@@ -1,0 +1,57 @@
+.pageStyle #leftside { 
+  color: #666;
+}
+
+.pageStyle #leftside a { 
+  color: #0066B3;
+  text-decoration: none;
+}
+
+.pageStyle #leftside h1 {
+  background: none;
+  margin: 0 0 10px;
+  padding: 10px 0;
+  font: bold 1.9em Arial,Verdana,sans-serif;
+}
+
+.pageStyle #leftside h2 { 
+  background: none;
+  margin: 0 0 10px;
+  padding: 10px 0;
+  font: bold 1.2em Arial,Verdana,sans-serif;
+}  
+.pageStyle #leftside h3 { 
+  background: none;
+  margin: 0 0 10px 5px;
+  padding: 10px 0;
+  font: 1.2em Arial,Verdana,sans-serif;
+}
+
+.pageStyle #leftside table {
+  margin: 15px 0 0;
+}
+
+.pageStyle #leftside td {
+ vertical-align: top;
+}
+
+.pageStyle #leftside p { color:#444; }
+
+
+.pageStyle #leftside td p {
+ margin-left:15px;
+}
+
+.pageStyle #leftside h4 {
+    margin: 0px 15px 10px 10px;
+    padding: 10px 0px;
+    font: 1.1em Arial,Verdana,sans-serif;
+    background: none;
+}
+
+.pageStyle #leftside ul { margin:0; padding-left:0; list-style-type: circle; }
+.pageStyle #leftside #TOC ul { margin:0; padding-left:0; list-style-type: none; }
+.pageStyle #leftside li { color:#444; margin-left:14px; }
+.pageStyle #leftside #TOC li { margin-left:0; }
+.pageStyle #leftside #TOC li li { margin-left:14px; }
+.pageStyle #leftside p { padding: 0; margin:0 0 10px; }

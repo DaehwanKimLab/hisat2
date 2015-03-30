@@ -1,0 +1,45 @@
+<!--#set var="Title" value="HISAT" -->
+<!--#set var="NoCrumbs" value="1" -->
+<!--#set var="SubTitle" value="Hierarchical Indexing for Spliced Alignment of Transcripts"-->
+<!--#set var="ExtraCSS" value="/software/hisat/add.css"-->
+<!--#include virtual="/iheader_r.shtml"-->
+<div id="mainContent">
+  <div id="main">
+	<div id="rightside">
+	<!--#include virtual="sidebar.inc.shtml"-->
+	</div> <!-- End of "rightside" -->
+    <div id="leftside">
+  	<h1>Frequently Asked Questions</h1><br>
+      <div id="toc">
+  	    <ul>
+	    <!--
+	      <li><a href="#edit_dist"><br>
+		</a></li>
+  	      </ul><br>
+		
+<h2 id="edit_dist"><br>
+		  </h2>
+		  <p><br>
+		  
+  </p>
+-->
+
+      </div>
+   </div>
+</div>
+</div>
+
+<!--#include virtual="footer.inc.html"-->
+
+<!-- Google analytics code -->
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-6101038-1");
+pageTracker._trackPageview();
+</script>
+
+</body>
+</html>
