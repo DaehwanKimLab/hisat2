@@ -24,12 +24,15 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
+	  <!--
 	  <h2>HISAT 0.1.6-beta release 1/30/2015</h2>
 	  <ul>
 	    <li> Added NH tags in SAM output for specifying number of alignments. </li>
 	    <li> Fixed a but that -s option in hisat-inspect didn't work. </li>
 	  </ul>
-	  <br>	  
+	  <br>
+	  -->
+	  <h2>HISAT source is available in a <a href="https://github.com/infphilo/hisat">public GitHub repository</a> (3/30/2015).</h2>
 	  <h2><a href = "http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html">The HISAT paper</a> is out in Nature Methods 3/9/2015</h2>
 	  <h2>HISAT 0.1.5-beta release 2/25/2015</h2>
 	  <ul>
