@@ -20,10 +20,14 @@
 #
 
 import os, sys
+import string, re
 
 """
 """
 def extract_transcripts(gtf_filename, verbose = True):
+    name_re = re.compile('^\w+')
+    value_re = re.compile('".+"')
+        
     genes = {}
     trans = {}
     tran_ids = []
@@ -44,8 +48,10 @@ def extract_transcripts(gtf_filename, verbose = True):
             continue
 
         value_dic = {}
-        for value in values[:-1]:
-            name, value = value.strip().split()
+        for name_value in values[:-1]:
+            print line,
+            name = name_re.findall(name_value.strip())[0]
+            value = value_re.findall(name_value.strip())[0]
             value = value[1:-1]
             value_dic[name] = value
 
