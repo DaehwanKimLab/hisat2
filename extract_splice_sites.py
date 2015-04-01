@@ -19,231 +19,121 @@
 # along with HISAT.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os, sys
-import string, re
+from __future__ import print_function
 
-"""
-"""
-def extract_transcripts(gtf_filename, verbose = True):
-    name_re = re.compile('^\w+')
-    value_re = re.compile('".+"')
-        
-    genes = {}
+from sys import stderr, exit
+from collections import defaultdict as dd, Counter
+from argparse import ArgumentParser, FileType
+
+
+def extract_splice_sites(gtf_file, verbose=False):
+    genes = dd(list)
     trans = {}
-    tran_ids = []
 
-    gtf_file = open(gtf_filename)
+    # Parse valid exon lines from the GTF file into a dict by transcript_id
     for line in gtf_file:
-        if not line.strip() or line.lstrip().startswith('#'):
+
+        line = line.strip()
+        if not line or line.startswith('#'):
             continue
-        chr, protein, type, left, right, comma1, strand, comma2, values = line[:-1].split('\t')
-            
-        values = values.strip().split(';')
+        if '#' in line:
+            line = line.split('#')[0].strip()
+
+        try:
+            chrom, source, feature, left, right, score, \
+                strand, frame, values = line.split('\t')
+        except ValueError:
+            continue
         left, right = int(left), int(right)
 
-        if type != "exon":
+        if feature != 'exon' or left >= right:
             continue
 
-        if left >= right:
+        values_dict = {}
+        for attr in values.split(';')[:-1]:
+            attr, _, val = attr.strip().partition(' ')
+            values_dict[attr] = val.strip('"')
+
+        if 'gene_id' not in values_dict or \
+                'transcript_id' not in values_dict:
             continue
 
-        value_dic = {}
-        for name_value in values[:-1]:
-            print line,
-            name = name_re.findall(name_value.strip())[0]
-            value = value_re.findall(name_value.strip())[0]
-            value = value[1:-1]
-            value_dic[name] = value
-
-        if 'gene_id' not in value_dic or \
-                'transcript_id' not in value_dic:
-            continue
-
-        gene_id = value_dic['gene_id']
-        if gene_id not in genes:
-            genes[gene_id] = []
-
-        transcript_id = value_dic['transcript_id']
+        transcript_id = values_dict['transcript_id']
         if transcript_id not in trans:
-            trans[transcript_id] = [chr, strand, [[left, right]]]
-            tran_ids.append(transcript_id)
-            genes[gene_id].append(transcript_id)
+            trans[transcript_id] = [chrom, strand, [[left, right]]]
+            genes[values_dict['gene_id']].append(transcript_id)
         else:
             trans[transcript_id][2].append([left, right])
 
-    gtf_file.close()
-
-    for tran_id in tran_ids:
-        chr, strand, exons = trans[tran_id]
-        assert len(exons) >= 1
-        def exon_cmp(a, b):
-            if a[0] != b[0]:
-                if a[0] < b[0]:
-                    return -1
+    # Sort exons and merge where separating introns are <=5 bps
+    for tran, [chrom, strand, exons] in trans.items():
+            exons.sort()
+            tmp_exons = [exons[0]]
+            for i in range(1, len(exons)):
+                if exons[i][0] - tmp_exons[-1][1] <= 5:
+                    tmp_exons[-1][1] = exons[i][1]
                 else:
-                    return 1
+                    tmp_exons.append(exons[i])
+            trans[tran] = [chrom, strand, tmp_exons]
 
-            if a[1] != b[1]:
-                if a[1] < b[1]:
-                    return -1
-                else:
-                    return 1
-
-            assert False
-            return 0
-
-        exons = sorted(exons, cmp=exon_cmp)
-        temp_exons = [exons[0]]
+    # Calculate and print the unique junctions
+    junctions = set()
+    for chrom, strand, exons in trans.values():
         for i in range(1, len(exons)):
-            prev_left, prev_right = temp_exons[-1]
-            left, right = exons[i]
+            junctions.add((chrom, exons[i-1][1], exons[i][0], strand))
+    junctions = sorted(junctions)
+    for chrom, left, right, strand in junctions:
+        # Zero-based offset
+        print('{}\t{}\t{}\t{}'.format(chrom, left-1, right-1, strand))
 
-            assert prev_left < left
-            if left - prev_right <= 5:
-                temp_exons[-1][1] = right
-            else:
-                temp_exons.append([left, right])
-        trans[tran_id] = [chr, strand, temp_exons]
-
+    # Print some stats if asked
     if verbose:
-        transcript_lengths, transcript_counts, transcript_length_sum = [0 for i in range(100000)], 0, 0
-        exon_lengths, exon_counts, exon_length_sum = [0 for i in range(100000)], 0, 0
-        intron_lengths, intron_counts, intron_length_sum = [0 for i in range(10000000)], 0, 0
-
-        for tran_id in tran_ids:
-            chr, strand, exons = trans[tran_id]
-            transcript_length = 0
-            for i in range(len(exons)):
-                exon_start, exon_end = exons[i]
-                exon_length = exon_end - exon_start + 1
-                if exon_length >= len(exon_lengths):
-                    continue
-
-                exon_lengths[exon_length] += 1
-                exon_counts += 1
-                exon_length_sum += exon_length
-
-                transcript_length += exon_length
-
+        exon_lengths, intron_lengths, trans_lengths = \
+            Counter(), Counter(), Counter()
+        for chrom, strand, exons in trans.values():
+            tran_len = 0
+            for i, exon in enumerate(exons):
+                exon_len = exon[1]-exon[0]+1
+                exon_lengths[exon_len] += 1
+                tran_len += exon_len
                 if i == 0:
                     continue
+                intron_lengths[exon[0] - exons[i-1][1]] += 1
+            trans_lengths[tran_len] += 1
 
-                intron_length = exon_start - exons[i-1][1]
-                if intron_length >= len(intron_lengths):
-                    continue
-
-                intron_lengths[intron_length] += 1
-                intron_counts += 1
-                intron_length_sum += intron_length
-
-            transcript_counts += 1
-            transcript_length_sum += transcript_length
-
-        gene_counts, gene_multi_isoforms_counts = 0, 0
-        for g_id, t_ids in genes.items():
-            gene_counts += 1
-            if len(t_ids) > 1:
-                gene_multi_isoforms_counts += 1
-
-        transcript_avg_length = float(transcript_length_sum) / max(transcript_counts, 1)
-        exon_avg_length = float(exon_length_sum) / max(exon_counts, 1)
-        intron_avg_length = float(intron_length_sum) / max(intron_counts, 1)
-
-
-        print >> sys.stderr, "gene counts: %d, gene counts (multiple isoforms): %d (%.2f)" % (gene_counts, gene_multi_isoforms_counts, float(gene_multi_isoforms_counts) / gene_counts)
-        print >> sys.stderr, "transcript counts: %d, transcript avg. length: %.2f" % (transcript_counts, transcript_avg_length)
-        print >> sys.stderr, "exon counts: %d, exon avg. length: %.2f" % (exon_counts, exon_avg_length)
-        print >> sys.stderr, "intron counts: %d, intron avg. length: %.2f" % (intron_counts, intron_avg_length)
-        print >> sys.stderr, "average number of exons per transcript: %.2f" % (float(exon_counts) / transcript_counts)
-        
-        for i in range(20):
-            sum = 0
-            for j in range(i * 10 + 1, (i+1) * 10 + 1):
-                sum += exon_lengths[j]
-                
-            print >> sys.stderr, "[%d, %d] : %.2f" % (i * 10 + 1, (i+1) * 10, float(sum) * 100 / exon_counts)
-            
-    return trans, tran_ids
+        print('genes: {}, genes with multiple isoforms: {}'.format(
+                len(genes), sum(len(v) > 1 for v in genes.values())),
+              file=stderr)
+        print('transcripts: {}, transcript avg. length: {:d}'.format(
+                len(trans), sum(trans_lengths.elements())/len(trans)),
+              file=stderr)
+        print('exons: {}, exon avg. length: {:d}'.format(
+                sum(exon_lengths.values()),
+                sum(exon_lengths.elements())/sum(exon_lengths.values())),
+              file=stderr)
+        print('introns: {}, intron avg. length: {:d}'.format(
+                sum(intron_lengths.values()),
+                sum(intron_lengths.elements())/sum(intron_lengths.values())),
+              file=stderr)
+        print('average number of exons per transcript: {:d}'.format(
+                sum(exon_lengths.values())/len(trans)),
+              file=stderr)
 
 
-"""
-"""
-def extract_junctions(trans_dic):
-    junctions_dic = {}
-    for tran_id, values in trans_dic.items():
-        chr, strand, exons = values
-        for i in range(1, len(exons)):
-            left, right = exons[i-1][1], exons[i][0]
-            junction = "%s:%d:%d:%s" % (chr, left, right, strand)
+if __name__ == '__main__':
+    parser = ArgumentParser(
+        description='Extract splice junctions from a GTF file')
+    parser.add_argument('gtf_file',
+        nargs='?',
+        type=FileType('r'),
+        help='input GTF file (use "-" for stdin)')
+    parser.add_argument('-v', '--verbose',
+        dest='verbose',
+        action='store_true',
+        help='also print some statistics to stderr')
 
-            if junction not in junctions_dic:
-                junctions_dic[junction] = []
-
-            junctions_dic[junction].append(tran_id)
-            
-
-    return junctions_dic
-
-
-"""
-"""
-def extract_splice_sites(gtf_fname):
-    if not os.path.exists(gtf_fname):
-        print >> sys.stderr, ""
-        sys.exit(1)
-
-    trans_dic, trans_ids = extract_transcripts(gtf_fname, verbose = False)
-    junctions_dic = extract_junctions(trans_dic)
-    junctions = []
-
-    for junction, value in junctions_dic.items():
-        chr, left, right, strand = junction.split(":")
-        left, right = int(left) - 1, int(right) - 1
-        assert left >= 0 and right >= 0 and right > left
-        junctions.append([chr, left, right, strand])
-
-    def junction_cmp(a, b):
-        if a[0] != b[0]:
-            if a[0] < b[0]:
-                return -1
-            else:
-                return 1
-
-        if a[1] != b[1]:
-            if a[1] < b[1]:
-                return -1
-            else:
-                return 1
-
-        if a[2] != b[2]:
-            if a[2] < b[2]:
-                return -1
-            else:
-                return 1
-
-        if a[3] != b[3]:
-            if a[3] == "+":
-                return -1
-            else:
-                return 1
-
-        assert False
-        return 0
-
-
-    junctions = sorted(junctions, cmp=junction_cmp)
-    for junction in junctions:
-        chr, left, right, strand = junction
-        print "%s\t%d\t%d\t%s" % (chr, left, right, strand)
-
-    
-"""
-"""
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print >> sys.stderr, "Usage:"
-        usage = "\tpython extract_splice_sites.py in_gtf_filename > out_splice_site_filename"
-        print >> sys.stderr, usage
-        sys.exit(1)
-        
-    extract_splice_sites(sys.argv[1])
+    args = parser.parse_args()
+    if not args.gtf_file:
+        parser.print_help()
+        exit(1)
+    extract_splice_sites(args.gtf_file, args.verbose)
