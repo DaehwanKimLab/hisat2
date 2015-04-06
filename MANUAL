@@ -278,7 +278,7 @@ considered valid, and `x` is the read length.
 
 ### Usage
 
-    hisat [options]* -x <hisat-idx> {-1 <m1> -2 <m2> | -U <r> | --sra-acc <SRA accession number>} -S [<hit>]
+    hisat [options]* -x <hisat-idx> {-1 <m1> -2 <m2> | -U <r> | --sra-acc <SRA accession number>} [-S <hit>]
 
 ### Main arguments
 
@@ -493,16 +493,16 @@ function options].  The default is `C,-18,0`.
 
     --pen-cansplice <int>
 
-Sets the penalty for a canonical splice site. Default: 0.
+Sets the penalty for each pair of canonical splice sites (e.g. GT/AG). Default: 0.
 
     --pen-noncansplice <int>
 
-Sets the penalty for a non-canonical splice site. Default: 3.
+Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 3.
 
     --pen-intronlen <func>
 
 Sets the penalty for long introns so that alignments with shorter introns are preferred
-to those with longer introns.  Default: G,-8,1
+to those with longer ones.  Default: G,-8,1
 
     --min-intronlen <int>
 
@@ -515,15 +515,15 @@ Sets maximum intron length. Default: 500000
     --known-splicesite-infile <path>
 
 With this mode, you can provide a list of known splice sites,
-which HISAT makes use of them to align reads with small anchors.   
-You can create such a list using "python extract_splice_sites.py genes.gtf > splicesites.txt",
-where "extract_splice_sites.py" is included in the HISAT package, "genes.gtf" is a gene annotation file,
-and "splicesites.txt" is a list of splice sites with which you provide HISAT in this mode.
+which HISAT makes use of to align reads with small anchors.   
+You can create such a list using `python extract_splice_sites.py genes.gtf > splicesites.txt`,
+where `extract_splice_sites.py` is included in the HISAT package, `genes.gtf` is a gene annotation file,
+and `splicesites.txt` is a list of splice sites with which you provide HISAT in this mode.
 
     --novel-splicesite-outfile <path>
 
-In this mode, HISAT reports a list of splice sites in the file "path":  
-   chromosome name "tab" genomic position of the flanking base on the left side of an intron "tab" genomic position of the flanking base on the right "tab" strand
+In this mode, HISAT reports a list of splice sites in the file <path>:  
+   chromosome name `<tab>` genomic position of the flanking base on the left side of an intron `<tab>` genomic position of the flanking base on the right `<tab>` strand
 
     --novel-splicesite-infile <path>
 
@@ -546,7 +546,7 @@ For single-end reads, use F or R.
  'F' means a read corresponds to a transcript.
  'R' means a read corresponds to the reverse complemented counterpart of a transcript.
 For paired-end reads, use either FR or RF.  
-Every read alignment will have an XS attribute tag:
+With this option being used, every read alignment will have an XS attribute tag:
  '+' means a read belongs to a transcript on '+' strand of genome.
  '-' means a read belongs to a transcript on '-' strand of genome.
 
@@ -993,6 +993,17 @@ alignment:
     A string representation of the mismatched reference bases in the alignment. 
     See [SAM] format specification for details.  Only present if SAM record is
     for an aligned read.
+
+        XS:A:<A>
+
+    Values of `+` and `-` indicate the read is mapped to transcripts on sense or anti-sense
+    strands, respectively.  Spliced alignments need to have this field, which is required in Cufflinks and StringTie.  
+    We can report this field for the canonical-splice site (GT/AG), but not for non-canonical splice sites.
+    You can direct HISAT not to output such alignments (involving non-canonical splice sites)  using "--pen-noncansplice 1000000".
+
+        NH:i:<N>
+
+    The number of mapped locations for the read or the pair.
 
 [SAM format specification]: http://samtools.sf.net/SAM1.pdf
 [FASTQ]: http://en.wikipedia.org/wiki/FASTQ_format

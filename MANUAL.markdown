@@ -1689,6 +1689,29 @@ alignment:
     for an aligned read.
 
     </td></tr>
+    <tr><td id="hisat-opt-fields-xs">
+
+        XS:A:<A>
+
+    </td><td>
+
+    Values of `+` and `-` indicate the read is mapped to transcripts on sense and anti-sense
+    strands, respectively.  Spliced alignments need to have this field, which is required in Cufflinks and StringTie.  
+    We can report this field for the canonical-splice site (GT/AG), but not for non-canonical splice sites.
+    You can direct HISAT not to output such alignments (involving non-canonical splice sites)  using "--pen-noncansplice 1000000".
+
+    </td></tr>
+    <!--
+    <tr><td id="hisat-opt-fields-nh">
+
+        NH:i:<N>
+
+    </td><td>
+
+    The number of mapped locations for the read or the pair.
+    </td></tr>
+    -->
+    
     </table>
 
 [SAM format specification]: http://samtools.sf.net/SAM1.pdf
