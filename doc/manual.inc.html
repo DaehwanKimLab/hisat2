@@ -892,6 +892,24 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 
 <p>A string representation of the mismatched reference bases in the alignment. See <a href="http://samtools.sourceforge.net/SAM1.pdf">SAM</a> format specification for details. Only present if SAM record is for an aligned read.</p>
 </td></tr>
+<tr><td id="hisat-opt-fields-xs">
+
+<pre><code>XS:A:&lt;A&gt;</code></pre>
+</td><td>
+
+<p>Values of <code>+</code> and <code>-</code> indicate the read is mapped to transcripts on sense and anti-sense strands, respectively. Spliced alignments need to have this field, which is required in Cufflinks and StringTie.<br />We can report this field for the canonical-splice site (GT/AG), but not for non-canonical splice sites. You can direct HISAT not to output such alignments (involving non-canonical splice sites) using &quot;--pen-noncansplice 1000000&quot;.</p>
+</td></tr>
+<!--
+<tr><td id="hisat-opt-fields-nh">
+
+    NH:i:<N>
+
+</td><td>
+
+The number of mapped locations for the read or the pair.
+</td></tr>
+-->
+
 </table>
 </li>
 </ol>
