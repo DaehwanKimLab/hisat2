@@ -1825,9 +1825,10 @@ void AlnSinkWrap<index_t>::finishRead(
 		}
 		// Report concordant paired-end alignments if possible
 		if(nconcord > 0) {
-			AlnSetSumm concordSumm(
-								   rd1_, rd2_, &rs1_, &rs2_, &rs1u_, &rs2u_,
-								   exhaust1, exhaust2, -1, -1);
+            AlnSetSumm concordSumm(
+                                   rd1_, rd2_, &rs1_, &rs2_, &rs1u_, &rs2u_,
+                                   exhaust1, exhaust2, -1, -1);
+            
 			// Possibly select a random subset
 			size_t off;
 			if(sortByScore) {
@@ -1837,6 +1838,9 @@ void AlnSinkWrap<index_t>::finishRead(
 				// Select subset randomly
 				off = selectAlnsToReport(rs1_, nconcord, select1_, rnd);
 			}
+            
+            concordSumm.numAlnsPaired(select1_.size());
+            
 			assert_lt(off, rs1_.size());
 			const AlnRes *rs1 = &rs1_[off];
 			const AlnRes *rs2 = &rs2_[off];
@@ -2110,6 +2114,7 @@ void AlnSinkWrap<index_t>::finishRead(
 				// Select subset randomly
 				off = selectAlnsToReport(rs1u_, nunpair1, select1_, rnd);
 			}
+            summ1.numAlns1(select1_.size());
 			repRs1 = &rs1u_[off];
 		} else if(rd1_ != NULL) {
 			// Mate 1 failed to align - don't do anything yet.  First we want
@@ -2137,6 +2142,7 @@ void AlnSinkWrap<index_t>::finishRead(
 				off = selectAlnsToReport(rs2u_, nunpair2, select2_, rnd);
 			}
 			repRs2 = &rs2u_[off];
+            summ2.numAlns2(select2_.size());
 		} else if(rd2_ != NULL) {
 			// Mate 2 failed to align - don't do anything yet.  First we want
 			// to collect information on mate 1 in case that factors into the

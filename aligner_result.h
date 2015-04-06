@@ -2051,9 +2051,14 @@ public:
 	bool     exhausted2()    const { return exhausted2_;    }
 	TRefId   orefid()        const { return orefid_;        }
 	TRefOff  orefoff()       const { return orefoff_;       }
+    
     TNumAlns numAlns1()      const { return numAlns1_;      }
     TNumAlns numAlns2()      const { return numAlns2_;      }
     TNumAlns numAlnsPaired() const { return numAlnsPaired_; }
+    
+    void numAlns1(TNumAlns numAlns1) { numAlns1_ = numAlns1; }
+    void numAlns2(TNumAlns numAlns2) { numAlns2_ = numAlns2; }
+    void numAlnsPaired(TNumAlns numAlnsPaired) { numAlnsPaired_ = numAlnsPaired; }
 
 	/**
 	 *

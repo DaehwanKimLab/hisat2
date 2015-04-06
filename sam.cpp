@@ -552,7 +552,8 @@ void SamConfig::printAlignedOptFlags(
             o.append(buf);
         } else if(flags.alignedUnpaired() || flags.alignedUnpairedMate()) {
             WRITE_SEP();
-            itoa10<uint64_t>(flags.readMate1() ? summ.numAlns1() : summ.numAlns2(), buf);
+            itoa10<uint64_t>((flags.alignedUnpaired() || flags.readMate1()) ?
+                             summ.numAlns1() : summ.numAlns2(), buf);
             o.append("NH:i:");
             o.append(buf);
         }

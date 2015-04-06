@@ -446,3 +446,8 @@ clean:
 	hisat-src.zip hisat-bin.zip
 	rm -f core.* .tmp.head
 	rm -rf *.dSYM
+
+.PHONY: push-doc
+push-doc: doc/manual.inc.html
+	scp doc/*.*html igm1:/data1/igm3/www/ccb.jhu.edu/html/software/hisat/
+	
