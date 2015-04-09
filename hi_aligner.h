@@ -712,31 +712,49 @@ struct GenomeHit {
     }
     
     /**
-     * Retrieve the left and right anchor lengths
+     * Retrieve left anchor length and number of edits in the anchor
      */
-    void getAnchors(index_t& leftanchor,
-                    index_t& rightanchor) const
+    void getLeftAnchor(index_t& leftanchor,
+                       index_t& nedits) const
     {
         assert(inited());
-        leftanchor = rightanchor = _len;
+        leftanchor = _len;
+        nedits = 0;
         for(index_t i = 0; i < _edits->size(); i++) {
             const Edit& edit = (*_edits)[i];
             if(edit.type == EDIT_TYPE_SPL) {
-                leftanchor = edit.pos + 1;
+                leftanchor = edit.pos;
                 break;
+            } else if(edit.type == EDIT_TYPE_MM ||
+                      edit.type == EDIT_TYPE_READ_GAP ||
+                      edit.type == EDIT_TYPE_REF_GAP) {
+                nedits++;
             }
         }
-        assert_gt(leftanchor, 0);
+    }
+    
+    /**
+     * Retrieve right anchor length and number of edits in the anchor
+     */
+    void getRightAnchor(index_t& rightanchor,
+                        index_t& nedits) const
+    {
+        rightanchor = _len;
+        nedits = 0;
         if(_edits->size() == 0) return;
         for(int i = _edits->size() - 1; i >= 0; i--) {
             const Edit& edit = (*_edits)[i];
             if(edit.type == EDIT_TYPE_SPL) {
                 rightanchor = _len - edit.pos - 1;
                 break;
+            } else if(edit.type == EDIT_TYPE_MM ||
+                      edit.type == EDIT_TYPE_READ_GAP ||
+                      edit.type == EDIT_TYPE_REF_GAP) {
+                nedits++;
             }
         }
-
     }
+    
     
     /**
      * Is it spliced alignment?

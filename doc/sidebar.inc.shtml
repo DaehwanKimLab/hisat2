@@ -36,15 +36,15 @@
 <a href="./downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
-   <table width="100%"><tbody><tr><td>version 0.1.6-beta</td> <td align="right">2/25/2015</td></tr>
+   <table width="100%"><tbody><tr><td>version 0.1.5-beta</td> <td align="right">2/25/2015</td></tr>
 	 <tr>
-		 <td><a href="./downloads/hisat-0.1.6-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
+		 <td><a href="./downloads/hisat-0.1.5-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
 	 </tr>
 	 <tr>
-		 <td><a href="./downloads/hisat-0.1.6-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
+		 <td><a href="./downloads/hisat-0.1.5-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
 	 </tr>
 	 <tr>
-		 <td><a href="./downloads/hisat-0.1.6-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
+		 <td><a href="./downloads/hisat-0.1.5-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
 	 </tr>
 
 

@@ -307,7 +307,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                         bool combined = tempHit.combineWith(hit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
-                        if(combined && tempHit.score() >= minsc) {
+                        index_t leftAnchorLen = 0, nedits = 0;
+                        tempHit.getLeftAnchor(leftAnchorLen, nedits);
+                        if(combined &&
+                           tempHit.score() >= minsc &&
+                           nedits <= leftAnchorLen / 4) { // prevent (short) anchors from having many mismatches
                             if(!this->redundant(sink, rdi, tempHit)) {
                                 another_spliced = true;
                                 if(tempHit.score() > best_score)
@@ -357,7 +361,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                             bool combined = combinedHit.combineWith(tempHit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
                             if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                             else         minsc = max(minsc, sink.bestUnp2());
-                            if(combined && combinedHit.score() >= minsc) {
+                            index_t rightAnchorLen = 0, nedits = 0;
+                            combinedHit.getRightAnchor(rightAnchorLen, nedits);
+                            if(combined &&
+                               combinedHit.score() >= minsc &&
+                               nedits <= rightAnchorLen / 4) { // prevent (short) anchors from having many mismatches
                                 if(!this->redundant(sink, rdi, combinedHit)) {
                                     another_spliced = true;
                                     if(combinedHit.score() > best_score)
@@ -427,7 +435,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
                     }
-                    if(combined && tempHit.score() >= minsc) {
+                    index_t leftAnchorLen = 0, nedits = 0;
+                    tempHit.getLeftAnchor(leftAnchorLen, nedits);
+                    if(combined &&
+                       tempHit.score() >= minsc &&
+                       nedits <= leftAnchorLen / 4) { // prevent (short) anchors from having many mismatches
                         assert_eq(tempHit.trim5(), 0);
                         assert_leq(tempHit.rdoff() + tempHit.len() + tempHit.trim3(), rdlen);
                         int64_t tmp_maxsc = hybridSearch_recur(
@@ -862,7 +874,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
                     }
-                    if(combined && combinedHit.score() >= minsc) {
+                    index_t rightAnchorLen = 0, nedits = 0;
+                    combinedHit.getRightAnchor(rightAnchorLen, nedits);
+                    if(combined &&
+                       combinedHit.score() >= minsc &&
+                       nedits <= rightAnchorLen / 4) { // prevent (short) anchors from having many mismatches
                         assert_leq(combinedHit.trim5(), combinedHit.rdoff());
                         assert_eq(combinedHit.rdoff() + combinedHit.len(), rdlen);
                         int64_t tmp_maxsc = hybridSearch_recur(
