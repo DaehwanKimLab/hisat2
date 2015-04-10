@@ -2488,9 +2488,9 @@ const
 	buf.resize(sz);
 	// Sort by score.  If reads are pairs, sort by sum of mate scores.
 	for(size_t i = 0; i < sz; i++) {
-		buf[i].first = (*rs1)[i].score().beast_score();
+		buf[i].first = (*rs1)[i].score().hisat_score();
 		if(rs2 != NULL) {
-			buf[i].first += (*rs2)[i].score().beast_score();
+			buf[i].first += (*rs2)[i].score().hisat_score();
 		}
 		buf[i].second = i; // original offset
 	}

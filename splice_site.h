@@ -83,7 +83,7 @@ public:
 	/**
 	 * Copy given fields into this Coord.
 	 */
-	virtual void init(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical) {
+    void init(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical) {
 		_ref = ref;
 		_left = left;
         _right = right;
@@ -240,12 +240,28 @@ public:
 
 	SpliceSite(const SpliceSite& c) { init(c); }
 	
-	SpliceSite(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical) { init(ref, left, right, fw, canonical); }
+	SpliceSite(uint32_t ref,
+               uint32_t left,
+               uint32_t right,
+               bool fw,
+               bool canonical,
+               bool fromFile = false,
+               bool known = false)
+    {
+        init(ref, left, right, fw, canonical, fromFile, known);
+    }
 
 	/**
 	 * Copy given fields into this Coord.
 	 */
-	virtual void init(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical) {
+	void init(uint32_t ref,
+              uint32_t left,
+              uint32_t right,
+              bool fw,
+              bool canonical,
+              bool fromFile = false,
+              bool known = false)
+    {
         SpliceSitePos::init(ref, left, right, fw, canonical);
     
         // _donordint = 0;
@@ -258,7 +274,8 @@ public:
         _editdist = 0;
         // _probscore = 0.0f;
         _readid = 0;
-        _fromfile = false;
+        _fromfile = fromFile;
+        _known = known;
 	}
 
 	/**
@@ -278,6 +295,7 @@ public:
         // _probscore = c._probscore;
         _readid = c._readid;
         _fromfile = c._fromfile;
+        _known = c._known;
 	}
 	
 	/**
@@ -297,6 +315,7 @@ public:
         // _probscore = 0.0;
         _readid = 0;
         _fromfile = false;
+        _known = false;
 	}
 	
     // uint8_t  donordint()    const { return _donordint; }
@@ -329,104 +348,12 @@ public:
     
     uint64_t _readid;
     bool     _fromfile;
+    bool     _known;
 };
 
 std::ostream& operator<<(std::ostream& out, const SpliceSite& c);
 
 class AlnRes;
-
-// #define SPLIT_DB
-
-#if defined(SPLIT_DB)
-
-class SpliceSiteDB {
-public:
-    typedef RedBlackNode<SpliceSitePos, uint32_t> Node;
-    
-public:
-    SpliceSiteDB(
-                 const BitPairReference& refs,
-                 const EList<string>& refnames,
-                 bool threadSafe = true,
-                 bool write = false,
-                 bool read = false);
-    ~SpliceSiteDB();
-    
-    bool addSpliceSite(
-                       const Read& rd,
-                       const AlnRes& rs,
-                       uint32_t minAnchorLen = 15);
-    
-   static float probscore(
-                          int64_t donor_seq,
-                          int64_t acceptor_seq);
-
-#if 0
-    size_t size(uint64_t ref) const;
-    bool empty(uint64_t ref) const;
-#endif
-    
-    bool empty() { return _empty; }
-    
-    bool write() const { return _write; }
-    bool read() const { return _read; }
-    
-    bool getSpliceSite(SpliceSite& ss) const;
-    void getLeftSpliceSites(uint32_t ref, uint32_t left, uint32_t range, EList<SpliceSite>& spliceSites) const;
-    void getRightSpliceSites(uint32_t ref, uint32_t right, uint32_t range, EList<SpliceSite>& spliceSites) const;
-
-    void print(ofstream& out);
-    void read(ifstream& in, bool novel = true);
-    
-private:
-    void getSpliceSites_recur(
-                              const RedBlackNode<SpliceSitePos, uint32_t> *node,
-			      const EList<SpliceSite>& spliceSites_db,
-                              uint32_t ref,
-                              uint32_t left,
-                              uint32_t right,
-                              EList<SpliceSite>& spliceSites) const;
-    
-    const RedBlackNode<SpliceSitePos, uint32_t>* getSpliceSite_temp(const SpliceSitePos& ssp) const;
-    
-    void print_recur(
-                     const RedBlackNode<SpliceSitePos, uint32_t> *node,
-                     ofstream& out,
-                     EList<SpliceSitePos>& ss_list);
-    
-    Pool& pool(uint64_t ref, uint64_t ref_seg);
-    
-    void print_impl(
-                    ofstream& out,
-                    EList<SpliceSitePos>& ss_list,
-                    const SpliceSitePos* ss = NULL);
-    
-private:
-    uint64_t                            _numRefs;
-    EList<string>                       _refnames;
-    
-    ELList<RedBlack<SpliceSitePos, uint32_t>* >   _fwIndex;
-    ELList<RedBlack<SpliceSitePos, uint32_t>* >   _bwIndex;
-    
-    ELLList<SpliceSite>                  _spliceSites;
-    
-    ELLList<Pool*>                       _pool;   // dispenses memory pages
-    
-    bool                                _write;
-    bool                                _read;
-    
-    ELList<MUTEX_T>                     _mutex;
-    bool                                _threadSafe;
-    
-    SStringExpandable<char>             raw_refbuf;
-    ASSERT_ONLY(SStringExpandable<uint32_t> destU32);
-    BTDnaString                         donorstr;
-    BTDnaString                         acceptorstr;
-    
-    bool                                _empty;
-};
-
-#else
 
 class SpliceSiteDB {
 public:
@@ -461,17 +388,23 @@ public:
     bool getSpliceSite(SpliceSite& ss) const;
     void getLeftSpliceSites(uint32_t ref, uint32_t left, uint32_t range, EList<SpliceSite>& spliceSites) const;
     void getRightSpliceSites(uint32_t ref, uint32_t right, uint32_t range, EList<SpliceSite>& spliceSites) const;
+    bool hasSpliceSites(uint32_t ref, uint32_t left1, uint32_t right1, uint32_t left2, uint32_t right2, bool includeNovel = false) const;
     
     void print(ofstream& out);
-    void read(ifstream& in, bool novel = true);
+    void read(ifstream& in, bool known = false);
     
 private:
     void getSpliceSites_recur(
                               const RedBlackNode<SpliceSitePos, uint32_t> *node,
-                              uint32_t ref,
                               uint32_t left,
                               uint32_t right,
                               EList<SpliceSite>& spliceSites) const;
+    
+    bool hasSpliceSites_recur(
+                              const RedBlackNode<SpliceSitePos, uint32_t> *node,
+                              uint32_t left,
+                              uint32_t right,
+                              bool includeNovel) const;
     
     const RedBlackNode<SpliceSitePos, uint32_t>* getSpliceSite_temp(const SpliceSitePos& ssp) const;
     
@@ -513,7 +446,5 @@ private:
     
     bool                                _empty;
 };
-
-#endif
 
 #endif /*ifndef SPLICE_SITE_H_*/

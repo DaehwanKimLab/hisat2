@@ -319,7 +319,6 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                 local_genomeHits.expand();
                                 local_genomeHits.back() = tempHit;
                                 this->_anchors_added.push_back(1);
-                                
                                 index_t temp_fragoff = 0, temp_fraglen = 0, temp_left = 0;
                                 tempHit.getLeft(temp_fragoff, temp_fraglen, temp_left);
                                 if(temp_fraglen < min_left_anchor)
@@ -392,13 +391,13 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     if(this->_anchors_added[i] < this->_anchors_added.back()) continue;
                     //}
                     if(!this->redundant(sink, rdi, canHit)) {
-                        this->reportHit(sc, ebwtFw, ref, sink, rdi, canHit);
+                        this->reportHit(sc, ebwtFw, ref, ssdb, sink, rdi, canHit);
                         maxsc = max<int64_t>(maxsc, canHit.score());
                     }
                 }
             }
             else {
-                this->reportHit(sc, ebwtFw, ref, sink, rdi, hit);
+                this->reportHit(sc, ebwtFw, ref, ssdb, sink, rdi, hit);
                 maxsc = max<int64_t>(maxsc, hit.score());
             }
             return maxsc;

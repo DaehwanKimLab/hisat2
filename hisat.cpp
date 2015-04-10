@@ -3706,14 +3706,16 @@ static void driver(
             if(knownSpliceSiteInfile != "") {
                 ifstream ssdb_file(knownSpliceSiteInfile.c_str(), ios::in);
                 if(ssdb_file.is_open()) {
-                    ssdb->read(ssdb_file, false); // known splice sites
+                    ssdb->read(ssdb_file,
+                               true); // known splice sites
                     ssdb_file.close();
                 }
             }
             if(novelSpliceSiteInfile != "") {
                 ifstream ssdb_file(novelSpliceSiteInfile.c_str(), ios::in);
                 if(ssdb_file.is_open()) {
-                    ssdb->read(ssdb_file, true); // novel splice sites
+                    ssdb->read(ssdb_file,
+                               false); // novel splice sites
                     ssdb_file.close();
                 }
             }

@@ -113,512 +113,6 @@ ostream& operator<<(ostream& out, const SpliceSite& s)
 	return out;
 }
 
-#if defined(SPLIT_DB)
-
-static const uint64_t ref_segment_size = 1 << 24;
-
-SpliceSiteDB::SpliceSiteDB(
-                           const BitPairReference& refs,
-                           const EList<string>& refnames,
-                           bool threadSafe,
-                           bool write,
-                           bool read) :
-_numRefs(refs.numRefs()),
-_refnames(refnames),
-_write(write),
-_read(read),
-_threadSafe(threadSafe),
-_empty(true)
-{
-    assert_gt(_numRefs, 0);
-    assert_eq(_numRefs, _refnames.size());
-    for(uint64_t i = 0; i < _numRefs; i++) {
-      uint64_t reflen = refs.approxLen(i);
-      assert_gt(reflen, 0);
-      uint64_t numsegs = (reflen + ref_segment_size - 1) / ref_segment_size;
-      assert_gt(numsegs, 0);
-      
-      _fwIndex.expand();
-      _bwIndex.expand();
-      for(uint64_t j = 0; j < numsegs; j++) {
-	_fwIndex.back().push_back(new RedBlack<SpliceSitePos, uint32_t>(16 << 10, CA_CAT));
-	_bwIndex.back().push_back(new RedBlack<SpliceSitePos, uint32_t>(16 << 10, CA_CAT));
-      }
-
-      _pool.expand();
-      _pool.back().resize(numsegs);
-      _spliceSites.expand();
-      _spliceSites.back().resize(numsegs);
-
-      _mutex.expand();
-      for(uint64_t j = 0; j < numsegs; j++) {
-	_mutex.back().push_back(MUTEX_T());
-      }
-    }
-    
-    donorstr.resize(donor_exonic_len + donor_intronic_len);
-    acceptorstr.resize(acceptor_intronic_len + acceptor_exonic_len);
-}
-
-SpliceSiteDB::~SpliceSiteDB() {
-    assert_eq(_fwIndex.size(), _bwIndex.size());
-    assert_eq(_fwIndex.size(), _pool.size());
-    for(uint64_t i = 0; i < _numRefs; i++) {
-      assert_eq(_fwIndex[i].size(), _bwIndex[i].size());
-      for(uint64_t j = 0; j < _fwIndex[i].size(); j++) {
-        delete _fwIndex[i][j];
-        delete _bwIndex[i][j];
-      }
-
-      _fwIndex[i].clear();
-      _bwIndex[i].clear();
-        
-        ELList<Pool*>& pool = _pool[i];
-        for(size_t j = 0; j < pool.size(); j++) {
-	  for(size_t k = 0; k < pool[j].size(); k++) {
-            delete pool[j][k];
-	  }
-        }
-    }
-}
-
-#if 0
-size_t SpliceSiteDB::size(uint64_t ref) const {
-    if(!_read) return 0;
-
-    assert_lt(ref, _numRefs);
-    assert_lt(ref, _mutex.size());
-    assert_lt(ref, _fwIndex.size());
-    assert_eq(_fwIndex.size(), _bwIndex.size());
-    ThreadSafe t(const_cast<MUTEX_T*>(&_mutex[ref]), _threadSafe && _write);
-    return _fwIndex.size();
-}
-
-bool SpliceSiteDB::empty(uint64_t ref) const {
-    return size(ref) == 0;
-}
-#endif
-
-bool SpliceSiteDB::addSpliceSite(
-                                 const Read& rd,
-                                 const AlnRes& rs,
-                                 uint32_t minAnchorLen)
-{
-    if(!_write) return false;
-    if(rs.trimmed5p(true) + rs.trimmed3p(true) > 0) return false;
-    
-    _empty = false;
-    
-    Coord coord = rs.refcoord();
-    uint64_t ref = coord.ref();
-    assert_lt(ref, _numRefs);
-    const EList<Edit>& edits = rs.ned();
-    if(!coord.orient()) {
-        Edit::invertPoss(const_cast<EList<Edit>&>(edits), rd.length(), false);
-	}
-    SpliceSitePos ssp;
-    uint32_t refoff = coord.off();
-    uint32_t leftAnchorLen = 0, rightAnchorLen = 0;
-    size_t eidx = 0;
-    size_t last_eidx = 0;
-    for(size_t i = 0; i < rd.length(); i++, refoff++) {
-        while(eidx < edits.size() && edits[eidx].pos == i) {
-			if(edits[eidx].isReadGap()) {
-                refoff++;
-			} else if(edits[eidx].isRefGap()) {
-                assert_gt(refoff, 0);
-                refoff--;
-            }
-            if(edits[eidx].isSpliced()) {
-                assert_gt(refoff, 0);
-                if(ssp.inited()) {
-                    assert(edits[last_eidx].isSpliced());
-                    assert_lt(edits[last_eidx].pos, edits[eidx].pos);
-                    rightAnchorLen = edits[eidx].pos - edits[last_eidx].pos;
-                    if(leftAnchorLen >= minAnchorLen && rightAnchorLen >= minAnchorLen) {
-                        bool added = false;
-                        uint64_t ref_seg = ssp.left() / ref_segment_size;
-                        uint64_t ref_seg2 = ssp.right() / ref_segment_size;
-                        assert_leq(ref_seg, ref_seg2);
-                        assert_lt(ref, _mutex.size());
-                        assert_lt(ref_seg, _mutex[ref].size());
-                        assert_lt(ref_seg2, _mutex[ref].size());
-                        ThreadSafe t(&_mutex[ref][ref_seg], _threadSafe && _write);
-                        ThreadSafe t2(&_mutex[ref][ref_seg2], _threadSafe && _write && ref_seg != ref_seg2);
-                        assert_lt(ref, _fwIndex.size());
-                        assert_lt(ref_seg, _fwIndex[ref].size());
-                        assert(_fwIndex[ref][ref_seg] != NULL);
-                        Node *cur = _fwIndex[ref][ref_seg]->add(pool(ref, ref_seg), ssp, &added);
-                        if(added) {
-                            assert_lt(ref, _spliceSites.size());
-                            assert_lt(ref_seg, _spliceSites[ref].size());
-                            _spliceSites[ref][ref_seg].expand();
-                            _spliceSites[ref][ref_seg].back().init(ssp.ref(), ssp.left(), ssp.right(), ssp.fw(), ssp.canonical());
-                            _spliceSites[ref][ref_seg].back()._readid = rd.rdid;
-                            assert(cur != NULL);
-                            cur->payload = _spliceSites[ref][ref_seg].size() - 1;
-                            
-                            SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.fw(), ssp.canonical());
-                            assert_lt(ref, _bwIndex.size());
-                            assert_lt(ref_seg2, _bwIndex[ref].size());
-                            assert(_bwIndex[ref][ref_seg2] != NULL);
-                            cur = _bwIndex[ref][ref_seg2]->add(pool(ref, ref_seg2), rssp, &added);
-                            assert(added);
-                            assert(cur != NULL);
-                            if(ref_seg != ref_seg2) {
-                                _spliceSites[ref][ref_seg2].expand();
-                                _spliceSites[ref][ref_seg2].back().init(ssp.ref(), ssp.left(), ssp.right(), ssp.fw(), ssp.canonical());
-                                _spliceSites[ref][ref_seg2].back()._readid = rd.rdid;
-                            }
-                            cur->payload = _spliceSites[ref][ref_seg2].size() - 1;
-                            
-                        } else {
-                            assert(cur != NULL);
-                            assert_lt(ref, _spliceSites.size());
-                            assert_lt(ref_seg, _spliceSites[ref].size());
-                            assert_lt(cur->payload, _spliceSites[ref][ref_seg].size());
-                            if(rd.rdid < _spliceSites[ref][ref_seg][cur->payload]._readid) {
-                                _spliceSites[ref][ref_seg][cur->payload]._readid = rd.rdid;
-                            }
-                            if(ref_seg != ref_seg2) {
-                                SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.fw(), ssp.canonical());
-                                cur = _bwIndex[ref][ref_seg2]->add(pool(ref, ref_seg2), rssp, &added);
-                                assert(cur != NULL);
-                                assert(!added);
-                                if(rd.rdid < _spliceSites[ref][ref_seg2][cur->payload]._readid) {
-                                    _spliceSites[ref][ref_seg2][cur->payload]._readid = rd.rdid;
-                                }
-                            }
-                        }
-                    }
-                    leftAnchorLen = rightAnchorLen;
-                    rightAnchorLen = 0;
-                } else {
-                    leftAnchorLen = edits[eidx].pos;
-                }
-                bool fw = (edits[eidx].splDir == EDIT_SPL_FW || edits[eidx].splDir == EDIT_SPL_UNKNOWN);
-                bool canonical = (edits[eidx].splDir != EDIT_SPL_UNKNOWN);
-                ssp.init(coord.ref(), refoff - 1, refoff + edits[eidx].splLen, fw, canonical);
-                refoff += edits[eidx].splLen;
-                last_eidx = eidx;
-            }
-			eidx++;
-		}
-	}
-    if(ssp.inited()) {
-        assert(edits[last_eidx].isSpliced());
-        assert_lt(edits[last_eidx].pos, rd.length());
-        rightAnchorLen = rd.length() - edits[last_eidx].pos;
-        if(leftAnchorLen >= minAnchorLen && rightAnchorLen >= minAnchorLen) {
-            bool added = false;
-            uint64_t ref_seg = ssp.left() / ref_segment_size;
-            uint64_t ref_seg2 = ssp.right() / ref_segment_size;
-            assert_leq(ref_seg, ref_seg2);
-            assert_lt(ref, _mutex.size());
-            assert_lt(ref_seg, _mutex[ref].size());
-            assert_lt(ref_seg2, _mutex[ref].size());
-            ThreadSafe t(&_mutex[ref][ref_seg], _threadSafe && _write);
-            ThreadSafe t2(&_mutex[ref][ref_seg2], _threadSafe && _write && ref_seg != ref_seg2);
-            assert_lt(ref, _fwIndex.size());
-            assert_lt(ref_seg, _fwIndex[ref].size());
-            assert(_fwIndex[ref][ref_seg] != NULL);
-            Node *cur = _fwIndex[ref][ref_seg]->add(pool(ref, ref_seg), ssp, &added);
-            if(added) {
-                assert_lt(ref, _spliceSites.size());
-                assert_lt(ref_seg, _spliceSites[ref].size());
-                _spliceSites[ref][ref_seg].expand();
-                _spliceSites[ref][ref_seg].back().init(ssp.ref(), ssp.left(), ssp.right(), ssp.fw(), ssp.canonical());
-                _spliceSites[ref][ref_seg].back()._readid = rd.rdid;
-                assert(cur != NULL);
-                cur->payload = _spliceSites[ref][ref_seg].size() - 1;
-                
-                SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.fw(), ssp.canonical());
-                assert_lt(ref, _bwIndex.size());
-                assert_lt(ref_seg2, _bwIndex[ref].size());
-                assert(_bwIndex[ref][ref_seg2] != NULL);
-                cur = _bwIndex[ref][ref_seg2]->add(pool(ref, ref_seg2), rssp, &added);
-                assert(added);
-                assert(cur != NULL);
-                if(ref_seg != ref_seg2) {
-                    _spliceSites[ref][ref_seg2].expand();
-                    _spliceSites[ref][ref_seg2].back().init(ssp.ref(), ssp.left(), ssp.right(), ssp.fw(), ssp.canonical());
-                    _spliceSites[ref][ref_seg2].back()._readid = rd.rdid;
-                }
-                cur->payload = _spliceSites[ref][ref_seg2].size() - 1;
-                
-            } else {
-                assert(cur != NULL);
-                assert_lt(ref, _spliceSites.size());
-                assert_lt(ref_seg, _spliceSites[ref].size());
-                assert_lt(cur->payload, _spliceSites[ref][ref_seg].size());
-                if(rd.rdid < _spliceSites[ref][ref_seg][cur->payload]._readid) {
-                    _spliceSites[ref][ref_seg][cur->payload]._readid = rd.rdid;
-                }
-                if(ref_seg != ref_seg2) {
-                    SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.fw(), ssp.canonical());
-                    cur = _bwIndex[ref][ref_seg2]->add(pool(ref, ref_seg2), rssp, &added);
-                    assert(cur != NULL);
-                    assert(!added);
-                    if(rd.rdid < _spliceSites[ref][ref_seg2][cur->payload]._readid) {
-                        _spliceSites[ref][ref_seg2][cur->payload]._readid = rd.rdid;
-                    }
-                }
-            }
-        }
-    }
-    if(!coord.orient()) {
-		Edit::invertPoss(const_cast<EList<Edit>&>(edits), rd.length(), false);
-	}
-
-    return true;
-}
-
-bool SpliceSiteDB::getSpliceSite(SpliceSite& ss) const
-{
-    if(!_read) return false;
-
-    uint64_t ref = ss.ref();
-    uint64_t ref_seg = ss.left() / ref_segment_size;
-    assert_lt(ref, _numRefs);
-    assert_lt(ref, _mutex.size());
-    assert_lt(ref_seg, _mutex[ref].size());
-    ThreadSafe t(const_cast<MUTEX_T*>(&_mutex[ref][ref_seg]), _threadSafe && _write);
-    
-    assert_lt(ref, _fwIndex.size());
-    assert_lt(ref_seg, _fwIndex[ref].size());
-    assert(_fwIndex[ref][ref_seg] != NULL);
-    const Node *cur = _fwIndex[ref][ref_seg]->lookup(ss);
-    if(cur == NULL) return false;
-    assert(cur != NULL);
-    assert_lt(ref, _spliceSites.size());
-    assert_lt(ref_seg, _spliceSites[ref].size());
-    ss = _spliceSites[ref][ref_seg][cur->payload];
-    return true;
-}
-
-void SpliceSiteDB::getLeftSpliceSites(uint32_t ref, uint32_t left, uint32_t range, EList<SpliceSite>& spliceSites) const
-{
-    if(!_read) return;
-    spliceSites.clear();
-    assert_lt(ref, _numRefs);
-    assert_gt(range, 0);
-    assert_geq(left + 1, range);
-    uint32_t begin = left + 1 - range, end = left;
-    for(uint32_t i = begin / ref_segment_size; i <= end / ref_segment_size; i++) {
-        assert_lt(ref, _mutex.size());
-        assert_lt(i, _mutex[ref].size());
-        ThreadSafe t(const_cast<MUTEX_T*>(&_mutex[ref][i]), _threadSafe && _write);
-        assert_lt(ref, _bwIndex.size());
-        assert_lt(i, _bwIndex[ref].size());
-        assert(_bwIndex[ref][i] != NULL);
-        const Node *cur = _bwIndex[ref][i]->root();
-        if(cur != NULL) getSpliceSites_recur(cur, _spliceSites[ref][i], ref, begin, end, spliceSites);
-    }
-}
-
-void SpliceSiteDB::getRightSpliceSites(uint32_t ref, uint32_t right, uint32_t range, EList<SpliceSite>& spliceSites) const
-{
-    if(!_read) return;
-    spliceSites.clear();
-    assert_lt(ref, _numRefs);
-    assert_gt(range, 0);
-    assert_gt(right + range, range);
-    uint32_t begin = right, end = right + range - 1;
-    for(uint32_t i = begin / ref_segment_size; i <= end / ref_segment_size; i++) {
-        assert_lt(ref, _mutex.size());
-        assert_lt(i, _mutex[ref].size());
-        ThreadSafe t(const_cast<MUTEX_T*>(&_mutex[ref][i]), _threadSafe && _write);
-        assert_lt(ref, _fwIndex.size());
-        assert_lt(i, _fwIndex[ref].size());
-        assert(_fwIndex[ref][i] != NULL);
-        const Node *cur = _fwIndex[ref][i]->root();
-        if(cur != NULL) getSpliceSites_recur(cur, _spliceSites[ref][i], ref, begin, end, spliceSites);
-    }
-    
-}
-
-void SpliceSiteDB::getSpliceSites_recur(
-                                        const RedBlackNode<SpliceSitePos, uint32_t> *node,
-                                        const EList<SpliceSite>& spliceSites_db,
-                                        uint32_t ref,
-                                        uint32_t left,
-                                        uint32_t right,
-                                        EList<SpliceSite>& spliceSites) const
-{
-    assert(node != NULL);
-    bool goleft = true, goright = true;
-    if((node->key.ref() > ref) ||
-       (node->key.ref() == ref && node->key.left() > right)) {
-        goright = false;
-    }
-    
-    if((node->key.ref() < ref) ||
-       (node->key.ref() == ref && node->key.left() < left)) {
-        goleft = false;
-    }
-    
-    if(goleft && node->left != NULL) {
-        getSpliceSites_recur(
-                             node->left,
-			     spliceSites_db,
-                             ref,
-                             left,
-                             right,
-                             spliceSites);
-    }
-    
-    if(node->key.ref() == ref &&
-       node->key.left() >= left && node->key.left() <= right) {
-        assert_lt(node->payload, spliceSites_db.size());
-#ifndef NDEBUG
-        const SpliceSite& ss = spliceSites_db[node->payload];
-        assert_eq(ss.ref(), node->key.ref());
-        assert(ss.left() == node->key.left() ||
-               ss.right() == node->key.left());
-#endif
-        spliceSites.push_back(spliceSites_db[node->payload]);
-    }
-    
-    if(goright && node->right != NULL) {
-        getSpliceSites_recur(
-                             node->right,
-			     spliceSites_db,
-                             ref,
-                             left,
-                             right,
-                             spliceSites);
-    }
-}
-
-void SpliceSiteDB::print(ofstream& out)
-{
-    EList<SpliceSitePos> ss_list;
-    for(uint64_t i = 0; i < _fwIndex.size(); i++) {
-      for(uint64_t j = 0; j < _fwIndex[i].size(); j++) {
-        assert(_fwIndex[i][j] != NULL);
-        const Node *root = _fwIndex[i][j]->root();
-        if(root != NULL) print_recur(root, out, ss_list);
-      }
-    }
-    print_impl(out, ss_list);
-}
-
-void SpliceSiteDB::print_recur(
-                               const RedBlackNode<SpliceSitePos, uint32_t> *node,
-                               ofstream& out,
-                               EList<SpliceSitePos>& ss_list)
-{
-    if(node == NULL) return;
-    print_recur(node->left, out, ss_list);
-    print_impl(out, ss_list, &(node->key));
-    print_recur(node->right, out, ss_list);
-}
-
-void SpliceSiteDB::print_impl(
-                              ofstream& out,
-                              EList<SpliceSitePos>& ss_list,
-                              const SpliceSitePos* ss)
-{
-    size_t i = 0;
-    while(i < ss_list.size()) {
-        const SpliceSitePos& tmp_ss = ss_list[i];
-        bool do_print = true;
-        if(ss != NULL) {
-            if(tmp_ss.ref() == ss->ref()) {
-                assert_leq(tmp_ss.left(), ss->left());
-                if(ss->left() < tmp_ss.left() + 10) {
-                    do_print = false;
-                    if((int)ss->left() - (int)tmp_ss.left() == (int)ss->right() - (int)tmp_ss.right()) {
-                        if(!tmp_ss.canonical() && ss->canonical()) {
-                            ss_list.erase(i);
-                            ss_list.push_back(*ss);
-                        }
-                        return;
-                    }
-                }
-            }
-        }
-        
-        if(!do_print) {
-            i++;
-            continue;
-        }
-        
-        assert_lt(tmp_ss.ref(), _refnames.size());
-        out << _refnames[tmp_ss.ref()] << "\t"
-            << tmp_ss.left() << "\t"
-            << tmp_ss.right() << "\t"
-            << (tmp_ss.canonical() ? (tmp_ss.fw() ? "+" : "-") : ".") << endl;
-
-        ss_list.erase(i);
-    }
-    
-    if(ss != NULL) ss_list.push_back(*ss);
-}
-
-void SpliceSiteDB::read(ifstream& in, bool novel)
-{
-    _empty = false;
-    assert_eq(_numRefs, _refnames.size());
-    while(!in.eof()) {
-        string refname;
-        uint32_t left = 0, right = 0;
-        char fw = 0;
-        in >> refname >> left >> right >> fw;
-        uint32_t ref = 0;
-        for(; ref < _refnames.size(); ref++) {
-            if(_refnames[ref] == refname) break;
-        }
-        if(ref >= _numRefs) continue;
-        uint64_t ref_seg = left / ref_segment_size;
-        assert_lt(ref, _spliceSites.size());
-        assert_lt(ref_seg, _spliceSites[ref].size());
-	
-        _spliceSites[ref][ref_seg].expand();
-        _spliceSites[ref][ref_seg].back().init(ref, left, right, fw == '+' || fw == '.', fw != '.');
-        _spliceSites[ref][ref_seg].back()._fromfile = true;
-        assert_gt(_spliceSites[ref][ref_seg].size(), 0);
-
-        bool added = false;
-        assert_lt(ref, _fwIndex.size());
-        assert_lt(ref_seg, _fwIndex[ref].size());
-        assert(_fwIndex[ref][ref_seg] != NULL);
-        Node *cur = _fwIndex[ref][ref_seg]->add(pool(ref, ref_seg), _spliceSites[ref][ref_seg].back(), &added);
-        assert(added);
-        assert(cur != NULL);
-        cur->payload = _spliceSites[ref][ref_seg].size() - 1;
-        
-        added = false;
-        uint64_t ref_seg2 = right / ref_segment_size;
-        SpliceSitePos rssp(ref, right, left, fw == '+' || fw == '.', fw != '.');
-        assert_lt(ref, _bwIndex.size());
-        assert_lt(ref_seg2, _bwIndex.size());
-        assert(_bwIndex[ref][ref_seg2] != NULL);
-        cur = _bwIndex[ref][ref_seg2]->add(pool(ref, ref_seg2), rssp, &added);
-        assert(added);
-        assert(cur != NULL);
-        if(ref_seg != ref_seg2) {
-            _spliceSites[ref][ref_seg2].expand();
-            _spliceSites[ref][ref_seg2].back().init(ref, left, right, fw == '+' || fw == '.', fw != '.');
-            _spliceSites[ref][ref_seg2].back()._fromfile = true;
-        }
-        cur->payload = _spliceSites[ref][ref_seg2].size() - 1;
-    }
-}
-
-Pool& SpliceSiteDB::pool(uint64_t ref, uint64_t ref_seg) {
-    assert_lt(ref, _numRefs);
-    assert_lt(ref, _pool.size());
-    assert_lt(ref_seg, _pool[ref].size());
-    if(_pool[ref][ref_seg].size() <= 0 || _pool[ref][ref_seg].back()->full()) {
-        _pool[ref][ref_seg].push_back(new Pool(1 << 18 /* 256KB */, 16 << 10 /* 16KB */, CA_CAT));
-    }
-    assert(_pool[ref][ref_seg].back() != NULL);
-    return *_pool[ref][ref_seg].back();
-}
-
-#else
-
 SpliceSiteDB::SpliceSiteDB(
                            const BitPairReference& refs,
                            const EList<string>& refnames,
@@ -869,7 +363,7 @@ void SpliceSiteDB::getLeftSpliceSites(uint32_t ref, uint32_t left, uint32_t rang
     assert_lt(ref, _bwIndex.size());
     assert(_bwIndex[ref] != NULL);
     const Node *cur = _bwIndex[ref]->root();
-    if(cur != NULL) getSpliceSites_recur(cur, ref, left + 1 - range, left, spliceSites);
+    if(cur != NULL) getSpliceSites_recur(cur, left + 1 - range, left, spliceSites);
 }
 
 void SpliceSiteDB::getRightSpliceSites(uint32_t ref, uint32_t right, uint32_t range, EList<SpliceSite>& spliceSites) const
@@ -884,40 +378,27 @@ void SpliceSiteDB::getRightSpliceSites(uint32_t ref, uint32_t right, uint32_t ra
     assert_lt(ref, _fwIndex.size());
     assert(_fwIndex[ref] != NULL);
     const Node *cur = _fwIndex[ref]->root();
-    if(cur != NULL) getSpliceSites_recur(cur, ref, right, right + range - 1, spliceSites);
+    if(cur != NULL) getSpliceSites_recur(cur, right, right + range - 1, spliceSites);
     
 }
 
 void SpliceSiteDB::getSpliceSites_recur(
                                         const RedBlackNode<SpliceSitePos, uint32_t> *node,
-                                        uint32_t ref,
                                         uint32_t left,
                                         uint32_t right,
                                         EList<SpliceSite>& spliceSites) const
 {
     assert(node != NULL);
-    bool goleft = true, goright = true;
-    if((node->key.ref() > ref) ||
-       (node->key.ref() == ref && node->key.left() > right)) {
-        goright = false;
-    }
-    
-    if((node->key.ref() < ref) ||
-       (node->key.ref() == ref && node->key.left() < left)) {
-        goleft = false;
-    }
-    
-    if(goleft && node->left != NULL) {
+    if(node->key.left() >= left && node->left != NULL) {
         getSpliceSites_recur(
                              node->left,
-                             ref,
                              left,
                              right,
                              spliceSites);
     }
     
-    if(node->key.ref() == ref &&
-       node->key.left() >= left && node->key.left() <= right) {
+    if(node->key.left() >= left && node->key.left() <= right) {
+        uint32_t ref = node->key.ref();
         assert_lt(ref, _spliceSites.size());
         assert_lt(node->payload, _spliceSites[ref].size());
 #ifndef NDEBUG
@@ -929,14 +410,82 @@ void SpliceSiteDB::getSpliceSites_recur(
         spliceSites.push_back(_spliceSites[ref][node->payload]);
     }
     
-    if(goright && node->right != NULL) {
+    if(node->key.left() <= right && node->right != NULL) {
         getSpliceSites_recur(
                              node->right,
-                             ref,
                              left,
                              right,
                              spliceSites);
     }
+}
+
+bool SpliceSiteDB::hasSpliceSites(
+                                  uint32_t ref,
+                                  uint32_t left1,
+                                  uint32_t right1,
+                                  uint32_t left2,
+                                  uint32_t right2,
+                                  bool includeNovel) const
+{
+    if(!_read) return false;
+    
+    assert_lt(ref, _numRefs);
+    assert_lt(ref, _mutex.size());
+    ThreadSafe t(const_cast<MUTEX_T*>(&_mutex[ref]), _threadSafe && _write);
+    
+    assert_lt(left1, right1);
+    assert_lt(ref, _bwIndex.size());
+    assert(_bwIndex[ref] != NULL);
+    const Node *cur = _bwIndex[ref]->root();
+    if(cur != NULL) {
+        if(hasSpliceSites_recur(cur, left1, right1, includeNovel))
+            return true;
+    }
+
+    assert_lt(ref, _fwIndex.size());
+    assert(_fwIndex[ref] != NULL);
+    cur = _fwIndex[ref]->root();
+    if(cur != NULL) {
+        return hasSpliceSites_recur(cur, left2, right2, includeNovel);
+    }
+    return false;
+}
+
+bool SpliceSiteDB::hasSpliceSites_recur(
+                                        const RedBlackNode<SpliceSitePos, uint32_t> *node,
+                                        uint32_t left,
+                                        uint32_t right,
+                                        bool includeNovel) const
+{
+    assert(node != NULL);
+    if(node->key.left() >= left && node->key.left() <= right) {
+        uint32_t ref = node->key.ref();
+        assert_lt(ref, _spliceSites.size());
+        assert_lt(node->payload, _spliceSites[ref].size());
+        const SpliceSite& ss = _spliceSites[ref][node->payload];
+        if(ss._fromfile && (includeNovel || ss._known))
+            return true;
+    }
+    
+    if(node->key.left() >= left && node->left != NULL) {
+        if(hasSpliceSites_recur(
+                                node->left,
+                                left,
+                                right,
+                                includeNovel))
+            return true;
+    }
+    
+    if(node->key.left() <= right && node->right != NULL) {
+        if(hasSpliceSites_recur(
+                                node->right,
+                                left,
+                                right,
+                                includeNovel))
+            return true;
+    }
+    
+    return false;
 }
 
 void calculate_splicesite_read_dist_impl(const RedBlackNode<SpliceSitePos, uint32_t> *node,
@@ -1058,7 +607,7 @@ void SpliceSiteDB::print_impl(
     if(ss != NULL) ss_list.push_back(*ss);
 }
 
-void SpliceSiteDB::read(ifstream& in, bool novel)
+void SpliceSiteDB::read(ifstream& in, bool known)
 {
     _empty = false;
     assert_eq(_numRefs, _refnames.size());
@@ -1074,8 +623,13 @@ void SpliceSiteDB::read(ifstream& in, bool novel)
         if(ref >= _numRefs) continue;
         assert_lt(ref, _spliceSites.size());
         _spliceSites[ref].expand();
-        _spliceSites[ref].back().init(ref, left, right, fw == '+' || fw == '.', fw != '.');
-        _spliceSites[ref].back()._fromfile = true;
+        _spliceSites[ref].back().init(ref,
+                                      left,
+                                      right,
+                                      fw == '+' || fw == '.',
+                                      fw != '.',
+                                      true,   // from file?
+                                      known); // known splice site?
         assert_gt(_spliceSites[ref].size(), 0);
         
         bool added = false;
@@ -1087,7 +641,11 @@ void SpliceSiteDB::read(ifstream& in, bool novel)
         cur->payload = _spliceSites[ref].size() - 1;
         
         added = false;
-        SpliceSitePos rssp(ref, right, left, fw == '+' || fw == '.', fw != '.');
+        SpliceSitePos rssp(ref,
+                           right,
+                           left,
+                           fw == '+' || fw == '.',
+                           fw != '.');
         assert_lt(ref, _bwIndex.size());
         assert(_bwIndex[ref] != NULL);
         cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
@@ -1107,8 +665,6 @@ Pool& SpliceSiteDB::pool(uint64_t ref) {
     assert(pool.back() != NULL);
     return *pool.back();
 }
-
-#endif
 
 float SpliceSiteDB::probscore(
                               int64_t donor_seq,

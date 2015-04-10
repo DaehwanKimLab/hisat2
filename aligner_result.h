@@ -63,11 +63,12 @@ public:
 	/**
 	 * Gapped scores are invalid until proven valid.
 	 */
-	inline AlnScore(TAlScore score, TAlScore ns, TAlScore gaps, TAlScore splices = 0) {
+	inline AlnScore(TAlScore score, TAlScore ns, TAlScore gaps, TAlScore splicescore = 0, bool nearSpliceSites = false) {
 		score_ = score;
 		ns_ = ns;
 		gaps_ = gaps;
-        splices_ = splices;
+        splicescore_ = splicescore;
+        nearSpliceSites_ = nearSpliceSites;
 		assert(valid());
 	}
 	
@@ -76,7 +77,8 @@ public:
 	 */
 	void reset() {
 		score_ = ns_ = gaps_ = 0;
-        splices_ = 0;
+        splicescore_ = 0;
+        nearSpliceSites_ = false;
 	}
 
 	/**
@@ -143,7 +145,8 @@ public:
 		gaps_  = o.gaps_;
 		ns_    = o.ns_;
 		score_ = o.score_;
-        splices_ = o.splices_;
+        splicescore_ = o.splicescore_;
+        nearSpliceSites_ = o.nearSpliceSites_;
 		assert_lt(ns_, 0x7fffffff);
 		return *this;
 	}
@@ -205,7 +208,7 @@ public:
 		s.gaps_ = gaps_ - o.gaps_;
 		s.ns_ = ns_;
 		s.score_ = score_ - o.score_;
-        s.splices_ = splices_ - o.splices_;
+        s.splicescore_ = splicescore_ - o.splicescore_;
 		assert_lt(s.ns_, 0x7fffffff);
 		return s;
 	}
@@ -219,7 +222,7 @@ public:
 		s.gaps_ = gaps_ + o.gaps_;
 		s.ns_ = ns_;
 		s.score_ = score_ + o.score_;
-        s.splices_ = splices_ + o.splices_;
+        s.splicescore_ = splicescore_ + o.splicescore_;
 		assert_lt(s.ns_, 0x7fffffff);
 		return s;
 	}
@@ -231,7 +234,7 @@ public:
 		if(VALID_AL_SCORE(*this)) {
 			gaps_ += o.gaps_;
 			score_ += o.score_;
-            splices_ += o.splices_;
+            splicescore_ += o.splicescore_;
 		}
 		return (*this);
 	}
@@ -243,7 +246,7 @@ public:
 		if(VALID_AL_SCORE(*this)) {
 			gaps_ -= o.gaps_;
 			score_ -= o.score_;
-            splices_ -= o.splices_;
+            splicescore_ -= o.splicescore_;
 		}
 		return (*this);
 	}
@@ -264,18 +267,26 @@ public:
 		s.gaps_ = gaps_;
 		s.ns_ = ns_;
 		s.score_ = score_ + o;
-        s.splices_ = splices_;
+        s.splicescore_ = splicescore_;
 		assert_lt(s.ns_, 0x7fffffff);
 		return s;
 	}
 
-	TAlScore score()   const { return  score_; }
-	TAlScore penalty() const { return -score_; }
-	TAlScore gaps()    const { return  gaps_;  }
-	TAlScore ns()      const { return  ns_;    }
-    TAlScore splices() const { return  splices_; }
+	TAlScore score()           const { return  score_; }
+	TAlScore penalty()         const { return -score_; }
+	TAlScore gaps()            const { return  gaps_;  }
+	TAlScore ns()              const { return  ns_;    }
+    TAlScore splicescore()     const { return splicescore_; }
+    bool     nearSpliceSites() const { return nearSpliceSites_; }
     
-    TAlScore beast_score() const { return (score_ << 10) - (splices_ / 100); }
+    TAlScore hisat_score() const
+    {
+        TAlScore r = (score_ << 10) - (splicescore_ / 100);
+        if(nearSpliceSites_) {
+            r += 1;
+        }
+        return r;
+    }
 
 	// Score accumulated so far (penalties are subtracted starting at 0)
 	TAlScore score_;
@@ -290,7 +301,10 @@ public:
 	TAlScore gaps_;
     
     // splice scores
-    TAlScore splices_;
+    TAlScore splicescore_;
+    
+    // continuous alignment near (known) splice sites?
+    bool nearSpliceSites_;
 };
 
 enum {

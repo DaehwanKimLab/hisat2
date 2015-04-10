@@ -2945,6 +2945,7 @@ public:
                    const Scoring&                   sc,
                    const Ebwt<index_t>&             ebwt,
                    const BitPairReference&          ref,
+                   const SpliceSiteDB&              ssdb,
                    AlnSinkWrap<index_t>&            sink,
                    index_t                          rdi,
                    const GenomeHit<index_t>&        hit,
@@ -3541,6 +3542,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                                                    const Scoring&                   sc,
                                                    const Ebwt<index_t>&             ebwt,
                                                    const BitPairReference&          ref,
+                                                   const SpliceSiteDB&              ssdb,
                                                    AlnSinkWrap<index_t>&            sink,
                                                    index_t                          rdi,
                                                    const GenomeHit<index_t>&        hit,
@@ -3552,7 +3554,6 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     index_t rdlen = rd.length();
     if(hit.rdoff() - hit.trim5() > 0 || hit.len() + hit.trim5() + hit.trim3() < rdlen) return false;
     if(hit.score() < _minsc[rdi]) return false;
-    // else if(hit.spliced() && !hit.spliced_consistently())
     
     // Edits are represented from 5' end of read to 3' end, not an alignment of read
     EList<Edit>& edits = const_cast<EList<Edit>&>(hit.edits());
@@ -3564,11 +3565,31 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     if(!hit.fw()) {
         Edit::invertPoss(edits, rdlen, false);
     }
+    // in case of multiple continuous alignments,
+    // choose the ones near (known) splice sites
+    // this helps eliminate alignments to pseudogenes
+    bool nearSpliceSites = hit.spliced();
+    if(!this->_no_spliced_alignment) {
+        if(!hit.spliced()) {
+            const index_t max_exon_size = 2000;
+            index_t left1 = 0, right1 = hit.refoff();
+            if(right1 > max_exon_size) left1 = right1 - max_exon_size;
+            index_t left2 = hit.refoff() + hit.len() - 1, right2 = left2 + max_exon_size;
+            nearSpliceSites = ssdb.hasSpliceSites(
+                                                  hit.ref(),
+                                                  left1,
+                                                  right1,
+                                                  left2,
+                                                  right2,
+                                                  true); // include novel splice sites
+        }
+    }
     AlnScore asc(
                  hit.score(),  // numeric score
                  hit.ns(),     // # Ns
                  hit.ngaps(),  // # gaps
-                 hit.splicescore()); // splice score
+                 hit.splicescore(), // splice score
+                 nearSpliceSites);
     bool softTrim = hit.trim5() > 0 || hit.trim3() > 0;
     AlnRes rs;
     rs.init(
