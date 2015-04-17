@@ -1701,7 +1701,6 @@ alignment:
     You can direct HISAT not to output such alignments (involving non-canonical splice sites)  using "--pen-noncansplice 1000000".
 
     </td></tr>
-    <!--
     <tr><td id="hisat-opt-fields-nh">
 
         NH:i:<N>
@@ -1710,7 +1709,6 @@ alignment:
 
     The number of mapped locations for the read or the pair.
     </td></tr>
-    -->
     
     </table>
 

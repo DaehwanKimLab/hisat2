@@ -3565,9 +3565,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     if(!hit.fw()) {
         Edit::invertPoss(edits, rdlen, false);
     }
-    // in case of multiple continuous alignments,
-    // choose the ones near (known) splice sites
-    // this helps eliminate alignments to pseudogenes
+    // in case of multiple exonic alignments, choose the ones near (known) splice sites
+    // this helps eliminate cases of reads being mapped to pseudogenes
     bool nearSpliceSites = hit.spliced();
     if(!this->_no_spliced_alignment) {
         if(!hit.spliced()) {
