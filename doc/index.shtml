@@ -29,7 +29,7 @@
 	    <li> Added NH tags in SAM output for specifying number of alignments. </li>
 	    <li> Fixed a bug that -s/--summary option in hisat-inspect didn't work. </li>
 	    <li> Rewritten extract_splice_sites.py to better handle various GTF files with thanks to George Young. </li>
-	    <li> Improved alignment accuracy by prevent reads from being mapped to pseudogenes when known or novel splice sites are provided (--known-splicesite-infile/--novel-splicesite-infile). </li>
+	    <li> Improved alignment accuracy by preventing reads from being mapped to pseudogenes when known or novel splice sites are provided (--known-splicesite-infile/--novel-splicesite-infile). </li>
 	    <li> Disallow reads to have short anchors with mismatches. </li>
 	  </ul>
 	  <br>
