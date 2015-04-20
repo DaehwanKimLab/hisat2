@@ -77,7 +77,7 @@ Support for FASTQ input is not yet included. Use e.g. awk to preprocess the FAST
 Example data, here chr 21 and the FIN subset of the 1KGP, can be downloaded and preprocessed as
 
    cd test
-   wget ftp://ftp.ncbi.nih.gov/genomes/H_sapiens/Assembled_chromosomes/seq/hs_ref_GRCh37.p13_chr21.fa.gz
+   wget ftp://ftp.ncbi.nih.gov/genomes/H_sapiens/ARCHIVE/ANNOTATION_RELEASE.105/Assembled_chromosomes/seq/hs_ref_GRCh37.p13_chr21.fa.gz
    gunzip hs_ref_GRCh37.p13_chr21.fa
    wget http://www.cs.helsinki.fi/group/gsa/1000gen-FIN-WholeGenome/1000gen-FIN-WholeGenome.vcf.gz
    gunzip 1000gen-FIN-WholeGenome.vcf.gz
@@ -85,12 +85,12 @@ Example data, here chr 21 and the FIN subset of the 1KGP, can be downloaded and 
 
 Index construction for the multiple alignment is done as (see rlcsa/gcsa/README for details):
 
-   ../rlcsa/gcsa/clean_alignment 1000gen-FIN-chr21.malignment 1000gen-FIN-chr21
+   ../../gcsa/clean_alignment 1000gen-FIN-chr21.malignment 1000gen-FIN-chr21
    rm 1000gen-FIN-chr21.malignment
-   ../rlcsa/gcsa/build_automaton -b 1000gen-FIN-chr21 4
+   ../../gcsa/build_automaton -b 1000gen-FIN-chr21 4
    rm 1000gen-FIN-chr21
-   ../rlcsa/gcsa/determinize -b 1000gen-FIN-chr21
-   ../rlcsa/gcsa/build_index -b 1000gen-FIN-chr21
+   ../../gcsa/determinize -b 1000gen-FIN-chr21
+   ../../gcsa/build_index -b 1000gen-FIN-chr21
    rm 1000gen-FIN-chr21.automaton
 
 Note: Around 4 GB of main-memory is required for the above `build_index`.
