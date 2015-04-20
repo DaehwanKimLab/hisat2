@@ -1,0 +1,471 @@
+General Information
+===================
+
+This is an implementation of the Run-Length Compressed Suffix Array (RLCSA) [1,2] and its incremental construction [2]. The implementation includes experimental support for LCP information [3], distribution-aware sampling [4], and document listing [5].
+
+Adam Novak's fork of RLCSA can be found at https://github.com/adamnovak/rlcsa. Among other things, the repository includes SWIG bindngs and an utility for merging indexes.
+
+Copyright 2007 - 2014, Jouni Siren, unless otherwise noted. See LICENSE for further information.
+
+
+Compiling
+---------
+
+The code should compile in both 32-bit and 64-bit environments. Uncomment SIZE_FLAGS in the makefile to use 64-bit integers in the 64-bit version.
+
+Parallelism is supported by libstdc++ Parallel Mode and by MCSTL. Uncomment either version of PARALLEL_FLAGS to compile the parallel version of the library, and set MCSTL_ROOT if necessary. GCC 4.2 or newer is required for the MCSTL version.
+
+Uncomment PSI_FLAGS to use a faster encoding for the run-length encoded bitvectors in .rlcsa.array. This increases the size somewhat. Uncomment LCP_FLAGS and SA_FLAGS to use a succinct bitvector instead of a gap encoded one to mark the sampled positions in the LCP array and the suffix array, respectively. This can increase the size of the samples, especially for sparse sampling. On the other hand, retrieving LCP values and locate() queries for single suffix array values can speed up significantly. LCP_FLAGS also uses a succinct vector instead of a run-length encoded one in PLCP.
+
+32-bit integers limit the size of the collection to less than 4 gigabytes. The size of individual input files is limited to less than 2 gigabytes in both 32-bit and 64-bit versions.
+
+Note that if 32-bit integers are used, then the bit-aligned arrays are limited to less than 512 megabytes (2^32 bits) in size. Hence if n is the collection size in characters and d is the sample rate, then (n / d) log ceil(n / d) must be less than 2^32. Otherwise the suffix array samples cannot be stored.
+
+
+Index Construction
+------------------
+
+The naming conventions for files are:
+
+  base_name - the sequences
+  base_name.rlcsa.array - most of the CSA
+  base_name.rlcsa.sa_samples - suffix array samples for locate and display
+  base_name.rlcsa.parameters - some of the index parameters
+  base_name.rlcsa.docs - document listing structure
+  base_name.lcp_samples - sampled LCP array
+  base_name.plcp - run-length encoded PLCP array
+  base_name.sa - suffix array
+
+A typical parameter file looks like:
+
+  RLCSA_BLOCK_SIZE = 32
+  SAMPLE_RATE = 128
+  SUPPORT_DISPLAY = 1
+  SUPPORT_LOCATE = 1
+  WEIGHTED_SAMPLES = 0
+
+parallel_build is used to construct the index, as described in [2]. The program takes 2 to 4 parameters:
+
+  use '-n' as the first parameter to stop before merging the partial indexes
+  use '-f' as the first parameter to use an alternate algorithm (thesis: Fast)
+  a list of input files (a text file, one file name per line)
+  base name of the output
+  number of threads to use (optional)
+
+The default parameters are 32 bytes for block size and 128 for sample rate. To modify these, one should create the parameter file for the output before running the construction program. Each input file should be a concatenation of non-empty C-style '\0'-terminated strings. The files must be smaller than 4 GB each.
+
+build_rlcsa provides a simpler alternative for indexing one file. The program takes 1 or 2 parameters: base name of the input/output and an optional number of threads. The same assumptions and restrictions apply as for parallel_build.
+
+
+Operations
+----------
+
+A number of operations have been implemented. The most important ones are the following:
+
+  pair_type count(const std::string& pattern) const
+  Returns the suffix array range corresponding to the matches of the pattern. The range is reported as a closed interval.
+
+  usint* locate(pair_type range, bool direct = false, bool steps = false) const
+  usint* locate(pair_type range, usint* data, bool direct = false, bool steps = false) const
+  usint locate(usint index, bool steps = false) const
+  These return the suffix array values at given range/position. The user is responsible for the allocated data. Optional parameters: bool direct = false (use direct locate implementation instead of the run-based optimizations) and bool steps = false (return the number of steps required to find a sample instead of the SA value).
+
+  uchar* display(usint sequence) const
+  uchar* display(usint sequence, pair_type range) const
+  uchar* display(usint sequence, pair_type range, uchar* data) const
+  These return a substring of the given sequence, as determined by the closed SA range 'range'. The user is responsible for freeing the allocated data.
+
+  uchar* display(usint position, usint len, usint context, usint& result_length) const
+  This is intended for displaying an occurrence of a pattern of length 'len' at SA position 'position' with 'context' extra characters on both sides. Parameter result_length will contain the actual length of the returned string.
+
+  uchar* readBWT() const
+  uchar* readBWT(pair_type range) const
+  Returns the BWT of the collection or a part of it. The user is responsible for the allocated string. Note that unlike the suffix array, the BWT includes all end markers.
+
+  pair_type getSequenceRange(usint number) const
+  Returns the sequence range for the given sequence.
+
+  pair_type getSequenceRangeForPosition(usint value) const
+  Returns the sequence range for the given text position (SA value).
+
+  usint getSequenceForPosition(usint value) const
+  Returns the sequence number for the given text position.
+
+  usint* getSequenceForPosition(usint* value, usint length) const
+  As above, but for multiple positions at once.
+
+  pair_type getRelativePosition(usint value) const
+  Converts text position to pair (sequence number, relative position).
+
+Locate and display can only be used when the corresponding parameter (SUPPORT_LOCATE or SUPPORT_DISPLAY) has value 1 and the suffix array samples have been created during the construction. If both of the parameters are missing or have value 0, the suffix array samples will not be loaded into memory.
+
+These operations are const and hence thread-safe.
+
+There is also a low-level interface (sections SUPPORT FOR EXTERNAL MODULES: POSITIONS and SUPPORT FOR EXTERNAL MODULES: RANGES in rlcsa.h) for use with external modules. While some modules (adaptive_samples.h and GCSA/bwasearch.h) already use the interface, it is not considered stable and can change without warning.
+
+
+Construction Interface
+----------------------
+
+Class RLCSABuilder provides other possibilities for index construction. The constructor takes four parameters:
+
+  block size for the Psi vectors in bytes
+  suffix array sample rate
+  buffer size for construction in bytes
+  number of threads to use
+
+If suffix array sample rate is set to 0, the samples will not be created. The buffer size must be less than 4 gigabytes.
+
+Function insertSequence is called to insert a new sequence into the collection. The parameters are:
+
+  sequence as a char array
+  length of the sequence (not including the trailing 0, if present)
+  should we free the memory used by the sequence
+
+Function insertFromFile can be used to merge existing indexes into the collection. It takes the base name of the index as a parameter. The sequences and the index should both be available.
+
+Function insertCollection can be used to index a new input file and merge it with the existing index. This approach is used in the alternate algorithm (Fast), and generally offers worse time/space trade-offs than the default option.
+
+Function getRLCSA is used to finish the construction and get the final index. After the call, the builder no longer contains the index. The caller is responsible for freeing the index.
+
+For example, the following inserts the sequences into the collection one at a time:
+
+  // Use a buffer of n megabytes.
+  RLCSABuilder builder(block_size, sample_rate, n * MEGABYTE, threads);
+
+  // For each sequence:
+  builder.insertSequence(sequence, length, false);
+
+  // If successful, write the index to disk.
+  if(builder.isOk())
+  {
+    RLCSA* rlcsa = builder.getRLCSA();
+    rlcsa->writeTo(base_name);
+    delete rlcsa;
+  }
+
+
+Incremental Construction for Multiple Sequences
+-----------------------------------------------
+
+When there are multiple sequences in one increment, character '\0' is assumed to represent the end of sequence marker. Hence the sequences themselves cannot contain character '\0'. This is always the case when using RLCSABuilder to build the partial indexes.
+
+If there is just one sequence in the increment, character '\0' is considered a normal character. This requires setting multiple_sequences = false in the RLCSA constructor. Note that RLCSABuilder cannot be used to merge these indexes, as it assumes character '\0' an end of sequence marker.
+
+
+Using Bitvectors
+----------------
+
+The bitvectors (SuccinctVector, DeltaVector, RLEVector, NibbleVector) all use a similar interface. All bitvectors are based on blocks containing a fixed amount of compressed data (32 bytes is a good default choice). Due to certain design choices, the a bitvector must always contain at least one 1-bit.
+
+The vectors are queried through iterators (class VectorType::Iterator), which are documented in file bits/bitvector.h. Queries selectNext, selectNextRun, and nextValue are intended for iterating quickly through the 1-bits after an initial call to select, selectRun, or valueBefore/valueAfter.
+
+The primary construction option is through classes VectorType::Encoder. The 1-bits should be written to the encoder in increasing order. Methods setBit() and setRun() write the bits immediately, while addBit() and addRun() may buffer them to save space. The set and add methods may not always mix gracefully. If addBit() and addRun() are used, flush() should be called when the encoding is finished. (flush() might actually not be necessary, and calling it will eventually become obsolete.)
+
+An alternate construction method is to encode a ReadBuffer/WriteBuffer by using the method encode<VectorType> found in file bits/vectors.h. There is also an inverse method decode<VectorType>. See the header file for further information.
+
+A quick example of vector construction:
+
+  // The vector contains an increasing sequence of pairs (run_start, run_length).
+  std::vector<pair_type> runs;
+  usint n;  // Desired vector length.
+  RLEVector::Encoder encoder(32);
+  for(usint i = 0; i < runs.size(); i++) { encoder.addRun(runs[i].first, runs[i].second); }
+  encoder.flush();
+  RLEVector rle(encoder, n);
+
+  // Convert the RLEVector into a DeltaVector.
+  ReadBuffer* bits = decode(rle);
+  DeltaVector* delta = encode<DeltaVector>(*bits, 32, n);
+  delete bits; bits = 0;
+  delete delta; delta = 0;
+
+
+LCP Support
+-----------
+
+The implementation includes experimental support for two representations of the LCP array: run-length encoded PLCP array and the sampled LCP array. sample_lcp and build_plcp can be used to build the representations. lcp_test was used in the experiments reported in [3].
+
+
+Distribution-Aware Samples
+--------------------------
+
+The implementation of distribution-aware sampling [4] should be considered very experimental. The implementation currently works only with a single sequence, and only optimizes the samples for either locate or display. The following assumes that the first 8 characters of each pattern contain the weight of that pattern.
+
+1) Build a RLCSA with regular samples for the data file.
+
+2) Use rlcsa_test -i8 -l -w to create a distribution file.
+
+3) Use sampler_test build the index with optimal samples (default, requires about max(32n', 4n + 12n') bytes of memory, where n' is the number of text positions with a positive locate frequency) or greedy samples (e.g. option -g0.5 selects half of the samples greedily and the rest at regular intervals). Option -t# allows using multiple threads to find (almost) optimal samples, improving the sampling speed significantly.
+
+4) Use rlcsa_test -i8 -l -d -g10000 to generate 10000 random patterns according to the pattern weights and search for them.
+
+There is also some experimental support for adapting the samples to the query distribution. The samples are stored in a hash table, and several different heuristics are used to determine if the located position should be sampled. Use rlcsa_test -a with samples generated by sampler_test -g0 to test the adaptive samples. The following lines in the RLCSA parameter line control the use of the heuristics:
+
+  CANDIDATE_SAMPLES = 1
+  Use two hash tables instead of one, making it more likely that frequent text positions remain in the hash table.
+
+  HALF_GREEDY_SAMPLES = 1
+  Store half of the samples in the normal sample structure, guaranteeing worst-case performance and allowing display() queries in addition to locate().
+
+  SAMPLE_PROMOTE_RATE = r
+  SAMPLE_WINDOW_SIZE = w
+  Maintain a running average s of the number of steps required to find the sample in w previous queries. Sample the located position with probability x / (rs), where x is the distance to the sample used to locate the position.
+
+
+Document Listing
+----------------
+
+The support for precomputed answers for document listing queries is very preliminary. The code for finding the bicliques used to build the grammar is not included in this package.
+
+There are three phases in building the document listing structure:
+
+  document_graph base_name b \beta
+
+This builds most of the structures and the graph used for building the grammar. Parameters b and \beta are explained in [5]. The finished structures are written to base_name.rlcsa.docs, while base_name.graph will contain the graph. Blocks containing only one document identifier are stored in base_name.singletons.
+
+In the second phase, one should build the grammar. After this phase, the grammar rules should be found in files prefix-biclique-it-#.txt, where prefix is the chosen prefix and # is a number starting from 0. Document identifiers not included in any of the grammar rules should be found in files prefix-it-X, where X is the number of the last grammar file, and prefix.singletons (the singleton file built in the previous phase).
+
+Finally,
+
+  document_graph base_name prefix
+
+builds the grammar and encodes the blocks, storing the results in base_name.rlcsa.docs.
+
+Use rlcsa_test -L to test document listing queries using the precomputed answers, or rlcsa_test -L -d to run the queries using the brute force solution.
+
+
+Other Programs
+--------------
+
+rlcsa_test is a count/locate test program. It assumes that the pattern file is in Pizza & Chili format (-p) or contains one pattern per line. If the first m characters of each pattern contain a numerical weight, then parameters -im -gn can be used to generate n random patterns from the distribution specified by the weights. Parameter -W writes the actual patterns into a file, while -w writes the distribution of located positions for use with weighted sampling. Parameter -S uses a plain suffix array (built by build_sa) instead of RLCSA. Parameter -d does the locate/list query directly without resulting to run-length optimizations (locate) or the document listing structure (list). Parameter -o writes the patterns into a file, sorted by the occ/docc ratio in decreasing order.
+
+display_test is a display test program. It extracts random substrings according to a distribution generated by rlcsa_test -w.
+
+extract_sequence can be used to extract individual sequences from the index.
+
+build_sa can be used to build a regular suffix array.
+
+The rest of the programs have not been used recently. They might no longer work correctly.
+
+
+Technical Information
+=====================
+
+Bitvectors
+----------
+
+(This was taken from an email, so the notation might not be consistent with the rest of the file.)
+
+RLEVector and DeltaVector are basically the same structure, and rank and select (and valueBefore, valueAfter, selectRun, and isSet) are basically the same operation. NibbleVector is RLEVector with a different encoding for the integers. Most of the following does not apply for SuccinctVector.
+
+At the lowest level, the data is stored as a sequence of delta-coded integers in 32-byte blocks. In DeltaVector, each integer is the distance from the previous 1-bit. RLEVector uses the integers in pairs, with the first one indicating the distance from the previous run of 1-bits, while the second one indicates the length of the current run.
+
+For each block, the vector stores two additional integers: the position of the first 1-bit of that block in the uncompressed vector, and the rank of that 1-bit. Then there are separate indexes for rank and select. If there are n_b blocks, both of the indexes contain about n_b/5 integers. If I want to compute rank(i), for example, the index tells me that the answer can be found from blocks rank_index[i / rank_rate] to rank_index[i / rank_rate + 1].
+
+A query begins by using the appropriate index to narrow the search down to a (hopefully) short range of blocks. After that, the iterator scans the stored integers sequentially, until it finds the correct block. This all happens in BitVector::Iterator::sampleForIndex()  (using select_index, for select-type queries) or ::sampleForValue() (using rank_index). The naming conventions come from the idea that a bitvector is really an array A of distinct integers in increasing order, such that A[index] = value.
+
+After the correct block has been found, the query starts decompressing the integers in that block sequentially, until it finds the answer. This is done in several different functions. valueLoop() is the most common one in rank-type queries. It decompresses the block until it finds an 1-bit at position >= i (for rank(i)). Equivalently, it stops when it finds A[index] >= i.
+
+In a typical case with large bitvectors, each query requires three random memory accesses (index, stored integers, block) and a few hundred nanoseconds. My hypothesis has been that about half of the time is taken by cache misses, while decompressing the block takes the other half. I have never bothered to profile it though.
+
+Creating new iterators is relatively cheap. An iterator contains a pointer to the bitvector, seven integers of state information (some of it is redundant), and two iterators to raw bitvector data. Those iterators in turn contain one pointer, six integers, and one boolean value each, so the total size should be about 184 bytes. The constructors just assign values to those variables. The destructors contain a total of two if() statements, where the condition (the boolean value in an inner iterator) is false.
+
+
+A collection of sequences
+-------------------------
+
+The index contains a collection C of sequences T1, T2, ..., Tr. When constructing the index, each Ti is assumed to be followed by an implicit end of sequence marker $. The markers are assumed to be less than any character in the alphabet, and their mutual order is defined by sequence numbers. In some construction options, these end markers are represented explicitly by \0 characters.
+
+RLCSA uses internally three kinds of ranges: BWT ranges, suffix array ranges, and text ranges.
+
+BWT ranges are used internally for computing Psi and LF. The first r positions correspond to the suffixes starting with end markers.
+
+Suffix array ranges are used in the query interface. Suffix array position i corresponds to BWT position i + r. Suffixes starting with end markers are not included in the suffix array, as the sequence order and hence the characters following the end markers are not well defined.
+
+Text ranges are also used in the query interface. End markers are not included in the sequences. Every sequence is padded with empty characters, so that its length is a multiple of sample rate d. These padded sequences are implicitly concatenated. Text ranges corresponding to sequences do not include the padding.
+
+Bit vector E is used to mark the last character of each sequence. The starting position of sequence k > 0 is d * ((E.select(k - 1) / d) + 1).
+
+
+Suffix array samples
+--------------------
+
+For a given sample rate d, we store the positions of each sequence divisible by d. The sampled positions of suffix array are marked in a bitvector S, while the multipliers of d are stored in an array A in the same order. Another array B contains the inverse permutation of A.
+
+When locating, we can use S.valueAfter(i - r) to get (j, k = S.rank(j) - 1) for the first sampled j >= i - r in the suffix array order. If j == i - r, we can get the suffix array value as d * A[k]. If i < r, we have reached the implicit end of sequence marker. In this case, the suffix array value is E.select(i) + 1 (this value should only be used to derive SA values for earlier positions). Note that i is BWT position, not SA position.
+
+When displaying text starting from position i, j = B[i / d] gives us the sample used as a starting point. The sample is located in SA position k = S.select(j) corresponding to BWT position k + r.
+
+
+Data formats
+------------
+
+.rlcsa.array
+  distribution of characters (CHARS * sizeof(usint) bytes)
+  RLEVector or NibbleVector for each character appearing in the text
+  DeltaVector E
+  sample rate d (sizeof(usint) bytes)
+
+.rlcsa.sa_samples
+  DeltaVector or SuccinctVector S
+  array A (number_of_samples items of length(number_of_samples - 1) bits)
+
+Any bitvector
+  universe size (sizeof(usint) bytes)
+  item count (sizeof(usint) bytes)
+  number of blocks (sizeof(usint) bytes)
+  block size in words (sizeof(usint) bytes)
+  block data (number_of_blocks * block_size words)
+  sample array (2 * (number_of_blocks + 1) items of length(size) bits)
+
+Note that the samples are not stored for a succinct bitvector. Any bitvector must have at least one 1-bit.
+
+ReadBuffer and WriteBuffer
+  raw data as sizeof(usint)-byte integers
+
+ReadBuffer exportable format with 1-bit items
+  the bits as characters '1' and '0'
+
+ReadBuffer exportable format with >1-bit items
+  the items written as sizeof(usint)-byte integers
+
+Array
+  item count (sizeof(usint) bytes)
+  number of blocks (sizeof(usint) bytes)
+  block size in words (sizeof(usint) bytes)
+  block data (number_of_blocks * block_size words)
+  sample array (2 * (number_of_blocks + 1) items of length(size) bits)
+
+MultiArray
+  flags (sizeof(usint) bytes)
+  SuccinctVector marking array borders
+  in FixedMultiArray:
+    an array of usints storing the elements (number of items from array borders, item bits from flags)
+  in DeltaMultiArray:
+    Array containing the items
+
+
+LCP Information
+---------------
+
+The (P)LCP representations have been generalized to support multiple sequences. As the end markers are not included in the collection, the LCP values corresponding to the last characters of the sequences can be 1 or 0. The padding characters between the sequences are also assigned LCP values in the PLCP representation to ease its use. The sampled LCP array is used in a similar way as the SA samples in locate.
+
+Data formats:
+
+.lcp_samples
+  DeltaVector or SuccinctVector for the sampled positions
+  Array for the sampled values
+
+.plcp
+  RLEVector or SuccinctVector
+
+Array
+  item count (sizeof(usint) bytes)
+  number of blocks (sizeof(usint) bytes)
+  block size in words (sizeof(usint) bytes)
+  block data (number_of_blocks * block_size words)
+  file.write((char*)&(this->number_of_blocks), sizeof(this->number_of_blocks));
+  file.write((char*)&(this->block_size), sizeof(this->block_size));
+  file.write((char*)(this->array), this->block_size * this->number_of_blocks * sizeof(usint));
+  sample array (number_of_blocks + 1 items of length(items) bits)
+
+
+Weighted Samples
+----------------
+
+RLCSA now experimentally supports weighted or distribution-aware samples. To use them, the index must be built with sampler_test. A weight file generated by rlcsa_test -w is required for construction. The suffix weights are assumed to represent a distribution of locate queries (or display queries, if parameter -b is used).
+
+There are two options: optimal sampling and greedy sampling. Optimal sampling requires about 28n bytes of memory for a text of length n, and takes considerably more time than index construction. With option -g, some of the samples are selected greedily according to suffix weights, and the rest at regular intervals. In both cases, the sampler aims to select n / d samples. If there are less suffixes with positive weights, then only those suffixes are sampled.
+
+To use weighted samples, MASSIVE_DATA_RLCSA must be set, as the largest integers used when selecting the optimal samples are roughly n^2 / 2 times the average suffix weight. Integer overflows might still occur, but as only the least significant bits of the integers are used, the results will generally be ok.
+
+Parameter -w can be used to write just the sampled positions for use with another index. If the index uses LF instead of Psi, then the default is to sample for display, and parameter -b is used for locate.
+
+Only one sequence is currently supported, and the weighted samples cannot be merged.
+
+The current implementations uses the same samples for both locate and display. It would be preferable to be able to select them separately. For locate, bitvector S stores the sampled SA positions, and array A contains the sampled SA values. For display, bitvector S' stores the sampled text positions, and array B contains the sampled inverse SA values. A possible size optimization similar to the one used in standard sampling (where the values of A and B have been divided by d) would be to use
+
+  SA[i] = select(S', A[rank(S, i)]), SA^-1[j] = select(S, B[rank(S', j]).
+
+The weighted samples can also be used in adaptive way in rlcsa_test (parameter -a). The initial samples are insterted into a hash table. When a new position is located, it is inserted into the hash table, overwriting any existing sample. This mechanism does not currently perform very well.
+
+Data formats:
+
+.rlcsa.sa_samples (samples)
+  text length (sizeof(usint) bytes)
+  item count (sizeof(usint) bytes)
+  samples as (i, SA[i]) pairs (number of samples * sizeof(pair_type) bytes)
+
+.rlcsa.sa_samples (sampled positions)
+  sampled text positions (number_of_samples * sizeof(uint) bytes)
+
+
+Document Listing
+----------------
+
+See [5] for the definition of the graph and for the names of the data structures. If there are d documents, nodes corresponding to documents are numbered as 0..d-1, while nodes corresponding to blocks are numbered starting from d.
+
+In the encoding of the blocks, document identifiers are numbered as 0..d-1, value d indicates a block containing all possible documents, and the rule identifiers are numbered starting from d+1. Similarly, in the encoding of the grammar rules, value d indicates a rule expanding to all documents.
+
+Data formats:
+
+.graph
+  number of nodes (sizeof(uint) bytes)
+  number of edges (sizeof(uint) bytes)
+  for each node with multiple outgoing edges in an arbitrary order:
+    -1 * node identifier (sizeof(int) bytes)
+    for each outgoing edge in an arbitrary order:
+      destination node identifier (sizeof(int) bytes)
+
+File containing the edges not encoded with any grammar rule (also .singletons)
+  for each node having outgoing edges in an arbitrary order:
+    "%u:", node identifier
+    for each outgoing edge in an arbitrary order:
+      " %u", destination node identifier
+    "\n"
+
+Grammar rule files
+  for each grammar rule in an arbitrary order:
+    for each block containing the rule in sorted order:
+      "%u ", node identifier
+    "-"
+    for each document encoded by the rule in sorted order:
+      " %u", document identifier
+    "\n"  
+
+.rlcsa.docs
+  flags (sizeof(usint) bytes)
+    0x01 - are grammar rules encoded using RLE
+  DeltaVector B_L
+  SuccinctVector B_F
+  array F storing pointers to the parents of the first children (I items of length(I - 1) bits)
+  array N storing pointers to the leaf nodes following and the internal nodes (I items of length(L) bits)
+
+  The following are stored once the grammar has been generated:
+
+  SuccinctVector B_G
+  array G containing the rules; a sequence of the following
+    document identifier (length(d) bits)
+    the number of successive document identifiers including the first one, if using RLE (length(d) bits)
+  SuccinctVector B_A
+  array A containing document identifiers and rule identifiers (items of length(d + n_R) bits)
+
+
+References
+==========
+
+[1] Veli Mäkinen, Gonzalo Navarro, Jouni Sirén, and Niko Välimäki: Storage and Retrieval of Highly Repetitive Sequence Collections.
+Journal of Computational Biology 17(3):281-308, 2010.
+
+[2] Jouni Sirén: Compressed Suffix Arrays for Massive Data.
+In SPIRE 2009, Springer LNCS 5721, pp. 63-74, Saariselkä, Finland, August 25-27, 2009.
+
+[3] Jouni Sirén: Sampled Longest Common Prefix Array.
+In CPM 2010, Springer LNCS 6129, pp. 227-237, New York, USA, June 21-23, 2010.
+
+[4] Paolo Ferragina, Jouni Sirén, and Rossano Venturini: Distribution-aware compressed full-text indexes.
+Algorithmica 67(4):529-546, 2013.
+
+[5] Travis Gagie, Kalle Karhu, Gonzalo Navarro, Simon J. Puglisi, and Jouni Sirén: Document Listing on Repetitive Collections.
+In CPM 2013, Springer LNCS 7922, pp. 107-119, Bad Herrenalb, Germany, June 17-19, 2013.
