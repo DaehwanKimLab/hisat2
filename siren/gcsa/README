@@ -1,0 +1,120 @@
+Graph CSA
+=========
+
+This is an implementation of the Generalized CSA (GCSA) [2, 3] and its doubling-based construction algorithm.
+
+Copyright 2010-2014, Jouni Sirén. See LICENSE for further information.
+
+
+Compiling
+---------
+
+The code should compile in both 32-bit and 64-bit environments. Uncomment SIZE_FLAGS in the makefile to use 64-bit integers in the 64-bit version. This allows the final automaton to have more than 2^32 nodes and edges (the initial automaton is still restricted to less than 2^32 nodes and edges).
+
+A large part of the running time is taken by sorting large arrays. Uncomment PARALLEL_FLAGS in the makefile to use a parallel version of std::sort.
+
+This implementation builds upon RLCSA [1] (available at http://www.cs.helsinki.fi/group/suds/rlcsa/). You must compile RLCSA library with same parameters as GCSA, and set RLCSA_ROOT in the makefile.
+
+If 32-bit integers are used, bit-aligned arrays are limited to less than 512 megabytes (2^32 bits) in size. This can cause some problems with dense sampling of very large automata.
+
+
+Index Construction
+------------------
+
+The initial input can be a multiple alignment of DNA sequences, with each line corresponding to one position of the alignment, and containing one character per sequence. Valid characters are all IUPAC codes for bases, " =-_" for gaps, and newlines.
+
+  clean_alignment alignment cleaned
+
+processes the alignment file 'alignment' and writes the output into 'cleaned'. All gaps will be marked with '-'. IUPAC codes corresponding to multiple bases will be converted 'N'. Finally, characters preceding a gap are sometimes moved to the end of the gap, making the construction of a reverse deterministic automaton easier.
+
+To build the initial automaton A_{0} from alignment file 'cleaned', use the following command:
+
+  build_automaton [-b] cleaned context_length
+
+The automaton will be written to 'cleaned.automaton'. Parameter -b will store backbone information (nodes corresponding to the first sequence in the alignment) in the automaton. With context length k, aligned bases will correspond to the same node, if the substrings of length k+1 starting from the bases are equal.
+
+Program determinize can be used to merge and determinize multiple automata (see below for the format). Command
+
+  determinize [-b|-r] automaton_1 ... automaton_n base_name
+
+merges the n automata, determinizing them when necessary, and writes the merged automaton to 'base_name.automaton'. If multiple similar automata are merged, the index can grow exponentially, so beware. The determinization algorithm has not been tested very well, and the memory usage can be large. If the automata contain backbone information, use parameter -b. Alternatively, parameter -r can be used to discard the backbone information.
+
+To build the index from an automaton file, use:
+
+  build_index [-b] base_name
+
+The index will be written to 'base_name.gcsa'. Use parameter -b if the automaton contains backbone information. Typical memory usage will be about 50n bytes, where n is the number of nodes in the final automaton.
+
+
+Test programs
+-------------
+
+Programs gcsa_test and rlcsa_test can be used to test find() and locate() on the respective indexes. They were used for the experiments reported in [2]. Their syntax is the following:
+
+  Xcsa_test [OPTIONS] index [patterns]
+
+Options include the following:
+
+  -i   Allow indels in approximate matching.
+  -k#  Do approximate matching with up to k mismatches/errors.
+  -l   Use locate() after find().
+  -m#  Locate at most # matches (actual function is complicated).
+  -p   Use different penalty scores for different edit operations in approximate matching with indels.
+  -r   Search for the reverse complements of the patterns as well.
+  -v   Verbose output.
+  -w   Classify the patterns (only in exact matching).
+
+The pattern file should contain one pattern per line. When using '-w', the patterns are written to files 'patterns.found', 'patterns.reverse', and 'patterns.notfound', depending on whether they were found, found as reverse complements, or not found at all.
+
+
+Data formats
+------------
+
+GCSA
+  distribution of characters (CHARS * sizeof(usint) bytes)
+  DeltaVector for each occurring character
+  RLEVector M marking the outgoing edges
+  DeltaVector B marking the sampled positions
+  sample_bits (sizeof(usint) bytes)
+  samples (B.items items of sample_bits bits)
+
+A GCSA with no support for locate will set sample_bits to 0.
+
+Automaton
+  number of nodes (sizeof(uint) bytes)
+  number of edges (sizeof(uint) bytes)
+  for each node in an arbitrary order:
+    node label (sizeof(uint) bytes)
+    node value (sizeof(uint) bytes)
+  for each edge in an arbitrary order:
+    'from' node id (sizeof(uint) bytes)
+    'to' node id (sizeof(uint) bytes)
+
+Only values 0..255 are allowed for node labels. Label 0 is restricted for the final node(s), while the initial node(s) must have a label larger than that of any other node. If the automaton contains backbone information, all lower case labels are converted to upper case before determining the largest node label. If multiple automata are merged, all automata should have the same label for the initial nodes.
+
+Node ids in edges are the positions of the nodes in stored order. Node values are the numerical values returned by locate(). During determinization, the value of each node will become the maximum value among the original nodes contained in the corresponding subset. If the automaton includes backbone information, and the subset contains backbone nodes or nodes aligned to the backbone, the value will become the maximum among those nodes.
+
+Backbone
+  number of backbone nodes (sizeof(usint) bytes)
+  SuccinctVector marking the nodes of the backbone
+  RLEVector marking the edges used to move forward in the backbone
+  SuccinctVector marking the nodes corresponding to the backbone of the original automaton
+
+Backbone is the path in the automaton corresponding to the reference sequence, including the initial and the final nodes. There is an option to build an extra structure (stored as base_name.backbone) to store that information when building GCSA. This requires an automaton that contains backbone information.
+
+Nodes that are not part of the backbone are marked with a lower case label in the automaton. These labels are considered to be the same characters as the corresponding upper case characters, and they are converted to upper case for index construction.
+
+Assume that the length of the reference sequence is n. Then the initial node must have value 0, the backbone nodes must have values from 1 to n, and the final node must have value n+1. Other nodes having values from 1 to n are considered to be aligned with the corresponding backbone node, while the rest of the nodes should have values starting from n+2. If there are multiple automata, the backbone of the second automata will be assigned values from n+2 to n+m+3, where m is the length of the second backbone, and so on. Unaligned nodes from all automata will be assigned values larger than of any backbone node.
+
+
+References
+----------
+
+[1] Veli Mäkinen, Gonzalo Navarro, Jouni Sirén, and Niko Välimäki: Storage and Retrieval of Highly Repetitive Sequence Collections.
+Journal of Computational Biology 17(3):281-308, 2010.
+
+[2] Jouni Sirén, Niko Välimäki, and Veli Mäkinen: Indexing Finite Language Representation of Population Genotypes.
+In WABI 2011, Springer LNCS 6833, pp. 270-281, Saarbrücken, Germany, September 5-7, 2011.
+
+[3] Jouni Sirén, Niko Välimäki, and Veli Mäkinen: Indexing Graphs for Path Queries with Applications in Genome Research.
+IEEE/ACM Transactions on Computational Biology and Bioinformatics 11(2):375-388, 2014.
