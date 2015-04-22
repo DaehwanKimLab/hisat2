@@ -6,3 +6,10 @@
 *-l
 hisat.xcodeproj/project.xcworkspace
 hisat.xcodeproj/xcuserdata
+
+build_automaton
+build_index
+clean_alignment
+determinize
+gcsa_alignment
+gcsa_test

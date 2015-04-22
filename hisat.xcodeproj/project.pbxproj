@@ -451,7 +451,7 @@
 			children = (
 				E8000A6A1AE7E5E600E1F351 /* README */,
 				E8EEBD1C1AE7D47600E0A359 /* gcsa */,
-				E8EEBD1D1AE7D47D00E0A359 /* gcsa_test */,
+				E8EEBD1D1AE7D47D00E0A359 /* gcsa_util */,
 				E8EEBD1E1AE7D48400E0A359 /* rlcsa */,
 			);
 			name = siren;
@@ -481,7 +481,7 @@
 			name = gcsa;
 			sourceTree = "<group>";
 		};
-		E8EEBD1D1AE7D47D00E0A359 /* gcsa_test */ = {
+		E8EEBD1D1AE7D47D00E0A359 /* gcsa_util */ = {
 			isa = PBXGroup;
 			children = (
 				E8000AB61AE7E66C00E1F351 /* gcsa_alignment.cpp */,
@@ -491,7 +491,7 @@
 				E8000ABA1AE7E66C00E1F351 /* Tools.h */,
 				E8000ABB1AE7E66C00E1F351 /* vcf2malignment.cpp */,
 			);
-			name = gcsa_test;
+			name = gcsa_util;
 			sourceTree = "<group>";
 		};
 		E8EEBD1E1AE7D48400E0A359 /* rlcsa */ = {

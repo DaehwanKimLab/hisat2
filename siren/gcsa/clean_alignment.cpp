@@ -10,7 +10,6 @@ using namespace CSA;
 
 std::string gapChars = " =-_";
 std::string bases = "ACGNT";
-const usint allowed_bases = 5;
 
 char*
 readAlignment(std::ifstream& input, usint& lines, usint sequences, bool quality_included)
