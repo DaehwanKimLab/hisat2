@@ -3872,7 +3872,7 @@ int hisat(int argc, const char **argv) {
 		return 1;
 	} catch(int e) {
 		if(e != 0) {
-			cerr << "Error: Encountered internal Bowtie 2 exception (#" << e << ")" << endl;
+			cerr << "Error: Encountered internal HISAT exception (#" << e << ")" << endl;
 			cerr << "Command: ";
 			for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
 			cerr << endl;
