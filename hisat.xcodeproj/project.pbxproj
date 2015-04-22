@@ -185,6 +185,7 @@
 		E8B0DBE71934F769005ED9FA /* Source */ = {
 			isa = PBXGroup;
 			children = (
+				E8EEBD1B1AE7D46900E0A359 /* siren */,
 				E85F1AFA193501E000F85A12 /* Makefile */,
 				E8B0DBE81934F7AA005ED9FA /* aligner_bt.h */,
 				E8B0DBE91934F7AA005ED9FA /* aligner_cache.h */,
@@ -326,6 +327,37 @@
 				E8B0DC6C1934F7AA005ED9FA /* unique.cpp */,
 			);
 			name = Source;
+			sourceTree = "<group>";
+		};
+		E8EEBD1B1AE7D46900E0A359 /* siren */ = {
+			isa = PBXGroup;
+			children = (
+				E8EEBD1C1AE7D47600E0A359 /* gcsa */,
+				E8EEBD1D1AE7D47D00E0A359 /* gcsa_test */,
+				E8EEBD1E1AE7D48400E0A359 /* rcsa */,
+			);
+			name = siren;
+			sourceTree = "<group>";
+		};
+		E8EEBD1C1AE7D47600E0A359 /* gcsa */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = gcsa;
+			sourceTree = "<group>";
+		};
+		E8EEBD1D1AE7D47D00E0A359 /* gcsa_test */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = gcsa_test;
+			sourceTree = "<group>";
+		};
+		E8EEBD1E1AE7D48400E0A359 /* rcsa */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = rcsa;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
