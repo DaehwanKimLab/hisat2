@@ -13,3 +13,5 @@ clean_alignment
 determinize
 gcsa_alignment
 gcsa_test
+
+siren/gcsa_util/test

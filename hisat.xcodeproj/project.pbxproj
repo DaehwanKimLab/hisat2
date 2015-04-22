@@ -539,6 +539,76 @@
 /* End PBXGroup section */
 
 /* Begin PBXLegacyTarget section */
+		E8000ACD1AE8271500E1F351 /* build_automaton-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "build_automaton-debug";
+			buildConfigurationList = E8000ACE1AE8271500E1F351 /* Build configuration list for PBXLegacyTarget "build_automaton-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT/codes/hisat;
+			dependencies = (
+			);
+			name = "build_automaton-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
+		E8000AD11AE82AAE00E1F351 /* determinize-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "determinize-debug";
+			buildConfigurationList = E8000AD21AE82AAE00E1F351 /* Build configuration list for PBXLegacyTarget "determinize-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT/codes/hisat;
+			dependencies = (
+			);
+			name = "determinize-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
+		E8000AD51AE82ABD00E1F351 /* build_index-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "build_index-debug";
+			buildConfigurationList = E8000AD61AE82ABD00E1F351 /* Build configuration list for PBXLegacyTarget "build_index-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT/codes/hisat;
+			dependencies = (
+			);
+			name = "build_index-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
+		E8000AD91AE82AC200E1F351 /* gcsa_test-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "gcsa_test-debug";
+			buildConfigurationList = E8000ADA1AE82AC200E1F351 /* Build configuration list for PBXLegacyTarget "gcsa_test-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT/codes/hisat;
+			dependencies = (
+			);
+			name = "gcsa_test-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
+		E8000ADD1AE82ACC00E1F351 /* gcsa_alignment-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "gcsa_alignment-debug";
+			buildConfigurationList = E8000ADE1AE82ACC00E1F351 /* Build configuration list for PBXLegacyTarget "gcsa_alignment-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT/codes/hisat;
+			dependencies = (
+			);
+			name = "gcsa_alignment-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
 		E81779C219704B300067B436 /* hisat-build-l-debug */ = {
 			isa = PBXLegacyTarget;
 			buildArgumentsString = "hisat-build-l-debug";
@@ -680,11 +750,161 @@
 				E8B8F8F51976E840001596FB /* hisat-inspect-l-debug */,
 				E8B8F8F9197A9BE2001596FB /* hisat-inspect-s-debug */,
 				E818AEAF19880CA400ED141B /* hisat-bp-bin-debug */,
+				E8000ACD1AE8271500E1F351 /* build_automaton-debug */,
+				E8000AD11AE82AAE00E1F351 /* determinize-debug */,
+				E8000AD51AE82ABD00E1F351 /* build_index-debug */,
+				E8000AD91AE82AC200E1F351 /* gcsa_test-debug */,
+				E8000ADD1AE82ACC00E1F351 /* gcsa_alignment-debug */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin XCBuildConfiguration section */
+		E8000ACF1AE8271500E1F351 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat-align-s-debug copy";
+			};
+			name = Debug;
+		};
+		E8000AD01AE8271500E1F351 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat-align-s-debug copy";
+			};
+			name = Release;
+		};
+		E8000AD31AE82AAE00E1F351 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "build_automaton-debug copy";
+			};
+			name = Debug;
+		};
+		E8000AD41AE82AAE00E1F351 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "build_automaton-debug copy";
+			};
+			name = Release;
+		};
+		E8000AD71AE82ABD00E1F351 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "determinize-debug copy";
+			};
+			name = Debug;
+		};
+		E8000AD81AE82ABD00E1F351 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "determinize-debug copy";
+			};
+			name = Release;
+		};
+		E8000ADB1AE82AC200E1F351 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "build_index-debug copy";
+			};
+			name = Debug;
+		};
+		E8000ADC1AE82AC200E1F351 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "build_index-debug copy";
+			};
+			name = Release;
+		};
+		E8000ADF1AE82ACC00E1F351 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "gcsa_test-debug copy";
+			};
+			name = Debug;
+		};
+		E8000AE01AE82ACC00E1F351 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "gcsa_test-debug copy";
+			};
+			name = Release;
+		};
 		E81779C419704B300067B436 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -974,6 +1194,51 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		E8000ACE1AE8271500E1F351 /* Build configuration list for PBXLegacyTarget "build_automaton-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E8000ACF1AE8271500E1F351 /* Debug */,
+				E8000AD01AE8271500E1F351 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E8000AD21AE82AAE00E1F351 /* Build configuration list for PBXLegacyTarget "determinize-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E8000AD31AE82AAE00E1F351 /* Debug */,
+				E8000AD41AE82AAE00E1F351 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E8000AD61AE82ABD00E1F351 /* Build configuration list for PBXLegacyTarget "build_index-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E8000AD71AE82ABD00E1F351 /* Debug */,
+				E8000AD81AE82ABD00E1F351 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E8000ADA1AE82AC200E1F351 /* Build configuration list for PBXLegacyTarget "gcsa_test-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E8000ADB1AE82AC200E1F351 /* Debug */,
+				E8000ADC1AE82AC200E1F351 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E8000ADE1AE82ACC00E1F351 /* Build configuration list for PBXLegacyTarget "gcsa_alignment-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E8000ADF1AE82ACC00E1F351 /* Debug */,
+				E8000AE01AE82ACC00E1F351 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		E81779C319704B300067B436 /* Build configuration list for PBXLegacyTarget "hisat-build-l-debug" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

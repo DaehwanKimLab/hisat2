@@ -387,11 +387,8 @@ hisat-bp-bin-debug: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEAR
 #
 
 SIREN_INC = -Isiren/rlcsa -Isiren/gcsa
-SIREN_RELEASE_FLAGS =
-SIREN_RELEASE_DEFS =
-SIREN_DEBUG_FLAGS =
-SIREN_DEBUG_DEFS =
-SIREN_DFFS =
+SIREN_RELEASE_FLAGS = -O3 -DNDEBUG
+SIREN_DEBUG_FLAGS = -O0 -g3
 SIREN_SHARED_CPPS = siren/rlcsa/rlcsa.cpp \
 	siren/rlcsa/rlcsa_builder.cpp \
 	siren/rlcsa/sasamples.cpp \
@@ -416,45 +413,67 @@ SIREN_SHARED_CPPS = siren/rlcsa/rlcsa.cpp \
 	siren/gcsa/parameter_handler.cpp
 
 clean_alignment: siren/gcsa/clean_alignment.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) $(SIREN_RELEASE_DEFS) \
-	$(SIREN_DEFS) $(NOASSERT_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 build_automaton: siren/gcsa/build_automaton.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) $(SIREN_RELEASE_DEFS) \
-	$(SIREN_DEFS) $(NOASSERT_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
+	$(SIREN_INC) \
+	-o $@ $< \
+	$(SIREN_SHARED_CPPS)
+
+build_automaton-debug: siren/gcsa/build_automaton.cpp $(SIREN_SHARED_CPPS)
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 determinize: siren/gcsa/determinize.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) $(SIREN_RELEASE_DEFS) \
-	$(SIREN_DEFS) $(NOASSERT_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
+determinize-debug: siren/gcsa/determinize.cpp $(SIREN_SHARED_CPPS)
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall \
+	$(SIREN_INC) \
+	-o $@ $< \
+	$(SIREN_SHARED_CPPS)
 
 build_index: siren/gcsa/build_index.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) $(SIREN_RELEASE_DEFS) \
-	$(SIREN_DEFS) $(NOASSERT_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
+build_index-debug: siren/gcsa/build_index.cpp $(SIREN_SHARED_CPPS)
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall \
+	$(SIREN_INC) \
+	-o $@ $< \
+	$(SIREN_SHARED_CPPS)
 
 gcsa_test: siren/gcsa/gcsa_test.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) $(SIREN_RELEASE_DEFS) \
-	$(SIREN_DEFS) $(NOASSERT_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
+	$(SIREN_INC) \
+	-o $@ $< \
+	$(SIREN_SHARED_CPPS)
+
+gcsa_test-debug: siren/gcsa/gcsa_test.cpp $(SIREN_SHARED_CPPS)
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 gcsa_alignment: siren/gcsa_util/gcsa_alignment.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) $(SIREN_RELEASE_DEFS) \
-	$(SIREN_DEFS) $(NOASSERT_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
+	$(SIREN_INC) \
+	-o $@ $< \
+	$(SIREN_SHARED_CPPS)
+
+gcsa_alignment-debug: siren/gcsa_util/gcsa_alignment.cpp $(SIREN_SHARED_CPPS)
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
