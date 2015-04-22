@@ -1,0 +1,8 @@
+*~
+*.dSYM
+.DS_Store
+*-debug
+*-s
+*-l
+hisat.xcodeproj/roject.xcworkspace
+hisat.xcodeproj/xcuserdata
