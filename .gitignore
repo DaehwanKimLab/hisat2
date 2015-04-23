@@ -15,3 +15,5 @@ gcsa_alignment
 gcsa_test
 
 siren/gcsa_util/test
+
+hisat2_test/paper_example.*

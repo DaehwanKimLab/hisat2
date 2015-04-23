@@ -413,55 +413,55 @@ SIREN_SHARED_CPPS = siren/rlcsa/rlcsa.cpp \
 	siren/gcsa/parameter_handler.cpp
 
 clean_alignment: siren/gcsa/clean_alignment.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 build_automaton: siren/gcsa/build_automaton.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 build_automaton-debug: siren/gcsa/build_automaton.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall \
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 determinize: siren/gcsa/determinize.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 determinize-debug: siren/gcsa/determinize.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall \
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 build_index: siren/gcsa/build_index.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 build_index-debug: siren/gcsa/build_index.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall \
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 gcsa_test: siren/gcsa/gcsa_test.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall \
+	$(CXX) $(SIREN_RELEASE_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
 
 gcsa_test-debug: siren/gcsa/gcsa_test.cpp $(SIREN_SHARED_CPPS)
-	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall \
+	$(CXX) $(SIREN_DEBUG_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(SIREN_INC) \
 	-o $@ $< \
 	$(SIREN_SHARED_CPPS)
