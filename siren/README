@@ -4,7 +4,7 @@
 
 ../../gcsa/build_automaton -b 1000gen-FIN-chr21 4
 
-../../gcsa/determinize -b 1000gen-FIN-chr21
+../../gcsa/determinize -b 1000gen-FIN-chr21.automaton 1000gen-FIN-chr21
 
 ../../gcsa/build_index -b 1000gen-FIN-chr21
 

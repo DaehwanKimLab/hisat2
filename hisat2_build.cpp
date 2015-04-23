@@ -187,8 +187,13 @@ buildAutomaton(std::ifstream& input, const std::string& base_name, usint sequenc
     }
     else { for(usint i = 0; i < lines; i++) { positions[i] = i; } }
     
+#if 0
     Node nodes[sequences];
     usint previous[sequences]; // Previous node id for every sequence.
+#else
+    Node nodes[3];
+    usint previous[3]; // Previous node id for every sequence.
+#endif
     for(usint i = 0; i < sequences; i++)
     {
         nodes[i].init(data, sequences, i, context_length, positions);
@@ -238,7 +243,19 @@ buildAutomaton(std::ifstream& input, const std::string& base_name, usint sequenc
     
     std::cout << "Lines: " << (lines - 2) << std::endl;
     std::cout << "Nodes: " << node_vector.size() << std::endl;
+#if 1
+    for(usint i = 0; i < node_vector.size(); i++) {
+        const GraphNode& n = node_vector[i];
+        std::cout << "\t" << i << "\t" << (char)n.label << "\t" << n.value << endl;
+    }
+#endif
     std::cout << "Edges: " << edge_vector.size() << std::endl;
+#if 1
+    for(usint i = 0; i < edge_vector.size(); i++) {
+        const GraphEdge& e = edge_vector[i];
+        std::cout << "\t" << i << "\t" << e.from << " to " << e.to << endl;
+    }
+#endif
     std::cout << std::endl;
     
     delete[] data;

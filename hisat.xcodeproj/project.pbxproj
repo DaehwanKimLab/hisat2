@@ -793,7 +793,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-s-debug copy";
+				PRODUCT_NAME = "build_automaton-debug";
 			};
 			name = Debug;
 		};
@@ -804,7 +804,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-s-debug copy";
+				PRODUCT_NAME = "build_automaton-debug";
 			};
 			name = Release;
 		};
@@ -822,7 +822,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "build_automaton-debug copy";
+				PRODUCT_NAME = "determinize-debug";
 			};
 			name = Debug;
 		};
@@ -833,7 +833,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "build_automaton-debug copy";
+				PRODUCT_NAME = "determinize-debug";
 			};
 			name = Release;
 		};
@@ -851,7 +851,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "determinize-debug copy";
+				PRODUCT_NAME = "build_index-debug";
 			};
 			name = Debug;
 		};
@@ -862,7 +862,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "determinize-debug copy";
+				PRODUCT_NAME = "build_index-debug";
 			};
 			name = Release;
 		};
@@ -880,7 +880,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "build_index-debug copy";
+				PRODUCT_NAME = "gcsa_test-debug";
 			};
 			name = Debug;
 		};
@@ -891,7 +891,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "build_index-debug copy";
+				PRODUCT_NAME = "gcsa_test-debug";
 			};
 			name = Release;
 		};
@@ -909,7 +909,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "gcsa_test-debug copy";
+				PRODUCT_NAME = "gcsa_alignment-debug";
 			};
 			name = Debug;
 		};
@@ -920,7 +920,7 @@
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "gcsa_test-debug copy";
+				PRODUCT_NAME = "gcsa_alignment-debug";
 			};
 			name = Release;
 		};
@@ -936,7 +936,7 @@
 				);
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-l-debug copy";
+				PRODUCT_NAME = "hisat-build-s-debug";
 			};
 			name = Debug;
 		};
@@ -945,7 +945,7 @@
 			buildSettings = {
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-l-debug copy";
+				PRODUCT_NAME = "hisat-build-s-debug";
 			};
 			name = Release;
 		};

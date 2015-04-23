@@ -89,7 +89,7 @@ Index construction for the multiple alignment is done as (see rlcsa/gcsa/README 
    rm 1000gen-FIN-chr21.malignment
    ../../gcsa/build_automaton -b 1000gen-FIN-chr21 4
    rm 1000gen-FIN-chr21
-   ../../gcsa/determinize -b 1000gen-FIN-chr21
+   ../../gcsa/determinize -b 1000gen-FIN-chr21.automaton 1000gen-FIN-chr21
    ../../gcsa/build_index -b 1000gen-FIN-chr21
    rm 1000gen-FIN-chr21.automaton
 
