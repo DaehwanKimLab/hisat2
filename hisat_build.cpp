@@ -129,7 +129,7 @@ static void printUsage(ostream& out) {
 		tool_name = "hisat-build";
 	}
     
-	out << "Usage: hisat2-build [options]* <reference_in> <bt2_index_base>" << endl
+	out << "Usage: hisat-build [options]* <reference_in> <bt2_index_base>" << endl
 	    << "    reference_in            comma-separated list of files with ref sequences" << endl
 	    << "    hisat_index_base          write " << gEbwt_ext << " data to files with this dir/basename" << endl
         << "Options:" << endl
