@@ -28,7 +28,7 @@
 using namespace std;
 
 extern "C" {
-	int hisat_build(int argc, const char **argv);
+	int hisat2_build(int argc, const char **argv);
 }
 
 /**
@@ -56,7 +56,7 @@ int main(int argc, const char **argv) {
 				myargs[i] = args[i].c_str();
 			}
 			if(args.size() == 1) continue;
-			lastret = hisat_build((int)args.size(), myargs);
+			lastret = hisat2_build((int)args.size(), myargs);
 			free(myargs);
 		}
 		if(lastret == -1) {
@@ -65,6 +65,6 @@ int main(int argc, const char **argv) {
 		}
 		return lastret;
 	} else {
-		return hisat_build(argc, argv);
+		return hisat2_build(argc, argv);
 	}
 }

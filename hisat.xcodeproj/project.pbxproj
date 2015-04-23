@@ -613,6 +613,20 @@
 			passBuildSettingsInEnvironment = 1;
 			productName = "sawhi-align-debug";
 		};
+		E8000AE31AE9324600E1F351 /* hisat2-build-s-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "hisat2-build-s-debug";
+			buildConfigurationList = E8000AE41AE9324600E1F351 /* Build configuration list for PBXLegacyTarget "hisat2-build-s-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT/codes/hisat;
+			dependencies = (
+			);
+			name = "hisat2-build-s-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
 		E81779C219704B300067B436 /* hisat-build-l-debug */ = {
 			isa = PBXLegacyTarget;
 			buildArgumentsString = "hisat-build-l-debug";
@@ -759,6 +773,7 @@
 				E8000AD51AE82ABD00E1F351 /* build_index-debug */,
 				E8000AD91AE82AC200E1F351 /* gcsa_test-debug */,
 				E8000ADD1AE82ACC00E1F351 /* gcsa_alignment-debug */,
+				E8000AE31AE9324600E1F351 /* hisat2-build-s-debug */,
 			);
 		};
 /* End PBXProject section */
@@ -906,6 +921,31 @@
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "gcsa_test-debug copy";
+			};
+			name = Release;
+		};
+		E8000AE51AE9324600E1F351 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat-build-l-debug copy";
+			};
+			name = Debug;
+		};
+		E8000AE61AE9324600E1F351 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat-build-l-debug copy";
 			};
 			name = Release;
 		};
@@ -1239,6 +1279,15 @@
 			buildConfigurations = (
 				E8000ADF1AE82ACC00E1F351 /* Debug */,
 				E8000AE01AE82ACC00E1F351 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E8000AE41AE9324600E1F351 /* Build configuration list for PBXLegacyTarget "hisat2-build-s-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E8000AE51AE9324600E1F351 /* Debug */,
+				E8000AE61AE9324600E1F351 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

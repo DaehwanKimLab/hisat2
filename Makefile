@@ -133,6 +133,8 @@ BUILD_CPPS = diff_sample.cpp
 HISAT_CPPS_MAIN = $(SEARCH_CPPS) hisat_main.cpp
 HISAT_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat_build_main.cpp
 
+HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
+
 SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
 VERSION = $(shell cat VERSION)
 
@@ -238,6 +240,7 @@ both-debug: hisat-align-s-debug hisat-align-l-debug hisat-build-s-debug hisat-bu
 
 DEFS=-fno-strict-aliasing \
      -DHISAT_VERSION="\"`cat VERSION`\"" \
+     -DHISAT2_VERSION="\"`cat VERSION2`\"" \
      -DBUILD_HOST="\"`hostname`\"" \
      -DBUILD_TIME="\"`date`\"" \
      -DCOMPILER_VERSION="\"`$(CXX) -v 2>&1 | tail -1`\"" \
@@ -359,6 +362,44 @@ hisat-inspect-l-debug: hisat_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
+
+
+#
+# hisat2-build targets
+#
+
+hisat2-build-s: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
+hisat2-build-l: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX $(NOASSERT_FLAGS) -Wall \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
+hisat2-build-s-debug: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 -Wall \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
+hisat2-build-l-debug: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -Wall \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
 
 
 #
