@@ -16,4 +16,4 @@ gcsa_test
 
 siren/gcsa_util/test
 
-hisat2_test/paper_example.*
+hisat2_test/paper_example.automaton
