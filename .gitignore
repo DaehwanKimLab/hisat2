@@ -17,3 +17,5 @@ gcsa_test
 siren/gcsa_util/test
 
 hisat2_test/paper_example.malignment.automaton
+hisat2_test/paper_example.malignment.backbone
+hisat2_test/paper_example.malignment.gcsa

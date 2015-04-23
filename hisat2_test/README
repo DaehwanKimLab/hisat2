@@ -1,0 +1,9 @@
+../clean_alignment paper_example.malignment paper_example
+
+../build_automaton -b paper_example.malignment 0
+
+../determinize -b paper_example.malignment.automaton paper_example.malignment
+
+../build_index -b paper_example.malignment
+
+../gcsa_alignment -k2 -l -i -v -r paper_example.malignment pattern_1.txt
