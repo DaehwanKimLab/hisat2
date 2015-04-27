@@ -88,6 +88,7 @@
 		E8000ACC1AE7E68200E1F351 /* verify.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = verify.cpp; path = siren/gcsa/verify.cpp; sourceTree = "<group>"; };
 		E8000AE11AE9304500E1F351 /* hisat2_build_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_build_main.cpp; sourceTree = "<group>"; };
 		E8000AE21AE9304500E1F351 /* hisat2_build.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_build.cpp; sourceTree = "<group>"; };
+		E8000AE71AEEC5A400E1F351 /* gbwt_graph.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gbwt_graph.h; sourceTree = "<group>"; };
 		E818AEAD1987FD2E00ED141B /* bp_aligner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bp_aligner.h; sourceTree = "<group>"; };
 		E818AEAE1987FD5100ED141B /* hisat_bp.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat_bp.cpp; sourceTree = "<group>"; };
 		E819F68819F553B100E1BD32 /* splice_site_mem.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = splice_site_mem.h; sourceTree = "<group>"; };
@@ -340,6 +341,7 @@
 				E8B0DC051934F7AA005ED9FA /* fast_mutex.h */,
 				E8B0DC061934F7AA005ED9FA /* filebuf.h */,
 				E8B0DC071934F7AA005ED9FA /* formats.h */,
+				E8000AE71AEEC5A400E1F351 /* gbwt_graph.h */,
 				E8B0DC081934F7AA005ED9FA /* group_walk.h */,
 				E81BC0841980295300580916 /* hi_aligner.h */,
 				E8B0DC091934F7AA005ED9FA /* hier_idx_common.h */,

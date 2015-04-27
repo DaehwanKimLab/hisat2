@@ -747,6 +747,8 @@ PathGraph::generateEdges(Graph& parent)
   }
 
   this->sortEdges(false, true);
+    
+// daehwan - now we get BWT sequence from the labels in this->edges
   parent.restoreLabels(this->automata, this->max_label);
   this->restoreLabels();
   this->status = ready;
