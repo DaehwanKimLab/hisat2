@@ -1,4 +1,4 @@
-#snp_id	chr	pos(zero-based)	type	dif
+#snp_id	chr	pos(zero-based)	type	diff
 r01	paper_example	3	DEL	-
 r02	paper_example	2	SNS	T
 r03	paper_example	6	DEL	-
