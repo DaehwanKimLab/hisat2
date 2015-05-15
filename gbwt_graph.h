@@ -69,15 +69,21 @@ public:
     };
     
     struct EdgeFromCmp {
+        bool operator() (const Edge& a, const Edge& b) const {
+            return a.from < b.from;
+        }
     };
-    
+
     struct EdgeToCmp {
+        bool operator() (const Edge& a, const Edge& b) {
+            return a.to < b.to;
+        };
     };
     
 public:
     RefGraph(const string& ref_fname, const string& snp_fname, bool verbose);
     
-    bool isReverseDeterministic() const;
+    bool isReverseDeterministic();
     void reverseDeterminize();
     
 #if 0
@@ -361,22 +367,35 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
 }
 
 template <typename index_t>
-bool RefGraph<index_t>::isReverseDeterministic() const
+bool RefGraph<index_t>::isReverseDeterministic()
 {
-#if 0
-    this->sortEdges(false); // Sort edges by destination node.
-    pair_type range = EMPTY_PAIR;
-    for(range = this->getNextEdgeRange(range, false); !isEmpty(range); range = this->getNextEdgeRange(range, false))
-    {
-        WriteBuffer buf(BITS_TO_WORDS(CHARS));
-        for(usint i = range.first; i <= range.second; i++)
-        {
-            uint c = this->nodes[this->edges[i].from].label;
-            if(buf.isSet(c)) { return false; }
-            buf.setBit(c);
+    if(edges.size() <= 0) return true;
+    
+    // Sort edges by "to" nodes
+    if(edges.size() > 1) {
+        std::sort(&edges[0], &edges[0] + edges.size(), EdgeToCmp());
+    }
+    
+    index_t curr_to = edges.front().to;
+    EList<char> seen;
+    for(index_t i = 1; i < edges.size(); i++) {
+        index_t from = edges[i].from;
+        assert_lt(from, nodes.size());
+        char nt = nodes[from].label;
+        if(curr_to != edges[i].to) {
+            curr_to = edges[i].to;
+            seen.clear();
+            seen.push_back(nt);
+        } else {
+            for(index_t j = 0; j < seen.size(); j++) {
+                if(nt == seen[j]) {
+                    return false;
+                }
+            }
+            seen.push_back(nt);
         }
     }
-#endif
+    
     return true;
 }
 
