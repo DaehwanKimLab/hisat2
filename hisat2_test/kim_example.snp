@@ -1,2 +1,4 @@
-#snp_id	chr	pos(zero-based)	type	diff
-r01	kim_example	1	SNS	T
+#snp_id	type	chr	pos(zero-based)	diff
+r01	single	kim_example	1	T
+r02	deletion	kim_example	1	-
+r03	insertion	kim_example	2	A

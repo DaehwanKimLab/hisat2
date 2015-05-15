@@ -22,6 +22,6 @@ hisat2_test/paper_example.malignment.gcsa
 hisat2_test/kim_example*.malignment.automaton
 hisat2_test/kim_example*.malignment.backbone
 hisat2_test/kim_example*.malignment.gcsa
-hisat2_test/kim_example*.bt2
+hisat2_test/kim_example*.ht2
 hisat2_test/22*
 hisat2_test/snp142*

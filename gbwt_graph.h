@@ -36,7 +36,7 @@ using namespace std;
 //--------------------------------------------------------------------------
 
 enum SNP_TYPE {
-    SNP_SNS = 0, // single nucleotide substitution
+    SNP_SGL = 0, // single nucleotide substitution
     SNP_INS,     // small insertion wrt reference genome
     SNP_DEL,     // small deletion wrt reference genome
 };
@@ -68,8 +68,17 @@ public:
         Edge(index_t from_, index_t to_) : from(from_), to(to_) {}
     };
     
+    struct EdgeFromCmp {
+    };
+    
+    struct EdgeToCmp {
+    };
+    
 public:
     RefGraph(const string& ref_fname, const string& snp_fname, bool verbose);
+    
+    bool isReverseDeterministic() const;
+    void reverseDeterminize();
     
 #if 0
     RefGraph(std::vector<GraphNode>& node_vector, std::vector<GraphEdge>& edge_vector);
@@ -228,7 +237,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         snp.pos = pos;
         snp.diff.clear();
         if(type == "single") {
-            snp.type = SNP_SNS;
+            snp.type = SNP_SGL;
             if(diff.size() != 1) {
                 cerr << "Error: SNS type takes only one base" << endl;
                 throw 1;
@@ -258,7 +267,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     }
     snp_file.close();
     
-    index_t num_predicted_nodes = jlen * 12 / 10;
+    index_t num_predicted_nodes = (index_t)(jlen * 1.2);
     nodes.reserveExact(num_predicted_nodes);
     edges.reserveExact(num_predicted_nodes);
     
@@ -289,7 +298,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     // Create nodes and edges for SNPs
     for(size_t i = 0; i < snps.size(); i++) {
         const SNP<index_t>& snp = snps[i];
-        if(snp.type == SNP_SNS) {
+        if(snp.type == SNP_SGL) {
             assert_eq(snp.diff.size(), 1);
             nodes.expand();
             nodes.back().label = snp.diff[0];
@@ -302,13 +311,37 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
             edges.expand();
             edges.back().from = nodes.size() - 1;
             edges.back().to = snp.pos + 2;
-        } else if(snp.type == SNP_INS) {
-            
         } else if(snp.type == SNP_DEL) {
-            
+            index_t deletionLen = snp.diff.size();
+            assert_gt(deletionLen, 0);
+            // assert_gt(snp.pos + deletionLen, *something*);
+            edges.expand();
+            edges.back().from = snp.pos;
+            edges.back().to = snp.pos + deletionLen + 1;
+        } else if(snp.type == SNP_INS) {
+            assert_gt(snp.diff.size(), 0);
+            for(size_t j = 0; j < snp.diff.size(); j++) {
+                char inserted_bp = snp.diff[j];
+                
+                nodes.expand();
+                nodes.back().label = inserted_bp;
+                nodes.back().value = snp.pos;
+                
+                edges.expand();
+                edges.back().from = (j == 0 ? snp.pos : nodes.size() - 2);
+                edges.back().to = nodes.size() - 1;
+            }
+            edges.expand();
+            edges.back().from = nodes.size() - 1;
+            edges.back().to = snp.pos + 1;
         } else {
             assert(false);
         }
+    }
+    
+    if(!isReverseDeterministic()) {
+        cerr << "is not reverse-deterministic" << endl;
+        reverseDeterminize();
     }
     
     if(verbose) {
@@ -325,6 +358,210 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         }
         cerr << endl;
     }
+}
+
+template <typename index_t>
+bool RefGraph<index_t>::isReverseDeterministic() const
+{
+#if 0
+    this->sortEdges(false); // Sort edges by destination node.
+    pair_type range = EMPTY_PAIR;
+    for(range = this->getNextEdgeRange(range, false); !isEmpty(range); range = this->getNextEdgeRange(range, false))
+    {
+        WriteBuffer buf(BITS_TO_WORDS(CHARS));
+        for(usint i = range.first; i <= range.second; i++)
+        {
+            uint c = this->nodes[this->edges[i].from].label;
+            if(buf.isSet(c)) { return false; }
+            buf.setBit(c);
+        }
+    }
+#endif
+    return true;
+}
+
+
+template <typename index_t>
+void RefGraph<index_t>::reverseDeterminize()
+{
+#if 0
+    if(!(this->ok)) { return; }
+    
+    bool create_backbone = (this->backbone != 0);
+    uint backbone_nodes = (create_backbone ? this->backbone->getNumberOfItems() : 0);
+    
+    // Find final node(s) and put them into active queue.
+    uint* outdegrees = new uint[this->node_count];
+    for(uint i = 0; i < this->node_count; i++) { outdegrees[i] = 0; }
+    for(uint i = 0; i < this->edge_count; i++) { outdegrees[this->edges[i].from]++; }
+    std::deque<TempNode*> active;
+    std::map<std::basic_string<uint>, TempNode*> new_nodes;
+    std::vector<TempEdge> new_edges;
+    for(uint i = 0; i < this->node_count; i++)
+    {
+        if(outdegrees[i] == 0)
+        {
+            TempNode* temp = new TempNode(this->nodes[i], i, create_backbone);
+            active.push_back(temp);
+            new_nodes[temp->nodes] = temp;
+        }
+    }
+    delete[] outdegrees; outdegrees = 0;
+    
+    
+    // Actual work.
+    this->sortEdges(false); // Sort edges by destination node.
+    while(!(active.empty()))
+    {
+        // Find predecessors of all original nodes contained in the next active node.
+        TempNode* curr = active.front(); active.pop_front();
+        std::vector<GraphNode*> predecessors;
+        for(std::basic_string<uint>::iterator iter = curr->nodes.begin(); iter != curr->nodes.end(); ++iter)
+        {
+            pair_type edge_range = this->getEdges(*iter, false);
+            for(uint i = edge_range.first; i <= edge_range.second; i++)
+            {
+                predecessors.push_back(this->nodes + this->edges[i].from);
+            }
+        }
+        removeDuplicates(predecessors, false);
+        
+        // Build new tempNodes from the predecessors.
+        sequentialSort(predecessors.begin(), predecessors.end(), nli_comparator);
+        SuccinctVector::Iterator* bb_iter = 0;
+        if(create_backbone) { bb_iter = new SuccinctVector::Iterator(*(this->backbone)); }
+        for(std::vector<GraphNode*>::iterator iter = predecessors.begin(); iter != predecessors.end(); )
+        {
+            GraphNode* first = *iter; ++iter;
+            uint threshold = (create_backbone ? backbone_nodes : curr->value);
+            TempNode* temp = new TempNode(*first, first - this->nodes, false);
+            if(create_backbone) { temp->potential = bb_iter->isSet(first - this->nodes); }
+            while(iter != predecessors.end() && (*iter)->label == first->label) // Other original predecessors.
+            {
+                uint new_value = temp->value;
+                if((temp->value < threshold) != ((*iter)->value < threshold))
+                {
+                    new_value = std::min(temp->value, (*iter)->value);
+                }
+                else { new_value = std::max(temp->value, (*iter)->value); }
+                if(create_backbone)
+                {
+                    temp->potential = bb_iter->isSet(*iter - this->nodes) |
+                    (new_value == temp->value ? temp->potential : 0);
+                }
+                temp->value = new_value;
+                temp->nodes.push_back(*iter - this->nodes);
+                ++iter;
+            }
+            std::map<std::basic_string<uint>, TempNode*>::iterator existing = new_nodes.find(temp->nodes);
+            if(existing == new_nodes.end()) // Create new node and make it active.
+            {
+                new_nodes[temp->nodes] = temp;
+                active.push_back(temp);
+                new_edges.push_back(TempEdge(temp, curr));
+            }
+            else
+            {
+                delete temp;
+                new_edges.push_back(TempEdge((*existing).second, curr));
+            }
+            curr->id++; // Increase indegree.
+        }
+        delete bb_iter; bb_iter = 0;
+    }
+    
+    // Create the new backbone.
+    if(create_backbone)
+    {
+        for(std::map<std::basic_string<uint>, TempNode*>::iterator iter = new_nodes.begin(); iter != new_nodes.end(); ++iter)
+        {
+            TempNode* node = (*iter).second;
+            if(node->backbone) { active.push_back(node); }
+        }
+        parallelSort(new_edges.begin(), new_edges.end(), tet_comparator);
+        while(!(active.empty()))
+        {
+            TempNode* curr = active.front(); active.pop_front();
+            TempEdge dummy(curr, curr);
+            std::pair<std::vector<TempEdge>::iterator, std::vector<TempEdge>::iterator> edge_range =
+            equal_range(new_edges.begin(), new_edges.end(), dummy, tet_comparator);
+            while(edge_range.first != edge_range.second)
+            {
+                TempNode* node = edge_range.first->from;
+                if(node->potential && curr->value == node->value + 1)
+                {
+                    node->backbone = true; node->potential = false;
+                    active.push_back(node);
+                }
+                ++(edge_range.first);
+            }
+        }
+    }
+    
+    // Topological sort. Create new nodes in sorted order.
+    delete[] this->nodes; this->nodes = new GraphNode[new_nodes.size()]; this->node_count = 0;
+    SuccinctEncoder* encoder = 0;
+    if(create_backbone) { encoder = new SuccinctEncoder(BACKBONE_BLOCK_SIZE); }
+    parallelSort(new_edges.begin(), new_edges.end(), tef_comparator);
+    for(std::map<std::basic_string<uint>, TempNode*>::iterator iter = new_nodes.begin(); iter != new_nodes.end(); ++iter)
+    {
+        TempNode* node = (*iter).second;
+        if(node->id == 0)
+        {
+            active.push_back(node);
+            node->id = this->node_count;
+            this->nodes[this->node_count] = node->getNode();
+            if(create_backbone && node->backbone) { encoder->setBit(this->node_count); }
+            this->node_count++;
+        }
+    }
+    while(!(active.empty()))
+    {
+        TempNode* curr = active.front(); active.pop_front();
+        TempEdge dummy(curr, curr);
+        std::pair<std::vector<TempEdge>::iterator, std::vector<TempEdge>::iterator> edge_range =
+        equal_range(new_edges.begin(), new_edges.end(), dummy, tef_comparator);
+        while(edge_range.first != edge_range.second)
+        {
+            TempNode* node = edge_range.first->to;
+            node->id--;
+            if(node->id == 0)
+            {
+                active.push_back(node);
+                node->id = this->node_count;
+                this->nodes[this->node_count] = node->getNode();
+                if(create_backbone && node->backbone) { encoder->setBit(this->node_count); }
+                this->node_count++;
+            }
+            ++(edge_range.first);
+        }
+    }
+    if(create_backbone)
+    {
+        delete this->backbone;
+        this->backbone = new SuccinctVector(*encoder, this->node_count);
+        usint new_bb = this->backbone->getNumberOfItems();
+        if(backbone_nodes != new_bb)
+        {
+            std::cerr << "Error: Backbone nodes: " << backbone_nodes << " -> " << new_bb << std::endl;
+        }
+        delete encoder; encoder = 0;
+    }
+    
+    // Create new edges.
+    delete[] this->edges; this->edges = new GraphEdge[new_edges.size()]; this->edge_count = 0;
+    for(std::vector<TempEdge>::iterator iter = new_edges.begin(); iter != new_edges.end(); ++iter)
+    {
+        this->edges[this->edge_count] = iter->getEdge(); this->edge_count++;
+    }
+    this->sortEdges(true);  // Edges must be sorted by from.
+    
+    // Delete TempNodes.
+    for(std::map<std::basic_string<uint>, TempNode*>::iterator iter = new_nodes.begin(); iter != new_nodes.end(); ++iter)
+    {
+        delete (*iter).second;
+    }
+#endif
 }
 
 #if 0

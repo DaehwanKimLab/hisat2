@@ -179,7 +179,7 @@ def extract_snps(genome_file, snp_file, verbose = False):
             elif classType1 == "deletion":
                 return -1
             else:
-                assert classType1 == "insertion" and classType2 == "deleltion"
+                assert classType1 == "insertion" and classType2 == "deletion"
                 return 1
 
         if allele1 < allele2:
@@ -214,7 +214,7 @@ if __name__ == '__main__':
     parser.add_argument('snp_file',
         nargs='?',
         type=FileType('r'),
-        help='input SNP file')
+        help='input snp file')
     parser.add_argument('-v', '--verbose',
         dest='verbose',
         action='store_true',

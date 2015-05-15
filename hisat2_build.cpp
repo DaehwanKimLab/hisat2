@@ -638,24 +638,6 @@ int hisat2_build(int argc, const char **argv) {
 				driver<S2bDnaString>(infile, infiles, snpfile, outfile, true, REF_READ_FORWARD);
 			}
 		}
-		int reverseType = reverseEach ? REF_READ_REVERSE_EACH : REF_READ_REVERSE;
-		srand(seed);
-		Timer timer(cout, "Total time for backward call to driver() for mirror index: ", verbose);
-		if(!packed) {
-			try {
-				driver<SString<char> >(infile, infiles, snpfile, outfile + ".rev", false, reverseType);
-			} catch(bad_alloc& e) {
-				if(autoMem) {
-					cerr << "Switching to a packed string representation." << endl;
-					packed = true;
-				} else {
-					throw e;
-				}
-			}
-		}
-		if(packed) {
-			driver<S2bDnaString>(infile, infiles, snpfile, outfile + ".rev", true, reverseType);
-		}
 		return 0;
 	} catch(std::exception& e) {
 		cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
