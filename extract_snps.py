@@ -142,7 +142,7 @@ def extract_snps(genome_file, snp_file, verbose = False):
                     continue
                 snp_list.append([rs_id, classType, chr, start, end, allele])
         elif classType == "deletion":
-            snp_list.append([rs_id, classType, chr, start, end, "-"])
+            snp_list.append([rs_id, classType, chr, start, end, "-" * (end - start)])
         else:
             assert classType == "insertion"
             for allele in allele_list:
@@ -201,7 +201,7 @@ def extract_snps(genome_file, snp_file, verbose = False):
     print >> sys.stderr, "Number of SNPs: %d" % (len(snp_list))
     for snp in snp_list:
         id, classType, chr, start, end, allele = snp
-        print "%s\t%s\t%s\t%d\t%d\t%s" % (id, classType, chr, start, end, allele)
+        print "%s\t%s\t%s\t%d\t%s" % (id, classType, chr, start, allele)
                      
 
 if __name__ == '__main__':

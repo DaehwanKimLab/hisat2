@@ -211,6 +211,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     
     EList<SNP<index_t> > snps;
     while(!snp_file.eof()) {
+        // rs73387790	single	22:20000001-21000000	145	A
         string snp_id;
         snp_file >> snp_id;
         if(snp_id.empty() || snp_id[0] == '#') {
@@ -218,22 +219,28 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
             getline(snp_file, line);
             continue;
         }
-        string chr, type, diff;
+        string type, chr, diff;
         index_t pos;
-        snp_file >> chr >> pos >> type >> diff;
+        snp_file >> type >> chr >> pos >> diff;
         
         snps.expand();
         SNP<index_t>& snp = snps.back();
         snp.pos = pos;
         snp.diff.clear();
-        if(type == "SNS") {
+        if(type == "single") {
             snp.type = SNP_SNS;
             if(diff.size() != 1) {
                 cerr << "Error: SNS type takes only one base" << endl;
                 throw 1;
             }
             snp.diff.push_back(diff[0]);
-        } else if(type == "INS") {
+        } else if(type == "deletion") {
+            snp.type = SNP_DEL;
+            for(size_t i = 0; i < diff.size(); i++) {
+                assert_eq(diff[i], '-');
+                snp.diff.push_back('-');
+            }
+        } else if(type == "insertion") {
             snp.type = SNP_INS;
             for(size_t i = 0; i < diff.size(); i++) {
                 char base = toupper(diff[i]);
@@ -243,12 +250,6 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
                     snps.pop_back();
                     continue;
                 }
-            }
-        } else if(type == "DEL") {
-            snp.type = SNP_DEL;
-            for(size_t i = 0; i < diff.size(); i++) {
-                assert_eq(diff[i], '-');
-                snp.diff.push_back('-');
             }
         } else {
             cerr << "Error: unknown snp type " << type << endl;
