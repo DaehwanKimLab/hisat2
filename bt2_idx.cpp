@@ -26,23 +26,11 @@
 
 using namespace std;
 
-#ifdef HISAT_CLASS
-
-const std::string gEbwt_ext("hc");
-
+#ifdef BOWTIE_64BIT_INDEX
+const std::string gEbwt_ext("ht2l");
 #else
-
-#  ifdef BOWTIE_64BIT_INDEX
-
-const std::string gEbwt_ext("bt2l");
-
-#  else
-
-const std::string gEbwt_ext("bt2");
-
-#  endif  // BOWTIE_64BIT_INDEX
-
-#endif
+const std::string gEbwt_ext("ht2");
+#endif  // BOWTIE_64BIT_INDEX
 
 /**
  * Try to find the Bowtie index specified by the user.  First try the
