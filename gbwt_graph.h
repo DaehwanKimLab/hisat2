@@ -355,7 +355,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     
     // Create tail node
     nodes.expand();
-    nodes.back().label = 0;
+    nodes.back().label = '$';
     nodes.back().value = s.length();
     zNode = nodes.size() - 1;
     edges.expand();
