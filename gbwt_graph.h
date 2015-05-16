@@ -50,6 +50,8 @@ struct SNP {
     EList<char, 4> diff;
 };
 
+
+// Note: I wrote the following codes based on Siren's work, gcsa (see the reference above).
 template <typename index_t>
 class RefGraph {
 public:
@@ -91,7 +93,7 @@ public:
     
 private:
     bool isReverseDeterministic();
-    void reverseDeterminize();
+    void reverseDeterminize(bool verbose = false);
     
     void sortEdgesFrom() {
         std::sort(edges.begin(), edges.end(), EdgeFromCmp());
@@ -129,7 +131,7 @@ private:
 private:
     EList<Node> nodes;
     EList<Edge> edges;
-    index_t     zNode;
+    index_t     lastNode; // $
     
 private:
     // Following composite nodes and edges are used to reverse-determinize an automaton.
@@ -139,7 +141,7 @@ private:
         char                       label;
         index_t                    value;
         
-        CompositeNode() : id(0), label(0), value(0) {}
+        CompositeNode() { reset(); }
         
         CompositeNode(char label_, index_t node_id) :
         id(0), label(label_)
@@ -149,6 +151,13 @@ private:
         
         Node getNode() const {
             return Node(label, value);
+        }
+        
+        void reset() {
+            nodes.clear();
+            id = 0;
+            label = 0;
+            value = 0;
         }
     };
     
@@ -170,12 +179,7 @@ private:
         
         bool operator < (const CompositeEdge& o) const
         {
-            if(from < o.from ||
-               (from == o.from && to < o.to)) {
-                return true;
-            } else {
-                return false;
-            }
+            return from < o.from;
         }
     };
     
@@ -197,7 +201,7 @@ private:
  */
 template <typename index_t>
 RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bool verbose)
-: zNode(0)
+: lastNode(0)
 {
     EList<FileBuf*> is(MISC_CAT);
     int reverse = 0;
@@ -357,7 +361,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     nodes.expand();
     nodes.back().label = '$';
     nodes.back().value = s.length();
-    zNode = nodes.size() - 1;
+    lastNode = nodes.size() - 1;
     edges.expand();
     edges.back().from = nodes.size() - 2;
     edges.back().to = nodes.size() - 1;
@@ -423,7 +427,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     
     if(!isReverseDeterministic()) {
         cerr << "is not reverse-deterministic" << endl;
-        reverseDeterminize();
+        reverseDeterminize(verbose);
     }
 }
 
@@ -507,54 +511,69 @@ bool RefGraph<index_t>::isReverseDeterministic()
 
 
 template <typename index_t>
-void RefGraph<index_t>::reverseDeterminize()
+void RefGraph<index_t>::reverseDeterminize(bool verbose)
 {
-    EList<CompositeNode> cnodes; cnodes.resize(nodes.size());
+    EList<CompositeNode> cnodes; cnodes.ensure(nodes.size());
     map<basic_string<index_t>, index_t> cnode_map;
     deque<index_t> active_cnodes;
-    EList<CompositeEdge> cedges; cedges.resize(edges.size());
+    EList<CompositeEdge> cedges; cedges.ensure(edges.size());
     
     // Start from the final node ('$')
-    assert_lt(zNode, nodes.size());
-    const Node& z_node = nodes[zNode];
+    assert_lt(lastNode, nodes.size());
+    const Node& last_node = nodes[lastNode];
     cnodes.expand();
-    cnodes.back().label = z_node.label;
-    cnodes.back().nodes.push_back(zNode);
+    cnodes.back().reset();
+    cnodes.back().label = last_node.label;
+    cnodes.back().value = last_node.value;
+    cnodes.back().nodes.push_back(lastNode);
     active_cnodes.push_back(0);
     cnode_map[cnodes.back().nodes] = 0;
     
     sortEdgesTo();
-    
+  
+    index_t firstNode = 0; // Z -> ... -> $
     EList<index_t> predecessors;
     while(!active_cnodes.empty()) {
-        index_t curr_cnode_id = active_cnodes.front(); active_cnodes.pop_front();
-        assert_lt(curr_cnode_id, cnodes.size());
-        CompositeNode& curr_cnode = cnodes[curr_cnode_id];
+        index_t cnode_id = active_cnodes.front(); active_cnodes.pop_front();
+        assert_lt(cnode_id, cnodes.size());
+        CompositeNode& cnode = cnodes[cnode_id];
         
         // Find predecessors of this composite node
         predecessors.clear();
-        for(size_t i = 0; i < curr_cnode.nodes.size(); i++) {
-            index_t curr_node_id = curr_cnode.nodes[i];
-            pair<index_t, index_t> edge_range = findEdgesTo(curr_node_id);
+        for(size_t i = 0; i < cnode.nodes.size(); i++) {
+            index_t node_id = cnode.nodes[i];
+            pair<index_t, index_t> edge_range = findEdgesTo(node_id);
+            assert_leq(edge_range.first, edge_range.second);
+            assert_leq(edge_range.second, edges.size());
             for(index_t j = edge_range.first; j < edge_range.second; j++) {
-                assert_lt(j, edges.size());
+                assert_eq(edges[j].to, node_id);
                 predecessors.push_back(edges[j].from);
             }
         }
         
-        predecessors.sort();
-        index_t new_size = unique(predecessors.begin(), predecessors.end()) - predecessors.begin();
-        predecessors.resize(new_size);
+        if(predecessors.size() >= 2) {
+            // Remove redundant nodes
+            predecessors.sort();
+            index_t new_size = unique(predecessors.begin(), predecessors.end()) - predecessors.begin();
+            predecessors.resize(new_size);
+            
+            // Create composite nodes by labels
+            stable_sort(predecessors.begin(), predecessors.end(), TempNodeLabelCmp(nodes));
+        }
         
-        // Create composite nodes by labels
-        stable_sort(predecessors.begin(), predecessors.end(), TempNodeLabelCmp(nodes));
-        for(size_t i = 0; i < predecessors.size(); i++) {
+        for(size_t i = 0; i < predecessors.size();) {
             index_t node_id = predecessors[i];
             assert_lt(node_id, nodes.size());
             const Node& node = nodes[node_id]; i++;
             cnodes.expand();
+            cnodes.back().reset();
             cnodes.back().label = node.label;
+            cnodes.back().value = node.value;
             cnodes.back().nodes.push_back(node_id);
+            
+            if(node.label == 'Z' && firstNode == 0) {
+                firstNode = cnodes.size() - 1;
+            }
             
             while(i < predecessors.size()) {
                 index_t next_node_id = predecessors[i];
@@ -570,37 +589,34 @@ void RefGraph<index_t>::reverseDeterminize()
             if(existing == cnode_map.end()) {
                 cnode_map[cnodes.back().nodes] = cnodes.size() - 1;
                 active_cnodes.push_back(cnodes.size() - 1);
-                cedges.push_back(CompositeEdge(cnodes.size() - 1, curr_cnode_id));
+                cedges.push_back(CompositeEdge(cnodes.size() - 1, cnode_id));
             } else {
                 cnodes.pop_back();
-                cedges.push_back(CompositeEdge((*existing).second, curr_cnode_id));
+                cedges.push_back(CompositeEdge((*existing).second, cnode_id));
             }
             
             // Increment indegree
-            curr_cnode.id++;
+            cnode.id++;
         }
     }
     
     // Create new nodes
     nodes.resizeExact(cnodes.size()); nodes.clear();
+    assert_neq(firstNode, 0);
+    assert_lt(firstNode, cnodes.size());
+    CompositeNode& first_node = cnodes[firstNode];
+    first_node.id = 0;
+    nodes.expand();
+    nodes.back() = first_node.getNode();
+    active_cnodes.push_back(firstNode);    
     sort(cedges.begin(), cedges.end());
-    for(index_t i = 0; i < cnodes.size(); i++) {
-        CompositeNode& node = cnodes[i];
-        if(node.id == 0) {
-            active_cnodes.push_back(i);
-            node.id = nodes.size();
-            nodes.expand();
-            nodes.back() = node.getNode();
-        }
-    }
-    
     while(!active_cnodes.empty()) {
-        index_t curr_cnode_id = active_cnodes.front(); active_cnodes.pop_front();
-        assert_lt(curr_cnode_id, cnodes.size());
-        index_t i = cedges.bsearchLoBound(CompositeEdge(curr_cnode_id, 0));
-        while(true) {
-            assert_geq(cedges[i].from, curr_cnode_id);
-            if(cedges[i].from != curr_cnode_id) break;
+        index_t cnode_id = active_cnodes.front(); active_cnodes.pop_front();
+        assert_lt(cnode_id, cnodes.size());
+        index_t i = cedges.bsearchLoBound(CompositeEdge(cnode_id, 0));
+        while(i < cedges.size()) {
+            assert_geq(cedges[i].from, cnode_id);
+            if(cedges[i].from != cnode_id) break;
             index_t successor_cnode_id = cedges[i].to;
             assert_lt(successor_cnode_id, cnodes.size());
             CompositeNode& successor_cnode = cnodes[successor_cnode_id];
@@ -623,8 +639,22 @@ void RefGraph<index_t>::reverseDeterminize()
         edges.expand();
         edges.back() = edge.getEdge(cnodes);
     }
-    
     sortEdgesFrom();
+    
+    if(verbose) {
+        cerr << "Nodes:" << endl;
+        for(size_t i = 0; i < nodes.size(); i++) {
+            const Node& node = nodes[i];
+            cerr << "\t" << i << "\t" << node.label << "\t" << node.value << endl;
+        }
+        cerr << endl;
+        cerr << "Edges: " << endl;
+        for(size_t i = 0; i < edges.size(); i++) {
+            const Edge& edge = edges[i];
+            cerr << "\t" << i << "\t" << edge.from << " --> " << edge.to << endl;
+        }
+        cerr << endl;
+    }
 }
 
 #if 0
