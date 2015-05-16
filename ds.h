@@ -670,11 +670,21 @@ public:
 		assert_gt(cur_, 0);
 		return list_[0];
 	}
-
+    
 	/**
 	 * Get the element on the bottom of the stack, const version.
 	 */
 	inline const T& front() const { return front(); }
+    
+    inline T* begin() {
+        assert_gt(cur_, 0);
+        return &list_[0];
+    }
+    
+    inline const T* begin() const { return begin(); }
+    
+    inline T* end() { return begin() + cur_; }
+    inline const T* end() const { return begin() + cur_; }
 
 	/**
 	 * Return true iff this list and list o contain the same elements in the
