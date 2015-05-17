@@ -93,7 +93,7 @@ public:
     
 private:
     bool isReverseDeterministic();
-    void reverseDeterminize(bool verbose = false);
+    void reverseDeterminize(bool debug = false);
     
     void sortEdgesFrom() {
         std::sort(edges.begin(), edges.end(), EdgeFromCmp());
@@ -235,13 +235,19 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
     assert_gt(szs.size(), 0);
     
-    EList<string> refnames;
-    
-    SString<char> s;
+    EList<pair<index_t, index_t> > chr_szs;
     index_t jlen = 0;
-    for(size_t i = 0; i < szs.size(); i++) {
+    for(index_t i = 0; i < szs.size(); i++) {
+        if(szs[i].first) {
+            chr_szs.expand();
+            chr_szs.back().first = jlen;
+            chr_szs.back().second = i;
+        }
         jlen += (index_t)szs[i].len;
     }
+    bool debug = (jlen <= 10);
+    SString<char> s;
+    EList<string> refnames;
     try {
         Timer _t(cerr, "  (1/5) Time reading reference sequence: ", verbose);
         
@@ -251,13 +257,17 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         assert_eq(is.size(), 1);
         FileBuf *fb = is[0];
         assert(!fb->eof());
-        // For each *fragment* (not necessary an entire sequence) we
-        // can pull out of istream l[i]...
-        if(!fb->eof()) {
-            // Push a new name onto our vector
-            refnames.push_back("");
-            TIndexOffU distoff = 0;
-            fastaRefReadAppend(*fb, true, s, distoff, rpcp, &refnames.back());
+        index_t szsi = 0;
+        index_t distoff = 0;
+        bool first = true;
+        while(!fb->eof()) {
+            if(szs[szsi].first) refnames.push_back("");
+            RefRecord rec = fastaRefReadAppend(*fb, first, s, distoff, rpcp, &refnames.back());
+            first = false;
+            assert_eq(rec.off, szs[szsi].off);
+            assert_eq(rec.len, szs[szsi].len);
+            assert_eq(rec.first, szs[szsi].first);
+            szsi++;
         }
         fb->reset();
         assert(!fb->eof());
@@ -302,6 +312,45 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         index_t pos;
         snp_file >> type >> chr >> pos >> diff;
         
+        index_t chr_idx = 0;
+        for(; chr_idx < refnames.size(); chr_idx++) {
+            if(chr == refnames[chr_idx])
+                break;
+        }
+        if(chr_idx >= refnames.size()) continue;
+        
+        assert_eq(chr_szs.size(), refnames.size());
+        assert_lt(chr_idx, chr_szs.size());
+        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+        const index_t sofar_len = tmp_pair.first;
+        const index_t szs_idx = tmp_pair.second;
+        bool inside_Ns = false;
+        index_t add_pos = 0;
+        assert(szs[szs_idx].first);
+        for(index_t i = szs_idx; i < szs.size(); i++) {
+            if(i != szs_idx && szs[i].first) break;
+            if(pos < szs[i].off) {
+                inside_Ns = true;
+                break;
+            } else {
+                pos -= szs[i].off;
+                if(pos < szs[i].len) {
+                    break;
+                } else {
+                    pos -= szs[i].len;
+                    add_pos += szs[i].len;
+                }
+            }
+        }
+        
+        if(inside_Ns) continue;
+        pos = sofar_len + add_pos + pos;
+        if(chr_idx + 1 < chr_szs.size()) {
+            if(pos >= chr_szs[chr_idx + 1].first) continue;
+        } else {
+            if(pos >= jlen) continue;
+        }
+
         snps.expand();
         SNP<index_t>& snp = snps.back();
         snp.pos = pos;
@@ -309,10 +358,17 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         if(type == "single") {
             snp.type = SNP_SGL;
             if(diff.size() != 1) {
-                cerr << "Error: SNS type takes only one base" << endl;
+                cerr << "Error: single type takes only one base" << endl;
                 throw 1;
             }
-            snp.diff.push_back(diff[0]);
+            char bp = diff[0];
+            if(bp == "ACGTN"[(int)s[pos]]) {
+                cerr << "Error: single type (" << bp
+                     << ") should have a different base than " << "ACGTN"[(int)s[pos]]
+                     << " (" << snp_id << ")" << endl;
+                throw 1;
+            }
+            snp.diff.push_back(bp);
         } else if(type == "deletion") {
             snp.type = SNP_DEL;
             for(size_t i = 0; i < diff.size(); i++) {
@@ -410,7 +466,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         }
     }
     
-    if(verbose) {
+    if(debug) {
         cerr << "Nodes:" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
             const Node& node = nodes[i];
@@ -427,7 +483,8 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     
     if(!isReverseDeterministic()) {
         cerr << "is not reverse-deterministic" << endl;
-        reverseDeterminize(verbose);
+        reverseDeterminize(debug);
+        assert(isReverseDeterministic());
     }
 }
 
@@ -511,7 +568,7 @@ bool RefGraph<index_t>::isReverseDeterministic()
 
 
 template <typename index_t>
-void RefGraph<index_t>::reverseDeterminize(bool verbose)
+void RefGraph<index_t>::reverseDeterminize(bool debug)
 {
     EList<CompositeNode> cnodes; cnodes.ensure(nodes.size());
     map<basic_string<index_t>, index_t> cnode_map;
@@ -641,7 +698,7 @@ void RefGraph<index_t>::reverseDeterminize(bool verbose)
     }
     sortEdgesFrom();
     
-    if(verbose) {
+    if(debug) {
         cerr << "Nodes:" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
             const Node& node = nodes[i];
