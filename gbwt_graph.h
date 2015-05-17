@@ -547,22 +547,20 @@ bool RefGraph<index_t>::isReverseDeterministic()
     sortEdgesTo();
     
     index_t curr_to = edges.front().to;
-    EList<char> seen;
+    EList<bool> seen; seen.resize(4); seen.fillZero();
     for(index_t i = 1; i < edges.size(); i++) {
         index_t from = edges[i].from;
         assert_lt(from, nodes.size());
         char nt = nodes[from].label;
+        nt = asc2dna[(int)nt];
+        assert_lt(nt, seen.size());
         if(curr_to != edges[i].to) {
             curr_to = edges[i].to;
-            seen.clear();
-            seen.push_back(nt);
+            seen.fillZero();
+            seen[nt] = true;
         } else {
-            for(index_t j = 0; j < seen.size(); j++) {
-                if(nt == seen[j]) {
-                    return false;
-                }
-            }
-            seen.push_back(nt);
+            if(seen[nt]) return false;
+            seen[nt] = true;
         }
     }
     
@@ -699,7 +697,7 @@ void RefGraph<index_t>::reverseDeterminize(bool debug)
             i++;
         }
     }
-    // Interchange from and to
+    // Restore from and to by interchanging them
     for(index_t i = 0; i < cedges.size(); i++) {
         index_t tmp = cedges[i].from;
         cedges[i].from = cedges[i].to;
