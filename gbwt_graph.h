@@ -58,9 +58,11 @@ public:
     struct Node {
         char    label; // ACGTN + #(=Z) + $(=0)
         index_t value; // location in a whole genome
+        bool    backbone; // backbone node, which corresponds to a reference sequence
         
-        Node() {}
-        Node(char label_, index_t value_) : label(label_), value(value_) {}
+        Node() { reset(); }
+        Node(char label_, index_t value_, bool backbone_ = false) : label(label_), value(value_), backbone(backbone_) {}
+        void reset() { label = 0; value = 0; backbone = false; }
     };
     
     struct Edge {
@@ -140,6 +142,8 @@ private:
         index_t                    id;
         char                       label;
         index_t                    value;
+        bool                       backbone;
+        bool                       potential;
         
         CompositeNode() { reset(); }
         
@@ -150,7 +154,7 @@ private:
         }
         
         Node getNode() const {
-            return Node(label, value);
+            return Node(label, value, backbone);
         }
         
         void reset() {
@@ -158,6 +162,7 @@ private:
             id = 0;
             label = 0;
             value = 0;
+            backbone = potential = false;
         }
     };
     
@@ -429,7 +434,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
             assert_eq(snp.diff.size(), 1);
             nodes.expand();
             nodes.back().label = snp.diff[0];
-            nodes.back().value = snp.pos;
+            nodes.back().value = nodes.size();
             
             edges.expand();
             edges.back().from = snp.pos;
@@ -441,7 +446,6 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         } else if(snp.type == SNP_DEL) {
             index_t deletionLen = snp.diff.size();
             assert_gt(deletionLen, 0);
-            // assert_gt(snp.pos + deletionLen, *something*);
             edges.expand();
             edges.back().from = snp.pos;
             edges.back().to = snp.pos + deletionLen + 1;
@@ -449,10 +453,9 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
             assert_gt(snp.diff.size(), 0);
             for(size_t j = 0; j < snp.diff.size(); j++) {
                 char inserted_bp = snp.diff[j];
-                
                 nodes.expand();
                 nodes.back().label = inserted_bp;
-                nodes.back().value = snp.pos;
+                nodes.back().value = nodes.size();
                 
                 edges.expand();
                 edges.back().from = (j == 0 ? snp.pos : nodes.size() - 2);
@@ -582,6 +585,7 @@ void RefGraph<index_t>::reverseDeterminize(bool debug)
     cnodes.back().reset();
     cnodes.back().label = last_node.label;
     cnodes.back().value = last_node.value;
+    cnodes.back().backbone = true;
     cnodes.back().nodes.push_back(lastNode);
     active_cnodes.push_back(0);
     cnode_map[cnodes.back().nodes] = 0;
@@ -627,9 +631,11 @@ void RefGraph<index_t>::reverseDeterminize(bool debug)
             cnodes.back().label = node.label;
             cnodes.back().value = node.value;
             cnodes.back().nodes.push_back(node_id);
+            cnodes.back().potential = node.value < lastNode;
             
             if(node.label == 'Z' && firstNode == 0) {
                 firstNode = cnodes.size() - 1;
+                cnodes.back().backbone = true;
             }
             
             while(i < predecessors.size()) {
@@ -638,6 +644,13 @@ void RefGraph<index_t>::reverseDeterminize(bool debug)
                 const Node& next_node = nodes[next_node_id];
                 if(next_node.label != node.label) break;
                 cnodes.back().nodes.push_back(next_node_id);
+
+                if((cnode.value < lastNode) != (next_node.value < lastNode)) {
+                    cnode.value = min(cnode.value, next_node.value);
+                } else {
+                    cnode.value = max(cnode.value, next_node.value);
+                }
+                cnode.potential = cnode.value < lastNode;
                 i++;
             }
             
@@ -655,6 +668,42 @@ void RefGraph<index_t>::reverseDeterminize(bool debug)
             // Increment indegree
             cnode.id++;
         }
+    }
+    
+    // Specify backbone nodes
+    // Interchange from and to
+    for(index_t i = 0; i < cedges.size(); i++) {
+        index_t tmp = cedges[i].from;
+        cedges[i].from = cedges[i].to;
+        cedges[i].to = tmp;
+    }
+    sort(cedges.begin(), cedges.end());
+    active_cnodes.push_back(0);
+    while(!active_cnodes.empty()) {
+        index_t cnode_id = active_cnodes.front(); active_cnodes.pop_front();
+        assert_lt(cnode_id, cnodes.size());
+        const CompositeNode& cnode = cnodes[cnode_id];
+        index_t i = cedges.bsearchLoBound(CompositeEdge(cnode_id, 0));
+        while(i < cedges.size()) {
+            assert_geq(cedges[i].from, cnode_id);
+            if(cedges[i].from != cnode_id) break;
+            index_t predecessor_cnode_id = cedges[i].to;
+            assert_lt(predecessor_cnode_id, cnodes.size());
+            CompositeNode& predecessor_cnode = cnodes[predecessor_cnode_id];
+            if(predecessor_cnode.potential && cnode.value == predecessor_cnode.value + 1) {
+                predecessor_cnode.backbone = true;
+                predecessor_cnode.potential = false;
+                active_cnodes.push_back(predecessor_cnode_id);
+                break;
+            }
+            i++;
+        }
+    }
+    // Interchange from and to
+    for(index_t i = 0; i < cedges.size(); i++) {
+        index_t tmp = cedges[i].from;
+        cedges[i].from = cedges[i].to;
+        cedges[i].to = tmp;
     }
     
     // Create new nodes
@@ -702,7 +751,7 @@ void RefGraph<index_t>::reverseDeterminize(bool debug)
         cerr << "Nodes:" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
             const Node& node = nodes[i];
-            cerr << "\t" << i << "\t" << node.label << "\t" << node.value << endl;
+            cerr << "\t" << i << "\t" << node.label << "\t" << node.value << (node.backbone ? "\tbackbone" : "") << endl;
         }
         cerr << endl;
         cerr << "Edges: " << endl;
