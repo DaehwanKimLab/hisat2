@@ -434,21 +434,54 @@ static void driver(
     RefGraph<TIndexOffU>* graph = new RefGraph<TIndexOffU>(infile, snpfile, verbose);
     
     PathGraph<TIndexOffU>* pg = new PathGraph<TIndexOffU>(*graph);
-    delete graph; graph = 0;
-#if 0
+    delete graph; graph = NULL;
     pg->printInfo();
-    while(pg->status != PathGraph::sorted) {
-        if(pg->status != PathGraph::ok) {
+    while(pg->IsSorted()) {
+        if(pg->repOk()) {
             std::cerr << "Error: Invalid PathGraph!" << std::endl;
-            delete pg; pg = 0;
-            return 3;
+            delete pg; pg = NULL;
+            return;
         }
         PathGraph<TIndexOffU>* next = new PathGraph<TIndexOffU>(*pg);
         delete pg; pg = next;
         pg->printInfo();
     }
+
+#if 0
+    if(print) { std::cout << "Generating edges... "; std::cout.flush(); }
+    if(!graph.generateEdges(parent)) { return; }
+    if(print) { std::cout << graph.edge_count << " edges." << std::endl; }
+    
+    usint offset = 0, edge_offset = 0;
+    for(std::vector<PathNode>::iterator node = graph.nodes.begin(); node != graph.nodes.end(); ++node)
+    {
+        // Write BWT.
+        pair_type edge_range = graph.getEdges(node - graph.nodes.begin(), false);
+        for(usint i = edge_range.first; i <= edge_range.second; i++)
+        {
+            uint label = graph.edges[i].label;
+            counts[label]++;
+            array_encoders[label]->setBit(offset);
+        }
+        offset++;
+        
+        // Write M
+        outedges.addBit(edge_offset);
+        edge_offset += std::max((usint)1, (*node).outdegree());
+    }
+    counts[0] = graph.automata;
+    this->alphabet = new Alphabet(counts);
+    
+    for(usint i = 1; i < CHARS; i++)
+    {
+        if(this->alphabet->hasChar(i)) { this->array[i] = new DeltaVector(*(array_encoders[i]), offset); }
+    }
+    outedges.flush();
+    this->outgoing = new RLEVector(outedges, edge_offset);
+    this->node_count = this->outgoing->getNumberOfItems();
 #endif
-    delete pg;
+    
+    delete pg; pg = NULL;
     
     return;
     
