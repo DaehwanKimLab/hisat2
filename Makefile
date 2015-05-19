@@ -491,7 +491,7 @@ hisat2-build-s: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(DEFS) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(INC) $(SIREN_INC) \
 	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) $(SIREN_SHARED_CPPS) \
+	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
 	$(LIBS) $(BUILD_LIBS)
 
 hisat2-build-l: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
@@ -507,7 +507,7 @@ hisat2-build-s-debug: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(DEFS) -DBOWTIE2 -Wall -DMASSIVE_DATA_RLCSA \
 	$(INC) $(SIREN_INC) \
 	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) $(SIREN_SHARED_CPPS) \
+	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
 	$(LIBS) $(BUILD_LIBS)
 
 hisat2-build-l-debug: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
