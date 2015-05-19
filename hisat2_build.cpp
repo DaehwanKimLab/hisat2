@@ -431,7 +431,24 @@ static void driver(
 	assert_gt(sztot.second, 0);
 	assert_gt(szs.size(), 0);
     
-    RefGraph<TIndexOffU> graph(infile, snpfile, verbose);
+    RefGraph<TIndexOffU>* graph = new RefGraph<TIndexOffU>(infile, snpfile, verbose);
+    
+    PathGraph<TIndexOffU>* pg = new PathGraph<TIndexOffU>(*graph);
+    delete graph; graph = 0;
+#if 0
+    pg->printInfo();
+    while(pg->status != PathGraph::sorted) {
+        if(pg->status != PathGraph::ok) {
+            std::cerr << "Error: Invalid PathGraph!" << std::endl;
+            delete pg; pg = 0;
+            return 3;
+        }
+        PathGraph<TIndexOffU>* next = new PathGraph<TIndexOffU>(*pg);
+        delete pg; pg = next;
+        pg->printInfo();
+    }
+#endif
+    delete pg;
     
     return;
     
