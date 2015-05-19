@@ -114,20 +114,23 @@ private:
     pair<index_t, index_t> findEdgesTo(index_t node) {
         return findEdges(node, false);
     }
-    
-#if 0
-    // Marks predecessor labels in GraphEdges.
-    void markPredecessors();
-    
-    char maxLabel();
-    
-    // Updates the labels when there are multiple automata to be indexed.
-    // Final nodes get labels 0..automata-1.
-    // The labels of regular nodes are incremented by automata.
-    // Initial nodes get labels max_label+automata..max_label+2automata-1.
-    void changeLabels(index_t automata, char max_label);
-    void restoreLabels(index_t automata, char max_label);
-#endif
+    pair<index_t, index_t> getNextEdgeRange(pair<index_t, index_t> range, bool from) {
+        if(range.second >= edges.size()) {
+            return pair<index_t, index_t>(0, 0);
+        }
+        range.first = range.second; range.second++;
+        
+        if(from) {
+            while(range.second < edges.size() && edges[range.second].from == edges[range.first].from) {
+                range.second++;
+            }
+        } else {
+            while(range.second < edges.size() && edges[range.second].to == edges[range.first].to) {
+                range.second++;
+            }
+        }
+        return range;
+    }
     
 private:
     EList<Node> nodes;
@@ -938,7 +941,16 @@ status(error), has_stabilized(false)
     debug = previous.debug;    
     previous.sortByFrom();
     
-    // A heuristic to determine, whether the number of new nodes should be counted.
+    if(debug) {
+        cerr << "Path nodes (" << generation << "-generation) - soryByFrom" << endl;
+        for(size_t i = 0; i < previous.nodes.size(); i++) {
+            const PathNode& node = previous.nodes[i];
+            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+            << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
+        }
+    }
+    
+    // A heuristic to determine, whether the number of new nodes should be counted
     index_t new_nodes = previous.nodes.size() + previous.nodes.size() / 8;
     if(previous.ranks >= previous.nodes.size() / 2 && !(previous.has_stabilized)) {
         new_nodes = 0;
@@ -965,6 +977,15 @@ status(error), has_stabilized(false)
     }
     temp_nodes = nodes.size();
     
+    if(debug) {
+        cerr << "Path nodes (" << generation << "-generation) - combine" << endl;
+        for(size_t i = 0; i < nodes.size(); i++) {
+            const PathNode& node = nodes[i];
+            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+            << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
+        }
+    }
+    
     status = ok;
     updateRank_and_merge();
     
@@ -981,8 +1002,6 @@ void PathGraph<index_t>::printInfo()
          << ranks << " ranks)" << endl;
 }
 
-#if 0
-
 //--------------------------------------------------------------------------
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
@@ -990,35 +1009,35 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     if(status != sorted)
         return false;
     
-    sortByFrom(f);  // Sort nodes by from
-    base.sortEdges(false);  // Sort parent edges by to.
+    sortByFrom();
+    base.sortEdgesTo();
     
-    // Create edges (from, to) as (from.from, to = rank(to)).
-    pair_type pn_range = this->getNextRange(EMPTY_PAIR);
-    pair_type ge_range = parent.getNextEdgeRange(EMPTY_PAIR, false);
-    this->edges.reserve(this->node_count + this->node_count / 4);
-    while(!isEmpty(pn_range) && !isEmpty(ge_range)) {
-        if(this->nodes[pn_range.first].from == parent.edges[ge_range.first].to) {
-            for(usint node = pn_range.first; node <= pn_range.second; node++) {
-                for(usint edge = ge_range.first; edge <= ge_range.second; edge++) {
-                    uint from = parent.edges[edge].from;
-                    this->edges.push_back(PathEdge(from, this->nodes[node].key.first, parent.nodes[from].label));
+    // Create edges (from, to) as (from.from, to = rank(to))
+    pair<index_t, index_t> pn_range = getNextRange(pair<index_t, index_t>(0, 0));
+    pair<index_t, index_t> ge_range = base.getNextEdgeRange(pair<index_t, index_t>(0, 0), false);
+    edges.resizeExact(nodes.size() + nodes.size() / 4);
+    while(pn_range.first < pn_range.second && ge_range.first < ge_range.second) {
+        if(nodes[pn_range.first].from == base.edges[ge_range.first].to) {
+            for(index_t node = pn_range.first; node < pn_range.second; node++) {
+                for(index_t edge = ge_range.first; edge < ge_range.second; edge++) {
+                    index_t from = base.edges[edge].from;
+                    edges.push_back(PathEdge(from, nodes[node].key.first, base.nodes[from].label));
                 }
             }
-            pn_range = this->getNextRange(pn_range);
-            ge_range = parent.getNextEdgeRange(ge_range, false);
+            pn_range = getNextRange(pn_range);
+            ge_range = base.getNextEdgeRange(ge_range, false);
         }
-        else if(this->nodes[pn_range.first].from < parent.edges[ge_range.first].to) {
-            pn_range = this->getNextRange(pn_range);
+        else if(nodes[pn_range.first].from < base.edges[ge_range.first].to) {
+            pn_range = getNextRange(pn_range);
         }
         else {
-            ge_range = parent.getNextEdgeRange(ge_range, false);
+            ge_range = base.getNextEdgeRange(ge_range, false);
         }
     }
-    sortByKey(); // Restore correct node order.
-    sortEdges(); // Sort edges by (from.label, to.rank).
+    sortByKey(); // Restore correct node order
+    sortEdges(); // Sort edges by (from.label, to.rank)
     
-    // Sets PathNode.to = GraphNode.value and PathNode.key.first to outdegree.
+    // Sets PathNode.to = GraphNode.value and PathNode.key.first to outdegree
     // Replaces (from.from, to) with (from, to)
     PathNode* node = nodes.begin(); node->key.first = 0;
     PathEdge* edge = edges.begin();
@@ -1032,7 +1051,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
     if(node != nodes.end()) {
-        node->to = parent.nodes[node->from].value;
+        node->to = base.nodes[node->from].value;
     }
     
     sortEdgesTo();
@@ -1040,6 +1059,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     return true;
 }
 
+
+#if 0
 //--------------------------------------------------------------------------
 template <typename index_t>
 std::vector<pair_type>* PathGraph<index_t>::getSamples(usint sample_rate, usint& max_sample, const Graph& parent)
@@ -1186,7 +1207,7 @@ void PathGraph<index_t>::updateRank_and_merge()
         for(size_t i = 0; i < nodes.size(); i++) {
             const PathNode& node = nodes[i];
             cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
-                 << node.from << " --> " << node.to << endl;
+                 << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
         }
     }
 }
@@ -1241,18 +1262,31 @@ template <typename index_t>
 void PathGraph<index_t>::sortByFrom() {
     sort(nodes.begin(), nodes.end(), PathNodeFromCmp());
     status = error;
+    
+    index_t current = 0;
+    nodes.front().key.second = 0;
+    for(index_t i = 0; i < nodes.size(); i++) {
+        while(current < nodes[i].from) {
+            current++;
+            assert_lt(current, nodes.size());
+            nodes[current].key.second = i;
+        }
+    }
+    for(current++; current < nodes.size(); current++) {
+        nodes[current].key.second = nodes.size();
+    }
 }
 
 template <typename index_t>
 pair<index_t, index_t> PathGraph<index_t>::getNodesFrom(index_t node) {
     if(node + 1 >= nodes.size()) {
         assert_eq(node + 1, nodes.size());
-        return pair<index_t, index_t>(nodes.back().key.second, nodes.size() - 1);
+        return pair<index_t, index_t>(nodes.back().key.second, nodes.size());
     }
     if(nodes[node].key.second == nodes[node + 1].key.second) {
         return pair<index_t, index_t>(0, 0);
     }
-    return pair<index_t, index_t>(nodes[node].key.second, nodes[node + 1].key.second - 1);
+    return pair<index_t, index_t>(nodes[node].key.second, nodes[node + 1].key.second);
 }
 
 template <typename index_t>
