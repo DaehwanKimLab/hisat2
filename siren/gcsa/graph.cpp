@@ -777,6 +777,12 @@ PathGraph::generateEdges(Graph& parent)
             std::cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.rank << "\t" << (char)edge.label << std::endl;
         }
     }
+
+  this->sortEdges(false, true);
+    
+  parent.restoreLabels(this->automata, this->max_label);
+  this->restoreLabels();
+  this->status = ready;
     
     if(debug) {
         std::cerr << "Path nodes" << std::endl;
@@ -786,13 +792,6 @@ PathGraph::generateEdges(Graph& parent)
             << node.from << " --> " << node.to << std::endl;
         }
     }
-
-  this->sortEdges(false, true);
-    
-  parent.restoreLabels(this->automata, this->max_label);
-  this->restoreLabels();
-  this->status = ready;
-    
     
   return true;
 }

@@ -1053,10 +1053,40 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
     
+    if(debug) {
+        cerr << "just after creating path edges" << endl;
+        cerr << "Ref edges" << endl;
+        for(size_t i = 0; i < base.edges.size(); i++) {
+            const typename RefGraph<index_t>::Edge& edge = base.edges[i];
+            cerr << "\t" << i << "\t" << edge.from << " --> " << edge.to << endl;
+        }
+        
+        cerr << "Path nodes" << endl;
+        for(size_t i = 0; i < nodes.size(); i++) {
+            const PathNode& node = nodes[i];
+            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+            << node.from << " --> " << node.to << endl;
+        }
+        
+        cerr << "Path edges" << endl;
+        for(size_t i = 0; i < edges.size(); i++) {
+            const PathEdge& edge = edges[i];
+            cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
+        }
+    }
+    
     sortByKey(); // Restore correct node order
     sortEdges(); // Sort edges by (from.label, to.rank)
     
     if(debug) {
+        cerr << "after sorting nodes by ranking and edges by label and ranking" << endl;
+        cerr << "Path nodes" << endl;
+        for(size_t i = 0; i < nodes.size(); i++) {
+            const PathNode& node = nodes[i];
+            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+            << node.from << " --> " << node.to << endl;
+        }
+        
         cerr << "Path edges" << endl;
         for(size_t i = 0; i < edges.size(); i++) {
             const PathEdge& edge = edges[i];
@@ -1070,29 +1100,34 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     PathEdge* edge = edges.begin();
     while(node != nodes.end() && edge != edges.end()) {
         if(edge->from == node->from) {
-            edge->from = node - nodes.begin(); ++edge;
+            edge->from = node - nodes.begin(); edge++;
             node->key.first++;
         } else {
             node->to = base.nodes[node->from].value;
-            ++node; node->key.first = 0;
+            node++; node->key.first = 0;
         }
     }
     if(node != nodes.end()) {
         node->to = base.nodes[node->from].value;
     }
+    
     sortEdgesTo(true);
     status = ready;
     
     if(debug) {
-        cerr << "Path nodes" << endl;
+        cerr << "Path nodes (final)" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
             const PathNode& node = nodes[i];
             cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
             << node.from << " --> " << node.to << endl;
         }
-    }
-  
-    if(debug) {
+        
+        cerr << "Path edges (final)" << endl;
+        for(size_t i = 0; i < edges.size(); i++) {
+            const PathEdge& edge = edges[i];
+            cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
+        }
+        
         index_t bwt_count = 0;
         cerr << "Priting BWT" << endl;
         index_t offset = 0; //, edge_offset = 0;
