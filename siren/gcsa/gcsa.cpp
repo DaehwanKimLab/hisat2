@@ -76,6 +76,12 @@ GCSA::GCSA(PathGraph& graph, Graph& parent, bool print) :
   if(print) { std::cout << graph.edge_count << " edges." << std::endl; }
 
 
+    // daehwan - for debugging purposes
+    bool debug = parent.node_count <= 20;
+    usint bwt_count = 0;
+    if(debug) {
+        std::cerr << "Printing BWT" << std::endl;
+    }
   usint offset = 0, edge_offset = 0;
   for(std::vector<PathNode>::iterator node = graph.nodes.begin(); node != graph.nodes.end(); ++node)
   {
@@ -86,6 +92,11 @@ GCSA::GCSA(PathGraph& graph, Graph& parent, bool print) :
       uint label = graph.edges[i].label;
       counts[label]++;
       array_encoders[label]->setBit(offset);
+        
+        if(debug) {
+            bwt_count++;
+            std::cerr << bwt_count << "\t" << (char)label << std::endl;
+        }
     }
     offset++;
 

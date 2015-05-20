@@ -809,7 +809,15 @@ public:
         index_t ranking;
         char    label;
         
+        PathEdge() { reset(); }
+        
         PathEdge(index_t from_, index_t ranking_, char label_) : from(from_), ranking(ranking_), label(label_) {}
+        
+        void reset() {
+            from = 0;
+            ranking = 0;
+            label = 0;
+        }
         
         bool operator< (const PathEdge& o) const {
             return label < o.label || (label == o.label && ranking < o.ranking);
@@ -858,7 +866,7 @@ private:
     void sortByKey() { sort(nodes.begin(), nodes.end()); } // by key
 
     // Can create an index by using key.second in PathNodes.
-    void sortByFrom();
+    void sortByFrom(bool create_index = true);
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
     pair<index_t, index_t> getNextRange(pair<index_t, index_t> range);  // Use sortByFrom() first.
 
@@ -869,9 +877,21 @@ private:
         sort(edges.begin(), edges.end(), PathEdgeFromCmp());
         status = edges_sorted;
     }
-    void sortEdgesTo() {
+    void sortEdgesTo(bool create_index = false) {
         sort(edges.begin(), edges.end(), PathEdgeToCmp());
         status = error;
+        
+        if(create_index) {
+            for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+                node->key.second = 0;
+            }
+            for(PathEdge* edge = edges.begin(); edge != edges.end(); edge++) {
+                nodes[edge->ranking].key.second++;
+            }
+            for(index_t i = 1; i < nodes.size(); i++) {
+                nodes[i].key.second += nodes[i - 1].key.second;
+            }
+        }
     }
     
 private:
@@ -939,7 +959,7 @@ status(error), has_stabilized(false)
     if(previous.status != ok)
         return;
     debug = previous.debug;    
-    previous.sortByFrom();
+    previous.sortByFrom(true);
     
     if(debug) {
         cerr << "Path nodes (" << generation << "-generation) - soryByFrom" << endl;
@@ -982,7 +1002,7 @@ status(error), has_stabilized(false)
         for(size_t i = 0; i < nodes.size(); i++) {
             const PathNode& node = nodes[i];
             cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
-            << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
+                 << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
         }
     }
     
@@ -1009,13 +1029,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     if(status != sorted)
         return false;
     
-    sortByFrom();
+    sortByFrom(false);
     base.sortEdgesTo();
     
     // Create edges (from, to) as (from.from, to = rank(to))
     pair<index_t, index_t> pn_range = getNextRange(pair<index_t, index_t>(0, 0));
     pair<index_t, index_t> ge_range = base.getNextEdgeRange(pair<index_t, index_t>(0, 0), false);
-    edges.resizeExact(nodes.size() + nodes.size() / 4);
+    edges.resizeExact(nodes.size() + nodes.size() / 4); edges.clear();
     while(pn_range.first < pn_range.second && ge_range.first < ge_range.second) {
         if(nodes[pn_range.first].from == base.edges[ge_range.first].to) {
             for(index_t node = pn_range.first; node < pn_range.second; node++) {
@@ -1026,16 +1046,23 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             }
             pn_range = getNextRange(pn_range);
             ge_range = base.getNextEdgeRange(ge_range, false);
-        }
-        else if(nodes[pn_range.first].from < base.edges[ge_range.first].to) {
+        } else if(nodes[pn_range.first].from < base.edges[ge_range.first].to) {
             pn_range = getNextRange(pn_range);
-        }
-        else {
+        } else {
             ge_range = base.getNextEdgeRange(ge_range, false);
         }
     }
+    
     sortByKey(); // Restore correct node order
     sortEdges(); // Sort edges by (from.label, to.rank)
+    
+    if(debug) {
+        cerr << "Path edges" << endl;
+        for(size_t i = 0; i < edges.size(); i++) {
+            const PathEdge& edge = edges[i];
+            cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
+        }
+    }
     
     // Sets PathNode.to = GraphNode.value and PathNode.key.first to outdegree
     // Replaces (from.from, to) with (from, to)
@@ -1053,43 +1080,71 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     if(node != nodes.end()) {
         node->to = base.nodes[node->from].value;
     }
-    
-    sortEdgesTo();
+    sortEdgesTo(true);
     status = ready;
+    
+    if(debug) {
+        cerr << "Path nodes" << endl;
+        for(size_t i = 0; i < nodes.size(); i++) {
+            const PathNode& node = nodes[i];
+            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+            << node.from << " --> " << node.to << endl;
+        }
+    }
+  
+    if(debug) {
+        index_t bwt_count = 0;
+        cerr << "Priting BWT" << endl;
+        index_t offset = 0; //, edge_offset = 0;
+        for(index_t node = 0; node < nodes.size(); node++) {
+            // Write BWT
+            pair<index_t, index_t> edge_range = getEdges(node, false);
+            for(index_t i = edge_range.first; i < edge_range.second; i++) {
+                bwt_count++;
+                assert_lt(i, edges.size());
+                char label = edges[i].label;
+                cerr << bwt_count << "\t" << label << endl;
+                // counts[label]++;
+                // array_encoders[label]->setBit(offset);
+            }
+            offset++;
+            
+            // Write M
+            // outedges.addBit(edge_offset);
+            // edge_offset += max((index_t)1, (*node).outdegree());
+        }
+    }
+    
     return true;
 }
 
 
-#if 0
-//--------------------------------------------------------------------------
 template <typename index_t>
-std::vector<pair_type>* PathGraph<index_t>::getSamples(usint sample_rate, usint& max_sample, const Graph& parent)
+EList<pair<index_t, index_t> >* PathGraph<index_t>::getSamples(index_t sample_rate, index_t& max_sample, const RefGraph<index_t>& base)
 {
-    if(this->status != ready && this->status != edges_sorted) { return 0; }
-    
-    this->sortEdges(true, true);
-    WriteBuffer* found_nodes = new WriteBuffer(this->node_count, 1);
+    if(status != ready && status != edges_sorted)
+        return NULL;
+
+    EList<pair<index_t, index_t> >* sample_pairs = new EList<pair<index_t, index_t> >();
+#if 0
+    sortEdges(true, true);
+    WriteBuffer* found_nodes = new WriteBuffer(nodes.size(), 1);
     ReadBuffer* found = found_nodes->getReadBuffer();
-    WriteBuffer* sampled_nodes = new WriteBuffer(this->node_count, 1);
+    WriteBuffer* sampled_nodes = new WriteBuffer(nodes.size(), 1);
     ReadBuffer* sampled = sampled_nodes->getReadBuffer();
-    std::vector<pair_type>* sample_pairs = new std::vector<pair_type>;
     
-    std::stack<usint> active; // Push the initial nodes into stack.
-    for(usint i = 1; i <= this->automata; i++) { active.push(this->node_count - i); }
-    usint unsampled = 0, current = 0;
+    EList<index_t> active; // Push the initial nodes into stack.
+    active.push_back(nodes.size() - 1);
+    index_t unsampled = 0, current = 0;
     max_sample = 0;
-    usint total_found = 0;
-    while(!active.empty())
-    {
+    index_t total_found = 0;
+    while(!active.empty()) {
         current = active.top(); active.pop();
         unsampled = 1;
-        
-        while(true)
-        {
-            if(found->readItem(current))  // Nodes with multiple predecessors must be sampled.
-            {
-                if(!sampled->readItem(current))
-                {
+        while(true) {
+            // Nodes with multiple predecessors must be sampled.
+            if(found->readItem(current)) {
+                if(!sampled->readItem(current)) {
                     sample_pairs->push_back(pair_type(current, this->nodes[current].value()));
                     sampled_nodes->goToItem(current); sampled_nodes->writeItem(1);
                     max_sample = std::max(max_sample, (usint)(this->nodes[current].value()));
@@ -1097,24 +1152,21 @@ std::vector<pair_type>* PathGraph<index_t>::getSamples(usint sample_rate, usint&
                 break;
             }
             found_nodes->goToItem(current); found_nodes->writeItem(1); total_found++;
-            
-            pair_type successors = this->getEdges(current, true);
+            pair_type successors = getEdges(current, true);
             // No nearby samples.
             // Multiple or no outgoing edges.
             // Discontinuity in values.
             if(unsampled >= sample_rate || length(successors) != 1 ||
-               this->nodes[this->edges[successors.first].rank].value() != this->nodes[current].value() + 1)
-            {
+               this->nodes[this->edges[successors.first].rank].value() != this->nodes[current].value() + 1) {
                 sample_pairs->push_back(pair_type(current, this->nodes[current].value()));
                 sampled_nodes->goToItem(current); sampled_nodes->writeItem(1);
                 max_sample = std::max(max_sample, (usint)(this->nodes[current].value()));
-                for(usint suc = successors.first + 1; suc <= successors.second; suc++)
-                {
+                for(usint suc = successors.first + 1; suc <= successors.second; suc++) {
                     active.push(this->edges[suc].rank);
                 }
                 unsampled = 0;
             }
-            if(isEmpty(successors)) { break; }
+            if(isEmpty(successors)) break;
             
             current = this->edges[successors.first].rank;
             unsampled++;
@@ -1122,12 +1174,11 @@ std::vector<pair_type>* PathGraph<index_t>::getSamples(usint sample_rate, usint&
     }
     delete found_nodes; delete found;
     delete sampled_nodes; delete sampled;
+#endif
     
-    //  std::cout << "Found " << total_found << " nodes" << std::endl;
+    //  cerr << "Found " << total_found << " nodes" << endl;
     return sample_pairs;
 }
-
-#endif
 
 //--------------------------------------------------------------------------
 template <typename index_t>
@@ -1250,30 +1301,30 @@ pair<index_t, index_t> PathGraph<index_t>::getEdges(index_t node, bool by_from) 
         return pair<index_t, index_t>(0, 0);
     }
     if(node == 0) {
-        return pair<index_t, index_t>(0, nodes[node].key.second - 1);
+        return pair<index_t, index_t>(0, nodes[node].key.second);
     } else {
-        return pair<index_t, index_t>(nodes[node - 1].key.second, nodes[node].key.second - 1);
+        return pair<index_t, index_t>(nodes[node - 1].key.second, nodes[node].key.second);
     }
 }
 
-//--------------------------------------------------------------------------
-
 template <typename index_t>
-void PathGraph<index_t>::sortByFrom() {
+void PathGraph<index_t>::sortByFrom(bool create_index) {
     sort(nodes.begin(), nodes.end(), PathNodeFromCmp());
     status = error;
     
-    index_t current = 0;
-    nodes.front().key.second = 0;
-    for(index_t i = 0; i < nodes.size(); i++) {
-        while(current < nodes[i].from) {
-            current++;
-            assert_lt(current, nodes.size());
-            nodes[current].key.second = i;
+    if(create_index) {
+        index_t current = 0;
+        nodes.front().key.second = 0;
+        for(index_t i = 0; i < nodes.size(); i++) {
+            while(current < nodes[i].from) {
+                current++;
+                assert_lt(current, nodes.size());
+                nodes[current].key.second = i;
+            }
         }
-    }
-    for(current++; current < nodes.size(); current++) {
-        nodes[current].key.second = nodes.size();
+        for(current++; current < nodes.size(); current++) {
+            nodes[current].key.second = nodes.size();
+        }
     }
 }
 
@@ -1295,7 +1346,7 @@ pair<index_t, index_t> PathGraph<index_t>::getNextRange(pair<index_t, index_t> r
         return pair<index_t, index_t>(0, 0);
     
     if(range.first < range.second) {
-        range.second++; range.first = range.second;
+        range.first = range.second; range.second++;
     }
     
     while(range.second < nodes.size() && nodes[range.second].from == nodes[range.first].from) {

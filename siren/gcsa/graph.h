@@ -158,6 +158,8 @@ class PathGraph
 
     enum status_t { error, ok, sorted, ready, edges_sorted } status;
     bool has_stabilized;  // The number of nodes will probably not explode in subsequent doublings.
+    
+    bool debug;
 
     // Can create an index by using key.second in PathNodes.
     // If the graph is not ready, its status becomes error.

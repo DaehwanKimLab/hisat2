@@ -68,6 +68,7 @@ Graph::Graph(const std::string& base_name, bool is_full_name) :
   this->ok = true;
 }
 
+
 Graph::~Graph()
 {
   delete[] this->nodes; this->nodes = 0;
@@ -616,10 +617,29 @@ PathGraph::PathGraph(Graph& parent) :
     pn.key = pair_type(i, 0);
     this->nodes.push_back(pn);
   }
+    
+    // daehwan - for debugging purposes
+    debug = parent.node_count <= 20;
+    
+    if(debug) {
+        std::cerr << "Nodes:" << std::endl;
+        for(size_t i = 0; i < parent.node_count; i++) {
+            const GraphNode& node = parent.nodes[i];
+            std::cerr << "\t" << i << "\t" << (char)node.label << "\t" << node.value << std::endl;
+        }
+        std::cerr << std::endl;
+        std::cerr << "Edges: " << std::endl;
+        for(size_t i = 0; i < parent.edge_count; i++) {
+            const GraphEdge& edge = parent.edges[i];
+            std::cerr << "\t" << i << "\t" << edge.from << " --> " << edge.to << std::endl;
+        }
+        std::cerr << std::endl;
+    }
 
   parent.restoreLabels(this->automata, this->max_label);
   this->status = ok;
   this->sort();
+    
 }
 
 PathGraph::PathGraph(PathGraph& previous) :
@@ -629,6 +649,9 @@ PathGraph::PathGraph(PathGraph& previous) :
   status(error), has_stabilized(false)
 {
   if(previous.status != ok) { return; }
+    
+    // daehwan - for debugging purposes
+    debug = previous.debug;
 
   previous.sortByFrom(true);
 
@@ -687,6 +710,7 @@ PathGraph::generateEdges(Graph& parent)
   if(this->status != sorted) { return false; }
 
   this->sortByFrom(false);  // Sort nodes by from, do not create index.
+    
   parent.sortEdges(false);  // Sort parent edges by to.
   parent.changeLabels(this->automata, this->max_label);
 
@@ -720,7 +744,6 @@ PathGraph::generateEdges(Graph& parent)
   }
   this->edge_count = this->edges.size();
 
-
   this->sortByKey(); // Restore correct node order.
   this->sortEdges(); // Sort edges by (from.label, to.rank).
 
@@ -745,13 +768,32 @@ PathGraph::generateEdges(Graph& parent)
   {
     node->to = parent.nodes[node->from].value;
   }
+    
+    if(debug) {
+        // this->restoreLabels();
+        std::cerr << "Path edges" << std::endl;
+        for(size_t i = 0; i < edge_count; i++) {
+            const PathEdge& edge = edges[i];
+            std::cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.rank << "\t" << (char)edge.label << std::endl;
+        }
+    }
+    
+    if(debug) {
+        std::cerr << "Path nodes" << std::endl;
+        for(size_t i = 0; i < node_count; i++) {
+            const PathNode& node = nodes[i];
+            std::cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+            << node.from << " --> " << node.to << std::endl;
+        }
+    }
 
   this->sortEdges(false, true);
     
-// daehwan - now we get BWT sequence from the labels in this->edges
   parent.restoreLabels(this->automata, this->max_label);
   this->restoreLabels();
   this->status = ready;
+    
+    
   return true;
 }
 
@@ -846,6 +888,16 @@ PathGraph::sort()
     if(iter->key != key) { rank++; key = iter->key; }
     iter->key = pair_type(rank, 0);
   }
+    
+    // daehwan - for debugging purposes
+    if(debug) {
+        std::cerr << "Path nodes (" << generation << "-generation) before merge" << std::endl;
+        for(size_t i = 0; i < node_count; i++) {
+            const PathNode& node = nodes[i];
+            std::cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+                      << node.from << " --> " << node.to << std::endl;
+        }
+    }
 
   // Merge equivalent nodes.
   usint top = 0;
@@ -884,6 +936,15 @@ PathGraph::sort()
     }
     this->status = sorted;
   }
+    
+    if(debug) {
+        std::cerr << "Path nodes (" << generation << "-generation) after merge" << std::endl;
+        for(size_t i = 0; i < node_count; i++) {
+            const PathNode& node = nodes[i];
+            std::cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+                      << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << std::endl;
+        }
+    }
 }
 
 // Returns the next maximal mergeable set of PathNodes.
