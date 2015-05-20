@@ -19,6 +19,7 @@ siren/gcsa_util/test
 hisat2_test/paper_example.malignment.automaton
 hisat2_test/paper_example.malignment.backbone
 hisat2_test/paper_example.malignment.gcsa
+hisat2_test/paper_example*.ht2
 hisat2_test/kim_example*.malignment.automaton
 hisat2_test/kim_example*.malignment.backbone
 hisat2_test/kim_example*.malignment.gcsa
