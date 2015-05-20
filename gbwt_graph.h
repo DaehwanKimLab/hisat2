@@ -1128,25 +1128,29 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
         }
         
-        index_t bwt_count = 0;
-        cerr << "Priting BWT" << endl;
-        index_t offset = 0; //, edge_offset = 0;
+        EList<char> bwt_string;
+        EList<uint8_t> F_array, M_array;
         for(index_t node = 0; node < nodes.size(); node++) {
-            // Write BWT
             pair<index_t, index_t> edge_range = getEdges(node, false);
             for(index_t i = edge_range.first; i < edge_range.second; i++) {
-                bwt_count++;
                 assert_lt(i, edges.size());
                 char label = edges[i].label;
-                cerr << bwt_count << "\t" << label << endl;
-                // counts[label]++;
-                // array_encoders[label]->setBit(offset);
+                bwt_string.push_back(label);
+                F_array.push_back(i == edge_range.first ? 1 : 0);
             }
-            offset++;
-            
-            // Write M
-            // outedges.addBit(edge_offset);
-            // edge_offset += max((index_t)1, (*node).outdegree());
+            for(index_t i = 0; i < nodes[node].key.first; i++) {
+                M_array.push_back(i == 0 ? 1 : 0);
+            }
+        }
+        
+        assert_gt(bwt_string.size(), 0);
+        assert_eq(bwt_string.size(), F_array.size());
+        assert_eq(bwt_string.size(), M_array.size());
+        cerr << "i\tBWT\tF\tM" << endl;
+        for(index_t i = 0; i < bwt_string.size(); i++) {
+            cerr << i << "\t" << bwt_string[i] << "\t"  // BWT char
+                 << (int)F_array[i] << "\t"             // F bit value
+                 << (int)M_array[i] << endl;            // M bit value
         }
     }
     
