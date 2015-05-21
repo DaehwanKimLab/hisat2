@@ -931,10 +931,41 @@ private:
     bool               debug;
     
     EList<char>        bwt_string;
-    EList<uint8_t>     F_array;
-    EList<uint8_t>     M_array;
+    EList<char>        F_array;
+    EList<char>        M_array;
     EList<index_t>     bwt_counts;
-    EList<index_t>     node_counts;
+    
+    // brute-force implementations
+    index_t select(const EList<char>& array, index_t p, char c) {
+        if(p <= 0) return 0;
+        for(index_t i = 0; i < array.size(); i++) {
+            if(array[i] == c) {
+                assert_gt(p, 0);
+                p--;
+                if(p == 0)
+                    return i;
+            }
+        }
+        return array.size();
+    }
+    
+    index_t select1(const EList<char>& array, index_t p) {
+        return select(array, p, 1);
+    }
+    
+    index_t rank(const EList<char>& array, index_t p, char c) {
+        index_t count = 0;
+        assert_lt(p, array.size());
+        for(index_t i = 0; i <= p; i++) {
+            if(array[i] == c)
+                count++;
+        }
+        return count;
+    }
+    
+    index_t rank1(const EList<char>& array, index_t p) {
+        return rank(array, p, 1);
+    }
 #endif
 };
 
@@ -1128,7 +1159,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     
     // Sets PathNode.to = GraphNode.value and PathNode.key.first to outdegree
     // Replaces (from.from, to) with (from, to)
-    PathNode* node = nodes.begin(); node->key.first = 0;
+    PathNode* node = nodes.begin(); node->key.first = 1;
     PathEdge* edge = edges.begin();
     while(node != nodes.end() && edge != edges.end()) {
         if(edge->from == node->from) {
@@ -1161,20 +1192,23 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
         }
         
+        nodes.pop_back(); // Remove 'Z' node
         bwt_string.clear();
         F_array.clear();
         M_array.clear();
-        bwt_counts.resizeExact(5); bwt_counts.fillZero();
-        node_counts.resizeExact(5); node_counts.fillZer();
+        bwt_counts.resizeExact(5); bwt_counts.fillZero(); bwt_counts.front() = 1;
         for(index_t node = 0; node < nodes.size(); node++) {
             pair<index_t, index_t> edge_range = getEdges(node, false);
             for(index_t i = edge_range.first; i < edge_range.second; i++) {
                 assert_lt(i, edges.size());
                 char label = edges[i].label;
+                if(label == 'Z') {
+                    label = '$';
+                }
                 bwt_string.push_back(label);
                 F_array.push_back(i == edge_range.first ? 1 : 0);
                 
-                if(label != 'Z') {
+                if(label != '$') {
                     char nt = asc2dna[(int)label];
                     assert_lt(nt + 1, bwt_counts.size());
                     bwt_counts[nt + 1]++;
@@ -1200,22 +1234,45 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << i << "\t" << bwt_counts[i] << endl;
         }
 
-        // Test searches
-        EList<string> queries;
-        queries.push_back("GACGT");
-        queries.push_back("GATGT");
-        queries.push_back("GACT");
-        queries.push_back("ATGT");
-        queries.push_back("GTAC");
-        queries.push_back("ACTG");
+        // Test searches, based on paper_example
+        EList<string> queries;  EList<index_t> answers;
+        queries.push_back("GACGT"); answers.push_back(9);
+        queries.push_back("GATGT"); answers.push_back(9);
+        queries.push_back("GACT");  answers.push_back(9);
+        queries.push_back("ATGT");  answers.push_back(4);
+        queries.push_back("GTAC");  answers.push_back(10);
+        queries.push_back("ACTG");  answers.push_back(3);
         
         for(size_t q = 0; q < queries.size(); q++) {
             const string& query = queries[q];
             assert_gt(query.length(), 0);
-            index_t top = 0, bot = 0;
-            for(size_t i = 1; i < query.length(); i++) {
-                char nt = query[query.length() - i - 1];
+            index_t top = 0, bot = nodes.size();
+            cerr << "Aligning " << query <<  endl;
+            
+            for(size_t i = 0; i < query.length(); i++) {
+                if(top >= bot) break;
+                
+                int nt = query[query.length() - i - 1];
+                nt = asc2dna[nt];
+                assert_lt(nt, 4);
+                cerr << "\t" << i << ": " << "ACGT"[nt] << endl;
+                cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
+                
+                top = select1(F_array, top + 1);
+                bot = select1(F_array, bot + 1);
+                cerr << "\t\tBWT range: [" << top << ", " << bot << ")" << endl;
+                
+                top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
+                bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
+                cerr << "\t\tLF BWT range: [" << top << ", " << bot << ")" << endl;
+                
+                top = rank1(M_array, top) - 1;
+                bot = rank1(M_array, bot - 1);
+                cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
             }
+            
+            cerr << "finished..." << endl << endl;
+            assert_eq(top, answers[q]);
         }
     }
 #endif
