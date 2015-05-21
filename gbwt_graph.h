@@ -928,7 +928,13 @@ private:
     pair<index_t, index_t> getEdges(index_t node, bool by_from); // Create index first.
     
 #ifndef NDEBUG
-    bool debug;
+    bool               debug;
+    
+    EList<char>        bwt_string;
+    EList<uint8_t>     F_array;
+    EList<uint8_t>     M_array;
+    EList<index_t>     bwt_counts;
+    EList<index_t>     node_counts;
 #endif
 };
 
@@ -1155,8 +1161,11 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
         }
         
-        EList<char> bwt_string;
-        EList<uint8_t> F_array, M_array;
+        bwt_string.clear();
+        F_array.clear();
+        M_array.clear();
+        bwt_counts.resizeExact(5); bwt_counts.fillZero();
+        node_counts.resizeExact(5); node_counts.fillZer();
         for(index_t node = 0; node < nodes.size(); node++) {
             pair<index_t, index_t> edge_range = getEdges(node, false);
             for(index_t i = edge_range.first; i < edge_range.second; i++) {
@@ -1164,6 +1173,12 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
                 char label = edges[i].label;
                 bwt_string.push_back(label);
                 F_array.push_back(i == edge_range.first ? 1 : 0);
+                
+                if(label != 'Z') {
+                    char nt = asc2dna[(int)label];
+                    assert_lt(nt + 1, bwt_counts.size());
+                    bwt_counts[nt + 1]++;
+                }
             }
             for(index_t i = 0; i < nodes[node].key.first; i++) {
                 M_array.push_back(i == 0 ? 1 : 0);
@@ -1178,6 +1193,29 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << i << "\t" << bwt_string[i] << "\t"  // BWT char
                  << (int)F_array[i] << "\t"             // F bit value
                  << (int)M_array[i] << endl;            // M bit value
+        }
+        
+        for(size_t i = 0; i < bwt_counts.size(); i++) {
+            if(i > 0) bwt_counts[i] += bwt_counts[i - 1];
+            cerr << i << "\t" << bwt_counts[i] << endl;
+        }
+
+        // Test searches
+        EList<string> queries;
+        queries.push_back("GACGT");
+        queries.push_back("GATGT");
+        queries.push_back("GACT");
+        queries.push_back("ATGT");
+        queries.push_back("GTAC");
+        queries.push_back("ACTG");
+        
+        for(size_t q = 0; q < queries.size(); q++) {
+            const string& query = queries[q];
+            assert_gt(query.length(), 0);
+            index_t top = 0, bot = 0;
+            for(size_t i = 1; i < query.length(); i++) {
+                char nt = query[query.length() - i - 1];
+            }
         }
     }
 #endif
