@@ -97,7 +97,7 @@ public:
     
 private:
     bool isReverseDeterministic();
-    void reverseDeterminize(bool debug = false);
+    void reverseDeterminize();
     
     void sortEdgesFrom() {
         std::sort(edges.begin(), edges.end(), EdgeFromCmp());
@@ -136,6 +136,10 @@ private:
     EList<Node> nodes;
     EList<Edge> edges;
     index_t     lastNode; // $
+    
+#ifndef NDEBUG
+    bool        debug;
+#endif
     
 private:
     // Following composite nodes and edges are used to reverse-determinize an automaton.
@@ -252,7 +256,11 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         }
         jlen += (index_t)szs[i].len;
     }
-    bool debug = (jlen <= 10);
+    
+#ifndef NDEBUG
+    debug = (jlen <= 10);
+#endif
+    
     SString<char> s;
     EList<string> refnames;
     try {
@@ -269,7 +277,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         bool first = true;
         while(!fb->eof()) {
             if(szs[szsi].first) refnames.push_back("");
-            RefRecord rec = fastaRefReadAppend(*fb, first, s, distoff, rpcp, &refnames.back());
+            ASSERT_ONLY(RefRecord rec =) fastaRefReadAppend(*fb, first, s, distoff, rpcp, &refnames.back());
             first = false;
             assert_eq(rec.off, szs[szsi].off);
             assert_eq(rec.len, szs[szsi].len);
@@ -471,6 +479,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         }
     }
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "Nodes:" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
@@ -485,10 +494,11 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
         }
         cerr << endl;
     }
+#endif
     
     if(!isReverseDeterministic()) {
         cerr << "is not reverse-deterministic" << endl;
-        reverseDeterminize(debug);
+        reverseDeterminize();
         assert(isReverseDeterministic());
     }
 }
@@ -571,7 +581,7 @@ bool RefGraph<index_t>::isReverseDeterministic()
 
 
 template <typename index_t>
-void RefGraph<index_t>::reverseDeterminize(bool debug)
+void RefGraph<index_t>::reverseDeterminize()
 {
     EList<CompositeNode> cnodes; cnodes.ensure(nodes.size());
     map<basic_string<index_t>, index_t> cnode_map;
@@ -753,6 +763,7 @@ void RefGraph<index_t>::reverseDeterminize(bool debug)
     }
     sortEdgesFrom();
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "Nodes:" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
@@ -767,6 +778,7 @@ void RefGraph<index_t>::reverseDeterminize(bool debug)
         }
         cerr << endl;
     }
+#endif
 }
 
 static const uint8_t WORD_BITS = sizeof(TIndexOffU) * 8;
@@ -915,7 +927,9 @@ private:
     void      sortEdges(bool by_from, bool create_index);
     pair<index_t, index_t> getEdges(index_t node, bool by_from); // Create index first.
     
+#ifndef NDEBUG
     bool debug;
+#endif
 };
 
 
@@ -925,10 +939,10 @@ ranks(0), max_label('Z'), temp_nodes(0), generation(0),
 status(error), has_stabilized(false)
 {
     if(!base.repOk()) return;
-    
-    if(base.nodes.size() < 20) {
-        debug = true;
-    }
+
+#ifndef NDEBUG
+    debug = base.nodes.size() <= 20;
+#endif
 
     // Create a path node per edge with a key set to from node's label
     temp_nodes = base.edges.size() + 1;
@@ -958,9 +972,14 @@ status(error), has_stabilized(false)
 {
     if(previous.status != ok)
         return;
-    debug = previous.debug;    
+    
+#ifndef NDEBUG
+    debug = previous.debug;
+#endif
+    
     previous.sortByFrom(true);
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "Path nodes (" << generation << "-generation) - soryByFrom" << endl;
         for(size_t i = 0; i < previous.nodes.size(); i++) {
@@ -969,6 +988,7 @@ status(error), has_stabilized(false)
             << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
         }
     }
+#endif
     
     // A heuristic to determine, whether the number of new nodes should be counted
     index_t new_nodes = previous.nodes.size() + previous.nodes.size() / 8;
@@ -997,6 +1017,7 @@ status(error), has_stabilized(false)
     }
     temp_nodes = nodes.size();
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "Path nodes (" << generation << "-generation) - combine" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
@@ -1005,6 +1026,7 @@ status(error), has_stabilized(false)
                  << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
         }
     }
+#endif
     
     status = ok;
     updateRank_and_merge();
@@ -1053,6 +1075,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "just after creating path edges" << endl;
         cerr << "Ref edges" << endl;
@@ -1074,10 +1097,12 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
         }
     }
+#endif
     
     sortByKey(); // Restore correct node order
     sortEdges(); // Sort edges by (from.label, to.rank)
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "after sorting nodes by ranking and edges by label and ranking" << endl;
         cerr << "Path nodes" << endl;
@@ -1093,6 +1118,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
         }
     }
+#endif
     
     // Sets PathNode.to = GraphNode.value and PathNode.key.first to outdegree
     // Replaces (from.from, to) with (from, to)
@@ -1114,6 +1140,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     sortEdgesTo(true);
     status = ready;
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "Path nodes (final)" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
@@ -1153,6 +1180,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
                  << (int)M_array[i] << endl;            // M bit value
         }
     }
+#endif
     
     return true;
 }
@@ -1234,6 +1262,7 @@ void PathGraph<index_t>::updateRank_and_merge()
 {
     sortByKey();
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "Path nodes (" << generation << "-generation) before merge" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
@@ -1242,6 +1271,7 @@ void PathGraph<index_t>::updateRank_and_merge()
                  << node.from << " --> " << node.to << endl;
         }
     }
+#endif
     
     // Update ranks
     index_t rank = 0;
@@ -1292,6 +1322,7 @@ void PathGraph<index_t>::updateRank_and_merge()
         status = sorted;
     }
     
+#ifndef NDEBUG
     if(debug) {
         cerr << "Path nodes (" << generation << "-generation) after merge" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
@@ -1300,6 +1331,7 @@ void PathGraph<index_t>::updateRank_and_merge()
                  << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
         }
     }
+#endif
 }
 
 // Returns the next maximal mergeable set of PathNodes.
