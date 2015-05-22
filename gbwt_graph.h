@@ -1274,9 +1274,12 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
                 bot = rank1(M_array, bot - 1);
                 cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
             }
-            
-            cerr << "finished..." << endl << endl;
             assert_eq(top, answers[q]);
+            cerr << "finished... ";
+            if(top < nodes.size()) {
+                cerr << "being aligned at " << nodes[top].to;
+            }
+            cerr << endl << endl;
         }
     }
 #endif
