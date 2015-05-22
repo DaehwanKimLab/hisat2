@@ -929,6 +929,7 @@
 		E8000AE51AE9324600E1F351 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COPY_PHASE_STRIP = YES;
 				DEBUGGING_SYMBOLS = YES;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
@@ -938,16 +939,17 @@
 				);
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-s-debug";
+				PRODUCT_NAME = "hisat2-build-s-debug";
 			};
 			name = Debug;
 		};
 		E8000AE61AE9324600E1F351 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COPY_PHASE_STRIP = NO;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-s-debug";
+				PRODUCT_NAME = "hisat2-build-s-debug";
 			};
 			name = Release;
 		};

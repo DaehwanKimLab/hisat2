@@ -497,7 +497,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
 #endif
     
     if(!isReverseDeterministic()) {
-        cerr << "is not reverse-deterministic" << endl;
+        cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
         reverseDeterminize();
         assert(isReverseDeterministic());
     }
@@ -517,6 +517,10 @@ pair<index_t, index_t> RefGraph<index_t>::findEdges(index_t node, bool from) {
         if(node == temp) {
             high = mid;
         } else if(node < temp) {
+            if(mid == 0) {
+                return pair<index_t, index_t>(0, 0);
+            }
+            
             high = mid - 1;
         } else {
             low = mid + 1;
