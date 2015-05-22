@@ -1246,7 +1246,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     
     // Test searches, based on paper_example
     EList<string> queries;  EList<index_t> answers;
-#if 1
+#if 0
 #   if 1
     queries.push_back("GACGT"); answers.push_back(9);
     queries.push_back("GATGT"); answers.push_back(9);
@@ -1310,6 +1310,100 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
         cerr << endl << endl;
     }
+    
+    // daehwan - for debugging purposes
+#   if 0
+    cerr << endl << endl;
+    EList<index_t> tmp_F;
+    for(index_t i = 0; i < F_array.size(); i++) {
+        if(F_array[i] == 1) tmp_F.push_back(i);
+    }
+    
+    EList<index_t> tmp_M;
+    for(index_t i = 0; i < M_array.size(); i++) {
+        if(M_array[i] == 1) tmp_M.push_back(i);
+    }
+    
+#      if 0
+    index_t max_diff = 0;
+    assert_eq(tmp_F.size(), tmp_M.size());
+    for(index_t i = 0; i < tmp_F.size(); i++) {
+        index_t diff = (tmp_F[i] >= tmp_M[i] ? tmp_F[i] - tmp_M[i] : tmp_M[i] - tmp_F[i]);
+        if(diff > max_diff) {
+            max_diff = diff;
+            cerr << i << "\tdiff: " << max_diff << "\t" << (tmp_F[i] >= tmp_M[i] ? "+" : "-") << endl;
+        }
+    }
+    cerr << "Final: " << tmp_F.back() << " vs. " << tmp_M.back() << endl;
+#      else
+    index_t max_diff = 0, max_bits = 0;
+    index_t num_uncompressed = 0, num_compressed = 0, num_extra = 0;
+    assert_eq(tmp_F.size(), tmp_M.size());
+    for(index_t i = 0; i < tmp_F.size(); i++) {
+        index_t j = i + 1;
+        for(; j < tmp_F.size(); j++) {
+            assert_lt(tmp_F[i], tmp_F[j]);
+            if(tmp_F[i] + 192 <= tmp_F[j]) break;
+        }
+        if(j >= tmp_F.size()) break;
+        
+        index_t diff_F = tmp_F[j] - tmp_F[i];
+        index_t diff_M = tmp_M[j] - tmp_M[i];
+        index_t diff = (diff_F >= diff_M ? diff_F - diff_M : diff_M - diff_F);
+        if(diff > max_diff) {
+            max_diff = diff;
+            cerr << i << "," << j << "\tdiff: " << max_diff << "\t" << (diff_F >= diff_M ? "+" : "-") << endl;
+        }
+        
+        index_t bits = 0;
+        if(diff_M > diff_F) {
+            for(index_t m = i; m + 1 < j; m++) {
+                for(index_t n = m + 1; n < j; n++) {
+                    assert_lt(tmp_M[n-1], tmp_M[n]);
+                    if(tmp_M[n-1] + 1 < tmp_M[n]) {
+                        index_t num_1s = n - m;
+                        const index_t per_bits = 4;
+                        const index_t max_num = (1 << per_bits) - 2;
+                        bits += per_bits;
+                        while(num_1s > max_num) {
+                            num_1s -= max_num;
+                            bits += per_bits;
+                        }
+                        index_t num_0s = tmp_M[n] - tmp_M[n-1];
+                        // 0s
+                        bits += per_bits;
+                        while(num_0s > max_num) {
+                            num_0s -= max_num;
+                            bits += per_bits;
+                        }
+                        m = n;
+                        break;
+                    }
+                }
+            }
+            if(bits > 192) {
+                num_extra++;
+            } else {
+                num_compressed++;
+            }
+        } else {
+            num_uncompressed++;
+        }
+        if(bits > max_bits) {
+            max_bits = bits;
+            cerr << i << "," << j << "\tbits: " << diff_M << "\tcompressed bits: " << max_bits << endl;
+        }
+        
+        i = j;
+    }
+    
+    cerr << "num of uncompressed: " << num_uncompressed << endl;
+    cerr << "num of compressed: " << num_compressed << endl;
+    cerr << "num of extra: " << num_extra << endl;
+#      endif
+    
+#   endif
+    
 #endif
     
     return true;
