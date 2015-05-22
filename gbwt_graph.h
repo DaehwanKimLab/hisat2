@@ -133,6 +133,8 @@ private:
     }
     
 private:
+    EList<RefRecord> szs;
+    
     EList<Node> nodes;
     EList<Edge> edges;
     index_t     lastNode; // $
@@ -241,7 +243,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     // Vector for the ordered list of "records" comprising the input
     // sequences.  A record represents a stretch of unambiguous
     // characters in one of the input sequences.
-    EList<RefRecord> szs(MISC_CAT);
+    szs.clear();
     bool bigEndian = false, sanityCheck = false;
     BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
     assert_gt(szs.size(), 0);
@@ -333,7 +335,6 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
                 break;
         }
         if(chr_idx >= refnames.size()) continue;
-        
         assert_eq(chr_szs.size(), refnames.size());
         assert_lt(chr_idx, chr_szs.size());
         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
@@ -1180,7 +1181,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     
     sortEdgesTo(true);
     status = ready;
-    
+ 
 #ifndef NDEBUG
     if(debug) {
         cerr << "Path nodes (final)" << endl;
@@ -1195,92 +1196,119 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             const PathEdge& edge = edges[i];
             cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
         }
-        
-        nodes.pop_back(); // Remove 'Z' node
-        bwt_string.clear();
-        F_array.clear();
-        M_array.clear();
-        bwt_counts.resizeExact(5); bwt_counts.fillZero(); bwt_counts.front() = 1;
-        for(index_t node = 0; node < nodes.size(); node++) {
-            pair<index_t, index_t> edge_range = getEdges(node, false);
-            for(index_t i = edge_range.first; i < edge_range.second; i++) {
-                assert_lt(i, edges.size());
-                char label = edges[i].label;
-                if(label == 'Z') {
-                    label = '$';
-                }
-                bwt_string.push_back(label);
-                F_array.push_back(i == edge_range.first ? 1 : 0);
-                
-                if(label != '$') {
-                    char nt = asc2dna[(int)label];
-                    assert_lt(nt + 1, bwt_counts.size());
-                    bwt_counts[nt + 1]++;
-                }
+    }
+    
+    nodes.pop_back(); // Remove 'Z' node
+    bwt_string.clear();
+    F_array.clear();
+    M_array.clear();
+    bwt_counts.resizeExact(5); bwt_counts.fillZero(); bwt_counts.front() = 1;
+    for(index_t node = 0; node < nodes.size(); node++) {
+        pair<index_t, index_t> edge_range = getEdges(node, false);
+        for(index_t i = edge_range.first; i < edge_range.second; i++) {
+            assert_lt(i, edges.size());
+            char label = edges[i].label;
+            if(label == 'Z') {
+                label = '$';
             }
-            for(index_t i = 0; i < nodes[node].key.first; i++) {
-                M_array.push_back(i == 0 ? 1 : 0);
+            bwt_string.push_back(label);
+            F_array.push_back(i == edge_range.first ? 1 : 0);
+            
+            if(label != '$') {
+                char nt = asc2dna[(int)label];
+                assert_lt(nt + 1, bwt_counts.size());
+                bwt_counts[nt + 1]++;
             }
         }
-        
-        assert_gt(bwt_string.size(), 0);
-        assert_eq(bwt_string.size(), F_array.size());
-        assert_eq(bwt_string.size(), M_array.size());
+        for(index_t i = 0; i < nodes[node].key.first; i++) {
+            M_array.push_back(i == 0 ? 1 : 0);
+        }
+    }
+    assert_gt(bwt_string.size(), 0);
+    assert_eq(bwt_string.size(), F_array.size());
+    assert_eq(bwt_string.size(), M_array.size());
+    
+    if(debug) {
         cerr << "i\tBWT\tF\tM" << endl;
         for(index_t i = 0; i < bwt_string.size(); i++) {
             cerr << i << "\t" << bwt_string[i] << "\t"  // BWT char
-                 << (int)F_array[i] << "\t"             // F bit value
-                 << (int)M_array[i] << endl;            // M bit value
+            << (int)F_array[i] << "\t"             // F bit value
+            << (int)M_array[i] << endl;            // M bit value
         }
-        
-        for(size_t i = 0; i < bwt_counts.size(); i++) {
-            if(i > 0) bwt_counts[i] += bwt_counts[i - 1];
+    }
+    
+    for(size_t i = 0; i < bwt_counts.size(); i++) {
+        if(i > 0) bwt_counts[i] += bwt_counts[i - 1];
+        if(debug) {
             cerr << i << "\t" << bwt_counts[i] << endl;
         }
-
-        // Test searches, based on paper_example
-        EList<string> queries;  EList<index_t> answers;
-        queries.push_back("GACGT"); answers.push_back(9);
-        queries.push_back("GATGT"); answers.push_back(9);
-        queries.push_back("GACT");  answers.push_back(9);
-        queries.push_back("ATGT");  answers.push_back(4);
-        queries.push_back("GTAC");  answers.push_back(10);
-        queries.push_back("ACTG");  answers.push_back(3);
+    }
+    
+    // Test searches, based on paper_example
+    EList<string> queries;  EList<index_t> answers;
+#if 1
+#   if 1
+    queries.push_back("GACGT"); answers.push_back(9);
+    queries.push_back("GATGT"); answers.push_back(9);
+    queries.push_back("GACT");  answers.push_back(9);
+    queries.push_back("ATGT");  answers.push_back(4);
+    queries.push_back("GTAC");  answers.push_back(10);
+    queries.push_back("ACTG");  answers.push_back(3);
+#   else
+    // rs55902548, at 402, ref, alt, unknown alt
+    queries.push_back("GGCAGCTCCCATGGGTACACACTGGGCCCAGAACTGGGATGGAGGATGCA");
+    queries.push_back("GGCAGCTCCCATGGGTACACACTGGTCCCAGAACTGGGATGGAGGATGCA");
+    queries.push_back("GGCAGCTCCCATGGGTACACACTGGACCCAGAACTGGGATGGAGGATGCA");
+    
+    // rs5759268, at 926787, ref, alt, unknown alt
+    queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCACACCTGGTTCTCTTTCCAGTGTTAT");
+    queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCATACCTGGTTCTCTTTCCAGTGTTAT");
+    queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCAGACCTGGTTCTCTTTCCAGTGTTAT");
+#   endif
+#endif
+    
+    for(size_t q = 0; q < queries.size(); q++) {
+        const string& query = queries[q];
+        assert_gt(query.length(), 0);
+        index_t top = 0, bot = nodes.size();
+        cerr << "Aligning " << query <<  endl;
         
-        for(size_t q = 0; q < queries.size(); q++) {
-            const string& query = queries[q];
-            assert_gt(query.length(), 0);
-            index_t top = 0, bot = nodes.size();
-            cerr << "Aligning " << query <<  endl;
+        for(size_t i = 0; i < query.length(); i++) {
+            if(top >= bot) break;
             
-            for(size_t i = 0; i < query.length(); i++) {
-                if(top >= bot) break;
-                
-                int nt = query[query.length() - i - 1];
-                nt = asc2dna[nt];
-                assert_lt(nt, 4);
-                cerr << "\t" << i << ": " << "ACGT"[nt] << endl;
-                cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
-                
-                top = select1(F_array, top + 1);
-                bot = select1(F_array, bot + 1);
-                cerr << "\t\tBWT range: [" << top << ", " << bot << ")" << endl;
-                
-                top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
-                bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
-                cerr << "\t\tLF BWT range: [" << top << ", " << bot << ")" << endl;
-                
-                top = rank1(M_array, top) - 1;
-                bot = rank1(M_array, bot - 1);
-                cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
-            }
-            assert_eq(top, answers[q]);
-            cerr << "finished... ";
-            if(top < nodes.size()) {
-                cerr << "being aligned at " << nodes[top].to;
-            }
-            cerr << endl << endl;
+            int nt = query[query.length() - i - 1];
+            nt = asc2dna[nt];
+            assert_lt(nt, 4);
+            cerr << "\t" << i << ": " << "ACGT"[nt] << endl;
+            cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
+            
+            top = select1(F_array, top + 1);
+            bot = select1(F_array, bot + 1);
+            cerr << "\t\tBWT range: [" << top << ", " << bot << ")" << endl;
+            
+            top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
+            bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
+            cerr << "\t\tLF BWT range: [" << top << ", " << bot << ")" << endl;
+            
+            top = rank1(M_array, top) - 1;
+            bot = rank1(M_array, bot - 1);
+            cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
         }
+        // assert_eq(top, answers[q]);
+        cerr << "finished... ";
+        if(top < bot && top < nodes.size()) {
+            index_t pos = nodes[top].to;
+            index_t gpos = pos;
+            const EList<RefRecord>& szs = base.szs;
+            for(index_t i = 0; i < szs.size(); i++) {
+                gpos += szs[i].off;
+                if(pos < szs[i].len) break;
+                pos -= szs[i].len;
+            }
+            
+            cerr << "being aligned at " << gpos;
+        }
+        cerr << endl << endl;
     }
 #endif
     

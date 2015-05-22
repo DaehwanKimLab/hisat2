@@ -75,9 +75,12 @@ def read_genome(genome_file):
 
 """
 """
-def extract_snps(genome_file, snp_file, verbose = False):
+def extract_snps(genome_file, snp_file, verbose = False, testset = False):
     # load genomic sequences
     chr_dic = read_genome(genome_file)
+
+    if testset:
+        testset_file = open("testset.fa", "w")
 
     # load SNPs
     snp_list = []
@@ -141,6 +144,13 @@ def extract_snps(genome_file, snp_file, verbose = False):
                 if allele == ref_base:
                     continue
                 snp_list.append([rs_id, classType, chr, start, end, allele])
+
+                if testset:
+                    ref_seq = chr_seq[start-25:start+25]
+                    alt_seq = chr_seq[start-25:start] + allele + chr_seq[start+1:start+25]
+                    print >> testset_file, ">%s %d %s" % (rs_id, start - 25, ref_seq)
+                    print >> testset_file, alt_seq
+                
         elif classType == "deletion":
             snp_list.append([rs_id, classType, chr, start, end, "-" * (end - start)])
         else:
@@ -150,6 +160,9 @@ def extract_snps(genome_file, snp_file, verbose = False):
                     continue
                 if re.match('[ACGT]+', allele):
                     snp_list.append([rs_id, classType, chr, start, end, allele])
+
+    if testset:
+        testset_file.close()
 
                     
     # Sort SNPs (snp_list) according to chromosomes, genomic coordinates, types, and alleles
@@ -219,9 +232,13 @@ if __name__ == '__main__':
         dest='verbose',
         action='store_true',
         help='also print some statistics to stderr')
+    parser.add_argument('--testset',
+        dest='testset',
+        action='store_true',
+        help='print test reads')
 
     args = parser.parse_args()
     if not args.snp_file:
         parser.print_help()
         exit(1)
-    extract_snps(args.genome_file, args.snp_file, args.verbose)
+    extract_snps(args.genome_file, args.snp_file, args.verbose, args.testset)
