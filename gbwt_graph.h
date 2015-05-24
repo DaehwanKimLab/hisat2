@@ -90,6 +90,12 @@ public:
             return true;
         }
         
+        bool operator== (const Node& o) const {
+            if(value != o.value) return false;
+            if(label != o.label) return false;
+            return true;
+        }
+        
         bool operator< (const Node& o) const {
             if(value != o.value) return value < o.value;
             return label < o.label;
@@ -137,13 +143,17 @@ public:
     struct TempEdgeNodeCmp {
         TempEdgeNodeCmp(const EList<Node>& nodes_) : nodes(nodes_) {}
         bool operator() (const Edge& a, const Edge& b) const {
-            if(a.from != b.from) {
+            // Compare "from" nodes
+            {
                 assert_lt(a.from, nodes.size());
                 const Node& a_node = nodes[a.from];
                 assert_lt(b.from, nodes.size());
                 const Node& b_node = nodes[b.from];
-                return a_node < b_node;
+                if(!(a_node == b_node))
+                    return a_node < b_node;
             }
+
+            // Compare "to" nodes
             assert_lt(a.to, nodes.size());
             const Node& a_node = nodes[a.to];
             assert_lt(b.to, nodes.size());
@@ -164,7 +174,7 @@ public:
     
 private:
     bool isReverseDeterministic();
-    void reverseDeterminize();
+    void reverseDeterminize(index_t lastNode_add = 0);
     
     void sortEdgesFrom() {
         std::sort(edges.begin(), edges.end(), EdgeFromCmp());
@@ -480,21 +490,109 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
     sort(snps.begin(), snps.end());
     
     // a memory-efficient way to create a population graph with known SNPs
-    bool frag_automaton = false;
+    bool frag_automaton = true;
     if(frag_automaton) {
         const string rg_fname = out_fname + ".rf";
-        ofstream rf_out_file(rg_fname.c_str(), ios::binary);
-        if(!rf_out_file.good()) {
+        ofstream rg_out_file(rg_fname.c_str(), ios::binary);
+        if(!rg_out_file.good()) {
             cerr << "Could not open file for writing a reference graph: \"" << rg_fname << "\"" << endl;
             throw 1;
         }
         
+#if 1
+        EList<RefRecord> tmp_szs;
+        {
+            index_t relax = 10;
+            EList<pair<index_t, index_t> > snp_ranges;
+            for(index_t i = 0; i < snps.size(); i++) {
+                const SNP<index_t>& snp = snps[i];
+                pair<index_t, index_t> range;
+                range.first = snp.pos > relax ? snp.pos - relax - 1 : 0;
+                if(snp.type == SNP_SGL) {
+                    range.second = snp.pos + 1;
+                } else if(snp.type == SNP_DEL) {
+                    range.second = snp.pos + snp.diff.size();
+                } else if(snp.type == SNP_INS) {
+                    range.second = snp.pos;
+                } else assert(false);
+                range.second += relax;
+                
+                if(snp_ranges.empty() || snp_ranges.back().second < range.first) {
+                    snp_ranges.push_back(range);
+                } else {
+                    assert_leq(snp_ranges.back().first, range.first);
+                    if(snp_ranges.back().second < range.second) {
+                        snp_ranges.back().second = range.second;
+                    }
+                }
+            }
+            
+            const index_t chunk_size = 1 << 20;
+            index_t pos = 0, range_idx = 0;
+            for(index_t i = 0; i < szs.size(); i++) {
+                if(szs[i].len == 0) continue;
+                if(szs[i].len <= chunk_size) {
+                    tmp_szs.push_back(szs[i]);
+                    pos += szs[i].len;
+                } else {
+                    index_t num_chunks = (szs[i].len + chunk_size - 1) / chunk_size;
+                    assert_gt(num_chunks, 1);
+                    index_t modified_chunk_size = szs[i].len / num_chunks;
+                    index_t after_pos = pos + szs[i].len;
+                    ASSERT_ONLY(index_t sum_len = 0);
+                    while(pos < after_pos) {
+                        index_t target_pos = pos + modified_chunk_size;
+                        if(target_pos < after_pos) {
+                            for(; range_idx < snp_ranges.size(); range_idx++) {
+                                if(target_pos < snp_ranges[range_idx].first) break;
+                            }
+                            pair<index_t, index_t> snp_free_range;
+                            if(range_idx == 0) {
+                                snp_free_range.first = 0;
+                            } else {
+                                snp_free_range.first = snp_ranges[range_idx - 1].second + 1;
+                            }
+                        
+                            if(range_idx == snp_ranges.size()) {
+                                snp_free_range.second = jlen - 1;
+                            } else {
+                                snp_free_range.second = snp_ranges[range_idx].first - 1;
+                            }
+                            
+                            assert_lt(snp_free_range.first, snp_free_range.second);
+                            if(target_pos < snp_free_range.first) target_pos = snp_free_range.first;
+                            if(target_pos > after_pos) target_pos = after_pos;
+                        } else {
+                            target_pos = after_pos;
+                        }
+                        
+                        tmp_szs.expand();
+                        tmp_szs.back().len = target_pos - pos;
+                        tmp_szs.back().off = 0;
+                        pos = target_pos;
+                        ASSERT_ONLY(sum_len += tmp_szs.back().len);
+                    }
+                    assert_eq(pos, after_pos);
+                    assert_eq(sum_len, szs[i].len);
+                }
+            }
+#ifndef NDEBUG
+            index_t modified_jlen = 0;
+            for(index_t i = 0; i < tmp_szs.size(); i++) {
+                modified_jlen += tmp_szs[i].len;
+            }
+            assert_eq(modified_jlen, jlen);
+#endif
+        }
+#else
+        EList<RefRecord> tmp_szs = szs;
+#endif
         index_t num_nodes = 0, num_edges = 0, curr_pos = 0;
         index_t szs_idx = 0, snp_idx = 0, num_snp_nodes = 0;
-        assert(szs[szs_idx].first);
+        assert(tmp_szs[szs_idx].first);
         EList<index_t> prev_tail_nodes;
-        for(; szs_idx < szs.size(); szs_idx++) {
-            index_t curr_len = szs[szs_idx].len;
+        for(; szs_idx < tmp_szs.size(); szs_idx++) {
+            index_t curr_len = tmp_szs[szs_idx].len;
             if(curr_len <= 0) continue;
             
             index_t num_predicted_nodes = (index_t)(curr_len * 1.2);
@@ -575,7 +673,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             }
             
             if(!isReverseDeterministic()) {
-                reverseDeterminize();
+                reverseDeterminize(curr_pos > 0 ? curr_pos + 1 : 0);
                 assert(isReverseDeterministic());
             }
 
@@ -592,7 +690,6 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             }
             assert_lt(head_node, nodes.size());
             assert_lt(tail_node, nodes.size());
-            
             
             // Update edges
             const index_t invalid = std::numeric_limits<index_t>::max();
@@ -653,12 +750,12 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             assert_gt(tmp_num_nodes, 2);
             if(curr_pos > 0) tmp_num_nodes--;
             if(curr_pos + curr_len < jlen) tmp_num_nodes--;
-            writeIndex<index_t>(rf_out_file, tmp_num_nodes, bigEndian);
+            writeIndex<index_t>(rg_out_file, tmp_num_nodes, bigEndian);
             ASSERT_ONLY(index_t num_nodes_written = 0);
             for(index_t i = 0; i < nodes.size(); i++) {
                 if(curr_pos > 0 && nodes[i].label == 'Z') continue;
                 if(curr_pos + curr_len < jlen && nodes[i].label == '$') continue;
-                nodes[i].write(rf_out_file, bigEndian);
+                nodes[i].write(rg_out_file, bigEndian);
                 ASSERT_ONLY(num_nodes_written++);
             }
             assert_eq(tmp_num_nodes, num_nodes_written);
@@ -666,12 +763,12 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             assert_gt(tmp_num_edges, num_head_nodes + prev_tail_nodes.size());
             if(curr_pos > 0) tmp_num_edges -= num_head_nodes;
             if(curr_pos + curr_len < jlen) tmp_num_edges -= prev_tail_nodes.size();
-            writeIndex<index_t>(rf_out_file, tmp_num_edges, bigEndian);
+            writeIndex<index_t>(rg_out_file, tmp_num_edges, bigEndian);
             ASSERT_ONLY(index_t num_edges_written = 0);
             for(index_t i = 0; i < edges.size(); i++) {
                 if(curr_pos > 0 && edges[i].from == head_node) continue;
                 if(curr_pos + curr_len < jlen && edges[i].to == tail_node) continue;
-                edges[i].write(rf_out_file, bigEndian);
+                edges[i].write(rg_out_file, bigEndian);
                 ASSERT_ONLY(num_edges_written++);
             }
             assert_eq(tmp_num_edges, num_edges_written);
@@ -685,26 +782,26 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
         }
         
         // Close out file handle
-        rf_out_file.close();
+        rg_out_file.close();
         
         // Read all the nodes and edges
-        ifstream rf_in_file(rg_fname.c_str(), ios::binary);
-        if(!rf_in_file.good()) {
+        ifstream rg_in_file(rg_fname.c_str(), ios::binary);
+        if(!rg_in_file.good()) {
             cerr << "Could not open file for reading a reference graph: \"" << rg_fname << "\"" << endl;
             throw 1;
         }
         nodes.resizeExact(num_nodes); nodes.clear();
         edges.resizeExact(num_edges); edges.clear();
-        while(!rf_in_file.eof()) {
-            index_t tmp_num_nodes = readIndex<index_t>(rf_in_file, bigEndian);
+        while(!rg_in_file.eof()) {
+            index_t tmp_num_nodes = readIndex<index_t>(rg_in_file, bigEndian);
             for(index_t i = 0; i < tmp_num_nodes; i++) {
                 nodes.expand();
-                nodes.back().read(rf_in_file, bigEndian);
+                nodes.back().read(rg_in_file, bigEndian);
             }
-            index_t tmp_num_edges = readIndex<index_t>(rf_in_file, bigEndian);
+            index_t tmp_num_edges = readIndex<index_t>(rg_in_file, bigEndian);
             for(index_t i = 0; i < tmp_num_edges; i++) {
                 edges.expand();
-                edges.back().read(rf_in_file, bigEndian);
+                edges.back().read(rg_in_file, bigEndian);
             }
             
             if(nodes.size() >= num_nodes) {
@@ -713,7 +810,8 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
                 break;
             }
         }
-        rf_in_file.close();
+        rg_in_file.close();
+        std::remove(rg_fname.c_str());
     } else { // this is memory-consuming
         index_t num_predicted_nodes = (index_t)(jlen * 1.2);
         nodes.reserveExact(num_predicted_nodes);
@@ -811,7 +909,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
     }
     
     // daehwan - for debugging purposes
-#if 0
+#if 1
     if(frag_automaton) {
         cout << "frag automaton" << endl;
     } else {
@@ -918,7 +1016,7 @@ bool RefGraph<index_t>::isReverseDeterministic()
 
 
 template <typename index_t>
-void RefGraph<index_t>::reverseDeterminize()
+void RefGraph<index_t>::reverseDeterminize(index_t lastNode_add)
 {
     EList<CompositeNode> cnodes; cnodes.ensure(nodes.size());
     map<basic_string<index_t>, index_t> cnode_map;
@@ -968,17 +1066,18 @@ void RefGraph<index_t>::reverseDeterminize()
             // Create composite nodes by labels
             stable_sort(predecessors.begin(), predecessors.end(), TempNodeLabelCmp(nodes));
         }
-        
+
         for(size_t i = 0; i < predecessors.size();) {
             index_t node_id = predecessors[i];
             assert_lt(node_id, nodes.size());
             const Node& node = nodes[node_id]; i++;
+            
             cnodes.expand();
             cnodes.back().reset();
             cnodes.back().label = node.label;
             cnodes.back().value = node.value;
             cnodes.back().nodes.push_back(node_id);
-            cnodes.back().potential = node.value < lastNode;
+            cnodes.back().potential = node.value < (lastNode + lastNode_add);
             
             if(node.label == 'Z' && firstNode == 0) {
                 firstNode = cnodes.size() - 1;
@@ -992,12 +1091,12 @@ void RefGraph<index_t>::reverseDeterminize()
                 if(next_node.label != node.label) break;
                 cnodes.back().nodes.push_back(next_node_id);
 
-                if((cnode.value < lastNode) != (next_node.value < lastNode)) {
+                if((cnode.value < (lastNode + lastNode_add)) != (next_node.value < (lastNode + lastNode_add))) {
                     cnode.value = min(cnode.value, next_node.value);
                 } else {
                     cnode.value = max(cnode.value, next_node.value);
                 }
-                cnode.potential = cnode.value < lastNode;
+                cnode.potential = cnode.value < (lastNode + lastNode_add);
                 i++;
             }
             
