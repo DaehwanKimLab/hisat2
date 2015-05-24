@@ -48,6 +48,16 @@ struct SNP {
     index_t        pos;
     SNP_TYPE       type;
     EList<char, 4> diff;
+    
+    bool operator< (const SNP& o) const {
+        if(pos != o.pos) return pos < o.pos;
+        if(type != o.type) return type < o.type;
+        if(diff.size() != o.diff.size()) return diff.size() < o.diff.size();
+        for(index_t i = 0; i < diff.size(); i++) {
+            if(diff[i] != o.diff[i]) return diff[i] < o.diff[i];
+        }
+        return false;
+    }
 };
 
 template <typename index_t> class PathGraph;
@@ -65,6 +75,25 @@ public:
         Node() { reset(); }
         Node(char label_, index_t value_, bool backbone_ = false) : label(label_), value(value_), backbone(backbone_) {}
         void reset() { label = 0; value = 0; backbone = false; }
+        
+        bool write(ofstream& f_out, bool bigEndian) const {
+            writeIndex<index_t>(f_out, value, bigEndian);
+            writeU16(f_out, label, bigEndian);
+            writeU16(f_out, backbone, bigEndian);
+            return true;
+        }
+        
+        bool read(ifstream& f_in, bool bigEndian) {
+            value = readIndex<index_t>(f_in, bigEndian);
+            label = (char)readU16(f_in, bigEndian);
+            backbone = (bool)readU16(f_in, bigEndian);
+            return true;
+        }
+        
+        bool operator< (const Node& o) const {
+            if(value != o.value) return value < o.value;
+            return label < o.label;
+        }
     };
     
     struct Edge {
@@ -73,6 +102,23 @@ public:
         
         Edge() {}
         Edge(index_t from_, index_t to_) : from(from_), to(to_) {}
+        
+        bool write(ofstream& f_out, bool bigEndian) const {
+            writeIndex<index_t>(f_out, from, bigEndian);
+            writeIndex<index_t>(f_out, to, bigEndian);
+            return true;
+        }
+        
+        bool read(ifstream& f_in, bool bigEndian) {
+            from = readIndex<index_t>(f_in, bigEndian);
+            to = readIndex<index_t>(f_in, bigEndian);
+            return true;
+        }
+        
+        bool operator< (const Edge& o) const {
+            if(from != o.from) return from < o.from;
+            return to < o.to;
+        }
     };
     
     struct EdgeFromCmp {
@@ -87,8 +133,29 @@ public:
         };
     };
     
+    // for debugging purposes
+    struct TempEdgeNodeCmp {
+        TempEdgeNodeCmp(const EList<Node>& nodes_) : nodes(nodes_) {}
+        bool operator() (const Edge& a, const Edge& b) const {
+            if(a.from != b.from) {
+                assert_lt(a.from, nodes.size());
+                const Node& a_node = nodes[a.from];
+                assert_lt(b.from, nodes.size());
+                const Node& b_node = nodes[b.from];
+                return a_node < b_node;
+            }
+            assert_lt(a.to, nodes.size());
+            const Node& a_node = nodes[a.to];
+            assert_lt(b.to, nodes.size());
+            const Node& b_node = nodes[b.to];
+            return a_node < b_node;
+        }
+        
+        const EList<Node>& nodes;
+    };
+    
 public:
-    RefGraph(const string& ref_fname, const string& snp_fname, bool verbose);
+    RefGraph(const string& ref_fname, const string& snp_fname, const string& out_fname, bool verbose);
     
     bool repOk() { return true; }
     
@@ -213,7 +280,7 @@ private:
  * Construct a reference graph
  */
 template <typename index_t>
-RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bool verbose)
+RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, const string& out_fname, bool verbose)
 : lastNode(0)
 {
     EList<FileBuf*> is(MISC_CAT);
@@ -244,7 +311,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     // sequences.  A record represents a stretch of unambiguous
     // characters in one of the input sequences.
     szs.clear();
-    bool bigEndian = false, sanityCheck = false;
+    const bool bigEndian = false, sanityCheck = false;
     BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
     assert_gt(szs.size(), 0);
     
@@ -409,99 +476,364 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, bo
     }
     snp_file.close();
     
-    index_t num_predicted_nodes = (index_t)(jlen * 1.2);
-    nodes.reserveExact(num_predicted_nodes);
-    edges.reserveExact(num_predicted_nodes);
+    // Sort SNPs based on positions
+    sort(snps.begin(), snps.end());
     
-    // Created head node
-    nodes.expand();
-    nodes.back().label = 'Z';
-    nodes.back().value = 0;
-    // Create nodes and edges corresponding to a reference genome
-    for(size_t i = 0; i < s.length(); i++) {
-        nodes.expand();
-        nodes.back().label = "ACGT"[(int)s[i]];
-        nodes.back().value = i;
+    // a memory-efficient way to create a population graph with known SNPs
+    bool frag_automaton = false;
+    if(frag_automaton) {
+        const string rg_fname = out_fname + ".rf";
+        ofstream rf_out_file(rg_fname.c_str(), ios::binary);
+        if(!rf_out_file.good()) {
+            cerr << "Could not open file for writing a reference graph: \"" << rg_fname << "\"" << endl;
+            throw 1;
+        }
         
-        assert_geq(nodes.size(), 2);
+        index_t num_nodes = 0, num_edges = 0, curr_pos = 0;
+        index_t szs_idx = 0, snp_idx = 0, num_snp_nodes = 0;
+        assert(szs[szs_idx].first);
+        EList<index_t> prev_tail_nodes;
+        for(; szs_idx < szs.size(); szs_idx++) {
+            index_t curr_len = szs[szs_idx].len;
+            if(curr_len <= 0) continue;
+            
+            index_t num_predicted_nodes = (index_t)(curr_len * 1.2);
+            nodes.clear(); nodes.reserveExact(num_predicted_nodes);
+            edges.clear(); edges.reserveExact(num_predicted_nodes);
+            
+            // Created head node
+            nodes.expand();
+            nodes.back().label = 'Z';
+            nodes.back().value = 0;
+            
+            // Create nodes and edges corresponding to a reference genome
+            assert_leq(curr_pos + curr_len, s.length());
+            for(size_t i = curr_pos; i < curr_pos + curr_len; i++) {
+                nodes.expand();
+                nodes.back().label = "ACGT"[(int)s[i]];
+                nodes.back().value = i;
+                
+                assert_geq(nodes.size(), 2);
+                edges.expand();
+                edges.back().from = nodes.size() - 2;
+                edges.back().to = nodes.size() - 1;
+            }
+            
+            // Create tail node
+            nodes.expand();
+            nodes.back().label = '$';
+            nodes.back().value = s.length();
+            lastNode = nodes.size() - 1;
+            edges.expand();
+            edges.back().from = nodes.size() - 2;
+            edges.back().to = nodes.size() - 1;
+            
+            // Create nodes and edges for SNPs
+            for(; snp_idx < snps.size(); snp_idx++) {
+                const SNP<index_t>& snp = snps[snp_idx];
+                assert_geq(snp.pos, curr_pos);
+                if(snp.pos >= curr_pos + curr_len) break;
+                if(snp.type == SNP_SGL) {
+                    assert_eq(snp.diff.size(), 1);
+                    nodes.expand();
+                    num_snp_nodes++;
+                    nodes.back().label = snp.diff[0];
+                    nodes.back().value = jlen + 2 + num_snp_nodes;
+                    
+                    edges.expand();
+                    edges.back().from = snp.pos - curr_pos;
+                    edges.back().to = nodes.size() - 1;
+                    
+                    edges.expand();
+                    edges.back().from = nodes.size() - 1;
+                    edges.back().to = snp.pos - curr_pos + 2;
+                } else if(snp.type == SNP_DEL) {
+                    index_t deletionLen = snp.diff.size();
+                    assert_gt(deletionLen, 0);
+                    edges.expand();
+                    edges.back().from = snp.pos - curr_pos;
+                    edges.back().to = snp.pos + - curr_pos + deletionLen + 1;
+                } else if(snp.type == SNP_INS) {
+                    assert_gt(snp.diff.size(), 0);
+                    for(size_t j = 0; j < snp.diff.size(); j++) {
+                        char inserted_bp = snp.diff[j];
+                        nodes.expand();
+                        num_snp_nodes++;
+                        nodes.back().label = inserted_bp;
+                        nodes.back().value = jlen + 2 + num_snp_nodes;
+                        
+                        edges.expand();
+                        edges.back().from = (j == 0 ? snp.pos - curr_pos : nodes.size() - 2);
+                        edges.back().to = nodes.size() - 1;
+                    }
+                    edges.expand();
+                    edges.back().from = nodes.size() - 1;
+                    edges.back().to = snp.pos - curr_pos + 1;
+                } else {
+                    assert(false);
+                }
+            }
+            
+            if(!isReverseDeterministic()) {
+                reverseDeterminize();
+                assert(isReverseDeterministic());
+            }
+
+            // Identify head and tail nodes
+            index_t head_node = nodes.size(), tail_node = nodes.size();
+            for(index_t i = 0; i < nodes.size(); i++) {
+                if(nodes[i].label == 'Z') {
+                    assert_eq(head_node, nodes.size());
+                    head_node = i;
+                } else if(nodes[i].label == '$') {
+                    assert_eq(tail_node, nodes.size());
+                    tail_node = i;
+                }
+            }
+            assert_lt(head_node, nodes.size());
+            assert_lt(tail_node, nodes.size());
+            
+            
+            // Update edges
+            const index_t invalid = std::numeric_limits<index_t>::max();
+            bool head_off = curr_pos > 0, tail_off = curr_pos + curr_len < jlen;
+            for(index_t i = 0; i < edges.size(); i++) {
+                index_t from = edges[i].from;
+                from = from + num_nodes;
+                if(head_off && edges[i].from > head_node) from -= 1;
+                if(tail_off && edges[i].from > tail_node) from -= 1;
+                if(head_off && edges[i].from == head_node) {
+                    edges[i].from = invalid;
+                } else {
+                    edges[i].from = from;
+                }
+                
+                index_t to = edges[i].to;
+                to = to + num_nodes;
+                if(head_off && edges[i].to > head_node) to -= 1;
+                if(tail_off && edges[i].to > tail_node) to -= 1;
+                if(tail_off && edges[i].to == tail_node) {
+                    edges[i].to = invalid;
+                } else {
+                    edges[i].to = to;
+                }
+            }
+            head_node = tail_node = invalid;
+
+            // Connect head nodes with tail nodes in the previous automaton
+            index_t num_head_nodes = 0;
+            index_t tmp_num_edges = edges.size();
+            if(curr_pos > 0) {
+                assert_gt(prev_tail_nodes.size(), 0);
+                for(index_t i = 0; i < tmp_num_edges; i++) {
+                    if(edges[i].from == head_node) {
+                        num_head_nodes++;
+                        for(index_t j = 0; j < prev_tail_nodes.size(); j++) {
+                            edges.expand();
+                            edges.back().from = prev_tail_nodes[i];
+                            edges.back().to = edges[i].to;
+                            assert_lt(edges.back().from, edges.back().to);
+                        }
+                    }
+                }
+            }
+            
+            // List tail nodes
+            prev_tail_nodes.clear();
+            if(curr_pos + curr_len < jlen) {
+                for(index_t i = 0; i < tmp_num_edges; i++) {
+                    if(edges[i].to == tail_node) {
+                        prev_tail_nodes.push_back(edges[i].from);
+                    }
+                }
+            }
+            
+            // Write nodes and edges
+            index_t tmp_num_nodes = nodes.size();
+            assert_gt(tmp_num_nodes, 2);
+            if(curr_pos > 0) tmp_num_nodes--;
+            if(curr_pos + curr_len < jlen) tmp_num_nodes--;
+            writeIndex<index_t>(rf_out_file, tmp_num_nodes, bigEndian);
+            ASSERT_ONLY(index_t num_nodes_written = 0);
+            for(index_t i = 0; i < nodes.size(); i++) {
+                if(curr_pos > 0 && nodes[i].label == 'Z') continue;
+                if(curr_pos + curr_len < jlen && nodes[i].label == '$') continue;
+                nodes[i].write(rf_out_file, bigEndian);
+                ASSERT_ONLY(num_nodes_written++);
+            }
+            assert_eq(tmp_num_nodes, num_nodes_written);
+            tmp_num_edges = edges.size();
+            assert_gt(tmp_num_edges, num_head_nodes + prev_tail_nodes.size());
+            if(curr_pos > 0) tmp_num_edges -= num_head_nodes;
+            if(curr_pos + curr_len < jlen) tmp_num_edges -= prev_tail_nodes.size();
+            writeIndex<index_t>(rf_out_file, tmp_num_edges, bigEndian);
+            ASSERT_ONLY(index_t num_edges_written = 0);
+            for(index_t i = 0; i < edges.size(); i++) {
+                if(curr_pos > 0 && edges[i].from == head_node) continue;
+                if(curr_pos + curr_len < jlen && edges[i].to == tail_node) continue;
+                edges[i].write(rf_out_file, bigEndian);
+                ASSERT_ONLY(num_edges_written++);
+            }
+            assert_eq(tmp_num_edges, num_edges_written);
+            
+            // Clear nodes and edges
+            nodes.clear(); edges.clear();
+            
+            curr_pos += curr_len;
+            num_nodes += tmp_num_nodes;
+            num_edges += tmp_num_edges;
+        }
+        
+        // Close out file handle
+        rf_out_file.close();
+        
+        // Read all the nodes and edges
+        ifstream rf_in_file(rg_fname.c_str(), ios::binary);
+        if(!rf_in_file.good()) {
+            cerr << "Could not open file for reading a reference graph: \"" << rg_fname << "\"" << endl;
+            throw 1;
+        }
+        nodes.resizeExact(num_nodes); nodes.clear();
+        edges.resizeExact(num_edges); edges.clear();
+        while(!rf_in_file.eof()) {
+            index_t tmp_num_nodes = readIndex<index_t>(rf_in_file, bigEndian);
+            for(index_t i = 0; i < tmp_num_nodes; i++) {
+                nodes.expand();
+                nodes.back().read(rf_in_file, bigEndian);
+            }
+            index_t tmp_num_edges = readIndex<index_t>(rf_in_file, bigEndian);
+            for(index_t i = 0; i < tmp_num_edges; i++) {
+                edges.expand();
+                edges.back().read(rf_in_file, bigEndian);
+            }
+            
+            if(nodes.size() >= num_nodes) {
+                assert_eq(nodes.size(), num_nodes);
+                assert_eq(edges.size(), num_edges);
+                break;
+            }
+        }
+        rf_in_file.close();
+    } else { // this is memory-consuming
+        index_t num_predicted_nodes = (index_t)(jlen * 1.2);
+        nodes.reserveExact(num_predicted_nodes);
+        edges.reserveExact(num_predicted_nodes);
+        
+        // Created head node
+        nodes.expand();
+        nodes.back().label = 'Z';
+        nodes.back().value = 0;
+        // Create nodes and edges corresponding to a reference genome
+        for(size_t i = 0; i < s.length(); i++) {
+            nodes.expand();
+            nodes.back().label = "ACGT"[(int)s[i]];
+            nodes.back().value = i;
+            
+            assert_geq(nodes.size(), 2);
+            edges.expand();
+            edges.back().from = nodes.size() - 2;
+            edges.back().to = nodes.size() - 1;
+        }
+        
+        // Create tail node
+        nodes.expand();
+        nodes.back().label = '$';
+        nodes.back().value = s.length();
+        lastNode = nodes.size() - 1;
         edges.expand();
         edges.back().from = nodes.size() - 2;
         edges.back().to = nodes.size() - 1;
-    }
-    
-    // Create tail node
-    nodes.expand();
-    nodes.back().label = '$';
-    nodes.back().value = s.length();
-    lastNode = nodes.size() - 1;
-    edges.expand();
-    edges.back().from = nodes.size() - 2;
-    edges.back().to = nodes.size() - 1;
-    
-    // Create nodes and edges for SNPs
-    for(size_t i = 0; i < snps.size(); i++) {
-        const SNP<index_t>& snp = snps[i];
-        if(snp.type == SNP_SGL) {
-            assert_eq(snp.diff.size(), 1);
-            nodes.expand();
-            nodes.back().label = snp.diff[0];
-            nodes.back().value = nodes.size();
-            
-            edges.expand();
-            edges.back().from = snp.pos;
-            edges.back().to = nodes.size() - 1;
-            
-            edges.expand();
-            edges.back().from = nodes.size() - 1;
-            edges.back().to = snp.pos + 2;
-        } else if(snp.type == SNP_DEL) {
-            index_t deletionLen = snp.diff.size();
-            assert_gt(deletionLen, 0);
-            edges.expand();
-            edges.back().from = snp.pos;
-            edges.back().to = snp.pos + deletionLen + 1;
-        } else if(snp.type == SNP_INS) {
-            assert_gt(snp.diff.size(), 0);
-            for(size_t j = 0; j < snp.diff.size(); j++) {
-                char inserted_bp = snp.diff[j];
+        
+        // Create nodes and edges for SNPs
+        for(size_t i = 0; i < snps.size(); i++) {
+            const SNP<index_t>& snp = snps[i];
+            if(snp.type == SNP_SGL) {
+                assert_eq(snp.diff.size(), 1);
                 nodes.expand();
-                nodes.back().label = inserted_bp;
+                nodes.back().label = snp.diff[0];
                 nodes.back().value = nodes.size();
                 
                 edges.expand();
-                edges.back().from = (j == 0 ? snp.pos : nodes.size() - 2);
+                edges.back().from = snp.pos;
                 edges.back().to = nodes.size() - 1;
+                
+                edges.expand();
+                edges.back().from = nodes.size() - 1;
+                edges.back().to = snp.pos + 2;
+            } else if(snp.type == SNP_DEL) {
+                index_t deletionLen = snp.diff.size();
+                assert_gt(deletionLen, 0);
+                edges.expand();
+                edges.back().from = snp.pos;
+                edges.back().to = snp.pos + deletionLen + 1;
+            } else if(snp.type == SNP_INS) {
+                assert_gt(snp.diff.size(), 0);
+                for(size_t j = 0; j < snp.diff.size(); j++) {
+                    char inserted_bp = snp.diff[j];
+                    nodes.expand();
+                    nodes.back().label = inserted_bp;
+                    nodes.back().value = nodes.size();
+                    
+                    edges.expand();
+                    edges.back().from = (j == 0 ? snp.pos : nodes.size() - 2);
+                    edges.back().to = nodes.size() - 1;
+                }
+                edges.expand();
+                edges.back().from = nodes.size() - 1;
+                edges.back().to = snp.pos + 1;
+            } else {
+                assert(false);
             }
-            edges.expand();
-            edges.back().from = nodes.size() - 1;
-            edges.back().to = snp.pos + 1;
-        } else {
-            assert(false);
         }
-    }
-    
+        
 #ifndef NDEBUG
-    if(debug) {
-        cerr << "Nodes:" << endl;
-        for(size_t i = 0; i < nodes.size(); i++) {
-            const Node& node = nodes[i];
-            cerr << "\t" << i << "\t" << node.label << "\t" << node.value << endl;
+        if(debug) {
+            cerr << "Nodes:" << endl;
+            for(size_t i = 0; i < nodes.size(); i++) {
+                const Node& node = nodes[i];
+                cerr << "\t" << i << "\t" << node.label << "\t" << node.value << endl;
+            }
+            cerr << endl;
+            cerr << "Edges: " << endl;
+            for(size_t i = 0; i < edges.size(); i++) {
+                const Edge& edge = edges[i];
+                cerr << "\t" << i << "\t" << edge.from << " --> " << edge.to << endl;
+            }
+            cerr << endl;
         }
-        cerr << endl;
-        cerr << "Edges: " << endl;
-        for(size_t i = 0; i < edges.size(); i++) {
-            const Edge& edge = edges[i];
-            cerr << "\t" << i << "\t" << edge.from << " --> " << edge.to << endl;
-        }
-        cerr << endl;
-    }
 #endif
     
-    if(!isReverseDeterministic()) {
-        cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
-        reverseDeterminize();
-        assert(isReverseDeterministic());
+        if(!isReverseDeterministic()) {
+            cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
+            reverseDeterminize();
+            assert(isReverseDeterministic());
+        }
     }
+    
+    // daehwan - for debugging purposes
+#if 0
+    if(frag_automaton) {
+        cout << "frag automaton" << endl;
+    } else {
+        cout << "one automaton" << endl;
+    }
+    EList<Node> tmp_nodes = nodes;
+    sort(tmp_nodes.begin(), tmp_nodes.end());
+    cout << "num of nodes: " << tmp_nodes.size() << endl;
+    for(index_t i = 0; i < tmp_nodes.size(); i++) {
+        cout << tmp_nodes[i].label << "\t" << tmp_nodes[i].value << endl;
+    }
+    
+    cout << "num of edges: " << edges.size() << endl;
+    sort(edges.begin(), edges.end(), TempEdgeNodeCmp(nodes));
+    for(index_t i = 0; i < edges.size(); i++) {
+        const Node& from = nodes[edges[i].from];
+        const Node& to = nodes[edges[i].to];
+        cout << from.label << " " << from.value << " --> " << to.label << " " << to.value << endl;
+    }
+    
+    exit(1);
+#endif
 }
 
 template <typename index_t>
@@ -934,6 +1266,7 @@ private:
     
 #ifndef NDEBUG
     bool               debug;
+#endif
     
     EList<char>        bwt_string;
     EList<char>        F_array;
@@ -971,7 +1304,6 @@ private:
     index_t rank1(const EList<char>& array, index_t p) {
         return rank(array, p, 1);
     }
-#endif
 };
 
 
@@ -1181,22 +1513,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     
     sortEdgesTo(true);
     status = ready;
- 
-#ifndef NDEBUG
-    if(debug) {
-        cerr << "Path nodes (final)" << endl;
-        for(size_t i = 0; i < nodes.size(); i++) {
-            const PathNode& node = nodes[i];
-            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
-            << node.from << " --> " << node.to << endl;
-        }
-        
-        cerr << "Path edges (final)" << endl;
-        for(size_t i = 0; i < edges.size(); i++) {
-            const PathEdge& edge = edges[i];
-            cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
-        }
-    }
     
     nodes.pop_back(); // Remove 'Z' node
     bwt_string.clear();
@@ -1228,33 +1544,48 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     assert_eq(bwt_string.size(), F_array.size());
     assert_eq(bwt_string.size(), M_array.size());
     
+    for(size_t i = 0; i < bwt_counts.size(); i++) {
+        if(i > 0) bwt_counts[i] += bwt_counts[i - 1];
+    }
+ 
+#ifndef NDEBUG
     if(debug) {
+        cerr << "Path nodes (final)" << endl;
+        for(size_t i = 0; i < nodes.size(); i++) {
+            const PathNode& node = nodes[i];
+            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+            << node.from << " --> " << node.to << endl;
+        }
+        
+        cerr << "Path edges (final)" << endl;
+        for(size_t i = 0; i < edges.size(); i++) {
+            const PathEdge& edge = edges[i];
+            cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
+        }
+    
         cerr << "i\tBWT\tF\tM" << endl;
         for(index_t i = 0; i < bwt_string.size(); i++) {
             cerr << i << "\t" << bwt_string[i] << "\t"  // BWT char
             << (int)F_array[i] << "\t"             // F bit value
             << (int)M_array[i] << endl;            // M bit value
         }
-    }
-    
-    for(size_t i = 0; i < bwt_counts.size(); i++) {
-        if(i > 0) bwt_counts[i] += bwt_counts[i - 1];
-        if(debug) {
+        
+        for(size_t i = 0; i < bwt_counts.size(); i++) {
             cerr << i << "\t" << bwt_counts[i] << endl;
         }
     }
     
     // Test searches, based on paper_example
     EList<string> queries;  EList<index_t> answers;
-#if 0
-#   if 1
+#   if 0
+#      if 1
     queries.push_back("GACGT"); answers.push_back(9);
     queries.push_back("GATGT"); answers.push_back(9);
     queries.push_back("GACT");  answers.push_back(9);
     queries.push_back("ATGT");  answers.push_back(4);
     queries.push_back("GTAC");  answers.push_back(10);
     queries.push_back("ACTG");  answers.push_back(3);
-#   else
+#      else
     // rs55902548, at 402, ref, alt, unknown alt
     queries.push_back("GGCAGCTCCCATGGGTACACACTGGGCCCAGAACTGGGATGGAGGATGCA");
     queries.push_back("GGCAGCTCCCATGGGTACACACTGGTCCCAGAACTGGGATGGAGGATGCA");
@@ -1264,8 +1595,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCACACCTGGTTCTCTTTCCAGTGTTAT");
     queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCATACCTGGTTCTCTTTCCAGTGTTAT");
     queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCAGACCTGGTTCTCTTTCCAGTGTTAT");
-#   endif
-#endif
+#      endif
     
     for(size_t q = 0; q < queries.size(); q++) {
         const string& query = queries[q];
@@ -1310,9 +1640,10 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
         cerr << endl << endl;
     }
+#   endif
     
     // daehwan - for debugging purposes
-#   if 0
+#   if 1
     cerr << endl << endl;
     EList<index_t> tmp_F;
     for(index_t i = 0; i < F_array.size(); i++) {
@@ -1324,7 +1655,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         if(M_array[i] == 1) tmp_M.push_back(i);
     }
     
-#      if 0
+#      if 1
     index_t max_diff = 0;
     assert_eq(tmp_F.size(), tmp_M.size());
     for(index_t i = 0; i < tmp_F.size(); i++) {
@@ -1401,7 +1732,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     cerr << "num of compressed: " << num_compressed << endl;
     cerr << "num of extra: " << num_extra << endl;
 #      endif
-    
+
 #   endif
     
 #endif

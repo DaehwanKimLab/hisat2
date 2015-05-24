@@ -416,8 +416,8 @@ static void driver(
 	EList<RefRecord> szs(MISC_CAT);
 	std::pair<size_t, size_t> sztot;
 	{
-		if(verbose) cout << "Reading reference sizes" << endl;
-		Timer _t(cout, "  Time reading reference sizes: ", verbose);
+		if(verbose) cerr << "Reading reference sizes" << endl;
+		Timer _t(cerr, "  Time reading reference sizes: ", verbose);
 		if(!reverse && (writeRef || justRef)) {
 			filesWritten.push_back(outfile + ".3." + gEbwt_ext);
 			filesWritten.push_back(outfile + ".4." + gEbwt_ext);
@@ -431,7 +431,7 @@ static void driver(
 	assert_gt(sztot.second, 0);
 	assert_gt(szs.size(), 0);
     
-    RefGraph<TIndexOffU>* graph = new RefGraph<TIndexOffU>(infile, snpfile, verbose);
+    RefGraph<TIndexOffU>* graph = new RefGraph<TIndexOffU>(infile, snpfile, outfile, verbose);
     
     PathGraph<TIndexOffU>* pg = new PathGraph<TIndexOffU>(*graph);
     // delete graph; graph = NULL;
@@ -595,7 +595,7 @@ int hisat2_build(int argc, const char **argv) {
 
 		// Optionally summarize
 		if(verbose) {
-			cout << "Settings:" << endl
+			cerr << "Settings:" << endl
 				 << "  Output files: \"" << outfile.c_str() << ".*." << gEbwt_ext << "\"" << endl
 				 << "  Line rate: " << lineRate << " (line is " << (1<<lineRate) << " bytes)" << endl
 				 << "  Lines per side: " << linesPerSide << " (side is " << ((1<<lineRate)*linesPerSide) << " bytes)" << endl
@@ -608,34 +608,34 @@ int hisat2_build(int argc, const char **argv) {
                  << "  Local sequence overlap between the two consecutive indexes: " << local_index_overlap << endl
 				 ;
 			if(bmax == OFF_MASK) {
-				cout << "  Max bucket size: default" << endl;
+				cerr << "  Max bucket size: default" << endl;
 			} else {
-				cout << "  Max bucket size: " << bmax << endl;
+				cerr << "  Max bucket size: " << bmax << endl;
 			}
 			if(bmaxMultSqrt == OFF_MASK) {
-				cout << "  Max bucket size, sqrt multiplier: default" << endl;
+				cerr << "  Max bucket size, sqrt multiplier: default" << endl;
 			} else {
-				cout << "  Max bucket size, sqrt multiplier: " << bmaxMultSqrt << endl;
+				cerr << "  Max bucket size, sqrt multiplier: " << bmaxMultSqrt << endl;
 			}
 			if(bmaxDivN == 0xffffffff) {
-				cout << "  Max bucket size, len divisor: default" << endl;
+				cerr << "  Max bucket size, len divisor: default" << endl;
 			} else {
-				cout << "  Max bucket size, len divisor: " << bmaxDivN << endl;
+				cerr << "  Max bucket size, len divisor: " << bmaxDivN << endl;
 			}
-			cout << "  Difference-cover sample period: " << dcv << endl;
-			cout << "  Endianness: " << (bigEndian? "big":"little") << endl
+			cerr << "  Difference-cover sample period: " << dcv << endl;
+			cerr << "  Endianness: " << (bigEndian? "big":"little") << endl
 				 << "  Actual local endianness: " << (currentlyBigEndian()? "big":"little") << endl
 				 << "  Sanity checking: " << (sanityCheck? "enabled":"disabled") << endl;
 	#ifdef NDEBUG
-			cout << "  Assertions: disabled" << endl;
+			cerr << "  Assertions: disabled" << endl;
 	#else
-			cout << "  Assertions: enabled" << endl;
+			cerr << "  Assertions: enabled" << endl;
 	#endif
-			cout << "  Random seed: " << seed << endl;
-			cout << "  Sizeofs: void*:" << sizeof(void*) << ", int:" << sizeof(int) << ", long:" << sizeof(long) << ", size_t:" << sizeof(size_t) << endl;
-			cout << "Input files DNA, " << file_format_names[format].c_str() << ":" << endl;
+			cerr << "  Random seed: " << seed << endl;
+			cerr << "  Sizeofs: void*:" << sizeof(void*) << ", int:" << sizeof(int) << ", long:" << sizeof(long) << ", size_t:" << sizeof(size_t) << endl;
+			cerr << "Input files DNA, " << file_format_names[format].c_str() << ":" << endl;
 			for(size_t i = 0; i < infiles.size(); i++) {
-				cout << "  " << infiles[i].c_str() << endl;
+				cerr << "  " << infiles[i].c_str() << endl;
 			}
 		}
 		// Seed random number generator
