@@ -909,7 +909,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
     }
     
     // daehwan - for debugging purposes
-#if 1
+#if 0
     if(frag_automaton) {
         cout << "frag automaton" << endl;
     } else {
