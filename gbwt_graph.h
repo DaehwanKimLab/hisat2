@@ -677,19 +677,16 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
                 assert(isReverseDeterministic());
             }
 
-            // Identify head and tail nodes
-            index_t head_node = nodes.size(), tail_node = nodes.size();
+            // Identify head
+            index_t head_node = nodes.size();
             for(index_t i = 0; i < nodes.size(); i++) {
                 if(nodes[i].label == 'Z') {
-                    assert_eq(head_node, nodes.size());
                     head_node = i;
-                } else if(nodes[i].label == '$') {
-                    assert_eq(tail_node, nodes.size());
-                    tail_node = i;
+                    break;
                 }
             }
             assert_lt(head_node, nodes.size());
-            assert_lt(tail_node, nodes.size());
+            index_t tail_node = lastNode; assert_lt(tail_node, nodes.size());
             
             // Update edges
             const index_t invalid = std::numeric_limits<index_t>::max();
@@ -716,6 +713,11 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
                 }
             }
             head_node = tail_node = invalid;
+            // Also update lastNode
+            if(!tail_off) {
+                lastNode += num_nodes;
+                if(head_off) lastNode -= 1;
+            }
 
             // Connect head nodes with tail nodes in the previous automaton
             index_t num_head_nodes = 0;
@@ -1613,6 +1615,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     sortEdgesTo(true);
     status = ready;
     
+    // daehwan - for debugging purposes
+    // exit(1);
+    
     nodes.pop_back(); // Remove 'Z' node
     bwt_string.clear();
     F_array.clear();
@@ -1673,11 +1678,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << i << "\t" << bwt_counts[i] << endl;
         }
     }
-    
+#endif
+
     // Test searches, based on paper_example
+#if 0
     EList<string> queries;  EList<index_t> answers;
-#   if 0
-#      if 1
+#   if 1
+#      if 0
     queries.push_back("GACGT"); answers.push_back(9);
     queries.push_back("GATGT"); answers.push_back(9);
     queries.push_back("GACT");  answers.push_back(9);
@@ -1686,14 +1693,14 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     queries.push_back("ACTG");  answers.push_back(3);
 #      else
     // rs55902548, at 402, ref, alt, unknown alt
-    queries.push_back("GGCAGCTCCCATGGGTACACACTGGGCCCAGAACTGGGATGGAGGATGCA");
+    // queries.push_back("GGCAGCTCCCATGGGTACACACTGGGCCCAGAACTGGGATGGAGGATGCA");
     queries.push_back("GGCAGCTCCCATGGGTACACACTGGTCCCAGAACTGGGATGGAGGATGCA");
-    queries.push_back("GGCAGCTCCCATGGGTACACACTGGACCCAGAACTGGGATGGAGGATGCA");
+    // queries.push_back("GGCAGCTCCCATGGGTACACACTGGACCCAGAACTGGGATGGAGGATGCA");
     
     // rs5759268, at 926787, ref, alt, unknown alt
-    queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCACACCTGGTTCTCTTTCCAGTGTTAT");
-    queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCATACCTGGTTCTCTTTCCAGTGTTAT");
-    queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCAGACCTGGTTCTCTTTCCAGTGTTAT");
+    // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCACACCTGGTTCTCTTTCCAGTGTTAT");
+    // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCATACCTGGTTCTCTTTCCAGTGTTAT");
+    // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCAGACCTGGTTCTCTTTCCAGTGTTAT");
 #      endif
     
     for(size_t q = 0; q < queries.size(); q++) {
@@ -1741,8 +1748,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #   endif
     
-    // daehwan - for debugging purposes
-#   if 1
+    // See inconsistencies between F and M arrays
+#   if 0
     cerr << endl << endl;
     EList<index_t> tmp_F;
     for(index_t i = 0; i < F_array.size(); i++) {
