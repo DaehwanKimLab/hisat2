@@ -499,7 +499,6 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             throw 1;
         }
         
-#if 1
         EList<RefRecord> tmp_szs;
         {
             index_t relax = 10;
@@ -584,9 +583,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             assert_eq(modified_jlen, jlen);
 #endif
         }
-#else
-        EList<RefRecord> tmp_szs = szs;
-#endif
+
         index_t num_nodes = 0, num_edges = 0, curr_pos = 0;
         index_t szs_idx = 0, snp_idx = 0, num_snp_nodes = 0;
         assert(tmp_szs[szs_idx].first);
@@ -814,7 +811,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
         }
         rg_in_file.close();
         std::remove(rg_fname.c_str());
-    } else { // this is memory-consuming
+    } else { // this is memory-consuming, but simple to implement
         index_t num_predicted_nodes = (index_t)(jlen * 1.2);
         nodes.reserveExact(num_predicted_nodes);
         edges.reserveExact(num_predicted_nodes);
@@ -910,7 +907,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
         }
     }
     
-    // daehwan - for debugging purposes
+    // debugging purposes
 #if 0
     if(frag_automaton) {
         cout << "frag automaton" << endl;
@@ -1616,7 +1613,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     status = ready;
     
     // daehwan - for debugging purposes
-    // exit(1);
+    exit(1);
     
     nodes.pop_back(); // Remove 'Z' node
     bwt_string.clear();
@@ -1679,7 +1676,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
 #endif
-
+    
     // Test searches, based on paper_example
 #if 0
     EList<string> queries;  EList<index_t> answers;
