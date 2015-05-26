@@ -641,7 +641,7 @@ int hisat2_build(int argc, const char **argv) {
 		// Seed random number generator
 		srand(seed);
 		{
-			Timer timer(cout, "Total time for call to driver() for forward index: ", verbose);
+			Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
 			if(!packed) {
 				try {
 					driver<SString<char> >(infile, infiles, snpfile, outfile, false, REF_READ_FORWARD);

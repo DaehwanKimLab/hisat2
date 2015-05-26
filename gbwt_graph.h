@@ -502,7 +502,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
         EList<RefRecord> tmp_szs;
         {
             index_t relax = 10;
-            EList<pair<index_t, index_t> > snp_ranges;
+            EList<pair<index_t, index_t> > snp_ranges; // each range inclusive
             for(index_t i = 0; i < snps.size(); i++) {
                 const SNP<index_t>& snp = snps[i];
                 pair<index_t, index_t> range;
@@ -516,7 +516,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
                 } else assert(false);
                 range.second += relax;
                 
-                if(snp_ranges.empty() || snp_ranges.back().second < range.first) {
+                if(snp_ranges.empty() || snp_ranges.back().second + 1 < range.first) {
                     snp_ranges.push_back(range);
                 } else {
                     assert_leq(snp_ranges.back().first, range.first);
@@ -558,7 +558,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
                                 snp_free_range.second = snp_ranges[range_idx].first - 1;
                             }
                             
-                            assert_lt(snp_free_range.first, snp_free_range.second);
+                            assert_leq(snp_free_range.first, snp_free_range.second);
                             if(target_pos < snp_free_range.first) target_pos = snp_free_range.first;
                             if(target_pos > after_pos) target_pos = after_pos;
                         } else {
@@ -719,14 +719,14 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             // Connect head nodes with tail nodes in the previous automaton
             index_t num_head_nodes = 0;
             index_t tmp_num_edges = edges.size();
-            if(curr_pos > 0) {
+            if(head_off) {
                 assert_gt(prev_tail_nodes.size(), 0);
                 for(index_t i = 0; i < tmp_num_edges; i++) {
                     if(edges[i].from == head_node) {
                         num_head_nodes++;
                         for(index_t j = 0; j < prev_tail_nodes.size(); j++) {
                             edges.expand();
-                            edges.back().from = prev_tail_nodes[i];
+                            edges.back().from = prev_tail_nodes[j];
                             edges.back().to = edges[i].to;
                             assert_lt(edges.back().from, edges.back().to);
                         }
@@ -736,7 +736,7 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             
             // List tail nodes
             prev_tail_nodes.clear();
-            if(curr_pos + curr_len < jlen) {
+            if(tail_off) {
                 for(index_t i = 0; i < tmp_num_edges; i++) {
                     if(edges[i].to == tail_node) {
                         prev_tail_nodes.push_back(edges[i].from);
@@ -747,26 +747,26 @@ RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, co
             // Write nodes and edges
             index_t tmp_num_nodes = nodes.size();
             assert_gt(tmp_num_nodes, 2);
-            if(curr_pos > 0) tmp_num_nodes--;
-            if(curr_pos + curr_len < jlen) tmp_num_nodes--;
+            if(head_off) tmp_num_nodes--;
+            if(tail_off) tmp_num_nodes--;
             writeIndex<index_t>(rg_out_file, tmp_num_nodes, bigEndian);
             ASSERT_ONLY(index_t num_nodes_written = 0);
             for(index_t i = 0; i < nodes.size(); i++) {
-                if(curr_pos > 0 && nodes[i].label == 'Z') continue;
-                if(curr_pos + curr_len < jlen && nodes[i].label == '$') continue;
+                if(head_off && nodes[i].label == 'Z') continue;
+                if(tail_off && nodes[i].label == '$') continue;
                 nodes[i].write(rg_out_file, bigEndian);
                 ASSERT_ONLY(num_nodes_written++);
             }
             assert_eq(tmp_num_nodes, num_nodes_written);
             tmp_num_edges = edges.size();
             assert_gt(tmp_num_edges, num_head_nodes + prev_tail_nodes.size());
-            if(curr_pos > 0) tmp_num_edges -= num_head_nodes;
-            if(curr_pos + curr_len < jlen) tmp_num_edges -= prev_tail_nodes.size();
+            if(head_off) tmp_num_edges -= num_head_nodes;
+            if(tail_off) tmp_num_edges -= prev_tail_nodes.size();
             writeIndex<index_t>(rg_out_file, tmp_num_edges, bigEndian);
             ASSERT_ONLY(index_t num_edges_written = 0);
             for(index_t i = 0; i < edges.size(); i++) {
-                if(curr_pos > 0 && edges[i].from == head_node) continue;
-                if(curr_pos + curr_len < jlen && edges[i].to == tail_node) continue;
+                if(head_off && edges[i].from == head_node) continue;
+                if(tail_off && edges[i].to == tail_node) continue;
                 edges[i].write(rg_out_file, bigEndian);
                 ASSERT_ONLY(num_edges_written++);
             }
@@ -1613,7 +1613,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     status = ready;
     
     // daehwan - for debugging purposes
-    exit(1);
+    // exit(1);
     
     nodes.pop_back(); // Remove 'Z' node
     bwt_string.clear();
@@ -1676,6 +1676,14 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
 #endif
+    
+    // daehwan - for debugging purposes
+    cout << "i\tBWT\tF\tM" << endl;
+    for(index_t i = 0; i < bwt_string.size(); i++) {
+        cout << i << "\t" << bwt_string[i] << "\t"  // BWT char
+        << (int)F_array[i] << "\t"             // F bit value
+        << (int)M_array[i] << endl;            // M bit value
+    }
     
     // Test searches, based on paper_example
 #if 0
