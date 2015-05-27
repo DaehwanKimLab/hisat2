@@ -1,20 +1,20 @@
 /*
- * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
+ * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
  *
- * This file is part of Bowtie 2.
+ * This file is part of HISAT 2.
  *
- * Bowtie 2 is free software: you can redistribute it and/or modify
+ * HISAT 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Bowtie 2 is distributed in the hope that it will be useful,
+ * HISAT 2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Bowtie 2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <iostream>
@@ -34,7 +34,6 @@
 #include "ds.h"
 #include "gfm.h"
 #include "hier_gfm.h"
-#include "gbwt_graph.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -431,30 +430,6 @@ static void driver(
 	assert_gt(sztot.second, 0);
 	assert_gt(szs.size(), 0);
     
-    RefGraph<TIndexOffU>* graph = new RefGraph<TIndexOffU>(infile, snpfile, outfile, verbose);
-    
-    PathGraph<TIndexOffU>* pg = new PathGraph<TIndexOffU>(*graph);
-    // delete graph; graph = NULL;
-    pg->printInfo();
-    while(pg->IsSorted()) {
-        if(pg->repOk()) {
-            std::cerr << "Error: Invalid PathGraph!" << std::endl;
-            delete pg; pg = NULL;
-            return;
-        }
-        PathGraph<TIndexOffU>* next = new PathGraph<TIndexOffU>(*pg);
-        delete pg; pg = next;
-        pg->printInfo();
-    }
-
-
-    if(verbose) { cerr << "Generating edges... " << endl; }
-    if(!pg->generateEdges(*graph)) { return; }
-    // if(verbose) { std::cout << graph.edge_count << " edges." << std::endl; }
-    delete pg; pg = NULL;
-    
-    return;
-    
 	// Construct index from input strings and parameters
 	filesWritten.push_back(outfile + ".1." + gEbwt_ext);
 	filesWritten.push_back(outfile + ".2." + gEbwt_ext);
@@ -468,7 +443,8 @@ static void driver(
                                 ftabChars,    // number of chars in initial arrow-pair calc
                                 localOffRate,
                                 localFtabChars,
-                                outfile,      // basename for .?.ebwt files
+                                snpfile,
+                                outfile,      // basename for .?.ht2 files
                                 reverse == 0, // fw
                                 !entireSA,    // useBlockwise
                                 bmax,         // block size for blockwise SA builder
@@ -488,7 +464,7 @@ static void driver(
     // load it into memory, call ebwt.loadIntoMemory()
 	if(verbose) {
 		// Print Ebwt's vital stats
-		hierGFM.gh().print(cout);
+		hierGFM.gh().print(cerr);
 	}
 	if(sanityCheck) {
 		// Try restoring the original string (if there were
@@ -642,21 +618,16 @@ int hisat2_build(int argc, const char **argv) {
 		srand(seed);
 		{
 			Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
-			if(!packed) {
-				try {
-					driver<SString<char> >(infile, infiles, snpfile, outfile, false, REF_READ_FORWARD);
-				} catch(bad_alloc& e) {
-					if(autoMem) {
-						cerr << "Switching to a packed string representation." << endl;
-						packed = true;
-					} else {
-						throw e;
-					}
-				}
-			}
-			if(packed) {
-				driver<S2bDnaString>(infile, infiles, snpfile, outfile, true, REF_READ_FORWARD);
-			}
+            try {
+                driver<SString<char> >(infile, infiles, snpfile, outfile, false, REF_READ_FORWARD);
+            } catch(bad_alloc& e) {
+                if(autoMem) {
+                    cerr << "Switching to a packed string representation." << endl;
+                    packed = true;
+                } else {
+                    throw e;
+                }
+            }
 		}
 		return 0;
 	} catch(std::exception& e) {

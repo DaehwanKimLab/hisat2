@@ -165,7 +165,11 @@ public:
     };
     
 public:
-    RefGraph(const string& ref_fname, const string& snp_fname, const string& out_fname, bool verbose);
+    RefGraph(const SString<char>& s,
+             const EList<RefRecord>& szs,
+             const EList<SNP<index_t> >& snps,
+             const string& out_fname,
+             bool verbose);
     
     bool repOk() { return true; }
     
@@ -290,204 +294,20 @@ private:
  * Construct a reference graph
  */
 template <typename index_t>
-RefGraph<index_t>::RefGraph(const string& ref_fname, const string& snp_fname, const string& out_fname, bool verbose)
+RefGraph<index_t>::RefGraph(const SString<char>& s,
+                            const EList<RefRecord>& szs,
+                            const EList<SNP<index_t> >& snps,
+                            const string& out_fname,
+                            bool verbose)
 : lastNode(0)
 {
-    EList<FileBuf*> is(MISC_CAT);
-    int reverse = 0;
-    bool nsToAs = false, bisulfite = false;
-    RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
-    FILE *f = fopen(ref_fname.c_str(), "r");
-    if (f == NULL) {
-        cerr << "Error: could not open " << ref_fname.c_str() << endl;
-        throw 1;
-    }
-    FileBuf *fb = new FileBuf(f);
-    assert(fb != NULL);
-    if(fb->peek() == -1 || fb->eof()) {
-        cerr << "Warning: Empty fasta file: '" << ref_fname.c_str() << "'" << endl;
-        throw 1;
-    }
-    assert(!fb->eof());
-    assert(fb->get() == '>');
-    ASSERT_ONLY(fb->reset());
-    assert(!fb->eof());
-    is.push_back(fb);
-    if(is.empty()) {
-        cerr << "Warning: All fasta inputs were empty" << endl;
-        throw 1;
-    }
-    // Vector for the ordered list of "records" comprising the input
-    // sequences.  A record represents a stretch of unambiguous
-    // characters in one of the input sequences.
-    szs.clear();
-    const bool bigEndian = false, sanityCheck = false;
-    BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
+    const bool bigEndian = false;
     assert_gt(szs.size(), 0);
-    
-    EList<pair<index_t, index_t> > chr_szs;
-    index_t jlen = 0;
-    for(index_t i = 0; i < szs.size(); i++) {
-        if(szs[i].first) {
-            chr_szs.expand();
-            chr_szs.back().first = jlen;
-            chr_szs.back().second = i;
-        }
-        jlen += (index_t)szs[i].len;
-    }
+    index_t jlen = s.length();
     
 #ifndef NDEBUG
     debug = (jlen <= 10);
 #endif
-    
-    SString<char> s;
-    EList<string> refnames;
-    try {
-        Timer _t(cerr, "  (1/5) Time reading reference sequence: ", verbose);
-        
-        s.resize(jlen);
-        RefReadInParams rpcp = refparams;
-        // For each filebuf
-        assert_eq(is.size(), 1);
-        FileBuf *fb = is[0];
-        assert(!fb->eof());
-        index_t szsi = 0;
-        index_t distoff = 0;
-        bool first = true;
-        while(!fb->eof()) {
-            if(szs[szsi].first) refnames.push_back("");
-            ASSERT_ONLY(RefRecord rec =) fastaRefReadAppend(*fb, first, s, distoff, rpcp, &refnames.back());
-            first = false;
-            assert_eq(rec.off, szs[szsi].off);
-            assert_eq(rec.len, szs[szsi].len);
-            assert_eq(rec.first, szs[szsi].first);
-            szsi++;
-        }
-        fb->reset();
-        assert(!fb->eof());
-        // Joined reference sequence now in 's'
-    } catch(bad_alloc& e) {
-        // If we throw an allocation exception in the try block,
-        // that means that the joined version of the reference
-        // string itself is too larger to fit in memory.  The only
-        // alternatives are to tell the user to give us more memory
-        // or to try again with a packed representation of the
-        // reference (if we haven't tried that already).
-        cerr << "Could not allocate space for a joined string of " << jlen << " elements." << endl;
-        // There's no point passing this exception on.  The fact
-        // that we couldn't allocate the joined string means that
-        // --bmax is irrelevant - the user should re-run with
-        // ebwt-build-packed
-        cerr << "Please try running hisat2-build on a computer with more memory." << endl;
-        if(sizeof(void*) == 4) {
-            cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
-            << "this executable is 32-bit." << endl;
-        }
-        throw 1;
-    }
-    
-    ifstream snp_file(snp_fname.c_str(), ios::in);
-    if(!snp_file.is_open()) {
-        cerr << "Error: could not open "<< snp_fname.c_str() << endl;
-        throw 1;
-    }
-    
-    EList<SNP<index_t> > snps;
-    while(!snp_file.eof()) {
-        // rs73387790	single	22:20000001-21000000	145	A
-        string snp_id;
-        snp_file >> snp_id;
-        if(snp_id.empty() || snp_id[0] == '#') {
-            string line;
-            getline(snp_file, line);
-            continue;
-        }
-        string type, chr, diff;
-        index_t pos;
-        snp_file >> type >> chr >> pos >> diff;
-        
-        index_t chr_idx = 0;
-        for(; chr_idx < refnames.size(); chr_idx++) {
-            if(chr == refnames[chr_idx])
-                break;
-        }
-        if(chr_idx >= refnames.size()) continue;
-        assert_eq(chr_szs.size(), refnames.size());
-        assert_lt(chr_idx, chr_szs.size());
-        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
-        const index_t sofar_len = tmp_pair.first;
-        const index_t szs_idx = tmp_pair.second;
-        bool inside_Ns = false;
-        index_t add_pos = 0;
-        assert(szs[szs_idx].first);
-        for(index_t i = szs_idx; i < szs.size(); i++) {
-            if(i != szs_idx && szs[i].first) break;
-            if(pos < szs[i].off) {
-                inside_Ns = true;
-                break;
-            } else {
-                pos -= szs[i].off;
-                if(pos < szs[i].len) {
-                    break;
-                } else {
-                    pos -= szs[i].len;
-                    add_pos += szs[i].len;
-                }
-            }
-        }
-        
-        if(inside_Ns) continue;
-        pos = sofar_len + add_pos + pos;
-        if(chr_idx + 1 < chr_szs.size()) {
-            if(pos >= chr_szs[chr_idx + 1].first) continue;
-        } else {
-            if(pos >= jlen) continue;
-        }
-
-        snps.expand();
-        SNP<index_t>& snp = snps.back();
-        snp.pos = pos;
-        snp.diff.clear();
-        if(type == "single") {
-            snp.type = SNP_SGL;
-            if(diff.size() != 1) {
-                cerr << "Error: single type takes only one base" << endl;
-                throw 1;
-            }
-            char bp = diff[0];
-            if(bp == "ACGTN"[(int)s[pos]]) {
-                cerr << "Error: single type (" << bp
-                     << ") should have a different base than " << "ACGTN"[(int)s[pos]]
-                     << " (" << snp_id << ")" << endl;
-                throw 1;
-            }
-            snp.diff.push_back(bp);
-        } else if(type == "deletion") {
-            snp.type = SNP_DEL;
-            for(size_t i = 0; i < diff.size(); i++) {
-                assert_eq(diff[i], '-');
-                snp.diff.push_back('-');
-            }
-        } else if(type == "insertion") {
-            snp.type = SNP_INS;
-            for(size_t i = 0; i < diff.size(); i++) {
-                char base = toupper(diff[i]);
-                if(base == 'A' || base == 'C' || base == 'G' || base == 'T') {
-                    snp.diff.push_back(base);
-                } else {
-                    snps.pop_back();
-                    continue;
-                }
-            }
-        } else {
-            cerr << "Error: unknown snp type " << type << endl;
-            throw 1;
-        }
-    }
-    snp_file.close();
-    
-    // Sort SNPs based on positions
-    sort(snps.begin(), snps.end());
     
     // a memory-efficient way to create a population graph with known SNPs
     bool frag_automaton = true;

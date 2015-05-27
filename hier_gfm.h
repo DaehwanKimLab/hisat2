@@ -1143,7 +1143,8 @@ public:
             int32_t ftabChars,
             int32_t localOffRate,
             int32_t localFtabChars,
-            const string& file,   // base filename for EBWT files
+            const string& snpfile,
+            const string& outfile,   // base filename for GFM files
             bool fw,
             bool useBlockwise,
             TIndexOffU bmax,
@@ -1296,7 +1297,8 @@ HierGFM<index_t, local_index_t>::HierGFM(
                                          int32_t ftabChars,
                                          int32_t localOffRate,
                                          int32_t localFtabChars,
-                                         const string& file,   // base filename for EBWT files
+                                         const string& snpfile,
+                                         const string& outfile,   // base filename for EBWT files
                                          bool fw,
                                          bool useBlockwise,
                                          TIndexOffU bmax,
@@ -1318,7 +1320,8 @@ HierGFM<index_t, local_index_t>::HierGFM(
                  lineRate,
                  offRate,
                  ftabChars,
-                 file,
+                 snpfile,
+                 outfile,
                  fw,
                  useBlockwise,
                  bmax,
@@ -1337,8 +1340,11 @@ HierGFM<index_t, local_index_t>::HierGFM(
     _in5(NULL),
     _in6(NULL)
 {
-    _in5Str = file + ".5." + gEbwt_ext;
-    _in6Str = file + ".6." + gEbwt_ext;
+    // daehwan - to be implemented
+    return;
+    
+    _in5Str = outfile + ".5." + gEbwt_ext;
+    _in6Str = outfile + ".6." + gEbwt_ext;
     
     // Open output files
     ofstream fout5(_in5Str.c_str(), ios::binary);
@@ -1571,7 +1577,7 @@ HierGFM<index_t, local_index_t>::HierGFM(
                                                                                               local_lineRate,
                                                                                               localOffRate,      // suffix-array sampling rate
                                                                                               localFtabChars,    // number of chars in initial arrow-pair calc
-                                                                                              file,               // basename for .?.ebwt files
+                                                                                              outfile,           // basename for .?.ebwt files
                                                                                               fw,                 // fw
                                                                                               dcv,                // difference-cover period
                                                                                               conv_local_szs,     // list of reference sizes
