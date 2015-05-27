@@ -24,8 +24,6 @@
 #include <getopt.h>
 #include "assert_helpers.h"
 #include "endian_swap.h"
-#include "bt2_idx.h"
-#include "hier_idx.h"
 #include "formats.h"
 #include "sequence_io.h"
 #include "tokenize.h"
@@ -34,7 +32,9 @@
 #include "filebuf.h"
 #include "reference.h"
 #include "ds.h"
+#include "gfm.h"
 #include "gbwt_graph.h"
+// #include "hier_idx.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -60,7 +60,7 @@ static int noDc;
 static int entireSA;
 static int seed;
 static int showVersion;
-//   Ebwt parameters
+//   GFM parameters
 static int32_t lineRate;
 static int32_t linesPerSide;
 static int32_t offRate;
@@ -88,8 +88,8 @@ static void resetOptions() {
 	entireSA       = 0;     // 1 = disable blockwise SA
 	seed           = 0;     // srandom seed
 	showVersion    = 0;     // just print version and quit?
-	//   Ebwt parameters
-	lineRate       = Ebwt<TIndexOffU>::default_lineRate;
+	// GFM parameters
+	lineRate       = GFM<TIndexOffU>::default_lineRate;
 	linesPerSide   = 1;  // 1 64-byte line on a side
 	offRate        = 4;  // sample 1 out of 16 SA elts
 	ftabChars      = 10; // 10 chars in initial lookup table
@@ -455,6 +455,8 @@ static void driver(
     
     return;
     
+#if 0
+    
 	// Construct index from input strings and parameters
 	filesWritten.push_back(outfile + ".1." + gEbwt_ext);
 	filesWritten.push_back(outfile + ".2." + gEbwt_ext);
@@ -527,6 +529,7 @@ static void driver(
 			}
 		}
 	}
+#endif // daehwan
 }
 
 static const char *argv0 = NULL;
@@ -603,10 +606,12 @@ int hisat2_build(int argc, const char **argv) {
 				 << "  FTable chars: " << ftabChars << endl
 				 << "  Strings: " << (packed? "packed" : "unpacked") << endl
                  << "  Local offset rate: " << localOffRate << " (one in " << (1<<localOffRate) << ")" << endl
-                 << "  Local fTable chars: " << localFtabChars << endl
+            << "  Local fTable chars: " << localFtabChars << endl;
+// daehwan - fix the following
+#if 0
                  << "  Local sequence length: " << local_index_size << endl
-                 << "  Local sequence overlap between the two consecutive indexes: " << local_index_overlap << endl
-				 ;
+                 << "  Local sequence overlap between the two consecutive indexes: " << local_index_overlap << endl;
+#endif
 			if(bmax == OFF_MASK) {
 				cerr << "  Max bucket size: default" << endl;
 			} else {

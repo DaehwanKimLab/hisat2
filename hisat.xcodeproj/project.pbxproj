@@ -95,6 +95,7 @@
 		E81BC0841980295300580916 /* hi_aligner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hi_aligner.h; sourceTree = "<group>"; };
 		E85766711970545400D8AAFB /* btypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = btypes.h; sourceTree = "<group>"; };
 		E85F1AFA193501E000F85A12 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		E88C30AA1B15E23800761CCB /* gfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gfm.h; sourceTree = "<group>"; };
 		E8B0DBE81934F7AA005ED9FA /* aligner_bt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_bt.h; sourceTree = "<group>"; };
 		E8B0DBE91934F7AA005ED9FA /* aligner_cache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_cache.h; sourceTree = "<group>"; };
 		E8B0DBEA1934F7AA005ED9FA /* aligner_driver.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_driver.h; sourceTree = "<group>"; };
@@ -342,6 +343,7 @@
 				E8B0DC061934F7AA005ED9FA /* filebuf.h */,
 				E8B0DC071934F7AA005ED9FA /* formats.h */,
 				E8000AE71AEEC5A400E1F351 /* gbwt_graph.h */,
+				E88C30AA1B15E23800761CCB /* gfm.h */,
 				E8B0DC081934F7AA005ED9FA /* group_walk.h */,
 				E81BC0841980295300580916 /* hi_aligner.h */,
 				E8B0DC091934F7AA005ED9FA /* hier_idx_common.h */,
