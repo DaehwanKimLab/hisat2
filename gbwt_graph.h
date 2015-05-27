@@ -1124,6 +1124,37 @@ public:
     // predecessor labels to PathNode.key.first.
     // Restores the labels of parent.
     bool generateEdges(RefGraph<index_t>& parent);
+    
+    bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos) {
+        if(report_node_idx >= nodes.size()) return false;
+        bool firstOutEdge = false;
+        if(report_edge_range.first >= report_edge_range.second) {
+            report_edge_range = getEdges(report_node_idx, false /* from? */);
+            firstOutEdge = true;
+            if(report_node_idx == 0) {
+                report_M = pair<index_t, index_t>(0, 0);
+            }
+        }
+        assert_lt(report_edge_range.first, report_edge_range.second);
+        assert_lt(report_edge_range.first, edges.size());
+        gbwtChar = edges[report_edge_range.first].label;
+        if(gbwtChar == 'Z') gbwtChar = '$';
+        assert_lt(report_node_idx, nodes.size());
+        pos = nodes[report_node_idx].to;
+        F = (firstOutEdge ? 1 : 0);
+        report_edge_range.first++;
+        if(report_edge_range.first >= report_edge_range.second) {
+            report_node_idx++;
+        }
+        assert_lt(report_M.first, nodes.size());
+        M = (report_M.second == 0 ? 1 : 0);
+        report_M.second++;
+        if(report_M.second >= nodes[report_M.first].key.first) {
+            report_M.first++;
+            report_M.second = 0;
+        }
+        return true;
+    }
 
 private:
     void      createPathNode(const PathNode& left, const PathNode& right);
@@ -1175,6 +1206,11 @@ private:
     
     enum status_t { error, ok, sorted, ready, edges_sorted } status;
     bool            has_stabilized;  // The number of nodes will probably not explode in subsequent doublings.
+    
+    // For reporting GBWT char, F, and M values
+    index_t                report_node_idx;
+    pair<index_t, index_t> report_edge_range;
+    pair<index_t, index_t> report_M;
     
     // Can create an index by using key.second in PathNodes.
     // If the graph is not ready, its status becomes error.
@@ -1228,7 +1264,8 @@ private:
 template <typename index_t>
 PathGraph<index_t>::PathGraph(RefGraph<index_t>& base) :
 ranks(0), max_label('Z'), temp_nodes(0), generation(0),
-status(error), has_stabilized(false)
+status(error), has_stabilized(false),
+report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0))
 {
     if(!base.repOk()) return;
 
@@ -1260,7 +1297,8 @@ status(error), has_stabilized(false)
 template <typename index_t>
 PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
 ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1),
-status(error), has_stabilized(false)
+status(error), has_stabilized(false),
+report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0))
 {
     if(previous.status != ok)
         return;
@@ -1431,17 +1469,16 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     
     sortEdgesTo(true);
     status = ready;
-    
-    // daehwan - for debugging purposes
-    // exit(1);
-    
     nodes.pop_back(); // Remove 'Z' node
+    
+    return true;
+    
     bwt_string.clear();
     F_array.clear();
     M_array.clear();
     bwt_counts.resizeExact(5); bwt_counts.fillZero(); bwt_counts.front() = 1;
     for(index_t node = 0; node < nodes.size(); node++) {
-        pair<index_t, index_t> edge_range = getEdges(node, false);
+        pair<index_t, index_t> edge_range = getEdges(node, false /* from? */);
         for(index_t i = edge_range.first; i < edge_range.second; i++) {
             assert_lt(i, edges.size());
             char label = edges[i].label;
@@ -1496,14 +1533,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
 #endif
-    
-    // daehwan - for debugging purposes
-    cout << "i\tBWT\tF\tM" << endl;
-    for(index_t i = 0; i < bwt_string.size(); i++) {
-        cout << i << "\t" << bwt_string[i] << "\t"  // BWT char
-        << (int)F_array[i] << "\t"             // F bit value
-        << (int)M_array[i] << endl;            // M bit value
-    }
     
     // Test searches, based on paper_example
 #if 0
@@ -1586,7 +1615,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         if(M_array[i] == 1) tmp_M.push_back(i);
     }
     
-#      if 1
     index_t max_diff = 0;
     assert_eq(tmp_F.size(), tmp_M.size());
     for(index_t i = 0; i < tmp_F.size(); i++) {
@@ -1597,73 +1625,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
     cerr << "Final: " << tmp_F.back() << " vs. " << tmp_M.back() << endl;
-#      else
-    index_t max_diff = 0, max_bits = 0;
-    index_t num_uncompressed = 0, num_compressed = 0, num_extra = 0;
-    assert_eq(tmp_F.size(), tmp_M.size());
-    for(index_t i = 0; i < tmp_F.size(); i++) {
-        index_t j = i + 1;
-        for(; j < tmp_F.size(); j++) {
-            assert_lt(tmp_F[i], tmp_F[j]);
-            if(tmp_F[i] + 192 <= tmp_F[j]) break;
-        }
-        if(j >= tmp_F.size()) break;
-        
-        index_t diff_F = tmp_F[j] - tmp_F[i];
-        index_t diff_M = tmp_M[j] - tmp_M[i];
-        index_t diff = (diff_F >= diff_M ? diff_F - diff_M : diff_M - diff_F);
-        if(diff > max_diff) {
-            max_diff = diff;
-            cerr << i << "," << j << "\tdiff: " << max_diff << "\t" << (diff_F >= diff_M ? "+" : "-") << endl;
-        }
-        
-        index_t bits = 0;
-        if(diff_M > diff_F) {
-            for(index_t m = i; m + 1 < j; m++) {
-                for(index_t n = m + 1; n < j; n++) {
-                    assert_lt(tmp_M[n-1], tmp_M[n]);
-                    if(tmp_M[n-1] + 1 < tmp_M[n]) {
-                        index_t num_1s = n - m;
-                        const index_t per_bits = 4;
-                        const index_t max_num = (1 << per_bits) - 2;
-                        bits += per_bits;
-                        while(num_1s > max_num) {
-                            num_1s -= max_num;
-                            bits += per_bits;
-                        }
-                        index_t num_0s = tmp_M[n] - tmp_M[n-1];
-                        // 0s
-                        bits += per_bits;
-                        while(num_0s > max_num) {
-                            num_0s -= max_num;
-                            bits += per_bits;
-                        }
-                        m = n;
-                        break;
-                    }
-                }
-            }
-            if(bits > 192) {
-                num_extra++;
-            } else {
-                num_compressed++;
-            }
-        } else {
-            num_uncompressed++;
-        }
-        if(bits > max_bits) {
-            max_bits = bits;
-            cerr << i << "," << j << "\tbits: " << diff_M << "\tcompressed bits: " << max_bits << endl;
-        }
-        
-        i = j;
-    }
-    
-    cerr << "num of uncompressed: " << num_uncompressed << endl;
-    cerr << "num of compressed: " << num_compressed << endl;
-    cerr << "num of extra: " << num_extra << endl;
-#      endif
-
 #   endif
     
 #endif

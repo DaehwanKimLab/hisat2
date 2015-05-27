@@ -617,7 +617,7 @@ public:
 		 int32_t lineRate,
 		 int32_t offRate,
 		 int32_t ftabChars,
-		 const string& file,   // base filename for EBWT files
+		 const string& file,   // base filename for GFM files
 		 bool fw,
 		 int dcv,
 		 EList<RefRecord>& szs,
@@ -1197,7 +1197,7 @@ public:
                 
                 if(verbose) { cerr << "Generating edges... " << endl; }
                 if(!pg->generateEdges(*graph)) { return; }
-                // if(verbose) { std::cout << graph.edge_count << " edges." << std::endl; }
+                buildToDisk(*pg, s, out1, out2);
                 delete pg; pg = NULL;
                 delete graph; graph = NULL;
 #else
@@ -1729,7 +1729,7 @@ public:
 	template <typename TStr> static TStr join(EList<TStr>& l, uint32_t seed);
 	template <typename TStr> static TStr join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed);
 	template <typename TStr> void joinToDisk(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, TStr& ret, ostream& out1, ostream& out2);
-	template <typename TStr> void buildToDisk(InorderBlockwiseSA<TStr>& sa, const TStr& s, ostream& out1, ostream& out2);
+	template <typename TStr> void buildToDisk(PathGraph<index_t>& gbwt, const TStr& s, ostream& out1, ostream& out2);
 
 	// I/O
 	void readIntoMemory(int needEntireRev, bool loadSASamp, bool loadFtab, bool loadRstarts, bool justHeader, GFMParams<index_t> *params, bool mmSweep, bool loadNames, bool startVerbose);
@@ -2917,19 +2917,32 @@ void GFM<index_t>::joinToDisk(
 template <typename index_t>
 template <typename TStr>
 void GFM<index_t>::buildToDisk(
-	InorderBlockwiseSA<TStr>& sa,
-	const TStr& s,
-	ostream& out1,
-	ostream& out2)
+                               PathGraph<index_t>& gbwt,
+                               const TStr& s,
+                               ostream& out1,
+                               ostream& out2)
 {
+    // daehwan - for debugging purposes
+#if 0
+    cout << "i\tBWT\tF\tM" << endl;
+    int gbwtChar; // one of A, C, G, T, and $
+    int F, M;     // either 0 or 1
+    index_t pos;  // pos on joined string
+    index_t count = 0;
+    while(gbwt.nextRow(gbwtChar, F, M, pos)) {
+        cout << count << "\t" << (char)gbwtChar << "\t" << F << "\t" << M << "\t" << pos << endl;
+        count++;
+    }
+    exit(1);
+#endif
+    
 	const GFMParams<index_t>& gh = this->_gh;
-
+    
 	assert(gh.repOk());
-	assert_eq(s.length()+1, sa.size());
+	//assert_eq(s.length() + 1, gbwt.size());
 	assert_eq(s.length(), gh._len);
 	assert_gt(gh._lineRate, 3);
-	assert(sa.suffixItrIsReset());
-
+	
 	index_t  len = gh._len;
 	index_t  ftabLen = gh._ftabLen;
 	index_t  sideSz = gh._sideSz;
@@ -3014,13 +3027,18 @@ void GFM<index_t>::buildToDisk(
 		for(int bpi = 0; bpi < 4; bpi++, si++)
 #endif
 		{
-			int gbwtChar;
+			int gbwtChar; // one of A, C, G, T, and $
+            int F, M;     // either 0 or 1
+            index_t pos;  // pos on joined string
 			bool count = true;
 			if(si <= len) {
-				// Still in the SA; extract the bwtChar
-				index_t saElt = sa.nextSuffix();
+				// daehwan - to be implemented;
+                index_t saElt = 0;
+                
+                gbwt.nextRow(gbwtChar, F, M, pos);
+                
 				// (that might have triggered sa to calc next suf block)
-				if(saElt == 0) {
+				if(gbwtChar == '$') {
 					// Don't add the '$' in the last column to the BWT
 					// transform; we can't encode a $ (only A C T or G)
 					// and counting it as, say, an A, will mess up the
@@ -3030,7 +3048,7 @@ void GFM<index_t>::buildToDisk(
 					zOff = si; // remember the SA row that
 					           // corresponds to the 0th suffix
 				} else {
-					gbwtChar = (int)(s[saElt-1]);
+                    gbwtChar = asc2dna[gbwtChar];
 					assert_lt(gbwtChar, 4);
 					// Update the fchr
 					fchr[gbwtChar]++;
