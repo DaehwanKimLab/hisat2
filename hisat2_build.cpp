@@ -33,8 +33,8 @@
 #include "reference.h"
 #include "ds.h"
 #include "gfm.h"
+#include "hier_gfm.h"
 #include "gbwt_graph.h"
-// #include "hier_idx.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -455,61 +455,57 @@ static void driver(
     
     return;
     
-#if 0
-    
 	// Construct index from input strings and parameters
 	filesWritten.push_back(outfile + ".1." + gEbwt_ext);
 	filesWritten.push_back(outfile + ".2." + gEbwt_ext);
 	TStr s;
-	HierEbwt<TIndexOffU> hierEbwt(
-                                  s,
-                                  packed,
-                                  0,
-                                  1,  // TODO: maybe not?
-                                  lineRate,
-                                  offRate,      // suffix-array sampling rate
-                                  ftabChars,    // number of chars in initial arrow-pair calc
-                                  localOffRate,
-                                  localFtabChars,
-                                  outfile,      // basename for .?.ebwt files
-                                  reverse == 0, // fw
-                                  !entireSA,    // useBlockwise
-                                  bmax,         // block size for blockwise SA builder
-                                  bmaxMultSqrt, // block size as multiplier of sqrt(len)
-                                  bmaxDivN,     // block size as divisor of len
-                                  noDc? 0 : dcv,// difference-cover period
-                                  is,           // list of input streams
-                                  szs,          // list of reference sizes
-                                  (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
-                                  refparams,    // reference read-in parameters
-                                  seed,         // pseudo-random number generator seed
-                                  -1,           // override offRate
-                                  verbose,      // be talkative
-                                  autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                                  sanityCheck); // verify results and internal consistency
-	// Note that the Ebwt is *not* resident in memory at this time.  To
-	// load it into memory, call ebwt.loadIntoMemory()
+	HierGFM<TIndexOffU> hierGFM(
+                                s,
+                                packed,
+                                1,  // TODO: maybe not?
+                                lineRate,
+                                offRate,      // suffix-array sampling rate
+                                ftabChars,    // number of chars in initial arrow-pair calc
+                                localOffRate,
+                                localFtabChars,
+                                outfile,      // basename for .?.ebwt files
+                                reverse == 0, // fw
+                                !entireSA,    // useBlockwise
+                                bmax,         // block size for blockwise SA builder
+                                bmaxMultSqrt, // block size as multiplier of sqrt(len)
+                                bmaxDivN,     // block size as divisor of len
+                                noDc? 0 : dcv,// difference-cover period
+                                is,           // list of input streams
+                                szs,          // list of reference sizes
+                                (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
+                                refparams,    // reference read-in parameters
+                                seed,         // pseudo-random number generator seed
+                                -1,           // override offRate
+                                verbose,      // be talkative
+                                autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                                sanityCheck); // verify results and internal consistency
+    // Note that the Ebwt is *not* resident in memory at this time.  To
+    // load it into memory, call ebwt.loadIntoMemory()
 	if(verbose) {
 		// Print Ebwt's vital stats
-		hierEbwt.eh().print(cout);
+		hierGFM.gh().print(cout);
 	}
 	if(sanityCheck) {
 		// Try restoring the original string (if there were
 		// multiple texts, what we'll get back is the joined,
 		// padded string, not a list)
-		hierEbwt.loadIntoMemory(
-								0,
-								reverse ? (refparams.reverse == REF_READ_REVERSE) : 0,
-								true,  // load SA sample?
-								true,  // load ftab?
-								true,  // load rstarts?
-								false,
-								false);
+		hierGFM.loadIntoMemory(
+                               reverse ? (refparams.reverse == REF_READ_REVERSE) : 0,
+                               true,  // load SA sample?
+                               true,  // load ftab?
+                               true,  // load rstarts?
+                               false,
+                               false);
 		SString<char> s2;
-		hierEbwt.restore(s2);
-		hierEbwt.evictFromMemory();
+		hierGFM.restore(s2);
+		hierGFM.evictFromMemory();
 		{
-			SString<char> joinedss = Ebwt<>::join<SString<char> >(
+			SString<char> joinedss = GFM<>::join<SString<char> >(
 				is,          // list of input streams
 				szs,         // list of reference sizes
 				(TIndexOffU)sztot.first, // total size of all unambiguous ref chars
@@ -529,7 +525,6 @@ static void driver(
 			}
 		}
 	}
-#endif // daehwan
 }
 
 static const char *argv0 = NULL;

@@ -234,6 +234,7 @@
 		E8B0DCAA1934F7C5005ED9FA /* NEWS */ = {isa = PBXFileReference; lastKnownFileType = text; path = NEWS; sourceTree = "<group>"; };
 		E8B0DCAC1934F7C5005ED9FA /* TUTORIAL */ = {isa = PBXFileReference; lastKnownFileType = text; path = TUTORIAL; sourceTree = "<group>"; };
 		E8B0DCAD1934F7C5005ED9FA /* VERSION */ = {isa = PBXFileReference; lastKnownFileType = text; path = VERSION; sourceTree = "<group>"; };
+		E8EE06DF1B15F1DE00E75FC3 /* hier_gfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hier_gfm.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -346,6 +347,7 @@
 				E88C30AA1B15E23800761CCB /* gfm.h */,
 				E8B0DC081934F7AA005ED9FA /* group_walk.h */,
 				E81BC0841980295300580916 /* hi_aligner.h */,
+				E8EE06DF1B15F1DE00E75FC3 /* hier_gfm.h */,
 				E8B0DC091934F7AA005ED9FA /* hier_idx_common.h */,
 				E8B0DC0A1934F7AA005ED9FA /* hier_idx.h */,
 				E8B0DC0B1934F7AA005ED9FA /* ival_list.h */,
