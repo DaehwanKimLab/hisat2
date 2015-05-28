@@ -128,17 +128,18 @@ public:
 	}
 
 	void init(
-		index_t len,
-		int32_t lineRate,
-		int32_t offRate,
-		int32_t ftabChars,
-		bool entireReverse)
+              index_t len,
+              int32_t lineRate,
+              int32_t offRate,
+              int32_t ftabChars,
+              bool entireReverse,
+              index_t gbwtLen = 0)
 	{
 		_entireReverse = entireReverse;
 		_len = len;
-		_bwtLen = _len + 1;
-		_sz = (len+3)/4;
-		_bwtSz = (len/4 + 1);
+        _gbwtLen = (gbwtLen == 0 ? _len + 1 : gbwtLen);
+        _sz = (len+3)/4;
+        _gbwtSz = (_gbwtLen+3)/4;
 		_lineRate = lineRate;
 		_origOffRate = offRate;
 		_offRate = offRate;
@@ -148,13 +149,13 @@ public:
 		_eftabSz = _eftabLen*sizeof(index_t);
 		_ftabLen = (1 << (_ftabChars*2))+1;
 		_ftabSz = _ftabLen*sizeof(index_t);
-		_offsLen = (_bwtLen + (1 << _offRate) - 1) >> _offRate;
+		_offsLen = (_gbwtLen + (1 << _offRate) - 1) >> _offRate;
 		_offsSz = _offsLen*sizeof(index_t);
 		_lineSz = 1 << _lineRate;
 		_sideSz = _lineSz * 1 /* lines per side */;
-		_sideBwtSz = _sideSz - (sizeof(index_t) * 4);
-		_sideBwtLen = _sideBwtSz*4;
-		_numSides = (_bwtSz+(_sideBwtSz)-1)/(_sideBwtSz);
+		_sideGbwtSz = _sideSz - (sizeof(index_t) * 6);
+		_sideGbwtLen = _sideGbwtSz*2;
+		_numSides = (_gbwtSz+(_sideGbwtSz)-1)/(_sideGbwtSz);
 		_numLines = _numSides * 1 /* lines per side */;
 		_gbwtTotLen = _numSides * _sideSz;
 		_gbwtTotSz = _gbwtTotLen;
@@ -163,9 +164,9 @@ public:
 
 	index_t len() const           { return _len; }
 	index_t lenNucs() const       { return _len; }
-	index_t bwtLen() const        { return _bwtLen; }
+    index_t gbwtLen() const       { return _gbwtLen; }
 	index_t sz() const            { return _sz; }
-	index_t bwtSz() const         { return _bwtSz; }
+	index_t gbwtSz() const        { return _gbwtSz; }
 	int32_t lineRate() const      { return _lineRate; }
 	int32_t origOffRate() const   { return _origOffRate; }
 	int32_t offRate() const       { return _offRate; }
@@ -179,8 +180,8 @@ public:
 	index_t offsSz() const        { return _offsSz; }
 	index_t lineSz() const        { return _lineSz; }
 	index_t sideSz() const        { return _sideSz; }
-	index_t sideBwtSz() const     { return _sideBwtSz; }
-	index_t sideBwtLen() const    { return _sideBwtLen; }
+	index_t sideGbtSz() const     { return _sideGbwtSz; }
+	index_t sideGbwtLen() const   { return _sideGbwtLen; }
 	index_t numSides() const      { return _numSides; }
 	index_t numLines() const      { return _numLines; }
 	index_t gbwtTotLen() const    { return _gbwtTotLen; }
@@ -194,7 +195,7 @@ public:
 	void setOffRate(int __offRate) {
 		_offRate = __offRate;
 		_offMask = std::numeric_limits<index_t>::max() << _offRate;
-		_offsLen = (_bwtLen + (1 << _offRate) - 1) >> _offRate;
+		_offsLen = (_gbwtLen + (1 << _offRate) - 1) >> _offRate;
 		_offsSz = _offsLen * sizeof(index_t);
 	}
 
@@ -219,9 +220,9 @@ public:
 	void print(ostream& out) const {
 		out << "Headers:" << endl
 		    << "    len: "          << _len << endl
-		    << "    bwtLen: "       << _bwtLen << endl
+		    << "    gbwtLen: "      << _gbwtLen << endl
 		    << "    sz: "           << _sz << endl
-		    << "    bwtSz: "        << _bwtSz << endl
+		    << "    gbwtSz: "       << _gbwtSz << endl
 		    << "    lineRate: "     << _lineRate << endl
 		    << "    offRate: "      << _offRate << endl
 		    << "    offMask: 0x"    << hex << _offMask << dec << endl
@@ -234,8 +235,8 @@ public:
 		    << "    offsSz: "       << _offsSz << endl
 		    << "    lineSz: "       << _lineSz << endl
 		    << "    sideSz: "       << _sideSz << endl
-		    << "    sideBwtSz: "    << _sideBwtSz << endl
-		    << "    sideBwtLen: "   << _sideBwtLen << endl
+		    << "    sideGbwtSz: "   << _sideGbwtSz << endl
+		    << "    sideGbwtLen: "  << _sideGbwtLen << endl
 		    << "    numSides: "     << _numSides << endl
 		    << "    numLines: "     << _numLines << endl
 		    << "    gbwtTotLen: "   << _gbwtTotLen << endl
@@ -244,9 +245,9 @@ public:
 	}
 
 	index_t  _len;
-	index_t  _bwtLen;
+	index_t  _gbwtLen;
 	index_t  _sz;
-	index_t  _bwtSz;
+	index_t  _gbwtSz;
 	int32_t  _lineRate;
 	int32_t  _origOffRate;
 	int32_t  _offRate;
@@ -260,8 +261,8 @@ public:
 	index_t  _offsSz;
 	index_t  _lineSz;
 	index_t  _sideSz;
-	index_t  _sideBwtSz;
-	index_t  _sideBwtLen;
+	index_t  _sideGbwtSz;
+	index_t  _sideGbwtLen;
 	index_t  _numSides;
 	index_t  _numLines;
 	index_t  _gbwtTotLen;
@@ -348,15 +349,15 @@ struct SideLocus {
 		const index_t sideSz      = gp._sideSz;
 		// Side length is hard-coded for now; this allows the compiler
 		// to do clever things to accelerate / and %.
-		_sideNum                  = row / gp._sideBwtLen;
+		_sideNum                  = row / gp._sideGbwtLen;
 		assert_lt(_sideNum, gp._numSides);
-		_charOff                  = row % gp._sideBwtLen;
+		_charOff                  = row % gp._sideGbwtLen;
 		_sideByteOff              = _sideNum * sideSz;
 		assert_leq(row, gp._len);
 		assert_leq(_sideByteOff + sideSz, gp._gbwtTotSz);
 		// Tons of cache misses on the next line
 		_by = _charOff >> 2; // byte within side
-		assert_lt(_by, (int)gp._sideBwtSz);
+		assert_lt(_by, (int)gp._sideGbwtSz);
 		_bp = _charOff & 3;  // bit-pair within byte
 	}
 	
@@ -533,8 +534,8 @@ public:
 	    _in1(NULL), \
 	    _in2(NULL), \
 	    _zOff(std::numeric_limits<index_t>::max()), \
-	    _zEbwtByteOff(std::numeric_limits<index_t>::max()), \
-	    _zEbwtBpOff(-1), \
+	    _zGbwtByteOff(std::numeric_limits<index_t>::max()), \
+	    _zGbwtBpOff(-1), \
 	    _nPat(0), \
 	    _nFrag(0), \
 	    _plen(EBWT_CAT), \
@@ -1197,6 +1198,14 @@ public:
                 
                 if(verbose) { cerr << "Generating edges... " << endl; }
                 if(!pg->generateEdges(*graph)) { return; }
+                // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
+                _gh.init(
+                         _gh.len(),
+                         _gh.lineRate(),
+                         _gh.offRate(),
+                         _gh.ftabChars(),
+                         _gh.entireReverse(),
+                         pg->getNumEdges());
                 buildToDisk(*pg, s, out1, out2);
                 delete pg; pg = NULL;
                 delete graph; graph = NULL;
@@ -1302,8 +1311,8 @@ public:
 	/// Accessors
 	inline const GFMParams<index_t>& gh() const     { return _gh; }
 	index_t    zOff() const         { return _zOff; }
-	index_t    zEbwtByteOff() const { return _zEbwtByteOff; }
-	int        zEbwtBpOff() const   { return _zEbwtBpOff; }
+	index_t    zGbwtByteOff() const { return _zGbwtByteOff; }
+	int        zGbwtBpOff() const   { return _zGbwtBpOff; }
 	index_t    nPat() const        { return _nPat; }
 	index_t    nFrag() const       { return _nFrag; }
 	inline index_t*   fchr()              { return _fchr.get(); }
@@ -1365,8 +1374,8 @@ public:
 			assert(fchr() != NULL);
 			//assert(_offs != NULL);
 			//assert(_rstarts != NULL);
-			assert_neq(_zEbwtByteOff, (index_t)OFF_MASK);
-			assert_neq(_zEbwtBpOff, -1);
+			assert_neq(_zGbwtByteOff, (index_t)OFF_MASK);
+			assert_neq(_zGbwtBpOff, -1);
 			return true;
 		} else {
 			assert(ftab() == NULL);
@@ -1374,8 +1383,8 @@ public:
 			assert(fchr() == NULL);
 			assert(offs() == NULL);
 			assert(rstarts() == NULL);
-			assert_eq(_zEbwtByteOff, (index_t)OFF_MASK);
-			assert_eq(_zEbwtBpOff, -1);
+			assert_eq(_zGbwtByteOff, (index_t)OFF_MASK);
+			assert_eq(_zGbwtBpOff, -1);
 			return false;
 		}
 	}
@@ -1423,8 +1432,8 @@ public:
 		// Keep plen; it's small and the client may want to seq it
 		// even when the others are evicted.
 		//_plen  = NULL;
-		_zEbwtByteOff = (index_t)OFF_MASK;
-		_zEbwtBpOff = -1;
+		_zGbwtByteOff = (index_t)OFF_MASK;
+		_zGbwtBpOff = -1;
 	}
 
 	/**
@@ -1646,14 +1655,14 @@ public:
 	 * _zEbwtBpOff from _zOff.
 	 */
 	void postReadInit(GFMParams<index_t>& gh) {
-		index_t sideNum     = _zOff / gh._sideBwtLen;
-		index_t sideCharOff = _zOff % gh._sideBwtLen;
+		index_t sideNum     = _zOff / gh._sideGbwtLen;
+		index_t sideCharOff = _zOff % gh._sideGbwtLen;
 		index_t sideByteOff = sideNum * gh._sideSz;
-		_zEbwtByteOff = sideCharOff >> 2;
-		assert_lt(_zEbwtByteOff, gh._sideBwtSz);
-		_zEbwtBpOff = sideCharOff & 3;
-		assert_lt(_zEbwtBpOff, 4);
-		_zEbwtByteOff += sideByteOff;
+		_zGbwtByteOff = sideCharOff >> 2;
+		assert_lt(_zGbwtByteOff, gh._sideGbwtSz);
+		_zGbwtBpOff = sideCharOff & 3;
+		assert_lt(_zGbwtBpOff, 4);
+		_zGbwtByteOff += sideByteOff;
 		assert(repOk(gh)); // Ebwt should be fully initialized now
 	}
 
@@ -1678,8 +1687,8 @@ public:
         return;
 		out << "Ebwt (" << (isInMemory()? "memory" : "disk") << "):" << endl
 		    << "    zOff: "         << _zOff << endl
-		    << "    zEbwtByteOff: " << _zEbwtByteOff << endl
-		    << "    zEbwtBpOff: "   << _zEbwtBpOff << endl
+		    << "    zGbwtByteOff: " << _zGbwtByteOff << endl
+		    << "    zGbwtBpOff: "   << _zGbwtBpOff << endl
 		    << "    nPat: "  << _nPat << endl
 		    << "    plen: ";
 		if(plen() == NULL) {
@@ -1746,10 +1755,10 @@ public:
 	void joinedToTextOff(index_t qlen, index_t off, index_t& tidx, index_t& textoff, index_t& tlen, bool rejectStraddle, bool& straddled) const;
 
 #define WITHIN_BWT_LEN(x) \
-	assert_leq(x[0], this->_gh._sideBwtLen); \
-	assert_leq(x[1], this->_gh._sideBwtLen); \
-	assert_leq(x[2], this->_gh._sideBwtLen); \
-	assert_leq(x[3], this->_gh._sideBwtLen)
+	assert_leq(x[0], this->_gh._sideGbwtLen); \
+	assert_leq(x[1], this->_gh._sideGbwtLen); \
+	assert_leq(x[2], this->_gh._sideGbwtLen); \
+	assert_leq(x[3], this->_gh._sideGbwtLen)
 
 #define WITHIN_FCHR(x) \
 	assert_leq(x[0], this->fchr()[1]); \
@@ -1775,26 +1784,26 @@ public:
 	 */
 	inline index_t countBt2Side(const SideLocus<index_t>& l, int c) const {
         assert_range(0, 3, c);
-        assert_range(0, (int)this->_gh._sideBwtSz-1, (int)l._by);
+        assert_range(0, (int)this->_gh._sideGbwtSz-1, (int)l._by);
         assert_range(0, 3, (int)l._bp);
         const uint8_t *side = l.side(this->gfm());
         index_t cCnt = countUpTo(l, c);
         assert_leq(cCnt, l.toBWRow());
-        assert_leq(cCnt, this->_gh._sideBwtLen);
-        if(c == 0 && l._sideByteOff <= _zEbwtByteOff && l._sideByteOff + l._by >= _zEbwtByteOff) {
+        assert_leq(cCnt, this->_gh._sideGbwtLen);
+        if(c == 0 && l._sideByteOff <= _zGbwtByteOff && l._sideByteOff + l._by >= _zGbwtByteOff) {
             // Adjust for the fact that we represented $ with an 'A', but
             // shouldn't count it as an 'A' here
-            if((l._sideByteOff + l._by > _zEbwtByteOff) ||
-               (l._sideByteOff + l._by == _zEbwtByteOff && l._bp > _zEbwtBpOff))
+            if((l._sideByteOff + l._by > _zGbwtByteOff) ||
+               (l._sideByteOff + l._by == _zGbwtByteOff && l._bp > _zGbwtBpOff))
             {
                 cCnt--; // Adjust for '$' looking like an 'A'
             }
         }
         index_t ret;
         // Now factor in the occ[] count at the side break
-        const uint8_t *acgt8 = side + _gh._sideBwtSz;
+        const uint8_t *acgt8 = side + _gh._sideGbwtSz;
         const index_t *acgt = reinterpret_cast<const index_t*>(acgt8);
-        assert_leq(acgt[0], this->_gh._numSides * this->_gh._sideBwtLen); // b/c it's used as padding
+        assert_leq(acgt[0], this->_gh._numSides * this->_gh._sideGbwtLen); // b/c it's used as padding
         assert_leq(acgt[1], this->_gh._len);
         assert_leq(acgt[2], this->_gh._len);
         assert_leq(acgt[3], this->_gh._len);
@@ -1802,9 +1811,9 @@ public:
 #ifndef NDEBUG
         assert_leq(ret, this->fchr()[c+1]); // can't have jumpded into next char's section
         if(c == 0) {
-            assert_leq(cCnt, this->_gh._sideBwtLen);
+            assert_leq(cCnt, this->_gh._sideGbwtLen);
         } else {
-            assert_leq(ret, this->_gh._bwtLen);
+            assert_leq(ret, this->_gh._gbwtLen);
         }
 #endif
         return ret;
@@ -1833,11 +1842,11 @@ public:
 		WITHIN_FCHR_DOLLARA(cntsUpto);
 		WITHIN_BWT_LEN(cntsUpto);
 		const uint8_t *side = l.side(this->ebwt());
-		if(l._sideByteOff <= _zEbwtByteOff && l._sideByteOff + l._by >= _zEbwtByteOff) {
+		if(l._sideByteOff <= _zGbwtByteOff && l._sideByteOff + l._by >= _zGbwtByteOff) {
 			// Adjust for the fact that we represented $ with an 'A', but
 			// shouldn't count it as an 'A' here
-			if((l._sideByteOff + l._by > _zEbwtByteOff) ||
-			   (l._sideByteOff + l._by == _zEbwtByteOff && l._bp > _zEbwtBpOff))
+			if((l._sideByteOff + l._by > _zGbwtByteOff) ||
+			   (l._sideByteOff + l._by == _zGbwtByteOff && l._bp > _zGbwtBpOff))
 			{
 				cntsUpto[0]--; // Adjust for '$' looking like an 'A'
 			}
@@ -1903,14 +1912,14 @@ public:
 	 *
 	 */
 	inline void countBt2SideEx(const SideLocus<index_t>& l, index_t* arrs) const {
-		assert_range(0, (int)this->_gh._sideBwtSz-1, (int)l._by);
+		assert_range(0, (int)this->_gh._sideGbwtSz-1, (int)l._by);
 		assert_range(0, 3, (int)l._bp);
 		countUpToEx(l, arrs);
-		if(l._sideByteOff <= _zEbwtByteOff && l._sideByteOff + l._by >= _zEbwtByteOff) {
+		if(l._sideByteOff <= _zGbwtByteOff && l._sideByteOff + l._by >= _zGbwtByteOff) {
 			// Adjust for the fact that we represented $ with an 'A', but
 			// shouldn't count it as an 'A' here
-			if((l._sideByteOff + l._by > _zEbwtByteOff) ||
-			   (l._sideByteOff + l._by == _zEbwtByteOff && l._bp > _zEbwtBpOff))
+			if((l._sideByteOff + l._by > _zGbwtByteOff) ||
+			   (l._sideByteOff + l._by == _zGbwtByteOff && l._bp > _zGbwtBpOff))
 			{
 				arrs[0]--; // Adjust for '$' looking like an 'A'
 			}
@@ -1921,11 +1930,11 @@ public:
 		const uint8_t *side = l.side(this->gfm());
 		const uint8_t *acgt16 = side + this->_gh._sideSz - sizeof(index_t) * 4;
 		const index_t *acgt = reinterpret_cast<const index_t*>(acgt16);
-		assert_leq(acgt[0], this->fchr()[1] + this->_gh.sideBwtLen());
+		assert_leq(acgt[0], this->fchr()[1] + this->_gh.sideGbwtLen());
 		assert_leq(acgt[1], this->fchr()[2]-this->fchr()[1]);
 		assert_leq(acgt[2], this->fchr()[3]-this->fchr()[2]);
 		assert_leq(acgt[3], this->fchr()[4]-this->fchr()[3]);
-		assert_leq(acgt[0], this->_gh._len + this->_gh.sideBwtLen());
+		assert_leq(acgt[0], this->_gh._len + this->_gh.sideGbwtLen());
 		assert_leq(acgt[1], this->_gh._len);
 		assert_leq(acgt[2], this->_gh._len);
 		assert_leq(acgt[3], this->_gh._len);
@@ -2396,7 +2405,7 @@ public:
 		assert_lt(c, 4);
 		assert_geq(c, 0);
 		ret = countBt2Side(l, c);
-		assert_lt(ret, this->_gh._bwtLen);
+		assert_lt(ret, this->_gh._gbwtLen);
 		assert_neq(srcrow, ret);
 #ifndef NDEBUG
 		if(_sanity && !overrideSanity) {
@@ -2424,7 +2433,7 @@ public:
 		assert_lt(c, 4);
 		assert_geq(c, 0);
 		ret = countBt2Side(l, c);
-		assert_lt(ret, this->_gh._bwtLen);
+		assert_lt(ret, this->_gh._gbwtLen);
 #ifndef NDEBUG
 		if(_sanity && !overrideSanity) {
 			// Make sure results match up with results from mapLFEx;
@@ -2550,10 +2559,10 @@ public:
 	/// Check that in-memory Ebwt is internally consistent with respect
 	/// to given EbwtParams; assert if not
 	bool inMemoryRepOk(const GFMParams<index_t>& gh) const {
-		assert_geq(_zEbwtBpOff, 0);
-		assert_lt(_zEbwtBpOff, 4);
-		assert_lt(_zEbwtByteOff, gh._gbwtTotSz);
-		assert_lt(_zOff, gh._bwtLen);
+		assert_geq(_zGbwtBpOff, 0);
+		assert_lt(_zGbwtBpOff, 4);
+		assert_lt(_zGbwtByteOff, gh._gbwtTotSz);
+		assert_lt(_zOff, gh._gbwtLen);
 		assert_geq(_nFrag, _nPat);
 		return true;
 	}
@@ -2591,8 +2600,8 @@ public:
 	string     _in1Str; // filename for primary index file
 	string     _in2Str; // filename for secondary index file
 	index_t    _zOff;
-	index_t    _zEbwtByteOff;
-	int        _zEbwtBpOff;
+	index_t    _zGbwtByteOff;
+	int        _zGbwtBpOff;
 	index_t    _nPat;  /// number of reference texts
 	index_t    _nFrag; /// number of fragments
 	APtrWrap<index_t> _plen;
@@ -2923,7 +2932,8 @@ void GFM<index_t>::buildToDisk(
                                ostream& out2)
 {
     // daehwan - for debugging purposes
-#if 0
+#ifndef NDEBUG
+#   if 0
     cout << "i\tBWT\tF\tM" << endl;
     int gbwtChar; // one of A, C, G, T, and $
     int F, M;     // either 0 or 1
@@ -2933,17 +2943,22 @@ void GFM<index_t>::buildToDisk(
         cout << count << "\t" << (char)gbwtChar << "\t" << F << "\t" << M << "\t" << pos << endl;
         count++;
     }
-    exit(1);
+    index_t F_loc = 0;
+    while((F_loc = gbwt.nextFLocation()) != std::numeric_limits<index_t>::max()) {
+        cout << F_loc << endl;
+    }
+#   endif
 #endif
     
 	const GFMParams<index_t>& gh = this->_gh;
     
 	assert(gh.repOk());
-	//assert_eq(s.length() + 1, gbwt.size());
+	assert_lt(s.length(), gh.gbwtLen());
 	assert_eq(s.length(), gh._len);
 	assert_gt(gh._lineRate, 3);
 	
 	index_t  len = gh._len;
+    index_t  gbwtLen = gh._gbwtLen;
 	index_t  ftabLen = gh._ftabLen;
 	index_t  sideSz = gh._sideSz;
 	index_t  gbwtTotSz = gh._gbwtTotSz;
@@ -2954,7 +2969,11 @@ void GFM<index_t>::buildToDisk(
 	// Save # of occurrences of each character as we walk along the bwt
 	index_t occ[4] = {0, 0, 0, 0};
 	index_t occSave[4] = {0, 0, 0, 0};
-
+    // # of occurrences of 1 in M arrays
+    index_t M_occ = 0, M_occSave = 0;
+    // Location in F that corresponds to 1 in M
+    index_t F_loc = 0, F_locSave = 0;
+    
 	// Record rows that should "absorb" adjacent rows in the ftab.
 	// The absorbed rows represent suffixes shorter than the ftabChars
 	// cutoff.
@@ -3016,9 +3035,12 @@ void GFM<index_t>::buildToDisk(
 	while(side < gbwtTotSz) {
 		// Sanity-check our cursor into the side buffer
 		assert_geq(sideCur, 0);
-		assert_lt(sideCur, (int)gh._sideBwtSz);
+		assert_lt(sideCur, (int)gh._sideGbwtSz);
 		assert_eq(0, side % sideSz); // 'side' must be on side boundary
-		gfmSide[sideCur] = 0; // clear
+        if(sideCur == 0) {
+            memset(gfmSide.ptr(), 0, gh._sideGbwtSz);
+            gfmSide[sideCur] = 0; // clear
+        }
 		assert_lt(side + sideCur, gbwtTotSz);
 		// Iterate over bit-pairs in the si'th character of the BWT
 #ifdef SIXTY4_FORMAT
@@ -3031,7 +3053,7 @@ void GFM<index_t>::buildToDisk(
             int F, M;     // either 0 or 1
             index_t pos;  // pos on joined string
 			bool count = true;
-			if(si <= len) {
+			if(si < gbwtLen) {
 				// daehwan - to be implemented;
                 index_t saElt = 0;
                 
@@ -3045,7 +3067,7 @@ void GFM<index_t>::buildToDisk(
 					// LR mapping
 					gbwtChar = 0; count = false;
 					ASSERT_ONLY(dollarSkipped = true);
-					zOff = si; // remember the SA row that
+					zOff = si; // remember the GBWT row that
 					           // corresponds to the 0th suffix
 				} else {
                     gbwtChar = asc2dna[gbwtChar];
@@ -3053,6 +3075,15 @@ void GFM<index_t>::buildToDisk(
 					// Update the fchr
 					fchr[gbwtChar]++;
 				}
+                
+                assert_lt(F, 2);
+                assert_lt(M, 2);
+                if(M == 1) {
+                    assert_neq(F_loc, numeric_limits<index_t>::max());
+                    F_loc = gbwt.nextFLocation();
+                    assert_gt(F_loc, F_locSave);
+                }
+                
 				// Update ftab
 				if((len-saElt) >= (index_t)gh._ftabChars) {
 					// Turn the first ftabChars characters of the
@@ -3103,33 +3134,56 @@ void GFM<index_t>::buildToDisk(
 				if(inSA) {
 					// Assert that we wrote all the characters in the
 					// string before now
-					assert_eq(si, len+1);
+					assert_eq(si, gbwtLen);
 					inSA = false;
 				}
 #endif
 				// 'A' used for padding; important that padding be
 				// counted in the occ[] array
 				gbwtChar = 0;
+                F = M = 0;
 			}
 			if(count) occ[gbwtChar]++;
+            M_occ++;
 			// Append BWT char to bwt section of current side
 			if(fw) {
 				// Forward bucket: fill from least to most
 #ifdef SIXTY4_FORMAT
 				gfmSide[sideCur] |= ((uint64_t)gbwtChar << (bpi << 1));
 				if(gbwtChar > 0) assert_gt(gfmSide[sideCur], 0);
+                // To be implemented ...
+                assert(false);
+                cerr << "Not implemented" << endl;
+                exit(1);
 #else
 				pack_2b_in_8b(gbwtChar, gfmSide[sideCur], bpi);
 				assert_eq((gfmSide[sideCur] >> (bpi*2)) & 3, gbwtChar);
+                
+                int F_sideCur = (gh._sideGbwtSz + sideCur) >> 1;
+                int F_bpi = bpi + ((sideCur & 0x1) << 2); // Can be used as M_bpi as well
+                pack_1b_in_8b(F, gfmSide[F_sideCur], F_bpi);
+                assert_eq((gfmSide[F_sideCur] >> F_bpi) & 1, F);
+                
+                int M_sideCur = F_sideCur + (gh._sideGbwtSz >> 2);
+                pack_1b_in_8b(M, gfmSide[M_sideCur], F_bpi);
+                assert_eq((gfmSide[M_sideCur] >> F_bpi) & 1, M);
 #endif
 			} else {
 				// Backward bucket: fill from most to least
 #ifdef SIXTY4_FORMAT
 				gfmSide[sideCur] |= ((uint64_t)gbwtChar << ((31 - bpi) << 1));
 				if(gbwtChar > 0) assert_gt(gfmSide[sideCur], 0);
+                // To be implemented ...
+                assert(false);
+                cerr << "Not implemented" << endl;
+                exit(1);
 #else
 				pack_2b_in_8b(gbwtChar, gfmSide[sideCur], 3-bpi);
 				assert_eq((gfmSide[sideCur] >> ((3-bpi)*2)) & 3, gbwtChar);
+                // To be implemented ...
+                assert(false);
+                cerr << "Not implemented" << endl;
+                exit(1);
 #endif
 			}
 		} // end loop over bit-pairs
@@ -3141,16 +3195,20 @@ void GFM<index_t>::buildToDisk(
 #endif
 
 		sideCur++;
-		if(sideCur == (int)gh._sideBwtSz) {
+		if((sideCur << 1) == (int)gh._sideGbwtSz) {
 			sideCur = 0;
 			index_t *uside = reinterpret_cast<index_t*>(gfmSide.ptr());
-			// Write 'A', 'C', 'G' and 'T' tallies
+			// Write 'A', 'C', 'G', 'T', and '1' in M tallies
 			side += sideSz;
 			assert_leq(side, gh._gbwtTotSz);
+            uside[(sideSz / sizeof(index_t))-6] = endianizeIndex(F_locSave, this->toBe());
+            uside[(sideSz / sizeof(index_t))-5] = endianizeIndex(M_occSave, this->toBe());
 			uside[(sideSz / sizeof(index_t))-4] = endianizeIndex(occSave[0], this->toBe());
 			uside[(sideSz / sizeof(index_t))-3] = endianizeIndex(occSave[1], this->toBe());
 			uside[(sideSz / sizeof(index_t))-2] = endianizeIndex(occSave[2], this->toBe());
 			uside[(sideSz / sizeof(index_t))-1] = endianizeIndex(occSave[3], this->toBe());
+            F_locSave = F_loc;
+            M_occSave = M_occ;
 			occSave[0] = occ[0];
 			occSave[1] = occ[1];
 			occSave[2] = occ[2];
@@ -3184,7 +3242,7 @@ void GFM<index_t>::buildToDisk(
 	for(int i = 1; i < 4; i++) {
 		fchr[i] += fchr[i-1];
 	}
-	assert_eq(fchr[3], len);
+	assert_eq(fchr[3], gbwtLen - 1);
 	// Shift everybody up by one
 	for(int i = 4; i >= 1; i--) {
 		fchr[i] = fchr[i-1];
@@ -4481,8 +4539,8 @@ void GFM<index_t>::sanityCheckUpToSide(int upToSide) const {
     bool fw = false;
     while(cur < (upToSide * gh._sideSz)) {
         assert_leq(cur + gh._sideSz, gh._gbwtTotLen);
-        for(index_t i = 0; i < gh._sideBwtSz; i++) {
-            uint8_t by = this->gfm()[cur + (fw ? i : gh._sideBwtSz-i-1)];
+        for(index_t i = 0; i < gh._sideGbwtSz; i++) {
+            uint8_t by = this->gfm()[cur + (fw ? i : gh._sideGbwtSz-i-1)];
             for(int j = 0; j < 4; j++) {
                 // Unpack from lowest to highest bit pair
                 int twoBit = unpack_2b_from_8b(by, fw ? j : 3-j);
@@ -4490,10 +4548,10 @@ void GFM<index_t>::sanityCheckUpToSide(int upToSide) const {
             }
             assert_eq(0, (occ[0] + occ[1] + occ[2] + occ[3]) % 4);
         }
-        assert_eq(0, (occ[0] + occ[1] + occ[2] + occ[3]) % gh._sideBwtLen);
+        assert_eq(0, (occ[0] + occ[1] + occ[2] + occ[3]) % gh._sideGbwtLen);
         // Finished forward bucket; check saved [A], [C], [G] and [T]
         // against the index_ts encoded here
-        ASSERT_ONLY(const index_t *ugbwt = reinterpret_cast<const index_t*>(&gfm()[cur + gh._sideBwtSz]));
+        ASSERT_ONLY(const index_t *ugbwt = reinterpret_cast<const index_t*>(&gfm()[cur + gh._sideGbwtSz]));
         ASSERT_ONLY(index_t as = ugbwt[0]);
         ASSERT_ONLY(index_t cs = ugbwt[1]);
         ASSERT_ONLY(index_t gs = ugbwt[2]);
@@ -4523,12 +4581,12 @@ void GFM<index_t>::sanityCheckAll(int reverse) const {
     for(index_t i = 1; i < gh._ftabLen; i++) {
         assert_geq(this->ftabHi(i), this->ftabLo(i-1));
         assert_geq(this->ftabLo(i), this->ftabHi(i-1));
-        assert_leq(this->ftabHi(i), gh._bwtLen+1);
+        assert_leq(this->ftabHi(i), gh._gbwtLen+1);
     }
-    assert_eq(this->ftabHi(gh._ftabLen-1), gh._bwtLen);
+    assert_eq(this->ftabHi(gh._ftabLen-1), gh._gbwtLen);
     
     // Check offs
-    int seenLen = (gh._bwtLen + 31) >> ((index_t)5);
+    int seenLen = (gh._gbwtLen + 31) >> ((index_t)5);
     uint32_t *seen;
     try {
         seen = new uint32_t[seenLen]; // bitvector marking seen offsets
@@ -4539,7 +4597,7 @@ void GFM<index_t>::sanityCheckAll(int reverse) const {
     memset(seen, 0, 4 * seenLen);
     index_t offsLen = gh._offsLen;
     for(index_t i = 0; i < offsLen; i++) {
-        assert_lt(this->offs()[i], gh._bwtLen);
+        assert_lt(this->offs()[i], gh._gbwtLen);
         int w = this->offs()[i] >> 5;
         int r = this->offs()[i] & 31;
         assert_eq(0, (seen[w] >> r) & 1); // shouldn't have been seen before

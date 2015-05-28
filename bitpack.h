@@ -50,4 +50,31 @@ static inline int unpack_2b_from_32b(const uint32_t thirty2, const int off) {
 	return ((thirty2 >> (off*2)) & 0x3);
 }
 
+/**
+ * Routines for marshalling 1-bit values into and out of 8-bit or
+ * 32-bit hosts
+ */
+
+static inline void pack_1b_in_8b(const int one, uint8_t& eight, const int off) {
+    assert_lt(one, 2);
+    assert_lt(off, 8);
+    eight |= (one << off);
+}
+
+static inline int unpack_1b_from_8b(const uint8_t eight, const int off) {
+    assert_lt(off, 2);
+    return ((eight >> off) & 0x1);
+}
+
+static inline void pack_1b_in_32b(const int one, uint32_t& thirty2, const int off) {
+    assert_lt(one, 2);
+    assert_lt(off, 32);
+    thirty2 |= (one << off);
+}
+
+static inline int unpack_1b_from_32b(const uint32_t thirty2, const int off) {
+    assert_lt(off, 32);
+    return ((thirty2 >> off) & 0x1);
+}
+
 #endif /*BITPACK_H_*/

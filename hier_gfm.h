@@ -389,7 +389,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 	while(side < gbwtTotSz) {
 		// Sanity-check our cursor into the side buffer
 		assert_geq(sideCur, 0);
-		assert_lt(sideCur, (int)gh._sideBwtSz);
+		assert_lt(sideCur, (int)gh._sideGbwtSz);
 		assert_eq(0, side % sideSz); // 'side' must be on side boundary
 		gbwtSide[sideCur] = 0; // clear
 		assert_lt(side + sideCur, gbwtTotSz);
@@ -508,7 +508,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 #endif
 		
 		sideCur++;
-		if(sideCur == (int)gh._sideBwtSz) {
+		if(sideCur == (int)gh._sideGbwtSz) {
 			sideCur = 0;
 			index_t *uside = reinterpret_cast<index_t*>(gbwtSide.ptr());
 			// Write 'A', 'C', 'G' and 'T' tallies

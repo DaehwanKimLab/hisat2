@@ -1125,6 +1125,9 @@ public:
     // Restores the labels of parent.
     bool generateEdges(RefGraph<index_t>& parent);
     
+    index_t getNumEdges() const { return edges.size(); }
+    
+    //
     bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos) {
         if(report_node_idx >= nodes.size()) return false;
         bool firstOutEdge = false;
@@ -1154,6 +1157,16 @@ public:
             report_M.second = 0;
         }
         return true;
+    }
+    
+    //
+    index_t nextFLocation() {
+        if(report_F_node_idx >= nodes.size()) return std::numeric_limits<index_t>::max();
+        pair<index_t, index_t> edge_range = getEdges(report_F_node_idx, false /* from? */);
+        report_F_node_idx++;
+        assert_lt(edge_range.first, edge_range.second);
+        report_F_location += (edge_range.second - edge_range.first);
+        return report_F_location;
     }
 
 private:
@@ -1211,6 +1224,9 @@ private:
     index_t                report_node_idx;
     pair<index_t, index_t> report_edge_range;
     pair<index_t, index_t> report_M;
+    // For reporting location in F corresponding to 1 bit in M
+    index_t                report_F_node_idx;
+    index_t                report_F_location;
     
     // Can create an index by using key.second in PathNodes.
     // If the graph is not ready, its status becomes error.
@@ -1265,7 +1281,8 @@ template <typename index_t>
 PathGraph<index_t>::PathGraph(RefGraph<index_t>& base) :
 ranks(0), max_label('Z'), temp_nodes(0), generation(0),
 status(error), has_stabilized(false),
-report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0))
+report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
+report_F_node_idx(0), report_F_location(0)
 {
     if(!base.repOk()) return;
 
@@ -1298,7 +1315,8 @@ template <typename index_t>
 PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
 ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1),
 status(error), has_stabilized(false),
-report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0))
+report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
+report_F_node_idx(0), report_F_location(0)
 {
     if(previous.status != ok)
         return;
