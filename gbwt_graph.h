@@ -1475,6 +1475,8 @@ void PathGraph<index_t>::printInfo()
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChars)
 {
+	return 1;
+#if 0
     if(status != sorted)
         return false;
     
@@ -1565,12 +1567,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     }
     
     // Pre-calculate prefix for each node
-    sortEdgesFrom();
-    for(index_t i = 0; i < nodes.size(); i++) {
-        nodes[i].key.first = numeric_limits<index_t>::max();
-        nodes[i].key.second = numeric_limits<index_t>::max();
-    }
-    
+#if 0
     EList<FNode> tmp_nodes; // a list of (node_id, depth)
     for(index_t i = 0; i < nodes.size(); i++) {
         PathNode& node = nodes[i];
@@ -1617,15 +1614,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
         }
     }
     
-    // daehwan - for debugging purposes
-#ifndef NDEBUG
-    if(debug) {
-        cerr << "Path nodes" << endl;
-        for(size_t i = 0; i < nodes.size(); i++) {
-            const PathNode& node = nodes[i];
-            cerr << "\t" << i << "\t" << (bitset<18>)node.key.first << ", " << (bitset<18>)node.key.second << endl;
-        }
-    }
 #endif
     
     
@@ -1694,6 +1682,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
             cerr << i << "\t" << bwt_counts[i] << endl;
         }
     }
+#endif
 #endif
     
     // Test searches, based on paper_example
