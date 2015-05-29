@@ -1046,19 +1046,22 @@ public:
         index_t                from;
         index_t                to;
         pair<index_t, index_t> key;
+        index_t                outdegree_;
         
         void setSorted()      { to = from; }
         bool isSorted() const { return to == from; }
         
         index_t value() const { return to; }
-        index_t outdegree() const { return key.first; }
+        index_t outdegree() const { return outdegree_; }
         
+        /*
         bool  isBackbone() const {
             return (key.first & (((index_t)1) << (WORD_BITS - 1)));
         }
         void  setBackbone() {
             key.first |= ((index_t)1) << (WORD_BITS - 1);
         }
+         */
         
         bool operator< (const PathNode& o) const {
             return key < o.key;
@@ -1123,12 +1126,12 @@ public:
     // Writes outdegree to PathNode.key.second, value to PathNode.to, and
     // predecessor labels to PathNode.key.first.
     // Restores the labels of parent.
-    bool generateEdges(RefGraph<index_t>& parent);
+    bool generateEdges(RefGraph<index_t>& parent, index_t ftabChars = 10);
     
     index_t getNumEdges() const { return edges.size(); }
     
     //
-    bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos) {
+    bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos, index_t& firstSeq, index_t& lastSeq, index_t ftabChars = 10) {
         if(report_node_idx >= nodes.size()) return false;
         bool firstOutEdge = false;
         if(report_edge_range.first >= report_edge_range.second) {
@@ -1140,11 +1143,32 @@ public:
         }
         assert_lt(report_edge_range.first, report_edge_range.second);
         assert_lt(report_edge_range.first, edges.size());
-        gbwtChar = edges[report_edge_range.first].label;
+        const PathEdge& edge = edges[report_edge_range.first];
+        gbwtChar = edge.label;
         if(gbwtChar == 'Z') gbwtChar = '$';
         assert_lt(report_node_idx, nodes.size());
-        pos = nodes[report_node_idx].to;
+        const PathNode& node = nodes[report_node_idx];
+        pos = node.to;
         F = (firstOutEdge ? 1 : 0);
+        
+        // daehwan - for debugging purposes
+        if(report_node_idx == 2) {
+            int kk = 0;
+            kk += 20;
+        }
+        
+        assert_lt(edge.ranking, nodes.size());
+        const PathNode& next_node = nodes[edge.ranking];
+        if(gbwtChar != '$' && next_node.key.first != numeric_limits<index_t>::max()) {
+            assert_neq(next_node.key.second, numeric_limits<index_t>::max());
+            int nt = asc2dna[(int)gbwtChar];
+            firstSeq = (nt << (ftabChars - 1)) | next_node.key.first;
+            lastSeq = (nt << (ftabChars - 1)) | next_node.key.second;
+        } else {
+            firstSeq = numeric_limits<index_t>::max();
+            lastSeq = numeric_limits<index_t>::max();
+        }
+        
         report_edge_range.first++;
         if(report_edge_range.first >= report_edge_range.second) {
             report_node_idx++;
@@ -1152,7 +1176,7 @@ public:
         assert_lt(report_M.first, nodes.size());
         M = (report_M.second == 0 ? 1 : 0);
         report_M.second++;
-        if(report_M.second >= nodes[report_M.first].key.first) {
+        if(report_M.second >= nodes[report_M.first].outdegree_) {
             report_M.first++;
             report_M.second = 0;
         }
@@ -1183,10 +1207,7 @@ private:
 
     void sortEdges() { sort(edges.begin(), edges.end()); } // by (from.label, to.rank)
     void sortEdgesFrom() {
-        if(this->status == edges_sorted)
-            return;
         sort(edges.begin(), edges.end(), PathEdgeFromCmp());
-        status = edges_sorted;
     }
     void sortEdgesTo(bool create_index = false) {
         sort(edges.begin(), edges.end(), PathEdgeToCmp());
@@ -1273,6 +1294,64 @@ private:
     
     index_t rank1(const EList<char>& array, index_t p) {
         return rank(array, p, 1);
+    }
+    
+private:
+    // Used to construct FCharTable
+    struct FNode {
+        index_t id;
+        index_t key;
+        index_t depth;
+    };
+    
+    pair<index_t, index_t> findEdges(index_t node, bool from) {
+        pair<index_t, index_t> range(0, 0);
+        assert_gt(edges.size(), 0);
+        
+        // Find lower bound
+        index_t low = 0, high = edges.size() - 1;
+        index_t temp;
+        while(low < high) {
+            index_t mid = low + (high - low) / 2;
+            temp = (from ? edges[mid].from : edges[mid].ranking);
+            if(node == temp) {
+                high = mid;
+            } else if(node < temp) {
+                if(mid == 0) {
+                    return pair<index_t, index_t>(0, 0);
+                }
+                
+                high = mid - 1;
+            } else {
+                low = mid + 1;
+            }
+        }
+        temp = (from ? edges[low].from : edges[low].ranking);
+        if(node == temp) {
+            range.first = low;
+        } else {
+            return range;
+        }
+        
+        // Find upper bound
+        high = edges.size() - 1;
+        while(low < high)
+        {
+            index_t mid = low + (high - low + 1) / 2;
+            temp = (from ? edges[mid].from : edges[mid].ranking);
+            if(node == temp) {
+                low = mid;
+            } else {
+                assert_lt(node, temp);
+                high = mid - 1;
+            }
+        }
+#ifndef NDEBUG
+        temp = (from ? edges[high].from : edges[high].ranking);
+        assert_eq(node, temp);
+#endif
+        range.second = high + 1;
+        return range;
     }
 };
 
@@ -1394,7 +1473,7 @@ void PathGraph<index_t>::printInfo()
 
 //--------------------------------------------------------------------------
 template <typename index_t>
-bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
+bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChars)
 {
     if(status != sorted)
         return false;
@@ -1404,7 +1483,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     
     // Create edges (from, to) as (from.from, to = rank(to))
     pair<index_t, index_t> pn_range = getNextRange(pair<index_t, index_t>(0, 0));
-    pair<index_t, index_t> ge_range = base.getNextEdgeRange(pair<index_t, index_t>(0, 0), false);
+    pair<index_t, index_t> ge_range = base.getNextEdgeRange(pair<index_t, index_t>(0, 0), false /* from? */);
     edges.resizeExact(nodes.size() + nodes.size() / 4); edges.clear();
     while(pn_range.first < pn_range.second && ge_range.first < ge_range.second) {
         if(nodes[pn_range.first].from == base.edges[ge_range.first].to) {
@@ -1457,7 +1536,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         for(size_t i = 0; i < nodes.size(); i++) {
             const PathNode& node = nodes[i];
             cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
-            << node.from << " --> " << node.to << endl;
+                 << node.from << " --> " << node.to << endl;
         }
         
         cerr << "Path edges" << endl;
@@ -1470,20 +1549,85 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     
     // Sets PathNode.to = GraphNode.value and PathNode.key.first to outdegree
     // Replaces (from.from, to) with (from, to)
-    PathNode* node = nodes.begin(); node->key.first = 1;
+    PathNode* node = nodes.begin(); node->outdegree_ = 1;
     PathEdge* edge = edges.begin();
     while(node != nodes.end() && edge != edges.end()) {
         if(edge->from == node->from) {
             edge->from = node - nodes.begin(); edge++;
-            node->key.first++;
+            node->outdegree_++;
         } else {
             node->to = base.nodes[node->from].value;
-            node++; node->key.first = 0;
+            node++; node->outdegree_ = 0;
         }
     }
     if(node != nodes.end()) {
         node->to = base.nodes[node->from].value;
     }
+    
+    // Pre-calculate prefix for each node
+    sortEdgesFrom();
+    for(index_t i = 0; i < nodes.size(); i++) {
+        nodes[i].key.first = numeric_limits<index_t>::max();
+        nodes[i].key.second = numeric_limits<index_t>::max();
+    }
+    
+    EList<FNode> tmp_nodes; // a list of (node_id, depth)
+    for(index_t i = 0; i < nodes.size(); i++) {
+        PathNode& node = nodes[i];
+        tmp_nodes.clear();
+        tmp_nodes.expand();
+        tmp_nodes.back().id = i;
+        tmp_nodes.back().key = 0;
+        tmp_nodes.back().depth = 0;
+        while(tmp_nodes.size() > 0) {
+            FNode tmp_node = tmp_nodes.back(); tmp_nodes.pop_back();
+            pair<index_t, index_t> edge_range = findEdges(tmp_node.id, true /* from? */);
+            for(; edge_range.first < edge_range.second; edge_range.first++) {
+                assert_lt(edge_range.first, edges.size());
+                const PathEdge& edge = edges[edge_range.first];
+                if(edge.label == '$') continue;
+                index_t key = (tmp_node.key << 2) | asc2dna[(int)edge.label];
+                if(tmp_node.depth + 2 == ftabChars) {
+                    if(node.key.first == numeric_limits<index_t>::max()) {
+                        assert_eq(node.key.second, numeric_limits<index_t>::max());
+                        node.key.first = key;
+                        node.key.second = key;
+                    } else if(key < node.key.first) {
+                        assert_neq(node.key.second, numeric_limits<index_t>::max());
+                        node.key.first = key;
+                    } else if(key > node.key.second) {
+                        assert_neq(node.key.first, numeric_limits<index_t>::max());
+                        node.key.second = key;
+                    }
+                } else {
+                    if(node.key.first != numeric_limits<index_t>::max()) {
+                        assert_neq(node.key.second, numeric_limits<index_t>::max());
+                        index_t shift = ftabChars - 2 - tmp_node.depth;
+                        index_t tmp_first = node.key.first >> shift;
+                        index_t tmp_second = node.key.second >> shift;
+                        if(tmp_first < key && tmp_second > key) continue;
+                    }
+                    
+                    tmp_nodes.expand();
+                    tmp_nodes.back().id = edge.ranking;
+                    tmp_nodes.back().key = key;
+                    tmp_nodes.back().depth = tmp_node.depth + 1;
+                }
+            }
+        }
+    }
+    
+    // daehwan - for debugging purposes
+#ifndef NDEBUG
+    if(debug) {
+        cerr << "Path nodes" << endl;
+        for(size_t i = 0; i < nodes.size(); i++) {
+            const PathNode& node = nodes[i];
+            cerr << "\t" << i << "\t" << (bitset<18>)node.key.first << ", " << (bitset<18>)node.key.second << endl;
+        }
+    }
+#endif
+    
     
     sortEdgesTo(true);
     status = ready;
@@ -1512,7 +1656,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
                 bwt_counts[nt + 1]++;
             }
         }
-        for(index_t i = 0; i < nodes[node].key.first; i++) {
+        for(index_t i = 0; i < nodes[node].outdegree_; i++) {
             M_array.push_back(i == 0 ? 1 : 0);
         }
     }

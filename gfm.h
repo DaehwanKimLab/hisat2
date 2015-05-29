@@ -1197,7 +1197,7 @@ public:
                 }
                 
                 if(verbose) { cerr << "Generating edges... " << endl; }
-                if(!pg->generateEdges(*graph)) { return; }
+                if(!pg->generateEdges(*graph, _gh._ftabChars)) { return; }
                 // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
                 _gh.init(
                          _gh.len(),
@@ -2933,19 +2933,24 @@ void GFM<index_t>::buildToDisk(
 {
     // daehwan - for debugging purposes
 #ifndef NDEBUG
-#   if 0
-    cout << "i\tBWT\tF\tM" << endl;
-    int gbwtChar; // one of A, C, G, T, and $
-    int F, M;     // either 0 or 1
-    index_t pos;  // pos on joined string
-    index_t count = 0;
-    while(gbwt.nextRow(gbwtChar, F, M, pos)) {
-        cout << count << "\t" << (char)gbwtChar << "\t" << F << "\t" << M << "\t" << pos << endl;
-        count++;
-    }
-    index_t F_loc = 0;
-    while((F_loc = gbwt.nextFLocation()) != std::numeric_limits<index_t>::max()) {
-        cout << F_loc << endl;
+#   if 1
+    {
+        cout << "i\tBWT\tF\tM\tpos\tfirstseq\tlastseq\tseqlen" << endl;
+        int gbwtChar; // one of A, C, G, T, and $
+        int F, M;     // either 0 or 1
+        index_t pos;  // pos on joined string
+        index_t firstSeq, lastSeq;
+        index_t count = 0;
+        while(gbwt.nextRow(gbwtChar, F, M, pos, firstSeq, lastSeq, _gh._ftabChars)) {
+            cout << count << "\t" << (char)gbwtChar << "\t" << F << "\t" << M << "\t" << pos << "\t"
+                 << (bitset<20>)firstSeq << "\t" << (bitset<20>)lastSeq << endl;
+            count++;
+        }
+        index_t F_loc = 0;
+        while((F_loc = gbwt.nextFLocation()) != std::numeric_limits<index_t>::max()) {
+            cout << F_loc << endl;
+        }
+        exit(1);
     }
 #   endif
 #endif
@@ -2959,12 +2964,15 @@ void GFM<index_t>::buildToDisk(
 	
 	index_t  len = gh._len;
     index_t  gbwtLen = gh._gbwtLen;
+    writeIndex<index_t>(out1, gbwtLen, this->toBe());
+    
 	index_t  ftabLen = gh._ftabLen;
 	index_t  sideSz = gh._sideSz;
 	index_t  gbwtTotSz = gh._gbwtTotSz;
 	index_t  fchr[] = {0, 0, 0, 0, 0};
 	EList<index_t> ftab(EBWT_CAT);
-	index_t  zOff = (index_t)OFF_MASK;
+    EList<uint8_t> ftab_overlap(EBWT_CAT);
+    EList<index_t> zOffs;
 
 	// Save # of occurrences of each character as we walk along the bwt
 	index_t occ[4] = {0, 0, 0, 0};
@@ -2977,12 +2985,14 @@ void GFM<index_t>::buildToDisk(
 	// Record rows that should "absorb" adjacent rows in the ftab.
 	// The absorbed rows represent suffixes shorter than the ftabChars
 	// cutoff.
-	uint8_t absorbCnt = 0;
-	EList<uint8_t> absorbFtab(EBWT_CAT);
+	index_t absorbCnt = 0;
+	EList<index_t> absorbFtab(EBWT_CAT);
 	try {
 		VMSG_NL("Allocating ftab, absorbFtab");
 		ftab.resize(ftabLen);
 		ftab.fillZero();
+        ftab_overlap.resize(ftabLen >> 3);
+        ftab_overlap.fillZero();
 		absorbFtab.resize(ftabLen);
 		absorbFtab.fillZero();
 	} catch(bad_alloc &e) {
@@ -3052,12 +3062,10 @@ void GFM<index_t>::buildToDisk(
 			int gbwtChar; // one of A, C, G, T, and $
             int F, M;     // either 0 or 1
             index_t pos;  // pos on joined string
+            index_t firstSeq, lastSeq;
 			bool count = true;
 			if(si < gbwtLen) {
-				// daehwan - to be implemented;
-                index_t saElt = 0;
-                
-                gbwt.nextRow(gbwtChar, F, M, pos);
+				gbwt.nextRow(gbwtChar, F, M, pos, firstSeq, lastSeq, gh._ftabChars);
                 
 				// (that might have triggered sa to calc next suf block)
 				if(gbwtChar == '$') {
@@ -3067,8 +3075,12 @@ void GFM<index_t>::buildToDisk(
 					// LR mapping
 					gbwtChar = 0; count = false;
 					ASSERT_ONLY(dollarSkipped = true);
-					zOff = si; // remember the GBWT row that
-					           // corresponds to the 0th suffix
+#ifndef NDEBUG
+                    if(zOffs.size() > 0) {
+                        assert_gt(si, zOffs.back());
+                    }
+#endif
+                    zOffs.push_back(si); // remember the GBWT row that corresponds to the 0th suffix
 				} else {
                     gbwtChar = asc2dna[gbwtChar];
 					assert_lt(gbwtChar, 4);
@@ -3085,47 +3097,47 @@ void GFM<index_t>::buildToDisk(
                 }
                 
 				// Update ftab
-				if((len-saElt) >= (index_t)gh._ftabChars) {
+                if(firstSeq != numeric_limits<index_t>::max()) {
 					// Turn the first ftabChars characters of the
 					// suffix into an integer index into ftab.  The
 					// leftmost (lowest index) character of the suffix
 					// goes in the most significant bit pair if the
 					// integer.
-					index_t sufInt = 0;
-					for(int i = 0; i < gh._ftabChars; i++) {
-						sufInt <<= 2;
-						assert_lt((index_t)i, len-saElt);
-						sufInt |= (unsigned char)(s[saElt+i]);
-					}
+					assert_neq(lastSeq, numeric_limits<index_t>::max());
+                    assert_leq(firstSeq, lastSeq);
 					// Assert that this prefix-of-suffix is greater
 					// than or equal to the last one (true b/c the
 					// suffix array is sorted)
 #ifndef NDEBUG
-					if(lastSufInt > 0) assert_geq(sufInt, lastSufInt);
-					lastSufInt = sufInt;
+					if(lastSufInt > 0) assert_geq(firstSeq, lastSufInt);
+					lastSufInt = lastSeq;
 #endif
 					// Update ftab
-					assert_lt(sufInt+1, ftabLen);
-					ftab[sufInt+1]++;
+					assert_lt(firstSeq+1, ftabLen);
+					ftab[firstSeq+1]++;
 					if(absorbCnt > 0) {
 						// Absorb all short suffixes since the last
 						// transition into this transition
-						absorbFtab[sufInt] = absorbCnt;
+						absorbFtab[firstSeq] = absorbCnt;
 						absorbCnt = 0;
 					}
+                    if(firstSeq < lastSeq) {
+                        for(index_t seqi = firstSeq + 1; seqi <= lastSeq; seqi++) {
+                            pack_1b_in_8b(1, ftab_overlap[seqi / 8], seqi % 8);
+                        }
+                    }
 				} else {
 					// Otherwise if suffix is fewer than ftabChars
 					// characters long, then add it to the 'absorbCnt';
 					// it will be absorbed into the next transition
-					assert_lt(absorbCnt, 255);
 					absorbCnt++;
 				}
 				// Suffix array offset boundary? - update offset array
-				if((si & gh._offMask) == si) {
+				if(M == 1 && (M_occ & gh._offMask) == M_occ) {
 					assert_lt((si >> gh._offRate), gh._offsLen);
 					// Write offsets directly to the secondary output
 					// stream, thereby avoiding keeping them in memory
-                    writeIndex<index_t>(out2, saElt, this->toBe());
+                    writeIndex<index_t>(out2, pos, this->toBe());
 				}
 			} else {
 				// Strayed off the end of the SA, now we're just
@@ -3218,7 +3230,6 @@ void GFM<index_t>::buildToDisk(
 		}
 	}
 	VMSG_NL("Exited Ebwt loop");
-	assert_neq(zOff, (index_t)OFF_MASK);
 	if(absorbCnt > 0) {
 		// Absorb any trailing, as-yet-unabsorbed short suffixes into
 		// the last element of ftab
@@ -3231,9 +3242,13 @@ void GFM<index_t>::buildToDisk(
 	// assert that the last thing we did was write a forward bucket
 
 	//
-	// Write zOff to primary stream
+	// Write zOffs to primary stream
 	//
-	writeIndex<index_t>(out1, zOff, this->toBe());
+    assert_gt(zOffs.size(), 0);
+    writeIndex<index_t>(out1, zOffs.size(), this->toBe());
+    for(size_t i = 0; i < zOffs.size(); i++) {
+        writeIndex<index_t>(out1, zOffs[i], this->toBe());
+    }
 
 	//
 	// Finish building fchr
@@ -3299,7 +3314,12 @@ void GFM<index_t>::buildToDisk(
 	for(index_t i = 0; i < ftabLen; i++) {
 		writeIndex<index_t>(out1, ftab[i], this->toBe());
 	}
+    // Write ftab to primary file
+    for(index_t i = 0; i < ftab_overlap.size(); i += 4) {
+        writeIndex<index_t>(out1, *(index_t*)(ftab_overlap.ptr() + i), this->toBe());
+    }
 	// Write eftab to primary file
+    writeIndex<index_t>(out1, eftabLen, this->toBe());
 	for(index_t i = 0; i < eftabLen; i++) {
 		writeIndex<index_t>(out1, eftab[i], this->toBe());
 	}
