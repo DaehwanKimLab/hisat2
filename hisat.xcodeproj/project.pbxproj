@@ -93,6 +93,11 @@
 		E818AEAE1987FD5100ED141B /* hisat_bp.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat_bp.cpp; sourceTree = "<group>"; };
 		E819F68819F553B100E1BD32 /* splice_site_mem.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = splice_site_mem.h; sourceTree = "<group>"; };
 		E81BC0841980295300580916 /* hi_aligner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hi_aligner.h; sourceTree = "<group>"; };
+		E85452591B1A2B720049F2AC /* hisat2_inspect.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_inspect.cpp; sourceTree = "<group>"; };
+		E854525A1B1A2B7C0049F2AC /* hisat2_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_main.cpp; sourceTree = "<group>"; };
+		E854525B1B1A2B870049F2AC /* hisat2.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2.cpp; sourceTree = "<group>"; };
+		E854525C1B1A2BA30049F2AC /* hi_aligner2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hi_aligner2.h; sourceTree = "<group>"; };
+		E854525D1B1A2BB90049F2AC /* spliced_aligner2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = spliced_aligner2.h; sourceTree = "<group>"; };
 		E85766711970545400D8AAFB /* btypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = btypes.h; sourceTree = "<group>"; };
 		E85F1AFA193501E000F85A12 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		E88C30AA1B15E23800761CCB /* gfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gfm.h; sourceTree = "<group>"; };
@@ -347,6 +352,7 @@
 				E88C30AA1B15E23800761CCB /* gfm.h */,
 				E8B0DC081934F7AA005ED9FA /* group_walk.h */,
 				E81BC0841980295300580916 /* hi_aligner.h */,
+				E854525C1B1A2BA30049F2AC /* hi_aligner2.h */,
 				E8EE06DF1B15F1DE00E75FC3 /* hier_gfm.h */,
 				E8B0DC091934F7AA005ED9FA /* hier_idx_common.h */,
 				E8B0DC0A1934F7AA005ED9FA /* hier_idx.h */,
@@ -379,6 +385,7 @@
 				E819F68819F553B100E1BD32 /* splice_site_mem.h */,
 				E8B0DC251934F7AA005ED9FA /* splice_site.h */,
 				E8B0DC261934F7AA005ED9FA /* spliced_aligner.h */,
+				E854525D1B1A2BB90049F2AC /* spliced_aligner2.h */,
 				E8B0DC271934F7AA005ED9FA /* sse_util.h */,
 				E8B0DC281934F7AA005ED9FA /* sstring.h */,
 				E8B0DC291934F7AA005ED9FA /* str_util.h */,
@@ -439,11 +446,14 @@
 				E818AEAE1987FD5100ED141B /* hisat_bp.cpp */,
 				E8B0DC601934F7AA005ED9FA /* hisat_build_main.cpp */,
 				E8B0DC611934F7AA005ED9FA /* hisat_build.cpp */,
-				E8000AE11AE9304500E1F351 /* hisat2_build_main.cpp */,
-				E8000AE21AE9304500E1F351 /* hisat2_build.cpp */,
 				E8B0DC621934F7AA005ED9FA /* hisat_inspect.cpp */,
 				E8B0DC631934F7AA005ED9FA /* hisat_main.cpp */,
 				E8B0DC641934F7AA005ED9FA /* hisat.cpp */,
+				E8000AE11AE9304500E1F351 /* hisat2_build_main.cpp */,
+				E8000AE21AE9304500E1F351 /* hisat2_build.cpp */,
+				E85452591B1A2B720049F2AC /* hisat2_inspect.cpp */,
+				E854525A1B1A2B7C0049F2AC /* hisat2_main.cpp */,
+				E854525B1B1A2B870049F2AC /* hisat2.cpp */,
 				E8B0DC651934F7AA005ED9FA /* scoring.cpp */,
 				E8B0DC661934F7AA005ED9FA /* shmem.cpp */,
 				E8B0DC671934F7AA005ED9FA /* simple_func.cpp */,
@@ -675,6 +685,20 @@
 			passBuildSettingsInEnvironment = 1;
 			productName = "sawhi-align-debug";
 		};
+		E85452551B1A0CFA0049F2AC /* hisat-build-s-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "hisat-build-s-debug";
+			buildConfigurationList = E85452561B1A0CFA0049F2AC /* Build configuration list for PBXLegacyTarget "hisat-build-s-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
+			dependencies = (
+			);
+			name = "hisat-build-s-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
 		E857666519704BFB00D8AAFB /* hisat-align-s-debug */ = {
 			isa = PBXLegacyTarget;
 			buildArgumentsString = "USE_SRA=0 hisat-align-s-debug";
@@ -780,6 +804,7 @@
 				E8000AD91AE82AC200E1F351 /* gcsa_test-debug */,
 				E8000ADD1AE82ACC00E1F351 /* gcsa_alignment-debug */,
 				E8000AE31AE9324600E1F351 /* hisat2-build-s-debug */,
+				E85452551B1A0CFA0049F2AC /* hisat-build-s-debug */,
 			);
 		};
 /* End PBXProject section */
@@ -1033,6 +1058,31 @@
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "hisat-align-s-debug copy";
+			};
+			name = Release;
+		};
+		E85452571B1A0CFA0049F2AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat-build-s-debug";
+			};
+			name = Debug;
+		};
+		E85452581B1A0CFA0049F2AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat-build-s-debug";
 			};
 			name = Release;
 		};
@@ -1323,6 +1373,15 @@
 			buildConfigurations = (
 				E818AEB119880CA400ED141B /* Debug */,
 				E818AEB219880CA400ED141B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E85452561B1A0CFA0049F2AC /* Build configuration list for PBXLegacyTarget "hisat-build-s-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E85452571B1A0CFA0049F2AC /* Debug */,
+				E85452581B1A0CFA0049F2AC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -45,8 +45,6 @@
 #include <iostream>
 #include <vector>
 
-#include <misc/utils.h>
-
 // Build parameters
 int verbose;
 static int sanityCheck;

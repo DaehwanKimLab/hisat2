@@ -136,10 +136,16 @@ public:
               index_t gbwtLen = 0)
 	{
 		_entireReverse = entireReverse;
+        _noSnp = (len + 1 == gbwtLen || gbwtLen == 0);
 		_len = len;
         _gbwtLen = (gbwtLen == 0 ? _len + 1 : gbwtLen);
-        _sz = (len+3)/4;
-        _gbwtSz = (_gbwtLen+3)/4;
+        if(_noSnp) {
+            _sz = (len+3)/4;
+            _gbwtSz = (_gbwtLen+3)/4;
+        } else {
+            _sz = (len+1)/2;
+            _gbwtSz = (_gbwtLen+1)/2;
+        }
 		_lineRate = lineRate;
 		_origOffRate = offRate;
 		_offRate = offRate;
@@ -153,7 +159,11 @@ public:
 		_offsSz = _offsLen*sizeof(index_t);
 		_lineSz = 1 << _lineRate;
 		_sideSz = _lineSz * 1 /* lines per side */;
-		_sideGbwtSz = _sideSz - (sizeof(index_t) * 6);
+        if(_noSnp) {
+            _sideGbwtSz = _sideSz - (sizeof(index_t) * 6);
+        } else {
+            _sideGbwtSz = _sideSz - (sizeof(index_t) * 4);
+        }
 		_sideGbwtLen = _sideGbwtSz*2;
 		_numSides = (_gbwtSz+(_sideGbwtSz)-1)/(_sideGbwtSz);
 		_numLines = _numSides * 1 /* lines per side */;
@@ -187,6 +197,7 @@ public:
 	index_t gbwtTotLen() const    { return _gbwtTotLen; }
 	index_t gbwtTotSz() const     { return _gbwtTotSz; }
 	bool entireReverse() const    { return _entireReverse; }
+    bool noSnp() const            { return _noSnp; }
 
 	/**
 	 * Set a new suffix-array sampling rate, which involves updating
@@ -241,7 +252,8 @@ public:
 		    << "    numLines: "     << _numLines << endl
 		    << "    gbwtTotLen: "   << _gbwtTotLen << endl
 		    << "    gbwtTotSz: "    << _gbwtTotSz << endl
-		    << "    reverse: "      << _entireReverse << endl;
+		    << "    reverse: "      << _entireReverse << endl
+            << "    snp: "          << (_noSnp ? "No" : "Yes") << endl;
 	}
 
 	index_t  _len;
@@ -268,6 +280,7 @@ public:
 	index_t  _gbwtTotLen;
 	index_t  _gbwtTotSz;
 	bool     _entireReverse;
+    bool     _noSnp;
 };
 
 /**
@@ -1474,7 +1487,7 @@ public:
 		return GFM<index_t>::ftabHi(
 			ftab(),
 			eftab(),
-			_gh._len,
+			_gh._gbwtLen,
 			_gh._ftabLen,
 		    _gh._eftabLen,
 			i);
@@ -1492,13 +1505,13 @@ public:
 	static index_t ftabHi(
 		const index_t *ftab,
 		const index_t *eftab,
-		index_t len,
+		index_t gbwtLen,
 		index_t ftabLen,
 		index_t eftabLen,
 		index_t i)
 	{
 		assert_lt(i, ftabLen);
-		if(ftab[i] <= len) {
+		if(ftab[i] <= gbwtLen) {
 			return ftab[i];
 		} else {
 			index_t efIdx = ftab[i] ^ (index_t)OFF_MASK;
@@ -1514,7 +1527,7 @@ public:
 		return GFM<index_t>::ftabLo(
 			ftab(),
 			eftab(),
-			_gh._len,
+			_gh._gbwtLen,
 			_gh._ftabLen,
 		    _gh._eftabLen,
 			i);
@@ -1571,13 +1584,13 @@ public:
 	static index_t ftabLo(
 		const index_t *ftab,
 		const index_t *eftab,
-		index_t len,
+		index_t gbwtLen,
 		index_t ftabLen,
 		index_t eftabLen,
 		index_t i)
 	{
 		assert_lt(i, ftabLen);
-		if(ftab[i] <= len) {
+		if(ftab[i] <= gbwtLen) {
 			return ftab[i];
 		} else {
 			index_t efIdx = ftab[i] ^ (index_t)OFF_MASK;
@@ -2933,7 +2946,7 @@ void GFM<index_t>::buildToDisk(
 {
     // daehwan - for debugging purposes
 #ifndef NDEBUG
-#   if 1
+#   if 0
     {
         cout << "i\tBWT\tF\tM\tpos\tfirstseq\tlastseq\tseqlen" << endl;
         int gbwtChar; // one of A, C, G, T, and $
@@ -2941,7 +2954,7 @@ void GFM<index_t>::buildToDisk(
         index_t pos;  // pos on joined string
         index_t firstSeq, lastSeq;
         index_t count = 0;
-        while(gbwt.nextRow(gbwtChar, F, M, pos, firstSeq, lastSeq, _gh._ftabChars)) {
+        while(gbwt.nextRow(gbwtChar, F, M, pos, firstSeq, lastSeq)) {
             cout << count << "\t" << (char)gbwtChar << "\t" << F << "\t" << M << "\t" << pos << "\t"
                  << (bitset<20>)firstSeq << "\t" << (bitset<20>)lastSeq << endl;
             count++;
@@ -2962,8 +2975,7 @@ void GFM<index_t>::buildToDisk(
 	assert_eq(s.length(), gh._len);
 	assert_gt(gh._lineRate, 3);
 	
-	index_t  len = gh._len;
-    index_t  gbwtLen = gh._gbwtLen;
+	index_t  gbwtLen = gh._gbwtLen;
     writeIndex<index_t>(out1, gbwtLen, this->toBe());
     
 	index_t  ftabLen = gh._ftabLen;
@@ -3065,14 +3077,14 @@ void GFM<index_t>::buildToDisk(
             index_t firstSeq, lastSeq;
 			bool count = true;
 			if(si < gbwtLen) {
-				gbwt.nextRow(gbwtChar, F, M, pos, firstSeq, lastSeq, gh._ftabChars);
+				gbwt.nextRow(gbwtChar, F, M, pos, firstSeq, lastSeq);
                 
 				// (that might have triggered sa to calc next suf block)
 				if(gbwtChar == '$') {
 					// Don't add the '$' in the last column to the BWT
 					// transform; we can't encode a $ (only A C T or G)
 					// and counting it as, say, an A, will mess up the
-					// LR mapping
+					// LF mapping
 					gbwtChar = 0; count = false;
 					ASSERT_ONLY(dollarSkipped = true);
 #ifndef NDEBUG
@@ -3080,7 +3092,7 @@ void GFM<index_t>::buildToDisk(
                         assert_gt(si, zOffs.back());
                     }
 #endif
-                    zOffs.push_back(si); // remember the GBWT row that corresponds to the 0th suffix
+                    zOffs.push_back(si); // remember GBWT row that corresponds to the 0th suffix
 				} else {
                     gbwtChar = asc2dna[gbwtChar];
 					assert_lt(gbwtChar, 4);
@@ -3253,19 +3265,19 @@ void GFM<index_t>::buildToDisk(
 	//
 	// Finish building fchr
 	//
+    // Shift everybody up by one
+    for(int i = 4; i >= 1; i--) {
+        fchr[i] = fchr[i-1];
+    }
+    fchr[0] = zOffs.size();
 	// Exclusive prefix sum on fchr
-	for(int i = 1; i < 4; i++) {
+	for(int i = 1; i < 5; i++) {
 		fchr[i] += fchr[i-1];
 	}
-	assert_eq(fchr[3], gbwtLen - 1);
-	// Shift everybody up by one
-	for(int i = 4; i >= 1; i--) {
-		fchr[i] = fchr[i-1];
-	}
-	fchr[0] = 0;
+	assert_eq(fchr[4], gbwtLen);
 	if(_verbose) {
-		for(int i = 0; i < 5; i++)
-			cout << "fchr[" << "ACGT$"[i] << "]: " << fchr[i] << endl;
+		for(int i = 0; i < 4; i++)
+			cout << "fchr[" << "ACGT"[i] << "]: " << fchr[i] << endl;
 	}
 	// Write fchr to primary file
 	for(int i = 0; i < 5; i++) {
@@ -3277,12 +3289,13 @@ void GFM<index_t>::buildToDisk(
 	//
 	// Prefix sum on ftable
 	index_t eftabLen = 0;
-	assert_eq(0, absorbFtab[0]);
-	for(index_t i = 1; i < ftabLen; i++) {
-		if(absorbFtab[i] > 0) eftabLen += 2;
+	for(index_t i = 0; i < ftabLen; i++) {
+        if(absorbFtab[i] > 0) {
+            eftabLen += 2;
+        }
 	}
-	assert_leq(eftabLen, (index_t)gh._ftabChars*2);
-	eftabLen = gh._ftabChars*2;
+    assert_leq(eftabLen, (index_t)gh._ftabChars*2);
+    eftabLen = gh._ftabChars*2;
 	EList<index_t> eftab(EBWT_CAT);
 	try {
 		eftab.resize(eftabLen);
@@ -3294,8 +3307,11 @@ void GFM<index_t>::buildToDisk(
 		throw e;
 	}
 	index_t eftabCur = 0;
-	for(index_t i = 1; i < ftabLen; i++) {
-		index_t lo = ftab[i] + GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), len, ftabLen, eftabLen, i-1);
+	for(index_t i = 0; i < ftabLen; i++) {
+        index_t lo = ftab[i];
+        if(i > 0) {
+            lo += GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i-1);
+        }
 		if(absorbFtab[i] > 0) {
 			// Skip a number of short pattern indicated by absorbFtab[i]
 			index_t hi = lo + absorbFtab[i];
@@ -3303,13 +3319,13 @@ void GFM<index_t>::buildToDisk(
 			eftab[eftabCur*2] = lo;
 			eftab[eftabCur*2+1] = hi;
 			ftab[i] = (eftabCur++) ^ (index_t)OFF_MASK; // insert pointer into eftab
-			assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), len, ftabLen, eftabLen, i));
-			assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), len, ftabLen, eftabLen, i));
+			assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
+			assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
 		} else {
 			ftab[i] = lo;
 		}
 	}
-	assert_eq(GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), len, ftabLen, eftabLen, ftabLen-1), len+1);
+	assert_eq(GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, ftabLen-1), gbwtLen);
 	// Write ftab to primary file
 	for(index_t i = 0; i < ftabLen; i++) {
 		writeIndex<index_t>(out1, ftab[i], this->toBe());
@@ -3319,8 +3335,7 @@ void GFM<index_t>::buildToDisk(
         writeIndex<index_t>(out1, *(index_t*)(ftab_overlap.ptr() + i), this->toBe());
     }
 	// Write eftab to primary file
-    writeIndex<index_t>(out1, eftabLen, this->toBe());
-	for(index_t i = 0; i < eftabLen; i++) {
+    for(index_t i = 0; i < eftabLen; i++) {
 		writeIndex<index_t>(out1, eftab[i], this->toBe());
 	}
 
@@ -4601,7 +4616,7 @@ void GFM<index_t>::sanityCheckAll(int reverse) const {
     for(index_t i = 1; i < gh._ftabLen; i++) {
         assert_geq(this->ftabHi(i), this->ftabLo(i-1));
         assert_geq(this->ftabLo(i), this->ftabHi(i-1));
-        assert_leq(this->ftabHi(i), gh._gbwtLen+1);
+        assert_leq(this->ftabHi(i), gh._gbwtLen);
     }
     assert_eq(this->ftabHi(gh._ftabLen-1), gh._gbwtLen);
     

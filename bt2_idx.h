@@ -2902,6 +2902,7 @@ void Ebwt<index_t>::buildToDisk(
 			if(si <= len) {
 				// Still in the SA; extract the bwtChar
 				index_t saElt = sa.nextSuffix();
+                
 				// (that might have triggered sa to calc next suf block)
 				if(saElt == 0) {
 					// Don't add the '$' in the last column to the BWT
