@@ -24,7 +24,8 @@ import sys, re
 from collections import defaultdict as dd, Counter
 from argparse import ArgumentParser, FileType
 
-"""                                                                                                                                                                             """
+"""
+"""
 def reverse_complement(seq):
     result = ""
     for nt in seq:
@@ -126,12 +127,12 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
             continue
 
         # daehwan - for debugging purposes
-        """
+        # """
         if len(snp_list) > 0:
             _, _, last_chr, last_start, _, _  = snp_list[-1]
             if chr == last_chr and abs(start - last_start) <= 20:
                 continue
-        """x
+        # """
 
         observed = observed.upper()
         allele_list = observed.split("/")

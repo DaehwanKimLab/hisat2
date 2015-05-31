@@ -838,9 +838,15 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 	}
 	
 	// Read zOff from primary stream
-	this->_zOff = readIndex<index_t>(in5, switchEndian);
-	bytesRead += sizeof(index_t);
-	assert_lt(this->_zOff, len);
+    this->_zOffs.clear();
+    index_t num_zOffs = readIndex<index_t>(in5, switchEndian);
+    bytesRead += sizeof(index_t);
+    for(index_t i = 0; i < num_zOffs; i++) {
+        index_t zOff = readIndex<index_t>(in5, switchEndian);
+        bytesRead += sizeof(index_t);
+        assert_lt(zOff, len);
+        this->_zOffs.push_back(zOff);
+    }	
 	
 	try {
 		// Read fchr from primary stream
@@ -1678,6 +1684,9 @@ void HierGFM<index_t, local_index_t>::readIntoMemory(
                                  mmSweep,
                                  loadNames,
                                  startVerbose);
+    
+    // daehwan - for debugging purposes
+    return;
 
 	bool switchEndian; // dummy; caller doesn't care
 #ifdef BOWTIE_MM

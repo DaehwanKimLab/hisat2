@@ -117,14 +117,16 @@ public:
 		int32_t lineRate,
 		int32_t offRate,
 		int32_t ftabChars,
-		bool entireReverse)
+		bool entireReverse,
+        index_t gbwtLen = 0,
+        index_t numNodes = 0)
 	{
-		init(len, lineRate, offRate, ftabChars, entireReverse);
+		init(len, lineRate, offRate, ftabChars, entireReverse, gbwtLen, numNodes);
 	}
 
 	GFMParams(const GFMParams& gh) {
 		init(gh._len, gh._lineRate, gh._offRate,
-		     gh._ftabChars, gh._entireReverse);
+		     gh._ftabChars, gh._entireReverse, gh._gbwtLen, gh._numNodes);
 	}
 
 	void init(
@@ -133,12 +135,14 @@ public:
               int32_t offRate,
               int32_t ftabChars,
               bool entireReverse,
-              index_t gbwtLen = 0)
+              index_t gbwtLen = 0,
+              index_t numNodes = 0)
 	{
 		_entireReverse = entireReverse;
         _noSnp = (len + 1 == gbwtLen || gbwtLen == 0);
 		_len = len;
         _gbwtLen = (gbwtLen == 0 ? _len + 1 : gbwtLen);
+        _numNodes = (numNodes == 0 ? _gbwtLen : numNodes);
         if(_noSnp) {
             _sz = (len+3)/4;
             _gbwtSz = (_gbwtLen+3)/4;
@@ -155,7 +159,7 @@ public:
 		_eftabSz = _eftabLen*sizeof(index_t);
 		_ftabLen = (1 << (_ftabChars*2))+1;
 		_ftabSz = _ftabLen*sizeof(index_t);
-		_offsLen = (_gbwtLen + (1 << _offRate) - 1) >> _offRate;
+		_offsLen = (_numNodes + (1 << _offRate) - 1) >> _offRate;
 		_offsSz = _offsLen*sizeof(index_t);
 		_lineSz = 1 << _lineRate;
 		_sideSz = _lineSz * 1 /* lines per side */;
@@ -198,6 +202,7 @@ public:
 	index_t gbwtTotSz() const     { return _gbwtTotSz; }
 	bool entireReverse() const    { return _entireReverse; }
     bool noSnp() const            { return _noSnp; }
+    index_t numNodes() const      { return _numNodes; }
 
 	/**
 	 * Set a new suffix-array sampling rate, which involves updating
@@ -253,7 +258,8 @@ public:
 		    << "    gbwtTotLen: "   << _gbwtTotLen << endl
 		    << "    gbwtTotSz: "    << _gbwtTotSz << endl
 		    << "    reverse: "      << _entireReverse << endl
-            << "    snp: "          << (_noSnp ? "No" : "Yes") << endl;
+            << "    snp: "          << (_noSnp ? "No" : "Yes") << endl
+            << "    nodes: "        << _numNodes << endl;
 	}
 
 	index_t  _len;
@@ -281,6 +287,7 @@ public:
 	index_t  _gbwtTotSz;
 	bool     _entireReverse;
     bool     _noSnp;
+    index_t  _numNodes;
 };
 
 /**
@@ -366,7 +373,7 @@ struct SideLocus {
 		assert_lt(_sideNum, gp._numSides);
 		_charOff                  = row % gp._sideGbwtLen;
 		_sideByteOff              = _sideNum * sideSz;
-		assert_leq(row, gp._len);
+		assert_lt(row, gp._gbwtLen);
 		assert_leq(_sideByteOff + sideSz, gp._gbwtTotSz);
 		// Tons of cache misses on the next line
 		_by = _charOff >> 2; // byte within side
@@ -546,7 +553,6 @@ public:
 	    fw_(fw), \
 	    _in1(NULL), \
 	    _in2(NULL), \
-	    _zOff(std::numeric_limits<index_t>::max()), \
 	    _zGbwtByteOff(std::numeric_limits<index_t>::max()), \
 	    _zGbwtBpOff(-1), \
 	    _nPat(0), \
@@ -1218,7 +1224,8 @@ public:
                          _gh.offRate(),
                          _gh.ftabChars(),
                          _gh.entireReverse(),
-                         pg->getNumEdges());
+                         pg->getNumEdges(),
+                         pg->getNumNodes());
                 buildToDisk(*pg, s, out1, out2);
                 delete pg; pg = NULL;
                 delete graph; graph = NULL;
@@ -1323,7 +1330,7 @@ public:
 
 	/// Accessors
 	inline const GFMParams<index_t>& gh() const     { return _gh; }
-	index_t    zOff() const         { return _zOff; }
+	index_t    zOff() const         { return _zOffs[0]; }
 	index_t    zGbwtByteOff() const { return _zGbwtByteOff; }
 	int        zGbwtBpOff() const   { return _zGbwtBpOff; }
 	index_t    nPat() const        { return _nPat; }
@@ -1331,6 +1338,7 @@ public:
 	inline index_t*   fchr()              { return _fchr.get(); }
 	inline index_t*   ftab()              { return _ftab.get(); }
 	inline index_t*   eftab()             { return _eftab.get(); }
+    inline uint8_t*   ftab_overlap()      { return _ftab_overlap.get(); }
     inline index_t*   offs()              { return _offs.get(); }
 	inline index_t*   plen()              { return _plen.get(); }
 	inline index_t*   rstarts()           { return _rstarts.get(); }
@@ -1395,7 +1403,7 @@ public:
 			assert(eftab() == NULL);
 			assert(fchr() == NULL);
 			assert(offs() == NULL);
-			assert(rstarts() == NULL);
+			// assert(rstarts() == NULL);
 			assert_eq(_zGbwtByteOff, (index_t)OFF_MASK);
 			assert_eq(_zGbwtBpOff, -1);
 			return false;
@@ -1606,7 +1614,7 @@ public:
 	 */
 	index_t tryOffset(index_t elt) const {
 		assert(offs() != NULL);
-		if(elt == _zOff) return 0;
+		if(elt == _zOffs[0]) return 0;
 		if((elt & _gh._offMask) == elt) {
 			index_t eltOff = elt >> _gh._offRate;
 			assert_lt(eltOff, _gh._offsLen);
@@ -1668,8 +1676,8 @@ public:
 	 * _zEbwtBpOff from _zOff.
 	 */
 	void postReadInit(GFMParams<index_t>& gh) {
-		index_t sideNum     = _zOff / gh._sideGbwtLen;
-		index_t sideCharOff = _zOff % gh._sideGbwtLen;
+		index_t sideNum     = _zOffs[0] / gh._sideGbwtLen;
+		index_t sideCharOff = _zOffs[0] % gh._sideGbwtLen;
 		index_t sideByteOff = sideNum * gh._sideSz;
 		_zGbwtByteOff = sideCharOff >> 2;
 		assert_lt(_zGbwtByteOff, gh._sideGbwtSz);
@@ -1699,7 +1707,7 @@ public:
 		gh.print(out); // print params
         return;
 		out << "Ebwt (" << (isInMemory()? "memory" : "disk") << "):" << endl
-		    << "    zOff: "         << _zOff << endl
+		    << "    zOffs[0]: "     << _zOffs[0] << endl
 		    << "    zGbwtByteOff: " << _zGbwtByteOff << endl
 		    << "    zGbwtBpOff: "   << _zGbwtBpOff << endl
 		    << "    nPat: "  << _nPat << endl
@@ -2520,7 +2528,7 @@ public:
 		ASSERT_ONLY(, bool overrideSanity = false)
 		) const
 	{
-		if(rowL(l) != c || row == _zOff) return (index_t)OFF_MASK;
+		if(rowL(l) != c || row == _zOffs[0]) return (index_t)OFF_MASK;
 		index_t ret;
 		assert_lt(c, 4);
 		assert_geq(c, 0);
@@ -2550,7 +2558,7 @@ public:
 		ASSERT_ONLY(, bool overrideSanity = false)
 		) const
 	{
-		if(row == _zOff) return -1;
+		if(row == _zOffs[0]) return -1;
 		int c = rowL(l);
 		assert_range(0, 3, c);
 		row = countBt2Side(l, c);
@@ -2575,7 +2583,7 @@ public:
 		assert_geq(_zGbwtBpOff, 0);
 		assert_lt(_zGbwtBpOff, 4);
 		assert_lt(_zGbwtByteOff, gh._gbwtTotSz);
-		assert_lt(_zOff, gh._gbwtLen);
+		assert_lt(_zOffs[0], gh._gbwtLen);
 		assert_geq(_nFrag, _nPat);
 		return true;
 	}
@@ -2612,7 +2620,6 @@ public:
 	FILE       *_in2;   // input fd for secondary index file
 	string     _in1Str; // filename for primary index file
 	string     _in2Str; // filename for secondary index file
-	index_t    _zOff;
     EList<index_t> _zOffs;
 	index_t    _zGbwtByteOff;
 	int        _zGbwtBpOff;
@@ -2627,6 +2634,7 @@ public:
 	APtrWrap<index_t> _fchr;
 	APtrWrap<index_t> _ftab;
 	APtrWrap<index_t> _eftab; // "extended" entries for _ftab
+    APtrWrap<uint8_t> _ftab_overlap; // "extended" entries for _ftab
 	// _offs may be extremely large.  E.g. for DNA w/ offRate=4 (one
 	// offset every 16 rows), the total size of _offs is the same as
 	// the total size of the input sequence
@@ -3051,6 +3059,7 @@ void GFM<index_t>::buildToDisk(
 	
 	index_t  gbwtLen = gh._gbwtLen;
     writeIndex<index_t>(out1, gbwtLen, this->toBe());
+    writeIndex<index_t>(out1, gh._numNodes, this->toBe());
     
 	index_t  ftabLen = gh._ftabLen;
 	index_t  sideSz = gh._sideSz;
@@ -3408,7 +3417,7 @@ void GFM<index_t>::buildToDisk(
         writeIndex<index_t>(out1, eftab[i], this->toBe());
     }
     // Write ftab to primary file
-    for(index_t i = 0; i < ftab_overlap.size(); i += 4) {
+    for(index_t i = 0; i < ftab_overlap.size(); i += sizeof(index_t)) {
         writeIndex<index_t>(out1, *(index_t*)(ftab_overlap.ptr() + i), this->toBe());
     }
 
@@ -3538,7 +3547,7 @@ index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
 	SideLocus<index_t> l;
 	if(steps > 0) l.initFromRow(row, _gh, gfm());
 	while(steps > 0) {
-		if(row == _zOff) return (index_t)OFF_MASK;
+		if(row == _zOffs[0]) return (index_t)OFF_MASK;
 		index_t newrow = this->mapLF(l ASSERT_ONLY(, false));
 		assert_neq((index_t)OFF_MASK, newrow);
 		assert_neq(newrow, row);
@@ -3556,7 +3565,7 @@ template <typename index_t>
 index_t GFM<index_t>::getOffset(index_t row) const {
 	assert(offs() != NULL);
 	assert_neq((index_t)OFF_MASK, row);
-	if(row == _zOff) return 0;
+	if(row == _zOffs[0]) return 0;
 	if((row & _gh._offMask) == row) return this->offs()[row >> _gh._offRate];
 	index_t jumps = 0;
 	SideLocus<index_t> l;
@@ -3567,7 +3576,7 @@ index_t GFM<index_t>::getOffset(index_t row) const {
 		assert_neq((index_t)OFF_MASK, newrow);
 		assert_neq(newrow, row);
 		row = newrow;
-		if(row == _zOff) {
+		if(row == _zOffs[0]) {
 			return jumps;
 		} else if((row & _gh._offMask) == row) {
 			return jumps + this->offs()[row >> _gh._offRate];
@@ -3829,39 +3838,15 @@ void GFM<index_t>::readIntoMemory(
     } else entireRev = true;
     bytesRead += 4;
     
-    // Create a new EbwtParams from the entries read from primary stream
-    GFMParams<index_t> *gh;
-    bool deleteGh = false;
-    if(params != NULL) {
-        params->init(len, lineRate, offRate, ftabChars, entireRev);
-        if(_verbose || startVerbose) params->print(cerr);
-        gh = params;
-    } else {
-        gh = new GFMParams<index_t>(len, lineRate, offRate, ftabChars, entireRev);
-        deleteGh = true;
-    }
-    
-    // Set up overridden suffix-array-sample parameters
-    index_t offsLen = gh->_offsLen;
-    index_t offRateDiff = 0;
-    index_t offsLenSampled = offsLen;
-    if(_overrideOffRate > offRate) {
-        offRateDiff = _overrideOffRate - offRate;
-    }
-    if(offRateDiff > 0) {
-        offsLenSampled >>= offRateDiff;
-        if((offsLen & ~((index_t)OFF_MASK << offRateDiff)) != 0) {
-            offsLenSampled++;
-        }
-    }
-    
     // Can't override the offrate or isarate and use memory-mapped
     // files; ultimately, all processes need to copy the sparser sample
     // into their own memory spaces.
+#if 0
     if(_useMm && (offRateDiff)) {
         cerr << "Error: Can't use memory-mapped files when the offrate is overridden" << endl;
         throw 1;
     }
+#endif
     
     // Read nPat from primary stream
     this->_nPat = readIndex<index_t>(_in1, switchEndian);
@@ -3901,12 +3886,6 @@ void GFM<index_t>::readIntoMemory(
     
     bool shmemLeader;
     
-    // TODO: I'm not consistent on what "header" means.  Here I'm using
-    // "header" to mean everything that would exist in memory if we
-    // started to build the Ebwt but stopped short of the build*() step
-    // (i.e. everything up to and including join()).
-    if(justHeader) goto done;
-    
     this->_nFrag = readIndex<index_t>(_in1, switchEndian);
     bytesRead += sizeof(index_t);
     if(_verbose || startVerbose) {
@@ -3945,6 +3924,54 @@ void GFM<index_t>::readIntoMemory(
         assert(rstarts() == NULL);
         bytesRead += this->_nFrag*sizeof(index_t)*3;
         fseek(_in1, this->_nFrag*sizeof(index_t)*3, SEEK_CUR);
+    }
+
+    index_t gbwtLen = readIndex<index_t>(_in1, switchEndian);
+    bytesRead += sizeof(index_t);    
+    assert_lt(len, gbwtLen);
+    index_t numNodes = readIndex<index_t>(_in1, switchEndian);
+    bytesRead += sizeof(index_t);
+    // Create a new EbwtParams from the entries read from primary stream
+    GFMParams<index_t> *gh;
+    bool deleteGh = false;
+    if(params != NULL) {
+        params->init(len, lineRate, offRate, ftabChars, entireRev, gbwtLen, numNodes);
+        if(_verbose || startVerbose) params->print(cerr);
+        gh = params;
+    } else {
+        gh = new GFMParams<index_t>(len, lineRate, offRate, ftabChars, entireRev, gbwtLen, numNodes);
+        deleteGh = true;
+    }
+    
+    // Set up overridden suffix-array-sample parameters
+    index_t offsLen = gh->_offsLen;
+    index_t offRateDiff = 0;
+    index_t offsLenSampled = offsLen;
+    if(_overrideOffRate > offRate) {
+        offRateDiff = _overrideOffRate - offRate;
+    }
+    if(offRateDiff > 0) {
+        offsLenSampled >>= offRateDiff;
+        if((offsLen & ~((index_t)OFF_MASK << offRateDiff)) != 0) {
+            offsLenSampled++;
+        }
+    }
+    
+    // TODO: I'm not consistent on what "header" means.  Here I'm using
+    // "header" to mean everything that would exist in memory if we
+    // started to build the Ebwt but stopped short of the build*() step
+    // (i.e. everything up to and including join()).
+    if(justHeader) {
+        // Be kind
+        if(deleteGh) delete gh;
+#ifdef BOWTIE_MM
+        fseek(_in1, 0, SEEK_SET);
+        if(loadSASamp) fseek(_in2, 0, SEEK_SET);
+#else
+        rewind(_in1);
+        if(loadSASamp) rewind(_in2);
+#endif
+        return;
     }
     
     _gfm.reset();
@@ -4016,9 +4043,15 @@ void GFM<index_t>::readIntoMemory(
     }
     
     // Read zOff from primary stream
-    _zOff = readIndex<index_t>(_in1, switchEndian);
+    _zOffs.clear();
+    index_t num_zOffs = readIndex<index_t>(_in1, switchEndian);
     bytesRead += sizeof(index_t);
-    assert_lt(_zOff, len);
+    for(index_t i = 0; i < num_zOffs; i++) {
+        index_t zOff = readIndex<index_t>(_in1, switchEndian);
+        bytesRead += sizeof(index_t);
+        assert_lt(zOff, gbwtLen);
+        _zOffs.push_back(zOff);
+    }
     
     try {
         // Read fchr from primary stream
@@ -4034,7 +4067,7 @@ void GFM<index_t>::readIntoMemory(
             _fchr.init(new index_t[5], 5, true);
             for(int i = 0; i < 5; i++) {
                 this->fchr()[i] = readIndex<index_t>(_in1, switchEndian);
-                assert_leq(this->fchr()[i], len);
+                assert_leq(this->fchr()[i], gbwtLen);
                 assert(i <= 0 || this->fchr()[i] >= this->fchr()[i-1]);
             }
         }
@@ -4080,6 +4113,9 @@ void GFM<index_t>::readIntoMemory(
                 
             }
             _eftab.reset();
+            index_t eftabLen = readIndex<index_t>(_in1, switchEndian);
+            bytesRead += sizeof(index_t);
+            gh->_eftabLen = eftabLen;
             if(_useMm) {
 #ifdef BOWTIE_MM
                 _eftab.init((index_t*)(mmFile[0] + bytesRead), gh->_eftabLen, false);
@@ -4106,15 +4142,41 @@ void GFM<index_t>::readIntoMemory(
                     assert_eq(0, this->eftab()[i]);
                 }
             }
+            
+            // Read ftab overlap
+            index_t ftabOverlapLen = gh->_ftabLen >> 3;
+            if(_useMm) {
+#ifdef BOWTIE_MM
+                _ftab_overlap.init((uint8_t*)(mmFile[0] + bytesRead), ftabOverlapLen, false);
+                fseek(_in1, ftabOverlapLen, SEEK_CUR);
+#endif
+            } else {
+                _ftab_overlap.init(new uint8_t[ftabOverlapLen], ftabOverlapLen, true);
+                if(switchEndian) {
+                    for(size_t i = 0; i < ftabOverlapLen; i += sizeof(index_t))
+                        *(index_t*)(this->ftab_overlap() + i) = readIndex<index_t>(_in1, switchEndian);
+                } else {
+                    size_t r = MM_READ(_in1, (void *)ftab_overlap(), ftabOverlapLen);
+                    if(r != (size_t)ftabOverlapLen) {
+                        cerr << "Error reading _ftab[] array: " << r << ", " << ftabOverlapLen << endl;
+                        throw 1;
+                    }
+                }
+            }
+            bytesRead += ftabOverlapLen;
         } else {
             assert(ftab() == NULL);
             assert(eftab() == NULL);
+            assert(ftab_overlap() == NULL);
             // Skip ftab
             bytesRead += gh->_ftabLen*sizeof(index_t);
             fseek(_in1, gh->_ftabLen*sizeof(index_t), SEEK_CUR);
             // Skip eftab
+            bytesRead += sizeof(index_t);
             bytesRead += gh->_eftabLen*sizeof(index_t);
             fseek(_in1, gh->_eftabLen*sizeof(index_t), SEEK_CUR);
+            // Skip ftab_overlap
+            bytesRead += (gh->_ftabLen >> 3);
         }
     } catch(bad_alloc& e) {
         cerr << "Out of memory allocating fchr[], ftab[] or eftab[] arrays for the Bowtie index." << endl
@@ -4155,30 +4217,18 @@ void GFM<index_t>::readIntoMemory(
             if(!useShmem_) {
                 // Allocate offs_
                 try {
-#ifdef HISAT_CLASS
-                    _offs.init(new uint16_t[offsLenSampled], offsLenSampled, true);
-#else
                     _offs.init(new index_t[offsLenSampled], offsLenSampled, true);
-#endif
                 } catch(bad_alloc& e) {
                     cerr << "Out of memory allocating the offs[] array  for the Bowtie index." << endl
                     << "Please try again on a computer with more memory." << endl;
                     throw 1;
                 }
             } else {
-#ifdef HISAT_CLASS
-                uint16_t *tmp = NULL;
-                shmemLeader = ALLOC_SHARED_U32(
-                                               (_in2Str + "[offs]"), offsLenSampled*sizeof(uint16_t), &tmp,
-                                               "offs", (_verbose || startVerbose));
-                _offs.init((uint16_t*)tmp, offsLenSampled, false);
-#else
                 index_t *tmp = NULL;
                 shmemLeader = ALLOC_SHARED_U32(
                                                (_in2Str + "[offs]"), offsLenSampled*sizeof(index_t), &tmp,
                                                "offs", (_verbose || startVerbose));
                 _offs.init((index_t*)tmp, offsLenSampled, false);
-#endif
             }
         }
         
@@ -4188,11 +4238,7 @@ void GFM<index_t>::readIntoMemory(
                 if(switchEndian || offRateDiff > 0) {
                     assert(!_useMm);
                     const index_t blockMaxSz = (index_t)(2 * 1024 * 1024); // 2 MB block size
-#ifdef HISAT_CLASS
-                    const index_t blockMaxSzU = (blockMaxSz / sizeof(uint16_t)); // # U32s per block
-#else
                     const index_t blockMaxSzU = (blockMaxSz / sizeof(index_t)); // # U32s per block
-#endif
                     char *buf;
                     try {
                         buf = new char[blockMaxSz];
@@ -4202,22 +4248,6 @@ void GFM<index_t>::readIntoMemory(
                     }
                     for(index_t i = 0; i < offsLen; i += blockMaxSzU) {
                         index_t block = min<index_t>((index_t)blockMaxSzU, (index_t)(offsLen - i));
-#ifdef HISAT_CLASS
-                        size_t r = MM_READ(_in2, (void *)buf, block * sizeof(uint16_t));
-                        if(r != (size_t)(block * sizeof(uint16_t))) {
-                            cerr << "Error reading block of _offs[] array: " << r << ", " << (block * sizeof(uint16_t)) << endl;
-                            throw 1;
-                        }
-                        index_t idx = i >> 1;
-                        for(index_t j = 0; j < block; j += 2) {
-                            assert_lt(idx, offsLenSampled);
-                            this->offs()[idx] = ((uint16_t*)buf)[j];
-                            if(switchEndian) {
-                                this->offs()[idx] = endianSwapIndex((uint16_t)this->offs()[idx]);
-                            }
-                            idx++;
-                        }
-#else
                         size_t r = MM_READ(_in2, (void *)buf, block * sizeof(index_t));
                         if(r != (size_t)(block * sizeof(index_t))) {
                             cerr << "Error reading block of _offs[] array: " << r << ", " << (block * sizeof(index_t)) << endl;
@@ -4232,7 +4262,6 @@ void GFM<index_t>::readIntoMemory(
                             }
                             idx++;
                         }
-#endif
                     }
                     delete[] buf;
                 } else {
@@ -4280,8 +4309,6 @@ void GFM<index_t>::readIntoMemory(
     // The fact that _ebwt and friends actually point to something
     // (other than NULL) now signals to other member functions that the
     // Ebwt is loaded into memory.
-    
-done: // Exit hatch for both justHeader and !justHeader
     
     // Be kind
     if(deleteGh) delete gh;
@@ -4731,7 +4758,7 @@ void GFM<index_t>::restore(SString<char>& s) const {
     index_t jumps = 0;
     index_t i = this->_gh._len; // should point to final SA elt (starting with '$')
     SideLocus<index_t> l(i, this->_gh, this->gfm());
-    while(i != _zOff) {
+    while(i != _zOffs[0]) {
         assert_lt(jumps, this->_gh._len);
         //if(_verbose) cout << "restore: i: " << i << endl;
         // Not a marked row; go back a char in the original string

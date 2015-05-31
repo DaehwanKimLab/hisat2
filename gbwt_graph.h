@@ -1127,6 +1127,7 @@ public:
     // Restores the labels of parent.
     bool generateEdges(RefGraph<index_t>& parent, index_t ftabChars = 10);
     
+    index_t getNumNodes() const { return nodes.size(); }
     index_t getNumEdges() const { return edges.size(); }
     
     //

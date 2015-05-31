@@ -53,23 +53,23 @@ readEntireReverse(const string& instr) {
  * exact path given by the user.  Then try the user-provided string
  * appended onto the path of the "indexes" subdirectory below this
  * executable, then try the provided string appended onto
- * "$BOWTIE2_INDEXES/".
+ * "$HISAT2_INDEXES/".
  */
 string adjustEbwtBase(const string& cmdline,
-                      const string& ebwtFileBase,
+                      const string& gfmFileBase,
                       bool verbose)
 {
-    string str = ebwtFileBase;
+    string str = gfmFileBase;
     ifstream in;
     if(verbose) cout << "Trying " << str.c_str() << endl;
-    in.open((str + ".1.bt2").c_str(), ios_base::in | ios::binary);
+    in.open((str + ".1." + gfm_ext).c_str(), ios_base::in | ios::binary);
     if(!in.is_open()) {
         if(verbose) cout << "  didn't work" << endl;
         in.close();
-        if(getenv("BOWTIE2_INDEXES") != NULL) {
-            str = string(getenv("BOWTIE2_INDEXES")) + "/" + ebwtFileBase;
+        if(getenv("HISAT2_INDEXES") != NULL) {
+            str = string(getenv("HISAT2_INDEXES")) + "/" + gfmFileBase;
             if(verbose) cout << "Trying " << str.c_str() << endl;
-            in.open((str + ".1.bt2").c_str(), ios_base::in | ios::binary);
+            in.open((str + ".1." + gfm_ext).c_str(), ios_base::in | ios::binary);
             if(!in.is_open()) {
                 if(verbose) cout << "  didn't work" << endl;
                 in.close();
@@ -79,7 +79,7 @@ string adjustEbwtBase(const string& cmdline,
         }
     }
     if(!in.is_open()) {
-        cerr << "Could not locate a Bowtie index corresponding to basename \"" << ebwtFileBase.c_str() << "\"" << endl;
+        cerr << "Could not locate a HISAT2 index corresponding to basename \"" << gfmFileBase.c_str() << "\"" << endl;
         throw 1;
     }
     return str;

@@ -1708,7 +1708,7 @@ static void parseOptions(int argc, const char **argv) {
 #ifndef NDEBUG
 	if(!gQuiet) {
 		cerr << "Warning: Running in debug mode.  Please use debug mode only "
-			 << "for diagnosing errors, and not for typical use of HISAT."
+			 << "for diagnosing errors, and not for typical use of HISAT2."
 			 << endl;
 	}
 #endif
