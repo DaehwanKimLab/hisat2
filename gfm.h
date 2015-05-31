@@ -332,25 +332,25 @@ struct SideLocus {
 	static void initFromTopBot(
 		index_t top,
 		index_t bot,
-		const GFMParams<index_t>& ep,
-		const uint8_t* ebwt,
+		const GFMParams<index_t>& gp,
+		const uint8_t* gfm,
 		SideLocus& ltop,
 		SideLocus& lbot)
 	{
-		const index_t sideBwtLen = ep._sideBwtLen;
+		const index_t sideGbwtLen = gp._sideGbwtLen;
 		assert_gt(bot, top);
-		ltop.initFromRow(top, ep, ebwt);
+		ltop.initFromRow(top, gp, gfm);
 		index_t spread = bot - top;
 		// Many cache misses on the following lines
-		if(ltop._charOff + spread < sideBwtLen) {
+		if(ltop._charOff + spread < sideGbwtLen) {
 			lbot._charOff = ltop._charOff + spread;
 			lbot._sideNum = ltop._sideNum;
 			lbot._sideByteOff = ltop._sideByteOff;
 			lbot._by = lbot._charOff >> 2;
-			assert_lt(lbot._by, (int)ep._sideBwtSz);
+			assert_lt(lbot._by, (int)gp._sideGbwtSz);
 			lbot._bp = lbot._charOff & 3;
 		} else {
-			lbot.initFromRow(bot, ep, ebwt);
+			lbot.initFromRow(bot, gp, gfm);
 		}
 	}
 
@@ -407,11 +407,11 @@ struct SideLocus {
 	 * Check that SideLocus is internally consistent and consistent
 	 * with the (provided) EbwtParams.
 	 */
-	bool repOk(const GFMParams<index_t>& ep) const {
+	bool repOk(const GFMParams<index_t>& gp) const {
 		ASSERT_ONLY(index_t row = toBWRow());
-		assert_leq(row, ep._len);
+		assert_leq(row, gp._len);
 		assert_range(-1, 3, _bp);
-		assert_range(0, (int)ep._sideBwtSz, _by);
+		assert_range(0, (int)gp._sideGbwtSz, _by);
 		return true;
 	}
 #endif
@@ -594,8 +594,8 @@ public:
 		packed_ = false;
 		_useMm = useMm;
 		useShmem_ = useShmem;
-		_in1Str = in + ".1." + gEbwt_ext;
-		_in2Str = in + ".2." + gEbwt_ext;
+		_in1Str = in + ".1." + gfm_ext;
+		_in2Str = in + ".2." + gfm_ext;
 		
 		if(!skipLoading) {
 			readIntoMemory(
@@ -698,8 +698,8 @@ public:
         ProcessorSupport ps;
         _usePOPCNTinstruction = ps.POPCNTenabled();
 #endif
-		_in1Str = outfile + ".1." + gEbwt_ext;
-		_in2Str = outfile + ".2." + gEbwt_ext;
+		_in1Str = outfile + ".1." + gfm_ext;
+		_in2Str = outfile + ".2." + gfm_ext;
 		packed_ = packed;
 		// Open output files
 		ofstream fout1(_in1Str.c_str(), ios::binary);
@@ -1849,12 +1849,12 @@ public:
 		EList<bool> *masks) const // masks indicating which range elts = A/C/G/T
 	{
 		assert_gt(num, 0);
-		assert_range(0, (int)this->_gh._sideBwtSz-1, (int)l._by);
+		assert_range(0, (int)this->_gh._sideGbwtSz-1, (int)l._by);
 		assert_range(0, 3, (int)l._bp);
 		countUpToEx(l, cntsUpto);
 		WITHIN_FCHR_DOLLARA(cntsUpto);
 		WITHIN_BWT_LEN(cntsUpto);
-		const uint8_t *side = l.side(this->ebwt());
+		const uint8_t *side = l.side(this->gfm());
 		if(l._sideByteOff <= _zGbwtByteOff && l._sideByteOff + l._by >= _zGbwtByteOff) {
 			// Adjust for the fact that we represented $ with an 'A', but
 			// shouldn't count it as an 'A' here
@@ -1865,12 +1865,12 @@ public:
 			}
 		}
 		// Now factor in the occ[] count at the side break
-		const index_t *acgt = reinterpret_cast<const index_t*>(side + _gh._sideBwtSz);
-		assert_leq(acgt[0], this->fchr()[1] + this->_gh.sideBwtLen());
+		const index_t *acgt = reinterpret_cast<const index_t*>(side + _gh._sideGbwtSz);
+		assert_leq(acgt[0], this->fchr()[1] + this->_gh.sideGbwtLen());
 		assert_leq(acgt[1], this->fchr()[2]-this->fchr()[1]);
 		assert_leq(acgt[2], this->fchr()[3]-this->fchr()[2]);
 		assert_leq(acgt[3], this->fchr()[4]-this->fchr()[3]);
-		assert_leq(acgt[0], this->_gh._len + this->_gh.sideBwtLen());
+		assert_leq(acgt[0], this->_gh._len + this->_gh.sideGbwtLen());
 		assert_leq(acgt[1], this->_gh._len);
 		assert_leq(acgt[2], this->_gh._len);
 		assert_leq(acgt[3], this->_gh._len);
@@ -1894,7 +1894,7 @@ public:
 		SideLocus<index_t> lcopy = l;
 		while(nm < num) {
 			// Subsequent sides, if necessary
-			lcopy.nextSide(this->_eh);
+			lcopy.nextSide(this->_gh);
 			nm += countBt2SideRange2(lcopy, false, num - nm, cntsIn, masks, nm);
 			WITHIN_FCHR_DOLLARA(cntsIn);
 			assert_leq(nm, num);
@@ -2040,7 +2040,7 @@ public:
 		// Someday countInU64() and pop() functions should be
 		// vectorized/SSE-ized in case that helps.
 		index_t cCnt = 0;
-		const uint8_t *side = l.side(this->ebwt());
+		const uint8_t *side = l.side(this->gfm());
 		int i = 64 - 4 * sizeof(index_t) - 1;
 #ifdef POPCNT_CAPABILITY
         if ( _usePOPCNTinstruction) {
@@ -2235,8 +2235,8 @@ public:
 		ASSERT_ONLY(, bool overrideSanity = false)
 		) const
 	{
-		assert(ltop.repOk(this->eh()));
-		assert(lbot.repOk(this->eh()));
+		assert(ltop.repOk(this->gh()));
+		assert(lbot.repOk(this->gh()));
 		assert_eq(0, tops[0]); assert_eq(0, bots[0]);
 		assert_eq(0, tops[1]); assert_eq(0, bots[1]);
 		assert_eq(0, tops[2]); assert_eq(0, bots[2]);
@@ -2294,8 +2294,8 @@ public:
 		}
 		int by = iby, bp = ibp;
 		assert_lt(bp, 4);
-		assert_lt(by, (int)this->_eh._sideBwtSz);
-		const uint8_t *side = l.side(this->ebwt());
+		assert_lt(by, (int)this->_gh._sideGbwtSz);
+		const uint8_t *side = l.side(this->gfm());
 		while(nm < num) {
 			int c = (side[by] >> (bp * 2)) & 3;
 			assert_lt(maskOff + nm, masks[c].size());
@@ -2310,8 +2310,8 @@ public:
 			if(++bp == 4) {
 				bp = 0;
 				by++;
-				assert_leq(by, (int)this->_eh._sideBwtSz);
-				if(by == (int)this->_eh._sideBwtSz) {
+				assert_leq(by, (int)this->_gh._sideGbwtSz);
+				if(by == (int)this->_gh._sideGbwtSz) {
 					// Fell off the end of the side
 					break;
 				}
@@ -2387,8 +2387,8 @@ public:
 			// have infinite recursion
 			index_t tops[4] = {0, 0, 0, 0};
 			index_t bots[4] = {0, 0, 0, 0};
-			assert(ltop.repOk(this->eh()));
-			assert(lbot.repOk(this->eh()));
+			assert(ltop.repOk(this->gh()));
+			assert(lbot.repOk(this->gh()));
 			mapLFEx(ltop, lbot, tops, bots, false);
 			for(int i = 0; i < 4; i++) {
 				assert(cntsUpto[i] == tops[i] || tops[i] == bots[i]);
@@ -2525,7 +2525,7 @@ public:
 		assert_lt(c, 4);
 		assert_geq(c, 0);
 		ret = countBt2Side(l, c);
-		assert_lt(ret, this->_eh._bwtLen);
+		assert_lt(ret, this->_gh._gbwtLen);
 #ifndef NDEBUG
 		if(_sanity && !overrideSanity) {
 			// Make sure results match up with results from mapLFEx;
@@ -2554,7 +2554,7 @@ public:
 		int c = rowL(l);
 		assert_range(0, 3, c);
 		row = countBt2Side(l, c);
-		assert_lt(row, this->_eh._bwtLen);
+		assert_lt(row, this->_gh._gbwtLen);
 #ifndef NDEBUG
 		if(_sanity && !overrideSanity) {
 			// Make sure results match up with results from mapLFEx;
@@ -2613,6 +2613,7 @@ public:
 	string     _in1Str; // filename for primary index file
 	string     _in2Str; // filename for secondary index file
 	index_t    _zOff;
+    EList<index_t> _zOffs;
 	index_t    _zGbwtByteOff;
 	int        _zGbwtBpOff;
 	index_t    _nPat;  /// number of reference texts
@@ -2682,26 +2683,99 @@ protected:
  * file and store them in 'refnames'.
  */
 template <typename index_t>
-void readEbwtRefnames(istream& in, EList<string>& refnames);
+void readEbwtRefnames(istream& in, EList<string>& refnames) {
+    // _in1 must already be open with the get cursor at the
+    // beginning and no error flags set.
+    assert(in.good());
+    assert_eq((streamoff)in.tellg(), ios::beg);
+    
+    // Read endianness hints from both streams
+    bool switchEndian = false;
+    uint32_t one = readU32(in, switchEndian); // 1st word of primary stream
+    if(one != 1) {
+        assert_eq((1u<<24), one);
+        switchEndian = true;
+    }
+    
+    // Reads header entries one by one from primary stream
+    index_t len          = readIndex<index_t>(in, switchEndian);
+    int32_t  lineRate     = readI32(in, switchEndian);
+    /*int32_t  linesPerSide =*/ readI32(in, switchEndian);
+    int32_t  offRate      = readI32(in, switchEndian);
+    int32_t  ftabChars    = readI32(in, switchEndian);
+    // BTL: chunkRate is now deprecated
+    int32_t flags = readI32(in, switchEndian);
+    bool entireReverse = false;
+    if(flags < 0) {
+        entireReverse = (((-flags) & GFM_ENTIRE_REV) != 0);
+    }
+    
+    // Create a new EbwtParams from the entries read from primary stream
+    GFMParams<index_t> gh(len, lineRate, offRate, ftabChars, entireReverse);
+    
+    index_t nPat = readIndex<index_t>(in, switchEndian); // nPat
+    in.seekg(nPat*sizeof(index_t), ios_base::cur); // skip plen
+    
+    // Skip rstarts
+    index_t nFrag = readIndex<index_t>(in, switchEndian);
+    in.seekg(nFrag*sizeof(index_t)*3, ios_base::cur);
+    
+    // Skip ebwt
+    in.seekg(gh._gbwtTotLen, ios_base::cur);
+    
+    // Skip zOff from primary stream
+    readIndex<index_t>(in, switchEndian);
+    
+    // Skip fchr
+    in.seekg(5 * sizeof(index_t), ios_base::cur);
+    
+    // Skip ftab
+    in.seekg(gh._ftabLen*sizeof(index_t), ios_base::cur);
+    
+    // Skip eftab
+    in.seekg(gh._eftabLen*sizeof(index_t), ios_base::cur);
+    
+    // Read reference sequence names from primary index file
+    while(true) {
+        char c = '\0';
+        in.read(&c, 1);
+        if(in.eof()) break;
+        if(c == '\0') break;
+        else if(c == '\n') {
+            refnames.push_back("");
+        } else {
+            if(refnames.size() == 0) {
+                refnames.push_back("");
+            }
+            refnames.back().push_back(c);
+        }
+    }
+    if(refnames.back().empty()) {
+        refnames.pop_back();
+    }
+    
+    // Be kind
+    in.clear(); in.seekg(0, ios::beg);
+    assert(in.good());
+}
 
 /**
  * Read reference names from the index with basename 'in' and store
  * them in 'refnames'.
  */
 template <typename index_t>
-void readEbwtRefnames(const string& instr, EList<string>& refnames);
-
-/**
- * Read just enough of the Ebwt's header to determine whether it's
- * colorspace.
- */
-bool readEbwtColor(const string& instr);
-
-/**
- * Read just enough of the Ebwt's header to determine whether it's
- * entirely reversed.
- */
-bool readEntireReverse(const string& instr);
+void readEbwtRefnames(const string& instr, EList<string>& refnames) {
+    ifstream in;
+    // Initialize our primary and secondary input-stream fields
+    in.open((instr + ".1." + gfm_ext).c_str(), ios_base::in | ios::binary);
+    if(!in.is_open()) {
+        throw GFMFileOpenException("Cannot open file " + instr);
+    }
+    assert(in.is_open());
+    assert(in.good());
+    assert_eq((streamoff)in.tellg(), ios::beg);
+    readEbwtRefnames<index_t>(in, refnames);
+}
 
 ///////////////////////////////////////////////////////////////////////
 //
@@ -3294,9 +3368,7 @@ void GFM<index_t>::buildToDisk(
             eftabLen += 2;
         }
 	}
-    assert_leq(eftabLen, (index_t)gh._ftabChars*2);
-    eftabLen = gh._ftabChars*2;
-	EList<index_t> eftab(EBWT_CAT);
+    EList<index_t> eftab(EBWT_CAT);
 	try {
 		eftab.resize(eftabLen);
 		eftab.fillZero();
@@ -3330,32 +3402,21 @@ void GFM<index_t>::buildToDisk(
 	for(index_t i = 0; i < ftabLen; i++) {
 		writeIndex<index_t>(out1, ftab[i], this->toBe());
 	}
+    // Write eftab to primary file
+    writeIndex<index_t>(out1, eftabLen, this->toBe());
+    for(index_t i = 0; i < eftabLen; i++) {
+        writeIndex<index_t>(out1, eftab[i], this->toBe());
+    }
     // Write ftab to primary file
     for(index_t i = 0; i < ftab_overlap.size(); i += 4) {
         writeIndex<index_t>(out1, *(index_t*)(ftab_overlap.ptr() + i), this->toBe());
     }
-	// Write eftab to primary file
-    for(index_t i = 0; i < eftabLen; i++) {
-		writeIndex<index_t>(out1, eftab[i], this->toBe());
-	}
 
 	// Note: if you'd like to sanity-check the Ebwt, you'll have to
 	// read it back into memory first!
 	assert(!isInMemory());
 	VMSG_NL("Exiting Ebwt::buildToDisk()");
 }
-
-/**
- * Try to find the Bowtie index specified by the user.  First try the
- * exact path given by the user.  Then try the user-provided string
- * appended onto the path of the "indexes" subdirectory below this
- * executable, then try the provided string appended onto
- * "$BOWTIE2_INDEXES/".
- */
-string adjustEbwtBase(const string& cmdline,
-					  const string& ebwtFileBase,
-					  bool verbose);
-
 
 extern string gLastIOErrMsg;
 
@@ -4322,7 +4383,7 @@ template <typename index_t>
 void readGFMRefnames(const string& instr, EList<string>& refnames) {
     ifstream in;
     // Initialize our primary and secondary input-stream fields
-    in.open((instr + ".1." + gEbwt_ext).c_str(), ios_base::in | ios::binary);
+    in.open((instr + ".1." + gfm_ext).c_str(), ios_base::in | ios::binary);
     if(!in.is_open()) {
         throw GFMFileOpenException("Cannot open file " + instr);
     }
@@ -4339,7 +4400,7 @@ template <typename index_t>
 int32_t GFM<index_t>::readFlags(const string& instr) {
     ifstream in;
     // Initialize our primary and secondary input-stream fields
-    in.open((instr + ".1." + gEbwt_ext).c_str(), ios_base::in | ios::binary);
+    in.open((instr + ".1." + gfm_ext).c_str(), ios_base::in | ios::binary);
     if(!in.is_open()) {
         throw GFMFileOpenException("Cannot open file " + instr);
     }
@@ -4365,15 +4426,7 @@ int32_t GFM<index_t>::readFlags(const string& instr) {
  * Read just enough of the Ebwt's header to determine whether it's
  * entirely reversed.
  */
-bool
-readEntireReverse(const string& instr) {
-    int32_t flags = GFM<>::readFlags(instr);
-    if(flags < 0 && (((-flags) & GFM_ENTIRE_REV) != 0)) {
-        return true;
-    } else {
-        return false;
-    }
-}
+bool readEntireReverse(const string& instr);
 
 /**
  * Write an extended Burrows-Wheeler transform to a pair of output
@@ -4739,5 +4792,16 @@ void GFM<index_t>::checkOrigs(
         }
     }
 }
+
+/**
+ * Try to find the Bowtie index specified by the user.  First try the
+ * exact path given by the user.  Then try the user-provided string
+ * appended onto the path of the "indexes" subdirectory below this
+ * executable, then try the provided string appended onto
+ * "$BOWTIE2_INDEXES/".
+ */
+string adjustEbwtBase(const string& cmdline,
+                      const string& ebwtFileBase,
+                      bool verbose = false);
 
 #endif /*GFM_H_*/

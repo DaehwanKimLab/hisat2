@@ -83,7 +83,7 @@
 #include <stdint.h>
 #include <limits>
 #include "ds.h"
-#include "bt2_idx.h"
+#include "gfm.h"
 #include "read.h"
 #include "reference.h"
 #include "mem_ids.h"
@@ -428,7 +428,7 @@ public:
 	}
 	
 	/**
-	 * Initialize this GWState with new ebwt, top, bot, step, and sat.
+	 * Initialize this GWState with new gfm, top, bot, step, and sat.
 	 *
 	 * We assume map is already set up.
 	 *
@@ -436,7 +436,7 @@ public:
 	 */
 	template<int S>
 	pair<int, int> init(
-		const Ebwt<index_t>& ebwt,    // index to walk left in
+		const GFM<index_t>& gfm,      // index to walk left in
 		const BitPairReference& ref,  // bitpair-encoded reference
 		SARangeWithOffs<T>& sa,       // SA range with offsets
 		EList<GWState, S>& sts,       // EList of GWStates for range being advanced
@@ -457,7 +457,7 @@ public:
 		assert(!inited_);
 		ASSERT_ONLY(inited_ = true);
 		ASSERT_ONLY(lastStep_ = step-1);
-		return init(ebwt, ref, sa, sts, hit, range, reportList, res, met);
+		return init(gfm, ref, sa, sts, hit, range, reportList, res, met);
 	}
 
 	/**
@@ -473,7 +473,7 @@ public:
 	 */
 	template<int S>
 	pair<int, int> init(
-		const Ebwt<index_t>& ebwt,    // forward Bowtie index
+		const GFM<index_t>& gfm,      // forward Bowtie index
 		const BitPairReference& ref,  // bitpair-encoded reference
 		SARangeWithOffs<T>& sa,       // SA range with offsets
 		EList<GWState, S>& st,        // EList of GWStates for advancing range
@@ -486,7 +486,7 @@ public:
 		assert(inited_);
 		assert_eq(step, lastStep_+1);
 		ASSERT_ONLY(lastStep_++);
-		assert_leq((index_t)step, ebwt.eh().len());
+		assert_leq((index_t)step, gfm.gh().len());
 		assert_lt(range, st.size());
 		pair<int, int> ret = make_pair(0, 0);
 		index_t trimBegin = 0, trimEnd = 0;
@@ -498,17 +498,17 @@ public:
 			if(!resolved) {
 				// Elt not resolved yet; try to resolve it now
 				index_t bwrow = (index_t)(top - mapi_ + i);
-				index_t toff = ebwt.tryOffset(bwrow);
+				index_t toff = gfm.tryOffset(bwrow);
 				ASSERT_ONLY(index_t origBwRow = sa.topf + map(i));
-				assert_eq(bwrow, ebwt.walkLeft(origBwRow, step));
+				assert_eq(bwrow, gfm.walkLeft(origBwRow, step));
 				if(toff != (index_t)OFF_MASK) {
 					// Yes, toff was resolvable
-					assert_eq(toff, ebwt.getOffset(bwrow));
+					assert_eq(toff, gfm.getOffset(bwrow));
 					met.resolves++;
 #ifdef HISAT_CLASS
 #else
 					toff += step;
-                    assert_eq(toff, ebwt.getOffset(origBwRow));
+                    assert_eq(toff, gfm.getOffset(origBwRow));
 #endif
 					setOff(i, toff, sa, met);
 					if(!reportList) ret.first++;
@@ -528,7 +528,7 @@ public:
 					// matters here.
 					index_t tidx = (index_t)OFF_MASK, tof, tlen;
 					bool straddled = false;
-					ebwt.joinedToTextOff(
+					gfm.joinedToTextOff(
 						hit.len, // length of seed
 						toff,    // offset in joined reference string
 						tidx,    // reference sequence id
@@ -555,7 +555,7 @@ public:
 								// whether we have the right spot in the joined
 								// reference string
 								SString<char> jref;
-								ebwt.restore(jref);
+								gfm.restore(jref);
 								uint64_t key2 = hit.satup->key.seq;
 								for(int64_t k = toff + hit.len-1; k >= toff; k--) {
 									int c = jref[k];
@@ -655,21 +655,21 @@ public:
 			assert(!done());
 		}
 		// Is there a dollar sign in the middle of the range?
-		assert_neq(top, ebwt._zOff);
-		assert_neq(bot-1, ebwt._zOff);
-		if(ebwt._zOff > top && ebwt._zOff < bot-1) {
+		assert_neq(top, gfm._zOffs[0]);
+		assert_neq(bot-1, gfm._zOffs[0]);
+		if(gfm._zOffs[0] > top && gfm._zOffs[0] < bot-1) {
 			// Yes, the dollar sign is in the middle of this range.  We
 			// must split it into the two ranges on either side of the
 			// dollar.  Let 'bot' and 'top' delimit the portion of the
 			// range prior to the dollar.
 			index_t oldbot = bot;
-			bot = ebwt._zOff;
+			bot = gfm._zOffs[0];
 			// Note: might be able to do additional trimming off the
 			// end.
 			// Create a new range for the portion after the dollar.
 			st.expand();
 			st.back().reset();
-			index_t ztop = ebwt._zOff+1;
+			index_t ztop = gfm._zOffs[0]+1;
 			st.back().initMap(oldbot - ztop);
 			assert_eq((index_t)map_.size(), oldbot-top+mapi_);
 			for(index_t i = ztop; i < oldbot; i++) {
@@ -677,7 +677,7 @@ public:
 			}
 			map_.resize(bot - top + mapi_);
 			st.back().init(
-				ebwt,
+				gfm,
 				ref,
 				sa,
 				st,
@@ -693,12 +693,12 @@ public:
 		assert_gt(bot, top);
 		// Prepare SideLocus's for next step
 		if(bot-top > 1) {
-			SideLocus<index_t>::initFromTopBot(top, bot, ebwt.eh(), ebwt.ebwt(), tloc, bloc);
-			assert(tloc.valid()); assert(tloc.repOk(ebwt.eh()));
-			assert(bloc.valid()); assert(bloc.repOk(ebwt.eh()));
+			SideLocus<index_t>::initFromTopBot(top, bot, gfm.gh(), gfm.gfm(), tloc, bloc);
+			assert(tloc.valid()); assert(tloc.repOk(gfm.gh()));
+			assert(bloc.valid()); assert(bloc.repOk(gfm.gh()));
 		} else {
-			tloc.initFromRow(top, ebwt.eh(), ebwt.ebwt());
-			assert(tloc.valid()); assert(tloc.repOk(ebwt.eh()));
+			tloc.initFromRow(top, gfm.gh(), gfm.gfm());
+			assert(tloc.valid()); assert(tloc.repOk(gfm.gh()));
 			bloc.invalidate();
 		}
 		return ret;
@@ -709,13 +709,13 @@ public:
 	 * Check if this GWP is internally consistent.
 	 */
 	bool repOk(
-		const Ebwt<index_t>& ebwt,
+		const GFM<index_t>& gfm,
 		GWHit<index_t, T>& hit,
 		index_t range) const
 	{
 		assert(done() || bot > top);
-		assert(doneResolving(hit) || (tloc.valid() && tloc.repOk(ebwt.eh())));
-		assert(doneResolving(hit) || bot == top+1 || (bloc.valid() && bloc.repOk(ebwt.eh())));
+		assert(doneResolving(hit) || (tloc.valid() && tloc.repOk(gfm.gh())));
+		assert(doneResolving(hit) || bot == top+1 || (bloc.valid() && bloc.repOk(gfm.gh())));
 		assert_eq(map_.size()-mapi_, bot-top);
 		// Make sure that 'done' is compatible with whether we have >=
 		// 1 elements left to resolve.
@@ -724,7 +724,7 @@ public:
 			ASSERT_ONLY(index_t row = (index_t)(top + i - mapi_));
 			ASSERT_ONLY(index_t origRow = hit.satup->topf + map(i));
 			assert(step == 0 || row != origRow);
-			assert_eq(row, ebwt.walkLeft(origRow, step));
+			assert_eq(row, gfm.walkLeft(origRow, step));
 			assert_lt(map_[i], hit.satup->offs.size());
 			if(off(i, hit) == (index_t)OFF_MASK) left++;
 		}
@@ -853,7 +853,7 @@ public:
 	 */
 	template <int S>
 	pair<int, int> advance(
-		const Ebwt<index_t>& ebwt,   // the forward Bowtie index, for stepping left
+		const GFM<index_t>& gfm,     // the forward Bowtie index, for stepping left
 		const BitPairReference& ref, // bitpair-encoded reference
 		SARangeWithOffs<T>& sa,      // SA range with offsets
 		GWHit<index_t, T>& hit,      // the associated GWHit object
@@ -870,7 +870,7 @@ public:
 		assert_geq(step, 0);
 		assert_eq(step, lastStep_);
 		assert_geq(st.capacity(), st.size() + 4);
-		assert(tloc.valid()); assert(tloc.repOk(ebwt.eh()));
+		assert(tloc.valid()); assert(tloc.repOk(gfm.gh()));
 		assert_eq(bot-top, (index_t)(map_.size()-mapi_));
 		pair<int, int> ret = make_pair(0, 0);
 		assert_eq(top, tloc.toBWRow());
@@ -885,8 +885,8 @@ public:
 			prm.nExFmops++;
 			// Assert that there's not a dollar sign in the middle of
 			// this range
-			assert(bot <= ebwt._zOff || top > ebwt._zOff);
-			ebwt.mapLFRange(tloc, bloc, bot-top, upto, in, gws.masks);
+			assert(bot <= gfm._zOffs[0] || top > gfm._zOffs[0]);
+			gfm.mapLFRange(tloc, bloc, bot-top, upto, in, gws.masks);
 #ifndef NDEBUG
 			for(int i = 0; i < 4; i++) {
 			  assert_eq(bot-top, (index_t)(gws.masks[i].size()));
@@ -920,7 +920,7 @@ public:
 								assert_lt(gws.map.back(), sa.size());
 								if(sa.offs[gws.map.back()] == (index_t)OFF_MASK) {
 									assert_eq(newtop + gws.map.size() - 1,
-											  ebwt.walkLeft(sa.topf + gws.map.back(), step+1));
+											  gfm.walkLeft(sa.topf + gws.map.back(), step+1));
 								}
 #endif
 							}
@@ -946,7 +946,7 @@ public:
 						}
 						pair<int, int> rret =
 						st.back().init(
-							ebwt,        // forward Bowtie index
+							gfm,         // forward Bowtie index
 							ref,         // bitpair-encodede reference
 							sa,          // SA range with offsets
 							st,          // EList of all GWStates associated with original range
@@ -986,7 +986,7 @@ public:
 			ASSERT_ONLY(index_t oldtop = top);
 			met.bwops++;
 			prm.nExFmops++;
-			ebwt.mapLF1(top, tloc);
+			gfm.mapLF1(top, tloc);
 			assert_neq(top, oldtop);
 			bot = top+1;
 			if(mapi_ > 0) {
@@ -998,10 +998,10 @@ public:
 		assert(top != origTop || bot != origBot);
 		step++;
 		assert_gt(step, 0);
-		assert_leq((index_t)step, ebwt.eh().len());
+		assert_leq((index_t)step, gfm.gh().len());
 		pair<int, int> rret =
 		init<S>(
-			ebwt,       // forward Bowtie index
+			gfm,        // forward Bowtie index
 			ref,        // bitpair-encodede reference
 			sa,         // SA range with offsets
 			st,         // EList of all GWStates associated with original range
@@ -1095,7 +1095,7 @@ public:
 	 * Initialize a new group walk w/r/t a QVal object.
 	 */
 	void init(
-		const Ebwt<index_t>& ebwtFw, // forward Bowtie index for walking left
+		const GFM<index_t>& gfmFw,   // forward Bowtie index for walking left
 		const BitPairReference& ref, // bitpair-encoded reference
 		SARangeWithOffs<T>& sa,      // SA range with offsets
 		RandomSource& rnd,           // pseudo-random generator for sampling rows
@@ -1116,7 +1116,7 @@ public:
 		st_.back().initMap(bot-top);
 		st_.ensure(4);
 		st_.back().init(
-			ebwtFw,             // Bowtie index
+			gfmFw,              // Bowtie index
 			ref,                // bitpair-encoded reference
 			sa,                 // SA range with offsets
 			st_,                // EList<GWState>
@@ -1152,7 +1152,7 @@ public:
 	 */
 	bool advanceElement(
 		index_t elt,                  // element within the range
-		const Ebwt<index_t>& ebwtFw,  // forward Bowtie index for walking left
+		const GFM<index_t>& gfmFw,    // forward Bowtie index for walking left
 		const BitPairReference& ref,  // bitpair-encoded reference
 		SARangeWithOffs<T>& sa,       // SA range with offsets
 		GroupWalkState<index_t>& gws, // GroupWalk state; scratch space
@@ -1175,7 +1175,7 @@ public:
 			// resolved but unreported offsets found during this advance, the
 			// second being the number of as-yet-unresolved offsets.
 			st.advance(
-				ebwtFw,
+				gfmFw,
 				ref,
 				sa,
 				hit_,

@@ -1,14 +1,14 @@
 /*
- * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
+ * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
  *
- * This file is part of Bowtie 2.
+ * This file is part of HISAT 2.
  *
- * Bowtie 2 is free software: you can redistribute it and/or modify
+ * HISAT 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Bowtie 2 is distributed in the hope that it will be useful,
+ * HISAT 2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -27,7 +27,7 @@
 using namespace std;
 
 extern "C" {
-	int hisat(int argc, const char **argv);
+	int hisat2(int argc, const char **argv);
 }
 
 /**
@@ -55,7 +55,7 @@ int main(int argc, const char **argv) {
 				myargs[i] = args[i].c_str();
 			}
 			if(args.size() == 1) continue;
-			lastret = hisat((int)args.size(), myargs);
+			lastret = hisat2((int)args.size(), myargs);
 			free(myargs);
 		}
 		if(lastret == -1) {
@@ -64,6 +64,6 @@ int main(int argc, const char **argv) {
 		}
 		return lastret;
 	} else {
-		return hisat(argc, argv);
+		return hisat2(argc, argv);
 	}
 }

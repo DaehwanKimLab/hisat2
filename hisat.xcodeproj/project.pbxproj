@@ -96,10 +96,9 @@
 		E85452591B1A2B720049F2AC /* hisat2_inspect.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_inspect.cpp; sourceTree = "<group>"; };
 		E854525A1B1A2B7C0049F2AC /* hisat2_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_main.cpp; sourceTree = "<group>"; };
 		E854525B1B1A2B870049F2AC /* hisat2.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2.cpp; sourceTree = "<group>"; };
-		E854525C1B1A2BA30049F2AC /* hi_aligner2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hi_aligner2.h; sourceTree = "<group>"; };
-		E854525D1B1A2BB90049F2AC /* spliced_aligner2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = spliced_aligner2.h; sourceTree = "<group>"; };
 		E85766711970545400D8AAFB /* btypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = btypes.h; sourceTree = "<group>"; };
 		E85F1AFA193501E000F85A12 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		E861E5A51B1B3C2200362002 /* gfm.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = gfm.cpp; sourceTree = "<group>"; };
 		E88C30AA1B15E23800761CCB /* gfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gfm.h; sourceTree = "<group>"; };
 		E8B0DBE81934F7AA005ED9FA /* aligner_bt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_bt.h; sourceTree = "<group>"; };
 		E8B0DBE91934F7AA005ED9FA /* aligner_cache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_cache.h; sourceTree = "<group>"; };
@@ -122,9 +121,6 @@
 		E8B0DBFA1934F7AA005ED9FA /* binary_sa_search.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = binary_sa_search.h; sourceTree = "<group>"; };
 		E8B0DBFB1934F7AA005ED9FA /* bitpack.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bitpack.h; sourceTree = "<group>"; };
 		E8B0DBFC1934F7AA005ED9FA /* blockwise_sa.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = blockwise_sa.h; sourceTree = "<group>"; };
-		E8B0DBFD1934F7AA005ED9FA /* bt2_idx.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bt2_idx.h; sourceTree = "<group>"; };
-		E8B0DBFE1934F7AA005ED9FA /* bt2_io.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bt2_io.h; sourceTree = "<group>"; };
-		E8B0DBFF1934F7AA005ED9FA /* bt2_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bt2_util.h; sourceTree = "<group>"; };
 		E8B0DC001934F7AA005ED9FA /* diff_sample.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = diff_sample.h; sourceTree = "<group>"; };
 		E8B0DC011934F7AA005ED9FA /* dp_framer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = dp_framer.h; sourceTree = "<group>"; };
 		E8B0DC021934F7AA005ED9FA /* ds.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ds.h; sourceTree = "<group>"; };
@@ -135,7 +131,6 @@
 		E8B0DC071934F7AA005ED9FA /* formats.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = formats.h; sourceTree = "<group>"; };
 		E8B0DC081934F7AA005ED9FA /* group_walk.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = group_walk.h; sourceTree = "<group>"; };
 		E8B0DC091934F7AA005ED9FA /* hier_idx_common.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hier_idx_common.h; sourceTree = "<group>"; };
-		E8B0DC0A1934F7AA005ED9FA /* hier_idx.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hier_idx.h; sourceTree = "<group>"; };
 		E8B0DC0B1934F7AA005ED9FA /* ival_list.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ival_list.h; sourceTree = "<group>"; };
 		E8B0DC0C1934F7AA005ED9FA /* limit.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = limit.h; sourceTree = "<group>"; };
 		E8B0DC0D1934F7AA005ED9FA /* ls.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ls.h; sourceTree = "<group>"; };
@@ -192,12 +187,6 @@
 		E8B0DC401934F7AA005ED9FA /* aln_sink.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = aln_sink.cpp; sourceTree = "<group>"; };
 		E8B0DC411934F7AA005ED9FA /* alphabet.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = alphabet.cpp; sourceTree = "<group>"; };
 		E8B0DC421934F7AA005ED9FA /* banded.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = banded.cpp; sourceTree = "<group>"; };
-		E8B0DC431934F7AA005ED9FA /* bowtie_build_main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bowtie_build_main.cpp; sourceTree = "<group>"; };
-		E8B0DC441934F7AA005ED9FA /* bowtie_main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bowtie_main.cpp; sourceTree = "<group>"; };
-		E8B0DC451934F7AA005ED9FA /* bt2_build.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bt2_build.cpp; sourceTree = "<group>"; };
-		E8B0DC461934F7AA005ED9FA /* bt2_idx.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bt2_idx.cpp; sourceTree = "<group>"; };
-		E8B0DC471934F7AA005ED9FA /* bt2_inspect.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bt2_inspect.cpp; sourceTree = "<group>"; };
-		E8B0DC481934F7AA005ED9FA /* bt2_search.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bt2_search.cpp; sourceTree = "<group>"; };
 		E8B0DC491934F7AA005ED9FA /* ccnt_lut.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ccnt_lut.cpp; sourceTree = "<group>"; };
 		E8B0DC4A1934F7AA005ED9FA /* diff_sample.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = diff_sample.cpp; sourceTree = "<group>"; };
 		E8B0DC4B1934F7AA005ED9FA /* dp_framer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = dp_framer.cpp; sourceTree = "<group>"; };
@@ -221,11 +210,6 @@
 		E8B0DC5D1934F7AA005ED9FA /* ref_read.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ref_read.cpp; sourceTree = "<group>"; };
 		E8B0DC5E1934F7AA005ED9FA /* reference.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = reference.cpp; sourceTree = "<group>"; };
 		E8B0DC5F1934F7AA005ED9FA /* sam.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = sam.cpp; sourceTree = "<group>"; };
-		E8B0DC601934F7AA005ED9FA /* hisat_build_main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat_build_main.cpp; sourceTree = "<group>"; };
-		E8B0DC611934F7AA005ED9FA /* hisat_build.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat_build.cpp; sourceTree = "<group>"; };
-		E8B0DC621934F7AA005ED9FA /* hisat_inspect.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat_inspect.cpp; sourceTree = "<group>"; };
-		E8B0DC631934F7AA005ED9FA /* hisat_main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat_main.cpp; sourceTree = "<group>"; };
-		E8B0DC641934F7AA005ED9FA /* hisat.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat.cpp; sourceTree = "<group>"; };
 		E8B0DC651934F7AA005ED9FA /* scoring.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = scoring.cpp; sourceTree = "<group>"; };
 		E8B0DC661934F7AA005ED9FA /* shmem.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = shmem.cpp; sourceTree = "<group>"; };
 		E8B0DC671934F7AA005ED9FA /* simple_func.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = simple_func.cpp; sourceTree = "<group>"; };
@@ -336,9 +320,6 @@
 				E8B0DBFB1934F7AA005ED9FA /* bitpack.h */,
 				E8B0DBFC1934F7AA005ED9FA /* blockwise_sa.h */,
 				E818AEAD1987FD2E00ED141B /* bp_aligner.h */,
-				E8B0DBFD1934F7AA005ED9FA /* bt2_idx.h */,
-				E8B0DBFE1934F7AA005ED9FA /* bt2_io.h */,
-				E8B0DBFF1934F7AA005ED9FA /* bt2_util.h */,
 				E85766711970545400D8AAFB /* btypes.h */,
 				E8B0DC001934F7AA005ED9FA /* diff_sample.h */,
 				E8B0DC011934F7AA005ED9FA /* dp_framer.h */,
@@ -352,10 +333,8 @@
 				E88C30AA1B15E23800761CCB /* gfm.h */,
 				E8B0DC081934F7AA005ED9FA /* group_walk.h */,
 				E81BC0841980295300580916 /* hi_aligner.h */,
-				E854525C1B1A2BA30049F2AC /* hi_aligner2.h */,
 				E8EE06DF1B15F1DE00E75FC3 /* hier_gfm.h */,
 				E8B0DC091934F7AA005ED9FA /* hier_idx_common.h */,
-				E8B0DC0A1934F7AA005ED9FA /* hier_idx.h */,
 				E8B0DC0B1934F7AA005ED9FA /* ival_list.h */,
 				E8B0DC0C1934F7AA005ED9FA /* limit.h */,
 				E8B0DC0D1934F7AA005ED9FA /* ls.h */,
@@ -385,7 +364,6 @@
 				E819F68819F553B100E1BD32 /* splice_site_mem.h */,
 				E8B0DC251934F7AA005ED9FA /* splice_site.h */,
 				E8B0DC261934F7AA005ED9FA /* spliced_aligner.h */,
-				E854525D1B1A2BB90049F2AC /* spliced_aligner2.h */,
 				E8B0DC271934F7AA005ED9FA /* sse_util.h */,
 				E8B0DC281934F7AA005ED9FA /* sstring.h */,
 				E8B0DC291934F7AA005ED9FA /* str_util.h */,
@@ -414,17 +392,12 @@
 				E8B0DC401934F7AA005ED9FA /* aln_sink.cpp */,
 				E8B0DC411934F7AA005ED9FA /* alphabet.cpp */,
 				E8B0DC421934F7AA005ED9FA /* banded.cpp */,
-				E8B0DC431934F7AA005ED9FA /* bowtie_build_main.cpp */,
-				E8B0DC441934F7AA005ED9FA /* bowtie_main.cpp */,
-				E8B0DC451934F7AA005ED9FA /* bt2_build.cpp */,
-				E8B0DC461934F7AA005ED9FA /* bt2_idx.cpp */,
-				E8B0DC471934F7AA005ED9FA /* bt2_inspect.cpp */,
-				E8B0DC481934F7AA005ED9FA /* bt2_search.cpp */,
 				E8B0DC491934F7AA005ED9FA /* ccnt_lut.cpp */,
 				E8B0DC4A1934F7AA005ED9FA /* diff_sample.cpp */,
 				E8B0DC4B1934F7AA005ED9FA /* dp_framer.cpp */,
 				E8B0DC4C1934F7AA005ED9FA /* ds.cpp */,
 				E8B0DC4D1934F7AA005ED9FA /* edit.cpp */,
+				E861E5A51B1B3C2200362002 /* gfm.cpp */,
 				E8B0DC4E1934F7AA005ED9FA /* group_walk.cpp */,
 				E8B0DC4F1934F7AA005ED9FA /* ival_list.cpp */,
 				E8B0DC501934F7AA005ED9FA /* limit.cpp */,
@@ -444,11 +417,6 @@
 				E8B0DC5E1934F7AA005ED9FA /* reference.cpp */,
 				E8B0DC5F1934F7AA005ED9FA /* sam.cpp */,
 				E818AEAE1987FD5100ED141B /* hisat_bp.cpp */,
-				E8B0DC601934F7AA005ED9FA /* hisat_build_main.cpp */,
-				E8B0DC611934F7AA005ED9FA /* hisat_build.cpp */,
-				E8B0DC621934F7AA005ED9FA /* hisat_inspect.cpp */,
-				E8B0DC631934F7AA005ED9FA /* hisat_main.cpp */,
-				E8B0DC641934F7AA005ED9FA /* hisat.cpp */,
 				E8000AE11AE9304500E1F351 /* hisat2_build_main.cpp */,
 				E8000AE21AE9304500E1F351 /* hisat2_build.cpp */,
 				E85452591B1A2B720049F2AC /* hisat2_inspect.cpp */,
@@ -699,6 +667,34 @@
 			passBuildSettingsInEnvironment = 1;
 			productName = "sawhi-align-debug";
 		};
+		E854525E1B1A2E350049F2AC /* hisat2-inspect-s-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "hisat2-inspect-s-debug";
+			buildConfigurationList = E854525F1B1A2E350049F2AC /* Build configuration list for PBXLegacyTarget "hisat2-inspect-s-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
+			dependencies = (
+			);
+			name = "hisat2-inspect-s-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
+		E85452621B1A2E400049F2AC /* hisat2-align-s-debug */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "USE_SRA=0 hisat2-align-s-debug";
+			buildConfigurationList = E85452631B1A2E400049F2AC /* Build configuration list for PBXLegacyTarget "hisat2-align-s-debug" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
+			dependencies = (
+			);
+			name = "hisat2-align-s-debug";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
 		E857666519704BFB00D8AAFB /* hisat-align-s-debug */ = {
 			isa = PBXLegacyTarget;
 			buildArgumentsString = "USE_SRA=0 hisat-align-s-debug";
@@ -791,6 +787,7 @@
 			projectRoot = "";
 			targets = (
 				E81779C219704B300067B436 /* hisat-build-l-debug */,
+				E85452551B1A0CFA0049F2AC /* hisat-build-s-debug */,
 				E81779CA19704BB80067B436 /* hisat-align-l-debug */,
 				E857666519704BFB00D8AAFB /* hisat-align-s-debug */,
 				E857666919704BFE00D8AAFB /* hisat-align-l */,
@@ -804,7 +801,8 @@
 				E8000AD91AE82AC200E1F351 /* gcsa_test-debug */,
 				E8000ADD1AE82ACC00E1F351 /* gcsa_alignment-debug */,
 				E8000AE31AE9324600E1F351 /* hisat2-build-s-debug */,
-				E85452551B1A0CFA0049F2AC /* hisat-build-s-debug */,
+				E854525E1B1A2E350049F2AC /* hisat2-inspect-s-debug */,
+				E85452621B1A2E400049F2AC /* hisat2-align-s-debug */,
 			);
 		};
 /* End PBXProject section */
@@ -1083,6 +1081,60 @@
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "hisat-build-s-debug";
+			};
+			name = Release;
+		};
+		E85452601B1A2E350049F2AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat2-inspect-s-debug";
+			};
+			name = Debug;
+		};
+		E85452611B1A2E350049F2AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat2-inspect-s-debug";
+			};
+			name = Release;
+		};
+		E85452641B1A2E400049F2AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat2-align-s-debug";
+			};
+			name = Debug;
+		};
+		E85452651B1A2E400049F2AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat2-align-s-debug";
 			};
 			name = Release;
 		};
@@ -1382,6 +1434,24 @@
 			buildConfigurations = (
 				E85452571B1A0CFA0049F2AC /* Debug */,
 				E85452581B1A0CFA0049F2AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E854525F1B1A2E350049F2AC /* Build configuration list for PBXLegacyTarget "hisat2-inspect-s-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E85452601B1A2E350049F2AC /* Debug */,
+				E85452611B1A2E350049F2AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E85452631B1A2E400049F2AC /* Build configuration list for PBXLegacyTarget "hisat2-align-s-debug" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E85452641B1A2E400049F2AC /* Debug */,
+				E85452651B1A2E400049F2AC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -81,8 +81,8 @@ public:
                  sanityCheck,
                  true)
 	{
-		this->_in1Str = in + ".5." + gEbwt_ext;
-		this->_in2Str = in + ".5." + gEbwt_ext;
+		this->_in1Str = in + ".5." + gfm_ext;
+		this->_in2Str = in + ".5." + gfm_ext;
 		readIntoMemory(
 					   in5,
 					   in6,
@@ -1102,8 +1102,8 @@ public:
     _in5(NULL),
     _in6(NULL)
     {
-        _in5Str = in + ".5." + gEbwt_ext;
-        _in6Str = in + ".6." + gEbwt_ext;
+        _in5Str = in + ".5." + gfm_ext;
+        _in6Str = in + ".6." + gfm_ext;
         
         if(!skipLoading && false) {
             readIntoMemory(
@@ -1343,8 +1343,8 @@ HierGFM<index_t, local_index_t>::HierGFM(
     // daehwan - to be implemented
     return;
     
-    _in5Str = outfile + ".5." + gEbwt_ext;
-    _in6Str = outfile + ".6." + gEbwt_ext;
+    _in5Str = outfile + ".5." + gfm_ext;
+    _in6Str = outfile + ".6." + gfm_ext;
     
     // Open output files
     ofstream fout5(_in5Str.c_str(), ios::binary);

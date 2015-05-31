@@ -20,7 +20,7 @@
 #include "aligner_cache.h"
 #include "aligner_seed.h"
 #include "search_globals.h"
-#include "bt2_idx.h"
+#include "gfm.h"
 
 using namespace std;
 
@@ -473,9 +473,9 @@ int main(int argc, char **argv) {
 		cerr << "No reads; quitting..." << endl;
 		return 1;
 	}
-	string ebwtBase(reffn);
+	string gfmBase(reffn);
 	BitPairReference ref(
-		ebwtBase,    // base path
+		gfmBase,     // base path
 		gColor,      // whether we expect it to be colorspace
 		sanity,      // whether to sanity-check reference as it's loaded
 		NULL,        // fasta files to sanity check reference against
@@ -487,9 +487,8 @@ int main(int argc, char **argv) {
 		gVerbose,    // verbose
 		gVerbose);   // verbose but just for startup messages
 	Timer *t = new Timer(cerr, "Time loading fw index: ", timing);
-	Ebwt ebwtFw(
-		ebwtBase,
-		gColor,      // index is colorspace
+	GFM gfmFw(
+		gfmBase,
 		0,           // don't need entireReverse for fw index
 		true,        // index is for the forward direction
 		-1,          // offrate (irrelevant)
@@ -507,9 +506,8 @@ int main(int argc, char **argv) {
 		sanity);
 	delete t;
 	t = new Timer(cerr, "Time loading bw index: ", timing);
-	Ebwt ebwtBw(
-		ebwtBase + ".rev",
-		gColor,      // index is colorspace
+	GFM gfmBw(
+		gfmBase + ".rev",
 		1,           // need entireReverse
 		false,       // index is for the backward direction
 		-1,          // offrate (irrelevant)

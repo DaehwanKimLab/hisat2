@@ -2305,7 +2305,7 @@ public:
 	 * Initialize with index.
 	 */
 	HI_Aligner(
-               const Ebwt<index_t>& ebwt,
+               const GFM<index_t>& gfm,
                size_t minIntronLen = 20,
                size_t maxIntronLen = 500000,
                bool secondary = false,
@@ -2321,7 +2321,7 @@ public:
     _thread_rids_mindist(threads_rids_mindist),
     _no_spliced_alignment(no_spliced_alignment)
     {
-        index_t genomeLen = ebwt.eh().len();
+        index_t genomeLen = gfm.gh().len();
         _minK = 0;
         while(genomeLen > 0) {
             genomeLen >>= 2;
@@ -2390,8 +2390,8 @@ public:
     virtual
     int go(
            const Scoring&           sc,
-           const Ebwt<index_t>&     ebwtFw,
-           const Ebwt<index_t>&     ebwtBw,
+           const GFM<index_t>&      gfmFw,
+           const GFM<index_t>&      gfmBw,
            const BitPairReference&  ref,
            SwAligner&               swa,
            SpliceSiteDB&            ssdb,
@@ -2408,9 +2408,9 @@ public:
         // given read and its reverse complement
         //  (and mate and the reverse complement of mate in case of pair alignment),
         // pick up one with best partial alignment
-        while(nextBWT(sc, ebwtFw, ebwtBw, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
+        while(nextBWT(sc, gfmFw, gfmBw, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
             // given the partial alignment, try to extend it to full alignments
-        	found[rdi] = align(sc, ebwtFw, ebwtBw, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
+        	found[rdi] = align(sc, gfmFw, gfmBw, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
             if(!found[0] && !found[1]) {
                 break;
             }
@@ -2418,7 +2418,7 @@ public:
             // try to combine this alignment with some of mate alignments
             // to produce pair alignment
             if(this->_paired) {
-                pairReads(sc, ebwtFw, ebwtBw, ref, wlm, prm, him, rnd, sink);
+                pairReads(sc, gfmFw, gfmBw, ref, wlm, prm, him, rnd, sink);
                 // if(sink.bestPair() >= _minsc[0] + _minsc[1]) break;
             }
         }
@@ -2439,8 +2439,8 @@ public:
                         bool fw = (res.orient() == 1);
                         mate_found |= alignMate(
                                                 sc,
-                                                ebwtFw,
-                                                ebwtBw,
+                                                gfmFw,
+                                                gfmBw,
                                                 ref,
                                                 swa,
                                                 ssdb,
@@ -2458,7 +2458,7 @@ public:
                 }
                 
                 if(mate_found) {
-                    pairReads(sc, ebwtFw, ebwtBw, ref, wlm, prm, him, rnd, sink);
+                    pairReads(sc, gfmFw, gfmBw, ref, wlm, prm, him, rnd, sink);
                 }
             }
         }
@@ -2473,8 +2473,8 @@ public:
     virtual
     bool nextBWT(
                  const Scoring&          sc,
-                 const Ebwt<index_t>&    ebwtFw,
-                 const Ebwt<index_t>&    ebwtBw,
+                 const GFM<index_t>&     gfmFw,
+                 const GFM<index_t>&     gfmBw,
                  const BitPairReference& ref,
                  index_t&                rdi,
                  bool&                   fw,
@@ -2546,7 +2546,7 @@ public:
             // stops when it is uniquelly mapped with at least 28bp or
             // it may involve processed pseudogene
             partialSearch(
-                          ebwtFw,
+                          gfmFw,
                           *_rds[rdi],
                           sc,
                           fw,
@@ -2581,8 +2581,8 @@ public:
     virtual
     bool align(
                const Scoring&                   sc,
-               const Ebwt<index_t>&             ebwtFw,
-               const Ebwt<index_t>&             ebwtBw,
+               const GFM<index_t>&              gfmFw,
+               const GFM<index_t>&              gfmBw,
                const BitPairReference&          ref,
                SwAligner&                       swa,
                SpliceSiteDB&                    ssdb,
@@ -2602,8 +2602,8 @@ public:
     virtual
     bool alignMate(
                    const Scoring&                   sc,
-                   const Ebwt<index_t>&             ebwtFw,
-                   const Ebwt<index_t>&             ebwtBw,
+                   const GFM<index_t>&              gfmFw,
+                   const GFM<index_t>&              gfmBw,
                    const BitPairReference&          ref,
                    SwAligner&                       swa,
                    SpliceSiteDB&                    ssdb,
@@ -2626,8 +2626,8 @@ public:
     virtual
     void hybridSearch(
                       const Scoring&                     sc,
-                      const Ebwt<index_t>&               ebwtFw,
-                      const Ebwt<index_t>&               ebwtBw,
+                      const GFM<index_t>&                gfmFw,
+                      const GFM<index_t>&                gfmBw,
                       const BitPairReference&            ref,
                       SwAligner&                         swa,
                       SpliceSiteDB&                      ssdb,
@@ -2649,8 +2649,8 @@ public:
     virtual
     int64_t hybridSearch_recur(
                                const Scoring&                   sc,
-                               const Ebwt<index_t>&             ebwtFw,
-                               const Ebwt<index_t>&             ebwtBw,
+                               const GFM<index_t>&              gfmFw,
+                               const GFM<index_t>&              gfmBw,
                                const BitPairReference&          ref,
                                SwAligner&                       swa,
                                SpliceSiteDB&                    ssdb,
@@ -2703,7 +2703,7 @@ public:
      * Align a part of a read without any edits
 	 */
     size_t partialSearch(
-                         const Ebwt<index_t>&    ebwt,    // BWT index
+                         const GFM<index_t>&     gfm,    // BWT index
                          const Read&             read,    // read to align
                          const Scoring&          sc,      // scoring scheme
                          bool                    fw,      // don't align forward read
@@ -2718,62 +2718,62 @@ public:
     /**
      * Global FM index search
 	 */
-	size_t globalEbwtSearch(
-                            const Ebwt<index_t>& ebwt,  // BWT index
-                            const Read&          read,  // read to align
-                            const Scoring&       sc,    // scoring scheme
-                            bool                 fw,
-                            index_t              hitoff,
-                            index_t&             hitlen,
-                            index_t&             top,
-                            index_t&             bot,
-                            RandomSource&        rnd,
-                            bool&                uniqueStop,
-                            index_t              maxHitLen = (index_t)OFF_MASK);
+	size_t globalGFMSearch(
+                           const GFM<index_t>&  gfm,  // BWT index
+                           const Read&          read,  // read to align
+                           const Scoring&       sc,    // scoring scheme
+                           bool                 fw,
+                           index_t              hitoff,
+                           index_t&             hitlen,
+                           index_t&             top,
+                           index_t&             bot,
+                           RandomSource&        rnd,
+                           bool&                uniqueStop,
+                           index_t              maxHitLen = (index_t)OFF_MASK);
     
     /**
      * Local FM index search
 	 */
-	size_t localEbwtSearch(
-                           const LocalEbwt<local_index_t, index_t>*  ebwtFw,  // BWT index
-                           const LocalEbwt<local_index_t, index_t>*  ebwtBw,  // BWT index
-                           const Read&                      read,    // read to align
-                           const Scoring&                   sc,      // scoring scheme
-                           bool                             fw,
-                           bool                             searchfw,
-                           index_t                          rdoff,
-                           index_t&                         hitlen,
-                           local_index_t&                   top,
-                           local_index_t&                   bot,
-                           RandomSource&                    rnd,
-                           bool&                            uniqueStop,
-                           local_index_t                    minUniqueLen,
-                           local_index_t                    maxHitLen = (local_index_t)OFF_MASK);
+	size_t localGFMSearch(
+                          const LocalGFM<local_index_t, index_t>*  gfmFw,  // BWT index
+                          const LocalGFM<local_index_t, index_t>*  gfmBw,  // BWT index
+                          const Read&                      read,    // read to align
+                          const Scoring&                   sc,      // scoring scheme
+                          bool                             fw,
+                          bool                             searchfw,
+                          index_t                          rdoff,
+                          index_t&                         hitlen,
+                          local_index_t&                   top,
+                          local_index_t&                   bot,
+                          RandomSource&                    rnd,
+                          bool&                            uniqueStop,
+                          local_index_t                    minUniqueLen,
+                          local_index_t                    maxHitLen = (local_index_t)OFF_MASK);
     
     /**
      * Local FM index search
 	 */
-	size_t localEbwtSearch_reverse(
-                                   const LocalEbwt<local_index_t, index_t>*  ebwtFw,  // BWT index
-                                   const LocalEbwt<local_index_t, index_t>*  ebwtBw,  // BWT index
-                                   const Read&                      read,    // read to align
-                                   const Scoring&                   sc,      // scoring scheme
-                                   bool                             fw,
-                                   bool                             searchfw,
-                                   index_t                          rdoff,
-                                   index_t&                         hitlen,
-                                   local_index_t&                   top,
-                                   local_index_t&                   bot,
-                                   RandomSource&                    rnd,
-                                   bool&                            uniqueStop,
-                                   local_index_t                    minUniqueLen,
-                                   local_index_t                    maxHitLen = (local_index_t)OFF_MASK);
+	size_t localGFMSearch_reverse(
+                                  const LocalGFM<local_index_t, index_t>*  gfmFw,  // BWT index
+                                  const LocalGFM<local_index_t, index_t>*  gfmBw,  // BWT index
+                                  const Read&                      read,    // read to align
+                                  const Scoring&                   sc,      // scoring scheme
+                                  bool                             fw,
+                                  bool                             searchfw,
+                                  index_t                          rdoff,
+                                  index_t&                         hitlen,
+                                  local_index_t&                   top,
+                                  local_index_t&                   bot,
+                                  RandomSource&                    rnd,
+                                  bool&                            uniqueStop,
+                                  local_index_t                    minUniqueLen,
+                                  local_index_t                    maxHitLen = (local_index_t)OFF_MASK);
     
     /**
      * Convert FM offsets to the corresponding genomic offset (chromosome id, offset)
      **/
     bool getGenomeCoords(
-                         const Ebwt<index_t>&       ebwt,
+                         const GFM<index_t>&        gfm,
                          const BitPairReference&    ref,
                          RandomSource&              rnd,
                          index_t                    top,
@@ -2793,7 +2793,7 @@ public:
      * Convert FM offsets to the corresponding genomic offset (chromosome id, offset)
      **/
     bool getGenomeCoords_local(
-                               const Ebwt<local_index_t>&   ebwt,
+                               const GFM<local_index_t>&    gfm,
                                const BitPairReference&      ref,
                                RandomSource&                rnd,
                                local_index_t                top,
@@ -2813,7 +2813,7 @@ public:
      * choose some that are longer and mapped to fewer places
      */
     index_t getAnchorHits(
-                          const Ebwt<index_t>&              ebwt,
+                          const GFM<index_t>&               gfm,
                           const BitPairReference&           ref,
                           RandomSource&                     rnd,
                           index_t                           rdi,
@@ -2868,7 +2868,7 @@ public:
             assert(!partialHit.hasGenomeCoords());
             bool straddled = false;
             getGenomeCoords(
-                            ebwt,
+                            gfm,
                             ref,
                             rnd,
                             partialHit._top,
@@ -2929,8 +2929,8 @@ public:
     
     bool pairReads(
                    const Scoring&          sc,
-                   const Ebwt<index_t>&    ebwtFw,
-                   const Ebwt<index_t>&    ebwtBw,
+                   const GFM<index_t>&     gfmFw,
+                   const GFM<index_t>&     gfmBw,
                    const BitPairReference& ref,
                    WalkMetrics&            wlm,
                    PerReadMetrics&         prm,
@@ -2943,7 +2943,7 @@ public:
      **/
     bool reportHit(
                    const Scoring&                   sc,
-                   const Ebwt<index_t>&             ebwt,
+                   const GFM<index_t>&              gfm,
                    const BitPairReference&          ref,
                    const SpliceSiteDB&              ssdb,
                    AlnSinkWrap<index_t>&            sink,
@@ -3051,10 +3051,10 @@ protected:
 
 #define HIER_INIT_LOCS(top, bot, tloc, bloc, e) { \
 	if(bot - top == 1) { \
-		tloc.initFromRow(top, (e).eh(), (e).ebwt()); \
+		tloc.initFromRow(top, (e).gh(), (e).gfm()); \
 		bloc.invalidate(); \
 	} else { \
-		SideLocus<index_t>::initFromTopBot(top, bot, (e).eh(), (e).ebwt(), tloc, bloc); \
+		SideLocus<index_t>::initFromTopBot(top, bot, (e).gh(), (e).gfm(), tloc, bloc); \
 		assert(bloc.valid()); \
 	} \
 }
@@ -3067,10 +3067,10 @@ protected:
 
 #define LOCAL_INIT_LOCS(top, bot, tloc, bloc, e) { \
     if(bot - top == 1) { \
-        tloc.initFromRow(top, (e).eh(), (e).ebwt()); \
+        tloc.initFromRow(top, (e).gh(), (e).gfm()); \
         bloc.invalidate(); \
     } else { \
-        SideLocus<local_index_t>::initFromTopBot(top, bot, (e).eh(), (e).ebwt(), tloc, bloc); \
+        SideLocus<local_index_t>::initFromTopBot(top, bot, (e).gh(), (e).gfm(), tloc, bloc); \
         assert(bloc.valid()); \
     } \
 }
@@ -3082,8 +3082,8 @@ protected:
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::align(
                                                const Scoring&                   sc,
-                                               const Ebwt<index_t>&             ebwtFw,
-                                               const Ebwt<index_t>&             ebwtBw,
+                                               const GFM<index_t>&              gfmFw,
+                                               const GFM<index_t>&              gfmBw,
                                                const BitPairReference&          ref,
                                                SwAligner&                       swa,
                                                SpliceSiteDB&                    ssdb,
@@ -3117,7 +3117,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     // choose candidate partial alignments for further alignment
     const index_t maxsize = rp.khits;
     index_t numHits = getAnchorHits(
-                                    ebwtFw,
+                                    gfmFw,
                                     ref,
                                     rnd,
                                     rdi,
@@ -3139,8 +3139,8 @@ bool HI_Aligner<index_t, local_index_t>::align(
     // local search, extension, and (less often) global search
     hybridSearch(
                  sc,
-                 ebwtFw,
-                 ebwtBw,
+                 gfmFw,
+                 gfmBw,
                  ref,
                  swa,
                  ssdb,
@@ -3164,8 +3164,8 @@ bool HI_Aligner<index_t, local_index_t>::align(
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                    const Scoring&                   sc,
-                                                   const Ebwt<index_t>&             ebwtFw,
-                                                   const Ebwt<index_t>&             ebwtBw,
+                                                   const GFM<index_t>&              gfmFw,
+                                                   const GFM<index_t>&              gfmBw,
                                                    const BitPairReference&          ref,
                                                    SwAligner&                       swa,
                                                    SpliceSiteDB&                    ssdb,
@@ -3195,8 +3195,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     EList<Coord>& coords = _coords.front();
     
     // local search to find anchors
-    const HierEbwt<index_t, local_index_t>* hierEbwt = (const HierEbwt<index_t, local_index_t>*)(&ebwtFw);
-    const LocalEbwt<local_index_t, index_t>* localEbwt = hierEbwt->getLocalEbwt(tidx, toff);
+    const HierGFM<index_t, local_index_t>* hierGFM = (const HierGFM<index_t, local_index_t>*)(&gfmFw);
+    const LocalGFM<local_index_t, index_t>* localGFM = hierGFM->getLocalGFM(tidx, toff);
     bool success = false, first = true;
     index_t count = 0;
     index_t max_hitlen = 0;
@@ -3204,28 +3204,28 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
         if(first) {
             first = false;
         } else {
-            localEbwt = hierEbwt->prevLocalEbwt(localEbwt);
-            if(localEbwt == NULL || localEbwt->empty()) break;
+            localGFM = hierGFM->prevLocalGFM(localGFM);
+            if(localGFM == NULL || localGFM->empty()) break;
         }
         index_t hitoff = rdlen - 1;
         while(hitoff >= _minK_local - 1) {
             index_t hitlen = 0;
             local_index_t top = (local_index_t)OFF_MASK, bot = (local_index_t)OFF_MASK;
             bool uniqueStop = false;
-            index_t nelt = localEbwtSearch(
-                                           localEbwt,   // BWT index
-                                           NULL,        // BWT index
-                                           ord,          // read to align
-                                           sc,          // scoring scheme
-                                           ofw,
-                                           false,       // searchfw,
-                                           hitoff,
-                                           hitlen,
-                                           top,
-                                           bot,
-                                           rnd,
-                                           uniqueStop,
-                                           _minK_local);
+            index_t nelt = localGFMSearch(
+                                          localGFM,    // BWT index
+                                          NULL,        // BWT index
+                                          ord,         // read to align
+                                          sc,          // scoring scheme
+                                          ofw,
+                                          false,       // searchfw,
+                                          hitoff,
+                                          hitlen,
+                                          top,
+                                          bot,
+                                          rnd,
+                                          uniqueStop,
+                                          _minK_local);
             assert_leq(top, bot);
             assert_eq(nelt, (index_t)(bot - top));
             assert_leq(hitlen, hitoff + 1);
@@ -3233,7 +3233,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                 coords.clear();
                 bool straddled = false;
                 getGenomeCoords_local(
-                                      *localEbwt,
+                                      *localGFM,
                                       ref,
                                       rnd,
                                       top,
@@ -3302,8 +3302,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                          rightext);
         hybridSearch_recur(
                            sc,
-                           ebwtFw,
-                           ebwtBw,
+                           gfmFw,
+                           gfmBw,
                            ref,
                            swa,
                            ssdb,
@@ -3328,7 +3328,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
  **/
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
-                                                         const Ebwt<index_t>&       ebwt,
+                                                         const GFM<index_t>&        gfm,
                                                          const BitPairReference&    ref,
                                                          RandomSource&              rnd,
                                                          index_t                    top,
@@ -3353,14 +3353,14 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
     _offs.resize(nelt);
     _offs.fill(std::numeric_limits<index_t>::max());
     _sas.init(top, rdlen, EListSlice<index_t, 16>(_offs, 0, nelt));
-    _gws.init(ebwt, ref, _sas, rnd, met);
+    _gws.init(gfm, ref, _sas, rnd, met);
     
     for(index_t off = 0; off < nelt; off++) {
         WalkResult<index_t> wr;
         index_t tidx = 0, toff = 0, tlen = 0;
         _gws.advanceElement(
                             off,
-                            ebwt,         // forward Bowtie index for walking left
+                            gfm,          // forward Bowtie index for walking left
                             ref,          // bitpair-encoded reference
                             _sas,         // SA range with offsets
                             _gwstate,     // GroupWalk state; scratch space
@@ -3369,14 +3369,14 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
                             prm);         // per-read metrics
         assert_neq(wr.toff, (index_t)OFF_MASK);
         bool straddled2 = false;
-        ebwt.joinedToTextOff(
-                             wr.elt.len,
-                             wr.toff,
-                             tidx,
-                             toff,
-                             tlen,
-                             rejectStraddle,        // reject straddlers?
-                             straddled2);  // straddled?
+        gfm.joinedToTextOff(
+                            wr.elt.len,
+                            wr.toff,
+                            tidx,
+                            toff,
+                            tlen,
+                            rejectStraddle,        // reject straddlers?
+                            straddled2);  // straddled?
         
         straddled |= straddled2;
         
@@ -3401,7 +3401,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
  **/
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
-                                                               const Ebwt<local_index_t>&   ebwt,
+                                                               const GFM<local_index_t>&    gfm,
                                                                const BitPairReference&      ref,
                                                                RandomSource&                rnd,
                                                                local_index_t                top,
@@ -3424,14 +3424,14 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
     _offs_local.resize(nelt);
     _offs_local.fill(std::numeric_limits<local_index_t>::max());
     _sas_local.init(top, rdlen, EListSlice<local_index_t, 16>(_offs_local, 0, nelt));
-    _gws_local.init(ebwt, ref, _sas_local, rnd, met);
+    _gws_local.init(gfm, ref, _sas_local, rnd, met);
     
     for(local_index_t off = 0; off < nelt; off++) {
         WalkResult<local_index_t> wr;
         local_index_t tidx = 0, toff = 0, tlen = 0;
         _gws_local.advanceElement(
                                   off,
-                                  ebwt,         // forward Bowtie index for walking left
+                                  gfm,          // forward Bowtie index for walking left
                                   ref,          // bitpair-encoded reference
                                   _sas_local,   // SA range with offsets
                                   _gwstate_local, // GroupWalk state; scratch space
@@ -3440,14 +3440,14 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
                                   prm);         // per-read metrics
         assert_neq(wr.toff, (local_index_t)OFF_MASK);
         bool straddled2 = false;
-        ebwt.joinedToTextOff(
-                             wr.elt.len,
-                             wr.toff,
-                             tidx,
-                             toff,
-                             tlen,
-                             rejectStraddle,        // reject straddlers?
-                             straddled2);  // straddled?
+        gfm.joinedToTextOff(
+                            wr.elt.len,
+                            wr.toff,
+                            tidx,
+                            toff,
+                            tlen,
+                            rejectStraddle,        // reject straddlers?
+                            straddled2);  // straddled?
         
         straddled |= straddled2;
         
@@ -3457,8 +3457,8 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
             return false;
         }
         index_t global_toff = toff, global_tidx = tidx;
-        LocalEbwt<local_index_t, index_t>* localEbwt = (LocalEbwt<local_index_t, index_t>*)&ebwt;
-        global_tidx = localEbwt->_tidx, global_toff = toff + localEbwt->_localOffset;
+        LocalGFM<local_index_t, index_t>* localGFM = (LocalGFM<local_index_t, index_t>*)&gfm;
+        global_tidx = localGFM->_tidx, global_toff = toff + localGFM->_localOffset;
         if(global_toff < rdoff) continue;
         
         // Coordinate of the seed hit w/r/t the pasted reference string
@@ -3476,8 +3476,8 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::pairReads(
                                                    const Scoring&          sc,
-                                                   const Ebwt<index_t>&    ebwtFw,
-                                                   const Ebwt<index_t>&    ebwtBw,
+                                                   const GFM<index_t>&     gfmFw,
+                                                   const GFM<index_t>&     gfmBw,
                                                    const BitPairReference& ref,
                                                    WalkMetrics&            wlm,
                                                    PerReadMetrics&         prm,
@@ -3540,7 +3540,7 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::reportHit(
                                                    const Scoring&                   sc,
-                                                   const Ebwt<index_t>&             ebwt,
+                                                   const GFM<index_t>&              gfm,
                                                    const BitPairReference&          ref,
                                                    const SpliceSiteDB&              ssdb,
                                                    AlnSinkWrap<index_t>&            sink,
@@ -3601,7 +3601,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
             0,                          // ambig base first pos
             0,                          // ambig base last pos
             hit.coord(),                // coord of leftmost aligned char in ref
-            ebwt.plen()[hit.ref()],     // length of reference aligned to
+            gfm.plen()[hit.ref()],      // length of reference aligned to
             &_rawEdits,
             -1,                         // # seed mms allowed
             -1,                         // seed length
@@ -3676,7 +3676,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
              0,                          // ambig base first pos
              0,                          // ambig base last pos
              ohit->coord(),              // coord of leftmost aligned char in ref
-             ebwt.plen()[ohit->ref()],   // length of reference aligned to
+             gfm.plen()[ohit->ref()],    // length of reference aligned to
              &_rawEdits,
              -1,                         // # seed mms allowed
              -1,                         // seed length
@@ -3804,7 +3804,7 @@ bool HI_Aligner<index_t, local_index_t>::redundant(
  */
 template <typename index_t, typename local_index_t>
 size_t HI_Aligner<index_t, local_index_t>::partialSearch(
-                                                         const Ebwt<index_t>&      ebwt,    // BWT index
+                                                         const GFM<index_t>&       gfm,    // BWT index
                                                          const Read&               read,    // read to align
                                                          const Scoring&            sc,      // scoring scheme
                                                          bool                      fw,
@@ -3818,7 +3818,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
 {
     bool pseudogeneStop_ = pseudogeneStop, anchorStop_ = anchorStop;
     pseudogeneStop = anchorStop = false;
-	const index_t ftabLen = ebwt.eh().ftabChars();
+	const index_t ftabLen = gfm.gh().ftabChars();
 	SideLocus<index_t> tloc, bloc;
 	const index_t len = (index_t)read.length();
     const BTDnaString& seq = fw ? read.patFw : read.patRc;
@@ -3867,7 +3867,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     }
     
     // Use ftab
-    ebwt.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
+    gfm.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
     dep += ftabLen;
     if(bot <= top) {
         cur = dep;
@@ -3883,7 +3883,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         return 0;
     }
     index_t same_range = 0, similar_range = 0;
-    HIER_INIT_LOCS(top, bot, tloc, bloc, ebwt);
+    HIER_INIT_LOCS(top, bot, tloc, bloc, gfm);
     // Keep going
     while(dep < len) {
         int c = seq[len-dep-1];
@@ -3892,11 +3892,11 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                topTemp = ebwt.mapLF(tloc, c);
-                botTemp = ebwt.mapLF(bloc, c);
+                topTemp = gfm.mapLF(tloc, c);
+                botTemp = gfm.mapLF(bloc, c);
             } else {
                 bwops_++;
-                topTemp = ebwt.mapLF1(top, tloc, c);
+                topTemp = gfm.mapLF1(top, tloc, c);
                 if(topTemp == (index_t)OFF_MASK) {
                     topTemp = botTemp = 0;
                 } else {
@@ -3952,7 +3952,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
             }
         }
         
-        HIER_INIT_LOCS(top, bot, tloc, bloc, ebwt);
+        HIER_INIT_LOCS(top, bot, tloc, bloc, gfm);
     }
     
     // Done
@@ -3985,22 +3985,22 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
 /**
  */
 template <typename index_t, typename local_index_t>
-size_t HI_Aligner<index_t, local_index_t>::globalEbwtSearch(
-                                                            const Ebwt<index_t>& ebwt,  // BWT index
-                                                            const Read&          read,  // read to align
-                                                            const Scoring&       sc,    // scoring scheme
-                                                            bool                 fw,
-                                                            index_t              hitoff,
-                                                            index_t&             hitlen,
-                                                            index_t&             top,
-                                                            index_t&             bot,
-                                                            RandomSource&        rnd,
-                                                            bool&                uniqueStop,
-                                                            index_t              maxHitLen)
+size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
+                                                           const GFM<index_t>&  gfm,  // BWT index
+                                                           const Read&          read,  // read to align
+                                                           const Scoring&       sc,    // scoring scheme
+                                                           bool                 fw,
+                                                           index_t              hitoff,
+                                                           index_t&             hitlen,
+                                                           index_t&             top,
+                                                           index_t&             bot,
+                                                           RandomSource&        rnd,
+                                                           bool&                uniqueStop,
+                                                           index_t              maxHitLen)
 {
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
-    const index_t ftabLen = ebwt.eh().ftabChars();
+    const index_t ftabLen = gfm.gh().ftabChars();
 	SideLocus<index_t> tloc, bloc;
 	const index_t len = (index_t)read.length();
     
@@ -4022,8 +4022,8 @@ size_t HI_Aligner<index_t, local_index_t>::globalEbwtSearch(
         // Use fchr
         int c = seq[len-dep-1];
         if(c < 4) {
-            top = ebwt.fchr()[c];
-            bot = ebwt.fchr()[c+1];
+            top = gfm.fchr()[c];
+            bot = gfm.fchr()[c+1];
         } else {
             hitlen = left;
             return 0;
@@ -4041,7 +4041,7 @@ size_t HI_Aligner<index_t, local_index_t>::globalEbwtSearch(
         }
         
         // Use ftab
-        ebwt.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
+        gfm.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
         dep += ftabLen;
         if(bot <= top) {
             hitlen = ftabLen;
@@ -4049,7 +4049,7 @@ size_t HI_Aligner<index_t, local_index_t>::globalEbwtSearch(
         }
     }
     
-    HIER_INIT_LOCS(top, bot, tloc, bloc, ebwt);
+    HIER_INIT_LOCS(top, bot, tloc, bloc, gfm);
     // Keep going
     while(dep < len) {
         int c = seq[len-dep-1];
@@ -4058,11 +4058,11 @@ size_t HI_Aligner<index_t, local_index_t>::globalEbwtSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                topTemp = ebwt.mapLF(tloc, c);
-                botTemp = ebwt.mapLF(bloc, c);
+                topTemp = gfm.mapLF(tloc, c);
+                botTemp = gfm.mapLF(bloc, c);
             } else {
                 bwops_++;
-                topTemp = ebwt.mapLF1(top, tloc, c);
+                topTemp = gfm.mapLF1(top, tloc, c);
                 if(topTemp == (index_t)OFF_MASK) {
                     topTemp = botTemp = 0;
                 } else {
@@ -4085,7 +4085,7 @@ size_t HI_Aligner<index_t, local_index_t>::globalEbwtSearch(
             }
         }
         
-        HIER_INIT_LOCS(top, bot, tloc, bloc, ebwt);
+        HIER_INIT_LOCS(top, bot, tloc, bloc, gfm);
     }
     
     // Done
@@ -4103,33 +4103,33 @@ size_t HI_Aligner<index_t, local_index_t>::globalEbwtSearch(
  *
  **/
 template <typename index_t, typename local_index_t>
-size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch(
-                                                           const LocalEbwt<local_index_t, index_t>*  ebwtFw,  // BWT index
-                                                           const LocalEbwt<local_index_t, index_t>*  ebwtBw,  // BWT index
-                                                           const Read&                      read,    // read to align
-                                                           const Scoring&                   sc,      // scoring scheme
-                                                           bool                             fw,
-                                                           bool                             searchfw,
-                                                           index_t                          rdoff,
-                                                           index_t&                         hitlen,
-                                                           local_index_t&                   top,
-                                                           local_index_t&                   bot,
-                                                           RandomSource&                    rnd,
-                                                           bool&                         	uniqueStop,
-                                                           local_index_t                    minUniqueLen,
-                                                           local_index_t                    maxHitLen)
+size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
+                                                          const LocalGFM<local_index_t, index_t>*  gfmFw,  // BWT index
+                                                          const LocalGFM<local_index_t, index_t>*  gfmBw,  // BWT index
+                                                          const Read&                      read,    // read to align
+                                                          const Scoring&                   sc,      // scoring scheme
+                                                          bool                             fw,
+                                                          bool                             searchfw,
+                                                          index_t                          rdoff,
+                                                          index_t&                         hitlen,
+                                                          local_index_t&                   top,
+                                                          local_index_t&                   bot,
+                                                          RandomSource&                    rnd,
+                                                          bool&                            uniqueStop,
+                                                          local_index_t                    minUniqueLen,
+                                                          local_index_t                    maxHitLen)
 {
 #ifndef NDEBUG
     if(searchfw) {
-        assert(ebwtBw != NULL);
+        assert(gfmBw != NULL);
     } else {
-        assert(ebwtFw != NULL);
+        assert(gfmFw != NULL);
     }
 #endif
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
-    const LocalEbwt<local_index_t, index_t>& ebwt = *(searchfw ? ebwtBw : ebwtFw);
-	const local_index_t ftabLen = (local_index_t)ebwt.eh().ftabChars();
+    const LocalGFM<local_index_t, index_t>& gfm = *(searchfw ? gfmBw : gfmFw);
+	const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
 	SideLocus<local_index_t> tloc, bloc;
 	const local_index_t len = (local_index_t)read.length();
 	size_t nelt = 0;
@@ -4158,16 +4158,16 @@ size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch(
     
     // Use ftab
     if(searchfw) {
-        ebwt.ftabLoHi(seq, dep, false, top, bot);
+        gfm.ftabLoHi(seq, dep, false, top, bot);
     } else {
-        ebwt.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
+        gfm.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
     }
     dep += ftabLen;
     if(bot <= top) {
         hitlen = ftabLen;
         return 0;
     }
-    LOCAL_INIT_LOCS(top, bot, tloc, bloc, ebwt);
+    LOCAL_INIT_LOCS(top, bot, tloc, bloc, gfm);
     // Keep going
     while(dep < len) {
         int c = searchfw ? seq[dep] : seq[len-dep-1];
@@ -4176,11 +4176,11 @@ size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                topTemp = ebwt.mapLF(tloc, c);
-                botTemp = ebwt.mapLF(bloc, c);
+                topTemp = gfm.mapLF(tloc, c);
+                botTemp = gfm.mapLF(bloc, c);
             } else {
                 bwops_++;
-                topTemp = ebwt.mapLF1(top, tloc, c);
+                topTemp = gfm.mapLF1(top, tloc, c);
                 if(topTemp == (local_index_t)OFF_MASK) {
                     topTemp = botTemp = 0;
                 } else {
@@ -4193,7 +4193,7 @@ size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch(
         }
         top = topTemp;
         bot = botTemp;
-        LOCAL_INIT_LOCS(top, bot, tloc, bloc, ebwt);
+        LOCAL_INIT_LOCS(top, bot, tloc, bloc, gfm);
         dep++;
 
         if(uniqueStop_) {
@@ -4221,33 +4221,33 @@ size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch(
  *
  **/
 template <typename index_t, typename local_index_t>
-size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch_reverse(
-                                                                   const LocalEbwt<local_index_t, index_t>*  ebwtFw,  // BWT index
-                                                                   const LocalEbwt<local_index_t, index_t>*  ebwtBw,  // BWT index
-                                                                   const Read&                      read,    // read to align
-                                                                   const Scoring&                   sc,      // scoring scheme
-                                                                   bool                             fw,
-                                                                   bool                             searchfw,
-                                                                   index_t                          rdoff,
-                                                                   index_t&                         hitlen,
-                                                                   local_index_t&                   top,
-                                                                   local_index_t&                   bot,
-                                                                   RandomSource&                    rnd,
-                                                                   bool&                         	uniqueStop,
-                                                                   local_index_t                    minUniqueLen,
-                                                                   local_index_t                    maxHitLen)
+size_t HI_Aligner<index_t, local_index_t>::localGFMSearch_reverse(
+                                                                  const LocalGFM<local_index_t, index_t>*  gfmFw,  // BWT index
+                                                                  const LocalGFM<local_index_t, index_t>*  gfmBw,  // BWT index
+                                                                  const Read&                      read,    // read to align
+                                                                  const Scoring&                   sc,      // scoring scheme
+                                                                  bool                             fw,
+                                                                  bool                             searchfw,
+                                                                  index_t                          rdoff,
+                                                                  index_t&                         hitlen,
+                                                                  local_index_t&                   top,
+                                                                  local_index_t&                   bot,
+                                                                  RandomSource&                    rnd,
+                                                                  bool&                         	uniqueStop,
+                                                                  local_index_t                    minUniqueLen,
+                                                                  local_index_t                    maxHitLen)
 {
 #ifndef NDEBUG
     if(searchfw) {
-        assert(ebwtBw != NULL);
+        assert(gfmBw != NULL);
     } else {
-        assert(ebwtFw != NULL);
+        assert(gfmFw != NULL);
     }
 #endif
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
-    const LocalEbwt<local_index_t, index_t>& ebwt = *(searchfw ? ebwtBw : ebwtFw);
-	const local_index_t ftabLen = (local_index_t)ebwt.eh().ftabChars();
+    const LocalGFM<local_index_t, index_t>& gfm = *(searchfw ? gfmBw : gfmFw);
+	const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
 	SideLocus<local_index_t> tloc, bloc;
 	const local_index_t len = (local_index_t)read.length();
 	size_t nelt = 0;
@@ -4276,16 +4276,16 @@ size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch_reverse(
     
     // Use ftab
     if(searchfw) {
-        ebwt.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
+        gfm.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
     } else {
-        ebwt.ftabLoHi(seq, dep, false, top, bot);
+        gfm.ftabLoHi(seq, dep, false, top, bot);
     }
     dep += ftabLen;
     if(bot <= top) {
         hitlen = ftabLen;
         return 0;
     }
-    LOCAL_INIT_LOCS(top, bot, tloc, bloc, ebwt);
+    LOCAL_INIT_LOCS(top, bot, tloc, bloc, gfm);
     // Keep going
     while(dep < len) {
         int c = searchfw ? seq[len-dep-1] : seq[dep];
@@ -4294,11 +4294,11 @@ size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch_reverse(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                topTemp = ebwt.mapLF(tloc, c);
-                botTemp = ebwt.mapLF(bloc, c);
+                topTemp = gfm.mapLF(tloc, c);
+                botTemp = gfm.mapLF(bloc, c);
             } else {
                 bwops_++;
-                topTemp = ebwt.mapLF1(top, tloc, c);
+                topTemp = gfm.mapLF1(top, tloc, c);
                 if(topTemp == (local_index_t)OFF_MASK) {
                     topTemp = botTemp = 0;
                 } else {
@@ -4311,7 +4311,7 @@ size_t HI_Aligner<index_t, local_index_t>::localEbwtSearch_reverse(
         }
         top = topTemp;
         bot = botTemp;
-        LOCAL_INIT_LOCS(top, bot, tloc, bloc, ebwt);
+        LOCAL_INIT_LOCS(top, bot, tloc, bloc, gfm);
         dep++;
         
         if(uniqueStop_) {

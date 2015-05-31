@@ -1,20 +1,20 @@
 /*
- * Copyright 2014, Daehwan Kim <infphilo@gmail.com>
+ * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
  *
- * This file is part of HISAT.
+ * This file is part of HISAT 2.
  *
- * HISAT is free software: you can redistribute it and/or modify
+ * HISAT 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * HISAT is distributed in the hope that it will be useful,
+ * HISAT 2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with HISAT.  If not, see <http://www.gnu.org/licenses/>.
+ * along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <stdlib.h>
@@ -30,10 +30,7 @@
 #include "alphabet.h"
 #include "assert_helpers.h"
 #include "endian_swap.h"
-#include "bt2_idx.h"
-#include "bt2_io.h"
-#include "bt2_util.h"
-#include "hier_idx.h"
+#include "hier_gfm.h"
 #include "formats.h"
 #include "sequence_io.h"
 #include "tokenize.h"
@@ -47,7 +44,6 @@
 #include "splice_site.h"
 #include "spliced_aligner.h"
 #include "aligner_seed_policy.h"
-#include "aligner_driver.h"
 #include "aligner_sw.h"
 #include "aligner_sw_driver.h"
 #include "aligner_cache.h"
@@ -57,7 +53,6 @@
 #include "presets.h"
 #include "opts.h"
 #include "outq.h"
-#include "aligner_seed2.h"
 
 using namespace std;
 
@@ -716,8 +711,8 @@ static void printArgDesc(ostream& out) {
  * Print a summary usage message to the provided output stream.
  */
 static void printUsage(ostream& out) {
-	out << "HISAT version " << string(HISAT_VERSION).c_str() << " by Daehwan Kim (infphilo@gmail.com, www.ccb.jhu.edu/people/infphilo)" << endl;
-	string tool_name = "hisat-align";
+	out << "HISAT2 version " << string(HISAT2_VERSION).c_str() << " by Daehwan Kim (infphilo@gmail.com, www.ccb.jhu.edu/people/infphilo)" << endl;
+	string tool_name = "hisat2-align";
 	if(wrapper == "basic-0") {
 		tool_name = "hisat";
 	}
@@ -728,7 +723,7 @@ static void printUsage(ostream& out) {
     << "  " << tool_name.c_str() << " [options]* -x <bt2-idx> {-1 <m1> -2 <m2> | -U <r>} [-S <sam>]" << endl
 #endif
 	    << endl
-		<<     "  <bt2-idx>  Index filename prefix (minus trailing .X." << gEbwt_ext << ")." << endl
+		<<     "  <bt2-idx>  Index filename prefix (minus trailing .X." << gfm_ext << ")." << endl
 	    <<     "  <m1>       Files with #1 mates, paired with files in <m2>." << endl;
 	if(wrapper == "basic-0") {
 		out << "             Could be gzip'ed (extension: .gz) or bzip2'ed (extension: .bz2)." << endl;
@@ -1736,8 +1731,8 @@ createPatsrcFactory(PairedPatternSource& _patsrc, int tid) {
 typedef TIndexOffU index_t;
 typedef uint16_t local_index_t;
 static PairedPatternSource*              multiseed_patsrc;
-static HierEbwt<index_t>*                multiseed_ebwtFw;
-static HierEbwt<index_t>*                multiseed_ebwtBw;
+static HierGFM<index_t>*                 multiseed_gfmFw;
+static HierGFM<index_t>*                 multiseed_gfmBw;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
 static AlignmentCache<index_t>*          multiseed_ca; // seed cache
@@ -2875,11 +2870,11 @@ static inline void printEEScoreMsg(
  */
 static void multiseedSearchWorker_hisat(void *vp) {
 	int tid = *((int*)vp);
-	assert(multiseed_ebwtFw != NULL);
-	assert(multiseedMms == 0 || multiseed_ebwtBw != NULL);
+	assert(multiseed_gfmFw != NULL);
+	assert(multiseedMms == 0 || multiseed_gfmBw != NULL);
 	PairedPatternSource&             patsrc   = *multiseed_patsrc;
-	const HierEbwt<index_t>&         ebwtFw   = *multiseed_ebwtFw;
-	const HierEbwt<index_t>&         ebwtBw   = *multiseed_ebwtBw;
+	const HierGFM<index_t>&          gfmFw    = *multiseed_gfmFw;
+	const HierGFM<index_t>&          gfmBw    = *multiseed_gfmBw;
 	const Scoring&                   sc       = *multiseed_sc;
 	const BitPairReference&          ref      = *multiseed_refs;
 	AlignmentCache<index_t>&         scShared = *multiseed_ca;
@@ -2930,7 +2925,7 @@ static void multiseedSearchWorker_hisat(void *vp) {
                                    secondary);    // secondary alignments
     
     SplicedAligner<index_t, local_index_t> splicedAligner(
-                                                          ebwtFw,
+                                                          gfmFw,
                                                           minIntronLen,
                                                           maxIntronLen,
                                                           secondary,
@@ -3269,7 +3264,7 @@ static void multiseedSearchWorker_hisat(void *vp) {
                     splicedAligner.initRead(rds[0], nofw[0], norc[0], minsc[0], maxpen[0], filt[1]);
                 }
                 if(filt[0] || filt[1]) {
-                    int ret = splicedAligner.go(sc, ebwtFw, ebwtBw, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
+                    int ret = splicedAligner.go(sc, gfmFw, gfmBw, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
                     MERGE_SW(sw);
                     // daehwan
                     size_t mate = 0;
@@ -3378,15 +3373,15 @@ static void multiseedSearch(
 	Scoring& sc,
 	PairedPatternSource& patsrc,  // pattern source
 	AlnSink<index_t>& msink,             // hit sink
-	HierEbwt<index_t>& ebwtFw,                 // index of original text
-	HierEbwt<index_t>& ebwtBw,                 // index of mirror text
+	HierGFM<index_t>& gfmFw,                 // index of original text
+	HierGFM<index_t>& gfmBw,                 // index of mirror text
     BitPairReference* refs,
 	OutFileBuf *metricsOfb)
 {
     multiseed_patsrc = &patsrc;
 	multiseed_msink  = &msink;
-	multiseed_ebwtFw = &ebwtFw;
-	multiseed_ebwtBw = &ebwtBw;
+	multiseed_gfmFw  = &gfmFw;
+	multiseed_gfmBw  = &gfmBw;
 	multiseed_sc     = &sc;
 	multiseed_metricsOfb      = metricsOfb;
 	multiseed_refs = refs;
@@ -3394,10 +3389,9 @@ static void multiseedSearch(
 	AutoArray<int> tids(nthreads);
 	{
 		// Load the other half of the index into memory
-		assert(!ebwtFw.isInMemory());
+		assert(!gfmFw.isInMemory());
 		Timer _t(cerr, "Time loading forward index: ", timing);
-		ebwtFw.loadIntoMemory(
-			0,  // colorspace?
+		gfmFw.loadIntoMemory(
 			-1, // not the reverse index
 			true,         // load SA samp? (yes, need forward index's SA samp)
 			true,         // load ftab (in forward index)
@@ -3408,9 +3402,9 @@ static void multiseedSearch(
 #if 0
 	if(multiseedMms > 0 || do1mmUpFront) {
 		// Load the other half of the index into memory
-		assert(!ebwtBw.isInMemory());
+		assert(!gfmBw.isInMemory());
 		Timer _t(cerr, "Time loading mirror index: ", timing);
-		ebwtBw.loadIntoMemory(
+		gfmBw.loadIntoMemory(
 			0, // colorspace?
 			// It's bidirectional search, so we need the reverse to be
 			// constructed as the reverse of the concatenated strings.
@@ -3511,12 +3505,12 @@ static void driver(
 	} else {
 		fout = new OutFileBuf();
 	}
-	// Initialize Ebwt object and read in header
+	// Initialize GFM object and read in header
 	if(gVerbose || startVerbose) {
-		cerr << "About to initialize fw Ebwt: "; logTime(cerr, true);
+		cerr << "About to initialize fw GFM: "; logTime(cerr, true);
 	}
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
-	HierEbwt<index_t, local_index_t> ebwt(
+	HierGFM<index_t, local_index_t> gfm(
 		adjIdxBase,
 	    0,        // index is colorspace
 		-1,       // fw index
@@ -3534,14 +3528,14 @@ static void driver(
 	    startVerbose, // talkative during initialization
 	    false /*passMemExc*/,
 	    sanityCheck);
-	HierEbwt<index_t, local_index_t>* ebwtBw = NULL;
+	HierGFM<index_t, local_index_t>* gfmBw = NULL;
 #if 0
 	// We need the mirror index if mismatches are allowed
 	if(multiseedMms > 0 || do1mmUpFront) {
 		if(gVerbose || startVerbose) {
-			cerr << "About to initialize rev Ebwt: "; logTime(cerr, true);
+			cerr << "About to initialize rev GFM: "; logTime(cerr, true);
 		}
-		ebwtBw = new HierEbwt<index_t, local_index_t>(
+		gfmBw = new HierGFM<index_t, local_index_t>(
 			adjIdxBase + ".rev",
 			0,       // index is colorspace
 			1,       // TODO: maybe not
@@ -3562,25 +3556,24 @@ static void driver(
 	}
 #endif
 	if(sanityCheck && !os.empty()) {
-		// Sanity check number of patterns and pattern lengths in Ebwt
+		// Sanity check number of patterns and pattern lengths in GFM
 		// against original strings
-		assert_eq(os.size(), ebwt.nPat());
+		assert_eq(os.size(), gfm.nPat());
 		for(size_t i = 0; i < os.size(); i++) {
-			assert_eq(os[i].length(), ebwt.plen()[i]);
+			assert_eq(os[i].length(), gfm.plen()[i]);
 		}
 	}
-	// Sanity-check the restored version of the Ebwt
+	// Sanity-check the restored version of the GFM
 	if(sanityCheck && !os.empty()) {
-		ebwt.loadIntoMemory(
-			0,
+		gfm.loadIntoMemory(
 			-1, // fw index
 			true, // load SA sample
 			true, // load ftab
 			true, // load rstarts
 			!noRefNames,
 			startVerbose);
-		ebwt.checkOrigs(os, false, false);
-		ebwt.evictFromMemory();
+		gfm.checkOrigs(os, false);
+		gfm.evictFromMemory();
 	}
 	OutputQueue oq(
 		*fout,                   // out file buffer
@@ -3615,8 +3608,8 @@ static void driver(
             penConflictSplice, // conflicting splice site penalty
             &penIntronLen);  // penalty as to intron length
 		EList<size_t> reflens;
-		for(size_t i = 0; i < ebwt.nPat(); i++) {
-			reflens.push_back(ebwt.plen()[i]);
+		for(size_t i = 0; i < gfm.nPat(); i++) {
+			reflens.push_back(gfm.plen()[i]);
 		}
 		EList<string> refnames;
 		readEbwtRefnames<index_t>(adjIdxBase, refnames);
@@ -3626,9 +3619,9 @@ static void driver(
 			samTruncQname,          // whether to truncate QNAME to 255 chars
 			samOmitSecSeqQual,      // omit SEQ/QUAL for 2ndary alignments?
 			samNoUnal,              // omit unaligned-read records?
-			string("hisat"),      // program id
-			string("hisat"),      // program name
-			string(HISAT_VERSION), // program version
+			string("hisat2"),       // program id
+			string("hisat2"),       // program name
+			string(HISAT2_VERSION), // program version
 			argstr,                 // command-line
 			rgs_optflag,            // read-group string
             rna_strandness,
@@ -3755,16 +3748,16 @@ static void driver(
 			sc,      // scoring scheme
 			*patsrc, // pattern source
 			*mssink, // hit sink
-			ebwt,    // BWT
-			*ebwtBw, // BWT'
+			gfm,     // BWT
+			*gfmBw,  // BWT'
             refs.get(),
 			metricsOfb);
 		// Evict any loaded indexes from memory
-		if(ebwt.isInMemory()) {
-			ebwt.evictFromMemory();
+		if(gfm.isInMemory()) {
+			gfm.evictFromMemory();
 		}
-		if(ebwtBw != NULL) {
-			delete ebwtBw;
+		if(gfmBw != NULL) {
+			delete gfmBw;
 		}
 		if(!gQuiet && !seedSumm) {
 			size_t repThresh = mhits;
@@ -3808,7 +3801,7 @@ extern "C" {
  * options, sets global configuration variables, and calls the driver()
  * function.
  */
-int hisat(int argc, const char **argv) {
+int hisat2(int argc, const char **argv) {
 	try {
 		// Reset all global state, including getopt state
 		opterr = optind = 1;
@@ -3821,7 +3814,7 @@ int hisat(int argc, const char **argv) {
 		parseOptions(argc, argv);
 		argv0 = argv[0];
 		if(showVersion) {
-			cout << argv0 << " version " << HISAT_VERSION << endl;
+			cout << argv0 << " version " << HISAT2_VERSION << endl;
 			if(sizeof(void*) == 4) {
 				cout << "32-bit" << endl;
 			} else if(sizeof(void*) == 8) {
