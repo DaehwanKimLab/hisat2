@@ -519,7 +519,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     edges[i].from = from;
                 }
                 
-                index_t to = edges[i].to;
+                index_t to = ee the map class, you will need to include <map> and maps are part of the std namespace. Maps require two, and possibly three, types for the template: dges[i].to;
                 to = to + num_nodes;
                 if(head_off && edges[i].to > head_node) to -= 1;
                 if(tail_off && edges[i].to > tail_node) to -= 1;
@@ -1404,7 +1404,11 @@ report_F_node_idx(0), report_F_location(0)
     debug = previous.debug;
 #endif
     
-    previous.sortByFrom(true);
+//    previous.sortByFrom(true);
+
+	//create a hash table of all unsorted nodes
+	//keyed by node.to
+	std::map<index_t, EList<index_t> >  nodes_table;
     
 #ifndef NDEBUG
     if(debug) {
