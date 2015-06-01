@@ -1403,68 +1403,108 @@ report_F_node_idx(0), report_F_location(0)
 #ifndef NDEBUG
     debug = previous.debug;
 #endif
-    
-//    previous.sortByFrom(true);
 
-	//create a list of all unsorted nodes
-	index_t hash;
+	index_t new_nodes = previous.nodes.size() + previous.nodes.size() / 8;
 
-	EList<PathNode> unsorted_nodes;
-	for(index_t i = 0; i < previous.nodes.size(); i++) {
-		if(!previous.nodes[i].isSorted()) {
-			unsorted_nodes.push_back(previous.nodes[i]);
-		}
-	}
-	//create an array with these pathnodes binned by hash
-	EList<PathNode> nodes_table [unsorted_nodes.size() + unsorted_nodes.size() / 2];
-
-
-	for(index_t i = 0; i < unsorted_nodes.size(); i++) {
-		hash = (149 * unsorted_nodes[i].to % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
-		nodes_table[hash].push_back(unsorted_nodes[i]);
-	}
-
-#if 0
-    if(debug) {
-        cerr << "Path nodes (" << generation << "-generation) - soryByFrom" << endl;
-        for(size_t i = 0; i < previous.nodes.size(); i++) {
-            const PathNode& node = previous.nodes[i];
-            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
-            << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
-        }
-    }
-#endif
-    
-    // A heuristic to determine, whether the number of new nodes should be counted
-    index_t new_nodes = previous.nodes.size() + previous.nodes.size() / 8;
-    if(previous.ranks >= previous.nodes.size() / 2 && !(previous.has_stabilized)) {
-        new_nodes = 0;
-        for(index_t i = 0; i < previous.nodes.size(); i++) {
-			if(previous.nodes[i].isSorted()) {
-			new_nodes++;
-			}
-			index_t hash = (149 * previous.nodes[i].from % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
-       		for(index_t j = 0; j < nodes_table[hash].size(); j++) {
-				if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
-            	new_nodes++;
-     	   		}
+#ifndef NDEBUG
+  	  	if(debug) {
+        	cerr << "Path nodes (" << generation << "-generation) - soryByFrom" << endl;
+        	for(size_t i = 0; i < previous.nodes.size(); i++) {
+        	    const PathNode& node = previous.nodes[i];
+        	    cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+        	    << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
         	}
-		}
-    }
-	cerr << "Trying to allocate space for " << new_nodes << " nodes." << endl;
-    nodes.resizeExact(new_nodes);
-    nodes.clear();
-    
-    for(index_t i = 0; i < previous.nodes.size(); i++) {
-		if(previous.nodes[i].isSorted()) {
-			nodes.push_back(previous.nodes[i]);
-		}
-		index_t hash = (149 * previous.nodes[i].from % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
-        for(index_t j = 0; j < nodes_table[hash].size(); j++) {
-			if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
-            createPathNode(nodes_table[hash].get(j), previous.nodes[i]);
-     	   }
+    	}	
+#endif
+
+
+
+    if(generation < 6) {
+		previous.sortByFrom(true);
+    	// A heuristic to determine, whether the number of new nodes should be counted
+    	if(previous.ranks >= previous.nodes.size() / 2 && !(previous.has_stabilized)) {
+        	new_nodes = 0;
+        	for(index_t i = 0; i < previous.nodes.size(); i++) {
+        	    if(previous.nodes[i].isSorted()) { new_nodes++; continue; }
+        	    pair<index_t, index_t> pn_range = previous.getNodesFrom(previous.nodes[i].to);
+        	    assert_lt(pn_range.first, pn_range.second);
+        	    new_nodes += (pn_range.second - pn_range.first);
+        	}
+        	cerr << "Trying to allocate space for " << new_nodes << " nodes." << endl;
     	}
+
+		for(index_t i = 0; i < previous.nodes.size(); i++) {
+        	if(previous.nodes[i].isSorted()) {
+            	nodes.push_back(previous.nodes[i]);
+            	continue;
+        	}
+        	pair<index_t, index_t> pn_range = previous.getNodesFrom(previous.nodes[i].to);
+        	for(index_t pn = pn_range.first; pn < pn_range.second; pn++) {
+            	createPathNode(previous.nodes[i], previous.nodes[pn]);
+        	}
+    	}
+	} else {
+		//create a list of all unsorted nodes
+		index_t hash;
+
+		EList<PathNode> unsorted_nodes;
+		for(index_t i = 0; i < previous.nodes.size(); i++) {
+			if(!previous.nodes[i].isSorted()) {
+				unsorted_nodes.push_back(previous.nodes[i]);
+			}
+		}
+
+		cerr << "Do we get the list of unsorted nodes?" << endl;
+	
+		//create an array with these pathnodes binned by hash
+		EList<PathNode> * nodes_table;
+		nodes_table = new EList<PathNode> [unsorted_nodes.size() + unsorted_nodes.size() / 2];
+		cerr << "Do we allocatet the array?" << endl;
+		for(index_t i = 0; i < unsorted_nodes.size(); i++) {
+			//hash = (149*unsorted_nodes[i].to % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+			hash = unsorted_nodes[i].to % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+			nodes_table[hash].push_back(unsorted_nodes[i]);
+		}
+
+		cerr << "Do we build the array?" << endl;
+
+	    // A heuristic to determine, whether the number of new nodes should be counted
+	    
+	    if(previous.ranks >= previous.nodes.size() / 2 && !(previous.has_stabilized)) {
+	        new_nodes = 0;
+	        for(index_t i = 0; i < previous.nodes.size(); i++) {
+				if(previous.nodes[i].isSorted()) {
+				new_nodes++;
+				}
+				//hash = (149*previous.nodes[i].from % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+				hash = previous.nodes[i].from % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+	       		for(index_t j = 0; j < nodes_table[hash].size(); j++) {
+					if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
+	            	new_nodes++;
+	     	   		}
+	        	}
+			}
+
+	    }
+	
+		cerr << "Trying to allocate space for " << new_nodes << " nodes." << endl;
+	    nodes.resizeExact(new_nodes);
+	    nodes.clear();
+	    
+	    for(index_t i = 0; i < previous.nodes.size(); i++) {
+			if(previous.nodes[i].isSorted()) {
+				nodes.push_back(previous.nodes[i]);
+			}
+			//hash = (149 * previous.nodes[i].from % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+			hash = previous.nodes[i].from % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+	        for(index_t j = 0; j < nodes_table[hash].size(); j++) {
+				if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
+	            	createPathNode(nodes_table[hash].get(j), previous.nodes[i]);
+	     	   	}
+	    	}
+		}
+		unsorted_nodes.clear();
+		delete[] nodes_table;
 	}
     temp_nodes = nodes.size();
     
