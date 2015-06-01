@@ -519,7 +519,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     edges[i].from = from;
                 }
                 
-                index_t to = ee the map class, you will need to include <map> and maps are part of the std namespace. Maps require two, and possibly three, types for the template: dges[i].to;
+                index_t to = edges[i].to;
                 to = to + num_nodes;
                 if(head_off && edges[i].to > head_node) to -= 1;
                 if(tail_off && edges[i].to > tail_node) to -= 1;
@@ -1406,11 +1406,25 @@ report_F_node_idx(0), report_F_location(0)
     
 //    previous.sortByFrom(true);
 
-	//create a hash table of all unsorted nodes
-	//keyed by node.to
-	std::map<index_t, EList<index_t> >  nodes_table;
-    
-#ifndef NDEBUG
+	//create a list of all unsorted nodes
+	index_t hash;
+
+	EList<PathNode> unsorted_nodes;
+	for(index_t i = 0; i < previous.nodes.size(); i++) {
+		if(!previous.nodes[i].isSorted()) {
+			unsorted_nodes.push_back(previous.nodes[i]);
+		}
+	}
+	//create an array with these pathnodes binned by hash
+	EList<PathNode> nodes_table [unsorted_nodes.size() + unsorted_nodes.size() / 2];
+
+
+	for(index_t i = 0; i < unsorted_nodes.size(); i++) {
+		hash = (149 * unsorted_nodes[i].to % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+		nodes_table[hash].push_back(unsorted_nodes[i]);
+	}
+
+#if 0
     if(debug) {
         cerr << "Path nodes (" << generation << "-generation) - soryByFrom" << endl;
         for(size_t i = 0; i < previous.nodes.size(); i++) {
@@ -1426,26 +1440,32 @@ report_F_node_idx(0), report_F_location(0)
     if(previous.ranks >= previous.nodes.size() / 2 && !(previous.has_stabilized)) {
         new_nodes = 0;
         for(index_t i = 0; i < previous.nodes.size(); i++) {
-            if(previous.nodes[i].isSorted()) { new_nodes++; continue; }
-            pair<index_t, index_t> pn_range = previous.getNodesFrom(previous.nodes[i].to);
-            assert_lt(pn_range.first, pn_range.second);
-            new_nodes += (pn_range.second - pn_range.first);
-        }
-        cerr << "Trying to allocate space for " << new_nodes << " nodes." << endl;
+			if(previous.nodes[i].isSorted()) {
+			new_nodes++;
+			}
+			index_t hash = (149 * previous.nodes[i].from % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+       		for(index_t j = 0; j < nodes_table[hash].size(); j++) {
+				if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
+            	new_nodes++;
+     	   		}
+        	}
+		}
     }
+	cerr << "Trying to allocate space for " << new_nodes << " nodes." << endl;
     nodes.resizeExact(new_nodes);
     nodes.clear();
     
     for(index_t i = 0; i < previous.nodes.size(); i++) {
-        if(previous.nodes[i].isSorted()) {
-            nodes.push_back(previous.nodes[i]);
-            continue;
-        }
-        pair<index_t, index_t> pn_range = previous.getNodesFrom(previous.nodes[i].to);
-        for(index_t pn = pn_range.first; pn < pn_range.second; pn++) {
-            createPathNode(previous.nodes[i], previous.nodes[pn]);
-        }
-    }
+		if(previous.nodes[i].isSorted()) {
+			nodes.push_back(previous.nodes[i]);
+		}
+		index_t hash = (149 * previous.nodes[i].from % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
+        for(index_t j = 0; j < nodes_table[hash].size(); j++) {
+			if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
+            createPathNode(nodes_table[hash].get(j), previous.nodes[i]);
+     	   }
+    	}
+	}
     temp_nodes = nodes.size();
     
 #ifndef NDEBUG
