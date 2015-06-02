@@ -1195,7 +1195,7 @@ public:
 
 private:
     void      createPathNode(const PathNode& left, const PathNode& right);
-    void      updateRank_and_merge();
+    void      updateRank_and_merge(bool part_sorted);
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> node_range);
     
     void sortByKey() { sort(nodes.begin(), nodes.end()); } // by key
@@ -1387,7 +1387,7 @@ report_F_node_idx(0), report_F_location(0)
     nodes.back().key = pair<index_t, index_t>(0, 0);
    
     status = ok;
-    updateRank_and_merge();
+    updateRank_and_merge(false);
 }
 
 template <typename index_t>
@@ -1419,7 +1419,7 @@ report_F_node_idx(0), report_F_location(0)
 
 
 
-    if(generation < 6) {
+    if(generation < 5) {
 		previous.sortByFrom(true);
     	// A heuristic to determine, whether the number of new nodes should be counted
     	if(previous.ranks >= previous.nodes.size() / 2 && !(previous.has_stabilized)) {
@@ -1457,11 +1457,10 @@ report_F_node_idx(0), report_F_location(0)
 		cerr << "Do we get the list of unsorted nodes?" << endl;
 	
 		//create an array with these pathnodes binned by hash
-		EList<PathNode> * nodes_table;
-		nodes_table = new EList<PathNode> [unsorted_nodes.size() + unsorted_nodes.size() / 2];
-		cerr << "Do we allocatet the array?" << endl;
+		EList<PathNode, 1> * nodes_table;
+		nodes_table = new EList<PathNode,1> [unsorted_nodes.size() + unsorted_nodes.size() / 2];
+		cerr << "Do we allocate the array?" << endl;
 		for(index_t i = 0; i < unsorted_nodes.size(); i++) {
-			//hash = (149*unsorted_nodes[i].to % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
 			hash = unsorted_nodes[i].to % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
 			nodes_table[hash].push_back(unsorted_nodes[i]);
 		}
@@ -1474,9 +1473,8 @@ report_F_node_idx(0), report_F_location(0)
 	        new_nodes = 0;
 	        for(index_t i = 0; i < previous.nodes.size(); i++) {
 				if(previous.nodes[i].isSorted()) {
-				new_nodes++;
+					new_nodes++;
 				}
-				//hash = (149*previous.nodes[i].from % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
 				hash = previous.nodes[i].from % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
 	       		for(index_t j = 0; j < nodes_table[hash].size(); j++) {
 					if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
@@ -1484,18 +1482,17 @@ report_F_node_idx(0), report_F_location(0)
 	     	   		}
 	        	}
 			}
-
 	    }
-	
+
 		cerr << "Trying to allocate space for " << new_nodes << " nodes." << endl;
 	    nodes.resizeExact(new_nodes);
 	    nodes.clear();
-	    
+
+	    //Perform combine operation using hash table above
 	    for(index_t i = 0; i < previous.nodes.size(); i++) {
 			if(previous.nodes[i].isSorted()) {
 				nodes.push_back(previous.nodes[i]);
 			}
-			//hash = (149 * previous.nodes[i].from % 10009729) % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
 			hash = previous.nodes[i].from % (unsorted_nodes.size() + unsorted_nodes.size() / 2);
 	        for(index_t j = 0; j < nodes_table[hash].size(); j++) {
 				if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
@@ -1507,6 +1504,8 @@ report_F_node_idx(0), report_F_location(0)
 		delete[] nodes_table;
 	}
     temp_nodes = nodes.size();
+
+	cerr << "Done with combine step." << endl;
     
 #ifndef NDEBUG
     if(debug) {
@@ -1518,10 +1517,11 @@ report_F_node_idx(0), report_F_location(0)
         }
     }
 #endif
-    
-    status = ok;
-    updateRank_and_merge();
-    
+
+	status = ok;	
+    	
+    updateRank_and_merge(false);
+
     if(previous.has_stabilized || (generation >= 11 && ranks >= 0.8 * new_nodes)) {
         has_stabilized = true;
     }
@@ -1873,7 +1873,31 @@ EList<pair<index_t, index_t> >* PathGraph<index_t>::getSamples(index_t sample_ra
         while(true) {
             // Nodes with multiple predecessors must be sampled.
             if(found->readItem(current)) {
-                if(!sampled->readItem(current)) {
+                if(!sampled-Done with combine step.
+Path nodes (1-generation) - combine
+	0	(5, 0)	0 --> 0	sorted
+	1	(3, 1)	1 --> 12
+	2	(3, 1)	1 --> 3
+	3	(1, 4)	2 --> 4
+	4	(1, 2)	2 --> 5
+	5	(1, 2)	2 --> 4
+	6	(2, 4)	3 --> 6
+	7	(2, 3)	3 --> 5
+	8	(3, 4)	4 --> 6
+	9	(4, 1)	5 --> 7
+	10	(4, 1)	5 --> 8
+	11	(4, 1)	5 --> 10
+	12	(1, 2)	6 --> 8
+	13	(1, 2)	6 --> 9
+	14	(1, 3)	6 --> 11
+	15	(2, 2)	7 --> 9
+	16	(2, 4)	8 --> 10
+	17	(4, 3)	9 --> 11
+	18	(3, 0)	10 --> 11
+	19	(0, 17)	11 --> 11	sorted
+	20	(4, 3)	12 --> 5
+do we get here?
+>readItem(current)) {
                     sample_pairs->push_back(pair_type(current, this->nodes[current].value()));
                     sampled_nodes->goToItem(current); sampled_nodes->writeItem(1);
                     max_sample = std::max(max_sample, (usint)(this->nodes[current].value()));
@@ -1920,9 +1944,32 @@ void PathGraph<index_t>::createPathNode(const PathNode& left, const PathNode& ri
 }
 
 template <typename index_t>
-void PathGraph<index_t>::updateRank_and_merge()
+void PathGraph<index_t>::updateRank_and_merge(bool part_sorted)
 {
-    sortByKey();
+	if(part_sorted) {
+		cerr << "do we get here?" << endl;
+		index_t last_rank = nodes.front().key.first;
+		PathNode * block_start = nodes.begin();
+		bool need_sorting = false;
+		for(int i = 1; i < nodes.size(); i++) {
+			if(nodes.get(i).key.first == last_rank) {
+				need_sorting = true;
+			} else {
+				if(need_sorting) {
+					sort(block_start, &nodes.get(i - 1));
+				}
+				block_start = &nodes.get(i);
+				last_rank = nodes.get(i).key.first;
+				need_sorting = false;
+			}
+		}
+		if(need_sorting) {
+			sort(block_start, nodes.end());
+		}
+	}
+	else {
+		sortByKey();
+	}
     
 #ifndef NDEBUG
     if(debug) {
