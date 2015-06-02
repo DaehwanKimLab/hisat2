@@ -23,6 +23,7 @@
 
 uint8_t cCntLUT_4[4][4][256];
 uint8_t cCntLUT_4_rev[4][4][256];
+uint8_t cCntBIT[8][256];
 
 int countCnt(int by, int c, uint8_t str) {
     int count = 0;
@@ -55,6 +56,25 @@ void initializeCntLut() {
                 cCntLUT_4[by][c][str] = countCnt(by, c, str);
                 cCntLUT_4_rev[by][c][str] = countCnt_rev(by, c, str);
             }
+        }
+    }
+}
+
+int countBit(int b, uint8_t str) {
+    int count = 0;
+    if(b == 0) b = 8;
+    while(b-- > 0) {
+        if(str & 0x1) count++;
+        str >>= 1;
+    }
+    
+    return count;
+}
+
+void initializeCntBit() {
+    for(int b = 0; b < 8; b++) {
+        for(int str = 0; str < 256; str++) {
+            cCntBIT[b][str] = countBit(b, str);
         }
     }
 }

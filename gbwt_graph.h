@@ -218,7 +218,7 @@ private:
     
     EList<Node> nodes;
     EList<Edge> edges;
-    index_t     lastNode; // $
+    index_t     lastNode; // Z
     
 #ifndef NDEBUG
     bool        debug;
@@ -306,7 +306,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
     index_t jlen = s.length();
     
 #ifndef NDEBUG
-    debug = (jlen <= 10);
+    debug = (jlen <= 20);
 #endif
     
     // a memory-efficient way to create a population graph with known SNPs
@@ -418,7 +418,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             
             // Created head node
             nodes.expand();
-            nodes.back().label = 'Z';
+            nodes.back().label = 'Y';
             nodes.back().value = 0;
             
             // Create nodes and edges corresponding to a reference genome
@@ -436,7 +436,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             
             // Create tail node
             nodes.expand();
-            nodes.back().label = '$';
+            nodes.back().label = 'Z';
             nodes.back().value = s.length();
             lastNode = nodes.size() - 1;
             edges.expand();
@@ -489,6 +489,23 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 }
             }
             
+#ifndef NDEBUG
+            if(debug) {
+                cerr << "Nodes:" << endl;
+                for(size_t i = 0; i < nodes.size(); i++) {
+                    const Node& node = nodes[i];
+                    cerr << "\t" << i << "\t" << node.label << "\t" << node.value << endl;
+                }
+                cerr << endl;
+                cerr << "Edges: " << endl;
+                for(size_t i = 0; i < edges.size(); i++) {
+                    const Edge& edge = edges[i];
+                    cerr << "\t" << i << "\t" << edge.from << " --> " << edge.to << endl;
+                }
+                cerr << endl;
+            }
+#endif
+            
             if(!isReverseDeterministic()) {
                 reverseDeterminize(curr_pos > 0 ? curr_pos + 1 : 0);
                 assert(isReverseDeterministic());
@@ -497,7 +514,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             // Identify head
             index_t head_node = nodes.size();
             for(index_t i = 0; i < nodes.size(); i++) {
-                if(nodes[i].label == 'Z') {
+                if(nodes[i].label == 'Y') {
                     head_node = i;
                     break;
                 }
@@ -572,8 +589,8 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             writeIndex<index_t>(rg_out_file, tmp_num_nodes, bigEndian);
             ASSERT_ONLY(index_t num_nodes_written = 0);
             for(index_t i = 0; i < nodes.size(); i++) {
-                if(head_off && nodes[i].label == 'Z') continue;
-                if(tail_off && nodes[i].label == '$') continue;
+                if(head_off && nodes[i].label == 'Y') continue;
+                if(tail_off && nodes[i].label == 'Z') continue;
                 nodes[i].write(rg_out_file, bigEndian);
                 ASSERT_ONLY(num_nodes_written++);
             }
@@ -638,7 +655,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         
         // Created head node
         nodes.expand();
-        nodes.back().label = 'Z';
+        nodes.back().label = 'Y';
         nodes.back().value = 0;
         // Create nodes and edges corresponding to a reference genome
         for(size_t i = 0; i < s.length(); i++) {
@@ -654,7 +671,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         
         // Create tail node
         nodes.expand();
-        nodes.back().label = '$';
+        nodes.back().label = 'Z';
         nodes.back().value = s.length();
         lastNode = nodes.size() - 1;
         edges.expand();
@@ -702,23 +719,6 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 assert(false);
             }
         }
-        
-#ifndef NDEBUG
-        if(debug) {
-            cerr << "Nodes:" << endl;
-            for(size_t i = 0; i < nodes.size(); i++) {
-                const Node& node = nodes[i];
-                cerr << "\t" << i << "\t" << node.label << "\t" << node.value << endl;
-            }
-            cerr << endl;
-            cerr << "Edges: " << endl;
-            for(size_t i = 0; i < edges.size(); i++) {
-                const Edge& edge = edges[i];
-                cerr << "\t" << i << "\t" << edge.from << " --> " << edge.to << endl;
-            }
-            cerr << endl;
-        }
-#endif
     
         if(!isReverseDeterministic()) {
             cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
@@ -726,31 +726,6 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             assert(isReverseDeterministic());
         }
     }
-    
-    // debugging purposes
-#if 0
-    if(frag_automaton) {
-        cout << "frag automaton" << endl;
-    } else {
-        cout << "one automaton" << endl;
-    }
-    EList<Node> tmp_nodes = nodes;
-    sort(tmp_nodes.begin(), tmp_nodes.end());
-    cout << "num of nodes: " << tmp_nodes.size() << endl;
-    for(index_t i = 0; i < tmp_nodes.size(); i++) {
-        cout << tmp_nodes[i].label << "\t" << tmp_nodes[i].value << endl;
-    }
-    
-    cout << "num of edges: " << edges.size() << endl;
-    sort(edges.begin(), edges.end(), TempEdgeNodeCmp(nodes));
-    for(index_t i = 0; i < edges.size(); i++) {
-        const Node& from = nodes[edges[i].from];
-        const Node& to = nodes[edges[i].to];
-        cout << from.label << " " << from.value << " --> " << to.label << " " << to.value << endl;
-    }
-    
-    exit(1);
-#endif
 }
 
 template <typename index_t>
@@ -842,7 +817,7 @@ void RefGraph<index_t>::reverseDeterminize(index_t lastNode_add)
     deque<index_t> active_cnodes;
     EList<CompositeEdge> cedges; cedges.ensure(edges.size());
     
-    // Start from the final node ('$')
+    // Start from the final node ('Z')
     assert_lt(lastNode, nodes.size());
     const Node& last_node = nodes[lastNode];
     cnodes.expand();
@@ -856,7 +831,7 @@ void RefGraph<index_t>::reverseDeterminize(index_t lastNode_add)
     
     sortEdgesTo();
   
-    index_t firstNode = 0; // Z -> ... -> $
+    index_t firstNode = 0; // Y -> ... -> Z
     EList<index_t> predecessors;
     while(!active_cnodes.empty()) {
         index_t cnode_id = active_cnodes.front(); active_cnodes.pop_front();
@@ -898,7 +873,7 @@ void RefGraph<index_t>::reverseDeterminize(index_t lastNode_add)
             cnodes.back().nodes.push_back(node_id);
             cnodes.back().potential = node.value < (lastNode + lastNode_add);
             
-            if(node.label == 'Z' && firstNode == 0) {
+            if(node.label == 'Y' && firstNode == 0) {
                 firstNode = cnodes.size() - 1;
                 cnodes.back().backbone = true;
             }
@@ -999,7 +974,7 @@ void RefGraph<index_t>::reverseDeterminize(index_t lastNode_add)
                 successor_cnode.id = nodes.size();
                 nodes.expand();
                 nodes.back() = successor_cnode.getNode();
-                if(nodes.back().label == '$') {
+                if(nodes.back().label == 'Z') {
                     assert_eq(lastNode, 0);
                     assert_gt(nodes.size(), 1);
                     lastNode = nodes.size() - 1;
@@ -1131,7 +1106,7 @@ public:
     index_t getNumEdges() const { return edges.size(); }
     
     //
-    bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos, index_t& firstSeq, index_t& lastSeq) {
+    bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos) {
         if(report_node_idx >= nodes.size()) return false;
         bool firstOutEdge = false;
         if(report_edge_range.first >= report_edge_range.second) {
@@ -1145,21 +1120,11 @@ public:
         assert_lt(report_edge_range.first, edges.size());
         const PathEdge& edge = edges[report_edge_range.first];
         gbwtChar = edge.label;
-        if(gbwtChar == 'Z') gbwtChar = '$';
+        if(gbwtChar == 'Y') gbwtChar = 'Z';
         assert_lt(report_node_idx, nodes.size());
         const PathNode& node = nodes[report_node_idx];
         pos = node.to;
         F = (firstOutEdge ? 1 : 0);
-        if(report_node_idx != 0) {
-            assert_lt(report_seq_idx, report_seqs.size());
-            firstSeq = report_seqs[report_seq_idx].first;
-            lastSeq = report_seqs[report_seq_idx].second;
-            report_seq_idx++;
-        } else {
-            firstSeq = numeric_limits<index_t>::max();
-            lastSeq = numeric_limits<index_t>::max();
-        }
-        
         report_edge_range.first++;
         if(report_edge_range.first >= report_edge_range.second) {
             report_node_idx++;
@@ -1177,11 +1142,12 @@ public:
     //
     index_t nextFLocation() {
         if(report_F_node_idx >= nodes.size()) return std::numeric_limits<index_t>::max();
+        index_t ret = report_F_location;
         pair<index_t, index_t> edge_range = getEdges(report_F_node_idx, false /* from? */);
         report_F_node_idx++;
         assert_lt(edge_range.first, edge_range.second);
         report_F_location += (edge_range.second - edge_range.first);
-        return report_F_location;
+        return ret;
     }
 
 private:
@@ -1240,15 +1206,13 @@ private:
     index_t                report_F_node_idx;
     index_t                report_F_location;
     
-    EList<pair<index_t, index_t> >  report_seqs;
-    index_t                         report_seq_idx;
-    
     // Can create an index by using key.second in PathNodes.
     // If the graph is not ready, its status becomes error.
     // Sorting edges by from actually sorts them by (from, to).
     void      sortEdges(bool by_from, bool create_index);
     pair<index_t, index_t> getEdges(index_t node, bool by_from); // Create index first.
     
+    // following variables are for debugging purposes
 #ifndef NDEBUG
     bool               debug;
 #endif
@@ -1289,6 +1253,8 @@ private:
     index_t rank1(const EList<char>& array, index_t p) {
         return rank(array, p, 1);
     }
+    
+public: EList<pair<index_t, index_t> > ftab;
     
 private:
     // Used to construct FCharTable
@@ -1355,8 +1321,7 @@ PathGraph<index_t>::PathGraph(RefGraph<index_t>& base) :
 ranks(0), max_label('Z'), temp_nodes(0), generation(0),
 status(error), has_stabilized(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
-report_F_node_idx(0), report_F_location(0),
-report_seq_idx(0)
+report_F_node_idx(0), report_F_location(0)
 {
     if(!base.repOk()) return;
 
@@ -1376,10 +1341,10 @@ report_seq_idx(0)
     }
     // Final node.
     assert_lt(base.lastNode, base.nodes.size());
-    assert_eq(base.nodes[base.lastNode].label, '$');
+    assert_eq(base.nodes[base.lastNode].label, 'Z');
     nodes.expand();
     nodes.back().from = nodes.back().to = base.lastNode;
-    nodes.back().key = pair<index_t, index_t>(0, 0);
+    nodes.back().key = pair<index_t, index_t>('Z', 0);
    
     status = ok;
     updateRank_and_merge();
@@ -1390,8 +1355,7 @@ PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
 ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1),
 status(error), has_stabilized(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
-report_F_node_idx(0), report_F_location(0),
-report_seq_idx(0)
+report_F_node_idx(0), report_F_location(0)
 {
     if(previous.status != ok)
         return;
@@ -1545,7 +1509,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     
     // Sets PathNode.to = GraphNode.value and PathNode.key.first to outdegree
     // Replaces (from.from, to) with (from, to)
-    PathNode* node = nodes.begin(); node->key.first = 1;
+    PathNode* node = nodes.begin(); node->key.first = 0;
     PathEdge* edge = edges.begin();
     while(node != nodes.end() && edge != edges.end()) {
         if(edge->from == node->from) {
@@ -1560,86 +1524,61 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
         node->to = base.nodes[node->from].value;
     }
     
-    // Pre-calculate prefix for each node
-    sortEdgesFrom();
-    report_seqs.reserveExact(edges.size()); report_seqs.clear();
-    EList<FNode> tmp_nodes; // a list of (node_id, key, depth)
-    for(index_t i = 0; i < nodes.size(); i++) {
-        pair<index_t, index_t> erange = findEdges(i, true /* from? */);
-        for(; erange.first < erange.second; erange.first++) {
-            assert_lt(erange.first, edges.size());
-            const PathEdge& edge = edges[erange.first];
-            if(edge.label == '$' || edge.label == 'Z') continue;
-            report_seqs.expand();
-            report_seqs.back().first = numeric_limits<index_t>::max();
-            report_seqs.back().second = numeric_limits<index_t>::max();
-            tmp_nodes.clear();
-            tmp_nodes.expand();
-            tmp_nodes.back().id = edge.ranking;
-            tmp_nodes.back().key = asc2dna[(int)edge.label];
-            tmp_nodes.back().depth = 1;
-            while(tmp_nodes.size() > 0) {
-                FNode tmp_node = tmp_nodes.back(); tmp_nodes.pop_back();
-                pair<index_t, index_t> erange2 = findEdges(tmp_node.id, true /* from? */);
-                for(; erange2.first < erange2.second; erange2.first++) {
-                    assert_lt(erange2.first, edges.size());
-                    const PathEdge& edge2 = edges[erange2.first];
-                    if(edge2.label == '$' || edge2.label == 'Z') continue;
-                    index_t key = (tmp_node.key << 2) | asc2dna[(int)edge2.label];
-                    if(tmp_node.depth + 1 == ftabChars) {
-                        if(report_seqs.back().first == numeric_limits<index_t>::max()) {
-                            assert_eq(report_seqs.back().second, numeric_limits<index_t>::max());
-                            report_seqs.back().first = key;
-                            report_seqs.back().second = key;
-                        } else if(key < report_seqs.back().first) {
-                            assert_neq(report_seqs.back().second, numeric_limits<index_t>::max());
-                            report_seqs.back().first = key;
-                        } else if(key > report_seqs.back().second) {
-                            assert_neq(report_seqs.back().first, numeric_limits<index_t>::max());
-                            report_seqs.back().second = key;
-                        }
-                    } else {
-                        if(report_seqs.back().first != numeric_limits<index_t>::max()) {
-                            assert_neq(report_seqs.back().second, numeric_limits<index_t>::max());
-                            index_t shift = ftabChars - 1 - tmp_node.depth;
-                            index_t tmp_first = report_seqs.back().first >> shift;
-                            index_t tmp_second = report_seqs.back().second >> shift;
-                            if(tmp_first < key && tmp_second > key) continue;
-                        }
-                        
-                        tmp_nodes.expand();
-                        tmp_nodes.back().id = edge2.ranking;
-                        tmp_nodes.back().key = key;
-                        tmp_nodes.back().depth = tmp_node.depth + 1;
-                    }
-                }
-            }
+    // Remove 'Y' node
+    assert_gt(nodes.size(), 2);
+    nodes.back().key.first = nodes[nodes.size() - 2].key.first;
+    nodes[nodes.size() - 2] = nodes.back();
+    nodes.pop_back();
+    // Adjust edges accordingly
+    for(size_t i = 0; i < edges.size(); i++) {
+        PathEdge& edge = edges[i];
+        if(edge.label == 'Y') {
+            edge.label = 'Z';
+        } else if(edge.ranking >= nodes.size()) {
+            assert_eq(edge.ranking, nodes.size());
+            edge.ranking -= 1;
         }
     }
     
+#ifndef NDEBUG
+    if(debug) {
+        cerr << "Path nodes" << endl;
+        for(size_t i = 0; i < nodes.size(); i++) {
+            const PathNode& node = nodes[i];
+            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
+            << node.from << " --> " << node.to << endl;
+        }
+        
+        cerr << "Path edges" << endl;
+        for(size_t i = 0; i < edges.size(); i++) {
+            const PathEdge& edge = edges[i];
+            cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
+        }
+    }
+#endif
     
     sortEdgesTo(true);
     status = ready;
-    nodes.pop_back(); // Remove 'Z' node
     
-    return true;
+    // daehwan - for debugging purposes
+    // return true;
     
     bwt_string.clear();
     F_array.clear();
     M_array.clear();
-    bwt_counts.resizeExact(5); bwt_counts.fillZero(); bwt_counts.front() = 1;
+    bwt_counts.resizeExact(5); bwt_counts.fillZero();
     for(index_t node = 0; node < nodes.size(); node++) {
         pair<index_t, index_t> edge_range = getEdges(node, false /* from? */);
         for(index_t i = edge_range.first; i < edge_range.second; i++) {
             assert_lt(i, edges.size());
             char label = edges[i].label;
-            if(label == 'Z') {
-                label = '$';
+            if(label == 'Y') {
+                label = 'Z';
             }
             bwt_string.push_back(label);
             F_array.push_back(i == edge_range.first ? 1 : 0);
             
-            if(label != '$') {
+            if(label != 'Z') {
                 char nt = asc2dna[(int)label];
                 assert_lt(nt + 1, bwt_counts.size());
                 bwt_counts[nt + 1]++;
@@ -1688,8 +1627,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     // Test searches, based on paper_example
 #if 0
     EList<string> queries;  EList<index_t> answers;
-#   if 1
-#      if 0
+#   if 0
+#      if 1
     queries.push_back("GACGT"); answers.push_back(9);
     queries.push_back("GATGT"); answers.push_back(9);
     queries.push_back("GACT");  answers.push_back(9);
@@ -1754,7 +1693,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
 #   endif
     
     // See inconsistencies between F and M arrays
-#   if 0
+#   if 1
     cerr << endl << endl;
     EList<index_t> tmp_F;
     for(index_t i = 0; i < F_array.size(); i++) {
@@ -1778,6 +1717,42 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     cerr << "Final: " << tmp_F.back() << " vs. " << tmp_M.back() << endl;
 #   endif
     
+#endif
+    
+    // Ftab
+#if 0
+    index_t ftabLen = 1 << (ftabChars << 1);
+    ftab.resize(ftabLen);
+    for(index_t i = 0; i < ftabLen; i++) {
+        index_t q = i;
+        index_t top = 0, bot = bwt_counts[4];
+        index_t j = 0;
+        for(; j < ftabChars; j++) {
+            if(top >= bot) break;
+            int nt = q & 0x3; q >>= 2;
+
+            top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
+            bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
+            
+            if(top >= bot) break;
+            
+            top = rank1(M_array, top) - 1;
+            bot = rank1(M_array, bot - 1);
+            
+            top = select1(F_array, top + 1);
+            bot = select1(F_array, bot + 1);
+        }
+        if(j < ftabChars) {
+            if(i == 0) {
+                ftab[i].first = ftab[i].second = 0;
+            } else {
+                ftab[i].first = ftab[i].second = ftab[i-1].second;
+            }
+        } else {
+            ftab[i].first = top;
+            ftab[i].second = bot;
+        }
+    }
 #endif
     
     return true;

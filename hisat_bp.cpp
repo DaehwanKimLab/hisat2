@@ -3389,6 +3389,7 @@ static void multiseedSearch(
 static string argstr;
 
 extern void initializeCntLut();
+extern void initializeCntBit();
 
 template<typename TStr>
 static void driver(
@@ -3401,6 +3402,7 @@ static void driver(
 	}
     
     initializeCntLut();
+    initializeCntBit();
     
 	// Vector of the reference sequences; used for sanity-checking
 	EList<SString<char> > names, os;

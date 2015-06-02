@@ -350,6 +350,7 @@ static void deleteIdxFiles(
 }
 
 extern void initializeCntLut();
+extern void initializeCntBit();
 
 /**
  * Drive the index construction process and optionally sanity-check the
@@ -365,6 +366,7 @@ static void driver(
 	int reverse)
 {
     initializeCntLut();
+    initializeCntBit();
 	EList<FileBuf*> is(MISC_CAT);
 	bool bisulfite = false;
 	RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
@@ -438,7 +440,12 @@ static void driver(
                                 1,  // TODO: maybe not?
                                 lineRate,
                                 offRate,      // suffix-array sampling rate
+                                // daehwan - for debugging purposes
+#if 1
                                 ftabChars,    // number of chars in initial arrow-pair calc
+#else
+                                6,
+#endif
                                 localOffRate,
                                 localFtabChars,
                                 snpfile,

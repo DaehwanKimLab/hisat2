@@ -611,34 +611,6 @@
 			passBuildSettingsInEnvironment = 1;
 			productName = "sawhi-align-debug";
 		};
-		E81779C219704B300067B436 /* hisat-build-l-debug */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = "hisat-build-l-debug";
-			buildConfigurationList = E81779C319704B300067B436 /* Build configuration list for PBXLegacyTarget "hisat-build-l-debug" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
-			dependencies = (
-			);
-			name = "hisat-build-l-debug";
-			passBuildSettingsInEnvironment = 1;
-			productName = "sawhi-align-debug";
-		};
-		E81779CA19704BB80067B436 /* hisat-align-l-debug */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = "hisat-align-l-debug";
-			buildConfigurationList = E81779CB19704BB80067B436 /* Build configuration list for PBXLegacyTarget "hisat-align-l-debug" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
-			dependencies = (
-			);
-			name = "hisat-align-l-debug";
-			passBuildSettingsInEnvironment = 1;
-			productName = "sawhi-align-debug";
-		};
 		E818AEAF19880CA400ED141B /* hisat-bp-bin-debug */ = {
 			isa = PBXLegacyTarget;
 			buildArgumentsString = "hisat-bp-bin-debug";
@@ -650,20 +622,6 @@
 			dependencies = (
 			);
 			name = "hisat-bp-bin-debug";
-			passBuildSettingsInEnvironment = 1;
-			productName = "sawhi-align-debug";
-		};
-		E85452551B1A0CFA0049F2AC /* hisat-build-s-debug */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = "hisat-build-s-debug";
-			buildConfigurationList = E85452561B1A0CFA0049F2AC /* Build configuration list for PBXLegacyTarget "hisat-build-s-debug" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
-			dependencies = (
-			);
-			name = "hisat-build-s-debug";
 			passBuildSettingsInEnvironment = 1;
 			productName = "sawhi-align-debug";
 		};
@@ -695,76 +653,6 @@
 			passBuildSettingsInEnvironment = 1;
 			productName = "sawhi-align-debug";
 		};
-		E857666519704BFB00D8AAFB /* hisat-align-s-debug */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = "USE_SRA=0 hisat-align-s-debug";
-			buildConfigurationList = E857666619704BFB00D8AAFB /* Build configuration list for PBXLegacyTarget "hisat-align-s-debug" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
-			dependencies = (
-			);
-			name = "hisat-align-s-debug";
-			passBuildSettingsInEnvironment = 1;
-			productName = "sawhi-align-debug";
-		};
-		E857666919704BFE00D8AAFB /* hisat-align-l */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = "hisat-align-l-debug";
-			buildConfigurationList = E857666A19704BFE00D8AAFB /* Build configuration list for PBXLegacyTarget "hisat-align-l" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
-			dependencies = (
-			);
-			name = "hisat-align-l";
-			passBuildSettingsInEnvironment = 1;
-			productName = "sawhi-align-debug";
-		};
-		E857666D19704BFF00D8AAFB /* hisat-align-s */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = "hisat-align-s";
-			buildConfigurationList = E857666E19704BFF00D8AAFB /* Build configuration list for PBXLegacyTarget "hisat-align-s" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
-			dependencies = (
-			);
-			name = "hisat-align-s";
-			passBuildSettingsInEnvironment = 1;
-			productName = "sawhi-align-debug";
-		};
-		E8B8F8F51976E840001596FB /* hisat-inspect-l-debug */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = "hisat-inspect-l-debug";
-			buildConfigurationList = E8B8F8F61976E840001596FB /* Build configuration list for PBXLegacyTarget "hisat-inspect-l-debug" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
-			dependencies = (
-			);
-			name = "hisat-inspect-l-debug";
-			passBuildSettingsInEnvironment = 1;
-			productName = "sawhi-align-debug";
-		};
-		E8B8F8F9197A9BE2001596FB /* hisat-inspect-s-debug */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = "hisat-inspect-s-debug";
-			buildConfigurationList = E8B8F8FA197A9BE2001596FB /* Build configuration list for PBXLegacyTarget "hisat-inspect-s-debug" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat;
-			dependencies = (
-			);
-			name = "hisat-inspect-s-debug";
-			passBuildSettingsInEnvironment = 1;
-			productName = "sawhi-align-debug";
-		};
 /* End PBXLegacyTarget section */
 
 /* Begin PBXProject section */
@@ -786,14 +674,6 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				E81779C219704B300067B436 /* hisat-build-l-debug */,
-				E85452551B1A0CFA0049F2AC /* hisat-build-s-debug */,
-				E81779CA19704BB80067B436 /* hisat-align-l-debug */,
-				E857666519704BFB00D8AAFB /* hisat-align-s-debug */,
-				E857666919704BFE00D8AAFB /* hisat-align-l */,
-				E857666D19704BFF00D8AAFB /* hisat-align-s */,
-				E8B8F8F51976E840001596FB /* hisat-inspect-l-debug */,
-				E8B8F8F9197A9BE2001596FB /* hisat-inspect-s-debug */,
 				E818AEAF19880CA400ED141B /* hisat-bp-bin-debug */,
 				E8000ACD1AE8271500E1F351 /* build_automaton-debug */,
 				E8000AD11AE82AAE00E1F351 /* determinize-debug */,
@@ -980,60 +860,6 @@
 			};
 			name = Release;
 		};
-		E81779C419704B300067B436 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-l-debug copy";
-			};
-			name = Debug;
-		};
-		E81779C519704B300067B436 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-l-debug copy";
-			};
-			name = Release;
-		};
-		E81779CC19704BB80067B436 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
-				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-l-debug copy";
-			};
-			name = Debug;
-		};
-		E81779CD19704BB80067B436 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
-				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-l-debug copy";
-			};
-			name = Release;
-		};
 		E818AEB119880CA400ED141B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1056,31 +882,6 @@
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "hisat-align-s-debug copy";
-			};
-			name = Release;
-		};
-		E85452571B1A0CFA0049F2AC /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-s-debug";
-			};
-			name = Debug;
-		};
-		E85452581B1A0CFA0049F2AC /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-s-debug";
 			};
 			name = Release;
 		};
@@ -1135,93 +936,6 @@
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "hisat2-align-s-debug";
-			};
-			name = Release;
-		};
-		E857666719704BFB00D8AAFB /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
-				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-s-debug";
-			};
-			name = Debug;
-		};
-		E857666819704BFB00D8AAFB /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
-				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-s-debug";
-			};
-			name = Release;
-		};
-		E857666B19704BFE00D8AAFB /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
-				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-l-debug copy copy";
-			};
-			name = Debug;
-		};
-		E857666C19704BFE00D8AAFB /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
-				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-l-debug copy copy";
-			};
-			name = Release;
-		};
-		E857666F19704BFF00D8AAFB /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
-				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-s-debug";
-			};
-			name = Debug;
-		};
-		E857667019704BFF00D8AAFB /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
-				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-s-debug";
 			};
 			name = Release;
 		};
@@ -1295,56 +1009,6 @@
 			};
 			name = Release;
 		};
-		E8B8F8F71976E840001596FB /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-l-debug copy";
-			};
-			name = Debug;
-		};
-		E8B8F8F81976E840001596FB /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-build-l-debug copy";
-			};
-			name = Release;
-		};
-		E8B8F8FB197A9BE2001596FB /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-inspect-l-debug copy";
-			};
-			name = Debug;
-		};
-		E8B8F8FC197A9BE2001596FB /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-inspect-l-debug copy";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1402,38 +1066,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E81779C319704B300067B436 /* Build configuration list for PBXLegacyTarget "hisat-build-l-debug" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E81779C419704B300067B436 /* Debug */,
-				E81779C519704B300067B436 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E81779CB19704BB80067B436 /* Build configuration list for PBXLegacyTarget "hisat-align-l-debug" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E81779CC19704BB80067B436 /* Debug */,
-				E81779CD19704BB80067B436 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		E818AEB019880CA400ED141B /* Build configuration list for PBXLegacyTarget "hisat-bp-bin-debug" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E818AEB119880CA400ED141B /* Debug */,
 				E818AEB219880CA400ED141B /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E85452561B1A0CFA0049F2AC /* Build configuration list for PBXLegacyTarget "hisat-build-s-debug" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E85452571B1A0CFA0049F2AC /* Debug */,
-				E85452581B1A0CFA0049F2AC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1456,56 +1093,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E857666619704BFB00D8AAFB /* Build configuration list for PBXLegacyTarget "hisat-align-s-debug" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E857666719704BFB00D8AAFB /* Debug */,
-				E857666819704BFB00D8AAFB /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E857666A19704BFE00D8AAFB /* Build configuration list for PBXLegacyTarget "hisat-align-l" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E857666B19704BFE00D8AAFB /* Debug */,
-				E857666C19704BFE00D8AAFB /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E857666E19704BFF00D8AAFB /* Build configuration list for PBXLegacyTarget "hisat-align-s" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E857666F19704BFF00D8AAFB /* Debug */,
-				E857667019704BFF00D8AAFB /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		E8B0DBD51934F022005ED9FA /* Build configuration list for PBXProject "hisat" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E8B0DBE11934F022005ED9FA /* Debug */,
 				E8B0DBE21934F022005ED9FA /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E8B8F8F61976E840001596FB /* Build configuration list for PBXLegacyTarget "hisat-inspect-l-debug" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E8B8F8F71976E840001596FB /* Debug */,
-				E8B8F8F81976E840001596FB /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E8B8F8FA197A9BE2001596FB /* Build configuration list for PBXLegacyTarget "hisat-inspect-s-debug" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E8B8F8FB197A9BE2001596FB /* Debug */,
-				E8B8F8FC197A9BE2001596FB /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

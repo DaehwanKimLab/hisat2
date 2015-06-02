@@ -367,12 +367,14 @@ static void print_index_summary(
 }
 
 extern void initializeCntLut();
+extern void initializeCntBit();
 
 static void driver(
 	const string& ebwtFileBase,
 	const string& query)
 {
     initializeCntLut();
+    initializeCntBit();
     
 	// Adjust
 	string adjustedEbwtFileBase = adjustEbwtBase(argv0, ebwtFileBase, verbose);
