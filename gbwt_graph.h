@@ -1192,7 +1192,7 @@ public:
 private:
     void      createPathNode(const PathNode& left, const PathNode& right);
     void      mergeAllNodes(PathGraph<index_t>& previous);
-    pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> node_range);
+    pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> node_range, bool sorted);
     void      sortMergeUnsorted();
     // Can create an index by using key.second in PathNodes.
     void sortByFrom(bool create_index = true);
@@ -1592,7 +1592,7 @@ void PathGraph<index_t>::sortMergeUnsorted()
     index_t curr = 0;
     pair<index_t, index_t> range(0, 0); // Empty range
     while(true) {
-        range = nextMaximalSet(range);
+        range = nextMaximalSet(range, false);
         if(range.first >= range.second) {break;}
         unsorted_nodes[curr] = unsorted_nodes[range.first]; curr++;
     }
@@ -1622,31 +1622,58 @@ void PathGraph<index_t>::sortMergeUnsorted()
 // PathNodes begins in the same GraphNode, and no other PathNode shares
 // the key. If the maximal set is empty, returns the next PathNode.
 template <typename index_t>
-pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t> range) {
-    if(range.second >= unsorted_nodes.size()) {
-        return pair<index_t, index_t>(0, 0);
-    }
-    
-    range.first = range.second; //begin where we left off
-    range.second = range.first + 1; //end one to the right
+pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t> range, bool sorted) {
+	if(!sorted) {
+		if(range.second >= unsorted_nodes.size()) {
+			return pair<index_t, index_t>(0, 0);
+		}
 
-    //covers case when last range had same key, no merge can happen
-    if(range.first > 0 && unsorted_nodes[range.first - 1].key == unsorted_nodes[range.first].key) {
-        return range;
-    }
-    
-    //keep expanding until keys get to end of mergable
-    for(index_t i = range.second; i < unsorted_nodes.size(); i++) {
-        if(unsorted_nodes[i-1].key != unsorted_nodes[i].key) { //should this be range.first instead of i - 1???????
-            range.second = i;
-        }
-        if(unsorted_nodes[i].from != unsorted_nodes[range.first].from) {
-            return range;
-        }
-    }
-    //if we get to the end we finish.
-    range.second = unsorted_nodes.size();
-    return range;
+		range.first = range.second; //begin where we left off
+		range.second = range.first + 1; //end one to the right
+
+		//covers case when last range had same key, no merge can happen
+		if(range.first > 0 && unsorted_nodes[range.first - 1].key == unsorted_nodes[range.first].key) {
+			return range;
+		}
+
+		//keep expanding until keys get to end of mergable
+		for(index_t i = range.second; i < unsorted_nodes.size(); i++) {
+			if(unsorted_nodes[i-1].key != unsorted_nodes[i].key) { //should this be range.first instead of i - 1???????
+				range.second = i;
+			}
+			if(unsorted_nodes[i].from != unsorted_nodes[range.first].from) {
+				return range;
+			}
+		}
+		//if we get to the end we finish.
+		range.second = unsorted_nodes.size();
+		return range;
+	} else {
+		if(range.second >= sorted_nodes.size()) {
+			return pair<index_t, index_t>(0, 0);
+		}
+
+		range.first = range.second; //begin where we left off
+		range.second = range.first + 1; //end one to the right
+
+		//covers case when last range had same key, no merge can happen
+		if(range.first > 0 && sorted_nodes[range.first - 1].key == sorted_nodes[range.first].key) {
+			return range;
+		}
+
+		//keep expanding until keys get to end of mergable
+		for(index_t i = range.second; i < sorted_nodes.size(); i++) {
+			if(sorted_nodes[i-1].key != sorted_nodes[i].key) { //should this be range.first instead of i - 1???????
+				range.second = i;
+			}
+			if(sorted_nodes[i].from != sorted_nodes[range.first].from) {
+				return range;
+			}
+		}
+		//if we get to the end we finish.
+		range.second = sorted_nodes.size();
+		return range;
+	}
 }
 
 template <typename index_t>
@@ -1679,6 +1706,15 @@ void PathGraph<index_t>::mergeAllNodes(PathGraph<index_t>& previous)
 			curr_s++;
 		}
 	}
+
+	index_t curr = 0;
+	pair<index_t, index_t> range(0, 0); // Empty range
+	while(true) {
+		range = nextMaximalSet(range, true);
+		if(range.first >= range.second) {break;}
+		sorted_nodes[curr] = sorted_nodes[range.first]; curr++;
+	}
+	sorted_nodes.resize(curr);
 }
 
 #endif /*GBWT_GRAPH_H_*/
