@@ -606,8 +606,6 @@ public:
 	    fw_(fw), \
 	    _in1(NULL), \
 	    _in2(NULL), \
-	    _zGbwtByteOff(std::numeric_limits<index_t>::max()), \
-	    _zGbwtBpOff(-1), \
 	    _nPat(0), \
 	    _nFrag(0), \
 	    _plen(EBWT_CAT), \
@@ -1383,9 +1381,10 @@ public:
 
 	/// Accessors
 	inline const GFMParams<index_t>& gh() const     { return _gh; }
-	index_t    zOff() const         { return _zOffs[0]; }
-	index_t    zGbwtByteOff() const { return _zGbwtByteOff; }
-	int        zGbwtBpOff() const   { return _zGbwtBpOff; }
+    index_t    numZOffs() const     { return _zOffs.size(); }
+    index_t    zOff(index_t i) const         { assert_lt(i, _zOffs.size()); return _zOffs[i]; }
+    index_t    zGbwtByteOff(index_t i) const { assert_lt(i, _zGbwtByteOffs.size()); return _zGbwtByteOffs[i]; }
+    int        zGbwtBpOff(index_t i) const   { assert_lt(i, _zGbwtBpOffs.size()); return _zGbwtBpOffs[i]; }
 	index_t    nPat() const        { return _nPat; }
 	index_t    nFrag() const       { return _nFrag; }
 	inline index_t*   fchr()              { return _fchr.get(); }
@@ -1447,17 +1446,18 @@ public:
 			assert(fchr() != NULL);
 			//assert(_offs != NULL);
 			//assert(_rstarts != NULL);
-			assert_neq(_zGbwtByteOff, (index_t)OFF_MASK);
-			assert_neq(_zGbwtBpOff, -1);
+			// assert_neq(_zGbwtByteOff, (index_t)OFF_MASK);
+			// assert_neq(_zGbwtBpOff, -1);
 			return true;
 		} else {
 			assert(ftab() == NULL);
 			assert(eftab() == NULL);
 			assert(fchr() == NULL);
 			assert(offs() == NULL);
-			// assert(rstarts() == NULL);
-			assert_eq(_zGbwtByteOff, (index_t)OFF_MASK);
-			assert_eq(_zGbwtBpOff, -1);
+			assert(rstarts() == NULL);
+            assert_eq(_zOffs.size(), 0);
+            assert_eq(_zGbwtByteOffs.size(), 0);
+            assert_eq(_zGbwtBpOffs.size(), 0);
 			return false;
 		}
 	}
@@ -1505,8 +1505,9 @@ public:
 		// Keep plen; it's small and the client may want to seq it
 		// even when the others are evicted.
 		//_plen  = NULL;
-		_zGbwtByteOff = (index_t)OFF_MASK;
-		_zGbwtBpOff = -1;
+        _zOffs.clear();
+        _zGbwtByteOffs.clear();
+        _zGbwtBpOffs.clear();
 	}
 
 	/**
@@ -1728,15 +1729,19 @@ public:
 	 * _zEbwtBpOff from _zOff.
 	 */
 	void postReadInit(const GFMParams<index_t>& gh) {
-		index_t sideNum     = _zOffs[0] / gh._sideGbwtLen;
-		index_t sideCharOff = _zOffs[0] % gh._sideGbwtLen;
-		index_t sideByteOff = sideNum * gh._sideSz;
-		_zGbwtByteOff = sideCharOff >> 2;
-		assert_lt(_zGbwtByteOff, gh._sideGbwtSz);
-		_zGbwtBpOff = sideCharOff & 3;
-		assert_lt(_zGbwtBpOff, 4);
-		_zGbwtByteOff += sideByteOff;
-		assert(repOk(gh)); // Ebwt should be fully initialized now
+        _zGbwtByteOffs.resizeExact(_zOffs.size());
+        _zGbwtBpOffs.resizeExact(_zOffs.size());
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            index_t sideNum     = _zOffs[i] / gh._sideGbwtLen;
+            index_t sideCharOff = _zOffs[i] % gh._sideGbwtLen;
+            index_t sideByteOff = sideNum * gh._sideSz;
+            _zGbwtByteOffs[i] = sideCharOff >> 2;
+            assert_lt(_zGbwtByteOffs[i], gh._sideGbwtSz);
+            _zGbwtBpOffs[i] = sideCharOff & 3;
+            assert_lt(_zGbwtBpOffs[i], 4);
+            _zGbwtByteOffs[i] += sideByteOff;
+            assert(repOk(gh)); // Ebwt should be fully initialized now
+        }
 	}
 
 	/**
@@ -1758,12 +1763,14 @@ public:
 	void print(ostream& out, const GFMParams<index_t>& gh) const {
 		gh.print(out); // print params
         return;
-		out << "Ebwt (" << (isInMemory()? "memory" : "disk") << "):" << endl
-		    << "    zOffs[0]: "     << _zOffs[0] << endl
-		    << "    zGbwtByteOff: " << _zGbwtByteOff << endl
-		    << "    zGbwtBpOff: "   << _zGbwtBpOff << endl
-		    << "    nPat: "  << _nPat << endl
-		    << "    plen: ";
+        out << "Ebwt (" << (isInMemory()? "memory" : "disk") << "):" << endl;
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            out << "    " << (i+1) << " zOffs: "     << _zOffs[i] << endl
+                << "    " << (i+1) << " zGbwtByteOff: " << _zGbwtByteOffs[i] << endl
+                << "    " << (i+1) << " zGbwtBpOff: "   << _zGbwtBpOffs[i] << endl;
+        }
+		    out << "    nPat: "  << _nPat << endl
+		        << "    plen: ";
 		if(plen() == NULL) {
 			out << "NULL" << endl;
 		} else {
@@ -1863,13 +1870,18 @@ public:
         index_t cCnt = countUpTo(l, c);
         assert_leq(cCnt, l.toBWRow(_gh));
         assert_leq(cCnt, this->_gh._sideGbwtLen);
-        if(c == 0 && l._sideByteOff <= _zGbwtByteOff && l._sideByteOff + l._by >= _zGbwtByteOff) {
-            // Adjust for the fact that we represented $ with an 'A', but
-            // shouldn't count it as an 'A' here
-            if((l._sideByteOff + l._by > _zGbwtByteOff) ||
-               (l._sideByteOff + l._by == _zGbwtByteOff && l._bp > _zGbwtBpOff))
-            {
-                cCnt--; // Adjust for '$' looking like an 'A'
+        assert_eq(_zGbwtByteOffs.size(), _zGbwtBpOffs.size());
+        for(index_t i = 0; i < _zGbwtByteOffs.size(); i++) {
+            index_t zGbwtByteOff = _zGbwtByteOffs[i];
+            if(c == 0 && l._sideByteOff <= zGbwtByteOff && l._sideByteOff + l._by >= zGbwtByteOff) {
+                // Adjust for the fact that we represented $ with an 'A', but
+                // shouldn't count it as an 'A' here
+                int zGbwtBpOff = _zGbwtBpOffs[i];
+                if((l._sideByteOff + l._by > zGbwtByteOff) ||
+                   (l._sideByteOff + l._by == zGbwtByteOff && l._bp > zGbwtBpOff))
+                {
+                    cCnt--; // Adjust for '$' looking like an 'A'
+                }
             }
         }
         index_t ret;
@@ -1918,15 +1930,20 @@ public:
 		WITHIN_FCHR_DOLLARA(cntsUpto);
 		WITHIN_BWT_LEN(cntsUpto);
 		const uint8_t *side = l.side(this->gfm());
-		if(l._sideByteOff <= _zGbwtByteOff && l._sideByteOff + l._by >= _zGbwtByteOff) {
-			// Adjust for the fact that we represented $ with an 'A', but
-			// shouldn't count it as an 'A' here
-			if((l._sideByteOff + l._by > _zGbwtByteOff) ||
-			   (l._sideByteOff + l._by == _zGbwtByteOff && l._bp > _zGbwtBpOff))
-			{
-				cntsUpto[0]--; // Adjust for '$' looking like an 'A'
-			}
-		}
+        assert_eq(_zGbwtByteOffs.size(), _zGbwtBpOffs.size());
+        for(index_t i = 0; i < _zGbwtByteOffs.size(); i++) {
+            index_t zGbwtByteOff = _zGbwtByteOffs[i];
+            if(l._sideByteOff <= zGbwtByteOff && l._sideByteOff + l._by >= zGbwtByteOff) {
+                // Adjust for the fact that we represented $ with an 'A', but
+                // shouldn't count it as an 'A' here
+                int zGbwtBpOff = _zGbwtBpOffs[i];
+                if((l._sideByteOff + l._by > zGbwtByteOff) ||
+                   (l._sideByteOff + l._by == zGbwtByteOff && l._bp > zGbwtBpOff))
+                {
+                    cntsUpto[0]--; // Adjust for '$' looking like an 'A'
+                }
+            }
+        }
 		// Now factor in the occ[] count at the side break
 		const index_t *acgt = reinterpret_cast<const index_t*>(side + _gh._sideGbwtSz);
 		assert_leq(acgt[0], this->fchr()[1] + this->_gh.sideGbwtLen());
@@ -1991,15 +2008,20 @@ public:
 		assert_range(0, (int)this->_gh._sideGbwtSz-1, (int)l._by);
 		assert_range(0, 3, (int)l._bp);
 		countUpToEx(l, arrs);
-		if(l._sideByteOff <= _zGbwtByteOff && l._sideByteOff + l._by >= _zGbwtByteOff) {
-			// Adjust for the fact that we represented $ with an 'A', but
-			// shouldn't count it as an 'A' here
-			if((l._sideByteOff + l._by > _zGbwtByteOff) ||
-			   (l._sideByteOff + l._by == _zGbwtByteOff && l._bp > _zGbwtBpOff))
-			{
-				arrs[0]--; // Adjust for '$' looking like an 'A'
-			}
-		}
+        assert_eq(_zGbwtByteOffs.size(), _zGbwtBpOffs.size());
+        for(index_t i = 0; i < _zGbwtByteOffs.size(); i++) {
+            index_t zGbwtByteOff = _zGbwtByteOffs[i];
+            if(l._sideByteOff <= zGbwtByteOff && l._sideByteOff + l._by >= zGbwtByteOff) {
+                // Adjust for the fact that we represented $ with an 'A', but
+                // shouldn't count it as an 'A' here
+                int zGbwtBpOff = _zGbwtBpOffs[i];
+                if((l._sideByteOff + l._by > zGbwtByteOff) ||
+                   (l._sideByteOff + l._by == zGbwtByteOff && l._bp > zGbwtBpOff))
+                {
+                    arrs[0]--; // Adjust for '$' looking like an 'A'
+                }
+            }
+        }
 		WITHIN_FCHR(arrs);
 		WITHIN_BWT_LEN(arrs);
 		// Now factor in the occ[] count at the side break
@@ -2614,6 +2636,33 @@ public:
 #endif
 		return ret;
 	}
+    
+    /**
+     * Given row i and character c, return the row that the LF mapping maps
+     * i to on character c.
+     */
+    inline index_t mapGLF(
+                          const SideLocus<index_t>& l, int c
+                          ASSERT_ONLY(, bool overrideSanity = false)
+                          ) const
+    {
+        index_t ret;
+        assert_lt(c, 4);
+        assert_geq(c, 0);
+        ret = countBt2Side(l, c);
+        assert_lt(ret, this->_gh._gbwtLen);
+#ifndef NDEBUG
+        if(_sanity && !overrideSanity) {
+            // Make sure results match up with results from mapLFEx;
+            // be sure to override sanity-checking in the callee, or we'll
+            // have infinite recursion
+            index_t arrs[] = { 0, 0, 0, 0 };
+            mapLFEx(l, arrs, true);
+            assert_eq(arrs[c], ret);
+        }
+#endif
+        return ret;
+    }
 
 	/**
 	 * Given top and bot loci, calculate counts of all four DNA chars up to
@@ -2724,6 +2773,37 @@ public:
 	}
     
     /**
+     * Given row and its locus information, proceed on the given character
+     * and return the next row, or all-fs if we can't proceed on that
+     * character.  Returns 0xffffffff if this row ends in $.
+     */
+    inline index_t mapGLF1(
+                           index_t row,       // starting row
+                           const SideLocus<index_t>& l, // locus for starting row
+                           int c               // character to proceed on
+                           ASSERT_ONLY(, bool overrideSanity = false)
+                           ) const
+    {
+        if(rowL(l) != c || row == _zOffs[0]) return (index_t)OFF_MASK;
+        index_t ret;
+        assert_lt(c, 4);
+        assert_geq(c, 0);
+        ret = countBt2Side(l, c);
+        assert_lt(ret, this->_gh._gbwtLen);
+#ifndef NDEBUG
+        if(_sanity && !overrideSanity) {
+            // Make sure results match up with results from mapLFEx;
+            // be sure to override sanity-checking in the callee, or we'll
+            // have infinite recursion
+            index_t arrs[] = { 0, 0, 0, 0 };
+            mapLFEx(l, arrs, true);
+            assert_eq(arrs[c], ret);
+        }
+#endif
+        return ret;
+    }
+    
+    /**
      * Given row i, return rank
      */
     inline index_t rank_M(
@@ -2767,10 +2847,14 @@ public:
 	/// Check that in-memory Ebwt is internally consistent with respect
 	/// to given EbwtParams; assert if not
 	bool inMemoryRepOk(const GFMParams<index_t>& gh) const {
-		assert_geq(_zGbwtBpOff, 0);
-		assert_lt(_zGbwtBpOff, 4);
-		assert_lt(_zGbwtByteOff, gh._gbwtTotSz);
-		assert_lt(_zOffs[0], gh._gbwtLen);
+        assert_eq(_zOffs.size(), _zGbwtByteOffs.size());
+        assert_eq(_zOffs.size(), _zGbwtBpOffs.size());
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            assert_geq(_zGbwtBpOffs[i], 0);
+            assert_lt(_zGbwtBpOffs[i], 4);
+            assert_lt(_zGbwtByteOffs[i], gh._gbwtTotSz);
+            assert_lt(_zOffs[i], gh._gbwtLen);
+        }
 		assert_geq(_nFrag, _nPat);
 		return true;
 	}
@@ -2808,8 +2892,8 @@ public:
 	string     _in1Str; // filename for primary index file
 	string     _in2Str; // filename for secondary index file
     EList<index_t> _zOffs;
-	index_t    _zGbwtByteOff;
-	int        _zGbwtBpOff;
+	EList<index_t> _zGbwtByteOffs;
+	EList<int>     _zGbwtBpOffs;
 	index_t    _nPat;  /// number of reference texts
 	index_t    _nFrag; /// number of fragments
 	APtrWrap<index_t> _plen;
@@ -3303,9 +3387,6 @@ void GFM<index_t>::buildToDisk(
 	int sideCur = 0;
 	fw = true;
 
-	// Have we skipped the '$' in the last column yet?
-	ASSERT_ONLY(bool dollarSkipped = false);
-
 	index_t si = 0;   // string offset (chars)
 	ASSERT_ONLY(bool inSA = true); // true iff saI still points inside suffix
 	                               // array (as opposed to the padding at the
@@ -3344,7 +3425,6 @@ void GFM<index_t>::buildToDisk(
 					// and counting it as, say, an A, will mess up the
 					// LF mapping
 					gbwtChar = 0; count = false;
-					ASSERT_ONLY(dollarSkipped = true);
 #ifndef NDEBUG
                     if(zOffs.size() > 0) {
                         assert_gt(si, zOffs.back());
@@ -3436,7 +3516,7 @@ void GFM<index_t>::buildToDisk(
 #endif
 			}
 		} // end loop over bit-pairs
-		assert_eq(dollarSkipped ? 3 : 0, (occ[0] + occ[1] + occ[2] + occ[3]) & 3);
+		assert_eq(0, (occ[0] + occ[1] + occ[2] + occ[3] + zOffs.size()) & 3);
 #ifdef SIXTY4_FORMAT
 		assert_eq(0, si & 31);
 #else
@@ -3599,8 +3679,12 @@ void GFM<index_t>::buildToDisk(
 #endif
     }
     
+    // Clear memory
     _gfm.reset();
     _fchr.reset();
+    _zOffs.clear();
+    _zGbwtByteOffs.clear();
+    _zGbwtBpOffs.clear();
     
 	//
 	// Finish building ftab and build eftab
@@ -4722,8 +4806,11 @@ void GFM<index_t>::writeFromMemory(bool justHeader,
         // terribly large.  'ebwt' is written to the primary file and then
         // discarded from memory as it is built; 'offs' is similarly
         // written to the secondary file and discarded.
+        writeIndex<index_t>(out1, gh._gbwtTotLen, be);
         out1.write((const char *)this->gfm(), gh._gbwtTotLen);
-        writeIndex<index_t>(out1, this->zOff(), be);
+        writeIndex<index_t>(out1, _zOffs.size(), be);
+        for(index_t i = 0; i < _zOffs.size(); i++)
+            writeIndex<index_t>(out1, _zOffs[i], be);
         index_t offsLen = gh._offsLen;
         for(index_t i = 0; i < offsLen; i++)
             writeIndex<index_t>(out2, this->offs()[i], be);

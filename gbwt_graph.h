@@ -1720,40 +1720,40 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
 #endif
     
     // Ftab
-#if 0
-    index_t ftabLen = 1 << (ftabChars << 1);
-    ftab.resize(ftabLen);
-    for(index_t i = 0; i < ftabLen; i++) {
-        index_t q = i;
-        index_t top = 0, bot = bwt_counts[4];
-        index_t j = 0;
-        for(; j < ftabChars; j++) {
-            if(top >= bot) break;
-            int nt = q & 0x3; q >>= 2;
-
-            top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
-            bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
-            
-            if(top >= bot) break;
-            
-            top = rank1(M_array, top) - 1;
-            bot = rank1(M_array, bot - 1);
-            
-            top = select1(F_array, top + 1);
-            bot = select1(F_array, bot + 1);
-        }
-        if(j < ftabChars) {
-            if(i == 0) {
-                ftab[i].first = ftab[i].second = 0;
-            } else {
-                ftab[i].first = ftab[i].second = ftab[i-1].second;
+    if(ftabChars <= 6) {
+        index_t ftabLen = 1 << (ftabChars << 1);
+        ftab.resize(ftabLen);
+        for(index_t i = 0; i < ftabLen; i++) {
+            index_t q = i;
+            index_t top = 0, bot = bwt_counts[4];
+            index_t j = 0;
+            for(; j < ftabChars; j++) {
+                if(top >= bot) break;
+                int nt = q & 0x3; q >>= 2;
+                
+                top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
+                bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
+                
+                if(top >= bot) break;
+                
+                top = rank1(M_array, top) - 1;
+                bot = rank1(M_array, bot - 1);
+                
+                top = select1(F_array, top + 1);
+                bot = select1(F_array, bot + 1);
             }
-        } else {
-            ftab[i].first = top;
-            ftab[i].second = bot;
+            if(j < ftabChars) {
+                if(i == 0) {
+                    ftab[i].first = ftab[i].second = 0;
+                } else {
+                ftab[i].first = ftab[i].second = ftab[i-1].second;
+                }
+            } else {
+                ftab[i].first = top;
+                ftab[i].second = bot;
+            }
         }
     }
-#endif
     
     return true;
 }
