@@ -873,14 +873,14 @@ public:
 		assert(tloc.valid()); assert(tloc.repOk(gfm.gh()));
 		assert_eq(bot-top, (index_t)(map_.size()-mapi_));
 		pair<int, int> ret = make_pair(0, 0);
-		assert_eq(top, tloc.toBWRow());
+		assert_eq(top, tloc.toBWRow(gfm.gh()));
 		if(bloc.valid()) {
 			// Still multiple elements being tracked
 			assert_lt(top+1, bot);
 			index_t upto[4], in[4];
 			upto[0] = in[0] = upto[1] = in[1] =
 			upto[2] = in[2] = upto[3] = in[3] = 0;
-			assert_eq(bot, bloc.toBWRow());
+			assert_eq(bot, bloc.toBWRow(gfm.gh()));
 			met.bwops++;
 			prm.nExFmops++;
 			// Assert that there's not a dollar sign in the middle of

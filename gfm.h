@@ -471,7 +471,7 @@ struct SideLocus {
 	 * with the (provided) EbwtParams.
 	 */
 	bool repOk(const GFMParams<index_t>& gp) const {
-		ASSERT_ONLY(index_t row = toBWRow());
+		ASSERT_ONLY(index_t row = toBWRow(gp));
 		assert_leq(row, gp._len);
 		assert_range(-1, 3, _bp);
 		assert_range(0, (int)gp._sideGbwtSz, _by);
@@ -1454,7 +1454,7 @@ public:
 			assert(eftab() == NULL);
 			assert(fchr() == NULL);
 			assert(offs() == NULL);
-			assert(rstarts() == NULL);
+			// assert(rstarts() == NULL);
             assert_eq(_zOffs.size(), 0);
             assert_eq(_zGbwtByteOffs.size(), 0);
             assert_eq(_zGbwtBpOffs.size(), 0);
@@ -2500,7 +2500,7 @@ public:
 			// Make sure results match up with a call to mapLFEx.
 			index_t tops[4] = {0, 0, 0, 0};
 			index_t bots[4] = {0, 0, 0, 0};
-			index_t top = l.toBWRow();
+			index_t top = l.toBWRow(gh());
 			index_t bot = top + nm;
 			mapLFEx(top, bot, tops, bots, false);
 			assert(myarrs[0] == (bots[0] - tops[0]) || myarrs[0] == (bots[0] - tops[0])+1);
@@ -2550,7 +2550,7 @@ public:
 	{
 		assert(ltop.repOk(this->gh()));
 		assert(lbot.repOk(this->gh()));
-		assert_eq(num, lbot.toBWRow() - ltop.toBWRow());
+		assert_eq(num, lbot.toBWRow(this->gh()) - ltop.toBWRow(this->gh()));
 		assert_eq(0, cntsUpto[0]); assert_eq(0, cntsIn[0]);
 		assert_eq(0, cntsUpto[1]); assert_eq(0, cntsIn[1]);
 		assert_eq(0, cntsUpto[2]); assert_eq(0, cntsIn[2]);
@@ -2638,30 +2638,79 @@ public:
 	}
     
     /**
-     * Given row i and character c, return the row that the LF mapping maps
+     * Given row i and character c, return the row that the GLF mapping maps
      * i to on character c.
      */
-    inline index_t mapGLF(
-                          const SideLocus<index_t>& l, int c
-                          ASSERT_ONLY(, bool overrideSanity = false)
-                          ) const
+    inline index_t mapGLF_top(
+                              SideLocus<index_t>& l, int c
+                              ASSERT_ONLY(, bool overrideSanity = false)
+                              ) const
     {
-        index_t ret;
         assert_lt(c, 4);
         assert_geq(c, 0);
-        ret = countBt2Side(l, c);
-        assert_lt(ret, this->_gh._gbwtLen);
-#ifndef NDEBUG
-        if(_sanity && !overrideSanity) {
-            // Make sure results match up with results from mapLFEx;
-            // be sure to override sanity-checking in the callee, or we'll
-            // have infinite recursion
-            index_t arrs[] = { 0, 0, 0, 0 };
-            mapLFEx(l, arrs, true);
-            assert_eq(arrs[c], ret);
+        index_t top = mapLF(l, c);
+        
+        l.initFromRow_bit(top + 1, gh(), gfm());
+        index_t node_top = rank_M(l) - 1;
+        
+        const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
+        index_t top_F_loc = *((index_t*)side);
+        side += sizeof(index_t);
+        index_t top_M_occ = *((index_t*)side);
+        assert_leq(top_M_occ, node_top + 1);
+        if(top_M_occ > node_top) {
+            side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
+            top_F_loc = *((index_t*)side);
+            side += sizeof(index_t);
+            top_M_occ = *((index_t*)side);
+            assert_leq(top_M_occ, node_top + 1);
         }
-#endif
-        return ret;
+        if(top_M_occ > 0) top_F_loc++;
+        
+        l.initFromRow_bit(top_F_loc, gh(), gfm());
+        
+        if(node_top + 1 > top_M_occ) {
+            top = select_F(l, node_top + 1 - top_M_occ);
+        } else {
+            top = top_F_loc;
+        }
+        
+        return top;
+    }
+    
+    /**
+     * Given row i and character c, return the row that the GLF mapping maps
+     * i to on character c.
+     */
+    inline index_t mapGLF_bot(
+                              SideLocus<index_t>& l, int c
+                              ASSERT_ONLY(, bool overrideSanity = false)
+                              ) const
+    {
+        assert_lt(c, 4);
+        assert_geq(c, 0);
+        
+        index_t bot = mapLF(l, c);
+        
+        l.initFromRow_bit(bot, gh(), gfm());
+        index_t node_bot = rank_M(l);
+       
+        const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
+        index_t bot_F_loc = *((index_t*)side);
+        side += sizeof(index_t);
+        index_t bot_M_occ = *((index_t*)side);
+        assert_leq(bot_M_occ, node_bot + 1);
+        if(bot_M_occ > 0) bot_F_loc++;
+        
+        l.initFromRow_bit(bot_F_loc, gh(), gfm());
+        
+        if(node_bot + 1 > bot_M_occ) {
+            bot = select_F(l, node_bot + 1 - bot_M_occ);
+        } else {
+            bot = bot_F_loc;
+        }
+        
+        return bot;
     }
 
 	/**
@@ -2779,28 +2828,42 @@ public:
      */
     inline index_t mapGLF1(
                            index_t row,       // starting row
-                           const SideLocus<index_t>& l, // locus for starting row
+                           SideLocus<index_t>& l, // locus for starting row
                            int c               // character to proceed on
                            ASSERT_ONLY(, bool overrideSanity = false)
                            ) const
     {
-        if(rowL(l) != c || row == _zOffs[0]) return (index_t)OFF_MASK;
-        index_t ret;
         assert_lt(c, 4);
         assert_geq(c, 0);
-        ret = countBt2Side(l, c);
-        assert_lt(ret, this->_gh._gbwtLen);
-#ifndef NDEBUG
-        if(_sanity && !overrideSanity) {
-            // Make sure results match up with results from mapLFEx;
-            // be sure to override sanity-checking in the callee, or we'll
-            // have infinite recursion
-            index_t arrs[] = { 0, 0, 0, 0 };
-            mapLFEx(l, arrs, true);
-            assert_eq(arrs[c], ret);
+        index_t top = mapLF(l, c);
+        if(top == (index_t)OFF_MASK) return top;
+        
+        l.initFromRow_bit(top + 1, gh(), gfm());
+        index_t node_top = rank_M(l) - 1;
+        
+        const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
+        index_t top_F_loc = *((index_t*)side);
+        side += sizeof(index_t);
+        index_t top_M_occ = *((index_t*)side);
+        assert_leq(top_M_occ, node_top + 1);
+        if(top_M_occ > node_top) {
+            side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
+            top_F_loc = *((index_t*)side);
+            side += sizeof(index_t);
+            top_M_occ = *((index_t*)side);
+            assert_leq(top_M_occ, node_top + 1);
         }
-#endif
-        return ret;
+        if(top_M_occ > 0) top_F_loc++;
+        
+        l.initFromRow_bit(top_F_loc, gh(), gfm());
+        
+        if(node_top + 1 > top_M_occ) {
+            top = select_F(l, node_top + 1 - top_M_occ);
+        } else {
+            top = top_F_loc;
+        }
+        
+        return top;
     }
     
     /**
@@ -3605,6 +3668,23 @@ void GFM<index_t>::buildToDisk(
         index_t j = 0;
         for(; j < gh._ftabChars; j++) {
             int nt = q & 0x3; q >>= 2;
+            // daehwan - in the middle of implementation
+#if 1
+            if(bloc.valid()) {
+                top = mapGLF_top(tloc, nt);
+                bot = mapGLF_bot(bloc, nt);
+            } else {
+                top = mapGLF1(top, tloc, nt);
+                if(top == (index_t)OFF_MASK) {
+                    top = bot = 0;
+                } else {
+                    bot = top + 1;
+                }
+            }
+            if(bot <= top) {
+                break;
+            }
+#else
             if(bloc.valid()) {
                 top = mapLF(tloc, nt);
                 bot = mapLF(bloc, nt);
@@ -3656,6 +3736,7 @@ void GFM<index_t>::buildToDisk(
             } else {
                 bot = bot_F_loc;
             }
+#endif
 
             SideLocus<index_t>::initFromTopBot(top, bot, gh, gfm(), tloc, bloc);
         }
@@ -4437,6 +4518,9 @@ void GFM<index_t>::readIntoMemory(
             index_t eftabLen = readIndex<index_t>(_in1, switchEndian);
             bytesRead += sizeof(index_t);
             gh->_eftabLen = eftabLen;
+            gh->_eftabSz = eftabLen * sizeof(index_t);
+            _gh._eftabLen = gh->_eftabLen;
+            _gh._eftabSz = gh->_eftabSz;
             if(_useMm) {
 #ifdef BOWTIE_MM
                 _eftab.init((index_t*)(mmFile[0] + bytesRead), gh->_eftabLen, false);
@@ -4458,7 +4542,7 @@ void GFM<index_t>::readIntoMemory(
             }
             for(index_t i = 0; i < gh->_eftabLen; i++) {
                 if(i > 0 && this->eftab()[i] > 0) {
-                    assert_geq(this->eftab()[i], this->eftab()[i-1]);
+                    assert_geq(this->eftab()[i] + 1, this->eftab()[i-1]);
                 } else if(i > 0 && this->eftab()[i-1] == 0) {
                     assert_eq(0, this->eftab()[i]);
                 }

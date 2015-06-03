@@ -3514,8 +3514,7 @@ static void driver(
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
 	HierGFM<index_t, local_index_t> gfm(
 		adjIdxBase,
-	    0,        // index is colorspace
-		-1,       // fw index
+	    -1,       // fw index
 	    true,     // index is for the forward direction
 	    /* overriding: */ offRate,
 		0, // amount to add to index offrate or <= 0 to do nothing

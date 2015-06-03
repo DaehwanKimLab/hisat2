@@ -444,7 +444,7 @@ static void driver(
 #if 1
                                 ftabChars,    // number of chars in initial arrow-pair calc
 #else
-                                6,
+                                4,
 #endif
                                 localOffRate,
                                 localFtabChars,

@@ -1254,65 +1254,10 @@ private:
         return rank(array, p, 1);
     }
     
-public: EList<pair<index_t, index_t> > ftab;
-    
-private:
-    // Used to construct FCharTable
-    struct FNode {
-        index_t id;
-        index_t key;
-        index_t depth;
-    };
-    
-    pair<index_t, index_t> findEdges(index_t node, bool from) {
-        pair<index_t, index_t> range(0, 0);
-        assert_gt(edges.size(), 0);
-        
-        // Find lower bound
-        index_t low = 0, high = edges.size() - 1;
-        index_t temp;
-        while(low < high) {
-            index_t mid = low + (high - low) / 2;
-            temp = (from ? edges[mid].from : edges[mid].ranking);
-            if(node == temp) {
-                high = mid;
-            } else if(node < temp) {
-                if(mid == 0) {
-                    return pair<index_t, index_t>(0, 0);
-                }
-                
-                high = mid - 1;
-            } else {
-                low = mid + 1;
-            }
-        }
-        temp = (from ? edges[low].from : edges[low].ranking);
-        if(node == temp) {
-            range.first = low;
-        } else {
-            return range;
-        }
-        
-        // Find upper bound
-        high = edges.size() - 1;
-        while(low < high)
-        {
-            index_t mid = low + (high - low + 1) / 2;
-            temp = (from ? edges[mid].from : edges[mid].ranking);
-            if(node == temp) {
-                low = mid;
-            } else {
-                assert_lt(node, temp);
-                high = mid - 1;
-            }
-        }
+    // for debugging purposes
 #ifndef NDEBUG
-        temp = (from ? edges[high].from : edges[high].ranking);
-        assert_eq(node, temp);
+public: EList<pair<index_t, index_t> > ftab;
 #endif
-        range.second = high + 1;
-        return range;
-    }
 };
 
 
@@ -1719,6 +1664,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     
 #endif
     
+#ifndef NDEBUG
     // Ftab
     if(ftabChars <= 6) {
         index_t ftabLen = 1 << (ftabChars << 1);
@@ -1754,6 +1700,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
             }
         }
     }
+#endif
     
     return true;
 }

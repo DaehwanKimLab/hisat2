@@ -2409,6 +2409,9 @@ public:
         //  (and mate and the reverse complement of mate in case of pair alignment),
         // pick up one with best partial alignment
         while(nextBWT(sc, gfmFw, gfmBw, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
+            // daehwan - for debugging purposes
+            return EXTEND_POLICY_FULFILLED;
+            
             // given the partial alignment, try to extend it to full alignments
         	found[rdi] = align(sc, gfmFw, gfmBw, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
             if(!found[0] && !found[1]) {
@@ -2484,7 +2487,7 @@ public:
                  RandomSource&           rnd,
                  AlnSinkWrap<index_t>&   sink)
     {
-        // pick up a candidate from a read or its reverse complement
+        // Pick up a candidate from a read or its reverse complement
         // (for pair, also consider mate and its reverse complement)
         while(pickNextReadToSearch(rdi, fw)) {
             size_t mineFw = 0, mineRc = 0;
@@ -2517,7 +2520,7 @@ public:
                     assert_eq(rdi, 1);
                     bestScore = sink.bestUnp2();
                     if(bestScore >= _minsc[rdi]) {
-                        // do not further extend this alignment
+                        // Do not further extend this alignment
                         // unless it may be at least as good as the previous alignemnt
                         index_t maxmm = (-bestScore + sc.mmpMax - 1) / sc.mmpMax;
                         if(numSearched > maxmm + sink.bestSplicedUnp2() + 1) {
@@ -2541,8 +2544,12 @@ public:
                     }
                 }
             }
+            
+            // daehwan - for debugging purposes
+            pseudogeneStop = false;
+            anchorStop = false;
 
-            // align this read beginning from previously stopped base
+            // Align this read beginning from previously stopped base
             // stops when it is uniquelly mapped with at least 28bp or
             // it may involve processed pseudogene
             partialSearch(
@@ -2557,10 +2564,16 @@ public:
                           rnd,
                           pseudogeneStop,
                           anchorStop);
+            
+            // daehwan - for debugging purposes
+            if(hit.done()) {
+                const Read& rd = *_rds[rdi];
+                cout << rd.name << "\t(" << hit._cur << ", " << hit._len << ")" << endl;
+            }
 
             assert(hit.repOk());
             if(hit.done()) return true;
-            // advance hit._cur by 1
+            // Advance hit._cur by 1
             if(!pseudogeneStop) {
                 if(hit._cur + 1 < hit._len) hit._cur++;
             }
@@ -3892,11 +3905,11 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                topTemp = gfm.mapLF(tloc, c);
-                botTemp = gfm.mapLF(bloc, c);
+                topTemp = gfm.mapGLF_top(tloc, c);
+                botTemp = gfm.mapGLF_bot(bloc, c);
             } else {
                 bwops_++;
-                topTemp = gfm.mapLF1(top, tloc, c);
+                topTemp = gfm.mapGLF1(top, tloc, c);
                 if(topTemp == (index_t)OFF_MASK) {
                     topTemp = botTemp = 0;
                 } else {
