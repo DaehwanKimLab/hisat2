@@ -2889,54 +2889,39 @@ public:
                             ) const
     {
         assert_gt(count, 0);
-        const index_t total_by = _gh._sideGbwtSz >> 2;
         const uint8_t *side = l.side(this->gfm()) + (_gh._sideGbwtSz >> 1);
         while(true) {
-            bool skip = false;
-            if(l._bp == 0) {
-                index_t advance = 0;
-                if(count > 64 && l._by + 8 <= total_by) {
-                    index_t tmp_count = countInU64_bits<USE_POPCNT_INSTRUCTION>(*(uint64_t*)&side[l._by]);
-                    assert_leq(tmp_count, count);
-                    count -= tmp_count;
-                    advance = 64;
-                } else if(count > 32 && l._by + 4 <= total_by) {
-                    index_t tmp_count = countInU64_bits<USE_POPCNT_INSTRUCTION>(*(uint32_t*)&side[l._by]);
-                    assert_leq(tmp_count, count);
-                    count -= tmp_count;
-                    advance = 32;
-                } else if(count > 16 && l._by + 2 <= total_by) {
-                    index_t tmp_count = countInU64_bits<USE_POPCNT_INSTRUCTION>(*(uint16_t*)&side[l._by]);
-                    assert_leq(tmp_count, count);
-                    count -= tmp_count;
-                    advance = 16;
-                } else if(count > 8 && l._by + 1 <= total_by) {
-                    index_t tmp_count = cCntBIT[0][side[l._by]];
-                    assert_leq(tmp_count, count);
-                    count -= tmp_count;
-                    advance = 8;
-                }
-                if(advance > 0) {
-                    skip = true;
-                    assert_leq(l._charOff + advance, (_gh._sideGbwtSz << 1));
-                    if(l._charOff + advance == (_gh._sideGbwtSz << 1)) {
-                        l.nextSide(_gh);
-                        side = l.side(this->gfm()) + (_gh._sideGbwtSz >> 1);
-                    } else {
-                        l._charOff += advance;
-                        l._by = l._charOff >> 3;
-                        l._bp = l._charOff & 0x7;
-                    }
-                }
+            index_t remainingBitsSide = (_gh._sideGbwtSz << 1) - l._charOff;
+            assert_gt(remainingBitsSide, 0);
+            index_t minSide = (count < remainingBitsSide ? count : remainingBitsSide);
+            uint64_t bits = *(uint64_t*)&side[l._by];
+            uint8_t advance = 64;
+            if(l._bp > 0) {
+                bits >>= l._bp;
+                advance -= l._bp;
             }
-            if(skip) continue;
-            if((side[l._by] >> l._bp) & 0x1) count--;
-            if(count == 0) break;
-            if(l._charOff + 1 == (_gh._sideGbwtSz << 1)) {
+            if(minSide < advance) {
+                advance = minSide;
+                bits <<= (64 - minSide);
+            }
+            uint8_t tmp_count = countInU64_bits<USE_POPCNT_INSTRUCTION>(bits);
+            assert_leq(tmp_count, count);
+            count -= tmp_count;
+            if(count == 0) {
+                assert_gt(advance, 0);
+                l._charOff += (advance - 1);
+                assert_lt(l._charOff, _gh._sideGbwtSz << 1);
+                l._by = l._charOff >> 3;
+                l._bp = l._charOff & 0x7;
+                break;
+            }
+
+            assert_leq(l._charOff + advance, (_gh._sideGbwtSz << 1));
+            if(l._charOff + advance == (_gh._sideGbwtSz << 1)) {
                 l.nextSide(_gh);
                 side = l.side(this->gfm()) + (_gh._sideGbwtSz >> 1);
             } else {
-                l._charOff++;
+                l._charOff += advance;
                 l._by = l._charOff >> 3;
                 l._bp = l._charOff & 0x7;
             }
