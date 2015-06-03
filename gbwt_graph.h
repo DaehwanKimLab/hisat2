@@ -1123,10 +1123,11 @@ public:
     bool generateEdges(RefGraph<index_t>& parent, index_t ftabChars = 10);
     
     index_t getNumEdges() const { return edges.size(); }
-    
+
     //
     bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos, index_t& firstSeq, index_t& lastSeq, index_t ftabChars = 10) {
-        if(report_node_idx >= nodes.size()) return false;
+    	return true;
+        if(report_node_idx >= sorted_nodes.size()) return false;
         bool firstOutEdge = false;
         if(report_edge_range.first >= report_edge_range.second) {
             report_edge_range = getEdges(report_node_idx, false /* from? */);
@@ -1140,19 +1141,19 @@ public:
         const PathEdge& edge = edges[report_edge_range.first];
         gbwtChar = edge.label;
         if(gbwtChar == 'Z') gbwtChar = '$';
-        assert_lt(report_node_idx, nodes.size());
-        const PathNode& node = nodes[report_node_idx];
+        assert_lt(report_node_idx, sorted_nodes.size());
+        const PathNode& node = sorted_nodes[report_node_idx];
         pos = node.to;
         F = (firstOutEdge ? 1 : 0);
-        
+
         // daehwan - for debugging purposes
         if(report_node_idx == 2) {
             int kk = 0;
             kk += 20;
         }
-        
-        assert_lt(edge.ranking, nodes.size());
-        const PathNode& next_node = nodes[edge.ranking];
+
+        assert_lt(edge.ranking, sorted_nodes.size());
+        const PathNode& next_node = sorted_nodes[edge.ranking];
         if(gbwtChar != '$' && next_node.key.first != numeric_limits<index_t>::max()) {
             assert_neq(next_node.key.second, numeric_limits<index_t>::max());
             int nt = asc2dna[(int)gbwtChar];
@@ -1162,24 +1163,25 @@ public:
             firstSeq = numeric_limits<index_t>::max();
             lastSeq = numeric_limits<index_t>::max();
         }
-        
+
         report_edge_range.first++;
         if(report_edge_range.first >= report_edge_range.second) {
             report_node_idx++;
         }
-        assert_lt(report_M.first, nodes.size());
+        assert_lt(report_M.first, sorted_nodes.size());
         M = (report_M.second == 0 ? 1 : 0);
         report_M.second++;
-        if(report_M.second >= nodes[report_M.first].outdegree_) {
+        if(report_M.second >= sorted_nodes[report_M.first].outdegree_) {
             report_M.first++;
             report_M.second = 0;
         }
         return true;
     }
-    
+
     //
     index_t nextFLocation() {
-        if(report_F_node_idx >= nodes.size()) return std::numeric_limits<index_t>::max();
+    	return 0;
+        if(report_F_node_idx >= sorted_nodes.size()) return std::numeric_limits<index_t>::max();
         pair<index_t, index_t> edge_range = getEdges(report_F_node_idx, false /* from? */);
         report_F_node_idx++;
         assert_lt(edge_range.first, edge_range.second);
@@ -1189,9 +1191,9 @@ public:
 
 private:
     void      createPathNode(const PathNode& left, const PathNode& right);
-    void      updateRank_and_merge(bool part_sorted);
+    void      mergeAllNodes(PathGraph<index_t>& previous);
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> node_range);
-
+    void      sortMergeUnsorted();
     // Can create an index by using key.second in PathNodes.
     void sortByFrom(bool create_index = true);
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
@@ -1206,14 +1208,14 @@ private:
         status = error;
         
         if(create_index) {
-            for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+            for(PathNode* node = sorted_nodes.begin(); node != sorted_nodes.end(); node++) {
                 node->key.second = 0;
             }
             for(PathEdge* edge = edges.begin(); edge != edges.end(); edge++) {
-                nodes[edge->ranking].key.second++;
+                sorted_nodes[edge->ranking].key.second++;
             }
-            for(index_t i = 1; i < nodes.size(); i++) {
-                nodes[i].key.second += nodes[i - 1].key.second;
+            for(index_t i = 1; i < sorted_nodes.size(); i++) {
+                sorted_nodes[i].key.second += sorted_nodes[i - 1].key.second;
             }
         }
     }
@@ -1224,7 +1226,6 @@ private:
     
     EList<PathNode> sorted_nodes;
 	EList<PathNode> unsorted_nodes;
-	EList<PathNode> unmerged_nodes;
     EList<PathEdge> edges;
     index_t         ranks;
     index_t         max_label;  // Node label of initial nodes.
@@ -1349,7 +1350,8 @@ private:
     }
 };
 
-
+//Creates an initial PathGRaph from the RefGraph
+//All nodes begin as unsorted nodes
 template <typename index_t>
 PathGraph<index_t>::PathGraph(RefGraph<index_t>& base) :
 ranks(0), max_label('Z'), temp_nodes(0), generation(0),
@@ -1377,13 +1379,39 @@ report_F_node_idx(0), report_F_location(0)
     assert_lt(base.lastNode, base.nodes.size());
     assert_eq(base.nodes[base.lastNode].label, '$');
     unsorted_nodes.expand();
-    unsorted_nodes.back().from = nodes.back().to = base.lastNode;
+    unsorted_nodes.back().from = unsorted_nodes.back().to = base.lastNode;
     unsorted_nodes.back().key = pair<index_t, index_t>(0, 0);
    
     status = ok;
     sortMergeUnsorted();
+
+    pair<index_t, index_t> prev_key = pair<index_t, index_t>(0,0);
+    ranks = 1;
+    sorted_nodes.resizeExact(5);
+    sorted_nodes.clear();
+    for(int i = 0; i < unsorted_nodes.size(); i++) {
+    	if(unsorted_nodes[i].key != prev_key) {
+       	 	ranks++;
+       	 	prev_key = unsorted_nodes[i].key;
+       	}
+       	unsorted_nodes[i].key = pair<index_t, index_t>(ranks, 0);
+       	if(unsorted_nodes[i].isSorted()) {
+       		sorted_nodes.push_back(unsorted_nodes[i]);
+       	}
+
+    }
+    for(int i = 0; i < unsorted_nodes.size(); i++) {
+    	cerr << unsorted_nodes[i].from << '\t' <<
+    			unsorted_nodes[i].to << '\t' <<
+				unsorted_nodes[i].key.first << '\t' <<
+				unsorted_nodes[i].key.second << endl;
+    }
 }
 
+//creates a new PathGraph that is 2^(i+1) sorted from one that is 2^i sorted.
+//does so by merging unsorted nodes using a hash join
+//sorting and merging the newly made nodes
+//updating ranks and adding nodes that become sorted to sorted.
 template <typename index_t>
 PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
 ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1),
@@ -1391,37 +1419,63 @@ status(error), has_stabilized(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
+	if(generation == 5){
+		return;
+	}
     if(previous.status != ok) {
         return;
 	}
     
+    cerr << "Begin Round Unsorted" << endl;
+    for(int i = 0; i < previous.unsorted_nodes.size(); i++) {
+    	    cerr << previous.unsorted_nodes[i].from << '\t' <<
+    	    		previous.unsorted_nodes[i].to << '\t' <<
+					previous.unsorted_nodes[i].key.first << '\t' <<
+					previous.unsorted_nodes[i].key.second << endl;
+    }
+    cerr << "Begin Round Sorted" << endl;
+    for(int i = 0; i < previous.sorted_nodes.size(); i++) {
+       	    cerr << previous.sorted_nodes[i].from << '\t' <<
+       	   			previous.sorted_nodes[i].to << '\t' <<
+       				previous.sorted_nodes[i].key.first << '\t' <<
+       				previous.sorted_nodes[i].key.second << endl;
+    }
+
 #ifndef NDEBUG
     debug = previous.debug;
 #endif
 
 //create hash table for unsorted nodes
-	index_t table_size = previous.unsorted_nodes.size() + previous.unsorted_nodes.size() / 2
-	//intiialize array to be used for hash table
+	index_t table_size = previous.unsorted_nodes.size() + previous.unsorted_nodes.size() / 2;
+	index_t hash;
+	//Initialize array to be used for hash table
 	EList<PathNode, 1> * nodes_table;
 	nodes_table = new EList<PathNode,1> [table_size];
 	cerr << "Do we allocate the array?" << endl;
 
 	//populate hash table
+	bool add = false;
 	for(index_t i = 0; i < previous.unsorted_nodes.size(); i++) {
-		hash = previous.unsorted_nodes[i].to % table_size;
-		nodes_table[hash].push_back(previous.unsorted_nodes[i]);
+		if(!previous.unsorted_nodes[i].isSorted()){
+			add = true;
+			hash = previous.unsorted_nodes[i].to % table_size;
+			nodes_table[hash].push_back(previous.unsorted_nodes[i]);
+		}
 	}
 	cerr << "Do we build the hash table?" << endl;
 
-
+	if(!add) {
+		return;
+	}
 
 //query against hash table
 	//this part counts how many new nodes we will need to make
 	//I'm not entirely sure why we need to do this, seems like a waste
+#if 0
 	index_t new_nodes = previous.unsorted_nodes.size() + previous.unsorted_nodes.size() / 2;
 	if(previous.ranks >= previous.nodes.size() / 2 && !(previous.has_stabilized)) {
 		new_nodes = 0;
-	    for(index_t i = 0; i < previous.nodes.size(); i++) {
+	    for(index_t i = 0; i < previous.sorted_nodes.size(); i++) {
 			if(previous.nodes[i].isSorted()) {
 				new_nodes++;
 			}
@@ -1437,40 +1491,56 @@ report_F_node_idx(0), report_F_location(0)
 	cerr << "Trying to allocate space for " << new_nodes << " nodes." << endl;
     unsorted_nodes.resizeExact(new_nodes);
     unsorted_nodes.clear();
+#endif
 
 	//create unmerged nodes
     for(index_t i = 0; i < previous.sorted_nodes.size(); i++) {
-		hash = previous.nodes[i].from % table_size;
+		hash = previous.sorted_nodes[i].from % table_size;
 	    for(index_t j = 0; j < nodes_table[hash].size(); j++) {
-			if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
-            	createPathNode(nodes_table[hash].get(j), previous.nodes[i]); //needs to be updated
+			if(previous.sorted_nodes[i].from == nodes_table[hash].get(j).to) {
+            	createPathNode(nodes_table[hash].get(j), previous.sorted_nodes[i]); //needs to be updated
      	   	}
     	}
 	}
 	for(index_t i = 0; i < previous.unsorted_nodes.size(); i++) {
-		hash = previous.nodes[i].from % table_size;
-	    for(index_t j = 0; j < nodes_table[hash].size(); j++) {
-			if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
-            	createPathNode(nodes_table[hash].get(j), previous.nodes[i]);
-     	   	}
+		if(!previous.unsorted_nodes[i].isSorted()){
+			hash = previous.unsorted_nodes[i].from % table_size;
+			for(index_t j = 0; j < nodes_table[hash].size(); j++) {
+				if(previous.unsorted_nodes[i].from == nodes_table[hash].get(j).to) {
+					createPathNode(nodes_table[hash].get(j), previous.unsorted_nodes[i]);
+				}
+			}
     	}
 	}
 	delete[] nodes_table;
 
-    temp_nodes = nodes.size();
+    temp_nodes = unsorted_nodes.size();
 
 	cerr << "Done with combine step." << endl;
    
 //merge newly-combined nodes
-	status = ok;	
-    	
+	status = ok;
+	cerr << "new unsorted" << endl;
+	for(int i = 0; i < unsorted_nodes.size(); i++) {
+	    cerr << unsorted_nodes[i].from << '\t' <<
+	   			unsorted_nodes[i].to << '\t' <<
+				unsorted_nodes[i].key.first << '\t' <<
+				unsorted_nodes[i].key.second << endl;
+	}
     sortMergeUnsorted();
 
+    cerr << "merged unsorted" << endl;
+    for(int i = 0; i < unsorted_nodes.size(); i++) {
+    	cerr << unsorted_nodes[i].from << '\t' <<
+    			unsorted_nodes[i].to << '\t' <<
+				unsorted_nodes[i].key.first << '\t' <<
+				unsorted_nodes[i].key.second << endl;
+    }
 //merge merged-combind into sorted and update ranks
 	
-	mergeAllNodes();
+	mergeAllNodes(previous);
 
-    if(previous.has_stabilized || (generation >= 11 && ranks >= 0.8 * new_nodes)) {
+    if(previous.has_stabilized || generation >= 11) {//need to add clause about change in size
         has_stabilized = true;
     }
 }
@@ -1479,7 +1549,7 @@ template <typename index_t>
 void PathGraph<index_t>::printInfo()
 {
     cerr << "Generation " << generation
-         << " (" << temp_nodes << " -> " << nodes.size() << " nodes, "
+         << " (" << temp_nodes << " -> " << unsorted_nodes.size() << " nodes, "
          << ranks << " ranks)" << endl;
 }
 
@@ -1493,64 +1563,51 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
 template <typename index_t>
 EList<pair<index_t, index_t> >* PathGraph<index_t>::getSamples(index_t sample_rate, index_t& max_sample, const RefGraph<index_t>& base)
 {
-    if(status != ready && status != edges_sorted)
-        return NULL;
-
-    EList<pair<index_t, index_t> >* sample_pairs = new EList<pair<index_t, index_t> >();
-
-    return sample_pairs;
+	return 1;
 }
 
 //--------------------------------------------------------------------------
 template <typename index_t>
 void PathGraph<index_t>::createPathNode(const PathNode& left, const PathNode& right)
 {
-    nodes.expand();
-    nodes.back().from = left.from;
-    nodes.back().to = right.to;
-    nodes.back().key = pair<index_t, index_t>(left.key.first, right.key.first);
+    unsorted_nodes.expand();
+    unsorted_nodes.back().from = left.from;
+    unsorted_nodes.back().to = right.to;
+    unsorted_nodes.back().key = pair<index_t, index_t>(left.key.first, right.key.first);
 }
 
 template <typename index_t>
-void PathGraph<index_t>::sortMergeUnsorted(bool part_sorted)
+void PathGraph<index_t>::sortMergeUnsorted()
 {
-	sortByKey();
+
+	sort(unsorted_nodes.begin(), unsorted_nodes.end()); //this should be optimized later
 
 // Merge equivalent nodes
     index_t curr = 0;
     pair<index_t, index_t> range(0, 0); // Empty range
     while(true) {
         range = nextMaximalSet(range);
-        if(range.first >= range.second)
-            break;
-        nodes[curr] = nodes[range.first]; curr++;
+        if(range.first >= range.second) {break;}
+        unsorted_nodes[curr] = unsorted_nodes[range.first]; curr++;
     }
-    nodes.resize(curr);
-    
-    PathNode* candidate = &nodes.front();
-    key = candidate->key; ranks = 1;
-    for(index_t i = 1; i < nodes.size(); i++) {
-        if(nodes[i].key != key) {
+    unsorted_nodes.resize(curr);
+
+    //set newly sorted nodes as sorted
+    PathNode* candidate = &unsorted_nodes.front();
+    pair<index_t, index_t>key = candidate->key;
+    for(index_t i = 1; i < unsorted_nodes.size(); i++) {
+        if(unsorted_nodes[i].key != key) {
             if(candidate != NULL) {
                 candidate->setSorted();
             }
-            candidate = &nodes[i];
-            key = candidate->key; ranks++;
+            candidate = &unsorted_nodes[i];
+            key = candidate->key;
         } else {
             candidate = NULL;
         }
     }
     if(candidate != NULL) {
         candidate->setSorted();
-    }
-    
-    // Replace the ranks of a sorted graph so that rank(i) = i
-    // Merges may otherwise leave gaps in the ranks
-    if(ranks == nodes.size()) {
-        for(index_t i = 0; i < nodes.size(); i++) {
-            nodes[i].key.first = i;
-        }
-        status = sorted;
     }
 }
 
@@ -1560,91 +1617,62 @@ void PathGraph<index_t>::sortMergeUnsorted(bool part_sorted)
 // the key. If the maximal set is empty, returns the next PathNode.
 template <typename index_t>
 pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t> range) {
-    if(range.second >= nodes.size()) {
+    if(range.second >= unsorted_nodes.size()) {
         return pair<index_t, index_t>(0, 0);
     }
     
-    range.first = range.second;
-    range.second = range.first + 1;
-    if(range.first > 0 && nodes[range.first - 1].key == nodes[range.first].key) {
+    range.first = range.second; //begin where we left off
+    range.second = range.first + 1; //end one to the right
+
+    //covers case when last rantemplate <typename index_t>ge had same key, no merge can happen
+    if(range.first > 0 && unsorted_nodes[range.first - 1].key == unsorted_nodes[range.first].key) {
         return range;
     }
     
-    for(index_t i = range.second; i < nodes.size(); i++) {
-        if(nodes[i - 1].key != nodes[i].key) {
+    //keep expanding until keys get to end of mergable
+    for(index_t i = range.second; i < unsorted_nodes.size(); i++) {
+        if(unsorted_nodes[i-1].key != unsorted_nodes[i].key) { //should this be range.first instead of i - 1???????
             range.second = i;
         }
-        if(nodes[i].from != nodes[range.first].from) {
+        if(unsorted_nodes[i].from != unsorted_nodes[range.first].from) {
             return range;
         }
     }
-    
-    range.second = nodes.size();
+    //if we get to the end we finish.
+    range.second = unsorted_nodes.size();
     return range;
 }
 
 template <typename index_t>
-pair<index_t, index_t> PathGraph<index_t>::getEdges(index_t node, bool by_from) {
-    if(node >= nodes.size()) {
-        cerr << "Error: Trying to get edges " << (by_from ? "from " : "to ") << node << endl;
-    }
-    if(nodes[node].key.second == 0) {
-        return pair<index_t, index_t>(0, 0);
-    }
-    if(node == 0) {
-        return pair<index_t, index_t>(0, nodes[node].key.second);
-    } else {
-        return pair<index_t, index_t>(nodes[node - 1].key.second, nodes[node].key.second);
-    }
-}
-
-template <typename index_t>
-void PathGraph<index_t>::sortByFrom(bool create_index) {
-    sort(nodes.begin(), nodes.end(), PathNodeFromCmp());
-    status = error;
-    
-    if(create_index) {
-        index_t current = 0;
-        nodes.front().key.second = 0;
-        for(index_t i = 0; i < nodes.size(); i++) {
-            while(current < nodes[i].from) {
-                current++;
-                assert_lt(current, nodes.size());
-                nodes[current].key.second = i;
-            }
-        }
-        for(current++; current < nodes.size(); current++) {
-            nodes[current].key.second = nodes.size();
-        }
-    }
-}
-
-template <typename index_t>
-pair<index_t, index_t> PathGraph<index_t>::getNodesFrom(index_t node) {
-    if(node + 1 >= nodes.size()) {
-        assert_eq(node + 1, nodes.size());
-        return pair<index_t, index_t>(nodes.back().key.second, nodes.size());
-    }
-    if(nodes[node].key.second == nodes[node + 1].key.second) {
-        return pair<index_t, index_t>(0, 0);
-    }
-    return pair<index_t, index_t>(nodes[node].key.second, nodes[node + 1].key.second);
-}
-
-template <typename index_t>
-pair<index_t, index_t> PathGraph<index_t>::getNextRange(pair<index_t, index_t> range) {
-    if(range.second >= nodes.size())
-        return pair<index_t, index_t>(0, 0);
-    
-    if(range.first < range.second) {
-        range.first = range.second; range.second++;
-    }
-    
-    while(range.second < nodes.size() && nodes[range.second].from == nodes[range.first].from) {
-        range.second++;
-    }
-    
-    return range;
+void PathGraph<index_t>::mergeAllNodes(PathGraph<index_t>& previous)
+{
+	index_t curr_s = 0;
+	index_t curr_u = 0;
+	pair<index_t, index_t> prev_key = pair<index_t, index_t>(0,0);
+	ranks = 0;
+	sorted_nodes.resizeExact(30);
+	sorted_nodes.clear();
+	while(previous.sorted_nodes.size() > curr_s || unsorted_nodes.size() > curr_u) {
+		if(unsorted_nodes.size() > curr_u && (previous.sorted_nodes.size() <= curr_s || unsorted_nodes[curr_u] < previous.sorted_nodes[curr_s])) {
+			if(unsorted_nodes[curr_u].key != prev_key) {
+				ranks++;
+				prev_key = unsorted_nodes[curr_u].key;
+			}
+			unsorted_nodes[curr_u].key = pair<index_t, index_t>(ranks, 0);
+			if(unsorted_nodes[curr_u].isSorted()) {
+				sorted_nodes.push_back(unsorted_nodes[curr_u]);
+			}
+			curr_u++;
+		} else {
+			if(previous.sorted_nodes[curr_s].key != prev_key) {
+				ranks++;
+				prev_key = previous.sorted_nodes[curr_s].key;
+			}
+			previous.sorted_nodes[curr_s].key = pair<index_t, index_t>(ranks, 0);
+			sorted_nodes.push_back(previous.sorted_nodes[curr_s]);
+			curr_s++;
+		}
+	}
 }
 
 #endif /*GBWT_GRAPH_H_*/
