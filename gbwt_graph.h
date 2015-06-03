@@ -1400,12 +1400,14 @@ report_F_node_idx(0), report_F_location(0)
        	}
 
     }
+#if 0
     for(int i = 0; i < unsorted_nodes.size(); i++) {
     	cerr << unsorted_nodes[i].from << '\t' <<
     			unsorted_nodes[i].to << '\t' <<
 				unsorted_nodes[i].key.first << '\t' <<
 				unsorted_nodes[i].key.second << endl;
     }
+#endif
 }
 
 //creates a new PathGraph that is 2^(i+1) sorted from one that is 2^i sorted.
@@ -1419,13 +1421,11 @@ status(error), has_stabilized(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
-	if(generation == 5){
-		return;
-	}
+
     if(previous.status != ok) {
         return;
 	}
-    
+#if 0
     cerr << "Begin Round Unsorted" << endl;
     for(int i = 0; i < previous.unsorted_nodes.size(); i++) {
     	    cerr << previous.unsorted_nodes[i].from << '\t' <<
@@ -1440,6 +1440,7 @@ report_F_node_idx(0), report_F_location(0)
        				previous.sorted_nodes[i].key.first << '\t' <<
        				previous.sorted_nodes[i].key.second << endl;
     }
+#endif
 
 #ifndef NDEBUG
     debug = previous.debug;
@@ -1492,7 +1493,8 @@ report_F_node_idx(0), report_F_location(0)
     unsorted_nodes.resizeExact(new_nodes);
     unsorted_nodes.clear();
 #endif
-
+    unsorted_nodes.resizeExact(previous.unsorted_nodes.size() + previous.unsorted_nodes.size() / 2);
+    unsorted_nodes.clear();
 	//create unmerged nodes
     for(index_t i = 0; i < previous.sorted_nodes.size(); i++) {
 		hash = previous.sorted_nodes[i].from % table_size;
@@ -1521,21 +1523,25 @@ report_F_node_idx(0), report_F_location(0)
 //merge newly-combined nodes
 	status = ok;
 	cerr << "new unsorted" << endl;
+#if 0
 	for(int i = 0; i < unsorted_nodes.size(); i++) {
 	    cerr << unsorted_nodes[i].from << '\t' <<
 	   			unsorted_nodes[i].to << '\t' <<
 				unsorted_nodes[i].key.first << '\t' <<
 				unsorted_nodes[i].key.second << endl;
 	}
+#endif
     sortMergeUnsorted();
 
     cerr << "merged unsorted" << endl;
+#if 0
     for(int i = 0; i < unsorted_nodes.size(); i++) {
     	cerr << unsorted_nodes[i].from << '\t' <<
     			unsorted_nodes[i].to << '\t' <<
 				unsorted_nodes[i].key.first << '\t' <<
 				unsorted_nodes[i].key.second << endl;
     }
+#endif
 //merge merged-combind into sorted and update ranks
 	
 	mergeAllNodes(previous);
@@ -1624,7 +1630,7 @@ pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t>
     range.first = range.second; //begin where we left off
     range.second = range.first + 1; //end one to the right
 
-    //covers case when last rantemplate <typename index_t>ge had same key, no merge can happen
+    //covers case when last range had same key, no merge can happen
     if(range.first > 0 && unsorted_nodes[range.first - 1].key == unsorted_nodes[range.first].key) {
         return range;
     }
@@ -1650,7 +1656,7 @@ void PathGraph<index_t>::mergeAllNodes(PathGraph<index_t>& previous)
 	index_t curr_u = 0;
 	pair<index_t, index_t> prev_key = pair<index_t, index_t>(0,0);
 	ranks = 0;
-	sorted_nodes.resizeExact(30);
+	sorted_nodes.resizeExact(previous.sorted_nodes.size() + unsorted_nodes.size());
 	sorted_nodes.clear();
 	while(previous.sorted_nodes.size() > curr_s || unsorted_nodes.size() > curr_u) {
 		if(unsorted_nodes.size() > curr_u && (previous.sorted_nodes.size() <= curr_s || unsorted_nodes[curr_u] < previous.sorted_nodes[curr_s])) {
