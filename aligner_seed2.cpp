@@ -21,7 +21,7 @@
 #include <ctype.h>
 #include "aligner_seed2.h"
 #include "assert_helpers.h"
-#include "bt2_idx.h"
+#include "gfm.h"
 
 #ifdef ALIGNER_SEED2_MAIN
 
@@ -44,10 +44,9 @@ int main(int argc, char **argv) {
     //                                           ^
     bool packed = false;
     int color = 0;
-	pair<Ebwt*, Ebwt*> ebwts = Ebwt::fromStrings<SString<char> >(
+	pair<GFM*, GFM*> gfms = GFM::fromStrings<SString<char> >(
 		strs,
 		packed,
-		color,
 		REF_READ_REVERSE,
 		Ebwt::default_bigEndian,
 		Ebwt::default_lineRate,
@@ -64,8 +63,8 @@ int main(int argc, char **argv) {
 		false,  // autoMem
 		false); // sanity
     
-    ebwts.first->loadIntoMemory (color, -1, true, true, true, true, false);
-    ebwts.second->loadIntoMemory(color,  1, true, true, true, true, false);
+    gfms.first->loadIntoMemory (-1, true, true, true, true, false);
+    gfms.second->loadIntoMemory(1, true, true, true, true, false);
 	
 	int testnum = 0;
 
@@ -89,7 +88,7 @@ int main(int argc, char **argv) {
 
 			// Set up the DescentConfig
 			DescentConfig conf;
-			conf.cons.init(Ebwt::default_ftabChars, 1.0);
+			conf.cons.init(GFM::default_ftabChars, 1.0);
 			conf.expol = DESC_EX_NONE;
 			
 			// Set up the search roots
@@ -102,7 +101,7 @@ int main(int argc, char **argv) {
 			
 			// Do the search
 			Scoring sc = Scoring::base1();
-			dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+			dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 			
 			// Confirm that an exact-matching alignment was found
 			assert_eq(1, dr.sink().nrange());
@@ -125,7 +124,7 @@ int main(int argc, char **argv) {
         
         // Set up the DescentConfig
         DescentConfig conf;
-        conf.cons.init(Ebwt::default_ftabChars, 1.0);
+        conf.cons.init(GFM::default_ftabChars, 1.0);
         conf.expol = DESC_EX_NONE;
         
         // Set up the search roots
@@ -138,7 +137,7 @@ int main(int argc, char **argv) {
         
         // Do the search
         Scoring sc = Scoring::base1();
-        dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+        dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 		
 		// Confirm that an exact-matching alignment was found
 		assert_eq(1, dr.sink().nrange());
@@ -160,7 +159,7 @@ int main(int argc, char **argv) {
         
         // Set up the DescentConfig
         DescentConfig conf;
-        conf.cons.init(Ebwt::default_ftabChars, 1.0);
+        conf.cons.init(GFM::default_ftabChars, 1.0);
         conf.expol = DESC_EX_NONE;
         
         // Set up the search roots
@@ -173,7 +172,7 @@ int main(int argc, char **argv) {
         
         // Do the search
         Scoring sc = Scoring::base1();
-        dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+        dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 		
 		// Confirm that an exact-matching alignment was found
 		assert_eq(1, dr.sink().nrange());
@@ -194,13 +193,13 @@ int main(int argc, char **argv) {
         BTString    qual("ABCDEFGHIabcdefghiABCDEFGHIabc");
 		TIndexOffU top, bot;
 		top = bot = 0;
-		bool ret = ebwts.first->contains("GCGCTCGCATCATTTTGTGT", &top, &bot);
+		bool ret = gfms.first->contains("GCGCTCGCATCATTTTGTGT", &top, &bot);
 		cerr << ret << ", " << top << ", " << bot << endl;
 		dr.initRead(Read("test", seq.toZBuf(), qual.toZBuf()), -30, 30);
         
         // Set up the DescentConfig
         DescentConfig conf;
-        conf.cons.init(Ebwt::default_ftabChars, 1.0);
+        conf.cons.init(GFM::default_ftabChars, 1.0);
         conf.expol = DESC_EX_NONE;
         
         // Set up the search roots
@@ -213,42 +212,41 @@ int main(int argc, char **argv) {
         
         // Do the search
         Scoring sc = Scoring::base1();
-        dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+        dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 		
 		// Confirm that an exact-matching alignment was found
 		assert_eq(1, dr.sink().nrange());
 		assert_eq(2, dr.sink().nelt());
     }
 
-	delete ebwts.first;
-	delete ebwts.second;
+	delete gfms.first;
+	delete gfms.second;
 	
 	strs.clear();
     strs.push_back(string("CATGTCAGCTATATAGCGCGCTCGCATCATTTTGTGTGTAAACCA"
                           "NNNNNNNNNN"
                           "CATGTCAGCTATATAGCG"));
-	ebwts = Ebwt::fromStrings<SString<char> >(
+	gfms = GFM::fromStrings<SString<char> >(
 		strs,
 		packed,
-		color,
 		REF_READ_REVERSE,
-		Ebwt::default_bigEndian,
-		Ebwt::default_lineRate,
-		Ebwt::default_offRate,
-		Ebwt::default_ftabChars,
+		GFM::default_bigEndian,
+		GFM::default_lineRate,
+		GFM::default_offRate,
+		GFM::default_ftabChars,
 		".aligner_seed2.cpp.tmp",
-		Ebwt::default_useBlockwise,
-		Ebwt::default_bmax,
-		Ebwt::default_bmaxMultSqrt,
-		Ebwt::default_bmaxDivN,
-		Ebwt::default_dcv,
-		Ebwt::default_seed,
+		GFM::default_useBlockwise,
+		GFM::default_bmax,
+		GfM::default_bmaxMultSqrt,
+		GFM::default_bmaxDivN,
+		GFM::default_dcv,
+		GFM::default_seed,
 		false,  // verbose
 		false,  // autoMem
 		false); // sanity
     
-    ebwts.first->loadIntoMemory (color, -1, true, true, true, true, false);
-    ebwts.second->loadIntoMemory(color,  1, true, true, true, true, false);
+    gfms.first->loadIntoMemory (-1, true, true, true, true, false);
+    gfms.second->loadIntoMemory(1, true, true, true, true, false);
 	
 	// Query is longer than ftab and matches exactly once.  One search root for
 	// forward read.
@@ -270,7 +268,7 @@ int main(int argc, char **argv) {
 				
 				// Set up the DescentConfig
 				DescentConfig conf;
-				conf.cons.init(Ebwt::default_ftabChars, 1.0);
+				conf.cons.init(GFM::default_ftabChars, 1.0);
 				conf.expol = DESC_EX_NONE;
 				
 				// Set up the search roots
@@ -283,7 +281,7 @@ int main(int argc, char **argv) {
 				
 				// Do the search
 				Scoring sc = Scoring::base1();
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(1, dr.sink().nrange());
@@ -314,7 +312,7 @@ int main(int argc, char **argv) {
 				
 				// Set up the DescentConfig
 				DescentConfig conf;
-				conf.cons.init(Ebwt::default_ftabChars, 1.0);
+				conf.cons.init(GFM::default_ftabChars, 1.0);
 				conf.expol = DESC_EX_NONE;
 				
 				// Set up the search roots
@@ -333,7 +331,7 @@ int main(int argc, char **argv) {
 				
 				// Do the search
 				Scoring sc = Scoring::base1();
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(1, dr.sink().nrange());
@@ -361,17 +359,17 @@ int main(int argc, char **argv) {
 				for(size_t j = 0; j < seq.length(); j++) {
 					// Assume left-to-right
 					size_t beg = j;
-					size_t end = j + Ebwt::default_ftabChars;
+					size_t end = j + GFM::default_ftabChars;
 					// Mismatch penalty is 3, so we have to skip starting
 					// points that are within 2 from the mismatch
 					if((i > 0 && j > 0) || j == seq.length()-1) {
 						// Right-to-left
-						if(beg < Ebwt::default_ftabChars) {
+						if(beg < GFM::default_ftabChars) {
 							beg = 0;
 						} else {
-							beg -= Ebwt::default_ftabChars;
+							beg -= GFM::default_ftabChars;
 						}
-						end -= Ebwt::default_ftabChars;
+						end -= GFM::default_ftabChars;
 					}
 					size_t kk = k;
 					//if(rc) {
@@ -407,7 +405,7 @@ int main(int argc, char **argv) {
 					
 					// Do the search
 					Scoring sc = Scoring::base1();
-					dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+					dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 					
 					// Confirm that an exact-matching alignment was found
 					assert_eq(1, dr.sink().nrange());
@@ -439,17 +437,17 @@ int main(int argc, char **argv) {
 				for(size_t j = 0; j < seq.length(); j++) {
 					// Assume left-to-right
 					size_t beg = j;
-					size_t end = j + Ebwt::default_ftabChars;
+					size_t end = j + GFM::default_ftabChars;
 					// Mismatch penalty is 3, so we have to skip starting
 					// points that are within 2 from the mismatch
 					if((i > 0 && j > 0) || j == seq.length()-1) {
 						// Right-to-left
-						if(beg < Ebwt::default_ftabChars) {
+						if(beg < GFM::default_ftabChars) {
 							beg = 0;
 						} else {
-							beg -= Ebwt::default_ftabChars;
+							beg -= GFM::default_ftabChars;
 						}
-						end -= Ebwt::default_ftabChars;
+						end -= GFM::default_ftabChars;
 					}
 					if(beg <= k && end > k) {
 						continue;
@@ -481,7 +479,7 @@ int main(int argc, char **argv) {
 					
 					// Do the search
 					Scoring sc = Scoring::base1();
-					dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+					dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 					
 					// Confirm that an exact-matching alignment was found
 					assert_eq(1, dr.sink().nrange());
@@ -531,7 +529,7 @@ int main(int argc, char **argv) {
 				// Set up the DescentConfig
 				DescentConfig conf;
 				// Changed 
-				conf.cons.init(Ebwt::default_ftabChars, 1.0);
+				conf.cons.init(GFM::default_ftabChars, 1.0);
 				conf.expol = DESC_EX_NONE;
 				
 				// Set up the search roots
@@ -549,7 +547,7 @@ int main(int argc, char **argv) {
 				
 				// Do the search
 				Scoring sc = Scoring::base1();
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 			}
 		}
     }
@@ -603,17 +601,17 @@ int main(int argc, char **argv) {
 						(float)((float)y * 1.0f)); // root priority
 					// Assume left-to-right
 					size_t beg = j;
-					size_t end = j + Ebwt::default_ftabChars;
+					size_t end = j + GFM::default_ftabChars;
 					// Mismatch penalty is 3, so we have to skip starting
 					// points that are within 2 from the mismatch
 					if(!ltr) {
 						// Right-to-left
-						if(beg < Ebwt::default_ftabChars) {
+						if(beg < GFM::default_ftabChars) {
 							beg = 0;
 						} else {
-							beg -= Ebwt::default_ftabChars;
+							beg -= GFM::default_ftabChars;
 						}
-						end -= Ebwt::default_ftabChars;
+						end -= GFM::default_ftabChars;
 					}
 					bool good = true;
 					if(fw != fwi) {
@@ -635,7 +633,7 @@ int main(int argc, char **argv) {
 				
 				// Do the search
 				Scoring sc = Scoring::base1();
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(1, dr.sink().nrange());
@@ -675,17 +673,17 @@ int main(int argc, char **argv) {
 				if(k == 1) {
 					beg = seq.length() - beg - 1;
 				}
-				size_t end = beg + Ebwt::default_ftabChars;
+				size_t end = beg + GFM::default_ftabChars;
 				// Mismatch penalty is 3, so we have to skip starting
 				// points that are within 2 from the mismatch
 				if((i > 0 && j > 0) || j == seq.length()-1) {
 					// Right-to-left
-					if(beg < Ebwt::default_ftabChars) {
+					if(beg < GFM::default_ftabChars) {
 						beg = 0;
 					} else {
-						beg -= Ebwt::default_ftabChars;
+						beg -= GFM::default_ftabChars;
 					}
-					end -= Ebwt::default_ftabChars;
+					end -= GFM::default_ftabChars;
 				}
 				assert_geq(end, beg);
 				if(beg <= 15 && end >= 15) {
@@ -717,7 +715,7 @@ int main(int argc, char **argv) {
 				
 				// Do the search
 				Scoring sc = Scoring::base1();
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(1, dr.sink().nrange());
@@ -757,17 +755,17 @@ int main(int argc, char **argv) {
 				if(k == 1) {
 					beg = seq.length() - beg - 1;
 				}
-				size_t end = beg + Ebwt::default_ftabChars;
+				size_t end = beg + GFM::default_ftabChars;
 				// Mismatch penalty is 3, so we have to skip starting
 				// points that are within 2 from the mismatch
 				if((i > 0 && j > 0) || j == seq.length()-1) {
 					// Right-to-left
-					if(beg < Ebwt::default_ftabChars) {
+					if(beg < GFM::default_ftabChars) {
 						beg = 0;
 					} else {
-						beg -= Ebwt::default_ftabChars;
+						beg -= GFM::default_ftabChars;
 					}
-					end -= Ebwt::default_ftabChars;
+					end -= GFM::default_ftabChars;
 				}
 				if(beg <= 14 && end >= 14) {
 					continue;
@@ -799,7 +797,7 @@ int main(int argc, char **argv) {
 				// Need to adjust the mismatch penalty up to avoid alignments
 				// with lots of mismatches.
 				sc.setMmPen(COST_MODEL_CONSTANT, 6, 6);
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(1, dr.sink().nrange());
@@ -828,17 +826,17 @@ int main(int argc, char **argv) {
 			for(size_t j = 0; j < seq.length(); j++) {
 				// Assume left-to-right
 				size_t beg = j;
-				size_t end = j + Ebwt::default_ftabChars;
+				size_t end = j + GFM::default_ftabChars;
 				// Mismatch penalty is 3, so we have to skip starting
 				// points that are within 2 from the mismatch
 				if((i > 0 && j > 0) || j == seq.length()-1) {
 					// Right-to-left
-					if(beg < Ebwt::default_ftabChars) {
+					if(beg < GFM::default_ftabChars) {
 						beg = 0;
 					} else {
-						beg -= Ebwt::default_ftabChars;
+						beg -= GFM::default_ftabChars;
 					}
-					end -= Ebwt::default_ftabChars;
+					end -= GFM::default_ftabChars;
 				}
 				if(beg <= 14 && end >= 14) {
 					continue;
@@ -870,7 +868,7 @@ int main(int argc, char **argv) {
 				// Need to adjust the mismatch penalty up to avoid alignments
 				// with lots of mismatches.
 				sc.setMmPen(COST_MODEL_CONSTANT, 6, 6);
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(1, dr.sink().nrange());
@@ -899,17 +897,17 @@ int main(int argc, char **argv) {
 			for(size_t j = 0; j < seq.length(); j++) {
 				// Assume left-to-right
 				size_t beg = j;
-				size_t end = j + Ebwt::default_ftabChars;
+				size_t end = j + GFM::default_ftabChars;
 				// Mismatch penalty is 3, so we have to skip starting
 				// points that are within 2 from the mismatch
 				if((i > 0 && j > 0) || j == seq.length()-1) {
 					// Right-to-left
-					if(beg < Ebwt::default_ftabChars) {
+					if(beg < GFM::default_ftabChars) {
 						beg = 0;
 					} else {
-						beg -= Ebwt::default_ftabChars;
+						beg -= GFM::default_ftabChars;
 					}
-					end -= Ebwt::default_ftabChars;
+					end -= GFM::default_ftabChars;
 				}
 				if(beg <= 14 && end >= 14) {
 					continue;
@@ -947,7 +945,7 @@ int main(int argc, char **argv) {
 				// Need to adjust the mismatch penalty up to avoid alignments
 				// with lots of mismatches.
 				sc.setMmPen(COST_MODEL_CONSTANT, 6, 6);
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(1, dr.sink().nrange());
@@ -977,17 +975,17 @@ int main(int argc, char **argv) {
 			for(size_t j = 0; j < seq.length(); j++) {
 				// Assume left-to-right
 				size_t beg = j;
-				size_t end = j + Ebwt::default_ftabChars;
+				size_t end = j + GFM::default_ftabChars;
 				// Mismatch penalty is 3, so we have to skip starting
 				// points that are within 2 from the mismatch
 				if((i > 0 && j > 0) || j == seq.length()-1) {
 					// Right-to-left
-					if(beg < Ebwt::default_ftabChars) {
+					if(beg < GFM::default_ftabChars) {
 						beg = 0;
 					} else {
-						beg -= Ebwt::default_ftabChars;
+						beg -= GFM::default_ftabChars;
 					}
-					end -= Ebwt::default_ftabChars;
+					end -= GFM::default_ftabChars;
 				}
 				if(beg <= 10 && end >= 10) {
 					continue;
@@ -1022,7 +1020,7 @@ int main(int argc, char **argv) {
 				
 				// Do the search
 				Scoring sc = Scoring::base1();
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(1, dr.sink().nrange());
@@ -1037,8 +1035,8 @@ int main(int argc, char **argv) {
 		}
     }
 
-	delete ebwts.first;
-	delete ebwts.second;
+	delete gfms.first;
+	delete gfms.second;
 	
 	//  Ref CATGTCAGCT-ATATAGCGCGCTCGCATCATTTTGTGTGTAAAC
 	//      |||||||||| |||||||||||| |||||| |||||||||||||
@@ -1054,28 +1052,27 @@ int main(int argc, char **argv) {
                           "N"
                           "CATGTCAGCTGATATAGCGCGCTGCATCAATTTGTGTGTAAAC" // Exact match for read
 						  ));
-	ebwts = Ebwt::fromStrings<SString<char> >(
+	gfms = GFM::fromStrings<SString<char> >(
 		strs,
 		packed,
-		color,
 		REF_READ_REVERSE,
-		Ebwt::default_bigEndian,
-		Ebwt::default_lineRate,
-		Ebwt::default_offRate,
-		Ebwt::default_ftabChars,
+		GFM::default_bigEndian,
+		GFM::default_lineRate,
+		GFM::default_offRate,
+		GFM::default_ftabChars,
 		".aligner_seed2.cpp.tmp",
-		Ebwt::default_useBlockwise,
-		Ebwt::default_bmax,
-		Ebwt::default_bmaxMultSqrt,
-		Ebwt::default_bmaxDivN,
-		Ebwt::default_dcv,
-		Ebwt::default_seed,
+		GFM::default_useBlockwise,
+		GFM::default_bmax,
+		GFM::default_bmaxMultSqrt,
+		GFM::default_bmaxDivN,
+		GFM::default_dcv,
+		GFM::default_seed,
 		false,  // verbose
 		false,  // autoMem
 		false); // sanity
     
-    ebwts.first->loadIntoMemory (color, -1, true, true, true, true, false);
-    ebwts.second->loadIntoMemory(color,  1, true, true, true, true, false);
+    gfms.first->loadIntoMemory (color, -1, true, true, true, true, false);
+    gfms.second->loadIntoMemory(color,  1, true, true, true, true, false);
 
 	// Query is longer than ftab and matches exactly once with one read gap,
 	// one ref gap, and one mismatch
@@ -1092,17 +1089,17 @@ int main(int argc, char **argv) {
 			for(size_t j = 0; j < seq.length(); j++) {
 				// Assume left-to-right
 				size_t beg = j;
-				size_t end = j + Ebwt::default_ftabChars;
+				size_t end = j + GFM::default_ftabChars;
 				// Mismatch penalty is 3, so we have to skip starting
 				// points that are within 2 from the mismatch
 				if((i > 0 && j > 0) || j == seq.length()-1) {
 					// Right-to-left
-					if(beg < Ebwt::default_ftabChars) {
+					if(beg < GFM::default_ftabChars) {
 						beg = 0;
 					} else {
-						beg -= Ebwt::default_ftabChars;
+						beg -= GFM::default_ftabChars;
 					}
-					end -= Ebwt::default_ftabChars;
+					end -= GFM::default_ftabChars;
 				}
 				if(beg <= 10 && end >= 10) {
 					continue;
@@ -1137,7 +1134,7 @@ int main(int argc, char **argv) {
 				
 				// Do the search
 				Scoring sc = Scoring::base1();
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(5, dr.sink().nrange());
@@ -1171,17 +1168,17 @@ int main(int argc, char **argv) {
 			for(size_t j = 0; j < seq.length(); j++) {
 				// Assume left-to-right
 				size_t beg = j;
-				size_t end = j + Ebwt::default_ftabChars;
+				size_t end = j + GFM::default_ftabChars;
 				// Mismatch penalty is 3, so we have to skip starting
 				// points that are within 2 from the mismatch
 				if((i > 0 && j > 0) || j == seq.length()-1) {
 					// Right-to-left
-					if(beg < Ebwt::default_ftabChars) {
+					if(beg < GFM::default_ftabChars) {
 						beg = 0;
 					} else {
-						beg -= Ebwt::default_ftabChars;
+						beg -= GFM::default_ftabChars;
 					}
-					end -= Ebwt::default_ftabChars;
+					end -= GFM::default_ftabChars;
 				}
 				if(beg <= 10 && end >= 10) {
 					continue;
@@ -1220,7 +1217,7 @@ int main(int argc, char **argv) {
 				// Do the search
 				Scoring sc = Scoring::base1();
 				sc.setNPen(COST_MODEL_CONSTANT, 1);
-				dr.go(sc, *ebwts.first, *ebwts.second, mets, prm);
+				dr.go(sc, *gfms.first, *gfms.second, mets, prm);
 				
 				// Confirm that an exact-matching alignment was found
 				assert_eq(5, dr.sink().nrange());
@@ -1239,8 +1236,8 @@ int main(int argc, char **argv) {
 		}
     }
 
-    delete ebwts.first;
-    delete ebwts.second;
+    delete gfms.first;
+    delete gfms.second;
 	
 	cerr << "DONE" << endl;
 }

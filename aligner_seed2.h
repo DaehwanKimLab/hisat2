@@ -100,7 +100,7 @@
 #include "assert_helpers.h"
 #include "random_util.h"
 #include "aligner_result.h"
-#include "bt2_idx.h"
+#include "gfm.h"
 #include "simple_func.h"
 #include "scoring.h"
 #include "edit.h"
@@ -1081,8 +1081,8 @@ public:
 		TDescentId parent,              // parent ID
 		TScore pen,                     // total penalties so far
 		const Edit& e,                  // edit for incoming edge
-		const Ebwt<index_t>& ebwtFw,    // forward index
-		const Ebwt<index_t>& ebwtBw,    // mirror index
+		const GFM<index_t>& gfmFw,      // forward index
+		const GFM<index_t>& gfmBw,      // mirror index
 		DescentRedundancyChecker& re,   // redundancy checker
 		EFactory<Descent>& df,          // Descent factory
 		EFactory<DescentPos>& pf,       // DescentPos factory
@@ -1105,8 +1105,8 @@ public:
 		TAlScore minsc,                 // minimum score
 		TAlScore maxpen,                // maximum penalty
         size_t descid,                  // id of this Descent
-        const Ebwt<index_t>& ebwtFw,    // forward index
-        const Ebwt<index_t>& ebwtBw,    // mirror index
+        const GFM<index_t>& gfmFw,      // forward index
+        const GFM<index_t>& gfmBw,      // mirror index
 		DescentRedundancyChecker& re,   // redundancy checker
         EFactory<Descent>& df,          // Descent factory
         EFactory<DescentPos>& pf,       // DescentPos factory
@@ -1158,8 +1158,8 @@ public:
 	 */
 	void followBestOutgoing(
         const Read& q,                  // read
-        const Ebwt<index_t>& ebwtFw,    // forward index
-        const Ebwt<index_t>& ebwtBw,    // mirror index
+        const GFM<index_t>& gfmFw,      // forward index
+        const GFM<index_t>& gfmBw,      // mirror index
         const Scoring& sc,              // scoring scheme
 		TAlScore minsc,                 // minimum score
 		TAlScore maxpen,                // maximum penalty
@@ -1256,8 +1256,8 @@ protected:
         TIndexOffU botf,                 // SA range bottom in fw index
         TIndexOffU topb,                 // SA range top in bw index
         TIndexOffU botb,                 // SA range bottom in bw index
-        const Ebwt<index_t>& ebwtFw,    // forward index
-        const Ebwt<index_t>& ebwtBw,    // mirror index
+        const GFM<index_t>& gfmFw,      // forward index
+        const GFM<index_t>& gfmBw,      // mirror index
         const Scoring& sc,              // scoring scheme
 		TAlScore minsc,                 // minimum score
 		TAlScore maxpen,                // maximum penalty
@@ -1276,8 +1276,8 @@ protected:
 	 * get tloc, bloc ready for the next step.
 	 */
 	void nextLocsBi(
-		const Ebwt<index_t>& ebwtFw,  // forward index
-		const Ebwt<index_t>& ebwtBw,  // mirror index
+		const GFM<index_t>& gfmFw,    // forward index
+		const GFM<index_t>& gfmBw,    // mirror index
 		SideLocus<index_t>&  tloc,    // top locus
 		SideLocus<index_t>&  bloc,    // bot locus
 		index_t topf,                 // top in BWT
@@ -1291,8 +1291,8 @@ protected:
     bool followMatches(
         const Read& q,     // query string
 		const Scoring& sc,         // scoring scheme
-        const Ebwt<index_t>& ebwtFw,  // forward index
-        const Ebwt<index_t>& ebwtBw,  // mirror index
+        const GFM<index_t>& gfmFw,    // forward index
+        const GFM<index_t>& gfmBw,    // mirror index
 		DescentRedundancyChecker& re, // redundancy checker
         EFactory<Descent>& df,     // Descent factory
         EFactory<DescentPos>& pf,  // DescentPos factory
@@ -1519,8 +1519,8 @@ public:
      */
     bool reportAlignment(
         const Read& q,           // query string
-		const Ebwt<index_t>& ebwtFw,     // forward index
-		const Ebwt<index_t>& ebwtBw,     // mirror index
+		const GFM<index_t>& gfmFw,       // forward index
+		const GFM<index_t>& gfmBw,       // mirror index
 		TIndexOffU topf,                  // SA range top in forward index
 		TIndexOffU botf,                  // SA range bottom in forward index
 		TIndexOffU topb,                  // SA range top in backward index
@@ -2003,8 +2003,8 @@ public:
 	 */
 	void go(
         const Scoring& sc,    // scoring scheme
-		const Ebwt<index_t>& ebwtFw,   // forward index
-		const Ebwt<index_t>& ebwtBw,   // mirror index
+		const GFM<index_t>& gfmFw,   // forward index
+		const GFM<index_t>& gfmBw,   // mirror index
         DescentMetrics& met,  // metrics
 		PerReadMetrics& prm); // per-read metrics
 
@@ -2014,8 +2014,8 @@ public:
 	int advance(
 		const DescentStoppingConditions& stopc, // stopping conditions
         const Scoring& sc,    // scoring scheme
-		const Ebwt<index_t>& ebwtFw,   // forward index
-		const Ebwt<index_t>& ebwtBw,   // mirror index
+		const GFM<index_t>& gfmFw,   // forward index
+		const GFM<index_t>& gfmBw,   // mirror index
         DescentMetrics& met,  // metrics
 		PerReadMetrics& prm); // per-read metrics
 
@@ -2133,7 +2133,7 @@ public:
 	void init(
 		const Read& q,
 		const DescentAlignmentSink<index_t>& sink,
-		const Ebwt<index_t>& ebwtFw, // forward Bowtie index for walking left
+		const GFM<index_t>& gfmFw, // forward Bowtie index for walking left
 		const BitPairReference& ref, // bitpair-encoded reference
 		RandomSource& rnd,           // pseudo-random generator for sampling rows
 		WalkMetrics& met)
@@ -2152,7 +2152,7 @@ public:
 		for(size_t i = 0; i < sas_.size(); i++) {
 			size_t en = sink[i].botf - sink[i].topf;
 			sas_[i].init(sink[i].topf, q.length(), EListSlice<TIndexOffU, 16>(offs_, ei, en));
-			gws_[i].init(ebwtFw, ref, sas_[i], rnd, met);
+			gws_[i].init(gfmFw, ref, sas_[i], rnd, met);
 			ei += en;
 		}
 	}
@@ -2176,7 +2176,7 @@ public:
 	 */
 	bool next(
 		const DescentDriver<index_t>& dr,
-		const Ebwt<index_t>& ebwtFw, // forward Bowtie index for walking left
+		const GFM<index_t>& gfmFw, // forward Bowtie index for walking left
 		const BitPairReference& ref, // bitpair-encoded reference
 		RandomSource& rnd,
 		AlnRes& rs,
@@ -2196,7 +2196,7 @@ public:
 		TIndexOffU tidx = 0, toff = 0, tlen = 0;
 		gws_[rangei].advanceElement(
 			(TIndexOffU)off,
-			ebwtFw,       // forward Bowtie index for walking left
+			gfmFw,        // forward Bowtie index for walking left
 			ref,          // bitpair-encoded reference
 			sas_[rangei], // SA range with offsets
 			gwstate_,     // GroupWalk state; scratch space
@@ -2205,7 +2205,7 @@ public:
 			prm);         // per-read metrics
 		assert_neq(OFF_MASK, wr.toff);
 		bool straddled = false;
-		ebwtFw.joinedToTextOff(
+		gfmFw.joinedToTextOff(
 			wr.elt.len,
 			wr.toff,
 			tidx,
@@ -2336,7 +2336,7 @@ public:
 		const EHeap<TDescentPair>& heap, // the heap w/ the partial alns
 		TAlScore depthBonus,             // use depth when prioritizing
 		size_t nbatch,                   // # of alignments in a batch
-		const Ebwt<index_t>& ebwtFw,     // forward Bowtie index for walk-left
+		const GFM<index_t>& gfmFw,       // forward Bowtie index for walk-left
 		const BitPairReference& ref,     // bitpair-encoded reference
 		RandomSource& rnd,               // pseudo-randoms for sampling rows
 		WalkMetrics& met)                // metrics re: offset resolution
@@ -2367,7 +2367,7 @@ public:
 		for(size_t i = 0; i < sas_.size(); i++) {
 			size_t en = sink[i].botf - sink[i].topf;
 			sas_[i].init(sink[i].topf, q.length(), EListSlice<TIndexOff, 16>(offs_, ei, en));
-			gws_[i].init(ebwtFw, ref, sas_[i], rnd, met);
+			gws_[i].init(gfmFw, ref, sas_[i], rnd, met);
 			ei += en;
 		}
 #endif
@@ -2398,7 +2398,7 @@ public:
 	 */
 	bool next(
 		const DescentDriver<index_t>& dr,
-		const Ebwt<index_t>& ebwtFw,          // forward Bowtie index for walking left
+		const GFM<index_t>& gfmFw,          // forward Bowtie index for walking left
 		const BitPairReference& ref, // bitpair-encoded reference
 		RandomSource& rnd,
 		AlnRes& rs,
@@ -2418,7 +2418,7 @@ public:
 		uint32_t tidx = 0, toff = 0, tlen = 0;
 		gws_[rangei].advanceElement(
 			(uint32_t)off,
-			ebwtFw,       // forward Bowtie index for walking left
+			gfmFw,        // forward Bowtie index for walking left
 			ref,          // bitpair-encoded reference
 			sas_[rangei], // SA range with offsets
 			gwstate_,     // GroupWalk state; scratch space
@@ -2427,7 +2427,7 @@ public:
 			prm);         // per-read metrics
 		assert_neq(0xffffffff, wr.toff);
 		bool straddled = false;
-		ebwtFw.joinedToTextOff(
+		gfmFw.joinedToTextOff(
 			wr.elt.len,
 			wr.toff,
 			tidx,
@@ -2502,8 +2502,8 @@ protected:
 template <typename index_t>
 void DescentDriver<index_t>::go(
 								const Scoring& sc,    // scoring scheme
-								const Ebwt<index_t>& ebwtFw,   // forward index
-								const Ebwt<index_t>& ebwtBw,   // mirror index
+								const GFM<index_t>& gfmFw,   // forward index
+								const GFM<index_t>& gfmBw,   // mirror index
 								DescentMetrics& met,  // metrics
 								PerReadMetrics& prm)  // per-read metrics
 {
@@ -2522,8 +2522,8 @@ void DescentDriver<index_t>::go(
 								 minsc_,    // minimum score
 								 maxpen_,   // maximum penalty
 								 id,        // new Descent's id
-								 ebwtFw,    // forward index
-								 ebwtBw,    // mirror index
+								 gfmFw,     // forward index
+								 gfmBw,     // mirror index
 								 re_,       // redundancy checker
 								 df_,       // Descent factory
 								 pf_,       // DescentPos factory
@@ -2564,8 +2564,8 @@ void DescentDriver<index_t>::go(
 		df_.alloc(); df_.pop();
         df_[p.second].followBestOutgoing(
 										 q_,        // read
-										 ebwtFw,    // index over text
-										 ebwtBw,    // index over reverse text
+										 gfmFw,     // index over text
+										 gfmBw,     // index over reverse text
 										 sc,        // scoring scheme
 										 minsc_,    // minimum score
 										 maxpen_,   // maximum penalty
@@ -2589,8 +2589,8 @@ template <typename index_t>
 int DescentDriver<index_t>::advance(
 									const DescentStoppingConditions& stopc, // stopping conditions
 									const Scoring& sc,    // scoring scheme
-									const Ebwt<index_t>& ebwtFw,   // forward index
-									const Ebwt<index_t>& ebwtBw,   // mirror index
+									const GFM<index_t>& gfmFw,   // forward index
+									const GFM<index_t>& gfmBw,   // mirror index
 									DescentMetrics& met,  // metrics
 									PerReadMetrics& prm)  // per-read metrics
 {
@@ -2608,8 +2608,8 @@ int DescentDriver<index_t>::advance(
 								 minsc_,    // minimum score
 								 maxpen_,   // maximum penalty
 								 id,        // new Descent's id
-								 ebwtFw,    // forward index
-								 ebwtBw,    // mirror index
+								 gfmFw,     // forward index
+								 gfmBw,     // mirror index
 								 re_,       // redundancy checker
 								 df_,       // Descent factory
 								 pf_,       // DescentPos factory
@@ -2652,8 +2652,8 @@ int DescentDriver<index_t>::advance(
 		df_.alloc(); df_.pop();
         df_[p.second].followBestOutgoing(
 										 q_,
-										 ebwtFw,
-										 ebwtBw,
+										 gfmFw,
+										 gfmBw,
 										 sc,
 										 minsc_,    // minimum score
 										 maxpen_,   // maximum penalty
@@ -2694,8 +2694,8 @@ int DescentDriver<index_t>::advance(
 template <typename index_t>
 bool DescentAlignmentSink<index_t>::reportAlignment(
 													const Read& q,                  // query string
-													const Ebwt<index_t>& ebwtFw,    // forward index
-													const Ebwt<index_t>& ebwtBw,    // mirror index
+													const GFM<index_t>& gfmFw,      // forward index
+													const GFM<index_t>& gfmBw,      // mirror index
 													TIndexOffU topf,                 // SA range top in forward index
 													TIndexOffU botf,                 // SA range bottom in forward index
 													TIndexOffU topb,                 // SA range top in backward index
@@ -2754,7 +2754,7 @@ bool DescentAlignmentSink<index_t>::reportAlignment(
 		ASSERT_ONLY(TIndexOffU toptmp = 0);
 		ASSERT_ONLY(TIndexOffU bottmp = 0);
 		// Check that the edited string occurs in the reference
-		if(!ebwtFw.contains(rf, &toptmp, &bottmp)) {
+		if(!gfmFw.contains(rf, &toptmp, &bottmp)) {
 			std::cerr << rf << std::endl;
 			assert(false);
 		}
@@ -2795,8 +2795,8 @@ bool Descent<index_t>::init(
 							TDescentId parent,              // parent ID
 							TScore pen,                     // total penalties so far
 							const Edit& e,                  // edit for incoming edge
-							const Ebwt<index_t>& ebwtFw,    // forward index
-							const Ebwt<index_t>& ebwtBw,    // mirror index
+							const GFM<index_t>& gfmFw,      // forward index
+							const GFM<index_t>& gfmBw,      // mirror index
 							DescentRedundancyChecker& re,   // redundancy checker
 							EFactory<Descent>& df,          // Descent factory
 							EFactory<DescentPos>& pf,       // DescentPos factory
@@ -2843,8 +2843,8 @@ bool Descent<index_t>::init(
     bool matchSucc = followMatches(
 								   q,
 								   sc,
-								   ebwtFw,
-								   ebwtBw,
+								   gfmFw,
+								   gfmBw,
 								   re,
 								   df,
 								   pf,
@@ -2871,8 +2871,8 @@ bool Descent<index_t>::init(
 							botf_new,
 							topb_new,
 							botb_new,
-							ebwtFw,
-							ebwtBw,
+							gfmFw,
+							gfmBw,
 							sc,
 							minsc,    // minimum score
 							maxpen,   // maximum penalty
@@ -2909,8 +2909,8 @@ bool Descent<index_t>::init(
 							TAlScore minsc,                 // minimum score
 							TAlScore maxpen,                // maximum penalty
 							size_t descid,                  // id of this Descent
-							const Ebwt<index_t>& ebwtFw,    // forward index
-							const Ebwt<index_t>& ebwtBw,    // mirror index
+							const GFM<index_t>& gfmFw,      // forward index
+							const GFM<index_t>& gfmBw,      // mirror index
 							DescentRedundancyChecker& re,   // redundancy checker
 							EFactory<Descent<index_t> >& df,          // Descent factory
 							EFactory<DescentPos>& pf,       // DescentPos factory
@@ -2943,8 +2943,8 @@ bool Descent<index_t>::init(
     bool matchSucc = followMatches(
 								   q,
 								   sc,
-								   ebwtFw,
-								   ebwtBw,
+								   gfmFw,
+								   gfmBw,
 								   re,
 								   df,
 								   pf,
@@ -2971,8 +2971,8 @@ bool Descent<index_t>::init(
 							botf_new,
 							topb_new,
 							botb_new,
-							ebwtFw,
-							ebwtBw,
+							gfmFw,
+							gfmBw,
 							sc,
 							minsc,    // minimum score
 							maxpen,   // maximum penalty
@@ -3465,8 +3465,8 @@ bool Descent<index_t>::bounce(
 							  TIndexOffU botf,                 // SA range bottom in fw index
 							  TIndexOffU topb,                 // SA range top in bw index
 							  TIndexOffU botb,                 // SA range bottom in bw index
-							  const Ebwt<index_t>& ebwtFw,             // forward index
-							  const Ebwt<index_t>& ebwtBw,             // mirror index
+							  const GFM<index_t>& gfmFw,             // forward index
+							  const GFM<index_t>& gfmBw,             // mirror index
 							  const Scoring& sc,              // scoring scheme
 							  TAlScore minsc,                 // minimum score
 							  TAlScore maxpen,                // maximum penalty
@@ -3506,8 +3506,8 @@ bool Descent<index_t>::bounce(
 							descid_,   // parent ID
 							pen_,      // total penalties so far - same as parent
 							e_null,    // edit for incoming edge; uninitialized if bounced
-							ebwtFw,    // forward index
-							ebwtBw,    // mirror index
+							gfmFw,     // forward index
+							gfmBw,     // mirror index
 							re,        // redundancy checker
 							df,        // Descent factory
 							pf,        // DescentPos factory
@@ -3536,8 +3536,8 @@ bool Descent<index_t>::bounce(
 template <typename index_t>
 void Descent<index_t>::followBestOutgoing(
 										  const Read& q,                   // query string
-										  const Ebwt<index_t>& ebwtFw,     // forward index
-										  const Ebwt<index_t>& ebwtBw,     // mirror index
+										  const GFM<index_t>& gfmFw,       // forward index
+										  const GFM<index_t>& gfmBw,       // mirror index
 										  const Scoring& sc,               // scoring scheme
 										  TAlScore minsc,                  // minimum score
 										  TAlScore maxpen,                 // maximum penalty
@@ -3670,8 +3670,8 @@ void Descent<index_t>::followBestOutgoing(
 			// create a new Descent object.  We just report the alignment.
 			alsink.reportAlignment(
 								   q,        // query
-								   ebwtFw,   // forward index
-								   ebwtBw,   // backward index
+								   gfmFw,    // forward index
+								   gfmBw,    // backward index
 								   topf,     // top of SA range in forward index
 								   botf,     // bottom of SA range in forward index
 								   topb,     // top of SA range in backward index
@@ -3706,8 +3706,8 @@ void Descent<index_t>::followBestOutgoing(
 								descid_,   // parent ID
 								best.pen,  // total penalties so far
 								e.e,       // edit for incoming edge; uninitialized if bounced
-								ebwtFw,    // forward index
-								ebwtBw,    // mirror index
+								gfmFw,     // forward index
+								gfmBw,     // mirror index
 								re,        // redundancy checker
 								df,        // Descent factory
 								pf,        // DescentPos factory
@@ -3736,8 +3736,8 @@ void Descent<index_t>::followBestOutgoing(
  */
 template <typename index_t>
 void Descent<index_t>::nextLocsBi(
-								  const Ebwt<index_t>& ebwtFw, // forward index
-								  const Ebwt<index_t>& ebwtBw, // mirror index
+								  const GFM<index_t>& gfmFw, // forward index
+								  const GFM<index_t>& gfmBw, // mirror index
 								  SideLocus<index_t>& tloc,    // top locus
 								  SideLocus<index_t>& bloc,    // bot locus
 								  index_t topf,     // top in BWT
@@ -3751,22 +3751,22 @@ void Descent<index_t>::nextLocsBi(
 		// Left to right; use BWT'
 		if(botb - topb == 1) {
 			// Already down to 1 row; just init top locus
-			tloc.initFromRow(topb, ebwtBw.eh(), ebwtBw.ebwt());
+			tloc.initFromRow(topb, gfmBw.gh(), gfmBw.gfm());
 			bloc.invalidate();
 		} else {
 			SideLocus<index_t>::initFromTopBot(
-											   topb, botb, ebwtBw.eh(), ebwtBw.ebwt(), tloc, bloc);
+											   topb, botb, gfmBw.gh(), gfmBw.gfm(), tloc, bloc);
 			assert(bloc.valid());
 		}
 	} else {
 		// Right to left; use BWT
 		if(botf - topf == 1) {
 			// Already down to 1 row; just init top locus
-			tloc.initFromRow(topf, ebwtFw.eh(), ebwtFw.ebwt());
+			tloc.initFromRow(topf, gfmFw.gh(), gfmFw.gfm());
 			bloc.invalidate();
 		} else {
 			SideLocus<index_t>::initFromTopBot(
-											   topf, botf, ebwtFw.eh(), ebwtFw.ebwt(), tloc, bloc);
+											   topf, botf, gfmFw.gh(), gfmFw.gfm(), tloc, bloc);
 			assert(bloc.valid());
 		}
 	}
@@ -3800,8 +3800,8 @@ template <typename index_t>
 bool Descent<index_t>::followMatches(
 									 const Read& q,     // query string
 									 const Scoring& sc,         // scoring scheme
-									 const Ebwt<index_t>& ebwtFw,        // forward index
-									 const Ebwt<index_t>& ebwtBw,        // mirror index
+									 const GFM<index_t>& gfmFw,        // forward index
+									 const GFM<index_t>& gfmBw,        // mirror index
 									 DescentRedundancyChecker& re, // redundancy checker
 									 EFactory<Descent<index_t> >& df,     // Descent factory
 									 EFactory<DescentPos>& pf,  // DescentPos factory
@@ -3825,10 +3825,10 @@ bool Descent<index_t>::followMatches(
 	bool stopOnN = true;
 	assert(q.repOk());
 	assert(repOk(&q));
-	assert_eq(ebwtFw.eh().ftabChars(), ebwtBw.eh().ftabChars());
+	assert_eq(gfmFw.eh().ftabChars(), gfmBw.gh().ftabChars());
 #ifndef NDEBUG
 	for(int i = 0; i < 4; i++) {
-		assert_eq(ebwtFw.fchr()[i], ebwtBw.fchr()[i]);
+		assert_eq(gfmFw.fchr()[i], gfmBw.fchr()[i]);
 	}
 #endif
 	SideLocus<index_t> tloc, bloc;
@@ -3885,7 +3885,7 @@ bool Descent<index_t>::followMatches(
 	if(root()) {
         assert_eq(al5pi_, al5pf_);
 		// Check whether/how far we can jump using ftab
-		int ftabLen = ebwtFw.eh().ftabChars();
+		int ftabLen = gfmFw.gh().ftabChars();
 		bool ftabFits = true;
 		if(toward3p && ftabLen + off5p > q.length()) {
 			ftabFits = false;
@@ -3904,9 +3904,9 @@ bool Descent<index_t>::followMatches(
 				assert_geq((int)off_r2l, ftabLen - 1);
 				off_r2l -= (ftabLen - 1);
 			}
-			bool ret = ebwtFw.ftabLoHi(fw ? q.patFw : q.patRc, off_r2l,
-			                           false, // reverse
-			                           topf, botf);
+			bool ret = gfmFw.ftabLoHi(fw ? q.patFw : q.patRc, off_r2l,
+                                      false, // reverse
+                                      topf, botf);
 			if(!ret) {
 				// Encountered an N or something else that made it impossible
 				// to use the ftab
@@ -3925,9 +3925,9 @@ bool Descent<index_t>::followMatches(
 					off_l2r -= (ftabLen - 1);
 				}
 				ASSERT_ONLY(bool ret2 = )
-				ebwtBw.ftabLoHi(fw ? q.patFw : q.patRc, off_l2r,
-								false, // don't reverse
-								topb, botb);
+				gfmBw.ftabLoHi(fw ? q.patFw : q.patRc, off_l2r,
+                               false, // don't reverse
+                               topb, botb);
 				assert(ret == ret2);
 				int c_l2r = fw ? q.patFw[off_l2r + ftabLen - 1] :
 				q.patRc[off_l2r + ftabLen - 1];
@@ -3997,8 +3997,8 @@ bool Descent<index_t>::followMatches(
 				return false;
 			}
 			assert_range(0, 3, rdc);
-			topf = topb = ebwtFw.fchr()[rdc];
-			botf = botb = ebwtFw.fchr()[rdc+1];
+			topf = topb = gfmFw.fchr()[rdc];
+			botf = botb = gfmFw.fchr()[rdc+1];
 			if(botf - topf == 0) {
 				return false;
 			}
@@ -4054,8 +4054,8 @@ bool Descent<index_t>::followMatches(
         Edit eempty;
         alsink.reportAlignment(
 							   q,        // query
-							   ebwtFw,   // forward index
-							   ebwtBw,   // backward index
+							   gfmFw,    // forward index
+							   gfmBw,    // backward index
 							   topf,     // top of SA range in forward index
 							   botf,     // bottom of SA range in forward index
 							   topb,     // top of SA range in backward index
@@ -4081,7 +4081,7 @@ bool Descent<index_t>::followMatches(
     }
     // We just advanced either ftabLen characters, or 1 character,
     // depending on whether we used ftab or fchr.
-    nextLocsBi(ebwtFw, ebwtBw, tloc, bloc, topf, botf, topb, botb);
+    nextLocsBi(gfmFw, gfmBw, tloc, bloc, topf, botf, topb, botb);
     assert(tloc.valid());
 	assert(botf - topf == 1 ||  bloc.valid());
 	assert(botf - topf > 1  || !bloc.valid());
@@ -4100,7 +4100,7 @@ bool Descent<index_t>::followMatches(
 		assert(tloc.valid());
         TIndexOffU width = botf - topf;
 		bool ltr = l2r_;
-		const Ebwt<index_t>& ebwt = ltr ? ebwtBw : ebwtFw;
+		const GFM<index_t>& gfm = ltr ? gfmBw : gfmFw;
 		t[0] = t[1] = t[2] = t[3] = b[0] = b[1] = b[2] = b[3] = 0;
 		int only = -1; // if we only get 1 non-empty range, this is the char
 		size_t nopts = 1;
@@ -4121,7 +4121,7 @@ bool Descent<index_t>::followMatches(
 			if(prm.doFmString) {
 				prm.fmString.add(false, pen_, 1);
 			}
-			ebwt.mapBiLFEx(tloc, bloc, t, b, tp, bp);
+			gfm.mapBiLFEx(tloc, bloc, t, b, tp, bp);
 			// t, b, tp and bp now filled
 			ASSERT_ONLY(TIndexOffU tot = (b[0]-t[0])+(b[1]-t[1])+(b[2]-t[2])+(b[3]-t[3]));
 			ASSERT_ONLY(TIndexOffU totp = (bp[0]-tp[0])+(bp[1]-tp[1])+(bp[2]-tp[2])+(bp[3]-tp[3]));
@@ -4147,7 +4147,7 @@ bool Descent<index_t>::followMatches(
 			if(prm.doFmString) {
 				prm.fmString.add(false, pen_, 1);
 			}
-			int cc = ebwt.mapLF1(ntop, tloc);
+			int cc = gfm.mapLF1(ntop, tloc);
 			assert_range(-1, 3, cc);
             fail = (cc != rdc);
             if(fail) {
@@ -4248,7 +4248,7 @@ bool Descent<index_t>::followMatches(
 			}
 		}
         if(!fail && !hitEnd) {
-            nextLocsBi(ebwtFw, ebwtBw, tloc, bloc, tf[rdc], bf[rdc], tb[rdc], bb[rdc]);
+            nextLocsBi(gfmFw, gfmBw, tloc, bloc, tf[rdc], bf[rdc], tb[rdc], bb[rdc]);
         }
 	}
 	assert_geq(al5pf_, al5pi_);
@@ -4258,8 +4258,8 @@ bool Descent<index_t>::followMatches(
         Edit eempty;
         alsink.reportAlignment(
 							   q,        // query
-							   ebwtFw,   // forward index
-							   ebwtBw,   // backward index
+							   gfmFw,    // forward index
+							   gfmBw,    // backward index
 							   topf,     // top of SA range in forward index
 							   botf,     // bottom of SA range in forward index
 							   topb,     // top of SA range in backward index

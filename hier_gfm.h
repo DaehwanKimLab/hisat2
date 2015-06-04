@@ -81,8 +81,8 @@ public:
                  sanityCheck,
                  true)
 	{
-		this->_in1Str = in + ".5." + gEbwt_ext;
-		this->_in2Str = in + ".5." + gEbwt_ext;
+		this->_in1Str = in + ".5." + gfm_ext;
+		this->_in2Str = in + ".5." + gfm_ext;
 		readIntoMemory(
 					   in5,
 					   in6,
@@ -651,10 +651,13 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 	// Reads header entries one by one from primary stream
 	tidx = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
 	localOffset = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
-	uint32_t len = readU32(in5, switchEndian); bytesRead += 4;
+	uint32_t len      = readU32(in5, switchEndian); bytesRead += 4;
+    uint32_t gbwtLen  = readU32(in5, switchEndian); bytesRead += 4;
+    uint32_t numNodes = readU32(in5, switchEndian); bytesRead += 4;
+    uint32_t eftabLen = readU32(in5, switchEndian); bytesRead += 4;
 	
 	// Create a new EbwtParams from the entries read from primary stream
-	this->_gh.init(len, lineRate, offRate, ftabChars, entireRev);
+	this->_gh.init(len, gbwtLen, numNodes, lineRate, offRate, ftabChars, eftabLen, entireRev);
 	
 	if(len <= 0) {
 		return;
@@ -838,9 +841,15 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 	}
 	
 	// Read zOff from primary stream
-	this->_zOff = readIndex<index_t>(in5, switchEndian);
-	bytesRead += sizeof(index_t);
-	assert_lt(this->_zOff, len);
+    this->_zOffs.clear();
+    index_t num_zOffs = readIndex<index_t>(in5, switchEndian);
+    bytesRead += sizeof(index_t);
+    for(index_t i = 0; i < num_zOffs; i++) {
+        index_t zOff = readIndex<index_t>(in5, switchEndian);
+        bytesRead += sizeof(index_t);
+        assert_lt(zOff, len);
+        this->_zOffs.push_back(zOff);
+    }	
 	
 	try {
 		// Read fchr from primary stream
@@ -1102,8 +1111,8 @@ public:
     _in5(NULL),
     _in6(NULL)
     {
-        _in5Str = in + ".5." + gEbwt_ext;
-        _in6Str = in + ".6." + gEbwt_ext;
+        _in5Str = in + ".5." + gfm_ext;
+        _in6Str = in + ".6." + gfm_ext;
         
         if(!skipLoading && false) {
             readIntoMemory(
@@ -1343,8 +1352,8 @@ HierGFM<index_t, local_index_t>::HierGFM(
     // daehwan - to be implemented
     return;
     
-    _in5Str = outfile + ".5." + gEbwt_ext;
-    _in6Str = outfile + ".6." + gEbwt_ext;
+    _in5Str = outfile + ".5." + gfm_ext;
+    _in6Str = outfile + ".6." + gfm_ext;
     
     // Open output files
     ofstream fout5(_in5Str.c_str(), ios::binary);
@@ -1678,6 +1687,9 @@ void HierGFM<index_t, local_index_t>::readIntoMemory(
                                  mmSweep,
                                  loadNames,
                                  startVerbose);
+    
+    // daehwan - for debugging purposes
+    return;
 
 	bool switchEndian; // dummy; caller doesn't care
 #ifdef BOWTIE_MM

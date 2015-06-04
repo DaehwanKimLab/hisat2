@@ -1,20 +1,20 @@
 /*
- * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
+ * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
  *
- * This file is part of Bowtie 2.
+ * This file is part of HISAT 2.
  *
- * Bowtie 2 is free software: you can redistribute it and/or modify
+ * HISAT 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Bowtie 2 is distributed in the hope that it will be useful,
+ * HISAT 2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Bowtie 2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <stdlib.h>
@@ -30,9 +30,7 @@
 #include "alphabet.h"
 #include "assert_helpers.h"
 #include "endian_swap.h"
-#include "bt2_idx.h"
-#include "bt2_io.h"
-#include "bt2_util.h"
+#include "hier_gfm.h"
 #include "formats.h"
 #include "sequence_io.h"
 #include "tokenize.h"
@@ -43,8 +41,9 @@
 #include "aligner_metrics.h"
 #include "sam.h"
 #include "aligner_seed.h"
+#include "splice_site.h"
+#include "spliced_aligner.h"
 #include "aligner_seed_policy.h"
-#include "aligner_driver.h"
 #include "aligner_sw.h"
 #include "aligner_sw_driver.h"
 #include "aligner_cache.h"
@@ -54,7 +53,6 @@
 #include "presets.h"
 #include "opts.h"
 #include "outq.h"
-#include "aligner_seed2.h"
 
 using namespace std;
 
@@ -159,6 +157,8 @@ static bool sam_print_zm;
 static bool sam_print_zi;
 static bool sam_print_zp;
 static bool sam_print_zu;
+static bool sam_print_xs_a;
+static bool sam_print_nh;
 static bool bwaSwLike;
 static float bwaSwLikeC;
 static float bwaSwLikeT;
@@ -235,10 +235,32 @@ static bool reorder;          // true -> reorder SAM recs in -p mode
 static float sampleFrac;      // only align random fraction of input reads
 static bool arbitraryRandom;  // pseudo-randoms no longer a function of read properties
 static bool bowtie2p5;
+static bool useTempSpliceSite;
+static int penCanSplice;
+static int penNoncanSplice;
+static int penConflictSplice;
+static SimpleFunc penIntronLen;
+static size_t minIntronLen;
+static size_t maxIntronLen;
+static string knownSpliceSiteInfile;  //
+static string novelSpliceSiteInfile;  //
+static string novelSpliceSiteOutfile; //
+static bool secondary;
+static bool no_spliced_alignment;
+static int rna_strandness; //
+static bool splicesite_db_only; //
+
+#ifdef USE_SRA
+static EList<string> sra_accs;
+#endif
 
 static string bt2index;      // read Bowtie 2 index from files with this prefix
 static EList<pair<int, string> > extra_opts;
 static size_t extra_opts_cur;
+
+static EList<uint64_t> thread_rids;
+static MUTEX_T         thread_rids_mutex;
+static uint64_t        thread_rids_mindist;
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -273,8 +295,8 @@ static void resetOptions() {
 	nthreads				= 1;     // number of pthreads operating concurrently
 	outType					= OUTPUT_SAM;  // style of output
 	noRefNames				= false; // true -> print reference indexes; not names
-	khits					= 1;     // number of hits per read; >1 is much slower
-	mhits					= 50;    // stop after finding this many alignments+1
+	khits					= 5;     // number of hits per read; >1 is much slower
+	mhits					= 0;     // stop after finding this many alignments+1
 	partitionSz				= 0;     // output a partitioning key in first field
 	useSpinlock				= true;  // false -> don't use of spinlocks even if they're #defines
 	fileParallel			= false; // separate threads read separate input files in parallel
@@ -345,6 +367,8 @@ static void resetOptions() {
 	sam_print_zi            = false;
 	sam_print_zp            = false;
 	sam_print_zu            = false;
+    sam_print_xs_a          = true;
+    sam_print_nh            = true;
 	bwaSwLike               = false;
 	bwaSwLikeC              = 5.5f;
 	bwaSwLikeT              = 20.0f;
@@ -374,7 +398,8 @@ static void resetOptions() {
 	penRfGapConst   = DEFAULT_REF_GAP_CONST;
 	penRdGapLinear  = DEFAULT_READ_GAP_LINEAR;
 	penRfGapLinear  = DEFAULT_REF_GAP_LINEAR;
-	scoreMin.init  (SIMPLE_FUNC_LINEAR, DEFAULT_MIN_CONST,   DEFAULT_MIN_LINEAR);
+	// scoreMin.init  (SIMPLE_FUNC_LINEAR, DEFAULT_MIN_CONST,   DEFAULT_MIN_LINEAR);
+    scoreMin.init  (SIMPLE_FUNC_CONST, -18, 0);
 	nCeil.init     (SIMPLE_FUNC_LINEAR, 0.0f, DMAX, 2.0f, 0.1f);
 	msIval.init    (SIMPLE_FUNC_LINEAR, 1.0f, DMAX, DEFAULT_IVAL_B, DEFAULT_IVAL_A);
 	descConsExp     = 2.0;
@@ -423,6 +448,24 @@ static void resetOptions() {
 	sampleFrac = 1.1f;       // align all reads
 	arbitraryRandom = false; // let pseudo-random seeds be a function of read properties
 	bowtie2p5 = false;
+    useTempSpliceSite = true;
+    penCanSplice = 0;
+    penNoncanSplice = 12;
+    penConflictSplice = 1000000;
+    penIntronLen.init(SIMPLE_FUNC_LOG, -8, 1);
+    minIntronLen = 20;
+    maxIntronLen = 500000;
+    knownSpliceSiteInfile = "";
+    novelSpliceSiteInfile = "";
+    novelSpliceSiteOutfile = "";
+    secondary = false;       // allow secondary alignments
+    no_spliced_alignment = false;
+    rna_strandness = RNA_STRANDNESS_UNKNOWN;
+    splicesite_db_only = false;
+    
+#ifdef USE_SRA
+    sra_accs.clear();
+#endif
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -525,7 +568,7 @@ static struct option long_options[] = {
 	{(char*)"ion-torrent",  no_argument,       0,            ARG_NOISY_HPOLY},
 	{(char*)"no-mixed",     no_argument,       0,            ARG_NO_MIXED},
 	{(char*)"no-discordant",no_argument,       0,            ARG_NO_DISCORDANT},
-	{(char*)"local",        no_argument,       0,            ARG_LOCAL},
+	// {(char*)"local",        no_argument,       0,            ARG_LOCAL},
 	{(char*)"end-to-end",   no_argument,       0,            ARG_END_TO_END},
 	{(char*)"ungapped",     no_argument,       0,            ARG_UNGAPPED},
 	{(char*)"no-ungapped",  no_argument,       0,            ARG_UNGAPPED_NO},
@@ -607,6 +650,23 @@ static struct option long_options[] = {
 	{(char*)"desc-landing",     required_argument, 0,        ARG_DESC_LANDING},
 	{(char*)"desc-exp",         required_argument, 0,        ARG_DESC_EXP},
 	{(char*)"desc-fmops",       required_argument, 0,        ARG_DESC_FMOPS},
+    {(char*)"no-temp-splicesite",  no_argument, 0,     ARG_NO_TEMPSPLICESITE},
+    {(char*)"pen-cansplice",  required_argument, 0,        ARG_PEN_CANSPLICE},
+    {(char*)"pen-noncansplice",  required_argument, 0,     ARG_PEN_NONCANSPLICE},
+    {(char*)"pen-conflictsplice",  required_argument, 0,     ARG_PEN_CONFLICTSPLICE},
+    {(char*)"pen-intronlen",  required_argument, 0,     ARG_PEN_INTRONLEN},
+    {(char*)"min-intronlen",  required_argument, 0,     ARG_MIN_INTRONLEN},
+    {(char*)"max-intronlen",  required_argument, 0,     ARG_MAX_INTRONLEN},
+    {(char*)"known-splicesite-infile",       required_argument, 0,        ARG_KNOWN_SPLICESITE_INFILE},
+    {(char*)"novel-splicesite-infile",       required_argument, 0,        ARG_NOVEL_SPLICESITE_INFILE},
+    {(char*)"novel-splicesite-outfile",      required_argument, 0,        ARG_NOVEL_SPLICESITE_OUTFILE},
+    {(char*)"secondary",   no_argument, 0,        ARG_SECONDARY},
+    {(char*)"no-spliced-alignment",   no_argument, 0,        ARG_NO_SPLICED_ALIGNMENT},
+    {(char*)"rna-strandness",   required_argument, 0,        ARG_RNA_STRANDNESS},
+    {(char*)"splicesite-db-only",   no_argument, 0,        ARG_SPLICESITE_DB_ONLY},
+#ifdef USE_SRA
+    {(char*)"sra-acc",   required_argument, 0,        ARG_SRA_ACC},
+#endif
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -651,16 +711,19 @@ static void printArgDesc(ostream& out) {
  * Print a summary usage message to the provided output stream.
  */
 static void printUsage(ostream& out) {
-	out << "Bowtie 2 version " << string(BOWTIE2_VERSION).c_str() << " by Ben Langmead (langmea@cs.jhu.edu, www.cs.jhu.edu/~langmea)" << endl;
-	string tool_name = "bowtie2-align";
+	out << "HISAT2 version " << string(HISAT2_VERSION).c_str() << " by Daehwan Kim (infphilo@gmail.com, www.ccb.jhu.edu/people/infphilo)" << endl;
+	string tool_name = "hisat2-align";
 	if(wrapper == "basic-0") {
-		tool_name = "bowtie2";
+		tool_name = "hisat";
 	}
 	out << "Usage: " << endl
-	    << "  " << tool_name.c_str() << " [options]* -x <bt2-idx> {-1 <m1> -2 <m2> | -U <r>} [-S <sam>]" << endl
+#ifdef USE_SRA
+	    << "  " << tool_name.c_str() << " [options]* -x <bt2-idx> {-1 <m1> -2 <m2> | -U <r> | --sra-acc <SRA accession number>} [-S <sam>]" << endl
+#else
+    << "  " << tool_name.c_str() << " [options]* -x <bt2-idx> {-1 <m1> -2 <m2> | -U <r>} [-S <sam>]" << endl
+#endif
 	    << endl
-		<<     "  <bt2-idx>  Index filename prefix (minus trailing .X." << gEbwt_ext << ")." << endl
-		<<     "             NOTE: Bowtie 1 and Bowtie 2 indexes are not compatible." << endl
+		<<     "  <bt2-idx>  Index filename prefix (minus trailing .X." << gfm_ext << ")." << endl
 	    <<     "  <m1>       Files with #1 mates, paired with files in <m2>." << endl;
 	if(wrapper == "basic-0") {
 		out << "             Could be gzip'ed (extension: .gz) or bzip2'ed (extension: .bz2)." << endl;
@@ -673,6 +736,9 @@ static void printUsage(ostream& out) {
 	if(wrapper == "basic-0") {
 		out << "             Could be gzip'ed (extension: .gz) or bzip2'ed (extension: .bz2)." << endl;
 	}
+#ifdef USE_SRA
+    out <<     "  <SRA accession number>        Comma-separated list of SRA accession numbers, e.g. --sra-acc SRR353653,SRR353654." << endl;
+#endif
 	out <<     "  <sam>      File for SAM output (default: stdout)" << endl
 	    << endl
 	    << "  <m1>, <m2>, <r> can be comma-separated lists (no whitespace) and can be" << endl
@@ -694,6 +760,9 @@ static void printUsage(ostream& out) {
 	    << "  --phred33          qualities are Phred+33 (default)" << endl
 	    << "  --phred64          qualities are Phred+64" << endl
 	    << "  --int-quals        qualities encoded as space-delimited integers" << endl
+#ifdef USE_SRA
+        << "  --sra-acc          SRA accession ID" << endl
+#endif
 		<< endl
 	    << " Presets:                 Same as:" << endl
 		<< "  For --end-to-end:" << endl
@@ -719,11 +788,21 @@ static void printUsage(ostream& out) {
 	    << "  --nofw             do not align forward (original) version of read (off)" << endl
 	    << "  --norc             do not align reverse-complement version of read (off)" << endl
 		<< endl
-		<< "  --end-to-end       entire read must align; no clipping (on)" << endl
-		<< "   OR" << endl
-		<< "  --local            local alignment; ends might be soft clipped (off)" << endl
-		<< endl
-	    << " Scoring:" << endl
+        << " Spliced Alignment:" << endl
+        << "  --pen-cansplice <int>              penalty for a canonical splice site (0)" << endl
+        << "  --pen-noncansplice <int>           penalty for a non-canonical splice site (12)" << endl
+        // << "  --pen-conflictsplice <int>         penalty for conflicting splice sites (1000000)" << endl
+        << "  --pen-intronlen <func>             penalty for long introns (G,-8,1)" << endl
+        << "  --min-intronlen <int>              minimum intron length (20)" << endl
+        << "  --max-intronlen <int>              maximum intron length (500000)" << endl
+        << "  --known-splicesite-infile <path>   provide a list of known splice sites" << endl
+        << "  --novel-splicesite-outfile <path>  report a list of splice sites" << endl
+        << "  --novel-splicesite-infile <path>   provide a list of novel splice sites" << endl
+        << "  --no-temp-splicesite               disable the use of splice sites found" << endl
+        << "  --no-spliced-alignment             disable spliced alignment" << endl
+        << "  --rna-strandness <string>          Specify strand-specific information (unstranded)" << endl
+        << endl
+		<< " Scoring:" << endl
 		<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
 		<< "  --mp <int>         max penalty for mismatch; lower qual = lower penalty (6)" << endl
 		<< "  --np <int>         penalty for non-A/C/G/Ts in read/ref (1)" << endl
@@ -802,7 +881,7 @@ static void printUsage(ostream& out) {
 	if(wrapper.empty()) {
 		cerr << endl
 		     << "*** Warning ***" << endl
-			 << "'bowtie2-align' was run directly.  It is recommended that you run the wrapper script 'bowtie2' instead." << endl
+			 << "'hisat-align' was run directly.  It is recommended that you run the wrapper script 'hisat' instead." << endl
 			 << endl;
 	}
 }
@@ -1332,9 +1411,10 @@ static void parseOption(int next_option, const char *arg) {
 			if(args.size() == 3) {
 				polstr += (args[0] + "," + args[1] + "," + args[2]);
 			} else {
-				polstr += ("L," + args[0]);
-				if(args.size() > 1) {
-					polstr += ("," + (args[1]));
+                if(args.size() == 1) {
+                    polstr += ("C," + args[0]);
+                } else {
+					polstr += (args[0] + "," + args[1]);
 				}
 			}
 			break;
@@ -1391,6 +1471,74 @@ static void parseOption(int next_option, const char *arg) {
 			break;
 		}
 		case ARG_VERSION: showVersion = 1; break;
+        case ARG_NO_TEMPSPLICESITE: useTempSpliceSite = false; break;
+        case ARG_PEN_CANSPLICE: {
+            penCanSplice = parseInt(0, "--pen-cansplice arg must be at least 0", arg);
+            break;
+        }
+        case ARG_PEN_NONCANSPLICE: {
+            penNoncanSplice = parseInt(0, "--pen-noncansplice arg must be at least 0", arg);
+            break;
+        }
+        case ARG_PEN_CONFLICTSPLICE: {
+            penConflictSplice = parseInt(0, "--pen-conflictsplice arg must be at least 0", arg);
+            break;
+        }
+        case ARG_PEN_INTRONLEN: {
+			polstr += ";";
+			EList<string> args;
+			tokenize(arg, ",", args);
+			if(args.size() > 3 && args.size() == 0) {
+				cerr << "Error: expected 3 or fewer comma-separated "
+                << "arguments to --n-ceil option, got "
+                << args.size() << endl;
+				throw 1;
+			}
+			polstr += ("INTRONLEN=" + args[0]);
+			if(args.size() > 1) {
+				polstr += ("," + args[1]);
+			}
+			if(args.size() > 2) {
+				polstr += ("," + args[2]);
+			}
+			break;
+		}
+        case ARG_MIN_INTRONLEN: {
+            minIntronLen = parseInt(20, "--min-intronlen arg must be at least 20", arg);
+            break;
+        }
+        case ARG_MAX_INTRONLEN: {
+            maxIntronLen = parseInt(20, "--max-intronlen arg must be at least 20", arg);
+            break;
+        }
+        case ARG_KNOWN_SPLICESITE_INFILE: knownSpliceSiteInfile = arg; break;
+        case ARG_NOVEL_SPLICESITE_INFILE: novelSpliceSiteInfile = arg; break;
+        case ARG_NOVEL_SPLICESITE_OUTFILE: novelSpliceSiteOutfile = arg; break;
+        case ARG_SECONDARY: secondary = true; break;
+        case ARG_NO_SPLICED_ALIGNMENT: no_spliced_alignment = true; break;
+        case ARG_RNA_STRANDNESS: {
+            string strandness = arg;
+            if(strandness == "F")       rna_strandness = RNA_STRANDNESS_F;
+            else if(strandness == "R")  rna_strandness = RNA_STRANDNESS_R;
+            else if(strandness == "FR") rna_strandness = RNA_STRANDNESS_FR;
+            else if(strandness == "RF") rna_strandness = RNA_STRANDNESS_RF;
+            else {
+                // daehwan - throw exception with details
+                cerr << "Error: should be one of F, R, FR, or RF " << endl;
+				throw 1;
+            }
+            break;
+        }
+        case ARG_SPLICESITE_DB_ONLY: {
+            splicesite_db_only = true;
+            break;
+        }
+#ifdef USE_SRA
+        case ARG_SRA_ACC: {
+            tokenize(arg, ",", sra_accs); format = SRA_FASTA;
+            break;
+        }
+#endif
 		default:
 			printUsage(cerr);
 			throw 1;
@@ -1405,7 +1553,7 @@ static void parseOptions(int argc, const char **argv) {
 	int next_option;
 	saw_M = false;
 	saw_a = false;
-	saw_k = false;
+	saw_k = true;
 	presetList.clear();
 	if(startVerbose) { cerr << "Parsing options: "; logTime(cerr, true); }
 	while(true) {
@@ -1471,7 +1619,8 @@ static void parseOptions(int argc, const char **argv) {
 		multiseedLen,
 		msIval,
 		failStreakTmp,
-		nSeedRounds);
+		nSeedRounds,
+        &penIntronLen);
 	if(failStreakTmp > 0) {
 		maxEeStreak = failStreakTmp;
 		maxUgStreak = failStreakTmp;
@@ -1559,7 +1708,7 @@ static void parseOptions(int argc, const char **argv) {
 #ifndef NDEBUG
 	if(!gQuiet) {
 		cerr << "Warning: Running in debug mode.  Please use debug mode only "
-			 << "for diagnosing errors, and not for typical use of Bowtie 2."
+			 << "for diagnosing errors, and not for typical use of HISAT2."
 			 << endl;
 	}
 #endif
@@ -1579,16 +1728,17 @@ createPatsrcFactory(PairedPatternSource& _patsrc, int tid) {
 
 #define PTHREAD_ATTRS (PTHREAD_CREATE_JOINABLE | PTHREAD_CREATE_DETACHED)
 
-typedef uint32_t index_t;
-
-static PairedPatternSource*     multiseed_patsrc;
-static Ebwt<index_t>*           multiseed_ebwtFw;
-static Ebwt<index_t>*           multiseed_ebwtBw;
-static Scoring*                 multiseed_sc;
-static BitPairReference*        multiseed_refs;
-static AlignmentCache<index_t>* multiseed_ca; // seed cache
-static AlnSink<index_t>*        multiseed_msink;
-static OutFileBuf*              multiseed_metricsOfb;
+typedef TIndexOffU index_t;
+typedef uint16_t local_index_t;
+static PairedPatternSource*              multiseed_patsrc;
+static HierGFM<index_t>*                 multiseed_gfmFw;
+static HierGFM<index_t>*                 multiseed_gfmBw;
+static Scoring*                          multiseed_sc;
+static BitPairReference*                 multiseed_refs;
+static AlignmentCache<index_t>*          multiseed_ca; // seed cache
+static AlnSink<index_t>*                 multiseed_msink;
+static OutFileBuf*                       multiseed_metricsOfb;
+static SpliceSiteDB*                     ssdb;
 
 /**
  * Metrics for measuring the work done by the outer read alignment
@@ -1678,6 +1828,8 @@ struct PerfMetrics {
 		nbtfiltst_u = 0;
 		nbtfiltsc_u = 0;
 		nbtfiltdo_u = 0;
+        
+        him.reset();
 	}
 
 	/**
@@ -1697,6 +1849,7 @@ struct PerfMetrics {
 		uint64_t nbtfiltst_,
 		uint64_t nbtfiltsc_,
 		uint64_t nbtfiltdo_,
+        const HIMetrics *hi,
 		bool getLock)
 	{
 		ThreadSafe ts(&mutex_m, getLock);
@@ -1733,6 +1886,9 @@ struct PerfMetrics {
 		nbtfiltst_u += nbtfiltst_;
 		nbtfiltsc_u += nbtfiltsc_;
 		nbtfiltdo_u += nbtfiltdo_;
+        if(hi != NULL) {
+            him.merge(*hi, false);
+        }
 	}
 
 	/**
@@ -1894,7 +2050,16 @@ struct PerfMetrics {
 				/* 127 */ "DPMemPeak"      "\t" // DP_CAT
 				/* 128 */ "MiscMemPeak"    "\t" // MISC_CAT
 				/* 129 */ "DebugMemPeak"   "\t" // DEBUG_CAT
-				
+            
+                /* 130 */ "LocalSearch"         "\t"
+                /* 131 */ "AnchorSearch"        "\t"
+                /* 132 */ "LocalIndexSearch"    "\t"
+                /* 133 */ "LocalExtSearch"      "\t"
+                /* 134 */ "LocalSearchRecur"    "\t"
+                /* 135 */ "GlobalGenomeCoords"  "\t"
+                /* 136 */ "LocalGenomeCoords"   "\t"
+            
+            
 				"\n";
 			
 			if(name != NULL) {
@@ -2459,7 +2624,36 @@ struct PerfMetrics {
 		if(o != NULL) { o->writeChars(buf); o->write('\t'); }
 		// 129. Debug memory peak
 		itoa10<size_t>(gMemTally.peak(DEBUG_CAT) >> 20, buf);
-		if(metricsStderr) stderrSs << buf;
+        if(metricsStderr) stderrSs << buf << '\t';
+		if(o != NULL) { o->writeChars(buf); o->write('\t'); }
+        
+        // 130
+        itoa10<size_t>(him.localatts, buf);
+		if(metricsStderr) stderrSs << buf << '\t';
+		if(o != NULL) { o->writeChars(buf); o->write('\t'); }
+        // 131
+        itoa10<size_t>(him.anchoratts, buf);
+		if(metricsStderr) stderrSs << buf << '\t';
+		if(o != NULL) { o->writeChars(buf); o->write('\t'); }
+        // 132
+        itoa10<size_t>(him.localindexatts, buf);
+		if(metricsStderr) stderrSs << buf << '\t';
+		if(o != NULL) { o->writeChars(buf); o->write('\t'); }
+        // 133
+        itoa10<size_t>(him.localextatts, buf);
+        if(metricsStderr) stderrSs << buf << '\t';
+		if(o != NULL) { o->writeChars(buf); o->write('\t'); }
+        // 134
+        itoa10<size_t>(him.localsearchrecur, buf);
+        if(metricsStderr) stderrSs << buf << '\t';
+		if(o != NULL) { o->writeChars(buf); o->write('\t'); }
+        // 135
+        itoa10<size_t>(him.globalgenomecoords, buf);
+        if(metricsStderr) stderrSs << buf << '\t';
+		if(o != NULL) { o->writeChars(buf); o->write('\t'); }
+        // 136
+        itoa10<size_t>(him.localgenomecoords, buf);
+        if(metricsStderr) stderrSs << buf;
 		if(o != NULL) { o->writeChars(buf); }
 
 		if(o != NULL) { o->write('\n'); }
@@ -2525,6 +2719,9 @@ struct PerfMetrics {
 	uint64_t          nbtfiltst_u;
 	uint64_t          nbtfiltsc_u;
 	uint64_t          nbtfiltdo_u;
+    
+    //
+    HIMetrics         him;
 
 	MUTEX_T           mutex_m;  // lock for when one ob
 	bool              first; // yet to print first line?
@@ -2612,75 +2809,6 @@ static inline void printEEScoreMsg(
 	cerr << os.str().c_str();
 }
 
-/**
- * Initialize the minsc and maxpen arrays given information about the reads,
- * the alignment policy and the scoring scheme.
- */
-static void setupMinScores(
-	const PatternSourcePerThread& ps,
-	bool paired,
-	bool localAlign,
-	const Scoring& sc,
-	const size_t *rdlens,
-	TAlScore *minsc,
-	TAlScore *maxpen)
-{
-	if(bwaSwLike) {
-		// From BWA-SW manual: "Given an l-long query, the
-		// threshold for a hit to be retained is
-		// a*max{T,c*log(l)}."  We try to recreate that here.
-		float a = (float)sc.match(30);
-		float T = bwaSwLikeT, c = bwaSwLikeC;
-		minsc[0] = (TAlScore)max<float>(a*T, a*c*log(rdlens[0]));
-		if(paired) {
-			minsc[1] = (TAlScore)max<float>(a*T, a*c*log(rdlens[1]));
-		}
-	} else {
-		minsc[0] = scoreMin.f<TAlScore>(rdlens[0]);
-		if(paired) minsc[1] = scoreMin.f<TAlScore>(rdlens[1]);
-		if(localAlign) {
-			if(minsc[0] < 0) {
-				if(!gQuiet) printLocalScoreMsg(ps, paired, true);
-				minsc[0] = 0;
-			}
-			if(paired && minsc[1] < 0) {
-				if(!gQuiet) printLocalScoreMsg(ps, paired, false);
-				minsc[1] = 0;
-			}
-		} else {
-			if(minsc[0] > 0) {
-				if(!gQuiet) printEEScoreMsg(ps, paired, true);
-				minsc[0] = 0;
-			}
-			if(paired && minsc[1] > 0) {
-				if(!gQuiet) printEEScoreMsg(ps, paired, false);
-				minsc[1] = 0;
-			}
-		}
-	}
-	// Given minsc, calculate maxpen
-	if(localAlign) {
-		TAlScore perfect0 = sc.perfectScore(rdlens[0]);
-		assert_geq(perfect0, minsc[0]);
-		maxpen[0] = perfect0 - minsc[0];
-		if(paired) {
-			TAlScore perfect1 = sc.perfectScore(rdlens[1]);
-			assert_geq(perfect1, minsc[1]);
-			maxpen[1] = perfect1 - minsc[1];
-		} else {
-			maxpen[1] = std::numeric_limits<TAlScore>::min();
-		}
-	} else {
-		assert_leq(minsc[0], 0);
-		maxpen[0] = -minsc[0];
-		if(paired) {
-			assert_leq(minsc[1], 0);
-			maxpen[1] = -minsc[1];
-		} else {
-			maxpen[1] = std::numeric_limits<TAlScore>::min();
-		}
-	}
-}
 
 #define MERGE_METRICS(met, sync) { \
 	msink.mergeMetrics(rpm); \
@@ -2698,6 +2826,7 @@ static void setupMinScores(
 		nbtfiltst, \
 		nbtfiltsc, \
 		nbtfiltdo, \
+        &him, \
 		sync); \
 	olm.reset(); \
 	sdm.reset(); \
@@ -2709,6 +2838,7 @@ static void setupMinScores(
 	sseU8MateMet.reset(); \
 	sseI16ExtendMet.reset(); \
 	sseI16MateMet.reset(); \
+    him.reset(); \
 }
 
 #define MERGE_SW(x) { \
@@ -2736,21 +2866,21 @@ static void setupMinScores(
  *     we can skip all stages, report the result immediately and move to next
  *     read/pair
  *   + If not identical, continue
- * - 
+ * -
  */
-static void multiseedSearchWorker(void *vp) {
+static void multiseedSearchWorker_hisat(void *vp) {
 	int tid = *((int*)vp);
-	assert(multiseed_ebwtFw != NULL);
-	assert(multiseedMms == 0 || multiseed_ebwtBw != NULL);
-	PairedPatternSource&     patsrc   = *multiseed_patsrc;
-	const Ebwt<index_t>&     ebwtFw   = *multiseed_ebwtFw;
-	const Ebwt<index_t>&     ebwtBw   = *multiseed_ebwtBw;
-	const Scoring&           sc       = *multiseed_sc;
-	const BitPairReference&  ref      = *multiseed_refs;
-	AlignmentCache<index_t>& scShared = *multiseed_ca;
-	AlnSink<index_t>&        msink    = *multiseed_msink;
-	OutFileBuf*              metricsOfb = multiseed_metricsOfb;
-
+	assert(multiseed_gfmFw != NULL);
+	assert(multiseedMms == 0 || multiseed_gfmBw != NULL);
+	PairedPatternSource&             patsrc   = *multiseed_patsrc;
+	const HierGFM<index_t>&          gfmFw    = *multiseed_gfmFw;
+	const HierGFM<index_t>&          gfmBw    = *multiseed_gfmBw;
+	const Scoring&                   sc       = *multiseed_sc;
+	const BitPairReference&          ref      = *multiseed_refs;
+	AlignmentCache<index_t>&         scShared = *multiseed_ca;
+	AlnSink<index_t>&                msink    = *multiseed_msink;
+	OutFileBuf*                      metricsOfb = multiseed_metricsOfb;
+    
 	// Sinks: these are so that we can print tables encoding counts for
 	// events of interest on a per-read, per-seed, per-join, or per-SW
 	// level.  These in turn can be used to diagnose performance
@@ -2770,33 +2900,39 @@ static void multiseedSearchWorker(void *vp) {
 	
 	// Interfaces for alignment and seed caches
 	AlignmentCacheIface<index_t> ca(
-		&scCurrent,
-		scLocal.get(),
-		msNoCache ? NULL : &scShared);
+                                    &scCurrent,
+                                    scLocal.get(),
+                                    msNoCache ? NULL : &scShared);
 	
 	// Instantiate an object for holding reporting-related parameters.
-	ReportingParams rp(
-		(allHits ? std::numeric_limits<THitInt>::max() : khits), // -k
-		mhits,             // -m/-M
-		0,                 // penalty gap (not used now)
-		msample,           // true -> -M was specified, otherwise assume -m
-		gReportDiscordant, // report discordang paired-end alignments?
-		gReportMixed);     // report unpaired alignments for paired reads?
-
+    ReportingParams rp(
+                       (allHits ? std::numeric_limits<THitInt>::max() : khits), // -k
+                       mhits,             // -m/-M
+                       0,                 // penalty gap (not used now)
+                       msample,           // true -> -M was specified, otherwise assume -m
+                       gReportDiscordant, // report discordang paired-end alignments?
+                       gReportMixed);     // report unpaired alignments for paired reads?
+    
 	// Instantiate a mapping quality calculator
 	auto_ptr<Mapq> bmapq(new_mapq(mapqv, scoreMin, sc));
 	
 	// Make a per-thread wrapper for the global MHitSink object.
 	AlnSinkWrap<index_t> msinkwrap(
-		msink,         // global sink
-		rp,            // reporting parameters
-		*bmapq.get(),  // MAPQ calculator
-		(size_t)tid);  // thread id
-
-	SeedAligner<index_t> al;
-	SwDriver<index_t> sd(exactCacheCurrentMB * 1024 * 1024);
-	SwAligner sw, osw;
-	SeedResults<index_t> shs[2];
+                                   msink,         // global sink
+                                   rp,            // reporting parameters
+                                   *bmapq.get(),  // MAPQ calculator
+                                   (size_t)tid,   // thread id
+                                   secondary);    // secondary alignments
+    
+    SplicedAligner<index_t, local_index_t> splicedAligner(
+                                                          gfmFw,
+                                                          minIntronLen,
+                                                          maxIntronLen,
+                                                          secondary,
+                                                          localAlign,
+                                                          thread_rids_mindist,
+                                                          no_spliced_alignment);
+	SwAligner sw;
 	OuterLoopMetrics olm;
 	SeedSearchMetrics sdm;
 	WalkMetrics wlm;
@@ -2807,12 +2943,14 @@ static void multiseedSearchWorker(void *vp) {
 	SSEMetrics sseU8MateMet;
 	SSEMetrics sseI16ExtendMet;
 	SSEMetrics sseI16MateMet;
+   	DescentMetrics descm;
 	uint64_t nbtfiltst = 0; // TODO: find a new home for these
 	uint64_t nbtfiltsc = 0; // TODO: find a new home for these
 	uint64_t nbtfiltdo = 0; // TODO: find a new home for these
-
+    HIMetrics him;
+    
 	ASSERT_ONLY(BTDnaString tmp);
-
+    
 	int pepolFlag;
 	if(gMate1fw && gMate2fw) {
 		pepolFlag = PE_POLICY_FF;
@@ -2826,26 +2964,24 @@ static void multiseedSearchWorker(void *vp) {
 	assert_geq(gMaxInsert, gMinInsert);
 	assert_geq(gMinInsert, 0);
 	PairedEndPolicy pepol(
-		pepolFlag,
-		gMaxInsert,
-		gMinInsert,
-		localAlign,
-		gFlippedMatesOK,
-		gDovetailMatesOK,
-		gContainMatesOK,
-		gOlapMatesOK,
-		gExpandToFrag);
-	
-	PerfMetrics metricsPt; // per-thread metrics object; for read-level metrics
+                          pepolFlag,
+                          gMaxInsert,
+                          gMinInsert,
+                          localAlign,
+                          gFlippedMatesOK,
+                          gDovetailMatesOK,
+                          gContainMatesOK,
+                          gOlapMatesOK,
+                          gExpandToFrag);
+    
+  	PerfMetrics metricsPt; // per-thread metrics object; for read-level metrics
 	BTString nametmp;
-	EList<Seed> seeds1, seeds2;
-	EList<Seed> *seeds[2] = { &seeds1, &seeds2 };
 	
 	PerReadMetrics prm;
-
+    
 	// Used by thread with threadid == 1 to measure time elapsed
 	time_t iTime = time(0);
-
+    
 	// Keep track of whether last search was exhaustive for mates 1 and 2
 	bool exhaustive[2] = { false, false };
 	// Keep track of whether mates 1/2 were filtered out last time through
@@ -2860,7 +2996,7 @@ static void multiseedSearchWorker(void *vp) {
 	bool lenfilt[2] = { true, true };
 	// Keep track of whether mates 1/2 were filtered out by upstream qc
 	bool qcfilt[2]  = { true, true };
-
+    
 	rndArb.init((uint32_t)time(0));
 	int mergei = 0;
 	int mergeival = 16;
@@ -2873,6 +3009,31 @@ static void multiseedSearchWorker(void *vp) {
 			continue;
 		}
 		TReadId rdid = ps->rdid();
+        
+        if(nthreads > 1 && useTempSpliceSite) {
+            while(true) {
+                uint64_t min_rdid = 0;
+                {
+                    // ThreadSafe t(&thread_rids_mutex, nthreads > 1);
+                    assert_gt(thread_rids.size(), 0);
+                    min_rdid = thread_rids[0];
+                    for(size_t i = 1; i < thread_rids.size(); i++) {
+                        if(thread_rids[i] < min_rdid) {
+                            min_rdid = thread_rids[i];
+                        }
+                    }
+                }
+                
+                if(min_rdid + thread_rids_mindist < rdid) {
+#if defined(_TTHREAD_WIN32_)
+                    Sleep(0);
+#elif defined(_TTHREAD_POSIX_)
+                    sched_yield();
+#endif
+                } else break;
+            }
+        }
+        
 		bool sample = true;
 		if(arbitraryRandom) {
 			ps->bufa().seed = rndArb.nextU32();
@@ -2924,15 +3085,15 @@ static void multiseedSearchWorker(void *vp) {
 				const size_t rdlen2 = pair ? ps->bufb().length() : 0;
 				olm.bases += (rdlen1 + rdlen2);
 				msinkwrap.nextRead(
-					&ps->bufa(),
-					pair ? &ps->bufb() : NULL,
-					rdid,
-					sc.qualitiesMatter());
+                                   &ps->bufa(),
+                                   pair ? &ps->bufb() : NULL,
+                                   rdid,
+                                   sc.qualitiesMatter());
 				assert(msinkwrap.inited());
 				size_t rdlens[2] = { rdlen1, rdlen2 };
-				size_t rdrows[2] = { rdlen1, rdlen2 };
 				// Calculate the minimum valid score threshold for the read
-				TAlScore minsc[2];
+				TAlScore minsc[2], maxpen[2];
+				maxpen[0] = maxpen[1] = 0;
 				minsc[0] = minsc[1] = std::numeric_limits<TAlScore>::max();
 				if(bwaSwLike) {
 					// From BWA-SW manual: "Given an l-long query, the
@@ -2967,15 +3128,16 @@ static void multiseedSearchWorker(void *vp) {
 						}
 					}
 				}
+                
 				// N filter; does the read have too many Ns?
 				size_t readns[2] = {0, 0};
 				sc.nFilterPair(
-					&ps->bufa().patFw,
-					pair ? &ps->bufb().patFw : NULL,
-					readns[0],
-					readns[1],
-					nfilt[0],
-					nfilt[1]);
+                               &ps->bufa().patFw,
+                               pair ? &ps->bufb().patFw : NULL,
+                               readns[0],
+                               readns[1],
+                               nfilt[0],
+                               nfilt[1]);
 				// Score filter; does the read enough character to rise above
 				// the score threshold?
 				scfilt[0] = sc.scoreFilter(minsc[0], rdlens[0]);
@@ -3008,9 +3170,8 @@ static void multiseedSearchWorker(void *vp) {
 				Read* rds[2] = { &ps->bufa(), &ps->bufb() };
 				// For each mate...
 				assert(msinkwrap.empty());
-				sd.nextRead(paired, rdrows[0], rdrows[1]); // SwDriver
-				size_t minedfw[2] = { 0, 0 };
-				size_t minedrc[2] = { 0, 0 };
+				//size_t minedfw[2] = { 0, 0 };
+				//size_t minedrc[2] = { 0, 0 };
 				// Calcualte nofw / no rc
 				bool nofw[2] = { false, false };
 				bool norc[2] = { false, false };
@@ -3027,7 +3188,7 @@ static void multiseedSearchWorker(void *vp) {
 					nceil[1] = min(nceil[1], (int)rdlens[1]);
 				}
 				exhaustive[0] = exhaustive[1] = false;
-				size_t matemap[2] = { 0, 1 };
+				//size_t matemap[2] = { 0, 1 };
 				bool pairPostFilt = filt[0] && filt[1];
 				if(pairPostFilt) {
 					rnd.init(ps->bufa().seed ^ ps->bufb().seed);
@@ -3086,661 +3247,103 @@ static void multiseedSearchWorker(void *vp) {
 						olm.freads++;               // reads filtered out
 						olm.fbases += rdlens[mate]; // bases filtered out
 					} else {
-						shs[mate].clear();
-						shs[mate].nextRead(mate == 0 ? ps->bufa() : ps->bufb());
-						assert(shs[mate].empty());
+						//shs[mate].clear();
+						//shs[mate].nextRead(mate == 0 ? ps->bufa() : ps->bufb());
+						//assert(shs[mate].empty());
 						olm.ureads++;               // reads passing filter
 						olm.ubases += rdlens[mate]; // bases passing filter
 					}
 				}
-				size_t eePeEeltLimit = std::numeric_limits<size_t>::max();
+				//size_t eePeEeltLimit = std::numeric_limits<size_t>::max();
 				// Whether we're done with mate1 / mate2
-				bool done[2] = { !filt[0], !filt[1] };
-				size_t nelt[2] = {0, 0};
-									
-					// Find end-to-end exact alignments for each read
-					if(doExactUpFront) {
-						for(size_t matei = 0; matei < (pair ? 2:1); matei++) {
-							size_t mate = matemap[matei];
-							if(!filt[mate] || done[mate] || msinkwrap.state().doneWithMate(mate == 0)) {
-								continue;
-							}
-							swmSeed.exatts++;
-							nelt[mate] = al.exactSweep(
-								ebwtFw,        // index
-								*rds[mate],    // read
-								sc,            // scoring scheme
-								nofw[mate],    // nofw?
-								norc[mate],    // norc?
-								2,             // max # edits we care about
-								minedfw[mate], // minimum # edits for fw mate
-								minedrc[mate], // minimum # edits for rc mate
-								true,          // report 0mm hits
-								shs[mate],     // put end-to-end results here
-								sdm);          // metrics
-							size_t bestmin = min(minedfw[mate], minedrc[mate]);
-							if(bestmin == 0) {
-								sdm.bestmin0++;
-							} else if(bestmin == 1) {
-								sdm.bestmin1++;
-							} else {
-								assert_eq(2, bestmin);
-								sdm.bestmin2++;
-							}
-						}
-						matemap[0] = 0; matemap[1] = 1;
-						if(nelt[0] > 0 && nelt[1] > 0 && nelt[0] > nelt[1]) {
-							// Do the mate with fewer exact hits first
-							// TODO: Consider mates & orientations separately?
-							matemap[0] = 1; matemap[1] = 0;
-						}
-						for(size_t matei = 0; matei < (seedSumm ? 0:2); matei++) {
-							size_t mate = matemap[matei];
-							if(nelt[mate] == 0 || nelt[mate] > eePeEeltLimit) {
-								shs[mate].clearExactE2eHits();
-								continue;
-							}
-							if(msinkwrap.state().doneWithMate(mate == 0)) {
-								shs[mate].clearExactE2eHits();
-								done[mate] = true;
-								continue;
-							}
-							assert(filt[mate]);
-							assert(matei == 0 || pair);
-							assert(!msinkwrap.maxed());
-							assert(msinkwrap.repOk());
-							int ret = 0;
-							if(pair) {
-								// Paired-end dynamic programming driver
-								ret = sd.extendSeedsPaired(
-									*rds[mate],     // mate to align as anchor
-									*rds[mate ^ 1], // mate to align as opp.
-									mate == 0,      // anchor is mate 1?
-									!filt[mate ^ 1],// opposite mate filtered out?
-									shs[mate],      // seed hits for anchor
-									ebwtFw,         // bowtie index
-									&ebwtBw,        // rev bowtie index
-									ref,            // packed reference strings
-									sw,             // dyn prog aligner, anchor
-									osw,            // dyn prog aligner, opposite
-									sc,             // scoring scheme
-									pepol,          // paired-end policy
-									-1,             // # mms allowed in a seed
-									0,              // length of a seed
-									0,              // interval between seeds
-									minsc[mate],    // min score for anchor
-									minsc[mate^1],  // min score for opp.
-									nceil[mate],    // N ceil for anchor
-									nceil[mate^1],  // N ceil for opp.
-									nofw[mate],     // don't align forward read
-									norc[mate],     // don't align revcomp read
-									maxhalf,        // max width on one DP side
-									doUngapped,     // do ungapped alignment
-									mxIter[mate],   // max extend loop iters
-									mxUg[mate],     // max # ungapped extends
-									mxDp[mate],     // max # DPs
-									streak[mate],   // stop after streak of this many end-to-end fails
-									streak[mate],   // stop after streak of this many ungap fails
-									streak[mate],   // stop after streak of this many dp fails
-									mtStreak[mate], // max mate fails per seed range
-									doExtend,       // extend seed hits
-									enable8,        // use 8-bit SSE where possible
-									cminlen,        // checkpoint if read is longer
-									cpow2,          // checkpointer interval, log2
-									doTri,          // triangular mini-fills?
-									tighten,        // -M score tightening mode
-									ca,             // seed alignment cache
-									rnd,            // pseudo-random source
-									wlm,            // group walk left metrics
-									swmSeed,        // DP metrics, seed extend
-									swmMate,        // DP metrics, mate finding
-									prm,            // per-read metrics
-									&msinkwrap,     // for organizing hits
-									true,           // seek mate immediately
-									true,           // report hits once found
-									gReportDiscordant,// look for discordant alns?
-									gReportMixed,   // look for unpaired alns?
-									exhaustive[mate]);
-								// Might be done, but just with this mate
-							} else {
-								// Unpaired dynamic programming driver
-								ret = sd.extendSeeds(
-									*rds[mate],     // read
-									mate == 0,      // mate #1?
-									shs[mate],      // seed hits
-									ebwtFw,         // bowtie index
-									&ebwtBw,        // rev bowtie index
-									ref,            // packed reference strings
-									sw,             // dynamic prog aligner
-									sc,             // scoring scheme
-									-1,             // # mms allowed in a seed
-									0,              // length of a seed
-									0,              // interval between seeds
-									minsc[mate],    // minimum score for valid
-									nceil[mate],    // N ceil for anchor
-									maxhalf,        // max width on one DP side
-									doUngapped,     // do ungapped alignment
-									mxIter[mate],   // max extend loop iters
-									mxUg[mate],     // max # ungapped extends
-									mxDp[mate],     // max # DPs
-									streak[mate],   // stop after streak of this many end-to-end fails
-									streak[mate],   // stop after streak of this many ungap fails
-									doExtend,       // extend seed hits
-									enable8,        // use 8-bit SSE where possible
-									cminlen,        // checkpoint if read is longer
-									cpow2,          // checkpointer interval, log2
-									doTri,          // triangular mini-fills
-									tighten,        // -M score tightening mode
-									ca,             // seed alignment cache
-									rnd,            // pseudo-random source
-									wlm,            // group walk left metrics
-									swmSeed,        // DP metrics, seed extend
-									prm,            // per-read metrics
-									&msinkwrap,     // for organizing hits
-									true,           // report hits once found
-									exhaustive[mate]);
-							}
-							assert_gt(ret, 0);
-							MERGE_SW(sw);
-							MERGE_SW(osw);
-							// Clear out the exact hits so that we don't try to
-							// extend them again later!
-							shs[mate].clearExactE2eHits();
-							if(ret == EXTEND_EXHAUSTED_CANDIDATES) {
-								// Not done yet
-							} else if(ret == EXTEND_POLICY_FULFILLED) {
-								// Policy is satisfied for this mate at least
-								if(msinkwrap.state().doneWithMate(mate == 0)) {
-									done[mate] = true;
-								}
-								if(msinkwrap.state().doneWithMate(mate == 1)) {
-									done[mate^1] = true;
-								}
-							} else if(ret == EXTEND_PERFECT_SCORE) {
-								// We exhausted this mode at least
-								done[mate] = true;
-							} else if(ret == EXTEND_EXCEEDED_HARD_LIMIT) {
-								// We exceeded a per-read limit
-								done[mate] = true;
-							} else if(ret == EXTEND_EXCEEDED_SOFT_LIMIT) {
-								// Not done yet
-							} else {
-								//
-								cerr << "Bad return value: " << ret << endl;
-								throw 1;
-							}
-							if(!done[mate]) {
-								TAlScore perfectScore = sc.perfectScore(rdlens[mate]);
-								if(!done[mate] && minsc[mate] == perfectScore) {
-									done[mate] = true;
-								}
-							}
-						}
-					}
-					// 1-mismatch
-					if(do1mmUpFront && !seedSumm) {
-						for(size_t matei = 0; matei < (pair ? 2:1); matei++) {
-							size_t mate = matemap[matei];
-							if(!filt[mate] || done[mate] || nelt[mate] > eePeEeltLimit) {
-								// Done with this mate
-								shs[mate].clear1mmE2eHits();
-								nelt[mate] = 0;
-								continue;
-							}
-							nelt[mate] = 0;
-							assert(!msinkwrap.maxed());
-							assert(msinkwrap.repOk());
-							//rnd.init(ROTL(rds[mate]->seed, 10));
-							assert(shs[mate].empty());
-							assert(shs[mate].repOk(&ca.current()));
-							bool yfw = minedfw[mate] <= 1 && !nofw[mate];
-							bool yrc = minedrc[mate] <= 1 && !norc[mate];
-							if(yfw || yrc) {
-								// Clear out the exact hits
-								swmSeed.mm1atts++;
-								al.oneMmSearch(
-									&ebwtFw,        // BWT index
-									&ebwtBw,        // BWT' index
-									*rds[mate],     // read
-									sc,             // scoring scheme
-									minsc[mate],    // minimum score
-									!yfw,           // don't align forward read
-									!yrc,           // don't align revcomp read
-									localAlign,     // must be legal local alns?
-									false,          // do exact match
-									true,           // do 1mm
-									shs[mate],      // seed hits (hits installed here)
-									sdm);           // metrics
-								nelt[mate] = shs[mate].num1mmE2eHits();
-							}
-						}
-						// Possibly reorder the mates
-						matemap[0] = 0; matemap[1] = 1;
-						if(nelt[0] > 0 && nelt[1] > 0 && nelt[0] > nelt[1]) {
-							// Do the mate with fewer exact hits first
-							// TODO: Consider mates & orientations separately?
-							matemap[0] = 1; matemap[1] = 0;
-						}
-						for(size_t matei = 0; matei < (seedSumm ? 0:2); matei++) {
-							size_t mate = matemap[matei];
-							if(nelt[mate] == 0 || nelt[mate] > eePeEeltLimit) {
-								continue;
-							}
-							if(msinkwrap.state().doneWithMate(mate == 0)) {
-								done[mate] = true;
-								continue;
-							}
-							int ret = 0;
-							if(pair) {
-								// Paired-end dynamic programming driver
-								ret = sd.extendSeedsPaired(
-									*rds[mate],     // mate to align as anchor
-									*rds[mate ^ 1], // mate to align as opp.
-									mate == 0,      // anchor is mate 1?
-									!filt[mate ^ 1],// opposite mate filtered out?
-									shs[mate],      // seed hits for anchor
-									ebwtFw,         // bowtie index
-									&ebwtBw,        // rev bowtie index
-									ref,            // packed reference strings
-									sw,             // dyn prog aligner, anchor
-									osw,            // dyn prog aligner, opposite
-									sc,             // scoring scheme
-									pepol,          // paired-end policy
-									-1,             // # mms allowed in a seed
-									0,              // length of a seed
-									0,              // interval between seeds
-									minsc[mate],    // min score for anchor
-									minsc[mate^1],  // min score for opp.
-									nceil[mate],    // N ceil for anchor
-									nceil[mate^1],  // N ceil for opp.
-									nofw[mate],     // don't align forward read
-									norc[mate],     // don't align revcomp read
-									maxhalf,        // max width on one DP side
-									doUngapped,     // do ungapped alignment
-									mxIter[mate],   // max extend loop iters
-									mxUg[mate],     // max # ungapped extends
-									mxDp[mate],     // max # DPs
-									streak[mate],   // stop after streak of this many end-to-end fails
-									streak[mate],   // stop after streak of this many ungap fails
-									streak[mate],   // stop after streak of this many dp fails
-									mtStreak[mate], // max mate fails per seed range
-									doExtend,       // extend seed hits
-									enable8,        // use 8-bit SSE where possible
-									cminlen,        // checkpoint if read is longer
-									cpow2,          // checkpointer interval, log2
-									doTri,          // triangular mini-fills?
-									tighten,        // -M score tightening mode
-									ca,             // seed alignment cache
-									rnd,            // pseudo-random source
-									wlm,            // group walk left metrics
-									swmSeed,        // DP metrics, seed extend
-									swmMate,        // DP metrics, mate finding
-									prm,            // per-read metrics
-									&msinkwrap,     // for organizing hits
-									true,           // seek mate immediately
-									true,           // report hits once found
-									gReportDiscordant,// look for discordant alns?
-									gReportMixed,   // look for unpaired alns?
-									exhaustive[mate]);
-								// Might be done, but just with this mate
-							} else {
-								// Unpaired dynamic programming driver
-								ret = sd.extendSeeds(
-									*rds[mate],     // read
-									mate == 0,      // mate #1?
-									shs[mate],      // seed hits
-									ebwtFw,         // bowtie index
-									&ebwtBw,        // rev bowtie index
-									ref,            // packed reference strings
-									sw,             // dynamic prog aligner
-									sc,             // scoring scheme
-									-1,             // # mms allowed in a seed
-									0,              // length of a seed
-									0,              // interval between seeds
-									minsc[mate],    // minimum score for valid
-									nceil[mate],    // N ceil for anchor
-									maxhalf,        // max width on one DP side
-									doUngapped,     // do ungapped alignment
-									mxIter[mate],   // max extend loop iters
-									mxUg[mate],     // max # ungapped extends
-									mxDp[mate],     // max # DPs
-									streak[mate],   // stop after streak of this many end-to-end fails
-									streak[mate],   // stop after streak of this many ungap fails
-									doExtend,       // extend seed hits
-									enable8,        // use 8-bit SSE where possible
-									cminlen,        // checkpoint if read is longer
-									cpow2,          // checkpointer interval, log2
-									doTri,          // triangular mini-fills?
-									tighten,        // -M score tightening mode
-									ca,             // seed alignment cache
-									rnd,            // pseudo-random source
-									wlm,            // group walk left metrics
-									swmSeed,        // DP metrics, seed extend
-									prm,            // per-read metrics
-									&msinkwrap,     // for organizing hits
-									true,           // report hits once found
-									exhaustive[mate]);
-							}
-							assert_gt(ret, 0);
-							MERGE_SW(sw);
-							MERGE_SW(osw);
-							// Clear out the 1mm hits so that we don't try to
-							// extend them again later!
-							shs[mate].clear1mmE2eHits();
-							if(ret == EXTEND_EXHAUSTED_CANDIDATES) {
-								// Not done yet
-							} else if(ret == EXTEND_POLICY_FULFILLED) {
-								// Policy is satisfied for this mate at least
-								if(msinkwrap.state().doneWithMate(mate == 0)) {
-									done[mate] = true;
-								}
-								if(msinkwrap.state().doneWithMate(mate == 1)) {
-									done[mate^1] = true;
-								}
-							} else if(ret == EXTEND_PERFECT_SCORE) {
-								// We exhausted this mode at least
-								done[mate] = true;
-							} else if(ret == EXTEND_EXCEEDED_HARD_LIMIT) {
-								// We exceeded a per-read limit
-								done[mate] = true;
-							} else if(ret == EXTEND_EXCEEDED_SOFT_LIMIT) {
-								// Not done yet
-							} else {
-								//
-								cerr << "Bad return value: " << ret << endl;
-								throw 1;
-							}
-							if(!done[mate]) {
-								TAlScore perfectScore = sc.perfectScore(rdlens[mate]);
-								if(!done[mate] && minsc[mate] == perfectScore) {
-									done[mate] = true;
-								}
-							}
-						}
-					}
-					int seedlens[2] = { multiseedLen, multiseedLen };
-					nrounds[0] = min<size_t>(nrounds[0], interval[0]);
-					nrounds[1] = min<size_t>(nrounds[1], interval[1]);
-					Constraint gc = Constraint::penaltyFuncBased(scoreMin);
-					for(size_t roundi = 0; roundi < nSeedRounds; roundi++) {
-						ca.nextRead(); // Clear cache in preparation for new search
-						shs[0].clearSeeds();
-						shs[1].clearSeeds();
-						assert(shs[0].repOk(&ca.current()));
-						assert(shs[1].repOk(&ca.current()));
-						//if(roundi > 0) {
-						//	if(seedlens[0] > 8) seedlens[0]--;
-						//	if(seedlens[1] > 8) seedlens[1]--;
-						//}
-						for(size_t matei = 0; matei < (pair ? 2:1); matei++) {
-							size_t mate = matemap[matei];
-							if(done[mate] || msinkwrap.state().doneWithMate(mate == 0)) {
-								// Done with this mate
-								done[mate] = true;
-								continue;
-							}
-							if(roundi >= nrounds[mate]) {
-								// Not doing this round for this mate
-								continue;
-							}
-							// Figure out the seed offset
-							if(interval[mate] <= (int)roundi) {
-								// Can't do this round, seeds already packed as
-								// tight as possible
-								continue; 
-							}
-							size_t offset = (interval[mate] * roundi) / nrounds[mate];
-							assert(roundi == 0 || offset > 0);
-							assert(!msinkwrap.maxed());
-							assert(msinkwrap.repOk());
-							//rnd.init(ROTL(rds[mate]->seed, 10));
-							assert(shs[mate].repOk(&ca.current()));
-							swmSeed.sdatts++;
-							// Set up seeds
-							seeds[mate]->clear();
-							Seed::mmSeeds(
-								multiseedMms,    // max # mms per seed
-								seedlens[mate],  // length of a multiseed seed
-								*seeds[mate],    // seeds
-								gc);             // global constraint
-							// Check whether the offset would drive the first seed
-							// off the end
-							if(offset > 0 && (*seeds[mate])[0].len + offset > rds[mate]->length()) {
-								continue;
-							}
-							// Instantiate the seeds
-							std::pair<int, int> inst = al.instantiateSeeds(
-								*seeds[mate],   // search seeds
-								offset,         // offset to begin extracting
-								interval[mate], // interval between seeds
-								*rds[mate],     // read to align
-								sc,             // scoring scheme
-								nofw[mate],     // don't align forward read
-								norc[mate],     // don't align revcomp read
-								ca,             // holds some seed hits from previous reads
-								shs[mate],      // holds all the seed hits
-								sdm);           // metrics
-							assert(shs[mate].repOk(&ca.current()));
-							if(inst.first + inst.second == 0) {
-								// No seed hits!  Done with this mate.
-								assert(shs[mate].empty());
-								done[mate] = true;
-								break;
-							}
-							// Align seeds
-							al.searchAllSeeds(
-								*seeds[mate],     // search seeds
-								&ebwtFw,          // BWT index
-								&ebwtBw,          // BWT' index
-								*rds[mate],       // read
-								sc,               // scoring scheme
-								ca,               // alignment cache
-								shs[mate],        // store seed hits here
-								sdm,              // metrics
-								prm);             // per-read metrics
-							assert(shs[mate].repOk(&ca.current()));
-							if(shs[mate].empty()) {
-								// No seed alignments!  Done with this mate.
-								done[mate] = true;
-								break;
-							}
-						}
-						double uniqFactor[2] = { 0.0f, 0.0f };
-						for(size_t i = 0; i < 2; i++) {
-							if(!shs[i].empty()) {
-								swmSeed.sdsucc++;
-								uniqFactor[i] = shs[i].uniquenessFactor();
-							}
-						}
-						// Possibly reorder the mates
-						matemap[0] = 0; matemap[1] = 1;
-						if(!shs[0].empty() && !shs[1].empty() && uniqFactor[1] > uniqFactor[0]) {
-							// Do the mate with fewer exact hits first
-							// TODO: Consider mates & orientations separately?
-							matemap[0] = 1; matemap[1] = 0;
-						}
-						for(size_t matei = 0; matei < (pair ? 2:1); matei++) {
-							size_t mate = matemap[matei];
-							if(done[mate] || msinkwrap.state().doneWithMate(mate == 0)) {
-								// Done with this mate
-								done[mate] = true;
-								continue;
-							}
-							assert(!msinkwrap.maxed());
-							assert(msinkwrap.repOk());
-							//rnd.init(ROTL(rds[mate]->seed, 10));
-							assert(shs[mate].repOk(&ca.current()));
-							if(!seedSumm) {
-								// If there aren't any seed hits...
-								if(shs[mate].empty()) {
-									continue; // on to the next mate
-								}
-								// Sort seed hits into ranks
-								shs[mate].rankSeedHits(rnd);
-								int ret = 0;
-								if(pair) {
-									// Paired-end dynamic programming driver
-									ret = sd.extendSeedsPaired(
-										*rds[mate],     // mate to align as anchor
-										*rds[mate ^ 1], // mate to align as opp.
-										mate == 0,      // anchor is mate 1?
-										!filt[mate ^ 1],// opposite mate filtered out?
-										shs[mate],      // seed hits for anchor
-										ebwtFw,         // bowtie index
-										&ebwtBw,        // rev bowtie index
-										ref,            // packed reference strings
-										sw,             // dyn prog aligner, anchor
-										osw,            // dyn prog aligner, opposite
-										sc,             // scoring scheme
-										pepol,          // paired-end policy
-										multiseedMms,   // # mms allowed in a seed
-										seedlens[mate], // length of a seed
-										interval[mate], // interval between seeds
-										minsc[mate],    // min score for anchor
-										minsc[mate^1],  // min score for opp.
-										nceil[mate],    // N ceil for anchor
-										nceil[mate^1],  // N ceil for opp.
-										nofw[mate],     // don't align forward read
-										norc[mate],     // don't align revcomp read
-										maxhalf,        // max width on one DP side
-										doUngapped,     // do ungapped alignment
-										mxIter[mate],   // max extend loop iters
-										mxUg[mate],     // max # ungapped extends
-										mxDp[mate],     // max # DPs
-										streak[mate],   // stop after streak of this many end-to-end fails
-										streak[mate],   // stop after streak of this many ungap fails
-										streak[mate],   // stop after streak of this many dp fails
-										mtStreak[mate], // max mate fails per seed range
-										doExtend,       // extend seed hits
-										enable8,        // use 8-bit SSE where possible
-										cminlen,        // checkpoint if read is longer
-										cpow2,          // checkpointer interval, log2
-										doTri,          // triangular mini-fills?
-										tighten,        // -M score tightening mode
-										ca,             // seed alignment cache
-										rnd,            // pseudo-random source
-										wlm,            // group walk left metrics
-										swmSeed,        // DP metrics, seed extend
-										swmMate,        // DP metrics, mate finding
-										prm,            // per-read metrics
-										&msinkwrap,     // for organizing hits
-										true,           // seek mate immediately
-										true,           // report hits once found
-										gReportDiscordant,// look for discordant alns?
-										gReportMixed,   // look for unpaired alns?
-										exhaustive[mate]);
-									// Might be done, but just with this mate
-								} else {
-									// Unpaired dynamic programming driver
-									ret = sd.extendSeeds(
-										*rds[mate],     // read
-										mate == 0,      // mate #1?
-										shs[mate],      // seed hits
-										ebwtFw,         // bowtie index
-										&ebwtBw,        // rev bowtie index
-										ref,            // packed reference strings
-										sw,             // dynamic prog aligner
-										sc,             // scoring scheme
-										multiseedMms,   // # mms allowed in a seed
-										seedlens[mate], // length of a seed
-										interval[mate], // interval between seeds
-										minsc[mate],    // minimum score for valid
-										nceil[mate],    // N ceil for anchor
-										maxhalf,        // max width on one DP side
-										doUngapped,     // do ungapped alignment
-										mxIter[mate],   // max extend loop iters
-										mxUg[mate],     // max # ungapped extends
-										mxDp[mate],     // max # DPs
-										streak[mate],   // stop after streak of this many end-to-end fails
-										streak[mate],   // stop after streak of this many ungap fails
-										doExtend,       // extend seed hits
-										enable8,        // use 8-bit SSE where possible
-										cminlen,        // checkpoint if read is longer
-										cpow2,          // checkpointer interval, log2
-										doTri,          // triangular mini-fills?
-										tighten,        // -M score tightening mode
-										ca,             // seed alignment cache
-										rnd,            // pseudo-random source
-										wlm,            // group walk left metrics
-										swmSeed,        // DP metrics, seed extend
-										prm,            // per-read metrics
-										&msinkwrap,     // for organizing hits
-										true,           // report hits once found
-										exhaustive[mate]);
-								}
-								assert_gt(ret, 0);
-								MERGE_SW(sw);
-								MERGE_SW(osw);
-								if(ret == EXTEND_EXHAUSTED_CANDIDATES) {
-									// Not done yet
-								} else if(ret == EXTEND_POLICY_FULFILLED) {
-									// Policy is satisfied for this mate at least
-									if(msinkwrap.state().doneWithMate(mate == 0)) {
-										done[mate] = true;
-									}
-									if(msinkwrap.state().doneWithMate(mate == 1)) {
-										done[mate^1] = true;
-									}
-								} else if(ret == EXTEND_PERFECT_SCORE) {
-									// We exhausted this made at least
-									done[mate] = true;
-								} else if(ret == EXTEND_EXCEEDED_HARD_LIMIT) {
-									// We exceeded a per-read limit
-									done[mate] = true;
-								} else if(ret == EXTEND_EXCEEDED_SOFT_LIMIT) {
-									// Not done yet
-								} else {
-									//
-									cerr << "Bad return value: " << ret << endl;
-									throw 1;
-								}
-							} // if(!seedSumm)
-						} // for(size_t matei = 0; matei < 2; matei++)
-						
-						// We don't necessarily have to continue investigating both
-						// mates.  We continue on a mate only if its average
-						// interval length is high (> 1000)
-						for(size_t mate = 0; mate < 2; mate++) {
-							if(!done[mate] && shs[mate].averageHitsPerSeed() < seedBoostThresh) {
-								done[mate] = true;
-							}
-						}
-					}
-					for(size_t i = 0; i < 2; i++) {
-						assert_leq(prm.nExIters, mxIter[i]);
-						assert_leq(prm.nExDps,   mxDp[i]);
-						assert_leq(prm.nMateDps, mxDp[i]);
-						assert_leq(prm.nExUgs,   mxUg[i]);
-						assert_leq(prm.nMateUgs, mxUg[i]);
-						assert_leq(prm.nDpFail,  streak[i]);
-						assert_leq(prm.nUgFail,  streak[i]);
-						assert_leq(prm.nEeFail,  streak[i]);
-					}
+                bool done[2] = { !filt[0], !filt[1] };
+				// size_t nelt[2] = {0, 0};
+                if(filt[0] && filt[1]) {
+                    splicedAligner.initReads(rds, nofw, norc, minsc, maxpen);
+                } else if(filt[0] || filt[1]) {
+                    splicedAligner.initRead(rds[0], nofw[0], norc[0], minsc[0], maxpen[0], filt[1]);
+                }
+                if(filt[0] || filt[1]) {
+                    int ret = splicedAligner.go(sc, gfmFw, gfmBw, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
+                    MERGE_SW(sw);
+                    // daehwan
+                    size_t mate = 0;
+                    
+                    assert_gt(ret, 0);
+                    // Clear out the exact hits so that we don't try to
+                    // extend them again later!
+                    if(ret == EXTEND_EXHAUSTED_CANDIDATES) {
+                        // Not done yet
+                    } else if(ret == EXTEND_POLICY_FULFILLED) {
+                        // Policy is satisfied for this mate at least
+                        if(msinkwrap.state().doneWithMate(mate == 0)) {
+                            done[mate] = true;
+                        }
+                        if(msinkwrap.state().doneWithMate(mate == 1)) {
+                            done[mate^1] = true;
+                        }
+                    } else if(ret == EXTEND_PERFECT_SCORE) {
+                        // We exhausted this mode at least
+                        done[mate] = true;
+                    } else if(ret == EXTEND_EXCEEDED_HARD_LIMIT) {
+                        // We exceeded a per-read limit
+                        done[mate] = true;
+                    } else if(ret == EXTEND_EXCEEDED_SOFT_LIMIT) {
+                        // Not done yet
+                    } else {
+                        //
+                        cerr << "Bad return value: " << ret << endl;
+                        throw 1;
+                    }
+                    if(!done[mate]) {
+                        TAlScore perfectScore = sc.perfectScore(rdlens[mate]);
+                        if(!done[mate] && minsc[mate] == perfectScore) {
+                            done[mate] = true;
+                        }
+                    }
+                }
 
+                for(size_t i = 0; i < 2; i++) {
+                    assert_leq(prm.nExIters, mxIter[i]);
+                    assert_leq(prm.nExDps,   mxDp[i]);
+                    assert_leq(prm.nMateDps, mxDp[i]);
+                    assert_leq(prm.nExUgs,   mxUg[i]);
+                    assert_leq(prm.nMateUgs, mxUg[i]);
+                    assert_leq(prm.nDpFail,  streak[i]);
+                    assert_leq(prm.nUgFail,  streak[i]);
+                    assert_leq(prm.nEeFail,  streak[i]);
+                }
+                
 				// Commit and report paired-end/unpaired alignments
-				//uint32_t sd = rds[0]->seed ^ rds[1]->seed;
-				//rnd.init(ROTL(sd, 20));
 				msinkwrap.finishRead(
-					&shs[0],              // seed results for mate 1
-					&shs[1],              // seed results for mate 2
-					exhaustive[0],        // exhausted seed hits for mate 1?
-					exhaustive[1],        // exhausted seed hits for mate 2?
-					nfilt[0],
-					nfilt[1],
-					scfilt[0],
-					scfilt[1],
-					lenfilt[0],
-					lenfilt[1],
-					qcfilt[0],
-					qcfilt[1],
-					sortByScore,          // prioritize by alignment score
-					rnd,                  // pseudo-random generator
-					rpm,                  // reporting metrics
-					prm,                  // per-read metrics
-					sc,                   // scoring scheme
-					!seedSumm,            // suppress seed summaries?
-					seedSumm);            // suppress alignments?
+                                     NULL,
+                                     NULL,
+                                     exhaustive[0],        // exhausted seed hits for mate 1?
+                                     exhaustive[1],        // exhausted seed hits for mate 2?
+                                     nfilt[0],
+                                     nfilt[1],
+                                     scfilt[0],
+                                     scfilt[1],
+                                     lenfilt[0],
+                                     lenfilt[1],
+                                     qcfilt[0],
+                                     qcfilt[1],
+                                     sortByScore,          // prioritize by alignment score
+                                     rnd,                  // pseudo-random generator
+                                     rpm,                  // reporting metrics
+                                     prm,                  // per-read metrics
+                                     sc,                   // scoring scheme
+                                     !seedSumm,            // suppress seed summaries?
+                                     seedSumm);            // suppress alignments?
 				assert(!retry || msinkwrap.empty());
+                
+                if(nthreads > 1 && useTempSpliceSite) {
+                    // ThreadSafe t(&thread_rids_mutex, nthreads > 1);
+                    assert_gt(tid, 0);
+                    assert_leq(tid, thread_rids.size());
+                    assert(thread_rids[tid - 1] == 0 || rdid > thread_rids[tid - 1]);
+                    thread_rids[tid - 1] = rdid;
+                }
 			} // while(retry)
 		} // if(rdid >= skipReads && rdid < qUpto)
 		else if(rdid >= qUpto) {
@@ -3750,353 +3353,14 @@ static void multiseedSearchWorker(void *vp) {
 			MERGE_METRICS(metricsPt, nthreads > 1);
 			nametmp = ps->bufa().name;
 			metricsPt.reportInterval(
-				metricsOfb, metricsStderr, true, true, &nametmp);
+                                     metricsOfb, metricsStderr, true, true, &nametmp);
 			metricsPt.reset();
 		}
 	} // while(true)
 	
 	// One last metrics merge
 	MERGE_METRICS(metrics, nthreads > 1);
-
-	return;
-}
-
-static void multiseedSearchWorker_2p5(void *vp) {
-	int tid = *((int*)vp);
-	assert(multiseed_ebwtFw != NULL);
-	assert(multiseedMms == 0 || multiseed_ebwtBw != NULL);
-	PairedPatternSource&    patsrc   = *multiseed_patsrc;
-	const Ebwt<index_t>&    ebwtFw   = *multiseed_ebwtFw;
-	const Ebwt<index_t>&    ebwtBw   = *multiseed_ebwtBw;
-	const Scoring&          sc       = *multiseed_sc;
-	const BitPairReference& ref      = *multiseed_refs;
-	AlnSink<index_t>&       msink    = *multiseed_msink;
-	OutFileBuf*             metricsOfb = multiseed_metricsOfb;
-
-	// Sinks: these are so that we can print tables encoding counts for
-	// events of interest on a per-read, per-seed, per-join, or per-SW
-	// level.  These in turn can be used to diagnose performance
-	// problems, or generally characterize performance.
-	
-	auto_ptr<PatternSourcePerThreadFactory> patsrcFact(createPatsrcFactory(patsrc, tid));
-	auto_ptr<PatternSourcePerThread> ps(patsrcFact->create());
-	
-	// Instantiate an object for holding reporting-related parameters.
-	ReportingParams rp(
-		(allHits ? std::numeric_limits<THitInt>::max() : khits), // -k
-		mhits,             // -m/-M
-		0,                 // penalty gap (not used now)
-		msample,           // true -> -M was specified, otherwise assume -m
-		gReportDiscordant, // report discordang paired-end alignments?
-		gReportMixed);     // report unpaired alignments for paired reads?
-
-	// Instantiate a mapping quality calculator
-	auto_ptr<Mapq> bmapq(new_mapq(mapqv, scoreMin, sc));
-	
-	// Make a per-thread wrapper for the global MHitSink object.
-	AlnSinkWrap<index_t> msinkwrap(
-		msink,         // global sink
-		rp,            // reporting parameters
-		*bmapq.get(),  // MAPQ calculator
-		(size_t)tid);  // thread id
-
-	OuterLoopMetrics olm;
-	SeedSearchMetrics sdm;
-	WalkMetrics wlm;
-	SwMetrics swmSeed, swmMate;
-	DescentMetrics descm;
-	ReportingMetrics rpm;
-	RandomSource rnd, rndArb;
-	SSEMetrics sseU8ExtendMet;
-	SSEMetrics sseU8MateMet;
-	SSEMetrics sseI16ExtendMet;
-	SSEMetrics sseI16MateMet;
-	uint64_t nbtfiltst = 0; // TODO: find a new home for these
-	uint64_t nbtfiltsc = 0; // TODO: find a new home for these
-	uint64_t nbtfiltdo = 0; // TODO: find a new home for these
-
-	ASSERT_ONLY(BTDnaString tmp);
-
-	int pepolFlag;
-	if(gMate1fw && gMate2fw) {
-		pepolFlag = PE_POLICY_FF;
-	} else if(gMate1fw && !gMate2fw) {
-		pepolFlag = PE_POLICY_FR;
-	} else if(!gMate1fw && gMate2fw) {
-		pepolFlag = PE_POLICY_RF;
-	} else {
-		pepolFlag = PE_POLICY_RR;
-	}
-	assert_geq(gMaxInsert, gMinInsert);
-	assert_geq(gMinInsert, 0);
-	PairedEndPolicy pepol(
-		pepolFlag,
-		gMaxInsert,
-		gMinInsert,
-		localAlign,
-		gFlippedMatesOK,
-		gDovetailMatesOK,
-		gContainMatesOK,
-		gOlapMatesOK,
-		gExpandToFrag);
-	
-	AlignerDriver<index_t> ald(
-		descConsExp,       // exponent for interpolating maximum penalty
-		msIval,            // interval length, as function of read length
-		descentLanding,    // landing length
-		gVerbose,          // verbose?
-		descentTotSz,      // limit on total bytes of best-first search data
-		descentTotFmops);  // limit on total number of FM index ops in BFS
-	
-	PerfMetrics metricsPt; // per-thread metrics object; for read-level metrics
-	BTString nametmp;
-	
-	PerReadMetrics prm;
-
-	// Used by thread with threadid == 1 to measure time elapsed
-	time_t iTime = time(0);
-
-	// Keep track of whether last search was exhaustive for mates 1 and 2
-	bool exhaustive[2] = { false, false };
-	// Keep track of whether mates 1/2 were filtered out last time through
-	bool filt[2]    = { true, true };
-	// Keep track of whether mates 1/2 were filtered out due Ns last time
-	bool nfilt[2]   = { true, true };
-	// Keep track of whether mates 1/2 were filtered out due to not having
-	// enough characters to rise about the score threshold.
-	bool scfilt[2]  = { true, true };
-	// Keep track of whether mates 1/2 were filtered out due to not having
-	// more characters than the number of mismatches permitted in a seed.
-	bool lenfilt[2] = { true, true };
-	// Keep track of whether mates 1/2 were filtered out by upstream qc
-	bool qcfilt[2]  = { true, true };
-
-	rndArb.init((uint32_t)time(0));
-	int mergei = 0;
-	int mergeival = 16;
-	while(true) {
-		bool success = false, done = false, paired = false;
-		ps->nextReadPair(success, done, paired, outType != OUTPUT_SAM);
-		if(!success && done) {
-			break;
-		} else if(!success) {
-			continue;
-		}
-		TReadId rdid = ps->rdid();
-		bool sample = true;
-		if(arbitraryRandom) {
-			ps->bufa().seed = rndArb.nextU32();
-			ps->bufb().seed = rndArb.nextU32();
-		}
-		if(sampleFrac < 1.0f) {
-			rnd.init(ROTL(ps->bufa().seed, 2));
-			sample = rnd.nextFloat() < sampleFrac;
-		}
-		if(rdid >= skipReads && rdid < qUpto && sample) {
-			//
-			// Check if there is metrics reporting for us to do.
-			//
-			if(metricsIval > 0 &&
-			   (metricsOfb != NULL || metricsStderr) &&
-			   !metricsPerRead &&
-			   ++mergei == mergeival)
-			{
-				// Do a periodic merge.  Update global metrics, in a
-				// synchronized manner if needed.
-				MERGE_METRICS(metrics, nthreads > 1);
-				mergei = 0;
-				// Check if a progress message should be printed
-				if(tid == 0) {
-					// Only thread 1 prints progress messages
-					time_t curTime = time(0);
-					if(curTime - iTime >= metricsIval) {
-						metrics.reportInterval(metricsOfb, metricsStderr, false, true, NULL);
-						iTime = curTime;
-					}
-				}
-			}
-			prm.reset(); // per-read metrics
-			prm.doFmString = sam_print_zm;
-			// If we're reporting how long each read takes, get the initial time
-			// measurement here
-			if(sam_print_xt) {
-				gettimeofday(&prm.tv_beg, &prm.tz_beg);
-			}
-			// Try to align this read
-			assert_eq(ps->bufa().color, false);
-			olm.reads++;
-			bool pair = paired;
-			const size_t rdlen1 = ps->bufa().length();
-			const size_t rdlen2 = pair ? ps->bufb().length() : 0;
-			olm.bases += (rdlen1 + rdlen2);
-			// Check if read is identical to previous read
-			rnd.init(ROTL(ps->bufa().seed, 5));
-			msinkwrap.nextRead(
-				&ps->bufa(),
-				pair ? &ps->bufb() : NULL,
-				rdid,
-				sc.qualitiesMatter());
-			assert(msinkwrap.inited());
-			size_t rdlens[2] = { rdlen1, rdlen2 };
-			// Calculate the minimum valid score threshold for the read
-			TAlScore minsc[2], maxpen[2];
-			minsc[0] = minsc[1] = std::numeric_limits<TAlScore>::max();
-			setupMinScores(*ps, paired, localAlign, sc, rdlens, minsc, maxpen);
-			// N filter; does the read have too many Ns?
-			size_t readns[2] = {0, 0};
-			sc.nFilterPair(
-				&ps->bufa().patFw,
-				pair ? &ps->bufb().patFw : NULL,
-				readns[0],
-				readns[1],
-				nfilt[0],
-				nfilt[1]);
-			// Score filter; does the read enough character to rise above
-			// the score threshold?
-			scfilt[0] = sc.scoreFilter(minsc[0], rdlens[0]);
-			scfilt[1] = sc.scoreFilter(minsc[1], rdlens[1]);
-			lenfilt[0] = lenfilt[1] = true;
-			if(rdlens[0] <= (size_t)multiseedMms || rdlens[0] < 2) {
-				if(!gQuiet) printMmsSkipMsg(*ps, paired, true, multiseedMms);
-				lenfilt[0] = false;
-			}
-			if((rdlens[1] <= (size_t)multiseedMms || rdlens[1] < 2) && paired) {
-				if(!gQuiet) printMmsSkipMsg(*ps, paired, false, multiseedMms);
-				lenfilt[1] = false;
-			}
-			if(rdlens[0] < 2) {
-				if(!gQuiet) printLenSkipMsg(*ps, paired, true);
-				lenfilt[0] = false;
-			}
-			if(rdlens[1] < 2 && paired) {
-				if(!gQuiet) printLenSkipMsg(*ps, paired, false);
-				lenfilt[1] = false;
-			}
-			qcfilt[0] = qcfilt[1] = true;
-			if(qcFilter) {
-				qcfilt[0] = (ps->bufa().filter != '0');
-				qcfilt[1] = (ps->bufb().filter != '0');
-			}
-			filt[0] = (nfilt[0] && scfilt[0] && lenfilt[0] && qcfilt[0]);
-			filt[1] = (nfilt[1] && scfilt[1] && lenfilt[1] && qcfilt[1]);
-			prm.nFilt += (filt[0] ? 0 : 1) + (filt[1] ? 0 : 1);
-			Read* rds[2] = { &ps->bufa(), &ps->bufb() };
-			assert(msinkwrap.empty());
-			// Calcualte nofw / no rc
-			bool nofw[2] = { false, false };
-			bool norc[2] = { false, false };
-			nofw[0] = paired ? (gMate1fw ? gNofw : gNorc) : gNofw;
-			norc[0] = paired ? (gMate1fw ? gNorc : gNofw) : gNorc;
-			nofw[1] = paired ? (gMate2fw ? gNofw : gNorc) : gNofw;
-			norc[1] = paired ? (gMate2fw ? gNorc : gNofw) : gNorc;
-			// Calculate nceil
-			int nceil[2] = { 0, 0 };
-			nceil[0] = nCeil.f<int>((double)rdlens[0]);
-			nceil[0] = min(nceil[0], (int)rdlens[0]);
-			if(paired) {
-				nceil[1] = nCeil.f<int>((double)rdlens[1]);
-				nceil[1] = min(nceil[1], (int)rdlens[1]);
-			}
-			exhaustive[0] = exhaustive[1] = false;
-			bool pairPostFilt = filt[0] && filt[1];
-			if(pairPostFilt) {
-				rnd.init(ROTL((rds[0]->seed ^ rds[1]->seed), 10));
-			}
-			// Calculate streak length
-			size_t streak[2]    = { maxDpStreak,   maxDpStreak };
-			size_t mtStreak[2]  = { maxMateStreak, maxMateStreak };
-			size_t mxDp[2]      = { maxDp,         maxDp       };
-			size_t mxUg[2]      = { maxUg,         maxUg       };
-			size_t mxIter[2]    = { maxIters,      maxIters    };
-			if(allHits) {
-				streak[0]   = streak[1]   = std::numeric_limits<size_t>::max();
-				mtStreak[0] = mtStreak[1] = std::numeric_limits<size_t>::max();
-				mxDp[0]     = mxDp[1]     = std::numeric_limits<size_t>::max();
-				mxUg[0]     = mxUg[1]     = std::numeric_limits<size_t>::max();
-				mxIter[0]   = mxIter[1]   = std::numeric_limits<size_t>::max();
-			} else if(khits > 1) {
-				for(size_t mate = 0; mate < 2; mate++) {
-					streak[mate]   += (khits-1) * maxStreakIncr;
-					mtStreak[mate] += (khits-1) * maxStreakIncr;
-					mxDp[mate]     += (khits-1) * maxItersIncr;
-					mxUg[mate]     += (khits-1) * maxItersIncr;
-					mxIter[mate]   += (khits-1) * maxItersIncr;
-				}
-			}
-			// If paired-end and neither mate filtered...
-			if(filt[0] && filt[1]) {
-				// Reduce streaks for either mate
-				streak[0] = (size_t)ceil((double)streak[0] / 2.0);
-				streak[1] = (size_t)ceil((double)streak[1] / 2.0);
-				assert_gt(streak[1], 0);
-			}
-			assert_gt(streak[0], 0);
-			// Calculate # seed rounds for each mate
-			size_t nrounds[2] = { nSeedRounds, nSeedRounds };
-			if(filt[0] && filt[1]) {
-				nrounds[0] = (size_t)ceil((double)nrounds[0] / 2.0);
-				nrounds[1] = (size_t)ceil((double)nrounds[1] / 2.0);
-				assert_gt(nrounds[1], 0);
-			}
-			assert_gt(nrounds[0], 0);
-			// Increment counters according to what got filtered
-			for(size_t mate = 0; mate < (pair ? 2:1); mate++) {
-				if(!filt[mate]) {
-					// Mate was rejected by N filter
-					olm.freads++;               // reads filtered out
-					olm.fbases += rdlens[mate]; // bases filtered out
-				} else {
-					olm.ureads++;               // reads passing filter
-					olm.ubases += rdlens[mate]; // bases passing filter
-				}
-			}
-			if(filt[0]) {
-				ald.initRead(ps->bufa(), nofw[0], norc[0], minsc[0], maxpen[0], filt[1] ? &ps->bufb() : NULL);
-			} else if(filt[1]) {
-				ald.initRead(ps->bufb(), nofw[1], norc[1], minsc[1], maxpen[1], NULL);
-			}
-			if(filt[0] || filt[1]) {
-				ald.go(sc, ebwtFw, ebwtBw, ref, descm, wlm, prm, rnd, msinkwrap);
-			}
-			// Commit and report paired-end/unpaired alignments
-			uint32_t sd = rds[0]->seed ^ rds[1]->seed;
-			rnd.init(ROTL(sd, 20));
-			msinkwrap.finishRead(
-				NULL,                 // seed results for mate 1
-				NULL,                 // seed results for mate 2
-				exhaustive[0],        // exhausted seed results for 1?
-				exhaustive[1],        // exhausted seed results for 2?
-				nfilt[0],
-				nfilt[1],
-				scfilt[0],
-				scfilt[1],
-				lenfilt[0],
-				lenfilt[1],
-				qcfilt[0],
-				qcfilt[1],
-				sortByScore,          // prioritize by alignment score
-				rnd,                  // pseudo-random generator
-				rpm,                  // reporting metrics
-				prm,                  // per-read metrics
-				sc,                   // scoring scheme
-				!seedSumm,            // suppress seed summaries?
-				seedSumm);            // suppress alignments?
-		} // if(rdid >= skipReads && rdid < qUpto)
-		else if(rdid >= qUpto) {
-			break;
-		}
-		if(metricsPerRead) {
-			MERGE_METRICS(metricsPt, nthreads > 1);
-			nametmp = ps->bufa().name;
-			metricsPt.reportInterval(
-				metricsOfb, metricsStderr, true, true, &nametmp);
-			metricsPt.reset();
-		}
-	} // while(true)
-	
-	// One last metrics merge
-	MERGE_METRICS(metrics, nthreads > 1);
-
+    
 	return;
 }
 
@@ -4109,42 +3373,25 @@ static void multiseedSearch(
 	Scoring& sc,
 	PairedPatternSource& patsrc,  // pattern source
 	AlnSink<index_t>& msink,             // hit sink
-	Ebwt<index_t>& ebwtFw,                 // index of original text
-	Ebwt<index_t>& ebwtBw,                 // index of mirror text
+	HierGFM<index_t>& gfmFw,                 // index of original text
+	HierGFM<index_t>& gfmBw,                 // index of mirror text
+    BitPairReference* refs,
 	OutFileBuf *metricsOfb)
 {
-	multiseed_patsrc = &patsrc;
+    multiseed_patsrc = &patsrc;
 	multiseed_msink  = &msink;
-	multiseed_ebwtFw = &ebwtFw;
-	multiseed_ebwtBw = &ebwtBw;
+	multiseed_gfmFw  = &gfmFw;
+	multiseed_gfmBw  = &gfmBw;
 	multiseed_sc     = &sc;
 	multiseed_metricsOfb      = metricsOfb;
-	Timer *_t = new Timer(cerr, "Time loading reference: ", timing);
-	auto_ptr<BitPairReference> refs(
-		new BitPairReference(
-			adjIdxBase,
-			false,
-			sanityCheck,
-			NULL,
-			NULL,
-			false,
-			useMm,
-			useShmem,
-			mmSweep,
-			gVerbose,
-			startVerbose)
-	);
-	delete _t;
-	if(!refs->loaded()) throw 1;
-	multiseed_refs = refs.get();
+	multiseed_refs = refs;
 	AutoArray<tthread::thread*> threads(nthreads);
 	AutoArray<int> tids(nthreads);
 	{
 		// Load the other half of the index into memory
-		assert(!ebwtFw.isInMemory());
+		assert(!gfmFw.isInMemory());
 		Timer _t(cerr, "Time loading forward index: ", timing);
-		ebwtFw.loadIntoMemory(
-			0,  // colorspace?
+		gfmFw.loadIntoMemory(
 			-1, // not the reverse index
 			true,         // load SA samp? (yes, need forward index's SA samp)
 			true,         // load ftab (in forward index)
@@ -4152,33 +3399,35 @@ static void multiseedSearch(
 			!noRefNames,  // load names?
 			startVerbose);
 	}
+#if 0
 	if(multiseedMms > 0 || do1mmUpFront) {
 		// Load the other half of the index into memory
-		assert(!ebwtBw.isInMemory());
+		assert(!gfmBw.isInMemory());
 		Timer _t(cerr, "Time loading mirror index: ", timing);
-		ebwtBw.loadIntoMemory(
+		gfmBw.loadIntoMemory(
 			0, // colorspace?
 			// It's bidirectional search, so we need the reverse to be
 			// constructed as the reverse of the concatenated strings.
 			1,
-			false,        // don't load SA samp in reverse index
+			true,        // load SA samp in reverse index
 			true,         // yes, need ftab in reverse index
-			false,        // don't load rstarts in reverse index
+			true,        // load rstarts in reverse index
 			!noRefNames,  // load names?
 			startVerbose);
 	}
+#endif
 	// Start the metrics thread
 	{
 		Timer _t(cerr, "Multiseed full-index search: ", timing);
+        
+        thread_rids.resize(nthreads);
+        thread_rids.fill(0);
+        thread_rids_mindist = (nthreads == 1 || !useTempSpliceSite ? 0 : 1000 * nthreads);
 
 		for(int i = 0; i < nthreads; i++) {
 			// Thread IDs start at 1
 			tids[i] = i+1;
-			if(bowtie2p5) {
-				threads[i] = new tthread::thread(multiseedSearchWorker_2p5, (void*)&tids[i]);
-			} else {
-			    threads[i] = new tthread::thread(multiseedSearchWorker, (void*)&tids[i]);
-			}
+            threads[i] = new tthread::thread(multiseedSearchWorker_hisat, (void*)&tids[i]);
 		}
 
         for (int i = 0; i < nthreads; i++)
@@ -4192,6 +3441,9 @@ static void multiseedSearch(
 
 static string argstr;
 
+extern void initializeCntLut();
+extern void initializeCntBit();
+
 template<typename TStr>
 static void driver(
 	const char * type,
@@ -4201,6 +3453,10 @@ static void driver(
 	if(gVerbose || startVerbose)  {
 		cerr << "Entered driver(): "; logTime(cerr, true);
 	}
+    
+    initializeCntLut();
+    initializeCntBit();
+    
 	// Vector of the reference sequences; used for sanity-checking
 	EList<SString<char> > names, os;
 	EList<size_t> nameLens, seqLens;
@@ -4232,10 +3488,14 @@ static void driver(
 		mates1,      // mate1's, from -1 arg
 		mates2,      // mate2's, from -2 arg
 		mates12,     // both mates on each line, from --12 arg
+#ifdef USE_SRA
+        sra_accs,    // SRA accessions
+#endif
 		qualities,   // qualities associated with singles
 		qualities1,  // qualities associated with m1
 		qualities2,  // qualities associated with m2
 		pp,          // read read-in parameters
+        nthreads,
 		gVerbose || startVerbose); // be talkative
 	// Open hit output file
 	if(gVerbose || startVerbose) {
@@ -4247,15 +3507,14 @@ static void driver(
 	} else {
 		fout = new OutFileBuf();
 	}
-	// Initialize Ebwt object and read in header
+	// Initialize GFM object and read in header
 	if(gVerbose || startVerbose) {
-		cerr << "About to initialize fw Ebwt: "; logTime(cerr, true);
+		cerr << "About to initialize fw GFM: "; logTime(cerr, true);
 	}
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
-	Ebwt<index_t> ebwt(
+	HierGFM<index_t, local_index_t> gfm(
 		adjIdxBase,
-	    0,        // index is colorspace
-		-1,       // fw index
+	    -1,       // fw index
 	    true,     // index is for the forward direction
 	    /* overriding: */ offRate,
 		0, // amount to add to index offrate or <= 0 to do nothing
@@ -4270,13 +3529,14 @@ static void driver(
 	    startVerbose, // talkative during initialization
 	    false /*passMemExc*/,
 	    sanityCheck);
-	Ebwt<index_t>* ebwtBw = NULL;
+	HierGFM<index_t, local_index_t>* gfmBw = NULL;
+#if 0
 	// We need the mirror index if mismatches are allowed
 	if(multiseedMms > 0 || do1mmUpFront) {
 		if(gVerbose || startVerbose) {
-			cerr << "About to initialize rev Ebwt: "; logTime(cerr, true);
+			cerr << "About to initialize rev GFM: "; logTime(cerr, true);
 		}
-		ebwtBw = new Ebwt<index_t>(
+		gfmBw = new HierGFM<index_t, local_index_t>(
 			adjIdxBase + ".rev",
 			0,       // index is colorspace
 			1,       // TODO: maybe not
@@ -4295,26 +3555,26 @@ static void driver(
 		    false /*passMemExc*/,
 		    sanityCheck);
 	}
+#endif
 	if(sanityCheck && !os.empty()) {
-		// Sanity check number of patterns and pattern lengths in Ebwt
+		// Sanity check number of patterns and pattern lengths in GFM
 		// against original strings
-		assert_eq(os.size(), ebwt.nPat());
+		assert_eq(os.size(), gfm.nPat());
 		for(size_t i = 0; i < os.size(); i++) {
-			assert_eq(os[i].length(), ebwt.plen()[i]);
+			assert_eq(os[i].length(), gfm.plen()[i]);
 		}
 	}
-	// Sanity-check the restored version of the Ebwt
+	// Sanity-check the restored version of the GFM
 	if(sanityCheck && !os.empty()) {
-		ebwt.loadIntoMemory(
-			0,
+		gfm.loadIntoMemory(
 			-1, // fw index
 			true, // load SA sample
 			true, // load ftab
 			true, // load rstarts
 			!noRefNames,
 			startVerbose);
-		ebwt.checkOrigs(os, false, false);
-		ebwt.evictFromMemory();
+		gfm.checkOrigs(os, false);
+		gfm.evictFromMemory();
 	}
 	OutputQueue oq(
 		*fout,                   // out file buffer
@@ -4343,10 +3603,14 @@ static void driver(
 			penRfGapConst,  // constant coeff for ref gap cost
 			penRdGapLinear, // linear coeff for read gap cost
 			penRfGapLinear, // linear coeff for ref gap cost
-			gGapBarrier);   // # rows at top/bot only entered diagonally
+			gGapBarrier,    // # rows at top/bot only entered diagonally
+            penCanSplice,   // canonical splicing penalty
+            penNoncanSplice,// non-canonical splicing penalty
+            penConflictSplice, // conflicting splice site penalty
+            &penIntronLen);  // penalty as to intron length
 		EList<size_t> reflens;
-		for(size_t i = 0; i < ebwt.nPat(); i++) {
-			reflens.push_back(ebwt.plen()[i]);
+		for(size_t i = 0; i < gfm.nPat(); i++) {
+			reflens.push_back(gfm.plen()[i]);
 		}
 		EList<string> refnames;
 		readEbwtRefnames<index_t>(adjIdxBase, refnames);
@@ -4356,11 +3620,12 @@ static void driver(
 			samTruncQname,          // whether to truncate QNAME to 255 chars
 			samOmitSecSeqQual,      // omit SEQ/QUAL for 2ndary alignments?
 			samNoUnal,              // omit unaligned-read records?
-			string("bowtie2"),      // program id
-			string("bowtie2"),      // program name
-			string(BOWTIE2_VERSION), // program version
+			string("hisat2"),       // program id
+			string("hisat2"),       // program name
+			string(HISAT2_VERSION), // program version
 			argstr,                 // command-line
 			rgs_optflag,            // read-group string
+            rna_strandness,
 			sam_print_as,
 			sam_print_xs,
 			sam_print_xss,
@@ -4397,18 +3662,66 @@ static void driver(
 			sam_print_zm,
 			sam_print_zi,
 			sam_print_zp,
-			sam_print_zu);
+			sam_print_zu,
+            sam_print_xs_a,
+            sam_print_nh);
 		// Set up hit sink; if sanityCheck && !os.empty() is true,
 		// then instruct the sink to "retain" hits in a vector in
 		// memory so that we can easily sanity check them later on
 		AlnSink<index_t> *mssink = NULL;
+        Timer *_tRef = new Timer(cerr, "Time loading reference: ", timing);
+        auto_ptr<BitPairReference> refs(
+                                        new BitPairReference(
+                                                             adjIdxBase,
+                                                             false,
+                                                             sanityCheck,
+                                                             NULL,
+                                                             NULL,
+                                                             false,
+                                                             useMm,
+                                                             useShmem,
+                                                             mmSweep,
+                                                             gVerbose,
+                                                             startVerbose)
+                                        );
+        delete _tRef;
+        if(!refs->loaded()) throw 1;
+        
+        init_junction_prob();
+        bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;
+        bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite;
+        ssdb = new SpliceSiteDB(
+                                *(refs.get()),
+                                refnames,
+                                nthreads > 1, // thread-safe
+                                write, // write?
+                                read);  // read?
+        if(ssdb != NULL) {
+            if(knownSpliceSiteInfile != "") {
+                ifstream ssdb_file(knownSpliceSiteInfile.c_str(), ios::in);
+                if(ssdb_file.is_open()) {
+                    ssdb->read(ssdb_file,
+                               true); // known splice sites
+                    ssdb_file.close();
+                }
+            }
+            if(novelSpliceSiteInfile != "") {
+                ifstream ssdb_file(novelSpliceSiteInfile.c_str(), ios::in);
+                if(ssdb_file.is_open()) {
+                    ssdb->read(ssdb_file,
+                               false); // novel splice sites
+                    ssdb_file.close();
+                }
+            }
+        }
 		switch(outType) {
 			case OUTPUT_SAM: {
 				mssink = new AlnSinkSam<index_t>(
 					oq,           // output queue
 					samc,         // settings & routines for SAM output
 					refnames,     // reference names
-					gQuiet);      // don't print alignment summary at end
+					gQuiet,       // don't print alignment summary at end
+                    ssdb);
 				if(!samNoHead) {
 					bool printHd = true, printSq = true;
 					BTString buf;
@@ -4436,15 +3749,16 @@ static void driver(
 			sc,      // scoring scheme
 			*patsrc, // pattern source
 			*mssink, // hit sink
-			ebwt,    // BWT
-			*ebwtBw, // BWT'
+			gfm,     // BWT
+			*gfmBw,  // BWT'
+            refs.get(),
 			metricsOfb);
 		// Evict any loaded indexes from memory
-		if(ebwt.isInMemory()) {
-			ebwt.evictFromMemory();
+		if(gfm.isInMemory()) {
+			gfm.evictFromMemory();
 		}
-		if(ebwtBw != NULL) {
-			delete ebwtBw;
+		if(gfmBw != NULL) {
+			delete gfmBw;
 		}
 		if(!gQuiet && !seedSumm) {
 			size_t repThresh = mhits;
@@ -4457,11 +3771,21 @@ static void driver(
 				gReportMixed,
 				hadoopOut);
 		}
+        if(ssdb != NULL) {
+            if(novelSpliceSiteOutfile != "") {
+                ofstream ssdb_file(novelSpliceSiteOutfile.c_str(), ios::out);
+                if(ssdb_file.is_open()) {
+                    ssdb->print(ssdb_file);
+                    ssdb_file.close();
+                }
+            }
+        }
 		oq.flush(true);
 		assert_eq(oq.numStarted(), oq.numFinished());
 		assert_eq(oq.numStarted(), oq.numFlushed());
 		delete patsrc;
 		delete mssink;
+        delete ssdb;
 		delete metricsOfb;
 		if(fout != NULL) {
 			delete fout;
@@ -4478,7 +3802,7 @@ extern "C" {
  * options, sets global configuration variables, and calls the driver()
  * function.
  */
-int bowtie(int argc, const char **argv) {
+int hisat2(int argc, const char **argv) {
 	try {
 		// Reset all global state, including getopt state
 		opterr = optind = 1;
@@ -4491,7 +3815,7 @@ int bowtie(int argc, const char **argv) {
 		parseOptions(argc, argv);
 		argv0 = argv[0];
 		if(showVersion) {
-			cout << argv0 << " version " << BOWTIE2_VERSION << endl;
+			cout << argv0 << " version " << HISAT2_VERSION << endl;
 			if(sizeof(void*) == 4) {
 				cout << "32-bit" << endl;
 			} else if(sizeof(void*) == 8) {
@@ -4528,11 +3852,25 @@ int bowtie(int argc, const char **argv) {
 
 			// Get query filename
 			bool got_reads = !queries.empty() || !mates1.empty() || !mates12.empty();
+#ifdef USE_SRA
+            got_reads = got_reads || !sra_accs.empty();
+#endif
+            if(minIntronLen > maxIntronLen) {
+                cerr << "--min-intronlen(" << minIntronLen << ") should not be greater than --max-intronlen("
+                     << maxIntronLen << ")" << endl;
+                printUsage(cerr);
+                return 1;
+            }
 			if(optind >= argc) {
 				if(!got_reads) {
 					printUsage(cerr);
 					cerr << "***" << endl
-					     << "Error: Must specify at least one read input with -U/-1/-2" << endl;
+#ifdef USE_SRA
+					     << "Error: Must specify at least one read input with -U/-1/-2/--sra-acc" << endl;
+#else
+                    << "Error: Must specify at least one read input with -U/-1/-2" << endl;
+
+#endif
 					return 1;
 				}
 			} else if(!got_reads) {
@@ -4550,7 +3888,7 @@ int bowtie(int argc, const char **argv) {
 				outfile = argv[optind++];
 				cerr << "Warning: Output file '" << outfile.c_str()
 				     << "' was specified without -S.  This will not work in "
-					 << "future Bowtie 2 versions.  Please use -S instead."
+					 << "future HISAT 2 versions.  Please use -S instead."
 					 << endl;
 			}
 
@@ -4604,7 +3942,7 @@ int bowtie(int argc, const char **argv) {
 		return 1;
 	} catch(int e) {
 		if(e != 0) {
-			cerr << "Error: Encountered internal Bowtie 2 exception (#" << e << ")" << endl;
+			cerr << "Error: Encountered internal HISAT exception (#" << e << ")" << endl;
 			cerr << "Command: ";
 			for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
 			cerr << endl;

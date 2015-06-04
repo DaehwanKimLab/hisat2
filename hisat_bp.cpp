@@ -694,9 +694,9 @@ static void printUsage(ostream& out) {
 		tool_name = "hisat";
 	}
 	out << "Usage: " << endl
-	    << "  " << tool_name.c_str() << " [options]* -x <bt2-idx> {-1 <m1> -2 <m2> | -U <r>} [-S <sam>]" << endl
+	    << "  " << tool_name.c_str() << " [options]* -x <ht2-idx> {-1 <m1> -2 <m2> | -U <r>} [-S <sam>]" << endl
 	    << endl
-		<<     "  <bt2-idx>  Index filename prefix (minus trailing .X." << gEbwt_ext << ")." << endl
+		<<     "  <ht2-idx>  Index filename prefix (minus trailing .X." << gfm_ext << ")." << endl
 	    <<     "  <m1>       Files with #1 mates, paired with files in <m2>." << endl;
 	if(wrapper == "basic-0") {
 		out << "             Could be gzip'ed (extension: .gz) or bzip2'ed (extension: .bz2)." << endl;
@@ -3389,6 +3389,7 @@ static void multiseedSearch(
 static string argstr;
 
 extern void initializeCntLut();
+extern void initializeCntBit();
 
 template<typename TStr>
 static void driver(
@@ -3401,6 +3402,7 @@ static void driver(
 	}
     
     initializeCntLut();
+    initializeCntBit();
     
 	// Vector of the reference sequences; used for sanity-checking
 	EList<SString<char> > names, os;
