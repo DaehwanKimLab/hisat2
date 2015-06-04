@@ -1466,6 +1466,7 @@ report_F_node_idx(0), report_F_location(0)
 	cerr << "Do we build the hash table?" << endl;
 
 	if(!add) {
+		cerr << previous.sorted_nodes.size() << endl;
 		return;
 	}
 
