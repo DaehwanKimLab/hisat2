@@ -1195,11 +1195,6 @@ private:
     void      mergeUpdateRank();
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> node_range);
 
-    // Can create an index by using key.second in PathNodes.
-    void sortByFrom(bool create_index = true);
-    pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
-    pair<index_t, index_t> getNextRange(pair<index_t, index_t> range);  // Use sortByFrom() first.
-
     void sortEdges() { sort(edges.begin(), edges.end()); } // by (from.label, to.rank)
     void sortEdgesFrom() {
         sort(edges.begin(), edges.end(), PathEdgeFromCmp());
@@ -1385,14 +1380,16 @@ report_F_node_idx(0), report_F_location(0)
 
     status = ok;
 
-    sort(nodes.begin(), nodes.end());
+    sort(nodes.begin(), nodes.end()); // this should be changed into buckets
 
     mergeUpdateRank();
 }
 
 //creates a new PathGraph that is 2^(i+1) sorted from one that is 2^i sorted.
-//does so by merging unsorted nodes using a hash join
-//sorting and merging the newly made nodes
+//does so by:
+//merging unsorted nodes using a hash join
+//sorting the newly made nodes
+//merging all nodes together
 //updating ranks and adding nodes that become sorted to sorted.
 template <typename index_t>
 PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
@@ -1410,34 +1407,32 @@ report_F_node_idx(0), report_F_location(0)
     debug = previous.debug;
 #endif
 
-//create hash table for unsorted nodes
-	index_t table_size = 3 * (previous.nodes.size() - previous.ranks) / 2;
+// Create hash table for unsorted nodes
+	index_t num_unsorted = previous.nodes.size() - previous.ranks;
+	index_t table_size = num_unsorted + num_unsorted / 2;
 	index_t hash;
-	index_t num_unsorted = 0;
 
-	//Initialize array to be used for hash table
+	// Initialize array to be used for hash table
 	cerr << "Allocating size " << table_size << " array..." << endl;
 	EList<PathNode, 1> * nodes_table;
 	nodes_table = new EList<PathNode,1> [table_size];
 
-
-	//populate hash table
+	// Populate hash table
 	cerr << "Populating the hash table..." << endl;
 	for(index_t i = 0; i < previous.nodes.size(); i++) {
 		if(!previous.nodes[i].isSorted()){
 			hash = previous.nodes[i].to % table_size;
 			nodes_table[hash].push_back(previous.nodes[i]);
-			num_unsorted++;
 		}
 	}
 
 
-//query against hash table
+// Query against hash table
 	cerr << "Querying all nodes against hash table..." << endl;
-    new_nodes.resizeExact(num_unsorted + num_unsorted / 2); //better heuristic???
+    new_nodes.resizeExact(table_size); //better heuristic???
     new_nodes.clear();
 
-	//create unmerged nodes
+	// Create combined nodes
     for(index_t i = 0; i < previous.nodes.size(); i++) {
 		hash = previous.nodes[i].from % table_size;
 	    for(index_t j = 0; j < nodes_table[hash].size(); j++) {
@@ -1449,23 +1444,18 @@ report_F_node_idx(0), report_F_location(0)
 	delete[] nodes_table;
 
     temp_nodes = new_nodes.size() + previous.nodes.size();
-   
-//merge newly-combined nodes
 	status = ok;
 
 	cerr << "Sorting new nodes..." << endl;
-
     sort(new_nodes.begin(), new_nodes.end());
 
     cerr << "Merging new nodes into previous.nodes..." << endl;
-
     mergeAllNodes(previous);
 	
     cerr << "Pruning and updating ranks..." << endl;
-
     mergeUpdateRank();
 
-    if(previous.has_stabilized || generation >= 11) {//need to add clause about change in size
+    if(previous.has_stabilized || (generation >= 11 || ranks >= 0.8 * new_nodes.size())) {
         has_stabilized = true;
     }
 }
@@ -1501,13 +1491,14 @@ void PathGraph<index_t>::createPathNode(const PathNode& left, const PathNode& ri
     new_nodes.back().key = pair<index_t, index_t>(left.key.first, right.key.first);
 }
 
-
+// Performs a simple "two finger" merge
+// Importantly only writes sorted nodes from previous.nodes
 template <typename index_t>
 void PathGraph<index_t>::mergeAllNodes(PathGraph& previous)
 {
 	index_t curr_s = 0;
 	index_t curr_u = 0;
-	nodes.resizeExact(previous.nodes.size() + new_nodes.size());
+	nodes.resizeExact(previous.nodes.size() + new_nodes.size()); // this is an overestimate
 	nodes.clear();
 
 	while(previous.nodes.size() > curr_s || new_nodes.size() > curr_u) {
@@ -1515,8 +1506,9 @@ void PathGraph<index_t>::mergeAllNodes(PathGraph& previous)
 			nodes.push_back(new_nodes[curr_u]);
 			curr_u++;
 		} else {
+			//only write if sorted
 			if(previous.nodes[curr_s].isSorted()) {
-			nodes.push_back(previous.nodes[curr_s]);
+				nodes.push_back(previous.nodes[curr_s]);
 			}
 			curr_s++;
 		}
@@ -1528,7 +1520,6 @@ void PathGraph<index_t>::mergeAllNodes(PathGraph& previous)
 template <typename index_t>
 void PathGraph<index_t>::mergeUpdateRank()
 {
-
     // Update ranks
     index_t rank = 0;
     pair<index_t, index_t> key = nodes.front().key;
@@ -1552,6 +1543,7 @@ void PathGraph<index_t>::mergeUpdateRank()
     }
     nodes.resize(curr);
 
+    // Set nodes that become sorted as sorted
     PathNode* candidate = &nodes.front();
     key = candidate->key; ranks = 1;
     for(index_t i = 1; i < nodes.size(); i++) {
@@ -1569,6 +1561,7 @@ void PathGraph<index_t>::mergeUpdateRank()
         candidate->setSorted();
     }
 
+    // Only done on last iteration
     // Replace the ranks of a sorted graph so that rank(i) = i
     // Merges may otherwise leave gaps in the ranks
     if(ranks == nodes.size()) {
