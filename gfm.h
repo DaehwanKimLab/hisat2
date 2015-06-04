@@ -2933,7 +2933,7 @@ void GFM<index_t>::buildToDisk(
 {
     // daehwan - for debugging purposes
 #ifndef NDEBUG
-#   if 0
+#   if 1
     {
         cout << "i\tBWT\tF\tM\tpos\tfirstseq\tlastseq\tseqlen" << endl;
         int gbwtChar; // one of A, C, G, T, and $
