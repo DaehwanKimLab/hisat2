@@ -41,21 +41,22 @@ enum SNP_TYPE {
     SNP_SGL = 0, // single nucleotide substitution
     SNP_INS,     // small insertion wrt reference genome
     SNP_DEL,     // small deletion wrt reference genome
+    SNP_ALT,     // alternative sequence (to be implemented ...)
 };
 
 template <typename index_t>
 struct SNP {
-    index_t        pos;
-    SNP_TYPE       type;
-    EList<char, 4> diff;
+    index_t   pos;
+    SNP_TYPE  type;
+    uint32_t  len;
+    uint64_t  seq;  // used to store 32 bp, but it can be used to store a pointer to EList<uint64_t>
+                    // in order to support a sequence longer than 32 bp
     
     bool operator< (const SNP& o) const {
         if(pos != o.pos) return pos < o.pos;
         if(type != o.type) return type < o.type;
-        if(diff.size() != o.diff.size()) return diff.size() < o.diff.size();
-        for(index_t i = 0; i < diff.size(); i++) {
-            if(diff[i] != o.diff[i]) return diff[i] < o.diff[i];
-        }
+        if(len != o.len) return len < o.len;
+        if(seq != o.seq) return seq < o.seq;
         return false;
     }
 };
@@ -68,7 +69,7 @@ class RefGraph {
     friend class PathGraph<index_t>;
 public:
     struct Node {
-        char    label; // ACGTN + #(=Z) + $(=0)
+        char    label; // ACGTN + Y(head) + Z(tail)
         index_t value; // location in a whole genome
         bool    backbone; // backbone node, which corresponds to a reference sequence
         
@@ -330,8 +331,10 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 if(snp.type == SNP_SGL) {
                     range.second = snp.pos + 1;
                 } else if(snp.type == SNP_DEL) {
-                    range.second = snp.pos + snp.diff.size();
+                    assert_gt(snp.len, 0);
+                    range.second = snp.pos + snp.len;
                 } else if(snp.type == SNP_INS) {
+                    assert_gt(snp.len, 0);
                     range.second = snp.pos;
                 } else assert(false);
                 range.second += relax;
@@ -449,10 +452,11 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 assert_geq(snp.pos, curr_pos);
                 if(snp.pos >= curr_pos + curr_len) break;
                 if(snp.type == SNP_SGL) {
-                    assert_eq(snp.diff.size(), 1);
+                    assert_eq(snp.len, 1);
                     nodes.expand();
                     num_snp_nodes++;
-                    nodes.back().label = snp.diff[0];
+                    assert_lt(snp.seq, 4);
+                    nodes.back().label = "ACGT"[snp.seq];
                     nodes.back().value = jlen + 2 + num_snp_nodes;
                     
                     edges.expand();
@@ -463,18 +467,19 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     edges.back().from = nodes.size() - 1;
                     edges.back().to = snp.pos - curr_pos + 2;
                 } else if(snp.type == SNP_DEL) {
-                    index_t deletionLen = snp.diff.size();
-                    assert_gt(deletionLen, 0);
+                    assert_gt(snp.len, 0);
                     edges.expand();
                     edges.back().from = snp.pos - curr_pos;
-                    edges.back().to = snp.pos + - curr_pos + deletionLen + 1;
+                    edges.back().to = snp.pos + - curr_pos + snp.len + 1;
                 } else if(snp.type == SNP_INS) {
-                    assert_gt(snp.diff.size(), 0);
-                    for(size_t j = 0; j < snp.diff.size(); j++) {
-                        char inserted_bp = snp.diff[j];
+                    assert_gt(snp.len, 0);
+                    for(size_t j = 0; j < snp.len; j++) {
+                        uint64_t bp = snp.seq >> ((snp.len - j - 1) << 1);
+                        bp &= 0x3;                        
+                        char ch = "ACGT"[bp];
                         nodes.expand();
                         num_snp_nodes++;
-                        nodes.back().label = inserted_bp;
+                        nodes.back().label = ch;
                         nodes.back().value = jlen + 2 + num_snp_nodes;
                         
                         edges.expand();
@@ -682,9 +687,10 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         for(size_t i = 0; i < snps.size(); i++) {
             const SNP<index_t>& snp = snps[i];
             if(snp.type == SNP_SGL) {
-                assert_eq(snp.diff.size(), 1);
+                assert_eq(snp.len, 1);
                 nodes.expand();
-                nodes.back().label = snp.diff[0];
+                assert_lt(snp.seq, 4);
+                nodes.back().label = snp.seq;
                 nodes.back().value = nodes.size();
                 
                 edges.expand();
@@ -695,17 +701,18 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 edges.back().from = nodes.size() - 1;
                 edges.back().to = snp.pos + 2;
             } else if(snp.type == SNP_DEL) {
-                index_t deletionLen = snp.diff.size();
-                assert_gt(deletionLen, 0);
+                assert_gt(snp.len, 0);
                 edges.expand();
                 edges.back().from = snp.pos;
-                edges.back().to = snp.pos + deletionLen + 1;
+                edges.back().to = snp.pos + snp.len + 1;
             } else if(snp.type == SNP_INS) {
-                assert_gt(snp.diff.size(), 0);
-                for(size_t j = 0; j < snp.diff.size(); j++) {
-                    char inserted_bp = snp.diff[j];
+                assert_gt(snp.len, 0);
+                for(size_t j = 0; j < snp.len; j++) {
+                    uint64_t bp = snp.seq >> ((snp.len - j - 1) << 1);
+                    bp &= 0x3;
+                    char ch = "ACGT"[bp];
                     nodes.expand();
-                    nodes.back().label = inserted_bp;
+                    nodes.back().label = ch;
                     nodes.back().value = nodes.size();
                     
                     edges.expand();
@@ -1671,7 +1678,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
         ftab.resize(ftabLen);
         for(index_t i = 0; i < ftabLen; i++) {
             index_t q = i;
-            index_t top = 0, bot = bwt_counts[4];
+            index_t top = 0, bot = edges.size();
             index_t j = 0;
             for(; j < ftabChars; j++) {
                 if(top >= bot) break;

@@ -146,10 +146,10 @@ public:
         _numNodes = (numNodes == 0 ? _gbwtLen : numNodes);
         if(_noSnp) {
             _sz = (len+3)/4;
-            _gbwtSz = (_gbwtLen+3)/4;
+            _gbwtSz = _gbwtLen/4 + 1;
         } else {
             _sz = (len+1)/2;
-            _gbwtSz = (_gbwtLen+1)/2;
+            _gbwtSz = _gbwtLen/2 + 1;
         }
 		_lineRate = lineRate;
 		_origOffRate = offRate;
@@ -377,7 +377,7 @@ struct SideLocus {
 		assert_lt(_sideNum, gp._numSides);
 		_charOff                  = row % gp._sideGbwtLen;
 		_sideByteOff              = _sideNum * sideSz;
-		assert_lt(row, gp._gbwtLen);
+		assert_leq(row, gp._gbwtLen);
 		assert_leq(_sideByteOff + sideSz, gp._gbwtTotSz);
 		// Tons of cache misses on the next line
 		_by = _charOff >> 2; // byte within side
@@ -1077,9 +1077,19 @@ public:
                         getline(snp_file, line);
                         continue;
                     }
-                    string type, chr, diff;
+                    string type, chr;
                     index_t pos;
-                    snp_file >> type >> chr >> pos >> diff;
+                    char snp_ch;
+                    string ins_seq;
+                    index_t del_len;
+                    snp_file >> type >> chr >> pos;
+                    if(type == "single") {
+                        snp_file >> snp_ch;
+                    } else if(type == "deletion") {
+                        snp_file >> del_len;
+                    } else if(type == "insertion") {
+                        snp_file >> ins_seq;
+                    }
                     
                     index_t chr_idx = 0;
                     for(; chr_idx < _refnames.size(); chr_idx++) {
@@ -1122,37 +1132,44 @@ public:
                     _snps.expand();
                     SNP<index_t>& snp = _snps.back();
                     snp.pos = pos;
-                    snp.diff.clear();
                     if(type == "single") {
                         snp.type = SNP_SGL;
-                        if(diff.size() != 1) {
-                            cerr << "Error: single type takes only one base" << endl;
+                        snp_ch = toupper(snp_ch);
+                        if(snp_ch != 'A' && snp_ch != 'C' && snp_ch != 'G' && snp_ch != 'T') {
+                            _snps.pop_back();
+                            continue;
+                        }
+                        uint64_t bp = asc2dna[(int)snp_ch];
+                        assert_lt(bp, 4);
+                        if(bp == s[pos]) {
+                            cerr << "Error: single type (" << "ACGTN"[(int)s[pos]]
+                                 << ") should have a different base than " << "ACGTN"[(int)s[pos]]
+                                 << " (" << snp_id << ")" << endl;
                             throw 1;
                         }
-                        char bp = diff[0];
-                        if(bp == "ACGTN"[(int)s[pos]]) {
-                            cerr << "Error: single type (" << bp
-                            << ") should have a different base than " << "ACGTN"[(int)s[pos]]
-                            << " (" << snp_id << ")" << endl;
-                            throw 1;
-                        }
-                        snp.diff.push_back(bp);
+                        snp.len = 1;
+                        snp.seq = bp;
                     } else if(type == "deletion") {
                         snp.type = SNP_DEL;
-                        for(size_t i = 0; i < diff.size(); i++) {
-                            assert_eq(diff[i], '-');
-                            snp.diff.push_back('-');
-                        }
+                        snp.len = del_len;
+                        snp.seq = 0;
                     } else if(type == "insertion") {
                         snp.type = SNP_INS;
-                        for(size_t i = 0; i < diff.size(); i++) {
-                            char base = toupper(diff[i]);
-                            if(base == 'A' || base == 'C' || base == 'G' || base == 'T') {
-                                snp.diff.push_back(base);
-                            } else {
+                        snp.len = ins_seq.size();
+                        if(snp.len > sizeof(uint64_t) * 4) {
+                            _snps.pop_back();
+                            continue;
+                        }
+                        snp.seq = 0;
+                        for(size_t i = 0; i < ins_seq.size(); i++) {
+                            char ch = toupper(ins_seq[i]);
+                            if(ch != 'A' && ch != 'C' && ch != 'G' && ch != 'T') {
                                 _snps.pop_back();
                                 continue;
                             }
+                            uint64_t bp = asc2dna[(int)ch];
+                            assert_lt(bp, 4);
+                            snp.seq = (snp.seq << 2) | bp;
                         }
                     } else {
                         cerr << "Error: unknown snp type " << type << endl;
@@ -1454,7 +1471,7 @@ public:
 			assert(eftab() == NULL);
 			assert(fchr() == NULL);
 			assert(offs() == NULL);
-			// assert(rstarts() == NULL);
+			assert(rstarts() == NULL);
             assert_eq(_zOffs.size(), 0);
             assert_eq(_zGbwtByteOffs.size(), 0);
             assert_eq(_zGbwtBpOffs.size(), 0);
@@ -2641,25 +2658,30 @@ public:
      * Given row i and character c, return the row that the GLF mapping maps
      * i to on character c.
      */
-    inline index_t mapGLF_top(
-                              SideLocus<index_t>& l, int c
-                              ASSERT_ONLY(, bool overrideSanity = false)
-                              ) const
+    inline pair<index_t, index_t> mapGLF(
+                                         SideLocus<index_t>& tloc, SideLocus<index_t>& bloc, int c
+                                         ASSERT_ONLY(, bool overrideSanity = false)
+                                         ) const
     {
         assert_lt(c, 4);
         assert_geq(c, 0);
-        index_t top = mapLF(l, c);
+        index_t top = mapLF(tloc, c);
+        index_t bot = mapLF(bloc, c);
+        if(top + 1 >= gh()._gbwtLen || top >= bot) {
+            assert_eq(top, bot);
+            return pair<index_t, index_t>(0, 0);
+        }
         
-        l.initFromRow_bit(top + 1, gh(), gfm());
-        index_t node_top = rank_M(l) - 1;
+        tloc.initFromRow_bit(top + 1, gh(), gfm());
+        index_t node_top = rank_M(tloc) - 1;
         
-        const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
+        const uint8_t *side = tloc.side(gfm()) + gh()._sideGbwtSz;
         index_t top_F_loc = *((index_t*)side);
         side += sizeof(index_t);
         index_t top_M_occ = *((index_t*)side);
         assert_leq(top_M_occ, node_top + 1);
         if(top_M_occ > node_top) {
-            side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
+            side = tloc.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
             top_F_loc = *((index_t*)side);
             side += sizeof(index_t);
             top_M_occ = *((index_t*)side);
@@ -2667,50 +2689,33 @@ public:
         }
         if(top_M_occ > 0) top_F_loc++;
         
-        l.initFromRow_bit(top_F_loc, gh(), gfm());
+        tloc.initFromRow_bit(top_F_loc, gh(), gfm());
         
         if(node_top + 1 > top_M_occ) {
-            top = select_F(l, node_top + 1 - top_M_occ);
+            top = select_F(tloc, node_top + 1 - top_M_occ);
         } else {
             top = top_F_loc;
         }
         
-        return top;
-    }
-    
-    /**
-     * Given row i and character c, return the row that the GLF mapping maps
-     * i to on character c.
-     */
-    inline index_t mapGLF_bot(
-                              SideLocus<index_t>& l, int c
-                              ASSERT_ONLY(, bool overrideSanity = false)
-                              ) const
-    {
-        assert_lt(c, 4);
-        assert_geq(c, 0);
+        bloc.initFromRow_bit(bot, gh(), gfm());
+        index_t node_bot = rank_M(bloc);
         
-        index_t bot = mapLF(l, c);
-        
-        l.initFromRow_bit(bot, gh(), gfm());
-        index_t node_bot = rank_M(l);
-       
-        const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
+        side = bloc.side(gfm()) + gh()._sideGbwtSz;
         index_t bot_F_loc = *((index_t*)side);
         side += sizeof(index_t);
         index_t bot_M_occ = *((index_t*)side);
         assert_leq(bot_M_occ, node_bot + 1);
         if(bot_M_occ > 0) bot_F_loc++;
         
-        l.initFromRow_bit(bot_F_loc, gh(), gfm());
+        bloc.initFromRow_bit(bot_F_loc, gh(), gfm());
         
         if(node_bot + 1 > bot_M_occ) {
-            bot = select_F(l, node_bot + 1 - bot_M_occ);
+            bot = select_F(bloc, node_bot + 1 - bot_M_occ);
         } else {
             bot = bot_F_loc;
         }
         
-        return bot;
+        return pair<index_t, index_t>(top, bot);
     }
 
 	/**
@@ -2826,44 +2831,52 @@ public:
      * and return the next row, or all-fs if we can't proceed on that
      * character.  Returns 0xffffffff if this row ends in $.
      */
-    inline index_t mapGLF1(
-                           index_t row,       // starting row
-                           SideLocus<index_t>& l, // locus for starting row
-                           int c               // character to proceed on
-                           ASSERT_ONLY(, bool overrideSanity = false)
-                           ) const
+    inline pair<index_t, index_t> mapGLF1(
+                                          index_t row,       // starting row
+                                          SideLocus<index_t>& l, // locus for starting row
+                                          int c               // character to proceed on
+                                          ASSERT_ONLY(, bool overrideSanity = false)
+                                          ) const
     {
         assert_lt(c, 4);
         assert_geq(c, 0);
-        index_t top = mapLF(l, c);
-        if(top == (index_t)OFF_MASK) return top;
+        index_t top = mapLF1(row, l, c);
+        if(top == (index_t)OFF_MASK) return pair<index_t, index_t>(0, 0);
+        index_t bot = top;
         
         l.initFromRow_bit(top + 1, gh(), gfm());
         index_t node_top = rank_M(l) - 1;
         
         const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
-        index_t top_F_loc = *((index_t*)side);
+        index_t F_loc = *((index_t*)side);
         side += sizeof(index_t);
-        index_t top_M_occ = *((index_t*)side);
-        assert_leq(top_M_occ, node_top + 1);
-        if(top_M_occ > node_top) {
+        index_t M_occ = *((index_t*)side);
+        assert_leq(M_occ, node_top + 1);
+        if(M_occ > node_top) {
             side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
-            top_F_loc = *((index_t*)side);
+            F_loc = *((index_t*)side);
             side += sizeof(index_t);
-            top_M_occ = *((index_t*)side);
-            assert_leq(top_M_occ, node_top + 1);
+            M_occ = *((index_t*)side);
+            assert_leq(M_occ, node_top + 1);
         }
-        if(top_M_occ > 0) top_F_loc++;
+        if(M_occ > 0) F_loc++;
         
-        l.initFromRow_bit(top_F_loc, gh(), gfm());
+        l.initFromRow_bit(F_loc, gh(), gfm());
         
-        if(node_top + 1 > top_M_occ) {
-            top = select_F(l, node_top + 1 - top_M_occ);
+        if(node_top + 1 > M_occ) {
+            top = select_F(l, node_top + 1 - M_occ);
         } else {
-            top = top_F_loc;
+            top = F_loc;
         }
         
-        return top;
+        index_t node_bot = node_top + 1;
+        if(node_bot + 1 > M_occ) {
+            bot = select_F(l, node_bot + 1 - M_occ);
+        } else {
+            bot = F_loc;
+        }
+        
+        return pair<index_t, index_t>(top, bot);
     }
     
     /**
@@ -3686,94 +3699,37 @@ void GFM<index_t>::buildToDisk(
     tFtab.resizeExact(ftabLen - 1);
     for(index_t i = 0; i + 1 < ftabLen; i++) {
         index_t q = i;
-        index_t top = 0, bot = fchr[4];
+        pair<index_t, index_t> range(0, gh._gbwtLen);
         SideLocus<index_t> tloc, bloc;
-        SideLocus<index_t>::initFromTopBot(top, bot, gh, gfm(), tloc, bloc);
+        SideLocus<index_t>::initFromTopBot(range.first, range.second, gh, gfm(), tloc, bloc);
         index_t j = 0;
         for(; j < gh._ftabChars; j++) {
             int nt = q & 0x3; q >>= 2;
-            // daehwan - in the middle of implementation
-#if 1
             if(bloc.valid()) {
-                top = mapGLF_top(tloc, nt);
-                bot = mapGLF_bot(bloc, nt);
+                range = mapGLF(tloc, bloc, nt);
             } else {
-                top = mapGLF1(top, tloc, nt);
-                if(top == (index_t)OFF_MASK) {
-                    top = bot = 0;
-                } else {
-                    bot = top + 1;
-                }
+                range = mapGLF1(range.first, tloc, nt);
             }
-            if(bot <= top) {
+            if(range.first == (index_t)OFF_MASK || range.first >= range.second) {
                 break;
             }
-#else
-            if(bloc.valid()) {
-                top = mapLF(tloc, nt);
-                bot = mapLF(bloc, nt);
+            if(range.first + 1 == range.second) {
+                tloc.initFromRow(range.first, gh, gfm());
+                bloc.invalidate();
             } else {
-                top = mapLF1(top, tloc, nt);
-                if(top == (index_t)OFF_MASK) {
-                    top = bot = 0;
-                } else {
-                    bot = top + 1;
-                }
+                SideLocus<index_t>::initFromTopBot(range.first, range.second, gh, gfm(), tloc, bloc);
             }
-            if(bot <= top) {
-                break;
-            }
-            
-            SideLocus<index_t>::initFromTopBot_bit(top + 1, bot, gh, gfm(), tloc, bloc);
-            index_t node_top = rank_M(tloc) - 1;
-            index_t node_bot = rank_M(bloc);
-            
-            const uint8_t *side = tloc.side(gfm()) + gh._sideGbwtSz;
-            index_t top_F_loc = *((index_t*)side);
-            side += sizeof(index_t);
-            index_t top_M_occ = *((index_t*)side);
-            assert_leq(top_M_occ, node_top + 1);
-            if(top_M_occ > node_top) {
-                side = tloc.side(gfm()) + gh._sideGbwtSz - gh._sideSz;
-                top_F_loc = *((index_t*)side);
-                side += sizeof(index_t);
-                top_M_occ = *((index_t*)side);
-                assert_leq(top_M_occ, node_top + 1);
-            }
-            if(top_M_occ > 0) top_F_loc++;
-            side = bloc.side(gfm()) + gh._sideGbwtSz;
-            index_t bot_F_loc = *((index_t*)side);
-            side += sizeof(index_t);
-            index_t bot_M_occ = *((index_t*)side);
-            assert_leq(bot_M_occ, node_bot + 1);
-            if(bot_M_occ > 0) bot_F_loc++;
-            
-            SideLocus<index_t>::initFromTopBot_bit(top_F_loc, bot_F_loc, gh, gfm(), tloc, bloc);
-            
-            if(node_top + 1 > top_M_occ) {
-                top = select_F(tloc, node_top + 1 - top_M_occ);
-            } else {
-                top = top_F_loc;
-            }
-            if(node_bot + 1 > bot_M_occ) {
-                bot = select_F(bloc, node_bot + 1 - bot_M_occ);
-            } else {
-                bot = bot_F_loc;
-            }
-#endif
-
-            SideLocus<index_t>::initFromTopBot(top, bot, gh, gfm(), tloc, bloc);
         }
         
-        if(top >= bot) {
+        if(range.first >= range.second || j < gh._ftabChars) {
             if(i == 0) {
                 tFtab[i].first = tFtab[i].second = 0;
             } else {
                 tFtab[i].first = tFtab[i].second = tFtab[i-1].second;
             }
         } else {
-            tFtab[i].first = top;
-            tFtab[i].second = bot;
+            tFtab[i].first = range.first;
+            tFtab[i].second = range.second;
         }
         
 #ifndef NDEBUG
@@ -3816,11 +3772,6 @@ void GFM<index_t>::buildToDisk(
     ftab[1] = tFtab[0].second;
     for(index_t i = 1; i + 1 < ftabLen; i++) {
         if(ftab[i] != tFtab[i].first) {
-#ifndef NDEBUG
-            if(ftab[i] > tFtab[i].first) {
-                assert_eq(ftab[i], tFtab[i].first + 1);
-            }
-#endif
             index_t lo = ftab[i];
             index_t hi = tFtab[i].first;
             assert_lt(eftabCur*2+1, eftabLen);

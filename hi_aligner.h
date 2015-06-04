@@ -3846,8 +3846,8 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     
     index_t offset = cur;
     index_t dep = offset;
-    index_t top = 0, bot = 0;
-    index_t topTemp = 0, botTemp = 0;
+    pair<index_t, index_t> range(0, 0);
+    pair<index_t, index_t> rangeTemp(0, 0);
     index_t left = len - dep;
     assert_gt(left, 0);
     if(left < ftabLen) {
@@ -3880,9 +3880,9 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     }
     
     // Use ftab
-    gfm.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
+    gfm.ftabLoHi(seq, len - dep - ftabLen, false, range.first, range.second);
     dep += ftabLen;
-    if(bot <= top) {
+    if(range.first >= range.second) {
         cur = dep;
         partialHits.expand();
         partialHits.back().init((index_t)OFF_MASK,
@@ -3896,33 +3896,27 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         return 0;
     }
     index_t same_range = 0, similar_range = 0;
-    HIER_INIT_LOCS(top, bot, tloc, bloc, gfm);
+    HIER_INIT_LOCS(range.first, range.second, tloc, bloc, gfm);
     // Keep going
     while(dep < len) {
         int c = seq[len-dep-1];
         if(c > 3) {
-            topTemp = botTemp = 0;
+            rangeTemp.first = rangeTemp.second = 0;
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                topTemp = gfm.mapGLF_top(tloc, c);
-                botTemp = gfm.mapGLF_bot(bloc, c);
+                rangeTemp = gfm.mapGLF(tloc, bloc, c);
             } else {
                 bwops_++;
-                topTemp = gfm.mapGLF1(top, tloc, c);
-                if(topTemp == (index_t)OFF_MASK) {
-                    topTemp = botTemp = 0;
-                } else {
-                    botTemp = topTemp + 1;
-                }
+                rangeTemp = gfm.mapGLF1(range.first, tloc, c);
             }
         }
-        if(botTemp <= topTemp) {
+        if(rangeTemp.first >= rangeTemp.second) {
             break;
         }
 
         if(pseudogeneStop_) {
-            if(botTemp - topTemp < bot - top && bot - top <= 5) {
+            if(rangeTemp.second - rangeTemp.first < range.second - range.first && range.second - range.first <= 5) {
                 static const index_t minLenForPseudogene = _minK + 6;
                 if(dep - offset >= minLenForPseudogene && similar_range >= 5) {
                     hit._numUniqueSearch++;
@@ -3930,16 +3924,16 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                     break;
                 }
             }
-            if(botTemp - topTemp != 1) {
-                if(botTemp - topTemp + 2 >= bot - top) similar_range++;
-                else if(botTemp - topTemp + 4 < bot - top) similar_range = 0;
+            if(rangeTemp.second - rangeTemp.first != 1) {
+                if(rangeTemp.second - rangeTemp.first + 2 >= range.second - range.first) similar_range++;
+                else if(rangeTemp.second - rangeTemp.first + 4 < range.second - range.first) similar_range = 0;
             } else {
                 pseudogeneStop_ = false;
             }
         }
         
         if(anchorStop_) {
-            if(botTemp - topTemp != 1 && bot - top == botTemp - topTemp) {
+            if(rangeTemp.second - rangeTemp.first != 1 && range.second - range.first == rangeTemp.second - rangeTemp.first) {
                 same_range++;
                 if(same_range >= 5) {
                     anchorStop_ = false;
@@ -3948,28 +3942,27 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                 same_range = 0;
             }
         
-            if(dep - offset >= _minK + 8 && botTemp - topTemp >= 4) {
+            if(dep - offset >= _minK + 8 && rangeTemp.second - rangeTemp.first >= 4) {
                 anchorStop_ = false;
             }
         }
         
-        top = topTemp;
-        bot = botTemp;
+        range = rangeTemp;
         dep++;
 
         if(anchorStop_) {
-            if(dep - offset >= _minK + 12 && bot - top == 1) {
+            if(dep - offset >= _minK + 12 && range.second - range.first == 1) {
                 hit._numUniqueSearch++;
                 anchorStop = true;
                 break;
             }
         }
         
-        HIER_INIT_LOCS(top, bot, tloc, bloc, gfm);
+        HIER_INIT_LOCS(range.first, range.second, tloc, bloc, gfm);
     }
     
     // Done
-    if(bot > top) {
+    if(range.first < range.second) {
         // This is an exact hit
         assert_gt(dep, offset);
         assert_leq(dep, len);
@@ -3977,14 +3970,15 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         index_t hit_type = CANDIDATE_HIT;
         if(anchorStop) hit_type = ANCHOR_HIT;
         else if(pseudogeneStop) hit_type = PSEUDOGENE_HIT;
-        partialHits.back().init(top,
-                                bot,
+        partialHits.back().init(range.first,
+                                range.second,
                                 fw,
                                 (index_t)offset,
                                 (index_t)(dep - offset),
                                 hit_type);
         
-        nelt += (bot - top);
+        // daehwan - this needs to be fixed
+        nelt += (range.second - range.first);
         cur = dep;
         if(cur >= hit._len) {
             if(hit_type == CANDIDATE_HIT) hit._numUniqueSearch++;
