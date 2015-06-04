@@ -1437,7 +1437,6 @@ void PathGraph<index_t>::printInfo()
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChars)
 {
-#if 0
     if(status != sorted)
         return false;
     
@@ -1625,7 +1624,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
             cerr << i << "\t" << bwt_counts[i] << endl;
         }
     }
-#endif
 #endif
     
     // Test searches, based on paper_example
