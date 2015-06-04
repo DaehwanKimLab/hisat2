@@ -115,35 +115,37 @@ public:
 
 	GFMParams(
 		index_t len,
+        index_t gbwtLen,
+        index_t numNodes,
 		int32_t lineRate,
 		int32_t offRate,
 		int32_t ftabChars,
-		bool entireReverse,
-        index_t gbwtLen = 0,
-        index_t numNodes = 0)
+        index_t eftabLen,
+		bool entireReverse)
 	{
-		init(len, lineRate, offRate, ftabChars, entireReverse, gbwtLen, numNodes);
+		init(len, gbwtLen, numNodes, lineRate, offRate, ftabChars, eftabLen, entireReverse);
 	}
 
 	GFMParams(const GFMParams& gh) {
-		init(gh._len, gh._lineRate, gh._offRate,
-		     gh._ftabChars, gh._entireReverse, gh._gbwtLen, gh._numNodes);
+		init(gh._len, gh._gbwtLen, gh._numNodes, gh._lineRate, gh._offRate,
+		     gh._ftabChars, gh._eftabLen, gh._entireReverse);
 	}
 
 	void init(
               index_t len,
+              index_t gbwtLen,
+              index_t numNodes,
               int32_t lineRate,
               int32_t offRate,
               int32_t ftabChars,
-              bool entireReverse,
-              index_t gbwtLen = 0,
-              index_t numNodes = 0)
+              index_t eftabLen,
+              bool entireReverse)
 	{
 		_entireReverse = entireReverse;
         _noSnp = (len + 1 == gbwtLen || gbwtLen == 0);
 		_len = len;
-        _gbwtLen = (gbwtLen == 0 ? _len + 1 : gbwtLen);
-        _numNodes = (numNodes == 0 ? _gbwtLen : numNodes);
+        _gbwtLen = (gbwtLen == 0 ? len + 1 : gbwtLen);
+        _numNodes = (numNodes == 0 ? len + 1 : numNodes);
         if(_noSnp) {
             _sz = (len+3)/4;
             _gbwtSz = _gbwtLen/4 + 1;
@@ -156,7 +158,7 @@ public:
 		_offRate = offRate;
 		_offMask = std::numeric_limits<index_t>::max() << _offRate;
 		_ftabChars = ftabChars;
-		_eftabLen = _ftabChars*2;
+		_eftabLen = eftabLen;
 		_eftabSz = _eftabLen*sizeof(index_t);
 		_ftabLen = (1 << (_ftabChars*2))+1;
 		_ftabSz = _ftabLen*sizeof(index_t);
@@ -702,9 +704,12 @@ public:
 	GFM_INITS,
 	_gh(
 		joinedLen(szs),
+        0,
+        0,
 		lineRate,
 		offRate,
 		ftabChars,
+        0,
 		refparams.reverse == REF_READ_REVERSE)
 	{
 #ifdef POPCNT_CAPABILITY
@@ -746,9 +751,12 @@ public:
 		GFM_INITS,
 		_gh(
 			joinedLen(szs),
+            0,
+            0,
 			lineRate,
 			offRate,
 			ftabChars,
+            0,
 			refparams.reverse == REF_READ_REVERSE)
 	{
 #ifdef POPCNT_CAPABILITY
@@ -1288,12 +1296,13 @@ public:
                 // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
                 _gh.init(
                          _gh.len(),
+                         pg->getNumEdges(),
+                         pg->getNumNodes(),
                          _gh.lineRate(),
                          _gh.offRate(),
                          _gh.ftabChars(),
-                         _gh.entireReverse(),
-                         pg->getNumEdges(),
-                         pg->getNumNodes());
+                         0,
+                         _gh.entireReverse());
                 buildToDisk(*pg, s, out1, out2);
                 delete pg; pg = NULL;
                 delete graph; graph = NULL;
@@ -3076,11 +3085,14 @@ void readEbwtRefnames(istream& in, EList<string>& refnames) {
     }
     
     // Reads header entries one by one from primary stream
-    index_t len          = readIndex<index_t>(in, switchEndian);
-    int32_t  lineRate     = readI32(in, switchEndian);
+    index_t len           = readIndex<index_t>(in, switchEndian);
+    index_t gbwtLen       = readIndex<index_t>(in, switchEndian);
+    index_t numNodes      = readIndex<index_t>(in, switchEndian);
+    int32_t lineRate      = readI32(in, switchEndian);
     /*int32_t  linesPerSide =*/ readI32(in, switchEndian);
-    int32_t  offRate      = readI32(in, switchEndian);
-    int32_t  ftabChars    = readI32(in, switchEndian);
+    int32_t offRate       = readI32(in, switchEndian);
+    int32_t ftabChars     = readI32(in, switchEndian);
+    index_t eftabLen      = readIndex<index_t>(in, switchEndian);
     // BTL: chunkRate is now deprecated
     int32_t flags = readI32(in, switchEndian);
     bool entireReverse = false;
@@ -3089,7 +3101,7 @@ void readEbwtRefnames(istream& in, EList<string>& refnames) {
     }
     
     // Create a new EbwtParams from the entries read from primary stream
-    GFMParams<index_t> gh(len, lineRate, offRate, ftabChars, entireReverse);
+    GFMParams<index_t> gh(len, gbwtLen, numNodes, lineRate, offRate, ftabChars, eftabLen, entireReverse);
     
     index_t nPat = readIndex<index_t>(in, switchEndian); // nPat
     in.seekg(nPat*sizeof(index_t), ios_base::cur); // skip plen
@@ -3426,8 +3438,11 @@ void GFM<index_t>::buildToDisk(
 	assert_gt(gh._lineRate, 3);
 	
 	index_t  gbwtLen = gh._gbwtLen;
+    streampos out1pos = out1.tellp();
+    out1.seekp(4 + sizeof(index_t));
     writeIndex<index_t>(out1, gbwtLen, this->toBe());
     writeIndex<index_t>(out1, gh._numNodes, this->toBe());
+    out1.seekp(out1pos);
     
 	index_t  ftabLen = gh._ftabLen;
 	index_t  sideSz = gh._sideSz;
@@ -3794,7 +3809,10 @@ void GFM<index_t>::buildToDisk(
 		writeIndex<index_t>(out1, ftab[i], this->toBe());
 	}
     // Write eftab to primary file
+    out1pos = out1.tellp();
+    out1.seekp(20 + sizeof(index_t) * 3);
     writeIndex<index_t>(out1, eftabLen, this->toBe());
+    out1.seekp(out1pos);
     for(index_t i = 0; i < eftabLen; i++) {
         writeIndex<index_t>(out1, eftab[i], this->toBe());
     }
@@ -4188,7 +4206,12 @@ void GFM<index_t>::readIntoMemory(
     }
     
     // Reads header entries one by one from primary stream
-    index_t len          = readIndex<index_t>(_in1, switchEndian);
+    index_t len           = readIndex<index_t>(_in1, switchEndian);
+    bytesRead += sizeof(index_t);
+    index_t gbwtLen       = readIndex<index_t>(_in1, switchEndian);
+    bytesRead += sizeof(index_t);
+    assert_lt(len, gbwtLen);
+    index_t numNodes      = readIndex<index_t>(_in1, switchEndian);
     bytesRead += sizeof(index_t);
     int32_t  lineRate     = readI32(_in1, switchEndian);
     bytesRead += 4;
@@ -4201,6 +4224,8 @@ void GFM<index_t>::readIntoMemory(
     // sampling rate is.
     int32_t  ftabChars    = readI32(_in1, switchEndian);
     bytesRead += 4;
+    index_t  eftabLen     = readIndex<index_t>(_in1, switchEndian);
+    bytesRead += sizeof(index_t);
     // chunkRate was deprecated in an earlier version of Bowtie; now
     // we use it to hold flags.
     int32_t flags = readI32(_in1, switchEndian);
@@ -4214,6 +4239,32 @@ void GFM<index_t>::readIntoMemory(
         }
     } else entireRev = true;
     bytesRead += 4;
+    
+    // Create a new EbwtParams from the entries read from primary stream
+    GFMParams<index_t> *gh;
+    bool deleteGh = false;
+    if(params != NULL) {
+        params->init(len, gbwtLen, numNodes, lineRate, offRate, ftabChars, eftabLen, entireRev);
+        if(_verbose || startVerbose) params->print(cerr);
+        gh = params;
+    } else {
+        gh = new GFMParams<index_t>(len, gbwtLen, numNodes, lineRate, offRate, ftabChars, eftabLen, entireRev);
+        deleteGh = true;
+    }
+    
+    // Set up overridden suffix-array-sample parameters
+    index_t offsLen = gh->_offsLen;
+    index_t offRateDiff = 0;
+    index_t offsLenSampled = offsLen;
+    if(_overrideOffRate > offRate) {
+        offRateDiff = _overrideOffRate - offRate;
+    }
+    if(offRateDiff > 0) {
+        offsLenSampled >>= offRateDiff;
+        if((offsLen & ~((index_t)OFF_MASK << offRateDiff)) != 0) {
+            offsLenSampled++;
+        }
+    }
     
     // Can't override the offrate or isarate and use memory-mapped
     // files; ultimately, all processes need to copy the sparser sample
@@ -4261,6 +4312,23 @@ void GFM<index_t>::readIntoMemory(
         }
     }
     
+    // TODO: I'm not consistent on what "header" means.  Here I'm using
+    // "header" to mean everything that would exist in memory if we
+    // started to build the Ebwt but stopped short of the build*() step
+    // (i.e. everything up to and including join()).
+    if(justHeader) {
+        // Be kind
+        if(deleteGh) delete gh;
+#ifdef BOWTIE_MM
+        fseek(_in1, 0, SEEK_SET);
+        if(loadSASamp) fseek(_in2, 0, SEEK_SET);
+#else
+        rewind(_in1);
+        if(loadSASamp) rewind(_in2);
+#endif
+        return;
+    }
+    
     bool shmemLeader;
     
     this->_nFrag = readIndex<index_t>(_in1, switchEndian);
@@ -4301,54 +4369,6 @@ void GFM<index_t>::readIntoMemory(
         assert(rstarts() == NULL);
         bytesRead += this->_nFrag*sizeof(index_t)*3;
         fseek(_in1, this->_nFrag*sizeof(index_t)*3, SEEK_CUR);
-    }
-
-    index_t gbwtLen = readIndex<index_t>(_in1, switchEndian);
-    bytesRead += sizeof(index_t);    
-    assert_lt(len, gbwtLen);
-    index_t numNodes = readIndex<index_t>(_in1, switchEndian);
-    bytesRead += sizeof(index_t);
-    // Create a new EbwtParams from the entries read from primary stream
-    GFMParams<index_t> *gh;
-    bool deleteGh = false;
-    if(params != NULL) {
-        params->init(len, lineRate, offRate, ftabChars, entireRev, gbwtLen, numNodes);
-        if(_verbose || startVerbose) params->print(cerr);
-        gh = params;
-    } else {
-        gh = new GFMParams<index_t>(len, lineRate, offRate, ftabChars, entireRev, gbwtLen, numNodes);
-        deleteGh = true;
-    }
-    
-    // Set up overridden suffix-array-sample parameters
-    index_t offsLen = gh->_offsLen;
-    index_t offRateDiff = 0;
-    index_t offsLenSampled = offsLen;
-    if(_overrideOffRate > offRate) {
-        offRateDiff = _overrideOffRate - offRate;
-    }
-    if(offRateDiff > 0) {
-        offsLenSampled >>= offRateDiff;
-        if((offsLen & ~((index_t)OFF_MASK << offRateDiff)) != 0) {
-            offsLenSampled++;
-        }
-    }
-    
-    // TODO: I'm not consistent on what "header" means.  Here I'm using
-    // "header" to mean everything that would exist in memory if we
-    // started to build the Ebwt but stopped short of the build*() step
-    // (i.e. everything up to and including join()).
-    if(justHeader) {
-        // Be kind
-        if(deleteGh) delete gh;
-#ifdef BOWTIE_MM
-        fseek(_in1, 0, SEEK_SET);
-        if(loadSASamp) fseek(_in2, 0, SEEK_SET);
-#else
-        rewind(_in1);
-        if(loadSASamp) rewind(_in2);
-#endif
-        return;
     }
     
     _gfm.reset();
@@ -4490,12 +4510,6 @@ void GFM<index_t>::readIntoMemory(
                 
             }
             _eftab.reset();
-            index_t eftabLen = readIndex<index_t>(_in1, switchEndian);
-            bytesRead += sizeof(index_t);
-            gh->_eftabLen = eftabLen;
-            gh->_eftabSz = eftabLen * sizeof(index_t);
-            _gh._eftabLen = gh->_eftabLen;
-            _gh._eftabSz = gh->_eftabSz;
             if(_useMm) {
 #ifdef BOWTIE_MM
                 _eftab.init((index_t*)(mmFile[0] + bytesRead), gh->_eftabLen, false);
@@ -4696,11 +4710,14 @@ void readGFMRefnames(istream& in, EList<string>& refnames) {
     }
     
     // Reads header entries one by one from primary stream
-    index_t len          = readIndex<index_t>(in, switchEndian);
-    int32_t  lineRate     = readI32(in, switchEndian);
+    index_t len           = readIndex<index_t>(in, switchEndian);
+    index_t gbwtLen       = readIndex<index_t>(in, switchEndian);
+    index_t numNodes      = readIndex<index_t>(in, switchEndian);
+    int32_t lineRate     = readI32(in, switchEndian);
     /*int32_t  linesPerSide =*/ readI32(in, switchEndian);
-    int32_t  offRate      = readI32(in, switchEndian);
-    int32_t  ftabChars    = readI32(in, switchEndian);
+    int32_t offRate      = readI32(in, switchEndian);
+    int32_t ftabChars    = readI32(in, switchEndian);
+    index_t eftabLen     = readIndex<index_t>(in, switchEndian);
     // BTL: chunkRate is now deprecated
     int32_t flags = readI32(in, switchEndian);
     bool entireReverse = false;
@@ -4709,7 +4726,7 @@ void readGFMRefnames(istream& in, EList<string>& refnames) {
     }
     
     // Create a new EbwtParams from the entries read from primary stream
-    GFM<index_t> gh(len, lineRate, offRate, ftabChars, entireReverse);
+    GFM<index_t> gh(len, gbwtLen, numNodes, lineRate, offRate, ftabChars, eftabLen, entireReverse);
     
     index_t nPat = readIndex<index_t>(in, switchEndian); // nPat
     in.seekg(nPat*sizeof(index_t), ios_base::cur); // skip plen
@@ -4796,10 +4813,13 @@ int32_t GFM<index_t>::readFlags(const string& instr) {
         switchEndian = true;
     }
     readIndex<index_t>(in, switchEndian);
+    readIndex<index_t>(in, switchEndian);
+    readIndex<index_t>(in, switchEndian);
     readI32(in, switchEndian);
     readI32(in, switchEndian);
     readI32(in, switchEndian);
     readI32(in, switchEndian);
+    readIndex<index_t>(in, switchEndian);
     int32_t flags = readI32(in, switchEndian);
     return flags;
 }
@@ -4834,11 +4854,14 @@ void GFM<index_t>::writeFromMemory(bool justHeader,
     // before we join() or buildToDisk()
     writeI32(out1, 1, be); // endian hint for priamry stream
     writeI32(out2, 1, be); // endian hint for secondary stream
-    writeIndex<index_t>(out1, gh._len,          be); // length of string (and bwt and suffix array)
-    writeI32(out1, gh._lineRate,     be); // 2^lineRate = size in bytes of 1 line
-    writeI32(out1, 2,                be); // not used
-    writeI32(out1, gh._offRate,      be); // every 2^offRate chars is "marked"
-    writeI32(out1, gh._ftabChars,    be); // number of 2-bit chars used to address ftab
+    writeIndex<index_t>(out1, gh._len, be); // length of string (and bwt and suffix array)
+    writeIndex<index_t>(out1, 0,       be); // dummy for gbwt len
+    writeIndex<index_t>(out1, 0,       be); // dummy for number of nodes
+    writeI32(out1, gh._lineRate,       be); // 2^lineRate = size in bytes of 1 line
+    writeI32(out1, 2,                  be); // not used
+    writeI32(out1, gh._offRate,        be); // every 2^offRate chars is "marked"
+    writeI32(out1, gh._ftabChars,      be); // number of 2-bit chars used to address ftab
+    writeIndex<index_t>(out1, 0,       be); // eftab length
     int32_t flags = 1;
     if(gh._entireReverse) flags |= GFM_ENTIRE_REV;
     writeI32(out1, -flags, be); // BTL: chunkRate is now deprecated

@@ -651,10 +651,13 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 	// Reads header entries one by one from primary stream
 	tidx = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
 	localOffset = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
-	uint32_t len = readU32(in5, switchEndian); bytesRead += 4;
+	uint32_t len      = readU32(in5, switchEndian); bytesRead += 4;
+    uint32_t gbwtLen  = readU32(in5, switchEndian); bytesRead += 4;
+    uint32_t numNodes = readU32(in5, switchEndian); bytesRead += 4;
+    uint32_t eftabLen = readU32(in5, switchEndian); bytesRead += 4;
 	
 	// Create a new EbwtParams from the entries read from primary stream
-	this->_gh.init(len, lineRate, offRate, ftabChars, entireRev);
+	this->_gh.init(len, gbwtLen, numNodes, lineRate, offRate, ftabChars, eftabLen, entireRev);
 	
 	if(len <= 0) {
 		return;
