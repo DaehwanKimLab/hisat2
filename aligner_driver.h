@@ -198,8 +198,8 @@ public:
 	 */
 	int go(
 		const Scoring& sc,
-		const Ebwt<index_t>& ebwtFw,
-		const Ebwt<index_t>& ebwtBw,
+		const GFM<index_t>& gfmFw,
+		const GFM<index_t>& gfmBw,
 		const BitPairReference& ref,
 		DescentMetrics& met,
 		WalkMetrics& wlm,

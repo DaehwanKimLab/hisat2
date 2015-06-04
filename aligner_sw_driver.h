@@ -87,7 +87,7 @@
 #include "aligner_cache.h"
 #include "reference.h"
 #include "group_walk.h"
-#include "bt2_idx.h"
+#include "gfm.h"
 #include "mem_ids.h"
 #include "aln_sink.h"
 #include "pe.h"
@@ -335,8 +335,8 @@ public:
 		Read& rd,                    // read to align
 		bool mate1,                  // true iff rd is mate #1
 		SeedResults<index_t>& sh,    // seed hits to extend into full alignments
-		const Ebwt<index_t>& ebwtFw, // BWT
-		const Ebwt<index_t>* ebwtBw, // BWT'
+		const GFM<index_t>& gfmFw,   // BWT
+		const GFM<index_t>* gfmBw,   // BWT'
 		const BitPairReference& ref, // Reference strings
 		SwAligner& swa,              // dynamic programming aligner
 		const Scoring& sc,           // scoring scheme
@@ -384,8 +384,8 @@ public:
 		bool anchor1,                // true iff anchor mate is mate1
 		bool oppFilt,                // true iff opposite mate was filtered out
 		SeedResults<index_t>& sh,    // seed hits for anchor
-		const Ebwt<index_t>& ebwtFw, // BWT
-		const Ebwt<index_t>* ebwtBw, // BWT'
+		const GFM<index_t>& gfmFw,   // BWT
+		const GFM<index_t>* gfmBw,   // BWT'
 		const BitPairReference& ref, // Reference strings
 		SwAligner& swa,              // dyn programming aligner for anchor
 		SwAligner& swao,             // dyn programming aligner for opposite
@@ -457,7 +457,7 @@ protected:
 	bool eeSaTups(
 		const Read& rd,              // read
 		SeedResults<index_t>& sh,    // seed hits to extend into full alignments
-		const Ebwt<index_t>& ebwt,   // BWT
+		const GFM<index_t>& gfm,     // BWT
 		const BitPairReference& ref, // Reference strings
 		RandomSource& rnd,           // pseudo-random generator
 		WalkMetrics& wlm,            // group walk left metrics
@@ -468,8 +468,8 @@ protected:
     
     void extend(
 		const Read& rd,       // read
-		const Ebwt<index_t>& ebwtFw,   // Forward Bowtie index
-		const Ebwt<index_t>* ebwtBw,   // Backward Bowtie index
+		const GFM<index_t>& gfmFw,   // Forward Bowtie index
+		const GFM<index_t>* gfmBw,   // Backward Bowtie index
 		index_t topf,        // top in fw index
 		index_t botf,        // bot in fw index
 		index_t topb,        // top in bw index
@@ -484,8 +484,8 @@ protected:
 	void prioritizeSATups(
 		const Read& rd,              // read
 		SeedResults<index_t>& sh,    // seed hits to extend into full alignments
-		const Ebwt<index_t>& ebwtFw, // BWT
-		const Ebwt<index_t>* ebwtBw, // BWT'
+		const GFM<index_t>& gfmFw, // BWT
+		const GFM<index_t>* gfmBw, // BWT'
 		const BitPairReference& ref, // Reference strings
 		int seedmms,                 // # seed mismatches allowed
 		index_t maxelt,              // max elts we'll consider
@@ -587,7 +587,7 @@ template <typename index_t>
 bool SwDriver<index_t>::eeSaTups(
 								 const Read& rd,              // read
 								 SeedResults<index_t>& sh,    // seed hits to extend into full alignments
-								 const Ebwt<index_t>& ebwt,   // BWT
+                                 const GFM<index_t>& gfm,     // BWT
 								 const BitPairReference& ref, // Reference strings
 								 RandomSource& rnd,           // pseudo-random generator
 								 WalkMetrics& wlm,            // group walk left metrics
@@ -706,7 +706,7 @@ bool SwDriver<index_t>::eeSaTups(
 					sa.len = satpos_.back().sat.key.len;
 					sa.offs = satpos_.back().sat.offs;
                     gws_.back().init(
-									 ebwt,               // forward Bowtie index
+									 gfm,                // forward Bowtie index
 									 ref,                // reference sequences
 									 sa,                 // SATuple
 									 rnd,                // pseudo-random generator
@@ -795,7 +795,7 @@ bool SwDriver<index_t>::eeSaTups(
 				sa.len = satpos_.back().sat.key.len;
 				sa.offs = satpos_.back().sat.offs;
                 gws_.back().init(
-								 ebwt, // forward Bowtie index
+								 gfm,  // forward Bowtie index
 								 ref,  // reference sequences
 								 sa,   // SATuple
 								 rnd,  // pseudo-random generator
@@ -820,8 +820,8 @@ bool SwDriver<index_t>::eeSaTups(
 template <typename index_t>
 void SwDriver<index_t>::extend(
 							   const Read& rd,       // read
-							   const Ebwt<index_t>& ebwtFw,   // Forward Bowtie index
-							   const Ebwt<index_t>* ebwtBw,   // Backward Bowtie index
+							   const GFM<index_t>& gfmFw,   // Forward Bowtie index
+							   const GFM<index_t>* gfmBw,   // Backward Bowtie index
 							   index_t topf,         // top in fw index
 							   index_t botf,         // bot in fw index
 							   index_t topb,         // top in bw index
@@ -848,17 +848,17 @@ void SwDriver<index_t>::extend(
 		
 		// Have to do both because whether we can get through an N depends on
 		// which direction we're coming in
-		bool fwContains = ebwtFw.contains(tmp_rdseq_);
+		bool fwContains = gfmFw.contains(tmp_rdseq_);
 		tmp_rdseq_.reverse();
-		bool bwContains = ebwtBw != NULL && ebwtBw->contains(tmp_rdseq_);
+		bool bwContains = gfmBw != NULL && gfmBw->contains(tmp_rdseq_);
 		tmp_rdseq_.reverse();
 		assert(fwContains || bwContains);
 	}
 #endif
 	ASSERT_ONLY(tmp_rdseq_.reverse());
 	if(lim > 0) {
-		const Ebwt<index_t> *ebwt = &ebwtFw;
-		assert(ebwt != NULL);
+		const GFM<index_t> *gfm = &gfmFw;
+		assert(gfm != NULL);
 		// Extend left using forward index
 		const BTDnaString& seq = fw ? rd.patFw : rd.patRc;
 		// See what we get by extending 
@@ -868,7 +868,7 @@ void SwDriver<index_t>::extend(
 		tp[0] = tp[1] = tp[2] = tp[3] = topb;
 		bp[0] = bp[1] = bp[2] = bp[3] = botb;
 		SideLocus<index_t> tloc, bloc;
-		INIT_LOCS(top, bot, tloc, bloc, *ebwt);
+		INIT_LOCS(top, bot, tloc, bloc, *gfm);
 		for(index_t ii = 0; ii < lim; ii++) {
 			// Starting to left of seed (<off) and moving left
 			index_t i = 0;
@@ -884,7 +884,7 @@ void SwDriver<index_t>::extend(
 				prm.nSdFmops++;
 				t[0] = t[1] = t[2] = t[3] =
 				b[0] = b[1] = b[2] = b[3] = 0;
-				ebwt->mapBiLFEx(tloc, bloc, t, b, tp, bp);
+				gfm->mapBiLFEx(tloc, bloc, t, b, tp, bp);
 				SANITY_CHECK_4TUP(t, b, tp, bp);
 				int nonz = -1;
 				bool abort = false;
@@ -906,7 +906,7 @@ void SwDriver<index_t>::extend(
 			} else {
 				assert_eq(bot, top+1);
 				prm.nSdFmops++;
-				int c = ebwt->mapLF1(top, tloc);
+				int c = gfm->mapLF1(top, tloc);
 				if(c != rdc && rdc <= 3) {
 					break;
 				}
@@ -916,15 +916,15 @@ void SwDriver<index_t>::extend(
 			if(++nlex == 255) {
 				break;
 			}
-			INIT_LOCS(top, bot, tloc, bloc, *ebwt);
+			INIT_LOCS(top, bot, tloc, bloc, *gfm);
 		}
 	}
 	// We're about to add onto the end, so re-reverse
 	ASSERT_ONLY(tmp_rdseq_.reverse());
 	lim = fw ? rdlen - len - off : off;
-	if(lim > 0 && ebwtBw != NULL) {
-		const Ebwt<index_t> *ebwt = ebwtBw;
-		assert(ebwt != NULL);
+	if(lim > 0 && gfmBw != NULL) {
+		const GFM<index_t> *gfm = gfmBw;
+		assert(gfm != NULL);
 		// Extend right using backward index
 		const BTDnaString& seq = fw ? rd.patFw : rd.patRc;
 		// See what we get by extending 
@@ -933,7 +933,7 @@ void SwDriver<index_t>::extend(
 		b[0] = b[1] = b[2] = b[3] = 0;
 		tp[0] = tp[1] = tp[2] = tp[3] = topf;
 		bp[0] = bp[1] = bp[2] = bp[3] = botf;
-		INIT_LOCS(top, bot, tloc, bloc, *ebwt);
+		INIT_LOCS(top, bot, tloc, bloc, *gfm);
 		for(index_t ii = 0; ii < lim; ii++) {
 			// Starting to right of seed (<off) and moving right
 			index_t i;
@@ -949,7 +949,7 @@ void SwDriver<index_t>::extend(
 				prm.nSdFmops++;
 				t[0] = t[1] = t[2] = t[3] =
 				b[0] = b[1] = b[2] = b[3] = 0;
-				ebwt->mapBiLFEx(tloc, bloc, t, b, tp, bp);
+				gfm->mapBiLFEx(tloc, bloc, t, b, tp, bp);
 				SANITY_CHECK_4TUP(t, b, tp, bp);
 				int nonz = -1;
 				bool abort = false;
@@ -971,7 +971,7 @@ void SwDriver<index_t>::extend(
 			} else {
 				assert_eq(bot, top+1);
 				prm.nSdFmops++;
-				int c = ebwt->mapLF1(top, tloc);
+				int c = gfm->mapLF1(top, tloc);
 				if(c != rdc && rdc <= 3) {
 					break;
 				}
@@ -981,7 +981,7 @@ void SwDriver<index_t>::extend(
 			if(++nrex == 255) {
 				break;
 			}
-			INIT_LOCS(top, bot, tloc, bloc, *ebwt);
+			INIT_LOCS(top, bot, tloc, bloc, *gfm);
 		}
 	}
 #ifndef NDEBUG
@@ -993,9 +993,9 @@ void SwDriver<index_t>::extend(
 		
 		// Have to do both because whether we can get through an N depends on
 		// which direction we're coming in
-		bool fwContains = ebwtFw.contains(tmp_rdseq_);
+		bool fwContains = gfmFw.contains(tmp_rdseq_);
 		tmp_rdseq_.reverse();
-		bool bwContains = ebwtBw != NULL && ebwtBw->contains(tmp_rdseq_);
+		bool bwContains = gfmBw != NULL && gfmBw->contains(tmp_rdseq_);
 		tmp_rdseq_.reverse();
 		assert(fwContains || bwContains);
 	}
@@ -1013,8 +1013,8 @@ template <typename index_t>
 void SwDriver<index_t>::prioritizeSATups(
 										 const Read& read,            // read
 										 SeedResults<index_t>& sh,    // seed hits to extend into full alignments
-										 const Ebwt<index_t>& ebwtFw, // BWT
-										 const Ebwt<index_t>* ebwtBw, // BWT
+										 const GFM<index_t>& gfmFw,   // BWT
+										 const GFM<index_t>* gfmBw,   // BWT
 										 const BitPairReference& ref, // Reference strings
 										 int seedmms,                 // # mismatches allowed in seed
 										 index_t maxelt,              // max elts we'll consider
@@ -1098,8 +1098,8 @@ void SwDriver<index_t>::prioritizeSATups(
 			if(doExtend) {
 				extend(
 					   read,
-					   ebwtFw,
-					   ebwtBw,
+					   gfmFw,
+					   gfmBw,
 					   satpos.back().sat.topf,
 					   (index_t)(satpos.back().sat.topf + sz),
 					   satpos.back().sat.topb,
@@ -1140,7 +1140,7 @@ void SwDriver<index_t>::prioritizeSATups(
 			sa.len = satpos_.back().sat.key.len;
 			sa.offs = satpos_.back().sat.offs;
 			gws_.back().init(
-							 ebwtFw, // forward Bowtie index
+							 gfmFw,  // forward Bowtie index
 							 ref,    // reference sequences
 							 sa,     // SA tuples: ref hit, salist range
 							 rnd,    // pseudo-random generator
@@ -1185,7 +1185,7 @@ void SwDriver<index_t>::prioritizeSATups(
 		sa.len = satpos_.back().sat.key.len;
 		sa.offs = satpos_.back().sat.offs;
 		gws_.back().init(
-						 ebwtFw, // forward Bowtie index
+						 gfmFw,  // forward Bowtie index
 						 ref,    // reference sequences
 						 sa,     // SA tuples: ref hit, salist range
 						 rnd,    // pseudo-random generator
@@ -1245,7 +1245,7 @@ void SwDriver<index_t>::prioritizeSATups(
 		sa.len = sat.key.len;
 		sa.offs = sat.offs;
 		gws_.back().init(
-						 ebwtFw, // forward Bowtie index
+						 gfmFw,  // forward Bowtie index
 						 ref,    // reference sequences
 						 sa,     // SA tuples: ref hit, salist range
 						 rnd,    // pseudo-random generator
@@ -1281,8 +1281,8 @@ int SwDriver<index_t>::extendSeeds(
 								   Read& rd,                    // read to align
 								   bool mate1,                  // true iff rd is mate #1
 								   SeedResults<index_t>& sh,    // seed hits to extend into full alignments
-								   const Ebwt<index_t>& ebwtFw, // BWT
-								   const Ebwt<index_t>* ebwtBw, // BWT'
+								   const GFM<index_t>& gfmFw,   // BWT
+								   const GFM<index_t>* gfmBw,   // BWT'
 								   const BitPairReference& ref, // Reference strings
 								   SwAligner& swa,              // dynamic programming aligner
 								   const Scoring& sc,           // scoring scheme
@@ -1354,7 +1354,7 @@ int SwDriver<index_t>::extendSeeds(
 				eeMode = eeSaTups(
 								  rd,           // read
 								  sh,           // seed hits to extend into full alignments
-								  ebwtFw,       // BWT
+								  gfmFw,        // BWT
 								  ref,          // Reference strings
 								  rnd,          // pseudo-random generator
 								  wlm,          // group walk left metrics
@@ -1380,8 +1380,8 @@ int SwDriver<index_t>::extendSeeds(
 				prioritizeSATups(
 								 rd,            // read
 								 sh,            // seed hits to extend into full alignments
-								 ebwtFw,        // BWT
-								 ebwtBw,        // BWT'
+								 gfmFw,         // BWT
+								 gfmBw,         // BWT'
 								 ref,           // Reference strings
 								 seedmms,       // # seed mismatches allowed
 								 maxIters,      // max rows to consider per position
@@ -1453,7 +1453,7 @@ int SwDriver<index_t>::extendSeeds(
 				sa.topf = satpos_[i].sat.topf;
 				sa.len = satpos_[i].sat.key.len;
 				sa.offs = satpos_[i].sat.offs;
-				gws_[i].advanceElement((index_t)elt, ebwtFw, ref, sa, gwstate_, wr, wlm, prm);
+				gws_[i].advanceElement((index_t)elt, gfmFw, ref, sa, gwstate_, wr, wlm, prm);
 				eltsDone++;
 				if(!eeMode) {
 					assert_gt(neltLeft, 0);
@@ -1462,14 +1462,14 @@ int SwDriver<index_t>::extendSeeds(
 				assert_neq((index_t)OFF_MASK, wr.toff);
 				index_t tidx = 0, toff = 0, tlen = 0;
 				bool straddled = false;
-				ebwtFw.joinedToTextOff(
-									   wr.elt.len,
-									   wr.toff,
-									   tidx,
-									   toff,
-									   tlen,
-									   eeMode,     // reject straddlers?
-									   straddled); // did it straddle?
+				gfmFw.joinedToTextOff(
+                                      wr.elt.len,
+                                      wr.toff,
+                                      tidx,
+                                      toff,
+                                      tlen,
+                                      eeMode,     // reject straddlers?
+                                      straddled); // did it straddle?
 				if(tidx == (index_t)OFF_MASK) {
 					// The seed hit straddled a reference boundary so the seed hit
 					// isn't valid
@@ -1916,8 +1916,8 @@ int SwDriver<index_t>::extendSeedsPaired(
 										 bool anchor1,                // true iff anchor mate is mate1
 										 bool oppFilt,                // true iff opposite mate was filtered out
 										 SeedResults<index_t>& sh,    // seed hits for anchor
-										 const Ebwt<index_t>& ebwtFw, // BWT
-										 const Ebwt<index_t>* ebwtBw, // BWT'
+										 const GFM<index_t>& gfmFw,   // BWT
+										 const GFM<index_t>* gfmBw,   // BWT'
 										 const BitPairReference& ref, // Reference strings
 										 SwAligner& swa,              // dynamic programming aligner for anchor
 										 SwAligner& oswa,             // dynamic programming aligner for opposite
@@ -2038,7 +2038,7 @@ int SwDriver<index_t>::extendSeedsPaired(
 				eeMode = eeSaTups(
 								  rd,           // read
 								  sh,           // seed hits to extend into full alignments
-								  ebwtFw,       // BWT
+								  gfmFw,        // BWT
 								  ref,          // Reference strings
 								  rnd,          // pseudo-random generator
 								  wlm,          // group walk left metrics
@@ -2071,8 +2071,8 @@ int SwDriver<index_t>::extendSeedsPaired(
 				prioritizeSATups(
 								 rd,            // read
 								 sh,            // seed hits to extend into full alignments
-								 ebwtFw,        // BWT
-								 ebwtBw,        // BWT'
+								 gfmFw,         // BWT
+								 gfmBw,         // BWT'
 								 ref,           // Reference strings
 								 seedmms,       // # seed mismatches allowed
 								 maxIters,      // max rows to consider per position
@@ -2158,21 +2158,21 @@ int SwDriver<index_t>::extendSeedsPaired(
 				sa.topf = satpos_[i].sat.topf;
 				sa.len = satpos_[i].sat.key.len;
 				sa.offs = satpos_[i].sat.offs;
-				gws_[i].advanceElement((index_t)elt, ebwtFw, ref, sa, gwstate_, wr, wlm, prm);
+				gws_[i].advanceElement((index_t)elt, gfmFw, ref, sa, gwstate_, wr, wlm, prm);
 				eltsDone++;
 				assert_gt(neltLeft, 0);
 				neltLeft--;
 				assert_neq((index_t)OFF_MASK, wr.toff);
 				index_t tidx = 0, toff = 0, tlen = 0;
 				bool straddled = false;
-				ebwtFw.joinedToTextOff(
-									   wr.elt.len,
-									   wr.toff,
-									   tidx,
-									   toff,
-									   tlen,
-									   eeMode,       // reject straddlers?
-									   straddled);   // straddled?
+				gfmFw.joinedToTextOff(
+                                      wr.elt.len,
+                                      wr.toff,
+                                      tidx,
+                                      toff,
+                                      tlen,
+                                      eeMode,       // reject straddlers?
+                                      straddled);   // straddled?
 				if(tidx == (index_t)OFF_MASK) {
 					// The seed hit straddled a reference boundary so the seed hit
 					// isn't valid
@@ -2933,146 +2933,6 @@ int SwDriver<index_t>::extendSeedsPaired(
 		} // for(size_t i = 0; i < gws_.size(); i++)
 	}
 	return EXTEND_EXHAUSTED_CANDIDATES;
-}
-
-/**
- * Start the driver.  The driver will begin by conducting a best-first,
- * index-assisted search through the space of possible full and partial
- * alignments.  This search may be followed up with a dynamic programming
- * extension step, taking a prioritized set of partial SA ranges found
- * during the search and extending each with DP.  The process might also be
- * iterated, with the search being occasioanally halted so that DPs can be
- * tried, then restarted, etc.
- */
-template <typename index_t>
-int AlignerDriver<index_t>::go(
-							   const Scoring& sc,
-							   const Ebwt<index_t>& ebwtFw,
-							   const Ebwt<index_t>& ebwtBw,
-							   const BitPairReference& ref,
-							   DescentMetrics& met,
-							   WalkMetrics& wlm,
-							   PerReadMetrics& prm,
-							   RandomSource& rnd,
-							   AlnSinkWrap<index_t>& sink)
-{
-	if(paired_) {
-		// Paired-end - alternate between advancing dr1_ / dr2_ whenever a
-		// new full alignment is discovered in the one currently being
-		// advanced.  Whenever a new full alignment is found, check to see
-		// if it pairs with a previously discovered alignment.
-		bool first1 = rnd.nextBool();
-		bool first = true;
-		DescentStoppingConditions stopc1 = stop_;
-		DescentStoppingConditions stopc2 = stop_;
-		size_t totszIncr = (stop_.totsz + 7) / 8;
-		stopc1.totsz = totszIncr;
-		stopc2.totsz = totszIncr;
-		while(stopc1.totsz <= stop_.totsz && stopc2.totsz <= stop_.totsz) {
-			if(first && first1 && stopc1.totsz <= stop_.totsz) {
-				dr1_.advance(stop_, sc, ebwtFw, ebwtBw, met, prm);
-				stopc1.totsz += totszIncr;
-			}
-			if(stopc2.totsz <= stop_.totsz) {
-				dr2_.advance(stop_, sc, ebwtFw, ebwtBw, met, prm);
-				stopc2.totsz += totszIncr;
-			}
-			first = false;
-		}
-	} else {
-		// Unpaired
-		size_t iter = 1;
-		while(true) {
-			int ret = dr1_.advance(stop_, sc, ebwtFw, ebwtBw, met, prm);
-			if(ret == DESCENT_DRIVER_ALN) {
-				//cerr << iter << ". DESCENT_DRIVER_ALN" << endl;
-			} else if(ret == DESCENT_DRIVER_MEM) {
-				//cerr << iter << ". DESCENT_DRIVER_MEM" << endl;
-				break;
-			} else if(ret == DESCENT_DRIVER_STRATA) {
-				// DESCENT_DRIVER_STRATA is returned by DescentDriver.advance()
-				// when it has finished with a "non-empty" stratum: a stratum
-				// in which at least one alignment was found.  Here we report
-				// the alignments in an arbitrary order.
-				AlnRes res;
-				// Initialize alignment selector with the DescentDriver's
-				// alignment sink
-				alsel_.init(
-							dr1_.query(),
-							dr1_.sink(),
-							ebwtFw,
-							ref,
-							rnd,
-							wlm);
-				while(!alsel_.done() && !sink.state().doneWithMate(true)) {
-					res.reset();
-					bool ret2 = alsel_.next(
-											dr1_,
-											ebwtFw,
-											ref,
-											rnd,
-											res,
-											wlm,
-											prm);
-					if(ret2) {
-						// Got an alignment
-						assert(res.matchesRef(
-											  dr1_.query(),
-											  ref,
-											  tmp_rf_,
-											  tmp_rdseq_,
-											  tmp_qseq_,
-											  raw_refbuf_,
-											  raw_destU32_,
-											  raw_matches_,
-											  tmp_reflens_,
-											  tmp_refoffs_));
-						// Get reference interval involved in alignment
-						Interval refival(res.refid(), 0, res.fw(), res.reflen());
-						assert_gt(res.refExtent(), 0);
-						// Does alignment falls off end of reference?
-						if(gReportOverhangs &&
-						   !refival.containsIgnoreOrient(res.refival()))
-						{
-							res.clipOutside(true, 0, res.reflen());
-							if(res.refExtent() == 0) {
-								continue;
-							}
-						}
-						assert(gReportOverhangs ||
-							   refival.containsIgnoreOrient(res.refival()));
-						// Alignment fell entirely outside the reference?
-						if(!refival.overlapsIgnoreOrient(res.refival())) {
-							continue; // yes, fell outside
-						}
-						// Alignment redundant with one we've seen previously?
-						if(red1_.overlap(res)) {
-							continue; // yes, redundant
-						}
-						red1_.add(res); // so we find subsequent redundancies
-						// Report an unpaired alignment
-						assert(!sink.state().doneWithMate(true));
-						assert(!sink.maxed());
-						if(sink.report(0, &res, NULL)) {
-							// Short-circuited because a limit, e.g. -k, -m or
-							// -M, was exceeded
-							return ALDRIVER_POLICY_FULFILLED;
-						}
-					}
-				}
-				dr1_.sink().advanceStratum();
-			} else if(ret == DESCENT_DRIVER_BWOPS) {
-				//cerr << iter << ". DESCENT_DRIVER_BWOPS" << endl;
-			} else if(ret == DESCENT_DRIVER_DONE) {
-				//cerr << iter << ". DESCENT_DRIVER_DONE" << endl;
-				break;
-			} else {
-				assert(false);
-			}
-			iter++;
-		}
-	}
-	return ALDRIVER_EXHAUSTED_CANDIDATES;
 }
 
 #endif /*ALIGNER_SW_DRIVER_H_*/
