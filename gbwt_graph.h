@@ -59,6 +59,56 @@ struct SNP {
         if(seq != o.seq) return seq < o.seq;
         return false;
     }
+    
+#ifndef NDEBUG
+    bool repOk() const {
+        if(type == SNP_SGL) {
+            if(len != 1) {
+                assert(false);
+                return false;
+            }
+            
+            if(seq > 3) {
+                assert(false);
+                return false;
+            }
+        } else if(type == SNP_DEL) {
+            if(len <= 0) {
+                assert(false);
+                return false;
+            }
+            if(seq != 0) {
+                assert(false);
+                return false;
+            }
+        } else if(type == SNP_INS) {
+            if(len <= 0) {
+                assert(false);
+                return false;
+            }
+        } else {
+            assert(false);
+            return false;
+        }
+        return true;
+    }
+#endif
+    
+    bool write(ofstream& f_out, bool bigEndian) const {
+        writeIndex<index_t>(f_out, pos, bigEndian);
+        writeU32(f_out, type, bigEndian);
+        writeU32(f_out, len, bigEndian);
+        writeIndex<uint64_t>(f_out, seq, bigEndian);
+        return true;
+    }
+    
+    bool read(ifstream& f_in, bool bigEndian) {
+        pos = readIndex<index_t>(f_in, bigEndian);
+        type = (SNP_TYPE)readU32(f_in, bigEndian);
+        len = readU32(f_in, bigEndian);
+        seq = readIndex<uint64_t>(f_in, bigEndian);
+        return true;
+    }
 };
 
 template <typename index_t> class PathGraph;

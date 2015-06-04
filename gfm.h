@@ -655,29 +655,66 @@ public:
 		useShmem_ = useShmem;
 		_in1Str = in + ".1." + gfm_ext;
 		_in2Str = in + ".2." + gfm_ext;
+        if(skipLoading) return;
 		
-		if(!skipLoading) {
-			readIntoMemory(
-						   fw ? -1 : needEntireReverse, // need REF_READ_REVERSE
-						   loadSASamp,  // load the SA sample portion?
-						   loadFtab,    // load the ftab & eftab?
-						   loadRstarts, // load the rstarts array?
-						   true,        // stop after loading the header portion?
-						   &_gh,        // params
-						   mmSweep,     // mmSweep
-						   loadNames,   // loadNames
-						   startVerbose); // startVerbose
-			// If the offRate has been overridden, reflect that in the
-			// _eh._offRate field
-			if(offRatePlus > 0 && _overrideOffRate == -1) {
-				_overrideOffRate = _gh._offRate + offRatePlus;
-			}
-			if(_overrideOffRate > _gh._offRate) {
-				_gh.setOffRate(_overrideOffRate);
-				assert_eq(_overrideOffRate, _gh._offRate);
-			}
-			assert(repOk());
-		}
+        readIntoMemory(
+                       fw ? -1 : needEntireReverse, // need REF_READ_REVERSE
+                       loadSASamp,  // load the SA sample portion?
+                       loadFtab,    // load the ftab & eftab?
+                       loadRstarts, // load the rstarts array?
+                       true,        // stop after loading the header portion?
+                       &_gh,        // params
+                       mmSweep,     // mmSweep
+                       loadNames,   // loadNames
+                       startVerbose); // startVerbose
+        // If the offRate has been overridden, reflect that in the
+        // _eh._offRate field
+        if(offRatePlus > 0 && _overrideOffRate == -1) {
+            _overrideOffRate = _gh._offRate + offRatePlus;
+        }
+        if(_overrideOffRate > _gh._offRate) {
+            _gh.setOffRate(_overrideOffRate);
+            assert_eq(_overrideOffRate, _gh._offRate);
+        }
+
+        // Read SNPs
+        _snps.clear(); _snpnames.clear();
+        string in7Str = in + ".7." + gfm_ext;
+        string in8Str = in + ".8." + gfm_ext;
+        
+        if(verbose || startVerbose) cerr << "Opening \"" << in7Str.c_str() << "\"" << endl;
+        ifstream in7(in7Str.c_str(), ios::binary);
+        if(!in7.good()) {
+            cerr << "Could not open index file " << in7Str.c_str() << endl;
+        }
+        
+        readU32(in7, this->toBe());
+        index_t numSnps = readIndex<index_t>(in7, this->toBe());
+        while(!in7.eof()) {
+            _snps.expand();
+            _snps.back().read(in7, this->toBe());
+            if(_snps.size() == numSnps) break;
+        }
+        assert_eq(_snps.size(), numSnps);
+        in7.close();
+        
+        if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
+        ifstream in8(in8Str.c_str(), ios::binary);
+        if(!in8.good()) {
+            cerr << "Could not open index file " << in8Str.c_str() << endl;
+        }
+        readU32(in8, this->toBe());
+        numSnps = readIndex<index_t>(in8, this->toBe());
+        assert_eq(_snps.size(), numSnps);
+        while(!in8.eof()) {
+            _snpnames.expand();
+            in8 >> _snpnames.back();
+            if(_snpnames.size() == numSnps) break;
+        }
+        assert_eq(_snpnames.size(), numSnps);
+        in8.close();
+        
+        assert(repOk());
 	}
 	
 	/// Construct an Ebwt from the given header parameters and string
@@ -1059,6 +1096,7 @@ public:
             {
                 Timer timer(cerr, "  Time to read SNPs: ", _verbose);
                 _snps.clear();
+                _snpnames.clear();
                 EList<pair<index_t, index_t> > chr_szs;
                 index_t tmp_len = 0;
                 for(index_t i = 0; i < szs.size(); i++) {
@@ -1183,11 +1221,48 @@ public:
                         cerr << "Error: unknown snp type " << type << endl;
                         throw 1;
                     }
+                    
+                    _snpnames.push_back(snp_id);
+                    assert_eq(_snps.size(), _snpnames.size());
                 }
                 snp_file.close();
+                assert_eq(_snps.size(), _snpnames.size());
                 
                 // Sort SNPs based on positions
                 sort(_snps.begin(), _snps.end());
+      
+                // Write SNPs into 7.ht2 and 8.ht2
+                string file7 = outfile + ".7." + gfm_ext;
+                string file8 = outfile + ".8." + gfm_ext;
+                
+                // Open output stream for the '.7.gfm_ext' file which will
+                // hold SNPs (except IDs).
+                ofstream fout7(file7.c_str(), ios::binary);
+                if(!fout7.good()) {
+                    cerr << "Could not open index file for writing: \"" << file7.c_str() << "\"" << endl
+                         << "Please make sure the directory exists and that permissions allow writing by" << endl
+                         << "HISAT2." << endl;
+                    throw 1;
+                }
+                // Open output stream for the '.8.gfm_ext' file which will
+                // hold SNP IDs.
+                ofstream fout8(file8.c_str(), ios::binary);
+                if(!fout8.good()) {
+                    cerr << "Could not open index file for writing: \"" << file8.c_str() << "\"" << endl
+                         << "Please make sure the directory exists and that permissions allow writing by" << endl
+                         << "HISAT2." << endl;
+                    throw 1;
+                }
+                writeIndex<int32_t>(fout7, 1, this->toBe()); // endianness sentinel
+                writeIndex<int32_t>(fout8, 1, this->toBe()); // endianness sentinel
+                writeIndex<int32_t>(fout7, _snps.size(), this->toBe());
+                writeIndex<int32_t>(fout8, _snps.size(), this->toBe());
+                for(index_t i = 0; i < _snps.size(); i++) {
+                    _snps[i].write(fout7, this->toBe());
+                    fout8 << _snpnames[i] << endl;
+                }
+                fout7.close();
+                fout8.close();
             }
 			// Joined reference sequence now in 's'
 		} catch(bad_alloc& e) {
@@ -1427,6 +1502,8 @@ public:
 	inline const index_t* plen() const    { return _plen.get(); }
 	inline const index_t* rstarts() const { return _rstarts.get(); }
 	inline const uint8_t* gfm() const     { return _gfm.get(); }
+    inline const EList<SNP<index_t> >& snps() const  { return _snps; }
+    inline const EList<string>& snpnames() const     { return _snps; }
 	bool        toBe() const         { return _toBigEndian; }
 	bool        verbose() const      { return _verbose; }
 	bool        sanityCheck() const  { return _sanity; }
@@ -2965,6 +3042,7 @@ public:
             assert_lt(_zOffs[i], gh._gbwtLen);
         }
 		assert_geq(_nFrag, _nPat);
+        assert_eq(_snps.size(), _snpnames.size());
 		return true;
 	}
 
@@ -3048,6 +3126,7 @@ public:
 	static const bool     default_bigEndian = false;
     
     EList<SNP<index_t> >  _snps;
+    EList<string>         _snpnames;
 
 protected:
 
