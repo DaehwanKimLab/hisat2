@@ -1,14 +1,14 @@
 /*
- * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
+ * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
  *
- * This file is part of Bowtie 2.
+ * This file is part of HISAT 2.
  *
- * Bowtie 2 is free software: you can redistribute it and/or modify
+ * HISAT 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Bowtie 2 is distributed in the hope that it will be useful,
+ * HISAT 2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -23,22 +23,21 @@
 #include <stdlib.h>
 #include "tokenize.h"
 #include "ds.h"
-#include "mem_ids.h"
 
 using namespace std;
 
 extern "C" {
-	int bowtie_build(int argc, const char **argv);
+	int hisat2(int argc, const char **argv);
 }
 
 /**
- * bowtie-build main function.  It is placed in a separate source file
- * to make it slightly easier to compile as a library.
+ * Bowtie main function.  It is placed in a separate source file to
+ * make it slightly easier to compile Bowtie as a library.
  *
  * If the user specifies -A <file> as the first two arguments, main
  * will interpret that file as having one set of command-line arguments
  * per line, and will dispatch each batch of arguments one at a time to
- * bowtie-build.
+ * bowtie.
  */
 int main(int argc, const char **argv) {
 	if(argc > 2 && strcmp(argv[1], "-A") == 0) {
@@ -48,7 +47,7 @@ int main(int argc, const char **argv) {
 		char buf[4096];
 		int lastret = -1;
 		while(in.getline(buf, 4095)) {
-			EList<string> args(MISC_CAT);
+			EList<string> args;
 			args.push_back(string(argv[0]));
 			tokenize(buf, " \t", args);
 			const char **myargs = (const char**)malloc(sizeof(char*)*args.size());
@@ -56,7 +55,7 @@ int main(int argc, const char **argv) {
 				myargs[i] = args[i].c_str();
 			}
 			if(args.size() == 1) continue;
-			lastret = bowtie_build((int)args.size(), myargs);
+			lastret = hisat2((int)args.size(), myargs);
 			free(myargs);
 		}
 		if(lastret == -1) {
@@ -65,6 +64,6 @@ int main(int argc, const char **argv) {
 		}
 		return lastret;
 	} else {
-		return bowtie_build(argc, argv);
+		return hisat2(argc, argv);
 	}
 }

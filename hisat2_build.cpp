@@ -45,8 +45,6 @@
 #include <iostream>
 #include <vector>
 
-#include <misc/utils.h>
-
 // Build parameters
 int verbose;
 static int sanityCheck;
@@ -129,9 +127,9 @@ static void printUsage(ostream& out) {
 	out << "HISAT2 version " << string(HISAT2_VERSION).c_str() << " by Daehwan Kim (infphilo@gmail.com, http://www.ccb.jhu.edu/people/infphilo)" << endl;
     
 #ifdef BOWTIE_64BIT_INDEX
-	string tool_name = "hisat-build-l";
+	string tool_name = "hisat2-build-l";
 #else
-	string tool_name = "hisat-build-s";
+	string tool_name = "hisat2-build-s";
 #endif
 	if(wrapper == "basic-0") {
 		tool_name = "hisat-build";
@@ -139,7 +137,7 @@ static void printUsage(ostream& out) {
     
 	out << "Usage: hisat2-build [options]* <reference_in> <bt2_index_base>" << endl
 	    << "    reference_in            comma-separated list of files with ref sequences" << endl
-	    << "    hisat_index_base          write " << gEbwt_ext << " data to files with this dir/basename" << endl
+	    << "    hisat2_index_base          write " << gfm_ext << " data to files with this dir/basename" << endl
         << "Options:" << endl
         << "    -c                      reference sequences given on cmd line (as" << endl
         << "                            <reference_in>)" << endl;
@@ -352,6 +350,7 @@ static void deleteIdxFiles(
 }
 
 extern void initializeCntLut();
+extern void initializeCntBit();
 
 /**
  * Drive the index construction process and optionally sanity-check the
@@ -367,6 +366,7 @@ static void driver(
 	int reverse)
 {
     initializeCntLut();
+    initializeCntBit();
 	EList<FileBuf*> is(MISC_CAT);
 	bool bisulfite = false;
 	RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
@@ -418,8 +418,8 @@ static void driver(
 		if(verbose) cerr << "Reading reference sizes" << endl;
 		Timer _t(cerr, "  Time reading reference sizes: ", verbose);
 		if(!reverse && (writeRef || justRef)) {
-			filesWritten.push_back(outfile + ".3." + gEbwt_ext);
-			filesWritten.push_back(outfile + ".4." + gEbwt_ext);
+			filesWritten.push_back(outfile + ".3." + gfm_ext);
+			filesWritten.push_back(outfile + ".4." + gfm_ext);
 			sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck);
 		} else {
 			sztot = BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
@@ -431,8 +431,8 @@ static void driver(
 	assert_gt(szs.size(), 0);
     
 	// Construct index from input strings and parameters
-	filesWritten.push_back(outfile + ".1." + gEbwt_ext);
-	filesWritten.push_back(outfile + ".2." + gEbwt_ext);
+	filesWritten.push_back(outfile + ".1." + gfm_ext);
+	filesWritten.push_back(outfile + ".2." + gfm_ext);
 	TStr s;
 	HierGFM<TIndexOffU> hierGFM(
                                 s,
@@ -440,7 +440,12 @@ static void driver(
                                 1,  // TODO: maybe not?
                                 lineRate,
                                 offRate,      // suffix-array sampling rate
+                                // daehwan - for debugging purposes
+#if 1
                                 ftabChars,    // number of chars in initial arrow-pair calc
+#else
+                                5,
+#endif
                                 localOffRate,
                                 localFtabChars,
                                 snpfile,
@@ -522,7 +527,7 @@ int hisat2_build(int argc, const char **argv) {
 		parseOptions(argc, argv);
 		argv0 = argv[0];
 		if(showVersion) {
-			cout << argv0 << " version " << string(HISAT_VERSION).c_str() << endl;
+			cout << argv0 << " version " << string(HISAT2_VERSION).c_str() << endl;
 			if(sizeof(void*) == 4) {
 				cout << "32-bit" << endl;
 			} else if(sizeof(void*) == 8) {
@@ -570,7 +575,7 @@ int hisat2_build(int argc, const char **argv) {
 		// Optionally summarize
 		if(verbose) {
 			cerr << "Settings:" << endl
-				 << "  Output files: \"" << outfile.c_str() << ".*." << gEbwt_ext << "\"" << endl
+				 << "  Output files: \"" << outfile.c_str() << ".*." << gfm_ext << "\"" << endl
 				 << "  Line rate: " << lineRate << " (line is " << (1<<lineRate) << " bytes)" << endl
 				 << "  Lines per side: " << linesPerSide << " (side is " << ((1<<lineRate)*linesPerSide) << " bytes)" << endl
 				 << "  Offset rate: " << offRate << " (one in " << (1<<offRate) << ")" << endl

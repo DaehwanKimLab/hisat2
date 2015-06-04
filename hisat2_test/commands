@@ -1,5 +1,5 @@
 samtools faidx 22.fa 22:20000001-21000000 > 22_20_21M.fa
 
-../extract_snps.py 22.fa snp142Common_22.txt > 22.snp
+awk 'BEGIN {OFS="\t"} {if($3 >= 20000000 && $3 <= 21000000) {$2="22:20000001-21000000"; $3=$3-20000000; $4=$4-20000000; print}}' snp142Common_22.txt > snp142Common_22_20_21M.txt
 
-awk '{if($4 >= 20000000 && $4 <= 21000000) print $1"\t"$2"\t"$3":20000001-21000000\t"$4-20000000"\t"$5}' 22.snp > 22_20_21M.snp
+../extract_snps.py --testset 22_20_21M.fa snp142Common_22_20_21M.txt > 22_20_21M.snp

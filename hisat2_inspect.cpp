@@ -1,23 +1,23 @@
 /*
- * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
+ * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
  *
- * This file is part of Bowtie 2.
+ * This file is part of HISAT 2.
  *
- * Bowtie 2 is free software: you can redistribute it and/or modify
+ * HISAT 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Bowtie 2 is distributed in the hope that it will be useful,
+ * HISAT 2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Bowtie 2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef BOWTIE_INSPECT_MAIN
+#ifdef HISAT2_INSPECT_MAIN
 
 #include <string>
 #include <iostream>
@@ -26,7 +26,7 @@
 
 #include "assert_helpers.h"
 #include "endian_swap.h"
-#include "bt2_idx.h"
+#include "hier_gfm.h"
 #include "reference.h"
 #include "ds.h"
 
@@ -37,13 +37,13 @@ int verbose             = 0;  // be talkative
 static int names_only   = 0;  // just print the sequence names in the index
 static int summarize_only = 0; // just print summary of index and quit
 static int across       = 60; // number of characters across in FASTA output
-static bool refFromEbwt = false; // true -> when printing reference, decode it from Ebwt instead of reading it from BitPairReference
+static bool refFromGFM  = false; // true -> when printing reference, decode it from Gbwt instead of reading it from BitPairReference
 static string wrapper;
 static const char *short_options = "vhnsea:";
 
 enum {
 	ARG_VERSION = 256,
-	ARG_WRAPPER,
+    ARG_WRAPPER,
 	ARG_USAGE,
 };
 
@@ -55,8 +55,8 @@ static struct option long_options[] = {
 	{(char*)"summary",  no_argument,        0, 's'},
 	{(char*)"help",     no_argument,        0, 'h'},
 	{(char*)"across",   required_argument,  0, 'a'},
-	{(char*)"ebwt-ref", no_argument,        0, 'e'},
-	{(char*)"wrapper",  required_argument,  0, ARG_WRAPPER},
+	{(char*)"gbwt-ref", no_argument,        0, 'g'},
+    {(char*)"wrapper",  required_argument,  0, ARG_WRAPPER},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -64,34 +64,34 @@ static struct option long_options[] = {
  * Print a summary usage message to the provided output stream.
  */
 static void printUsage(ostream& out) {
-	out << "Bowtie 2 version " << string(BOWTIE2_VERSION).c_str() << " by Ben Langmead (langmea@cs.jhu.edu, www.cs.jhu.edu/~langmea)" << endl;
+	out << "HISAT2 version " << string(HISAT2_VERSION).c_str() << " by Daehwan Kim (infphilo@gmail.com, http://www.ccb.jhu.edu/people/infphilo)" << endl;
 	out
-	<< "Usage: bowtie2-inspect [options]* <bt2_base>" << endl
-	<< "  <bt2_base>         bt2 filename minus trailing .1." + gEbwt_ext + "/.2." + gEbwt_ext << endl
+	<< "Usage: hisat2-inspect [options]* <ht2_base>" << endl
+	<< "  <ht2_base>         ht2 filename minus trailing .1." << gfm_ext << "/.2." << gfm_ext << endl
 	<< endl
 	<< "  By default, prints FASTA records of the indexed nucleotide sequences to" << endl
 	<< "  standard out.  With -n, just prints names.  With -s, just prints a summary of" << endl
 	<< "  the index parameters and sequences.  With -e, preserves colors if applicable." << endl
 	<< endl
 	<< "Options:" << endl;
-	if(wrapper == "basic-0") {
+    if(wrapper == "basic-0") {
 		out << "  --large-index      force inspection of the 'large' index, even if a" << endl
-			<< "                     'small' one is present." << endl;
+        << "                     'small' one is present." << endl;
 	}
 	out << "  -a/--across <int>  Number of characters across in FASTA output (default: 60)" << endl
 	<< "  -n/--names         Print reference sequence names only" << endl
 	<< "  -s/--summary       Print summary incl. ref names, lengths, index properties" << endl
-	<< "  -e/--bt2-ref      Reconstruct reference from ." + gEbwt_ext + " (slow, preserves colors)" << endl
+	<< "  -e/--bt2-ref      Reconstruct reference from ." << gfm_ext << " (slow, preserves colors)" << endl
 	<< "  -v/--verbose       Verbose output (for debugging)" << endl
 	<< "  -h/--help          print detailed description of tool and its options" << endl
 	<< "  --help             print this usage message" << endl
 	;
-	if(wrapper.empty()) {
+    if(wrapper.empty()) {
 		cerr << endl
-		     << "*** Warning ***" << endl
-			 << "'boowtie2-inspect' was run directly.  It is recommended "
-			 << "to use the wrapper script instead."
-			 << endl << endl;
+        << "*** Warning ***" << endl
+        << "'hisat-inspect' was run directly.  It is recommended "
+        << "to use the wrapper script instead."
+        << endl << endl;
 	}
 }
 
@@ -127,7 +127,7 @@ static void parseOptions(int argc, char **argv) {
 	do {
 		next_option = getopt_long(argc, argv, short_options, long_options, &option_index);
 		switch (next_option) {
-			case ARG_WRAPPER:
+            case ARG_WRAPPER:
 				wrapper = optarg;
 				break;
 			case ARG_USAGE:
@@ -137,7 +137,7 @@ static void parseOptions(int argc, char **argv) {
 				break;
 			case 'v': verbose = true; break;
 			case ARG_VERSION: showVersion = true; break;
-			case 'e': refFromEbwt = true; break;
+			case 'g': refFromGFM = true; break;
 			case 'n': names_only = true; break;
 			case 's': summarize_only = true; break;
 			case 'a': across = parseInt(-1, "-a/--across arg must be at least 1"); break;
@@ -214,14 +214,13 @@ static void print_ref_sequence(
  */
 static void print_ref_sequences(
 	ostream& fout,
-	bool color,
 	const EList<string>& refnames,
 	const TIndexOffU* plen,
-	const string& adjustedEbwtFileBase)
+	const string& adjustedGFMFileBase)
 {
 	BitPairReference ref(
-		adjustedEbwtFileBase, // input basename
-		color,                // true -> expect colorspace reference
+		adjustedGFMFileBase, // input basename
+		false,                // true -> expect colorspace reference
 		false,                // sanity-check reference
 		NULL,                 // infiles
 		NULL,                 // originals
@@ -238,7 +237,7 @@ static void print_ref_sequences(
 			ref,
 			refnames[i],
 			i,
-			plen[i] + (color ? 1 : 0));
+			plen[i]);
 	}
 }
 
@@ -246,13 +245,13 @@ static void print_ref_sequences(
  * Given an index, reconstruct the reference by LF mapping through the
  * entire thing.
  */
-template<typename TStr>
-static void print_index_sequences(ostream& fout, Ebwt& ebwt)
+template<typename index_t, typename TStr>
+static void print_index_sequences(ostream& fout, GFM<index_t>& gfm)
 {
-	EList<string>* refnames = &(ebwt.refnames());
+	EList<string>* refnames = &(gfm.refnames());
 
 	TStr cat_ref;
-	ebwt.restore(cat_ref);
+	gfm.restore(cat_ref);
 
 	TIndexOffU curr_ref = OFF_MASK;
 	string curr_ref_seq = "";
@@ -266,7 +265,7 @@ static void print_index_sequences(ostream& fout, Ebwt& ebwt)
 		TIndexOffU textoff = OFF_MASK;
 		tlen = OFF_MASK;
 		bool straddled = false;
-		ebwt.joinedToTextOff(1 /* qlen */, (TIndexOffU)i, tidx, textoff, tlen, true, straddled);
+		gfm.joinedToTextOff(1 /* qlen */, (TIndexOffU)i, tidx, textoff, tlen, true, straddled);
 
 		if (tidx != OFF_MASK && textoff < tlen)
 		{
@@ -292,7 +291,7 @@ static void print_index_sequences(ostream& fout, Ebwt& ebwt)
 			if (textoff_adj - last_text_off > 1)
 				curr_ref_seq += string(textoff_adj - last_text_off - 1, 'N');
 
-			curr_ref_seq.push_back("ACGT"[int(cat_ref[i])]);
+            curr_ref_seq.push_back("ACGT"[int(cat_ref[i])]);			
 			last_text_off = textoff;
 			first = false;
 		}
@@ -310,10 +309,11 @@ static void print_index_sequences(ostream& fout, Ebwt& ebwt)
 
 static char *argv0 = NULL;
 
+template <typename index_t>
 static void print_index_sequence_names(const string& fname, ostream& fout)
 {
 	EList<string> p_refnames;
-	readEbwtRefnames(fname, p_refnames);
+	readEbwtRefnames<index_t>(fname, p_refnames);
 	for(size_t i = 0; i < p_refnames.size(); i++) {
 		cout << p_refnames[i].c_str() << endl;
 	}
@@ -322,105 +322,111 @@ static void print_index_sequence_names(const string& fname, ostream& fout)
 /**
  * Print a short summary of what's in the index and its flags.
  */
+template <typename index_t>
 static void print_index_summary(
 	const string& fname,
 	ostream& fout)
 {
-	int32_t flags = Ebwt::readFlags(fname);
-	int32_t flagsr = Ebwt::readFlags(fname + ".rev");
-	bool color = readEbwtColor(fname);
-	bool entireReverse = readEntireReverse(fname + ".rev");
-	Ebwt ebwt(
-		fname,
-		color,                // index is colorspace
-		-1,                   // don't require entire reverse
-		true,                 // index is for the forward direction
-		-1,                   // offrate (-1 = index default)
-		0,                    // offrate-plus (0 = index default)
-		false,                // use memory-mapped IO
-		false,                // use shared memory
-		false,                // sweep memory-mapped memory
-		true,                 // load names?
-		false,                // load SA sample?
-		false,                // load ftab?
-		false,                // load rstarts?
-		verbose,              // be talkative?
-		verbose,              // be talkative at startup?
-		false,                // pass up memory exceptions?
-		false);               // sanity check?
+	int32_t flags = GFM<index_t>::readFlags(fname);
+	int32_t flagsr = GFM<index_t>::readFlags(fname + ".rev");
+    // daehwan - for debugging purposes
+	// bool entireReverse = readEntireReverse(fname + ".rev")
+    bool entireReverse = false;
+    
+	GFM<index_t> gfm(
+                     fname,
+                     -1,                   // don't require entire reverse
+                     true,                 // index is for the forward direction
+                     -1,                   // offrate (-1 = index default)
+                     0,                    // offrate-plus (0 = index default)
+                     false,                // use memory-mapped IO
+                     false,                // use shared memory
+                     false,                // sweep memory-mapped memory
+                     true,                 // load names?
+                     false,                // load SA sample?
+                     false,                // load ftab?
+                     false,                // load rstarts?
+                     verbose,              // be talkative?
+                     verbose,              // be talkative at startup?
+                     false,                // pass up memory exceptions?
+                     false);               // sanity check?
 	EList<string> p_refnames;
-	readEbwtRefnames(fname, p_refnames);
+	readEbwtRefnames<index_t>(fname, p_refnames);
 	cout << "Flags" << '\t' << (-flags) << endl;
 	cout << "Reverse flags" << '\t' << (-flagsr) << endl;
-	cout << "Colorspace" << '\t' << (color ? "1" : "0") << endl;
 	cout << "2.0-compatible" << '\t' << (entireReverse ? "1" : "0") << endl;
-	cout << "SA-Sample" << "\t1 in " << (1 << ebwt.eh().offRate()) << endl;
-	cout << "FTab-Chars" << '\t' << ebwt.eh().ftabChars() << endl;
-	assert_eq(ebwt.nPat(), p_refnames.size());
+	cout << "SA-Sample" << "\t1 in " << (1 << gfm.gh().offRate()) << endl;
+	cout << "FTab-Chars" << '\t' << gfm.gh().ftabChars() << endl;
+	assert_eq(gfm.nPat(), p_refnames.size());
 	for(size_t i = 0; i < p_refnames.size(); i++) {
 		cout << "Sequence-" << (i+1)
 		     << '\t' << p_refnames[i].c_str()
-		     << '\t' << (ebwt.plen()[i] + (color ? 1 : 0))
+		     << '\t' << gfm.plen()[i]
 		     << endl;
 	}
 }
+
+extern void initializeCntLut();
+extern void initializeCntBit();
 
 static void driver(
 	const string& ebwtFileBase,
 	const string& query)
 {
+    initializeCntLut();
+    initializeCntBit();
+    
 	// Adjust
 	string adjustedEbwtFileBase = adjustEbwtBase(argv0, ebwtFileBase, verbose);
 
 	if (names_only) {
-		print_index_sequence_names(adjustedEbwtFileBase, cout);
+		print_index_sequence_names<TIndexOffU>(adjustedEbwtFileBase, cout);
 	} else if(summarize_only) {
-		print_index_summary(adjustedEbwtFileBase, cout);
+		print_index_summary<TIndexOffU>(adjustedEbwtFileBase, cout);
 	} else {
-		// Initialize Ebwt object
-		bool color = readEbwtColor(adjustedEbwtFileBase);
-		Ebwt ebwt(
-			adjustedEbwtFileBase, 
-			color,                // index is colorspace
-			-1,                   // don't care about entire-reverse
-			true,                 // index is for the forward direction
-			-1,                   // offrate (-1 = index default)
-			0,                    // offrate-plus (0 = index default)
-			false,                // use memory-mapped IO
-			false,                // use shared memory
-			false,                // sweep memory-mapped memory
-			true,                 // load names?
-			true,                 // load SA sample?
-			true,                 // load ftab?
-			true,                 // load rstarts?
-			verbose,              // be talkative?
-			verbose,              // be talkative at startup?
-			false,                // pass up memory exceptions?
-			false);               // sanity check?
+        // Initialize Ebwt object
+		HierGFM<TIndexOffU, uint16_t> gfm(
+                                          adjustedEbwtFileBase,
+                                          false,                // index is colorspace
+                                          -1,                   // don't care about entire-reverse
+                                          true,                 // index is for the forward direction
+                                          -1,                   // offrate (-1 = index default)
+                                          0,                    // offrate-plus (0 = index default)
+                                          false,                // use memory-mapped IO
+                                          false,                // use shared memory
+                                          false,                // sweep memory-mapped memory
+                                          true,                 // load names?
+                                          true,                 // load SA sample?
+                                          true,                 // load ftab?
+                                          true,                 // load rstarts?
+                                          false,                // be talkative?
+                                          false,                // be talkative at startup?
+                                          false,                // pass up memory exceptions?
+                                          false);               // sanity check?
+        
+        gfm.loadIntoMemory(
+                           -1,     // need entire reverse
+                           true,   // load SA sample
+                           true,   // load ftab
+                           true,   // load rstarts
+                           true,   // load names
+                           verbose);  // verbose
+        
 		// Load whole index into memory
-		if(refFromEbwt) {
-			ebwt.loadIntoMemory(
-				-1,     // color
-				-1,     // need entire reverse
-				true,   // load SA sample
-				true,   // load ftab
-				true,   // load rstarts
-				true,   // load names
-				false); // verbose
-			print_index_sequences<SString<char> >(cout, ebwt);
+		if(refFromGFM) {
+			print_index_sequences<TIndexOffU, SString<char> >(cout, gfm);
 		} else {
 			EList<string> refnames;
-			readEbwtRefnames(adjustedEbwtFileBase, refnames);
+			readEbwtRefnames<TIndexOffU>(adjustedEbwtFileBase, refnames);
 			print_ref_sequences(
 				cout,
-				readEbwtColor(ebwtFileBase),
 				refnames,
-				ebwt.plen(),
+				gfm.plen(),
 				adjustedEbwtFileBase);
 		}
 		// Evict any loaded indexes from memory
-		if(ebwt.isInMemory()) {
-			ebwt.evictFromMemory();
+		if(gfm.isInMemory()) {
+			gfm.evictFromMemory();
 		}
 	}
 }
@@ -437,7 +443,7 @@ int main(int argc, char **argv) {
 		argv0 = argv[0];
 		parseOptions(argc, argv);
 		if(showVersion) {
-			cout << argv0 << " version " << BOWTIE2_VERSION << endl;
+			cout << argv0 << " version " << HISAT2_VERSION << endl;
 			if(sizeof(void*) == 4) {
 				cout << "32-bit" << endl;
 			} else if(sizeof(void*) == 8) {
@@ -486,7 +492,7 @@ int main(int argc, char **argv) {
 		return 1;
 	} catch(int e) {
 		if(e != 0) {
-			cerr << "Error: Encountered internal Bowtie 2 exception (#" << e << ")" << endl;
+			cerr << "Error: Encountered internal HISAT exception (#" << e << ")" << endl;
 			cerr << "Command: ";
 			for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
 			cerr << endl;
@@ -495,4 +501,4 @@ int main(int argc, char **argv) {
 	}
 }
 
-#endif /*def BOWTIE_INSPECT_MAIN*/
+#endif /*def HISAT2_INSPECT_MAIN*/
