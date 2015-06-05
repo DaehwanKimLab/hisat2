@@ -3122,7 +3122,12 @@ bool HI_Aligner<index_t, local_index_t>::align(
     index_t minOff = 0;
     if(hit.minWidth(minOff) > (index_t)(rp.khits * 2)) return false;
     
-    // do not try to align if the potential alignment for this read might be
+    // daehwan - for debugging purposes
+    if(hit.offsetSize() != 1) {
+        return false;
+    }
+    
+    // Don't try to align if the potential alignment for this read might be
     // worse than the best alignment of its reverse complement
     int64_t bestScore = (rdi == 0 ? sink.bestUnp1() : sink.bestUnp2());
     index_t num_spliced = (rdi == 0 ? sink.bestSplicedUnp1() : sink.bestSplicedUnp2());
