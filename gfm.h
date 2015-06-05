@@ -2748,7 +2748,8 @@ public:
      */
     inline pair<index_t, index_t> mapGLF(
                                          SideLocus<index_t>& tloc, SideLocus<index_t>& bloc, int c,
-                                         pair<index_t, index_t>* node_range = NULL
+                                         pair<index_t, index_t>* node_range = NULL,
+                                         EList<pair<index_t, index_t> >* node_iedges = NULL
                                          ASSERT_ONLY(, bool overrideSanity = false)
                                          ) const
     {
@@ -2807,6 +2808,9 @@ public:
         if(node_range != NULL) {
             (*node_range).first = node_top;
             (*node_range).second = node_bot;
+        }
+        if(node_iedges != NULL) {
+            getInEdgeCount(top, bot, *node_iedges);
         }
         
         return pair<index_t, index_t>(top, bot);
@@ -3106,6 +3110,52 @@ public:
             }
         }
         return l.toBWRow(_gh);
+    }
+    
+    /**
+     *
+     */
+    inline void getInEdgeCount(
+                               index_t top,
+                               index_t bot,
+                               EList<pair<index_t, index_t> >& node_iedges) const
+    {
+        assert_lt(top, bot);
+        node_iedges.clear();
+        SideLocus<index_t> l; l.initFromRow_bit(top, _gh, gfm());
+        const uint8_t *side = l.side(this->gfm()) + (_gh._sideGbwtSz >> 1);
+        assert_lt(l._by, (_gh._sideGbwtSz >> 2));
+        assert_eq((side[l._by] >> l._bp) & 0x1, 0x1);
+        bool first = true;
+        index_t curr_node = 0;
+        index_t num0s = 0;
+        while(top < bot) {
+            if(first) {
+                first = false;
+            } else {
+                int bit = (side[l._by] >> l._bp) & 0x1;
+                if(bit == 0x1) {
+                    curr_node++;
+                    num0s = 0;
+                } else {
+                    num0s++;
+                    if(num0s == 1) {
+                        node_iedges.expand();
+                        node_iedges.back().first = curr_node;
+                    }
+                    node_iedges.back().second = num0s;
+                }
+            }
+            if(l._charOff + 1 == (_gh._sideGbwtSz << 1)) {
+                l.nextSide(_gh);
+                side = l.side(this->gfm()) + (_gh._sideGbwtSz >> 1);
+            } else {
+                l._charOff++;
+                l._by = l._charOff >> 3;
+                l._bp = l._charOff & 0x7;
+            }
+            top++;
+        }
     }
     
 
@@ -3865,7 +3915,7 @@ void GFM<index_t>::buildToDisk(
     memcpy(_fchr.get(), fchr, sizeof(index_t) * 5);
     
     
-    // Initialize _zGbwtByteOff and _zGbwtBpOff
+    // Initialize _zGbwtByteOffs and _zGbwtBpOffs
     _zOffs = zOffs;
     postReadInit(gh);
 
