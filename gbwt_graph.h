@@ -1179,14 +1179,13 @@ public:
         gbwtChar = edge.label;
         if(gbwtChar == 'Y') gbwtChar = 'Z';
         assert_lt(report_node_idx, nodes.size());
-        const PathNode& node = nodes[report_node_idx];
-        pos = node.to;
         F = (firstOutEdge ? 1 : 0);
         report_edge_range.first++;
         if(report_edge_range.first >= report_edge_range.second) {
             report_node_idx++;
         }
         assert_lt(report_M.first, nodes.size());
+        pos = nodes[report_M.first].to;
         M = (report_M.second == 0 ? 1 : 0);
         report_M.second++;
         if(report_M.second >= nodes[report_M.first].key.first) {
@@ -1629,8 +1628,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     // Test searches, based on paper_example
 #if 0
     EList<string> queries;  EList<index_t> answers;
-#   if 0
-#      if 1
+#   if 1
+#      if 0
     queries.push_back("GACGT"); answers.push_back(9);
     queries.push_back("GATGT"); answers.push_back(9);
     queries.push_back("GACT");  answers.push_back(9);
@@ -1639,8 +1638,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     queries.push_back("ACTG");  answers.push_back(3);
 #      else
     // rs55902548, at 402, ref, alt, unknown alt
-    // queries.push_back("GGCAGCTCCCATGGGTACACACTGGGCCCAGAACTGGGATGGAGGATGCA");
-    queries.push_back("GGCAGCTCCCATGGGTACACACTGGTCCCAGAACTGGGATGGAGGATGCA");
+    queries.push_back("GGCAGCTCCCATGGGTACACACTGGGCCCAGAACTGGGATGGAGGATGCA");
+    // queries.push_back("GGCAGCTCCCATGGGTACACACTGGTCCCAGAACTGGGATGGAGGATGCA");
     // queries.push_back("GGCAGCTCCCATGGGTACACACTGGACCCAGAACTGGGATGGAGGATGCA");
     
     // rs5759268, at 926787, ref, alt, unknown alt
@@ -1652,34 +1651,34 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     for(size_t q = 0; q < queries.size(); q++) {
         const string& query = queries[q];
         assert_gt(query.length(), 0);
-        index_t top = 0, bot = nodes.size();
+        index_t top = 0, bot = edges.size();
+        index_t node_top = 0, node_bot = 0;
         cerr << "Aligning " << query <<  endl;
-        
-        for(size_t i = 0; i < query.length(); i++) {
+        index_t i = 0;
+        for(; i < query.length(); i++) {
             if(top >= bot) break;
-            
             int nt = query[query.length() - i - 1];
             nt = asc2dna[nt];
             assert_lt(nt, 4);
-            cerr << "\t" << i << ": " << "ACGT"[nt] << endl;
-            cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
             
-            top = select1(F_array, top + 1);
-            bot = select1(F_array, bot + 1);
-            cerr << "\t\tBWT range: [" << top << ", " << bot << ")" << endl;
+            cerr << "\t" << i << "\tBWT range: [" << top << ", " << bot << ")" << endl;
             
             top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
             bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
             cerr << "\t\tLF BWT range: [" << top << ", " << bot << ")" << endl;
             
-            top = rank1(M_array, top) - 1;
-            bot = rank1(M_array, bot - 1);
-            cerr << "\t\tnode range: [" << top << ", " << bot << ")" << endl;
+            node_top = rank1(M_array, top) - 1;
+            node_bot = rank1(M_array, bot - 1);
+            cerr << "\t\tnode range: [" << node_top << ", " << node_bot << ")" << endl;
+            
+            top = select1(F_array, node_top + 1);
+            bot = select1(F_array, node_bot + 1);
         }
+        cerr << "\t" << i << "\tBWT range: [" << top << ", " << bot << ")" << endl;
         // assert_eq(top, answers[q]);
         cerr << "finished... ";
-        if(top < bot && top < nodes.size()) {
-            index_t pos = nodes[top].to;
+        if(node_top < node_bot && node_top < nodes.size()) {
+            index_t pos = nodes[node_top].to;
             index_t gpos = pos;
             const EList<RefRecord>& szs = base.szs;
             for(index_t i = 0; i < szs.size(); i++) {
@@ -1695,7 +1694,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
 #   endif
     
     // See inconsistencies between F and M arrays
-#   if 1
+#   if 0
     cerr << endl << endl;
     EList<index_t> tmp_F;
     for(index_t i = 0; i < F_array.size(); i++) {

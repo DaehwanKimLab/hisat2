@@ -505,11 +505,8 @@ public:
 					// Yes, toff was resolvable
 					assert_eq(toff, gfm.getOffset(bwrow));
 					met.resolves++;
-#ifdef HISAT_CLASS
-#else
 					toff += step;
                     assert_eq(toff, gfm.getOffset(origBwRow));
-#endif
 					setOff(i, toff, sa, met);
 					if(!reportList) ret.first++;
 #if 0
@@ -655,41 +652,43 @@ public:
 			assert(!done());
 		}
 		// Is there a dollar sign in the middle of the range?
-		assert_neq(top, gfm._zOffs[0]);
-		assert_neq(bot-1, gfm._zOffs[0]);
-		if(gfm._zOffs[0] > top && gfm._zOffs[0] < bot-1) {
-			// Yes, the dollar sign is in the middle of this range.  We
-			// must split it into the two ranges on either side of the
-			// dollar.  Let 'bot' and 'top' delimit the portion of the
-			// range prior to the dollar.
-			index_t oldbot = bot;
-			bot = gfm._zOffs[0];
-			// Note: might be able to do additional trimming off the
-			// end.
-			// Create a new range for the portion after the dollar.
-			st.expand();
-			st.back().reset();
-			index_t ztop = gfm._zOffs[0]+1;
-			st.back().initMap(oldbot - ztop);
-			assert_eq((index_t)map_.size(), oldbot-top+mapi_);
-			for(index_t i = ztop; i < oldbot; i++) {
-				st.back().map_[i - ztop] = map(i-top+mapi_);
-			}
-			map_.resize(bot - top + mapi_);
-			st.back().init(
-				gfm,
-				ref,
-				sa,
-				st,
-				hit,
-				(index_t)st.size()-1,
-				reportList,
-				res,
-				ztop,
-				oldbot,
-				step,
-				met);
-		}
+        for(index_t i = 0; i < gfm._zOffs.size(); i++) {
+            assert_neq(top, gfm._zOffs[i]);
+            assert_neq(bot-1, gfm._zOffs[i]);
+            if(gfm._zOffs[i] > top && gfm._zOffs[i] < bot-1) {
+                // Yes, the dollar sign is in the middle of this range.  We
+                // must split it into the two ranges on either side of the
+                // dollar.  Let 'bot' and 'top' delimit the portion of the
+                // range prior to the dollar.
+                index_t oldbot = bot;
+                bot = gfm._zOffs[i];
+                // Note: might be able to do additional trimming off the
+                // end.
+                // Create a new range for the portion after the dollar.
+                st.expand();
+                st.back().reset();
+                index_t ztop = gfm._zOffs[i]+1;
+                st.back().initMap(oldbot - ztop);
+                assert_eq((index_t)map_.size(), oldbot-top+mapi_);
+                for(index_t j = ztop; j < oldbot; j++) {
+                    st.back().map_[j - ztop] = map(j-top+mapi_);
+                }
+                map_.resize(bot - top + mapi_);
+                st.back().init(
+                               gfm,
+                               ref,
+                               sa,
+                               st,
+                               hit,
+                               (index_t)st.size()-1,
+                               reportList,
+                               res,
+                               ztop,
+                               oldbot,
+                               step,
+                               met);
+            }
+        }
 		assert_gt(bot, top);
 		// Prepare SideLocus's for next step
 		if(bot-top > 1) {
@@ -885,7 +884,11 @@ public:
 			prm.nExFmops++;
 			// Assert that there's not a dollar sign in the middle of
 			// this range
-			assert(bot <= gfm._zOffs[0] || top > gfm._zOffs[0]);
+#ifndef NDEBUG
+            for(index_t i = 0; i < gfm._zOffs.size(); i++) {
+                assert(bot <= gfm._zOffs[i] || top > gfm._zOffs[i]);
+            }
+#endif
 			gfm.mapLFRange(tloc, bloc, bot-top, upto, in, gws.masks);
 #ifndef NDEBUG
 			for(int i = 0; i < 4; i++) {
@@ -986,7 +989,8 @@ public:
 			ASSERT_ONLY(index_t oldtop = top);
 			met.bwops++;
 			prm.nExFmops++;
-			gfm.mapLF1(top, tloc);
+			pair<index_t, index_t> range = gfm.mapGLF1(top, tloc);
+            top = range.first;
 			assert_neq(top, oldtop);
 			bot = top+1;
 			if(mapi_ > 0) {

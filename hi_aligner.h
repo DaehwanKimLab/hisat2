@@ -2409,9 +2409,6 @@ public:
         //  (and mate and the reverse complement of mate in case of pair alignment),
         // pick up one with best partial alignment
         while(nextBWT(sc, gfmFw, gfmBw, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
-            // daehwan - for debugging purposes
-            return EXTEND_POLICY_FULFILLED;
-            
             // given the partial alignment, try to extend it to full alignments
         	found[rdi] = align(sc, gfmFw, gfmBw, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
             if(!found[0] && !found[1]) {
@@ -2565,12 +2562,6 @@ public:
                           pseudogeneStop,
                           anchorStop);
             
-            // daehwan - for debugging purposes
-            if(hit.done()) {
-                const Read& rd = *_rds[rdi];
-                cout << rd.name << "\t(" << hit._cur << ", " << hit._len << ")" << endl;
-            }
-
             assert(hit.repOk());
             if(hit.done()) return true;
             // Advance hit._cur by 1
@@ -3848,6 +3839,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     index_t dep = offset;
     pair<index_t, index_t> range(0, 0);
     pair<index_t, index_t> rangeTemp(0, 0);
+    pair<index_t, index_t> node_range(0, 0);
     index_t left = len - dep;
     assert_gt(left, 0);
     if(left < ftabLen) {
@@ -3905,10 +3897,10 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                rangeTemp = gfm.mapGLF(tloc, bloc, c);
+                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_range);
             } else {
                 bwops_++;
-                rangeTemp = gfm.mapGLF1(range.first, tloc, c);
+                rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_range);
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {
@@ -3977,8 +3969,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                                 (index_t)(dep - offset),
                                 hit_type);
         
-        // daehwan - this needs to be fixed
-        nelt += (range.second - range.first);
+        nelt += (node_range.second - node_range.first);
         cur = dep;
         if(cur >= hit._len) {
             if(hit_type == CANDIDATE_HIT) hit._numUniqueSearch++;

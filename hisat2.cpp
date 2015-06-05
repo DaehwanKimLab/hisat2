@@ -2868,7 +2868,7 @@ static inline void printEEScoreMsg(
  *   + If not identical, continue
  * -
  */
-static void multiseedSearchWorker_hisat(void *vp) {
+static void multiseedSearchWorker_hisat2(void *vp) {
 	int tid = *((int*)vp);
 	assert(multiseed_gfmFw != NULL);
 	assert(multiseedMms == 0 || multiseed_gfmBw != NULL);
@@ -3427,7 +3427,7 @@ static void multiseedSearch(
 		for(int i = 0; i < nthreads; i++) {
 			// Thread IDs start at 1
 			tids[i] = i+1;
-            threads[i] = new tthread::thread(multiseedSearchWorker_hisat, (void*)&tids[i]);
+            threads[i] = new tthread::thread(multiseedSearchWorker_hisat2, (void*)&tids[i]);
 		}
 
         for (int i = 0; i < nthreads; i++)

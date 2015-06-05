@@ -1770,7 +1770,9 @@ public:
 	 */
 	index_t tryOffset(index_t elt) const {
 		assert(offs() != NULL);
-		if(elt == _zOffs[0]) return 0;
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            if(elt == _zOffs[i]) return 0;
+        }
 		if((elt & _gh._offMask) == elt) {
 			index_t eltOff = elt >> _gh._offRate;
 			assert_lt(eltOff, _gh._offsLen);
@@ -1812,7 +1814,7 @@ public:
 	/**
 	 * Resolve the reference offset of the BW element 'elt'.
 	 */
-	index_t getOffset(index_t row) const;
+	index_t getOffset(index_t row, index_t node = 0) const;
 
 	/**
 	 * Resolve the reference offset of the BW element 'elt' such that
@@ -2745,7 +2747,8 @@ public:
      * i to on character c.
      */
     inline pair<index_t, index_t> mapGLF(
-                                         SideLocus<index_t>& tloc, SideLocus<index_t>& bloc, int c
+                                         SideLocus<index_t>& tloc, SideLocus<index_t>& bloc, int c,
+                                         pair<index_t, index_t>* node_range = NULL
                                          ASSERT_ONLY(, bool overrideSanity = false)
                                          ) const
     {
@@ -2799,6 +2802,11 @@ public:
             bot = select_F(bloc, node_bot + 1 - bot_M_occ);
         } else {
             bot = bot_F_loc;
+        }
+        
+        if(node_range != NULL) {
+            (*node_range).first = node_top;
+            (*node_range).second = node_bot;
         }
         
         return pair<index_t, index_t>(top, bot);
@@ -2864,7 +2872,10 @@ public:
 		ASSERT_ONLY(, bool overrideSanity = false)
 		) const
 	{
-		if(rowL(l) != c || row == _zOffs[0]) return (index_t)OFF_MASK;
+        if(rowL(l) != c) return (index_t)OFF_MASK;
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            if(row == _zOffs[i]) return (index_t)OFF_MASK;
+        }
 		index_t ret;
 		assert_lt(c, 4);
 		assert_geq(c, 0);
@@ -2894,7 +2905,9 @@ public:
 		ASSERT_ONLY(, bool overrideSanity = false)
 		) const
 	{
-		if(row == _zOffs[0]) return -1;
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            if(row == _zOffs[i]) return (index_t)OFF_MASK;
+        }
 		int c = rowL(l);
 		assert_range(0, 3, c);
 		row = countBt2Side(l, c);
@@ -2918,9 +2931,10 @@ public:
      * character.  Returns 0xffffffff if this row ends in $.
      */
     inline pair<index_t, index_t> mapGLF1(
-                                          index_t row,       // starting row
+                                          index_t row,           // starting row
                                           SideLocus<index_t>& l, // locus for starting row
-                                          int c               // character to proceed on
+                                          int c,                 // character to proceed
+                                          pair<index_t, index_t>* node_range = NULL
                                           ASSERT_ONLY(, bool overrideSanity = false)
                                           ) const
     {
@@ -2960,6 +2974,72 @@ public:
             bot = select_F(l, node_bot + 1 - M_occ);
         } else {
             bot = F_loc;
+        }
+        
+        if(node_range != NULL) {
+            (*node_range).first = node_top;
+            (*node_range).second = node_bot;
+        }
+        
+        return pair<index_t, index_t>(top, bot);
+    }
+    
+    /**
+     * Given row and its locus information, proceed on the given character
+     * and return the next row, or all-fs if we can't proceed on that
+     * character.  Returns 0xffffffff if this row ends in $.
+     */
+    inline pair<index_t, index_t> mapGLF1(
+                                          index_t row,           // starting row
+                                          SideLocus<index_t>& l, // locus for starting row
+                                          pair<index_t, index_t>* node_range = NULL
+                                          ASSERT_ONLY(, bool overrideSanity = false)
+                                          ) const
+    {
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            if(row == _zOffs[i]) return pair<index_t, index_t>((index_t)OFF_MASK, (index_t)OFF_MASK);
+        }
+
+        mapLF1(row, l);
+        index_t top = row;
+        if(top == (index_t)OFF_MASK) return pair<index_t, index_t>(0, 0);
+        index_t bot = top;
+        
+        l.initFromRow_bit(top + 1, gh(), gfm());
+        index_t node_top = rank_M(l) - 1;
+        
+        const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
+        index_t F_loc = *((index_t*)side);
+        side += sizeof(index_t);
+        index_t M_occ = *((index_t*)side);
+        assert_leq(M_occ, node_top + 1);
+        if(M_occ > node_top) {
+            side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
+            F_loc = *((index_t*)side);
+            side += sizeof(index_t);
+            M_occ = *((index_t*)side);
+            assert_leq(M_occ, node_top + 1);
+        }
+        if(M_occ > 0) F_loc++;
+        
+        l.initFromRow_bit(F_loc, gh(), gfm());
+        
+        if(node_top + 1 > M_occ) {
+            top = select_F(l, node_top + 1 - M_occ);
+        } else {
+            top = F_loc;
+        }
+        
+        index_t node_bot = node_top + 1;
+        if(node_bot + 1 > M_occ) {
+            bot = select_F(l, node_bot + 1 - M_occ);
+        } else {
+            bot = F_loc;
+        }
+        
+        if(node_range != NULL) {
+            (*node_range).first = node_top;
+            (*node_range).second = node_bot;
         }
         
         return pair<index_t, index_t>(top, bot);
@@ -3193,7 +3273,8 @@ void readEbwtRefnames(istream& in, EList<string>& refnames) {
     in.seekg(gh._gbwtTotLen, ios_base::cur);
     
     // Skip zOff from primary stream
-    readIndex<index_t>(in, switchEndian);
+    index_t numZOffs = readIndex<index_t>(in, switchEndian);
+    in.seekg(numZOffs * sizeof(index_t), ios_base::cur);
     
     // Skip fchr
     in.seekg(5 * sizeof(index_t), ios_base::cur);
@@ -4021,8 +4102,11 @@ index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
 	SideLocus<index_t> l;
 	if(steps > 0) l.initFromRow(row, _gh, gfm());
 	while(steps > 0) {
-		if(row == _zOffs[0]) return (index_t)OFF_MASK;
-		index_t newrow = this->mapLF(l ASSERT_ONLY(, false));
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            if(row == _zOffs[i]) return (index_t)OFF_MASK;
+        }
+        pair<index_t, index_t> range = this->mapGLF1(row, l, NULL ASSERT_ONLY(, false));
+        index_t newrow = range.first;
 		assert_neq((index_t)OFF_MASK, newrow);
 		assert_neq(newrow, row);
 		row = newrow;
@@ -4036,24 +4120,30 @@ index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
  * Resolve the reference offset of the BW element 'elt'.
  */
 template <typename index_t>
-index_t GFM<index_t>::getOffset(index_t row) const {
+index_t GFM<index_t>::getOffset(index_t row, index_t node) const {
 	assert(offs() != NULL);
 	assert_neq((index_t)OFF_MASK, row);
-	if(row == _zOffs[0]) return 0;
-	if((row & _gh._offMask) == row) return this->offs()[row >> _gh._offRate];
+    for(index_t i = 0; i < _zOffs.size(); i++) {
+        if(row == _zOffs[i]) return 0;
+    }
+	if((node & _gh._offMask) == node) return this->offs()[node >> _gh._offRate];
 	index_t jumps = 0;
 	SideLocus<index_t> l;
 	l.initFromRow(row, _gh, gfm());
 	while(true) {
-		index_t newrow = this->mapLF(l ASSERT_ONLY(, false));
+        pair<index_t, index_t> node_range(0, 0);
+        pair<index_t, index_t> range = this->mapGLF1(row, l, &node_range ASSERT_ONLY(, false));
+        index_t newrow = range.first;
 		jumps++;
 		assert_neq((index_t)OFF_MASK, newrow);
 		assert_neq(newrow, row);
 		row = newrow;
-		if(row == _zOffs[0]) {
-			return jumps;
-		} else if((row & _gh._offMask) == row) {
-			return jumps + this->offs()[row >> _gh._offRate];
+        for(index_t i = 0; i < _zOffs.size(); i++) {
+            if(row == _zOffs[i]) return jumps;
+        }
+        
+        if((node_range.first & _gh._offMask) == node_range.first) {
+			return jumps + this->offs()[node_range.first >> _gh._offRate];
 		}
 		l.initFromRow(row, _gh, gfm());
 	}
@@ -4818,7 +4908,8 @@ void readGFMRefnames(istream& in, EList<string>& refnames) {
     in.seekg(gh._ebwtTotLen, ios_base::cur);
     
     // Skip zOff from primary stream
-    readIndex<index_t>(in, switchEndian);
+    index_t numZOffs = readIndex<index_t>(in, switchEndian);
+    in.seekg(numZOffs * sizeof(index_t), ios_base::cur);
     
     // Skip fchr
     in.seekg(5 * sizeof(index_t), ios_base::cur);
@@ -5080,13 +5171,6 @@ void GFM<index_t>::szsToDisk(const EList<RefRecord>& szs, ostream& os, int rever
         writeIndex<index_t>(os, totlen, this->toBe()); // offset from beginning of joined string
         writeIndex<index_t>(os, (index_t)seqm1,  this->toBe()); // sequence id
         writeIndex<index_t>(os, (index_t)fwoff,  this->toBe()); // offset into sequence
-        
-#ifdef HISAT_CLASS
-        this->rstarts()[i*3]   = totlen;
-        this->rstarts()[i*3+1] = (index_t)seqm1;
-        this->rstarts()[i*3+2] = (index_t)fwoff;
-#endif
-        
         totlen += szs[i].len;
         off += szs[i].len;
     }
@@ -5218,7 +5302,10 @@ void GFM<index_t>::restore(SString<char>& s) const {
     index_t jumps = 0;
     index_t i = this->_gh._len; // should point to final SA elt (starting with '$')
     SideLocus<index_t> l(i, this->_gh, this->gfm());
-    while(i != _zOffs[0]) {
+    while(true) {
+        for(index_t j = 0; j < _zOffs.size(); j++) {
+            if(i == _zOffs[j]) break;
+        }
         assert_lt(jumps, this->_gh._len);
         //if(_verbose) cout << "restore: i: " << i << endl;
         // Not a marked row; go back a char in the original string
