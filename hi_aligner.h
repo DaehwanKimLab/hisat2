@@ -1,20 +1,20 @@
 /*
- * Copyright 2014, Daehwan Kim <infphilo@gmail.com>
+ * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
  *
- * This file is part of HISAT.
+ * This file is part of HISAT 2.
  *
- * HISAT is free software: you can redistribute it and/or modify
+ * HISAT 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * HISAT is distributed in the hope that it will be useful,
+ * HISAT 2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with HISAT.  If not, see <http://www.gnu.org/licenses/>.
+ * along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef HI_ALIGNER_H_
@@ -119,6 +119,7 @@ struct BWTHit {
 	
 	void reset() {
 		_top = _bot = 0;
+        _node_top = _node_bot = 0;
 		_fw = true;
 		_bwoff = (index_t)OFF_MASK;
 		_len = 0;
@@ -130,6 +131,8 @@ struct BWTHit {
 	void init(
 			  index_t top,
 			  index_t bot,
+              index_t node_top,
+              index_t node_bot,
   			  bool fw,
 			  uint32_t bwoff,
 			  uint32_t len,
@@ -137,6 +140,8 @@ struct BWTHit {
 	{
 		_top = top;
         _bot = bot;
+        _node_top = node_top;
+        _node_bot = node_bot;
 		_fw = fw;
 		_bwoff = bwoff;
 		_len = len;
@@ -188,6 +193,8 @@ struct BWTHit {
 	
 	index_t         _top;               // start of the range in the FM index
 	index_t         _bot;               // end of the range in the FM index
+    index_t         _node_top;
+    index_t         _node_bot;
 	bool            _fw;                // whether read is forward or reverse complemented
 	index_t         _bwoff;             // current base of a read to search from the right end
 	index_t         _len;               // read length
@@ -2782,6 +2789,8 @@ public:
                          RandomSource&              rnd,
                          index_t                    top,
                          index_t                    bot,
+                         index_t                    node_top,
+                         index_t                    node_bot,
                          bool                       fw,
                          index_t                    maxelt,
                          index_t                    rdoff,
@@ -2802,6 +2811,8 @@ public:
                                RandomSource&                rnd,
                                local_index_t                top,
                                local_index_t                bot,
+                               local_index_t                node_top,
+                               local_index_t                node_bot,
                                bool                         fw,
                                index_t                      rdoff,
                                index_t                      rdlen,
@@ -2877,6 +2888,8 @@ public:
                             rnd,
                             partialHit._top,
                             partialHit._bot,
+                            partialHit._node_top,
+                            partialHit._node_bot,
                             fw,
                             partialHit._bot - partialHit._top,
                             hit._len - partialHit._bwoff - partialHit._len,
@@ -3242,6 +3255,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                       rnd,
                                       top,
                                       bot,
+                                      (local_index_t)OFF_MASK,
+                                      (local_index_t)OFF_MASK,
                                       ofw,
                                       hitoff - hitlen + 1,
                                       hitlen,
@@ -3337,6 +3352,8 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
                                                          RandomSource&              rnd,
                                                          index_t                    top,
                                                          index_t                    bot,
+                                                         index_t                    node_top,
+                                                         index_t                    node_bot,
                                                          bool                       fw,
                                                          index_t                    maxelt,
                                                          index_t                    rdoff,
@@ -3356,7 +3373,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
     him.globalgenomecoords += (bot - top);
     _offs.resize(nelt);
     _offs.fill(std::numeric_limits<index_t>::max());
-    _sas.init(top, rdlen, EListSlice<index_t, 16>(_offs, 0, nelt));
+    _sas.init(top, node_top, rdlen, EListSlice<index_t, 16>(_offs, 0, nelt));
     _gws.init(gfm, ref, _sas, rnd, met);
     
     for(index_t off = 0; off < nelt; off++) {
@@ -3410,6 +3427,8 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
                                                                RandomSource&                rnd,
                                                                local_index_t                top,
                                                                local_index_t                bot,
+                                                               local_index_t                node_top,
+                                                               local_index_t                node_bot,
                                                                bool                         fw,
                                                                index_t                      rdoff,
                                                                index_t                      rdlen,
@@ -3427,7 +3446,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
     him.localgenomecoords += (bot - top);
     _offs_local.resize(nelt);
     _offs_local.fill(std::numeric_limits<local_index_t>::max());
-    _sas_local.init(top, rdlen, EListSlice<local_index_t, 16>(_offs_local, 0, nelt));
+    _sas_local.init(top, node_top, rdlen, EListSlice<local_index_t, 16>(_offs_local, 0, nelt));
     _gws_local.init(gfm, ref, _sas_local, rnd, met);
     
     for(local_index_t off = 0; off < nelt; off++) {
@@ -3847,6 +3866,8 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         partialHits.expand();
         partialHits.back().init((index_t)OFF_MASK,
                                 (index_t)OFF_MASK,
+                                (index_t)OFF_MASK,
+                                (index_t)OFF_MASK,
                                 fw,
                                 (index_t)offset,
                                 (index_t)(cur - offset));
@@ -3860,6 +3881,8 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
             cur += (i+1);
             partialHits.expand();
             partialHits.back().init((index_t)OFF_MASK,
+                                    (index_t)OFF_MASK,
+                                    (index_t)OFF_MASK,
                                     (index_t)OFF_MASK,
                                     fw,
                                     (index_t)offset,
@@ -3878,6 +3901,8 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         cur = dep;
         partialHits.expand();
         partialHits.back().init((index_t)OFF_MASK,
+                                (index_t)OFF_MASK,
+                                (index_t)OFF_MASK,
                                 (index_t)OFF_MASK,
                                 fw,
                                 (index_t)offset,
@@ -3964,6 +3989,8 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         else if(pseudogeneStop) hit_type = PSEUDOGENE_HIT;
         partialHits.back().init(range.first,
                                 range.second,
+                                node_range.first,
+                                node_range.second,
                                 fw,
                                 (index_t)offset,
                                 (index_t)(dep - offset),

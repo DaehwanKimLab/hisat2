@@ -1768,15 +1768,15 @@ public:
 	 * it can be resolved immediately, return the reference offset.  If
 	 * it cannot be resolved immediately, return 0xffffffff.
 	 */
-	index_t tryOffset(index_t elt) const {
+	index_t tryOffset(index_t elt, index_t node) const {
 		assert(offs() != NULL);
         for(index_t i = 0; i < _zOffs.size(); i++) {
             if(elt == _zOffs[i]) return 0;
         }
-		if((elt & _gh._offMask) == elt) {
-			index_t eltOff = elt >> _gh._offRate;
-			assert_lt(eltOff, _gh._offsLen);
-			index_t off = offs()[eltOff];
+		if((node & _gh._offMask) == node) {
+			index_t nodeOff = node >> _gh._offRate;
+			assert_lt(nodeOff, _gh._offsLen);
+			index_t off = offs()[nodeOff];
 			assert_neq((index_t)OFF_MASK, off);
 			return off;
 		} else {
@@ -2910,7 +2910,7 @@ public:
 		) const
 	{
         for(index_t i = 0; i < _zOffs.size(); i++) {
-            if(row == _zOffs[i]) return (index_t)OFF_MASK;
+            if(row == _zOffs[i]) return -1;
         }
 		int c = rowL(l);
 		assert_range(0, 3, c);

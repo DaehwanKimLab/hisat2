@@ -99,12 +99,12 @@ public:
 
 	SARangeWithOffs() { reset(); };
 
-	SARangeWithOffs(TIndexOffU tf, size_t len, const T& o) {
-		init(tf, len, o);
+	SARangeWithOffs(TIndexOffU tf, TIndexOffU ntf, size_t len, const T& o) {
+		init(tf, ntf, len, o);
 	}
 	
-	void init(TIndexOffU tf, size_t len_, const T& o) {
-		topf = tf; len = len_, offs = o;
+	void init(TIndexOffU tf, TIndexOffU ntf, size_t len_, const T& o) {
+        topf = tf; node_top = ntf; len = len_, offs = o;
 	}
 
 	/**
@@ -125,9 +125,10 @@ public:
 	 */
 	size_t size() const { return offs.size(); }
 
-	TIndexOffU topf; // top in BWT index
-	size_t    len;  // length of the reference sequence involved
-	T         offs; // offsets
+	TIndexOffU topf;      // top in GBWT index
+    TIndexOffU node_top;  // top node
+	size_t     len;        // length of the reference sequence involved
+	T          offs;       // offsets
 };
 
 /**
@@ -446,6 +447,8 @@ public:
 		EList<WalkResult<index_t>, 16>* res,   // EList where resolved offsets should be appended
 		index_t tp,                   // top of range at this step
 		index_t bt,                   // bot of range at this step
+        index_t n_tp,                 // node at top
+        index_t n_bt,                 // node at bot
 		index_t st,                   // # steps taken to get to this step
 		WalkMetrics& met)
 	{
@@ -453,6 +456,8 @@ public:
 		assert_lt(range, sts.size());
 		top = tp;
 		bot = bt;
+        node_top = n_tp;
+        node_bot = n_bt;
 		step = st;
 		assert(!inited_);
 		ASSERT_ONLY(inited_ = true);
@@ -498,15 +503,17 @@ public:
 			if(!resolved) {
 				// Elt not resolved yet; try to resolve it now
 				index_t bwrow = (index_t)(top - mapi_ + i);
-				index_t toff = gfm.tryOffset(bwrow);
-				ASSERT_ONLY(index_t origBwRow = sa.topf + map(i));
+                index_t node = (index_t)(node_top - mapi_ + i);
+				index_t toff = gfm.tryOffset(bwrow, node);
+                ASSERT_ONLY(index_t origBwRow = sa.topf + map(i));
+                ASSERT_ONLY(index_t origNode = sa.node_top + map(i));
 				assert_eq(bwrow, gfm.walkLeft(origBwRow, step));
 				if(toff != (index_t)OFF_MASK) {
 					// Yes, toff was resolvable
-					assert_eq(toff, gfm.getOffset(bwrow));
+					assert_eq(toff, gfm.getOffset(bwrow, node));
 					met.resolves++;
 					toff += step;
-                    assert_eq(toff, gfm.getOffset(origBwRow));
+                    assert_eq(toff, gfm.getOffset(origBwRow, origNode));
 					setOff(i, toff, sa, met);
 					if(!reportList) ret.first++;
 #if 0
@@ -685,6 +692,8 @@ public:
                                res,
                                ztop,
                                oldbot,
+                               (index_t)OFF_MASK,
+                               (index_t)OFF_MASK,
                                step,
                                met);
             }
@@ -959,6 +968,8 @@ public:
 							res,         // report hits here if reportList is true
 							ntop,        // BW top of new range
 							nbot,        // BW bot of new range
+                            (index_t)OFF_MASK,
+                            (index_t)OFF_MASK,
 							step+1,      // # steps taken to get to this new range
 							met);        // update these metrics
 						ret.first += rret.first;
@@ -989,10 +1000,13 @@ public:
 			ASSERT_ONLY(index_t oldtop = top);
 			met.bwops++;
 			prm.nExFmops++;
-			pair<index_t, index_t> range = gfm.mapGLF1(top, tloc);
+            pair<index_t, index_t> node_range(0, 0);
+			pair<index_t, index_t> range = gfm.mapGLF1(top, tloc, &node_range);
             top = range.first;
 			assert_neq(top, oldtop);
 			bot = top+1;
+            node_top = node_range.first;
+            node_bot = node_range.second;
 			if(mapi_ > 0) {
 				map_[0] = map_[mapi_];
 				mapi_ = 0;
@@ -1005,7 +1019,7 @@ public:
 		assert_leq((index_t)step, gfm.gh().len());
 		pair<int, int> rret =
 		init<S>(
-			gfm,        // forward Bowtie index
+			gfm,        // forward GFM index
 			ref,        // bitpair-encodede reference
 			sa,         // SA range with offsets
 			st,         // EList of all GWStates associated with original range
@@ -1066,8 +1080,10 @@ public:
 
 	SideLocus<index_t> tloc;      // SideLocus for top
 	SideLocus<index_t> bloc;      // SideLocus for bottom
-	index_t            top;       // top elt of range in BWT
-	index_t            bot;       // bot elt of range in BWT
+	index_t            top;       // top elt of range in GBWT
+	index_t            bot;       // bot elt of range in GBWT
+    index_t            node_top;
+    index_t            node_bot;
 	int                step;      // how many steps have we walked to the left so far
 
 protected:
@@ -1128,8 +1144,10 @@ public:
 			0,                  // range 0
 			false,              // put resolved elements into res_?
 			NULL,               // put resolved elements here
-			top,                // BW row at top
-			bot,                // BW row at bot
+			top,                // GBW row at top
+			bot,                // GBW row at bot
+            (index_t)OFF_MASK,  // node at top
+            (index_t)OFF_MASK,  // node at bot
 			0,                  // # steps taken
 			met);               // update metrics here
 		elt_ += sa.size();
