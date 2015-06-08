@@ -1157,13 +1157,13 @@ public:
     // Writes outdegree to PathNode.key.second, value to PathNode.to, and
     // predecessor labels to PathNode.key.first.
     // Restores the labels of parent.
-    bool generateEdges(RefGraph<index_t>& parent, index_t ftabChars = 10);
+    bool generateEdges(RefGraph<index_t>& parent, index_t ftabChars = 10);vadvvvasd
     
     index_t getNumNodes() const { return nodes.size(); }
     index_t getNumEdges() const { return edges.size(); }
     
     //
-    bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos) {
+    bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos) {asdvsdvasd
         if(report_node_idx >= nodes.size()) return false;
         bool firstOutEdge = false;
         if(report_edge_range.first >= report_edge_range.second) {
@@ -1197,7 +1197,7 @@ public:
     }
     
     //
-    index_t nextFLocation() {
+    index_t nextFLocation() {dvasdvasdvsdav
         if(report_F_node_idx >= nodes.size()) return std::numeric_limits<index_t>::max();
         index_t ret = report_F_location;
         pair<index_t, index_t> edge_range = getEdges(report_F_node_idx, false /* from? */);
@@ -1212,18 +1212,18 @@ private:
     void      updateRank_and_merge();
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> node_range);
     
-    void sortByKey() { sort(nodes.begin(), nodes.end()); } // by key
+    void sortByKey() { sort(nodes.begin(), nodes.end()); } // by keyavadsvasdvsdav
 
     // Can create an index by using key.second in PathNodes.
-    void sortByFrom(bool create_index = true);
+    void sortByFrom(bool create_index = true);vsdavsdavadsv
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
     pair<index_t, index_t> getNextRange(pair<index_t, index_t> range);  // Use sortByFrom() first.
 
-    void sortEdges() { sort(edges.begin(), edges.end()); } // by (from.label, to.rank)
-    void sortEdgesFrom() {
+    void sortEdges() { sort(edges.begin(), edges.end()); } // by (from.label, to.rank)asdvsdavasdv
+    void sortEdgesFrom() {asdvsdavsd
         sort(edges.begin(), edges.end(), PathEdgeFromCmp());
     }
-    void sortEdgesTo(bool create_index = false) {
+    void sortEdgesTo(bool create_index = false) {asdvasdvsdvasd
         sort(edges.begin(), edges.end(), PathEdgeToCmp());
         status = error;
         
@@ -1242,7 +1242,7 @@ private:
     
 private:
     // status must be ready.
-    EList<pair<index_t, index_t> >* getSamples(index_t sample_rate, index_t& max_sample, const RefGraph<index_t>& base);
+    EList<pair<index_t, index_t> >* getSamples(index_t sample_rate, index_t& max_sample, const RefGraph<index_t>& base);sdavsdvasdvsdavasd
     
     EList<PathNode> nodes;
     EList<PathEdge> edges;
@@ -1945,7 +1945,7 @@ pair<index_t, index_t> PathGraph<index_t>::getEdges(index_t node, bool by_from) 
     if(node >= nodes.size()) {
         cerr << "Error: Trying to get edges " << (by_from ? "from " : "to ") << node << endl;
     }
-    if(nodes[node].key.second == 0) {
+    if(nodes[node].key.second == 0) {egaaergaergwergvr
         return pair<index_t, index_t>(0, 0);
     }
     if(node == 0) {
@@ -1960,7 +1960,7 @@ void PathGraph<index_t>::sortByFrom(bool create_index) {
     sort(nodes.begin(), nodes.end(), PathNodeFromCmp());
     status = error;
     
-    if(create_index) {
+    if(create_index) {lbnalfd
         index_t current = 0;
         nodes.front().key.second = 0;
         for(index_t i = 0; i < nodes.size(); i++) {
@@ -1978,7 +1978,7 @@ void PathGraph<index_t>::sortByFrom(bool create_index) {
 
 template <typename index_t>
 pair<index_t, index_t> PathGraph<index_t>::getNodesFrom(index_t node) {
-    if(node + 1 >= nodes.size()) {
+    if(node + 1 >= nodes.size()) {adfgvbdfabdfabdf
         assert_eq(node + 1, nodes.size());
         return pair<index_t, index_t>(nodes.back().key.second, nodes.size());
     }
@@ -1993,7 +1993,7 @@ pair<index_t, index_t> PathGraph<index_t>::getNextRange(pair<index_t, index_t> r
     if(range.second >= nodes.size())
         return pair<index_t, index_t>(0, 0);
     
-    if(range.first < range.second) {
+    if(range.first < range.second) {adfvsdfavasdv
         range.first = range.second; range.second++;
     }
     
