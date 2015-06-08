@@ -1428,22 +1428,24 @@ report_F_node_idx(0), report_F_location(0)
     	}
 	}
 	delete[] nodes_table;
-
-    temp_nodes = new_nodes.size() + previous.nodes.size();
-	status = ok;
+    
 
 	cerr << "Sorting new nodes..." << endl;
     sort(new_nodes.begin(), new_nodes.end());
 
     cerr << "Merging new nodes into previous.nodes..." << endl;
     mergeAllNodes(previous);
-	
+
+    temp_nodes = nodes.size();
+    
     cerr << "Pruning and updating ranks..." << endl;
     mergeUpdateRank();
 
     if(previous.has_stabilized || (generation >= 11 || ranks >= 0.8 * new_nodes.size())) {
         has_stabilized = true;
     }
+    
+    status = ok;
 }
 
 template <typename index_t>
