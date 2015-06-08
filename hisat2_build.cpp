@@ -71,6 +71,7 @@ static bool packed;
 static bool writeRef;
 static bool justRef;
 static bool reverseEach;
+static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
 
 static void resetOptions() {
@@ -99,6 +100,7 @@ static void resetOptions() {
 	writeRef       = true;  // write compact reference to .3.bt2/.4.bt2
 	justRef        = false; // *just* write compact reference, don't index
 	reverseEach    = false;
+    nthreads       = 1;
     wrapper.clear();
 }
 
@@ -146,7 +148,7 @@ static void printUsage(ostream& out) {
 		<< "                            has fewer than 4 billion nucleotides" << endl;
 	}
     out << "    -a/--noauto             disable automatic -p/--bmax/--dcv memory-fitting" << endl
-	    << "    -p/--packed             use packed strings internally; slower, uses less mem" << endl
+	    << "    -p                      number of threads" << endl
 	    << "    --bmax <int>            max bucket sz for blockwise suffix-array builder" << endl
 	    << "    --bmaxdivn <int>        max bucket sz as divisor of ref len (default: 4)" << endl
 	    << "    --dcv <int>             diff-cover period for blockwise (default: 1024)" << endl
@@ -173,12 +175,12 @@ static void printUsage(ostream& out) {
 	}
 }
 
-static const char *short_options = "qraph?nscfl:i:o:t:h:3C";
+static const char *short_options = "qrap:h?nscfl:i:o:t:h:3C";
 
 static struct option long_options[] = {
 	{(char*)"quiet",          no_argument,       0,            'q'},
 	{(char*)"sanity",         no_argument,       0,            's'},
-	{(char*)"packed",         no_argument,       0,            'p'},
+	{(char*)"threads",        required_argument, 0,            'p'},
 	{(char*)"little",         no_argument,       &bigEndian,   0},
 	{(char*)"big",            no_argument,       &bigEndian,   1},
 	{(char*)"bmax",           required_argument, 0,            ARG_BMAX},
@@ -201,8 +203,7 @@ static struct option long_options[] = {
 	{(char*)"ntoa",           no_argument,       0,            ARG_NTOA},
 	{(char*)"justref",        no_argument,       0,            '3'},
 	{(char*)"noref",          no_argument,       0,            'r'},
-	{(char*)"color",          no_argument,       0,            'C'},
-    {(char*)"sa",             no_argument,       0,            ARG_SA},
+	{(char*)"sa",             no_argument,       0,            ARG_SA},
 	{(char*)"reverse-each",   no_argument,       0,            ARG_REVERSE_EACH},
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
@@ -248,7 +249,7 @@ static void parseOptions(int argc, const char **argv) {
 				break;
 			case 'f': format = FASTA; break;
 			case 'c': format = CMDLINE; break;
-			case 'p': packed = true; break;
+			//case 'p': packed = true; break;
 			case 'C':
 				cerr << "Error: -C specified but Bowtie 2 does not support colorspace input." << endl;
 				throw 1;
@@ -312,6 +313,9 @@ static void parseOptions(int argc, const char **argv) {
 			case 'q': verbose = false; break;
 			case 's': sanityCheck = true; break;
 			case 'r': writeRef = false; break;
+            case 'p':
+                nthreads = parseNumber<int>(1, "-p arg must be at least 1");
+                break;
 
 			case -1: /* Done with options. */
 				break;
@@ -448,6 +452,7 @@ static void driver(
 #endif
                                 localOffRate,
                                 localFtabChars,
+                                nthreads,
                                 snpfile,
                                 outfile,      // basename for .?.ht2 files
                                 reverse == 0, // fw

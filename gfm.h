@@ -621,7 +621,8 @@ public:
 	    useShmem_(false), \
 	    _refnames(EBWT_CAT), \
 	    mmFile1_(NULL), \
-	    mmFile2_(NULL)
+	    mmFile2_(NULL), \
+        _nthreads(1)
 
 	/// Construct an Ebwt from the given input file
 	GFM(const string& in,
@@ -768,6 +769,7 @@ public:
 		int32_t lineRate,
 		int32_t offRate,
 		int32_t ftabChars,
+        int nthreads,
         const string& snpfile,
 		const string& outfile,   // base filename for GFM files
 		bool fw,
@@ -796,6 +798,8 @@ public:
             0,
 			refparams.reverse == REF_READ_REVERSE)
 	{
+        assert_gt(nthreads, 0);
+        _nthreads = nthreads;
 #ifdef POPCNT_CAPABILITY
         ProcessorSupport ps;
         _usePOPCNTinstruction = ps.POPCNTenabled();
@@ -1352,8 +1356,8 @@ public:
 			iter++;
 			try {
 #if 1
-                RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _snps, outfile, verbose);
-                PathGraph<index_t>* pg = new PathGraph<index_t>(*graph);
+                RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _snps, outfile, _nthreads, verbose);
+                PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads);
                 pg->printInfo();
                 while(pg->IsSorted()) {
                     if(pg->repOk()) {
@@ -1361,7 +1365,7 @@ public:
                         delete pg; pg = NULL;
                         return;
                     }
-                    PathGraph<index_t>* next = new PathGraph<index_t>(*pg);
+                    PathGraph<index_t>* next = new PathGraph<index_t>(*pg, _nthreads);
                     delete pg; pg = next;
                     pg->printInfo();
                 }
@@ -3237,6 +3241,7 @@ public:
 	EList<string> _refnames; /// names of the reference sequences
 	char *mmFile1_;
 	char *mmFile2_;
+    int _nthreads;
 	GFMParams<index_t> _gh;
 	bool packed_;
 

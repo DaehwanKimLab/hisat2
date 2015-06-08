@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
+ * Copyright 2015, Daehwan Kim <infphilo@gmail.com>, Joe Paggi <jpaggi@mit.edu>
  *
  * This file is part of HISAT 2.
  *
@@ -220,6 +220,7 @@ public:
              const EList<RefRecord>& szs,
              const EList<SNP<index_t> >& snps,
              const string& out_fname,
+             int nthreads_,
              bool verbose);
     
     bool repOk() { return true; }
@@ -270,6 +271,8 @@ private:
     EList<Node> nodes;
     EList<Edge> edges;
     index_t     lastNode; // Z
+    
+    int         nthreads;
     
 #ifndef NDEBUG
     bool        debug;
@@ -349,9 +352,11 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                             const EList<RefRecord>& szs,
                             const EList<SNP<index_t> >& snps,
                             const string& out_fname,
+                            int nthreads_,
                             bool verbose)
-: lastNode(0)
+: lastNode(0), nthreads(nthreads_)
 {
+    assert_gt(nthreads, 0);
     const bool bigEndian = false;
     assert_gt(szs.size(), 0);
     index_t jlen = s.length();
@@ -1141,10 +1146,10 @@ public:
     
 public:
     // Create a new graph in which paths are represented using nodes
-    PathGraph(RefGraph<index_t>& parent);
+    PathGraph(RefGraph<index_t>& parent, int nthreads_);
     
     // Construct a next 2^(j+1) path graph from a 2^j path graph
-    PathGraph(PathGraph<index_t>& previous);
+    PathGraph(PathGraph<index_t>& previous, int nthreads_);
     
     ~PathGraph() {}
     
@@ -1247,6 +1252,8 @@ private:
     // status must be ready.
     EList<pair<index_t, index_t> >* getSamples(index_t sample_rate, index_t& max_sample, const RefGraph<index_t>& base);
     
+    int             nthreads;
+    
     EList<PathNode> nodes;
     EList<PathNode> new_nodes; //keeps track of combined nodes not yet merged into nodes
     EList<PathEdge> edges;
@@ -1324,12 +1331,14 @@ public: EList<pair<index_t, index_t> > ftab;
 //Creates an initial PathGRaph from the RefGraph
 //All nodes begin as unsorted nodes
 template <typename index_t>
-PathGraph<index_t>::PathGraph(RefGraph<index_t>& base) :
+PathGraph<index_t>::PathGraph(RefGraph<index_t>& base, int nthreads_) :
+nthreads(nthreads_),
 ranks(0), max_label('Z'), temp_nodes(0), generation(0),
 status(error), has_stabilized(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
+    assert_gt(nthreads, 0);
     if(!base.repOk()) return;
 
 #ifndef NDEBUG
@@ -1367,13 +1376,14 @@ report_F_node_idx(0), report_F_location(0)
 //merging all nodes together
 //updating ranks and adding nodes that become sorted to sorted.
 template <typename index_t>
-PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
+PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous, int nthreads_) :
+nthreads(nthreads_),
 ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1),
 status(error), has_stabilized(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
-
+    assert_gt(nthreads, 0);
     if(previous.status != ok) {
         return;
 	}
@@ -1383,33 +1393,34 @@ report_F_node_idx(0), report_F_location(0)
 #endif
 
 // Create hash table for unsorted nodes
-	index_t num_unsorted = previous.nodes.size() - previous.ranks;
+    assert_neq(previous.nodes.size(), previous.ranks);
+	index_t num_unsorted = previous.nodes.size() + 1 - previous.ranks;
 	index_t table_size = num_unsorted + num_unsorted / 2;
-	index_t hash;
+    if(table_size > previous.nodes.size()) table_size = previous.nodes.size();
 
 	// Initialize array to be used for hash table
 	cerr << "Allocating size " << table_size << " array..." << endl;
+    
 	EList<PathNode, 1> * nodes_table;
 	nodes_table = new EList<PathNode,1> [table_size];
 
 	// Populate hash table
 	cerr << "Populating the hash table..." << endl;
-	for(index_t i = 0; i < previous.nodes.size(); i++) {
+    for(index_t i = 0; i < previous.nodes.size(); i++) {
 		if(!previous.nodes[i].isSorted()){
-			hash = previous.nodes[i].to % table_size;
+			index_t hash = previous.nodes[i].to % table_size;
 			nodes_table[hash].push_back(previous.nodes[i]);
 		}
 	}
-
-
-// Query against hash table
+    
+    // Query against hash table
 	cerr << "Querying all nodes against hash table..." << endl;
-    new_nodes.resizeExact(table_size); //better heuristic???
+    new_nodes.resizeExact(table_size * 1.1); //better heuristic???
     new_nodes.clear();
 
 	// Create combined nodes
     for(index_t i = 0; i < previous.nodes.size(); i++) {
-		hash = previous.nodes[i].from % table_size;
+		index_t hash = previous.nodes[i].from % table_size;
 	    for(index_t j = 0; j < nodes_table[hash].size(); j++) {
 			if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
             	createPathNode(nodes_table[hash].get(j), previous.nodes[i]);
@@ -1636,14 +1647,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     }
 #endif
     
-    // daehwan - for debugging purposes
-    cout << "i\tBWT\tF\tM" << endl;
-    for(index_t i = 0; i < bwt_string.size(); i++) {
-        cout << i << "\t" << bwt_string[i] << "\t"  // BWT char
-             << (int)F_array[i] << "\t"             // F bit value
-             << (int)M_array[i] << endl;            // M bit value
-    }
-    
     // Test searches, based on paper_example
 #if 0
     EList<string> queries;  EList<index_t> answers;
@@ -1843,6 +1846,11 @@ EList<pair<index_t, index_t> >* PathGraph<index_t>::getSamples(index_t sample_ra
 template <typename index_t>
 void PathGraph<index_t>::createPathNode(const PathNode& left, const PathNode& right)
 {
+    if(new_nodes.size() == new_nodes.capacity()) {
+        index_t size = new_nodes.size();
+        new_nodes.resizeExact(new_nodes.size() * 1.1);
+        new_nodes.resize(size);
+    }
     new_nodes.expand();
     new_nodes.back().from = left.from;
     new_nodes.back().to = right.to;

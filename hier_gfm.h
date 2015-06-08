@@ -1152,6 +1152,7 @@ public:
             int32_t ftabChars,
             int32_t localOffRate,
             int32_t localFtabChars,
+            int nthreads,
             const string& snpfile,
             const string& outfile,   // base filename for GFM files
             bool fw,
@@ -1306,6 +1307,7 @@ HierGFM<index_t, local_index_t>::HierGFM(
                                          int32_t ftabChars,
                                          int32_t localOffRate,
                                          int32_t localFtabChars,
+                                         int nthreads,
                                          const string& snpfile,
                                          const string& outfile,   // base filename for EBWT files
                                          bool fw,
@@ -1329,6 +1331,7 @@ HierGFM<index_t, local_index_t>::HierGFM(
                  lineRate,
                  offRate,
                  ftabChars,
+                 nthreads,
                  snpfile,
                  outfile,
                  fw,
