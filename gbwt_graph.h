@@ -1211,8 +1211,8 @@ public:
 
 private:
     void      createPathNode(const PathNode& left, const PathNode& right);
-    void      mergeAllNodes(PathGraph& previous);
-    void      mergeUpdateRank();
+    void      mergeAllNodes(PathGraph& previous); //merges new_nodes and prev.nodes into nodes
+    void      mergeUpdateRank(); //performs pruning step, must have all nodes merged and sorted
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> node_range);
     
     void sortByKey() { sort(nodes.begin(), nodes.end()); } // by key
@@ -1248,7 +1248,7 @@ private:
     EList<pair<index_t, index_t> >* getSamples(index_t sample_rate, index_t& max_sample, const RefGraph<index_t>& base);
     
     EList<PathNode> nodes;
-    EList<PathNode> new_nodes;
+    EList<PathNode> new_nodes; //keeps track of combined nodes not yet merged into nodes
     EList<PathEdge> edges;
     index_t         ranks;
     index_t         max_label;  // Node label of initial nodes.
