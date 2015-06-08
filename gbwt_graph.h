@@ -1406,19 +1406,23 @@ report_F_node_idx(0), report_F_location(0)
 
 	// Populate hash table
 	cerr << "Populating the hash table..." << endl;
-    index_t max_collisions = 0;
+    index_t max_collisions = 0, max_hash = 0;
     for(index_t i = 0; i < previous.nodes.size(); i++) {
 		if(!previous.nodes[i].isSorted()){
 			index_t hash = previous.nodes[i].to % table_size;
 			nodes_table[hash].push_back(previous.nodes[i]);
             if(nodes_table[hash].size() > max_collisions) {
                 max_collisions = nodes_table[hash].size();
+                max_hash = hash;
             }
 		}
 	}
     
     cerr << "Table size: " << table_size << endl;
     cerr << "Max collisions: " << max_collisions << endl;
+    for(index_t i = 0; i < nodes_table[max_hash].size(); i++) {
+        cerr << "\t" << nodes_table[max_hash][i].from << " --> " << nodes_table[max_hash][i].to << endl;
+    }
     
     // Query against hash table
 	cerr << "Querying all nodes against hash table..." << endl;
