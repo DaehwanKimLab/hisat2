@@ -686,8 +686,7 @@ public:
 		if(trimEnd > 0) {
 			// Trim from end
 			map_.resize(map_.size() - trimEnd);
-            assert_leq(trimEnd, node_iedge_count.size());
-			bot -= trimEnd;
+            bot -= trimEnd;
             index_t node_range = node_bot - node_top;
             while(node_iedge_count.size() > 0) {
                 if(node_iedge_count.back().second < (node_range - trimEnd)) break;
@@ -941,7 +940,7 @@ public:
 		assert_eq(step, lastStep_);
 		assert_geq(st.capacity(), st.size() + 4);
 		assert(tloc.valid()); assert(tloc.repOk(gfm.gh()));
-		assert_eq(bot-top, (index_t)(map_.size()-mapi_));
+		assert_eq(node_bot-node_top, (index_t)(map_.size()-mapi_));
 		pair<int, int> ret = make_pair(0, 0);
 		assert_eq(top, tloc.toBWRow(gfm.gh()));
 		if(bot - top > 1) {
@@ -952,6 +951,7 @@ public:
             gws.map.clear();
 			// Still multiple elements being tracked
             index_t curtop = top, curbot = bot;
+            index_t cur_node_top = node_top, cur_node_bot = node_bot;
             for(index_t e = 0; e < node_iedge_count.size() + 1; e++) {
                 if(e >= node_iedge_count.size()) {
                     if(e > 0) {
@@ -961,18 +961,21 @@ public:
                             assert_eq(curtop, curbot);
                             break;
                         }
+                        cur_node_top = cur_node_bot;
+                        cur_node_bot = node_bot;
                     }
                 } else {
                     if(e > 0) {
                         curtop = curbot + node_iedge_count[e-1].second;
                         assert_lt(node_iedge_count[e-1].first, node_iedge_count[e].first);
                         curbot = curtop + (node_iedge_count[e].first - node_iedge_count[e-1].first);
+                        cur_node_top = cur_node_bot;
                     } else {
                         curbot = curtop + node_iedge_count[e].first + 1;
                     }
+                    cur_node_bot = node_top + node_iedge_count[e].first + 1;
                 }
                 assert_lt(curtop, curbot);
-                assert_lt(curtop+1, curbot);
                 index_t upto[4], in[4];
                 upto[0] = in[0] = upto[1] = in[1] =
                 upto[2] = in[2] = upto[3] = in[3] = 0;
@@ -986,7 +989,9 @@ public:
                     assert(curbot <= gfm._zOffs[i] || curtop > gfm._zOffs[i]);
                 }
 #endif
-                gfm.mapLFRange(tloc, bloc, bot-top, upto, in, gws.masks);
+                SideLocus<index_t> curtloc, curbloc;
+                SideLocus<index_t>::initFromTopBot(curtop, curbot, gfm.gh(), gfm.gfm(), curtloc, curbloc);
+                gfm.mapLFRange(curtloc, curbloc, curbot-curtop, upto, in, gws.masks);
 #ifndef NDEBUG
                 for(int i = 0; i < 4; i++) {
                     assert_eq(curbot-curtop, (index_t)(gws.masks[i].size()));
@@ -1001,8 +1006,9 @@ public:
                             first = false;
                             pair<index_t, index_t> range, node_range;
                             backup_node_iedge_count.clear();
-                            range = gfm.mapGLF(tloc, bloc, i, &node_range, &backup_node_iedge_count, node_bot - node_top);
-                            assert_eq(node_bot - node_top, node_range.second - node_range.first);
+                            SideLocus<index_t>::initFromTopBot(curtop, curbot, gfm.gh(), gfm.gfm(), curtloc, curbloc);
+                            range = gfm.mapGLF(curtloc, curbloc, i, &node_range, &backup_node_iedge_count, cur_node_bot - cur_node_top);
+                            assert_eq(cur_node_bot - cur_node_top, node_range.second - node_range.first);
                             newtop = range.first;
                             newbot = range.second;
                             assert_geq(newbot-newtop, curbot-curtop);
@@ -1039,11 +1045,17 @@ public:
                             st.back().reset();
                             tmp_node_iedge_count.clear();
                             pair<index_t, index_t> range, node_range;
-                            range = gfm.mapGLF(tloc, bloc, i, &node_range, &tmp_node_iedge_count, node_range.second - node_range.first);
-                            assert_eq(range.second - range.first, node_range.second - node_range.first);
+                            SideLocus<index_t>::initFromTopBot(curtop, curbot, gfm.gh(), gfm.gfm(), curtloc, curbloc);
+                            // daehwan - for debugging purposes
+                            if(curbot == 781253) {
+                                int kk = 20;
+                                kk += 20;
+                            }
+                            range = gfm.mapGLF(curtloc, curbloc, i, &node_range, &tmp_node_iedge_count, cur_node_bot - cur_node_top);
+                            assert_geq(range.second - range.first, node_range.second - node_range.first);
                             index_t ntop = range.first;
                             index_t nbot = range.second;
-                            assert_lt(nbot-ntop, curbot-curtop);
+                            assert_geq(nbot-ntop, curbot-curtop);
                             st.back().mapi_ = 0;
                             st.back().map_.clear();
                             met.branches++;

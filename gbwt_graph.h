@@ -1626,6 +1626,14 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     }
 #endif
     
+    // daehwan - for debugging purposes
+    cout << "i\tBWT\tF\tM" << endl;
+    for(index_t i = 0; i < bwt_string.size(); i++) {
+        cout << i << "\t" << bwt_string[i] << "\t"  // BWT char
+             << (int)F_array[i] << "\t"             // F bit value
+             << (int)M_array[i] << endl;            // M bit value
+    }
+    
     // Test searches, based on paper_example
 #if 0
     EList<string> queries;  EList<index_t> answers;

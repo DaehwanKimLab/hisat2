@@ -474,7 +474,7 @@ struct SideLocus {
 	 */
 	bool repOk(const GFMParams<index_t>& gp) const {
 		ASSERT_ONLY(index_t row = toBWRow(gp));
-		assert_leq(row, gp._len);
+        assert_leq(row, gp._gbwtLen);
 		assert_range(-1, 3, _bp);
 		assert_range(0, (int)gp._sideGbwtSz, _by);
 		return true;

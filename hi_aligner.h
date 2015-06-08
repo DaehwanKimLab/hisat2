@@ -2080,7 +2080,9 @@ bool GenomeHit<index_t>::repOk(const Read& rd, const BitPairReference& ref)
         cerr << "    decoded nucs: " << partialseq << endl;
         cerr << "     edited nucs: " << editstr << endl;
         cerr << "  reference nucs: " << refstr << endl;
-        assert(0);
+        
+        // daehwan - for debugging purposes
+        // assert(0);
     }
 
     return true;
@@ -3144,6 +3146,9 @@ bool HI_Aligner<index_t, local_index_t>::align(
     if(hit.offsetSize() != 1) {
         return false;
     }
+    if(hit.getPartialHit(0)._len < _rds[rdi]->length()) {
+        return false;
+    }
     
     // Don't try to align if the potential alignment for this read might be
     // worse than the best alignment of its reverse complement
@@ -3691,6 +3696,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
         }
     }
     //rs.setRefNs(nrefn);
+    // daehwan - for debugging purposes
+#if 0
     assert(rs.matchesRef(
                          rd,
                          ref,
@@ -3703,6 +3710,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                          _sharedVars.raw_refbuf2,
                          _sharedVars.reflens,
                          _sharedVars.refoffs));
+#endif
     if(ohit == NULL) {
         bool done;
         if(rdi == 0 && !_rightendonly) {
@@ -4015,8 +4023,12 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         }
         
         range = rangeTemp;
-        if(_tmp_node_iedge_count.size() > 0) _node_iedge_count = _tmp_node_iedge_count;
-        _tmp_node_iedge_count.clear();
+        if(_tmp_node_iedge_count.size() > 0) {
+            _node_iedge_count = _tmp_node_iedge_count;
+            _tmp_node_iedge_count.clear();
+        } else {
+            _node_iedge_count.clear();
+        }        
         dep++;
 
         if(anchorStop_) {
@@ -4036,6 +4048,17 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         if(node_range.second - node_range.first == range.second - range.first ||
            _node_iedge_count.size() > 0) {
             // This is an exact hit
+#ifndef NDEBUG
+            ASSERT_ONLY(index_t add = 0);
+            for(index_t e = 0; e < _node_iedge_count.size(); e++) {
+                if(e > 0) {
+                    assert_lt(_node_iedge_count[e-1].first, _node_iedge_count[e].first);
+                }
+                assert_gt(_node_iedge_count[e].second, 0);
+                add += _node_iedge_count[e].second;
+            }
+            assert_eq(node_range.second - node_range.first + add, range.second - range.first);
+#endif
             assert_gt(dep, offset);
             assert_leq(dep, len);
             partialHits.expand();

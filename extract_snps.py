@@ -155,9 +155,9 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
                 snp_list.append([rs_id, classType, chr, start, end, allele])
 
                 if testset:
-                    ref_seq = chr_seq[start-25:start+25]
-                    alt_seq = chr_seq[start-25:start] + allele + chr_seq[start+1:start+25]
-                    print >> testset_file, ">%s %d %s" % (rs_id, start - 25, ref_seq)
+                    ref_seq = chr_seq[start-50:start+50]
+                    alt_seq = chr_seq[start-50:start] + allele + chr_seq[start+1:start+50]
+                    print >> testset_file, ">%s_single_%d_%s" % (rs_id, start - 50, ref_seq)
                     print >> testset_file, alt_seq
                 
         elif classType == "deletion":
