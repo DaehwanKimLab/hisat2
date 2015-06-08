@@ -507,8 +507,8 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     num_snp_nodes++;
                     assert_lt(snp.seq, 4);
                     nodes.back().label = "ACGT"[snp.seq];
-                    nodes.back().value = jlen + 2 + num_snp_nodes;
-                    
+                    // nodes.back().value = jlen + 2 + num_snp_nodes;
+                    nodes.back().value = snp.pos;
                     edges.expand();
                     edges.back().from = snp.pos - curr_pos;
                     edges.back().to = nodes.size() - 1;
@@ -530,7 +530,8 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                         nodes.expand();
                         num_snp_nodes++;
                         nodes.back().label = ch;
-                        nodes.back().value = jlen + 2 + num_snp_nodes;
+                        // nodes.back().value = jlen + 2 + num_snp_nodes;
+                        nodes.back().value = snp.pos;
                         
                         edges.expand();
                         edges.back().from = (j == 0 ? snp.pos - curr_pos : nodes.size() - 2);

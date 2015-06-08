@@ -99,12 +99,34 @@ public:
 
 	SARangeWithOffs() { reset(); };
 
-	SARangeWithOffs(TIndexOffU tf, TIndexOffU ntf, size_t len, const T& o) {
-		init(tf, ntf, len, o);
+	SARangeWithOffs(
+                    TIndexOffU tf,
+                    TIndexOffU bf,
+                    TIndexOffU ntf,
+                    TIndexOffU nbf,
+                    const EList<pair<TIndexOffU, TIndexOffU> >& n_iedge_count,
+                    size_t len,
+                    const T& o) {
+		init(tf, bf, ntf, nbf, n_iedge_count, len, o);
 	}
 	
-	void init(TIndexOffU tf, TIndexOffU ntf, size_t len_, const T& o) {
-        topf = tf; node_top = ntf; len = len_, offs = o;
+	void init(
+              TIndexOffU tf,
+              TIndexOffU bf,
+              TIndexOffU ntf,
+              TIndexOffU nbf,
+              const EList<pair<TIndexOffU, TIndexOffU> >& n_iedge_count,
+              size_t len_,
+              const T& o) {
+        topf = tf;
+        botf = bf;
+        assert_lt(topf, botf);
+        node_top = ntf;
+        node_bot = nbf;
+        assert_leq(node_bot - node_top, botf - topf);
+        node_iedge_count = n_iedge_count;
+        len = len_,
+        offs = o;
 	}
 
 	/**
@@ -126,7 +148,10 @@ public:
 	size_t size() const { return offs.size(); }
 
 	TIndexOffU topf;      // top in GBWT index
+    TIndexOffU botf;
     TIndexOffU node_top;  // top node
+    TIndexOffU node_bot;
+    EList<pair<TIndexOffU, TIndexOffU> > node_iedge_count;
 	size_t     len;        // length of the reference sequence involved
 	T          offs;       // offsets
 };
@@ -449,6 +474,7 @@ public:
 		index_t bt,                   // bot of range at this step
         index_t n_tp,                 // node at top
         index_t n_bt,                 // node at bot
+        const EList<pair<index_t, index_t> >& n_iedge_count,
 		index_t st,                   // # steps taken to get to this step
 		WalkMetrics& met)
 	{
@@ -458,6 +484,7 @@ public:
 		bot = bt;
         node_top = n_tp;
         node_bot = n_bt;
+        node_iedge_count = n_iedge_count;
 		step = st;
 		assert(!inited_);
 		ASSERT_ONLY(inited_ = true);
@@ -498,12 +525,27 @@ public:
 		bool empty = true; // assume all resolved until proven otherwise
 		// Commit new information, if any, to the PListSlide.  Also,
 		// trim and check if we're done.
+        assert_eq(node_bot - node_top, map_.size());
+        index_t num_iedges = 0;
+        index_t e = 0;
 		for(size_t i = mapi_; i < map_.size(); i++) {
 			bool resolved = (off(i, sa) != (index_t)OFF_MASK);
 			if(!resolved) {
+                while(e < node_iedge_count.size()) {
+                    if(i <= node_iedge_count[e].first) {
+                        break;
+                    }
+                    num_iedges += node_iedge_count[e].second;
+                    e++;
+                }
 				// Elt not resolved yet; try to resolve it now
-				index_t bwrow = (index_t)(top - mapi_ + i);
-                index_t node = (index_t)(node_top - mapi_ + i);
+				index_t bwrow = (index_t)(top + i + num_iedges);
+                index_t node = (index_t)(node_top + i);
+                // daehwan - for debugging purposes
+                if(bwrow == 801561) {
+                    int kk = 20;
+                    kk += 20;
+                }
 				index_t toff = gfm.tryOffset(bwrow, node);
                 ASSERT_ONLY(index_t origBwRow = sa.topf + map(i));
                 ASSERT_ONLY(index_t origNode = sa.node_top + map(i));
@@ -631,12 +673,31 @@ public:
 		// Trim from beginning
 		assert_geq(trimBegin, 0);
 		mapi_ += trimBegin;
-		top += trimBegin;
+        if(trimBegin > 0) {
+            top += trimBegin;
+            index_t e = 0;
+            for(; e < node_iedge_count.size(); e++) {
+                if(node_iedge_count[e].first >= trimBegin) break;
+                assert_geq(top, node_iedge_count[e].second);
+                top -= node_iedge_count[e].second;
+            }
+            if(e > 0) node_iedge_count.erase(0, e);
+        }
 		if(trimEnd > 0) {
 			// Trim from end
 			map_.resize(map_.size() - trimEnd);
+            assert_leq(trimEnd, node_iedge_count.size());
 			bot -= trimEnd;
+            index_t node_range = node_bot - node_top;
+            while(node_iedge_count.size() > 0) {
+                if(node_iedge_count.back().second < (node_range - trimEnd)) break;
+                assert_geq(bot, node_iedge_count.back().second);
+                bot -= node_iedge_count.back().second;
+                node_iedge_count.pop_back();
+            }
 		}
+        node_top += trimBegin;
+        node_bot -= trimEnd;
 		if(empty) {
 			assert(done());
 #ifndef NDEBUG
@@ -694,6 +755,7 @@ public:
                                oldbot,
                                (index_t)OFF_MASK,
                                (index_t)OFF_MASK,
+                               node_iedge_count,
                                step,
                                met);
             }
@@ -882,118 +944,157 @@ public:
 		assert_eq(bot-top, (index_t)(map_.size()-mapi_));
 		pair<int, int> ret = make_pair(0, 0);
 		assert_eq(top, tloc.toBWRow(gfm.gh()));
-		if(bloc.valid()) {
+		if(bot - top > 1) {
+            bool first = true;
+            ASSERT_ONLY(index_t sum = 0);
+            index_t newtop = 0, newbot = 0;
+            index_t new_node_top = 0, new_node_bot = 0;
+            gws.map.clear();
 			// Still multiple elements being tracked
-			assert_lt(top+1, bot);
-			index_t upto[4], in[4];
-			upto[0] = in[0] = upto[1] = in[1] =
-			upto[2] = in[2] = upto[3] = in[3] = 0;
-			assert_eq(bot, bloc.toBWRow(gfm.gh()));
-			met.bwops++;
-			prm.nExFmops++;
-			// Assert that there's not a dollar sign in the middle of
-			// this range
+            index_t curtop = top, curbot = bot;
+            for(index_t e = 0; e < node_iedge_count.size() + 1; e++) {
+                if(e >= node_iedge_count.size()) {
+                    if(e > 0) {
+                        curtop = curbot + node_iedge_count[e-1].second;
+                        curbot = bot;
+                        if(curtop >= curbot) {
+                            assert_eq(curtop, curbot);
+                            break;
+                        }
+                    }
+                } else {
+                    if(e > 0) {
+                        curtop = curbot + node_iedge_count[e-1].second;
+                        assert_lt(node_iedge_count[e-1].first, node_iedge_count[e].first);
+                        curbot = curtop + (node_iedge_count[e].first - node_iedge_count[e-1].first);
+                    } else {
+                        curbot = curtop + node_iedge_count[e].first + 1;
+                    }
+                }
+                assert_lt(curtop, curbot);
+                assert_lt(curtop+1, curbot);
+                index_t upto[4], in[4];
+                upto[0] = in[0] = upto[1] = in[1] =
+                upto[2] = in[2] = upto[3] = in[3] = 0;
+                // assert_eq(bot, bloc.toBWRow(gfm.gh()));
+                met.bwops++;
+                prm.nExFmops++;
+                // Assert that there's not a dollar sign in the middle of
+                // this range
 #ifndef NDEBUG
-            for(index_t i = 0; i < gfm._zOffs.size(); i++) {
-                assert(bot <= gfm._zOffs[i] || top > gfm._zOffs[i]);
+                for(index_t i = 0; i < gfm._zOffs.size(); i++) {
+                    assert(curbot <= gfm._zOffs[i] || curtop > gfm._zOffs[i]);
+                }
+#endif
+                gfm.mapLFRange(tloc, bloc, bot-top, upto, in, gws.masks);
+#ifndef NDEBUG
+                for(int i = 0; i < 4; i++) {
+                    assert_eq(curbot-curtop, (index_t)(gws.masks[i].size()));
+                }
+#endif
+                
+                for(int i = 0; i < 4; i++) {
+                    if(in[i] > 0) {
+                        // Non-empty range resulted
+                        if(first) {
+                            // For the first one,
+                            first = false;
+                            pair<index_t, index_t> range, node_range;
+                            backup_node_iedge_count.clear();
+                            range = gfm.mapGLF(tloc, bloc, i, &node_range, &backup_node_iedge_count, node_bot - node_top);
+                            assert_eq(node_bot - node_top, node_range.second - node_range.first);
+                            newtop = range.first;
+                            newbot = range.second;
+                            assert_geq(newbot-newtop, curbot-curtop);
+                            new_node_top = node_range.first;
+                            new_node_bot = node_range.second;
+                            // Range narrowed so we have to look at the masks
+                            for(size_t j = 0; j < gws.masks[i].size(); j++) {
+                                assert_lt(j+mapi_, map_.size());
+                                if(gws.masks[i][j]) {
+                                    gws.map.push_back(map_[j+mapi_]);
+                                    assert(gws.map.size() <= 1 || gws.map.back() != gws.map[gws.map.size()-2]);
+#if 0
+                                    // If this element is not yet resolved,
+                                    // then check that it really is the
+                                    // expected number of steps to the left
+                                    // of the corresponding element in the
+                                    // root range
+                                    assert_lt(gws.map.back(), sa.size());
+                                    if(sa.offs[gws.map.back()] == (index_t)OFF_MASK) {
+                                        assert_eq(newtop + gws.map.size() - 1,
+                                                  gfm.walkLeft(sa.topf + gws.map.back(), step+1));
+                                    }
+#endif
+                                }
+                            }
+                            assert_eq(new_node_bot - new_node_top, (index_t)(gws.map.size()));
+                        } else {
+                            // For each beyond the first, create a new
+                            // GWState and add it to the GWState list.
+                            // NOTE: this can cause the underlying list to
+                            // be expanded which in turn might leave 'st'
+                            // pointing to bad memory.
+                            st.expand();
+                            st.back().reset();
+                            tmp_node_iedge_count.clear();
+                            pair<index_t, index_t> range, node_range;
+                            range = gfm.mapGLF(tloc, bloc, i, &node_range, &tmp_node_iedge_count, node_range.second - node_range.first);
+                            assert_eq(range.second - range.first, node_range.second - node_range.first);
+                            index_t ntop = range.first;
+                            index_t nbot = range.second;
+                            assert_lt(nbot-ntop, curbot-curtop);
+                            st.back().mapi_ = 0;
+                            st.back().map_.clear();
+                            met.branches++;
+                            // Range narrowed so we have to look at the masks
+                            for(size_t j = 0; j < gws.masks[i].size(); j++) {
+                                if(gws.masks[i][j]) st.back().map_.push_back(map_[j+mapi_]);
+                            }
+                            pair<int, int> rret =
+                            st.back().init(
+                                           gfm,         // forward Bowtie index
+                                           ref,         // bitpair-encodede reference
+                                           sa,          // SA range with offsets
+                                           st,          // EList of all GWStates associated with original range
+                                           hit,         // associated GWHit object
+                                           (index_t)st.size()-1, // range offset
+                                           reportList,  // if true, report hits to 'res' list
+                                           res,         // report hits here if reportList is true
+                                           ntop,        // BW top of new range
+                                           nbot,        // BW bot of new range
+                                           node_range.first,
+                                           node_range.second,
+                                           node_iedge_count,
+                                           step+1,      // # steps taken to get to this new range
+                                           met);        // update these metrics
+                            ret.first += rret.first;
+                            ret.second += rret.second;
+                        }
+                        ASSERT_ONLY(sum += in[i]);
+                    }
+                }
             }
-#endif
-			gfm.mapLFRange(tloc, bloc, bot-top, upto, in, gws.masks);
-#ifndef NDEBUG
-			for(int i = 0; i < 4; i++) {
-			  assert_eq(bot-top, (index_t)(gws.masks[i].size()));
-			}
-#endif
-			bool first = true;
-			ASSERT_ONLY(index_t sum = 0);
-			index_t newtop = 0, newbot = 0;
-			gws.map.clear();
-			for(int i = 0; i < 4; i++) {
-				if(in[i] > 0) {
-					// Non-empty range resulted
-					if(first) {
-						// For the first one, 
-						first = false;
-						newtop = upto[i];
-						newbot = newtop + in[i];
-						assert_leq(newbot-newtop, bot-top);
-						// Range narrowed so we have to look at the masks
-						for(size_t j = 0; j < gws.masks[i].size(); j++) {
-							assert_lt(j+mapi_, map_.size());
-							if(gws.masks[i][j]) {
-								gws.map.push_back(map_[j+mapi_]);
-								assert(gws.map.size() <= 1 || gws.map.back() != gws.map[gws.map.size()-2]);
-#ifndef NDEBUG
-								// If this element is not yet resolved,
-								// then check that it really is the
-								// expected number of steps to the left
-								// of the corresponding element in the
-								// root range
-								assert_lt(gws.map.back(), sa.size());
-								if(sa.offs[gws.map.back()] == (index_t)OFF_MASK) {
-									assert_eq(newtop + gws.map.size() - 1,
-											  gfm.walkLeft(sa.topf + gws.map.back(), step+1));
-								}
-#endif
-							}
-						}
- 						assert_eq(newbot-newtop, (index_t)(gws.map.size()));
-					} else {
-						// For each beyond the first, create a new
-						// GWState and add it to the GWState list. 
-						// NOTE: this can cause the underlying list to
-						// be expanded which in turn might leave 'st'
-						// pointing to bad memory.
-						st.expand();
-						st.back().reset();
-						index_t ntop = upto[i];
-						index_t nbot = ntop + in[i];
-						assert_lt(nbot-ntop, bot-top);
-						st.back().mapi_ = 0;
-						st.back().map_.clear();
-						met.branches++;
-						// Range narrowed so we have to look at the masks
-						for(size_t j = 0; j < gws.masks[i].size(); j++) {
-							if(gws.masks[i][j]) st.back().map_.push_back(map_[j+mapi_]);
-						}
-						pair<int, int> rret =
-						st.back().init(
-							gfm,         // forward Bowtie index
-							ref,         // bitpair-encodede reference
-							sa,          // SA range with offsets
-							st,          // EList of all GWStates associated with original range
-							hit,         // associated GWHit object
-							(index_t)st.size()-1, // range offset
-							reportList,  // if true, report hits to 'res' list
-							res,         // report hits here if reportList is true
-							ntop,        // BW top of new range
-							nbot,        // BW bot of new range
-                            (index_t)OFF_MASK,
-                            (index_t)OFF_MASK,
-							step+1,      // # steps taken to get to this new range
-							met);        // update these metrics
-						ret.first += rret.first;
-						ret.second += rret.second;
-					}
-					ASSERT_ONLY(sum += in[i]);
-				}
-			}
-			mapi_ = 0;
-			assert_eq(bot-top, sum);
-			assert_gt(newbot, newtop);
-			assert_leq(newbot-newtop, bot-top);
-			assert(top != newtop || bot != newbot);
-			//assert(!(newtop < top && newbot > top));
-			top = newtop;
-			bot = newbot;
-			if(!gws.map.empty()) {
-				map_ = gws.map;
-			}
-			//assert(repOkMapRepeats());
-			//assert(repOkMapInclusive(hit, range));
-			assert_eq(bot-top, (index_t)map_.size());
-		} else {
-			// Down to one element
+            mapi_ = 0;
+            // assert_eq(new_node_bot-new_node_top, sum);
+            assert_gt(newbot, newtop);
+            assert_geq(newbot-newtop, curbot-curtop);
+            assert(top != newtop || bot != newbot);
+            //assert(!(newtop < top && newbot > top));
+            top = newtop;
+            bot = newbot;
+            node_top = new_node_top;
+            node_bot = new_node_bot;
+            node_iedge_count = backup_node_iedge_count;
+            backup_node_iedge_count.clear();
+            if(!gws.map.empty()) {
+                map_ = gws.map;
+            }
+            //assert(repOkMapRepeats());
+            //assert(repOkMapInclusive(hit, range));
+            assert_eq(node_bot-node_top, (index_t)map_.size());
+        } else {
+            // Down to one element
 			assert_eq(bot, top+1);
 			assert_eq(1, map_.size()-mapi_);
 			// Sets top, returns char walked through (which we ignore)
@@ -1037,12 +1138,15 @@ public:
 	 * Clear all state in preparation for the next walk.
 	 */
 	void reset() {
-		top = bot = step = mapi_ = 0;
+		top = bot = node_top = node_bot = step = mapi_ = 0;
 		ASSERT_ONLY(lastStep_ = -1);
 		ASSERT_ONLY(inited_ = false);
 		tloc.invalidate();
 		bloc.invalidate();
 		map_.clear();
+        node_iedge_count.clear();
+        backup_node_iedge_count.clear();
+        tmp_node_iedge_count.clear();
 	}
 	
 	/**
@@ -1084,7 +1188,12 @@ public:
 	index_t            bot;       // bot elt of range in GBWT
     index_t            node_top;
     index_t            node_bot;
+    EList<pair<index_t, index_t> > node_iedge_count;
 	int                step;      // how many steps have we walked to the left so far
+    
+    // temporary
+    EList<pair<index_t, index_t> > backup_node_iedge_count;
+    EList<pair<index_t, index_t> > tmp_node_iedge_count;
 
 protected:
 	
@@ -1133,6 +1242,8 @@ public:
 		assert(st_.back().repOkBasic());
 		index_t top = sa.topf;
 		index_t bot = (index_t)(top + sa.size());
+        index_t node_top = sa.node_top;
+        index_t node_bot = (index_t)(node_top + sa.size());
 		st_.back().initMap(bot-top);
 		st_.ensure(4);
 		st_.back().init(
@@ -1146,8 +1257,9 @@ public:
 			NULL,               // put resolved elements here
 			top,                // GBW row at top
 			bot,                // GBW row at bot
-            (index_t)OFF_MASK,  // node at top
-            (index_t)OFF_MASK,  // node at bot
+            node_top,           // node at top
+            node_bot,           // node at bot
+            sa.node_iedge_count,
 			0,                  // # steps taken
 			met);               // update metrics here
 		elt_ += sa.size();

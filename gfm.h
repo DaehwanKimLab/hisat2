@@ -2022,7 +2022,7 @@ public:
 	 * 'C', and masks[0][10] == masks[2][10] == masks[3][10] == false.
 	 */
 	inline void countBt2SideRange(
-		SideLocus<index_t>& l,        // top locus
+		const SideLocus<index_t>& l,        // top locus
 		index_t num,        // number of elts in range to tall
 		index_t* cntsUpto,  // A/C/G/T counts up to top
 		index_t* cntsIn,    // A/C/G/T counts within range
@@ -2050,7 +2050,7 @@ public:
             }
         }
 		// Now factor in the occ[] count at the side break
-		const index_t *acgt = reinterpret_cast<const index_t*>(side + _gh._sideGbwtSz);
+		const index_t *acgt = reinterpret_cast<const index_t*>(side + _gh._sideGbwtSz + (sizeof(index_t) << 1));
 		assert_leq(acgt[0], this->fchr()[1] + this->_gh.sideGbwtLen());
 		assert_leq(acgt[1], this->fchr()[2]-this->fchr()[1]);
 		assert_leq(acgt[2], this->fchr()[3]-this->fchr()[2]);
@@ -2576,7 +2576,7 @@ public:
 		}
 		int by = iby, bp = ibp;
 		assert_lt(bp, 4);
-		assert_lt(by, (int)this->_gh._sideGbwtSz);
+		assert_lt(by, (int)(this->_gh._sideGbwtSz >> 1));
 		const uint8_t *side = l.side(this->gfm());
 		while(nm < num) {
 			int c = (side[by] >> (bp * 2)) & 3;
@@ -2592,8 +2592,8 @@ public:
 			if(++bp == 4) {
 				bp = 0;
 				by++;
-				assert_leq(by, (int)this->_gh._sideGbwtSz);
-				if(by == (int)this->_gh._sideGbwtSz) {
+				assert_leq(by, (int)(this->_gh._sideGbwtSz >> 1));
+				if(by == (int)(this->_gh._sideGbwtSz >> 1)) {
 					// Fell off the end of the side
 					break;
 				}
@@ -2644,8 +2644,8 @@ public:
 	 * those loci.  Used for more advanced backtracking-search.
 	 */
 	inline void mapLFRange(
-		SideLocus<index_t>& ltop,
-		SideLocus<index_t>& lbot,
+		const SideLocus<index_t>& ltop,
+		const SideLocus<index_t>& lbot,
 		index_t num,        // Number of elts
 		index_t* cntsUpto,  // A/C/G/T counts up to top
 		index_t* cntsIn,    // A/C/G/T counts within range
@@ -2749,7 +2749,8 @@ public:
     inline pair<index_t, index_t> mapGLF(
                                          SideLocus<index_t>& tloc, SideLocus<index_t>& bloc, int c,
                                          pair<index_t, index_t>* node_range = NULL,
-                                         EList<pair<index_t, index_t> >* node_iedges = NULL
+                                         EList<pair<index_t, index_t> >* node_iedges = NULL,
+                                         index_t k = 5
                                          ASSERT_ONLY(, bool overrideSanity = false)
                                          ) const
     {
@@ -2809,7 +2810,8 @@ public:
             (*node_range).first = node_top;
             (*node_range).second = node_bot;
         }
-        if(node_iedges != NULL) {
+        assert_leq(node_bot - node_top, bot - top);
+        if(node_iedges != NULL && node_bot - node_top <= k && node_bot - node_top < bot - top) {
             getInEdgeCount(top, bot, *node_iedges);
         }
         
@@ -3777,7 +3779,7 @@ void GFM<index_t>::buildToDisk(
 				// Suffix array offset boundary? - update offset array
 				if(M == 1 && (M_occ & gh._offMask) == M_occ) {
 					assert_lt((M_occ >> gh._offRate), gh._offsLen);
-					// Write offsets directly to the secondary output
+                    // Write offsets directly to the secondary output
 					// stream, thereby avoiding keeping them in memory
                     writeIndex<index_t>(out2, pos, this->toBe());
 				}

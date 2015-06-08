@@ -120,6 +120,7 @@ struct BWTHit {
 	void reset() {
 		_top = _bot = 0;
         _node_top = _node_bot = 0;
+        _node_iedge_count.clear();
 		_fw = true;
 		_bwoff = (index_t)OFF_MASK;
 		_len = 0;
@@ -133,15 +134,23 @@ struct BWTHit {
 			  index_t bot,
               index_t node_top,
               index_t node_bot,
+              const EList<pair<index_t, index_t> >& node_iedge_count,
   			  bool fw,
 			  uint32_t bwoff,
 			  uint32_t len,
               index_t hit_type = CANDIDATE_HIT)
 	{
+        assert_leq(node_bot - node_top, bot - top);
+#ifndef NDEBUG
+        if(node_bot - node_top < bot - top) {
+            assert_gt(node_iedge_count.size(), 0);
+        }
+#endif
 		_top = top;
         _bot = bot;
         _node_top = node_top;
         _node_bot = node_bot;
+        _node_iedge_count = node_iedge_count;
 		_fw = fw;
 		_bwoff = bwoff;
 		_len = len;
@@ -195,6 +204,7 @@ struct BWTHit {
 	index_t         _bot;               // end of the range in the FM index
     index_t         _node_top;
     index_t         _node_bot;
+    EList<pair<index_t, index_t> >  _node_iedge_count;
 	bool            _fw;                // whether read is forward or reverse complemented
 	index_t         _bwoff;             // current base of a read to search from the right end
 	index_t         _len;               // read length
@@ -2560,6 +2570,7 @@ public:
                           gfmFw,
                           *_rds[rdi],
                           sc,
+                          sink.reportingParams(),
                           fw,
                           0,
                           mineFw,
@@ -2717,6 +2728,7 @@ public:
                          const GFM<index_t>&     gfm,    // BWT index
                          const Read&             read,    // read to align
                          const Scoring&          sc,      // scoring scheme
+                         const ReportingParams&  rp,
                          bool                    fw,      // don't align forward read
                          size_t                  mineMax, // don't care about edit bounds > this
                          size_t&                 mineFw,  // minimum # edits for forward read
@@ -2791,6 +2803,7 @@ public:
                          index_t                    bot,
                          index_t                    node_top,
                          index_t                    node_bot,
+                         const EList<pair<index_t, index_t> >& node_iedge_count,
                          bool                       fw,
                          index_t                    maxelt,
                          index_t                    rdoff,
@@ -2890,6 +2903,7 @@ public:
                             partialHit._bot,
                             partialHit._node_top,
                             partialHit._node_bot,
+                            partialHit._node_iedge_count,
                             fw,
                             partialHit._bot - partialHit._top,
                             hit._len - partialHit._bwoff - partialHit._len,
@@ -3058,6 +3072,10 @@ protected:
     
     uint64_t   _thread_rids_mindist;
     bool _no_spliced_alignment;
+    
+    //
+    EList<pair<index_t, index_t> > _node_iedge_count;
+    EList<pair<index_t, index_t> > _tmp_node_iedge_count;
 
     // For AlnRes::matchesRef
 	ASSERT_ONLY(EList<bool> raw_matches_);
@@ -3359,6 +3377,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
                                                          index_t                    bot,
                                                          index_t                    node_top,
                                                          index_t                    node_bot,
+                                                         const EList<pair<index_t, index_t> >& node_iedge_count,
                                                          bool                       fw,
                                                          index_t                    maxelt,
                                                          index_t                    rdoff,
@@ -3372,13 +3391,21 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
 {
     straddled = false;
     assert_gt(bot, top);
-    index_t nelt = bot - top;
+    assert_leq(node_bot - node_top, bot - top);
+    index_t nelt = node_bot - node_top;
     nelt = min<index_t>(nelt, maxelt);
     coords.clear();
-    him.globalgenomecoords += (bot - top);
+    him.globalgenomecoords += (node_bot - node_top);
     _offs.resize(nelt);
     _offs.fill(std::numeric_limits<index_t>::max());
-    _sas.init(top, node_top, rdlen, EListSlice<index_t, 16>(_offs, 0, nelt));
+    _sas.init(
+              top,
+              bot,
+              node_top,
+              node_bot,
+              node_iedge_count,
+              rdlen,
+              EListSlice<index_t, 16>(_offs, 0, nelt));
     _gws.init(gfm, ref, _sas, rnd, met);
     
     for(index_t off = 0; off < nelt; off++) {
@@ -3446,13 +3473,25 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
 {
     straddled = false;
     assert_gt(bot, top);
-    index_t nelt = bot - top;
+    index_t nelt = node_bot - node_top;
+    assert_leq(node_bot - node_top, bot - top);
     coords.clear();
-    him.localgenomecoords += (bot - top);
+    him.localgenomecoords += (node_bot - node_top);
     _offs_local.resize(nelt);
     _offs_local.fill(std::numeric_limits<local_index_t>::max());
-    _sas_local.init(top, node_top, rdlen, EListSlice<local_index_t, 16>(_offs_local, 0, nelt));
+    
+    // daehwan - to be implemented
+#if 0
+    _sas_local.init(
+                    top,
+                    bot,
+                    node_top,
+                    node_bot,
+                    node_iedge_count,
+                    rdlen,
+                    EListSlice<local_index_t, 16>(_offs_local, 0, nelt));
     _gws_local.init(gfm, ref, _sas_local, rnd, met);
+#endif
     
     for(local_index_t off = 0; off < nelt; off++) {
         WalkResult<local_index_t> wr;
@@ -3835,6 +3874,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                                                          const GFM<index_t>&       gfm,    // BWT index
                                                          const Read&               read,    // read to align
                                                          const Scoring&            sc,      // scoring scheme
+                                                         const ReportingParams&    rp,
                                                          bool                      fw,
                                                          size_t                    mineMax, // don't care about edit bounds > this
                                                          size_t&                   mineFw,  // minimum # edits for forward read
@@ -3864,15 +3904,18 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     pair<index_t, index_t> range(0, 0);
     pair<index_t, index_t> rangeTemp(0, 0);
     pair<index_t, index_t> node_range(0, 0);
+    _node_iedge_count.clear();
+    _tmp_node_iedge_count.clear();
     index_t left = len - dep;
     assert_gt(left, 0);
-    if(left < ftabLen) {
+    if(left < ftabLen + 1) {
         cur = hit._len;
         partialHits.expand();
         partialHits.back().init((index_t)OFF_MASK,
                                 (index_t)OFF_MASK,
                                 (index_t)OFF_MASK,
                                 (index_t)OFF_MASK,
+                                _node_iedge_count,
                                 fw,
                                 (index_t)offset,
                                 (index_t)(cur - offset));
@@ -3889,6 +3932,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                                     (index_t)OFF_MASK,
                                     (index_t)OFF_MASK,
                                     (index_t)OFF_MASK,
+                                    _node_iedge_count,
                                     fw,
                                     (index_t)offset,
                                     (index_t)(cur - offset));
@@ -3909,6 +3953,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                                 (index_t)OFF_MASK,
                                 (index_t)OFF_MASK,
                                 (index_t)OFF_MASK,
+                                _node_iedge_count,
                                 fw,
                                 (index_t)offset,
                                 (index_t)(cur - offset));
@@ -3927,7 +3972,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_range);
+                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_range, &_tmp_node_iedge_count, rp.khits);
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_range);
@@ -3970,6 +4015,8 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         }
         
         range = rangeTemp;
+        if(_tmp_node_iedge_count.size() > 0) _node_iedge_count = _tmp_node_iedge_count;
+        _tmp_node_iedge_count.clear();
         dep++;
 
         if(anchorStop_) {
@@ -3985,27 +4032,32 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     
     // Done
     if(range.first < range.second) {
-        // This is an exact hit
-        assert_gt(dep, offset);
-        assert_leq(dep, len);
-        partialHits.expand();
-        index_t hit_type = CANDIDATE_HIT;
-        if(anchorStop) hit_type = ANCHOR_HIT;
-        else if(pseudogeneStop) hit_type = PSEUDOGENE_HIT;
-        partialHits.back().init(range.first,
-                                range.second,
-                                node_range.first,
-                                node_range.second,
-                                fw,
-                                (index_t)offset,
-                                (index_t)(dep - offset),
-                                hit_type);
-        
-        nelt += (node_range.second - node_range.first);
-        cur = dep;
-        if(cur >= hit._len) {
-            if(hit_type == CANDIDATE_HIT) hit._numUniqueSearch++;
-            hit.done(true);
+        assert_leq(node_range.second - node_range.first, range.second - range.first);
+        if(node_range.second - node_range.first == range.second - range.first ||
+           _node_iedge_count.size() > 0) {
+            // This is an exact hit
+            assert_gt(dep, offset);
+            assert_leq(dep, len);
+            partialHits.expand();
+            index_t hit_type = CANDIDATE_HIT;
+            if(anchorStop) hit_type = ANCHOR_HIT;
+            else if(pseudogeneStop) hit_type = PSEUDOGENE_HIT;
+            partialHits.back().init(range.first,
+                                    range.second,
+                                    node_range.first,
+                                    node_range.second,
+                                    _node_iedge_count,
+                                    fw,
+                                    (index_t)offset,
+                                    (index_t)(dep - offset),
+                                    hit_type);
+            
+            nelt += (node_range.second - node_range.first);
+            cur = dep;
+            if(cur >= hit._len) {
+                if(hit_type == CANDIDATE_HIT) hit._numUniqueSearch++;
+                hit.done(true);
+            }
         }
     }
     return nelt;
