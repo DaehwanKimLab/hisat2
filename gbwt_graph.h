@@ -1435,9 +1435,11 @@ report_F_node_idx(0), report_F_location(0)
     
       // Create combined nodes
       index_t max_rank = previous.nodes.back().key.first;
-      EList<index_t> nodes_table2;
-      nodes_table2.resizeExact(max_rank + 1);
-      nodes_table2.fill((index_t)OFF_MASK);
+      EList<index_t> nodes_table_head, nodes_table_tail;
+      nodes_table_head.resizeExact(max_rank + 1);
+      nodes_table_head.fill((index_t)OFF_MASK);
+      nodes_table_tail.resizeExact(max_rank + 1);
+      nodes_table_tail.fill((index_t)OFF_MASK);
       EList<LPathNode> nodes_list2;
       nodes_list2.resizeExact(num_unsorted * 1.1); nodes_list2.clear();
       for(index_t i = 0; i < previous.nodes.size(); i++) {
@@ -1458,31 +1460,20 @@ report_F_node_idx(0), report_F_location(0)
 	    nodes_list2.back().node.from = left.from;
 	    nodes_list2.back().node.to = right.to;
 	    nodes_list2.back().node.key = pair<index_t, index_t>(left.key.first, right.key.first);
-	    nodes_list2.back().next_node = nodes_table2[rank];
-	    nodes_table2[rank] = nodes_list2.size() - 1;
+	    nodes_list2.back().next_node = (index_t)OFF_MASK;
+	    if(nodes_table_head[rank] == (index_t)OFF_MASK) {
+	      assert_eq(nodes_table_tail[rank], (index_t)OFF_MASK);
+	      nodes_table_head[rank] = nodes_list2.size() - 1;
+	    } else {
+	      assert_neq(nodes_table_tail[rank], (index_t)OFF_MASK);
+	      index_t node_id2 = nodes_table_tail[rank];
+	      assert_lt(node_id2, nodes_list2.size());
+	      nodes_list2[node_id2].next_node = nodes_list2.size() - 1;	      
+	    }
+	    nodes_table_tail[rank] = nodes_list2.size() - 1;
 	  }
 	  node_id = nodes_list[node_id].next_node;
     	}
-      }
-
-      // Reverse nodes in each rank
-      cerr << "Reversing nodes in each rank" << endl;
-      for(index_t i = 0; i < nodes_table2.size(); i++) {
-        index_t node_id = nodes_table2[i];
-	index_t prev_node_id = (index_t)OFF_MASK;
-	while(node_id != (index_t)OFF_MASK) {
-	  assert_lt(node_id, nodes_list2.size());
-	  if(nodes_list2[node_id].next_node == (index_t)OFF_MASK) {
-	    nodes_table2[i] = node_id;
-	    nodes_list2[node_id].next_node = prev_node_id;
-	    break;
-	  } else {
-	    index_t tmp_node_id = nodes_list2[node_id].next_node;
-	    nodes_list2[node_id].next_node = prev_node_id;
-	    prev_node_id = node_id;
-	    node_id = tmp_node_id;
-	  }
-	}
       }
 
       cerr << "Merging new nodes into previous.nodes..." << endl;
@@ -1490,7 +1481,7 @@ report_F_node_idx(0), report_F_location(0)
       index_t prev_idx = 0;
       nodes.resizeExact(previous.nodes.size() + nodes_list2.size()); // this is an overestimate
       nodes.clear();
-      while(prev_idx < previous.nodes.size() || curr_rank < nodes_table2.size()) {
+      while(prev_idx < previous.nodes.size() || curr_rank < nodes_table_head.size()) {
 	while(prev_idx < previous.nodes.size()) {
 	  if(previous.nodes[prev_idx].key.first > curr_rank) break;
 	  if(previous.nodes[prev_idx].isSorted()) {
@@ -1502,8 +1493,8 @@ report_F_node_idx(0), report_F_location(0)
 	if(prev_idx < previous.nodes.size()) {
 	  cmp_rank = previous.nodes[prev_idx].key.first;
 	}
-	while(curr_rank < nodes_table2.size() && curr_rank <= cmp_rank) {
-	  index_t node_id = nodes_table2[curr_rank];
+	while(curr_rank < nodes_table_head.size() && curr_rank <= cmp_rank) {
+	  index_t node_id = nodes_table_head[curr_rank];
 	  while(node_id != (index_t)OFF_MASK) {
 	    assert_lt(node_id, nodes_list2.size());
 	    nodes.push_back(nodes_list2[node_id].node);
