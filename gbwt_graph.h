@@ -214,7 +214,7 @@ public:
         
         const EList<Node>& nodes;
     };
-    
+
 public:
     RefGraph(const SString<char>& s,
              const EList<RefRecord>& szs,
@@ -1143,6 +1143,13 @@ public:
             return a.ranking < b.ranking;
         }
     };
+
+    struct LPathNode {
+      PathNode node;
+      index_t next_node;
+    };
+    
+
     
 public:
     // Create a new graph in which paths are represented using nodes
@@ -1274,6 +1281,9 @@ private:
     index_t                report_F_node_idx;
     index_t                report_F_location;
     
+    EList<PathNode>* temp_new_nodes;
+    index_t          temp_num_new_nodes;
+    
     // Can create an index by using key.second in PathNodes.
     // If the graph is not ready, its status becomes error.
     // Sorting edges by from actually sorts them by (from, to).
@@ -1394,58 +1404,115 @@ report_F_node_idx(0), report_F_location(0)
 
 // Create hash table for unsorted nodes
     assert_neq(previous.nodes.size(), previous.ranks);
-	index_t num_unsorted = previous.nodes.size() + 1 - previous.ranks;
-	index_t table_size = num_unsorted + num_unsorted / 2;
+    index_t num_unsorted = previous.nodes.size() + 1 - previous.ranks;
+    index_t table_size = num_unsorted + num_unsorted / 2;
     if(table_size > previous.nodes.size()) table_size = previous.nodes.size();
-
-	// Initialize array to be used for hash table
-	cerr << "Allocating size " << table_size << " array..." << endl;
     
-	EList<PathNode, 1> * nodes_table;
-	nodes_table = new EList<PathNode,1> [table_size];
+    {
+      // Initialize array to be used for hash table
+      cerr << "Allocating size " << table_size << " array..." << endl;
+      EList<index_t> nodes_table;
+      nodes_table.resizeExact(table_size);
+      nodes_table.fill((index_t)OFF_MASK);
 
-	// Populate hash table
-	cerr << "Populating the hash table..." << endl;
-    index_t max_collisions = 0, max_hash = 0;
-    for(index_t i = 0; i < previous.nodes.size(); i++) {
-		if(!previous.nodes[i].isSorted()){
-			index_t hash = previous.nodes[i].to % table_size;
-			nodes_table[hash].push_back(previous.nodes[i]);
-            if(nodes_table[hash].size() > max_collisions) {
-                max_collisions = nodes_table[hash].size();
-                max_hash = hash;
-            }
-		}
+      EList<LPathNode> nodes_list;
+      nodes_list.resizeExact(num_unsorted * 1.1); nodes_list.clear();
+      
+      // Populate hash table
+      cerr << "Populating the hash table..." << endl;
+      for(index_t i = 0; i < previous.nodes.size(); i++) {
+	if(!previous.nodes[i].isSorted()) {
+	  index_t hash = previous.nodes[i].to % nodes_table.size();
+	  nodes_list.expand();
+	  nodes_list.back().node = previous.nodes[i];
+	  nodes_list.back().next_node = nodes_table[hash];
+	  nodes_table[hash] = nodes_list.size() - 1;
 	}
-    
-    cerr << "Table size: " << table_size << endl;
-    cerr << "Max collisions: " << max_collisions << endl;
-    for(index_t i = 0; i < nodes_table[max_hash].size(); i++) {
-        cerr << "\t" << nodes_table[max_hash][i].from << " --> " << nodes_table[max_hash][i].to << endl;
-    }
-    
-    // Query against hash table
-	cerr << "Querying all nodes against hash table..." << endl;
-    new_nodes.resizeExact(table_size * 1.1); //better heuristic???
-    new_nodes.clear();
+      }
 
-	// Create combined nodes
-    for(index_t i = 0; i < previous.nodes.size(); i++) {
-		index_t hash = previous.nodes[i].from % table_size;
-	    for(index_t j = 0; j < nodes_table[hash].size(); j++) {
-			if(previous.nodes[i].from == nodes_table[hash].get(j).to) {
-            	createPathNode(nodes_table[hash].get(j), previous.nodes[i]);
-     	   	}
+      // Query against hash table
+      cerr << "Querying all nodes against hash table..." << endl;
+    
+      // Create combined nodes
+      index_t max_rank = previous.nodes.back().key.first;
+      EList<index_t> nodes_table2;
+      nodes_table2.resizeExact(max_rank + 1);
+      nodes_table2.fill((index_t)OFF_MASK);
+      EList<LPathNode> nodes_list2;
+      nodes_list2.resizeExact(num_unsorted * 1.1); nodes_list2.clear();
+      for(index_t i = 0; i < previous.nodes.size(); i++) {
+	index_t hash = previous.nodes[i].from % nodes_table.size();
+	index_t node_id = nodes_table[hash];
+	while(node_id != (index_t)OFF_MASK) {
+	  assert_lt(node_id, nodes_list.size());
+	  if(previous.nodes[i].from == nodes_list[node_id].node.to) {
+	    const PathNode& left = nodes_list[node_id].node;
+	    const PathNode& right = previous.nodes[i];
+	    index_t rank = left.key.first;
+	    if(nodes_list2.size() == nodes_list2.capacity()) {
+	      index_t size = nodes_list2.size();
+	      nodes_list2.resizeExact(size * 1.1);
+	      nodes_list2.resize(size);
+	    }
+	    nodes_list2.expand();
+	    nodes_list2.back().node.from = left.from;
+	    nodes_list2.back().node.to = right.to;
+	    nodes_list2.back().node.key = pair<index_t, index_t>(left.key.first, right.key.first);
+	    nodes_list2.back().next_node = nodes_table2[rank];
+	    nodes_table2[rank] = nodes_list2.size() - 1;
+	  }
+	  node_id = nodes_list[node_id].next_node;
     	}
+      }
+
+      // Reverse nodes in each rank
+      cerr << "Reversing nodes in each rank" << endl;
+      for(index_t i = 0; i < nodes_table2.size(); i++) {
+        index_t node_id = nodes_table2[i];
+	index_t prev_node_id = (index_t)OFF_MASK;
+	while(node_id != (index_t)OFF_MASK) {
+	  assert_lt(node_id, nodes_list2.size());
+	  if(nodes_list2[node_id].next_node == (index_t)OFF_MASK) {
+	    nodes_table2[i] = node_id;
+	    nodes_list2[node_id].next_node = prev_node_id;
+	    break;
+	  } else {
+	    index_t tmp_node_id = nodes_list2[node_id].next_node;
+	    nodes_list2[node_id].next_node = prev_node_id;
+	    prev_node_id = node_id;
+	    node_id = tmp_node_id;
+	  }
 	}
-	delete[] nodes_table;
-    
+      }
 
-	cerr << "Sorting new nodes..." << endl;
-    sort(new_nodes.begin(), new_nodes.end());
-
-    cerr << "Merging new nodes into previous.nodes..." << endl;
-    mergeAllNodes(previous);
+      cerr << "Merging new nodes into previous.nodes..." << endl;
+      index_t curr_rank = 0;
+      index_t prev_idx = 0;
+      nodes.resizeExact(previous.nodes.size() + nodes_list2.size()); // this is an overestimate
+      nodes.clear();
+      while(prev_idx < previous.nodes.size() || curr_rank < nodes_table2.size()) {
+	while(prev_idx < previous.nodes.size()) {
+	  if(previous.nodes[prev_idx].key.first > curr_rank) break;
+	  if(previous.nodes[prev_idx].isSorted()) {
+	    nodes.push_back(previous.nodes[prev_idx]);
+	  }
+	  prev_idx++;
+	}
+	index_t cmp_rank = (index_t)OFF_MASK;
+	if(prev_idx < previous.nodes.size()) {
+	  cmp_rank = previous.nodes[prev_idx].key.first;
+	}
+	while(curr_rank < nodes_table2.size() && curr_rank <= cmp_rank) {
+	  index_t node_id = nodes_table2[curr_rank];
+	  while(node_id != (index_t)OFF_MASK) {
+	    assert_lt(node_id, nodes_list2.size());
+	    nodes.push_back(nodes_list2[node_id].node);
+	    node_id = nodes_list2[node_id].next_node;
+	  }
+	  curr_rank++;
+	}
+      }
+    }
 
     temp_nodes = nodes.size();
     status = ok;
