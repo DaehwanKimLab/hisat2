@@ -1281,9 +1281,6 @@ private:
     index_t                report_F_node_idx;
     index_t                report_F_location;
     
-    EList<PathNode>* temp_new_nodes;
-    index_t          temp_num_new_nodes;
-    
     // Can create an index by using key.second in PathNodes.
     // If the graph is not ready, its status becomes error.
     // Sorting edges by from actually sorts them by (from, to).
