@@ -1555,7 +1555,7 @@ public:
 			assert(fchr() != NULL);
 			//assert(_offs != NULL);
 			//assert(_rstarts != NULL);
-			// assert_neq(_zGbwtByteOff, (index_t)OFF_MASK);
+			// assert_neq(_zGbwtByteOff, INDEX_MAX);
 			// assert_neq(_zGbwtBpOff, -1);
 			return true;
 		} else {
@@ -1684,7 +1684,7 @@ public:
 		if(ftab[i] <= gbwtLen) {
 			return ftab[i];
 		} else {
-			index_t efIdx = ftab[i] ^ (index_t)OFF_MASK;
+			index_t efIdx = ftab[i] ^ INDEX_MAX;
 			assert_lt(efIdx*2+1, eftabLen);
 			return eftab[efIdx*2+1];
 		}
@@ -1763,7 +1763,7 @@ public:
 		if(ftab[i] <= gbwtLen) {
 			return ftab[i];
 		} else {
-			index_t efIdx = ftab[i] ^ (index_t)OFF_MASK;
+			index_t efIdx = ftab[i] ^ INDEX_MAX;
 			assert_lt(efIdx*2+1, eftabLen);
 			return eftab[efIdx*2];
 		}
@@ -1783,11 +1783,11 @@ public:
 			index_t nodeOff = node >> _gh._offRate;
 			assert_lt(nodeOff, _gh._offsLen);
 			index_t off = offs()[nodeOff];
-			assert_neq((index_t)OFF_MASK, off);
+			assert_neq(INDEX_MAX, off);
 			return off;
 		} else {
 			// Try looking at zoff
-			return (index_t)OFF_MASK;
+			return (index_t)INDEX_MAX;
 		}
 	}
 
@@ -1802,7 +1802,7 @@ public:
 		index_t hitlen) const
 	{
 		index_t off = tryOffset(elt);
-		if(off != (index_t)OFF_MASK && !fw) {
+		if(off != INDEX_MAX && !fw) {
 			assert_lt(off, _gh._len);
 			off = _gh._len - off - 1;
 			assert_geq(off, hitlen-1);
@@ -2884,9 +2884,9 @@ public:
 		ASSERT_ONLY(, bool overrideSanity = false)
 		) const
 	{
-        if(rowL(l) != c) return (index_t)OFF_MASK;
+        if(rowL(l) != c) return (index_t)INDEX_MAX;
         for(index_t i = 0; i < _zOffs.size(); i++) {
-            if(row == _zOffs[i]) return (index_t)OFF_MASK;
+            if(row == _zOffs[i]) return (index_t)INDEX_MAX;
         }
 		index_t ret;
 		assert_lt(c, 4);
@@ -2953,7 +2953,7 @@ public:
         assert_lt(c, 4);
         assert_geq(c, 0);
         index_t top = mapLF1(row, l, c);
-        if(top == (index_t)OFF_MASK) return pair<index_t, index_t>(0, 0);
+        if(top == INDEX_MAX) return pair<index_t, index_t>(0, 0);
         index_t bot = top;
         
         l.initFromRow_bit(top + 1, gh(), gfm());
@@ -3009,12 +3009,12 @@ public:
                                           ) const
     {
         for(index_t i = 0; i < _zOffs.size(); i++) {
-            if(row == _zOffs[i]) return pair<index_t, index_t>((index_t)OFF_MASK, (index_t)OFF_MASK);
+            if(row == _zOffs[i]) return pair<index_t, index_t>((index_t)INDEX_MAX, (index_t)INDEX_MAX);
         }
 
         mapLF1(row, l);
         index_t top = row;
-        if(top == (index_t)OFF_MASK) return pair<index_t, index_t>(0, 0);
+        if(top == INDEX_MAX) return pair<index_t, index_t>(0, 0);
         index_t bot = top;
         
         l.initFromRow_bit(top + 1, gh(), gfm());
@@ -3247,8 +3247,8 @@ public:
 	GFMParams<index_t> _gh;
 	bool packed_;
 
-	static const uint64_t default_bmax = OFF_MASK;
-	static const uint64_t default_bmaxMultSqrt = OFF_MASK;
+	static const uint64_t default_bmax = INDEX_MAX;
+	static const uint64_t default_bmaxMultSqrt = INDEX_MAX;
 	static const uint64_t default_bmaxDivN = 4;
 	static const int      default_dcv = 1024;
 	static const bool     default_noDc = false;
@@ -3944,7 +3944,7 @@ void GFM<index_t>::buildToDisk(
             } else {
                 range = mapGLF1(range.first, tloc, nt);
             }
-            if(range.first == (index_t)OFF_MASK || range.first >= range.second) {
+            if(range.first == INDEX_MAX || range.first >= range.second) {
                 break;
             }
             if(range.first + 1 == range.second) {
@@ -4011,7 +4011,7 @@ void GFM<index_t>::buildToDisk(
             assert_lt(eftabCur*2+1, eftabLen);
             eftab[eftabCur*2] = lo;
             eftab[eftabCur*2+1] = hi;
-            ftab[i] = (eftabCur++) ^ (index_t)OFF_MASK; // insert pointer into eftab
+            ftab[i] = (eftabCur++) ^ INDEX_MAX; // insert pointer into eftab
             assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
             assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
         }
@@ -4090,7 +4090,7 @@ void GFM<index_t>::joinedToTextOff(
 	assert(rstarts() != NULL); // must have loaded rstarts
 	index_t top = 0;
 	index_t bot = _nFrag; // 1 greater than largest addressable element
-	index_t elt = (index_t)OFF_MASK;
+	index_t elt = (index_t)INDEX_MAX;
 	// Begin binary search
 	while(true) {
 		ASSERT_ONLY(index_t oldelt = elt);
@@ -4112,7 +4112,7 @@ void GFM<index_t>::joinedToTextOff(
 					straddled = true;
 					if(rejectStraddle) {
 						// it falls off; signal no-go and return
-						tidx = (index_t)OFF_MASK;
+						tidx = (index_t)INDEX_MAX;
 						assert_lt(elt, _nFrag-1);
 						return;
 					}
@@ -4157,16 +4157,16 @@ void GFM<index_t>::joinedToTextOff(
 template <typename index_t>
 index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
 	assert(offs() != NULL);
-	assert_neq((index_t)OFF_MASK, row);
+	assert_neq(INDEX_MAX, row);
 	SideLocus<index_t> l;
 	if(steps > 0) l.initFromRow(row, _gh, gfm());
 	while(steps > 0) {
         for(index_t i = 0; i < _zOffs.size(); i++) {
-            if(row == _zOffs[i]) return (index_t)OFF_MASK;
+            if(row == _zOffs[i]) return (index_t)INDEX_MAX;
         }
         pair<index_t, index_t> range = this->mapGLF1(row, l, NULL ASSERT_ONLY(, false));
         index_t newrow = range.first;
-		assert_neq((index_t)OFF_MASK, newrow);
+		assert_neq(INDEX_MAX, newrow);
 		assert_neq(newrow, row);
 		row = newrow;
 		steps--;
@@ -4181,7 +4181,7 @@ index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
 template <typename index_t>
 index_t GFM<index_t>::getOffset(index_t row, index_t node) const {
 	assert(offs() != NULL);
-	assert_neq((index_t)OFF_MASK, row);
+	assert_neq(INDEX_MAX, row);
     for(index_t i = 0; i < _zOffs.size(); i++) {
         if(row == _zOffs[i]) return 0;
     }
@@ -4194,7 +4194,7 @@ index_t GFM<index_t>::getOffset(index_t row, index_t node) const {
         pair<index_t, index_t> range = this->mapGLF1(row, l, &node_range ASSERT_ONLY(, false));
         index_t newrow = range.first;
 		jumps++;
-		assert_neq((index_t)OFF_MASK, newrow);
+		assert_neq(INDEX_MAX, newrow);
 		assert_neq(newrow, row);
 		row = newrow;
         for(index_t i = 0; i < _zOffs.size(); i++) {
@@ -4220,7 +4220,7 @@ index_t GFM<index_t>::getOffset(
                                 index_t hitlen) const
 {
 	index_t off = getOffset(elt);
-	assert_neq((index_t)OFF_MASK, off);
+	assert_neq(INDEX_MAX, off);
 	if(!fw) {
 		assert_lt(off, _gh._len);
 		off = _gh._len - off - 1;
@@ -4489,7 +4489,7 @@ void GFM<index_t>::readIntoMemory(
     }
     if(offRateDiff > 0) {
         offsLenSampled >>= offRateDiff;
-        if((offsLen & ~((index_t)OFF_MASK << offRateDiff)) != 0) {
+        if((offsLen & ~(INDEX_MAX << offRateDiff)) != 0) {
             offsLenSampled++;
         }
     }

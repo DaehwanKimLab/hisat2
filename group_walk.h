@@ -1016,9 +1016,9 @@ public:
                             new_node_bot = node_range.second;
                             // Range narrowed so we have to look at the masks
                             for(size_t j = 0; j < gws.masks[i].size(); j++) {
-                                assert_lt(j+mapi_, map_.size());
+                                assert_lt(j+mapi_+e, map_.size());
                                 if(gws.masks[i][j]) {
-                                    gws.map.push_back(map_[j+mapi_]);
+                                    gws.map.push_back(map_[j+mapi_+e]);
                                     assert(gws.map.size() <= 1 || gws.map.back() != gws.map[gws.map.size()-2]);
 #if 0
                                     // If this element is not yet resolved,
@@ -1055,13 +1055,12 @@ public:
                             assert_geq(range.second - range.first, node_range.second - node_range.first);
                             index_t ntop = range.first;
                             index_t nbot = range.second;
-                            assert_geq(nbot-ntop, curbot-curtop);
                             st.back().mapi_ = 0;
                             st.back().map_.clear();
                             met.branches++;
                             // Range narrowed so we have to look at the masks
                             for(size_t j = 0; j < gws.masks[i].size(); j++) {
-                                if(gws.masks[i][j]) st.back().map_.push_back(map_[j+mapi_]);
+                                if(gws.masks[i][j]) st.back().map_.push_back(map_[j+mapi_+e]);
                             }
                             pair<int, int> rret =
                             st.back().init(

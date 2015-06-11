@@ -525,7 +525,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         for(index_t i = 0; i < threadParams.size(); i++) {
             if(threadParams[i].multipleHeadNodes) multipleHeadNodes = true;
             std::ostringstream number; number << i;
-            string rg_fname = out_fname + number.str() + ".rf";
+            string rg_fname = out_fname + "." + number.str() + ".rf";
             ifstream rg_in_file(rg_fname.c_str(), ios::binary);
             if(!rg_in_file.good()) {
                 cerr << "Could not open file for reading a reference graph: \"" << rg_fname << "\"" << endl;
@@ -742,7 +742,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
     index_t thread_id = threadParam->thread_id;
     index_t nthreads = refGraph.nthreads;
     std::ostringstream number; number << thread_id;
-    const string rg_fname = threadParam->out_fname + number.str() + ".rf";
+    const string rg_fname = threadParam->out_fname + "." + number.str() + ".rf";
     ofstream rg_out_file(rg_fname.c_str(), ios::binary);
     if(!rg_out_file.good()) {
         cerr << "Could not open file for writing a reference graph: \"" << rg_fname << "\"" << endl;
