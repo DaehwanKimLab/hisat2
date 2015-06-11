@@ -224,7 +224,7 @@ struct GWElt {
 	 * Reset GWElt to uninitialized state.
 	 */
 	void reset() {
-		offidx = range = elt = len = (index_t)0xffffffff;
+		offidx = range = elt = len = (index_t)OFF_MASK;
 		fw = false;
 	}
 
@@ -541,11 +541,6 @@ public:
 				// Elt not resolved yet; try to resolve it now
 				index_t bwrow = (index_t)(top + i + num_iedges);
                 index_t node = (index_t)(node_top + i);
-                // daehwan - for debugging purposes
-                if(bwrow == 801561) {
-                    int kk = 20;
-                    kk += 20;
-                }
 				index_t toff = gfm.tryOffset(bwrow, node);
                 ASSERT_ONLY(index_t origBwRow = sa.topf + map(i));
                 ASSERT_ONLY(index_t origNode = sa.node_top + map(i));
@@ -1008,17 +1003,15 @@ public:
                             backup_node_iedge_count.clear();
                             SideLocus<index_t>::initFromTopBot(curtop, curbot, gfm.gh(), gfm.gfm(), curtloc, curbloc);
                             range = gfm.mapGLF(curtloc, curbloc, i, &node_range, &backup_node_iedge_count, cur_node_bot - cur_node_top);
-                            assert_eq(cur_node_bot - cur_node_top, node_range.second - node_range.first);
                             newtop = range.first;
                             newbot = range.second;
-                            assert_geq(newbot-newtop, curbot-curtop);
                             new_node_top = node_range.first;
                             new_node_bot = node_range.second;
                             // Range narrowed so we have to look at the masks
                             for(size_t j = 0; j < gws.masks[i].size(); j++) {
-                                assert_lt(j+mapi_+e, map_.size());
+                                assert_lt(j+mapi_+(cur_node_top - node_top), map_.size());
                                 if(gws.masks[i][j]) {
-                                    gws.map.push_back(map_[j+mapi_+e]);
+                                    gws.map.push_back(map_[j+mapi_+(cur_node_top - node_top)]);
                                     assert(gws.map.size() <= 1 || gws.map.back() != gws.map[gws.map.size()-2]);
 #if 0
                                     // If this element is not yet resolved,
@@ -1034,6 +1027,16 @@ public:
 #endif
                                 }
                             }
+                            assert_lt(new_node_top, new_node_bot);
+                            if(new_node_bot - new_node_top < gws.map.size()) {
+                                index_t new_size = new_node_bot - new_node_top;
+                                for(index_t j = new_size; j < gws.map.size(); j++) {
+                                    index_t jmap = gws.map[j];
+                                    assert_lt(jmap, sa.offs.size());
+                                    sa.offs[jmap] = gws.map[new_size - 1];
+                                }
+                                gws.map.resize(new_size);
+                            }
                             assert_eq(new_node_bot - new_node_top, (index_t)(gws.map.size()));
                         } else {
                             // For each beyond the first, create a new
@@ -1046,11 +1049,6 @@ public:
                             tmp_node_iedge_count.clear();
                             pair<index_t, index_t> range, node_range;
                             SideLocus<index_t>::initFromTopBot(curtop, curbot, gfm.gh(), gfm.gfm(), curtloc, curbloc);
-                            // daehwan - for debugging purposes
-                            if(curbot == 781253) {
-                                int kk = 20;
-                                kk += 20;
-                            }
                             range = gfm.mapGLF(curtloc, curbloc, i, &node_range, &tmp_node_iedge_count, cur_node_bot - cur_node_top);
                             assert_geq(range.second - range.first, node_range.second - node_range.first);
                             index_t ntop = range.first;
@@ -1060,7 +1058,17 @@ public:
                             met.branches++;
                             // Range narrowed so we have to look at the masks
                             for(size_t j = 0; j < gws.masks[i].size(); j++) {
-                                if(gws.masks[i][j]) st.back().map_.push_back(map_[j+mapi_+e]);
+                                if(gws.masks[i][j]) st.back().map_.push_back(map_[j+mapi_+(cur_node_top - node_top)]);
+                            }
+                            assert_lt(node_range.first, node_range.second);
+                            if(node_range.second - node_range.first < st.back().map_.size()) {
+                                index_t new_size = node_range.second - node_range.first;
+                                for(index_t j = new_size; j < st.back().map_.size(); j++) {
+                                    index_t jmap = st.back().map_[j];
+                                    assert_lt(jmap, sa.offs.size());
+                                    sa.offs[jmap] = st.back().map_[new_size - 1];
+                                }
+                                st.back().map_.resize(new_size);
                             }
                             pair<int, int> rret =
                             st.back().init(
@@ -1076,7 +1084,7 @@ public:
                                            nbot,        // BW bot of new range
                                            node_range.first,
                                            node_range.second,
-                                           node_iedge_count,
+                                           tmp_node_iedge_count,
                                            step+1,      // # steps taken to get to this new range
                                            met);        // update these metrics
                             ret.first += rret.first;
@@ -1089,7 +1097,6 @@ public:
             mapi_ = 0;
             // assert_eq(new_node_bot-new_node_top, sum);
             assert_gt(newbot, newtop);
-            assert_geq(newbot-newtop, curbot-curtop);
             assert(top != newtop || bot != newbot);
             //assert(!(newtop < top && newbot > top));
             top = newtop;
