@@ -1233,7 +1233,9 @@ public:
                 assert_eq(_snps.size(), _snpnames.size());
                 
                 // Sort SNPs based on positions
-                sort(_snps.begin(), _snps.end());
+                if(_snps.size() > 1) {
+                    sort(_snps.begin(), _snps.end());
+                }
       
                 // Write SNPs into 7.ht2 and 8.ht2
                 string file7 = outfile + ".7." + gfm_ext;
