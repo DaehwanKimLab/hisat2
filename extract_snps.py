@@ -81,7 +81,9 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
     chr_dic = read_genome(genome_file)
 
     if testset:
-        testset_file = open("testset.fa", "w")
+        testset_bname = genome_file.name.split(".")[0]
+        ref_testset_file = open(testset_bname + ".ref.testset.fa", "w")
+        alt_testset_file = open(testset_bname + ".alt.testset.fa", "w")
 
     # load SNPs
     snp_list = []
@@ -157,21 +159,41 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
                 if testset:
                     ref_seq = chr_seq[start-50:start+50]
                     alt_seq = chr_seq[start-50:start] + allele + chr_seq[start+1:start+50]
-                    print >> testset_file, ">%s_single_%d_%s" % (rs_id, start - 50, ref_seq)
-                    print >> testset_file, alt_seq
+                    print >> ref_testset_file, ">%s_single_%d" % (rs_id, start - 50)
+                    print >> ref_testset_file, ref_seq
+                    print >> alt_testset_file, ">%s_single_%d_%s" % (rs_id, start - 50, ref_seq)
+                    print >> alt_testset_file, alt_seq
                 
         elif classType == "deletion":
             snp_list.append([rs_id, classType, chr, start, end, ""])
+            delLen = end -start
+            if testset and delLen > 0 and delLen <= 10:
+                ref_seq = chr_seq[start-50:start+50]
+                alt_seq = chr_seq[start-50:start] + chr_seq[start+delLen:start+50+delLen]
+                print >> ref_testset_file, ">%s_deletion_%d" % (rs_id, start - 50)
+                print >> ref_testset_file, ref_seq
+                print >> alt_testset_file, ">%s_deletion_%d_%s" % (rs_id, start - 50, ref_seq)
+                print >> alt_testset_file, alt_seq
         else:
             assert classType == "insertion"
+            insSeq = ""
             for allele in allele_list:
                 if allele == "-" or len(allele) <= 0:
                     continue
                 if re.match('[ACGT]+', allele):
                     snp_list.append([rs_id, classType, chr, start, end, allele])
+                    insLen = len(allele)
+                    if testset and insLen > 0 and insLen <= 10:
+                        ref_seq = chr_seq[start-50:start+50]
+                        alt_seq = chr_seq[start-50:start] + insSeq + chr_seq[start:start+50-insLen]
+                        print >> ref_testset_file, ">%s_insertion_%d" % (rs_id, start - 50)
+                        print >> ref_testset_file, ref_seq
+                        print >> alt_testset_file, ">%s_insertion_%d_%s" % (rs_id, start - 50, ref_seq)
+                        print >> alt_testset_file, alt_seq
 
     if testset:
-        testset_file.close()
+        ref_testset_file.close()
+        alt_testset_file.close()
 
                     
     # Sort SNPs (snp_list) according to chromosomes, genomic coordinates, types, and alleles

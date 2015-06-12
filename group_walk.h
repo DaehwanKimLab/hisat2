@@ -520,6 +520,17 @@ public:
 		ASSERT_ONLY(lastStep_++);
 		assert_leq((index_t)step, gfm.gh().len());
 		assert_lt(range, st.size());
+        
+        index_t num_prev_iedges = 0;
+        index_t e = 0;
+        while(e < sa.node_iedge_count.size()) {
+            if(map_.front() <= sa.node_iedge_count[e].first) {
+                break;
+            }
+            num_prev_iedges += sa.node_iedge_count[e].second;
+            e++;
+        }
+        
 		pair<int, int> ret = make_pair(0, 0);
 		index_t trimBegin = 0, trimEnd = 0;
 		bool empty = true; // assume all resolved until proven otherwise
@@ -527,7 +538,7 @@ public:
 		// trim and check if we're done.
         assert_eq(node_bot - node_top, map_.size());
         index_t num_iedges = 0;
-        index_t e = 0;
+        e = 0;
 		for(size_t i = mapi_; i < map_.size(); i++) {
 			bool resolved = (off(i, sa) != (index_t)OFF_MASK);
 			if(!resolved) {
@@ -542,7 +553,7 @@ public:
 				index_t bwrow = (index_t)(top + i + num_iedges);
                 index_t node = (index_t)(node_top + i);
 				index_t toff = gfm.tryOffset(bwrow, node);
-                ASSERT_ONLY(index_t origBwRow = sa.topf + map(i));
+                ASSERT_ONLY(index_t origBwRow = sa.topf + map(i) + num_iedges + num_prev_iedges);
                 ASSERT_ONLY(index_t origNode = sa.node_top + map(i));
 				assert_eq(bwrow, gfm.walkLeft(origBwRow, step));
 				if(toff != (index_t)OFF_MASK) {
@@ -1259,10 +1270,10 @@ public:
 		st_.back().reset();
 		assert(st_.back().repOkBasic());
 		index_t top = sa.topf;
-		index_t bot = (index_t)(top + sa.size());
+		index_t bot = sa.botf;
         index_t node_top = sa.node_top;
         index_t node_bot = (index_t)(node_top + sa.size());
-		st_.back().initMap(bot-top);
+		st_.back().initMap(sa.size());
 		st_.ensure(4);
 		st_.back().init(
 			gfmFw,              // Bowtie index
