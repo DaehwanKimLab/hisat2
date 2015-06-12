@@ -389,24 +389,24 @@ static void driver(
 	} else {
         // Initialize Ebwt object
         SNPDB<TIndexOffU> snpdb;
-		HierGFM<TIndexOffU, uint16_t> gfm(
-                                          adjustedEbwtFileBase,
-                                          &snpdb,
-                                          -1,                   // don't care about entire-reverse
-                                          true,                 // index is for the forward direction
-                                          -1,                   // offrate (-1 = index default)
-                                          0,                    // offrate-plus (0 = index default)
-                                          false,                // use memory-mapped IO
-                                          false,                // use shared memory
-                                          false,                // sweep memory-mapped memory
-                                          true,                 // load names?
-                                          true,                 // load SA sample?
-                                          true,                 // load ftab?
-                                          true,                 // load rstarts?
-                                          false,                // be talkative?
-                                          false,                // be talkative at startup?
-                                          false,                // pass up memory exceptions?
-                                          false);               // sanity check?
+		HGFM<TIndexOffU, uint16_t> gfm(
+                                       adjustedEbwtFileBase,
+                                       &snpdb,
+                                       -1,                   // don't care about entire-reverse
+                                       true,                 // index is for the forward direction
+                                       -1,                   // offrate (-1 = index default)
+                                       0,                    // offrate-plus (0 = index default)
+                                       false,                // use memory-mapped IO
+                                       false,                // use shared memory
+                                       false,                // sweep memory-mapped memory
+                                       true,                 // load names?
+                                       true,                 // load SA sample?
+                                       true,                 // load ftab?
+                                       true,                 // load rstarts?
+                                       false,                // be talkative?
+                                       false,                // be talkative at startup?
+                                       false,                // pass up memory exceptions?
+                                       false);               // sanity check?
         
         gfm.loadIntoMemory(
                            -1,     // need entire reverse

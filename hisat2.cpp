@@ -1731,7 +1731,7 @@ createPatsrcFactory(PairedPatternSource& _patsrc, int tid) {
 typedef TIndexOffU index_t;
 typedef uint16_t local_index_t;
 static PairedPatternSource*              multiseed_patsrc;
-static HierGFM<index_t>*                 multiseed_gfm;
+static HGFM<index_t>*                    multiseed_gfm;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
 static AlignmentCache<index_t>*          multiseed_ca; // seed cache
@@ -2873,7 +2873,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	assert(multiseed_gfm != NULL);
 	assert(multiseedMms == 0);
 	PairedPatternSource&             patsrc   = *multiseed_patsrc;
-	const HierGFM<index_t>&          gfm      = *multiseed_gfm;
+	const HGFM<index_t>&             gfm      = *multiseed_gfm;
 	const Scoring&                   sc       = *multiseed_sc;
 	const BitPairReference&          ref      = *multiseed_refs;
 	AlignmentCache<index_t>&         scShared = *multiseed_ca;
@@ -3372,7 +3372,7 @@ static void multiseedSearch(
 	Scoring& sc,
 	PairedPatternSource& patsrc,  // pattern source
 	AlnSink<index_t>& msink,      // hit sink
-	HierGFM<index_t>& gfm,        // index of original text
+	HGFM<index_t>& gfm,           // index of original text
     BitPairReference* refs,
 	OutFileBuf *metricsOfb)
 {
@@ -3493,24 +3493,24 @@ static void driver(
 	}
     snpdb = new SNPDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
-	HierGFM<index_t, local_index_t> gfm(
-		adjIdxBase,
-        snpdb,
-	    -1,       // fw index
-	    true,     // index is for the forward direction
-	    /* overriding: */ offRate,
-		0, // amount to add to index offrate or <= 0 to do nothing
-	    useMm,    // whether to use memory-mapped files
-	    useShmem, // whether to use shared memory
-	    mmSweep,  // sweep memory-mapped files
-	    !noRefNames, // load names?
-		true,        // load SA sample?
-		true,        // load ftab?
-		true,        // load rstarts?
-	    gVerbose, // whether to be talkative
-	    startVerbose, // talkative during initialization
-	    false /*passMemExc*/,
-	    sanityCheck);
+	HGFM<index_t, local_index_t> gfm(
+                                     adjIdxBase,
+                                     snpdb,
+                                     -1,       // fw index
+                                     true,     // index is for the forward direction
+                                     /* overriding: */ offRate,
+                                     0, // amount to add to index offrate or <= 0 to do nothing
+                                     useMm,    // whether to use memory-mapped files
+                                     useShmem, // whether to use shared memory
+                                     mmSweep,  // sweep memory-mapped files
+                                     !noRefNames, // load names?
+                                     true,        // load SA sample?
+                                     true,        // load ftab?
+                                     true,        // load rstarts?
+                                     gVerbose, // whether to be talkative
+                                     startVerbose, // talkative during initialization
+                                     false /*passMemExc*/,
+                                     sanityCheck);
 	if(sanityCheck && !os.empty()) {
 		// Sanity check number of patterns and pattern lengths in GFM
 		// against original strings
@@ -3569,7 +3569,7 @@ static void driver(
 		}
 		EList<string> refnames;
 		readEbwtRefnames<index_t>(adjIdxBase, refnames);
-		SamConfig samc(
+		SamConfig<index_t> samc(
 			refnames,               // reference sequence names
 			reflens,                // reference sequence lengths
 			samTruncQname,          // whether to truncate QNAME to 255 chars

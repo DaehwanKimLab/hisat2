@@ -17,8 +17,8 @@
  * along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HIERGFM_H_
-#define HIERGFM_H_
+#ifndef HGFM_H_
+#define HGFM_H_
 
 #include "hier_idx_common.h"
 #include "gfm.h"
@@ -1072,28 +1072,28 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
  *
  */
 template <typename index_t = uint32_t, typename local_index_t = uint16_t>
-class HierGFM : public GFM<index_t> {
+class HGFM : public GFM<index_t> {
 	typedef GFM<index_t> PARENT_CLASS;
 public:
 	/// Construct an Ebwt from the given input file
-	HierGFM(const string& in,
-            SNPDB<index_t>* snpdb,
-            int needEntireReverse,
-            bool fw,
-            int32_t overrideOffRate, // = -1,
-            int32_t offRatePlus, // = -1,
-            bool useMm, // = false,
-            bool useShmem, // = false,
-            bool mmSweep, // = false,
-            bool loadNames, // = false,
-            bool loadSASamp, // = true,
-            bool loadFtab, // = true,
-            bool loadRstarts, // = true,
-            bool verbose, // = false,
-            bool startVerbose, // = false,
-            bool passMemExc, // = false,
-            bool sanityCheck, // = false
-            bool skipLoading = false) :
+	HGFM(const string& in,
+         SNPDB<index_t>* snpdb,
+         int needEntireReverse,
+         bool fw,
+         int32_t overrideOffRate, // = -1,
+         int32_t offRatePlus, // = -1,
+         bool useMm, // = false,
+         bool useShmem, // = false,
+         bool mmSweep, // = false,
+         bool loadNames, // = false,
+         bool loadSASamp, // = true,
+         bool loadFtab, // = true,
+         bool loadRstarts, // = true,
+         bool verbose, // = false,
+         bool startVerbose, // = false,
+         bool passMemExc, // = false,
+         bool sanityCheck, // = false
+         bool skipLoading = false) :
     GFM<index_t>(in,
                  snpdb,
                  needEntireReverse,
@@ -1147,36 +1147,36 @@ public:
 	/// given 'bmax' and 'dcv' parameters.  The string vector is
 	/// ultimately joined and the joined string is passed to buildToDisk().
 	template<typename TStr>
-	HierGFM(
-            TStr& s,
-            bool packed,
-            int needEntireReverse,
-            int32_t lineRate,
-            int32_t offRate,
-            int32_t ftabChars,
-            int32_t localOffRate,
-            int32_t localFtabChars,
-            int nthreads,
-            const string& snpfile,
-            const string& outfile,   // base filename for GFM files
-            bool fw,
-            bool useBlockwise,
-            TIndexOffU bmax,
-            TIndexOffU bmaxSqrtMult,
-            TIndexOffU bmaxDivN,
-            int dcv,
-            EList<FileBuf*>& is,
-            EList<RefRecord>& szs,
-            index_t sztot,
-            const RefReadInParams& refparams,
-            uint32_t seed,
-            int32_t overrideOffRate = -1,
-            bool verbose = false,
-            bool passMemExc = false,
-            bool sanityCheck = false);
+	HGFM(
+         TStr& s,
+         bool packed,
+         int needEntireReverse,
+         int32_t lineRate,
+         int32_t offRate,
+         int32_t ftabChars,
+         int32_t localOffRate,
+         int32_t localFtabChars,
+         int nthreads,
+         const string& snpfile,
+         const string& outfile,   // base filename for GFM files
+         bool fw,
+         bool useBlockwise,
+         TIndexOffU bmax,
+         TIndexOffU bmaxSqrtMult,
+         TIndexOffU bmaxDivN,
+         int dcv,
+         EList<FileBuf*>& is,
+         EList<RefRecord>& szs,
+         index_t sztot,
+         const RefReadInParams& refparams,
+         uint32_t seed,
+         int32_t overrideOffRate = -1,
+         bool verbose = false,
+         bool passMemExc = false,
+         bool sanityCheck = false);
     
-	~HierGFM() {
-		clearLocalGFMs();
+	~HGFM() {
+        clearLocalGFMs();
 	}
     
     /**
@@ -1302,33 +1302,33 @@ public:
 /// ultimately joined and the joined string is passed to buildToDisk().
 template <typename index_t, typename local_index_t>
 template <typename TStr>
-HierGFM<index_t, local_index_t>::HierGFM(
-                                         TStr& s,
-                                         bool packed,
-                                         int needEntireReverse,
-                                         int32_t lineRate,
-                                         int32_t offRate,
-                                         int32_t ftabChars,
-                                         int32_t localOffRate,
-                                         int32_t localFtabChars,
-                                         int nthreads,
-                                         const string& snpfile,
-                                         const string& outfile,   // base filename for EBWT files
-                                         bool fw,
-                                         bool useBlockwise,
-                                         TIndexOffU bmax,
-                                         TIndexOffU bmaxSqrtMult,
-                                         TIndexOffU bmaxDivN,
-                                         int dcv,
-                                         EList<FileBuf*>& is,
-                                         EList<RefRecord>& szs,
-                                         index_t sztot,
-                                         const RefReadInParams& refparams,
-                                         uint32_t seed,
-                                         int32_t overrideOffRate,
-                                         bool verbose,
-                                         bool passMemExc,
-                                         bool sanityCheck) :
+HGFM<index_t, local_index_t>::HGFM(
+                                   TStr& s,
+                                   bool packed,
+                                   int needEntireReverse,
+                                   int32_t lineRate,
+                                   int32_t offRate,
+                                   int32_t ftabChars,
+                                   int32_t localOffRate,
+                                   int32_t localFtabChars,
+                                   int nthreads,
+                                   const string& snpfile,
+                                   const string& outfile,   // base filename for EBWT files
+                                   bool fw,
+                                   bool useBlockwise,
+                                   TIndexOffU bmax,
+                                   TIndexOffU bmaxSqrtMult,
+                                   TIndexOffU bmaxDivN,
+                                   int dcv,
+                                   EList<FileBuf*>& is,
+                                   EList<RefRecord>& szs,
+                                   index_t sztot,
+                                   const RefReadInParams& refparams,
+                                   uint32_t seed,
+                                   int32_t overrideOffRate,
+                                   bool verbose,
+                                   bool passMemExc,
+                                   bool sanityCheck) :
     GFM<index_t>(s,
                  packed,
                  needEntireReverse,
@@ -1674,16 +1674,16 @@ HierGFM<index_t, local_index_t>::HierGFM(
  * Read an Ebwt from file with given filename.
  */
 template <typename index_t, typename local_index_t>
-void HierGFM<index_t, local_index_t>::readIntoMemory(
-                                                     int needEntireRev,
-                                                     bool loadSASamp,
-                                                     bool loadFtab,
-                                                     bool loadRstarts,
-                                                     bool justHeader,
-                                                     GFMParams<index_t> *params,
-                                                     bool mmSweep,
-                                                     bool loadNames,
-                                                     bool startVerbose)
+void HGFM<index_t, local_index_t>::readIntoMemory(
+                                                  int needEntireRev,
+                                                  bool loadSASamp,
+                                                  bool loadFtab,
+                                                  bool loadRstarts,
+                                                  bool justHeader,
+                                                  GFMParams<index_t> *params,
+                                                  bool mmSweep,
+                                                  bool loadNames,
+                                                  bool startVerbose)
 {
     PARENT_CLASS::readIntoMemory(needEntireRev,
                                  loadSASamp,
@@ -1874,4 +1874,4 @@ void HierGFM<index_t, local_index_t>::readIntoMemory(
 #endif
 }
 
-#endif /*HIERGFM_H_*/
+#endif /*HGFM_H_*/

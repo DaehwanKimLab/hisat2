@@ -210,7 +210,6 @@
 		E8B0DC5C1934F7AA005ED9FA /* ref_coord.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ref_coord.cpp; sourceTree = "<group>"; };
 		E8B0DC5D1934F7AA005ED9FA /* ref_read.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ref_read.cpp; sourceTree = "<group>"; };
 		E8B0DC5E1934F7AA005ED9FA /* reference.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = reference.cpp; sourceTree = "<group>"; };
-		E8B0DC5F1934F7AA005ED9FA /* sam.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = sam.cpp; sourceTree = "<group>"; };
 		E8B0DC651934F7AA005ED9FA /* scoring.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = scoring.cpp; sourceTree = "<group>"; };
 		E8B0DC661934F7AA005ED9FA /* shmem.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = shmem.cpp; sourceTree = "<group>"; };
 		E8B0DC671934F7AA005ED9FA /* simple_func.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = simple_func.cpp; sourceTree = "<group>"; };
@@ -417,7 +416,6 @@
 				E8B0DC5C1934F7AA005ED9FA /* ref_coord.cpp */,
 				E8B0DC5D1934F7AA005ED9FA /* ref_read.cpp */,
 				E8B0DC5E1934F7AA005ED9FA /* reference.cpp */,
-				E8B0DC5F1934F7AA005ED9FA /* sam.cpp */,
 				E818AEAE1987FD5100ED141B /* hisat_bp.cpp */,
 				E8000AE11AE9304500E1F351 /* hisat2_build_main.cpp */,
 				E8000AE21AE9304500E1F351 /* hisat2_build.cpp */,

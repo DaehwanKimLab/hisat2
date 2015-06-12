@@ -438,58 +438,53 @@ static void driver(
 	filesWritten.push_back(outfile + ".1." + gfm_ext);
 	filesWritten.push_back(outfile + ".2." + gfm_ext);
 	TStr s;
-	HierGFM<TIndexOffU> hierGFM(
-                                s,
-                                packed,
-                                1,  // TODO: maybe not?
-                                lineRate,
-                                offRate,      // suffix-array sampling rate
-                                // daehwan - for debugging purposes
-#if 1
-                                ftabChars,    // number of chars in initial arrow-pair calc
-#else
-                                5,
-#endif
-                                localOffRate,
-                                localFtabChars,
-                                nthreads,
-                                snpfile,
-                                outfile,      // basename for .?.ht2 files
-                                reverse == 0, // fw
-                                !entireSA,    // useBlockwise
-                                bmax,         // block size for blockwise SA builder
-                                bmaxMultSqrt, // block size as multiplier of sqrt(len)
-                                bmaxDivN,     // block size as divisor of len
-                                noDc? 0 : dcv,// difference-cover period
-                                is,           // list of input streams
-                                szs,          // list of reference sizes
-                                (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
-                                refparams,    // reference read-in parameters
-                                seed,         // pseudo-random number generator seed
-                                -1,           // override offRate
-                                verbose,      // be talkative
-                                autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                                sanityCheck); // verify results and internal consistency
+	HGFM<TIndexOffU> hGFM(
+                          s,
+                          packed,
+                          1,  // TODO: maybe not?
+                          lineRate,
+                          offRate,      // suffix-array sampling rate
+                          ftabChars,    // number of chars in initial arrow-pair calc
+                          localOffRate,
+                          localFtabChars,
+                          nthreads,
+                          snpfile,
+                          outfile,      // basename for .?.ht2 files
+                          reverse == 0, // fw
+                          !entireSA,    // useBlockwise
+                          bmax,         // block size for blockwise SA builder
+                          bmaxMultSqrt, // block size as multiplier of sqrt(len)
+                          bmaxDivN,     // block size as divisor of len
+                          noDc? 0 : dcv,// difference-cover period
+                          is,           // list of input streams
+                          szs,          // list of reference sizes
+                          (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
+                          refparams,    // reference read-in parameters
+                          seed,         // pseudo-random number generator seed
+                          -1,           // override offRate
+                          verbose,      // be talkative
+                          autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                          sanityCheck); // verify results and internal consistency
     // Note that the Ebwt is *not* resident in memory at this time.  To
     // load it into memory, call ebwt.loadIntoMemory()
 	if(verbose) {
 		// Print Ebwt's vital stats
-		hierGFM.gh().print(cerr);
+		hGFM.gh().print(cerr);
 	}
 	if(sanityCheck) {
 		// Try restoring the original string (if there were
 		// multiple texts, what we'll get back is the joined,
 		// padded string, not a list)
-		hierGFM.loadIntoMemory(
-                               reverse ? (refparams.reverse == REF_READ_REVERSE) : 0,
-                               true,  // load SA sample?
-                               true,  // load ftab?
-                               true,  // load rstarts?
-                               false,
-                               false);
+		hGFM.loadIntoMemory(
+                            reverse ? (refparams.reverse == REF_READ_REVERSE) : 0,
+                            true,  // load SA sample?
+                            true,  // load ftab?
+                            true,  // load rstarts?
+                            false,
+                            false);
 		SString<char> s2;
-		hierGFM.restore(s2);
-		hierGFM.evictFromMemory();
+		hGFM.restore(s2);
+		hGFM.evictFromMemory();
 		{
 			SString<char> joinedss = GFM<>::join<SString<char> >(
 				is,          // list of input streams

@@ -479,9 +479,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
         }
         
         // choose a local index based on the genomic location of the partial alignment
-        const HierGFM<index_t, local_index_t>* hierGFMFw = (const HierGFM<index_t, local_index_t>*)(&gfm);
-        const LocalGFM<local_index_t, index_t>* localGFMFw = hierGFMFw->getLocalGFM(hit.ref(), hit.refoff());
-        assert_leq(localGFMFw->_localOffset, hit.refoff());
+        const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
+        const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(hit.ref(), hit.refoff());
+        assert_leq(lGFM->_localOffset, hit.refoff());
         bool success = false, first = true;
         index_t count = 0;
         // consider at most two local indexes
@@ -493,8 +493,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             if(first) {
                 first = false;
             } else {
-                localGFMFw = hierGFMFw->prevLocalGFM(localGFMFw);
-                if(localGFMFw == NULL || localGFMFw->empty()) break;
+                lGFM = hGFM->prevLocalGFM(lGFM);
+                if(lGFM == NULL || lGFM->empty()) break;
             }
             // local index search
             index_t extlen = 0;
@@ -514,11 +514,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 uniqueStop = true;
                 him.localindexatts++;
                 nelt = this->localGFMSearch(
-                                            localGFMFw,  // BWT index
-                                            rd,          // read to align
-                                            sc,          // scoring scheme
+                                            lGFM,     // BWT index
+                                            rd,       // read to align
+                                            sc,       // scoring scheme
                                             hit.fw(),
-                                            false,       // searchfw,
+                                            false,    // searchfw,
                                             extoff,
                                             extlen,
                                             top,
@@ -544,7 +544,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 bool straddled = false;
                 // get genomic locations for this local search
                 this->getGenomeCoords_local(
-                                            *localGFMFw,
+                                            *lGFM,
                                             snpdb,
                                             ref,
                                             rnd,
@@ -625,7 +625,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             // int64_t minsc = (rdi == 0 ? sink.bestUnp1() : sink.bestUnp2());
             if(maxsc >= prev_score - sc.mmpMax) success = true;
             if(!success &&
-               (him.localindexatts >= this->max_localindexatts || count == max_count || hierGFMFw->prevLocalGFM(localGFMFw) == NULL)) {
+               (him.localindexatts >= this->max_localindexatts || count == max_count || hGFM->prevLocalGFM(lGFM) == NULL)) {
                 for(index_t ti = 0; ti < local_genomeHits.size(); ti++) {
                     GenomeHit<index_t>& tempHit = local_genomeHits[ti];
                     int64_t minsc = this->_minsc[rdi];
@@ -927,8 +927,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
         }
         
         // choose a local index based on the genomic location of the partial alignment
-        const HierGFM<index_t, local_index_t>* hierGFMFw = (const HierGFM<index_t, local_index_t>*)(&gfm);
-        const LocalGFM<local_index_t, index_t>* localGFMFw = hierGFMFw->getLocalGFM(hit.ref(), hit.refoff());
+        const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
+        const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(hit.ref(), hit.refoff());
         bool success = false, first = true;
         index_t count = 0;
         index_t max_count = 2;
@@ -939,8 +939,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             if(first) {
                 first = false;
             } else {
-                localGFMFw = hierGFMFw->nextLocalGFM(localGFMFw);
-                if(localGFMFw == NULL || localGFMFw->empty()) break;
+                lGFM = hGFM->nextLocalGFM(lGFM);
+                if(lGFM == NULL || lGFM->empty()) break;
             }
             // local index search
             index_t extlen = 0;
@@ -961,11 +961,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 uniqueStop = false;
                 him.localindexatts++;
                 nelt = this->localGFMSearch(
-                                            localGFMFw,  // BWT index
-                                            rd,          // read to align
-                                            sc,          // scoring scheme
+                                            lGFM,     // BWT index
+                                            rd,       // read to align
+                                            sc,       // scoring scheme
                                             hit.fw(),
-                                            false,       // searchfw,
+                                            false,    // searchfw,
                                             extoff,
                                             extlen,
                                             top,
@@ -998,7 +998,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 bool straddled = false;
                 // get genomic locations for this local search
                 this->getGenomeCoords_local(
-                                            *localGFMFw,
+                                            *lGFM,
                                             snpdb,
                                             ref,
                                             rnd,
@@ -1076,7 +1076,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             // int64_t minsc = (rdi == 0 ? sink.bestUnp1() : sink.bestUnp2());
             if(maxsc >= prev_score - sc.mmpMax) success = true;
             if(!success &&
-               (him.localindexatts >= this->max_localindexatts || count == max_count || hierGFMFw->nextLocalGFM(localGFMFw) == NULL) ) {
+               (him.localindexatts >= this->max_localindexatts || count == max_count || hGFM->nextLocalGFM(lGFM) == NULL) ) {
                 for(index_t ti = 0; ti < local_genomeHits.size(); ti++) {
                     GenomeHit<index_t>& tempHit = local_genomeHits[ti];
                     int64_t minsc = this->_minsc[rdi];

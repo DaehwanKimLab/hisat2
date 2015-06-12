@@ -1346,10 +1346,10 @@ class AlnSinkSam : public AlnSink<index_t> {
 public:
 
 	AlnSinkSam(
-               OutputQueue&     oq,           // output queue
-               const SamConfig& samc,         // settings & routines for SAM output
-               const StrList&   refnames,     // reference names
-               bool             quiet,        // don't print alignment summary at end
+               OutputQueue&     oq,            // output queue
+               const SamConfig<index_t>& samc, // settings & routines for SAM output
+               const StrList&   refnames,      // reference names
+               bool             quiet,         // don't print alignment summary at end
                SNPDB<index_t>*  snpdb = NULL,
                SpliceSiteDB*    ssdb = NULL) :
 		AlnSink<index_t>(
@@ -1430,9 +1430,9 @@ protected:
 		const Mapq& mapq,          // MAPQ calculator
 		const Scoring& sc);        // scoring scheme
 
-	const SamConfig& samc_;    // settings & routines for SAM output
-	BTDnaString      dseq_;    // buffer for decoded read sequence
-	BTString         dqual_;   // buffer for decoded quality sequence
+	const SamConfig<index_t>& samc_;    // settings & routines for SAM output
+	BTDnaString               dseq_;    // buffer for decoded read sequence
+	BTString                  dqual_;   // buffer for decoded quality sequence
 };
 
 static inline std::ostream& printPct(
@@ -3014,7 +3014,8 @@ void AlnSinkSam<index_t>::appendMate(
 								   ssm,         // seed alignment summary
 								   prm,         // per-read metrics
 								   sc,          // scoring scheme
-								   mapqInps);   // inputs to MAPQ calculation
+								   mapqInps,    // inputs to MAPQ calculation
+                                   this->snpdb_);
 	} else {
 		samc_.printEmptyOptFlags(
 								 o,           // output buffer

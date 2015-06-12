@@ -406,8 +406,6 @@ struct SharedTempVars {
     EList<int64_t> temp_scores2;
     ASSERT_ONLY(SStringExpandable<uint32_t> destU32);
     
-    EList<SNP<index_t> > snps;
-    
     ASSERT_ONLY(BTDnaString editstr);
     ASSERT_ONLY(BTDnaString partialseq);
     ASSERT_ONLY(BTDnaString refstr);
@@ -1857,23 +1855,27 @@ bool GenomeHit<index_t>::adjustWithSNP(
     SStringExpandable<char>& raw_refbuf = _sharedVars->raw_refbuf;
     ASSERT_ONLY(SStringExpandable<uint32_t>& destU32 = _sharedVars->destU32);
     
-    EList<SNP<index_t> >& snps = _sharedVars->snps;
-    snps.clear();
+    const EList<SNP<index_t> >& snps = snpdb.snps();
+    pair<index_t, index_t> snp_range;
     {
         SNP<index_t> snp;
         snp.pos = _joinedOff;
         if(snp.pos >= 20) snp.pos -= 20;
         else snp.pos = 0;
         
-        index_t lower = snpdb.snps().bsearchLoBound(snp);
-        for(index_t i = lower; i < snpdb.snps().size(); i++) {
-            if(snpdb.snps()[i].pos > _joinedOff + this->_len + 20) break;
-            snps.push_back(snpdb.snps()[i]);
+        snp_range.first = snp_range.second = snpdb.snps().bsearchLoBound(snp);
+        for(snp_range.second = snp_range.first; snp_range.second < snps.size(); snp_range.second++) {
+            if(snps[snp_range.second].pos > _joinedOff + this->_len + 20) break;
         }
     }
     
+    if(snp_range.first >= snp_range.second) {
+        assert_eq(snp_range.first, snp_range.second);
+        return true;
+    }
+    
     const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
-    index_t reflen = ref.approxLen(_tidx);
+    // index_t reflen = ref.approxLen(_tidx);
     raw_refbuf.resize(rdlen + 16);
     int off = ref.getStretch(
                              reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
@@ -1883,6 +1885,22 @@ bool GenomeHit<index_t>::adjustWithSNP(
                              ASSERT_ONLY(, destU32));
     assert_lt(off, 16);
     char *refbuf = raw_refbuf.wbuf() + off;
+    cout << "ref: ";
+    index_t ref_i = 0, rd_i = 0;
+    for(; ref_i < this->_len; ref_i++, rd_i++) {
+        int ref_bp = refbuf[ref_i];
+        int rd_bp = seq[this->_rdoff + rd_i];
+        if(ref_bp != rd_bp) {
+            Edit e(
+                   rd_i,
+                   "ACGTN"[ref_bp],
+                   "ACGTN"[rd_bp],
+                   EDIT_TYPE_MM,
+                   true, /* chars? */
+                   snp_range.first);
+            _edits->push_back(e);
+        }
+    }
     assert(repOk(rd, ref));
     
     return true;
@@ -2071,12 +2089,14 @@ int64_t GenomeHit<index_t>::calculateScore(
         const Edit& edit = (*_edits)[i];
         assert_lt(edit.pos, _len);
         if(edit.type == EDIT_TYPE_MM) {
-            int pen = sc.score(
-                               dna2col[edit.qchr] - '0',
-                               asc2dnamask[edit.chr],
-                               qual[this->_rdoff + edit.pos] - 33);
-            score += pen;
-            mm++;
+            if(edit.snpID == std::numeric_limits<uint32_t>::max()) {
+                int pen = sc.score(
+                                   dna2col[edit.qchr] - '0',
+                                   asc2dnamask[edit.chr],
+                                   qual[this->_rdoff + edit.pos] - 33);
+                score += pen;
+                mm++;
+            }
         } else if(edit.type == EDIT_TYPE_SPL) {
             // int left = toff_base + edit.pos - 1;
             // assert_geq(left, 0);
@@ -2135,10 +2155,12 @@ int64_t GenomeHit<index_t>::calculateScore(
                     }
                 }
 
-                if(edit.splDir != EDIT_SPL_UNKNOWN) {
-                    score -= sc.canSpl((int)edit.splLen);
-                } else {
-                    score -= sc.noncanSpl((int)edit.splLen);
+                if(edit.snpID == std::numeric_limits<uint32_t>::max()) {
+                    if(edit.splDir != EDIT_SPL_UNKNOWN) {
+                        score -= sc.canSpl((int)edit.splLen);
+                    } else {
+                        score -= sc.noncanSpl((int)edit.splLen);
+                    }
                 }
                 
                 // daehwan - for debugging purposes
@@ -2167,8 +2189,10 @@ int64_t GenomeHit<index_t>::calculateScore(
                (*_edits)[i-1].pos == edit.pos) {
                 open = false;
             }
-            if(open)    score -= sc.readGapOpen();
-            else        score -= sc.readGapExtend();
+            if(edit.snpID == std::numeric_limits<uint32_t>::max()) {
+                if(open)    score -= sc.readGapOpen();
+                else        score -= sc.readGapExtend();
+            }
             toff_base++;
         } else if(edit.type == EDIT_TYPE_REF_GAP) {
             bool open = true;
@@ -2177,8 +2201,10 @@ int64_t GenomeHit<index_t>::calculateScore(
                (*_edits)[i-1].pos + 1 == edit.pos) {
                 open = false;
             }
-            if(open)    score -= sc.refGapOpen();
-            else        score -= sc.refGapExtend();
+            if(edit.snpID == std::numeric_limits<uint32_t>::max()) {
+                if(open)    score -= sc.refGapOpen();
+                else        score -= sc.refGapExtend();
+            }
             assert_gt(toff_base, 0);
             toff_base--;
         }
@@ -3204,8 +3230,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     EList<Coord>& coords = _coords.front();
     
     // local search to find anchors
-    const HierGFM<index_t, local_index_t>* hierGFM = (const HierGFM<index_t, local_index_t>*)(&gfm);
-    const LocalGFM<local_index_t, index_t>* localGFM = hierGFM->getLocalGFM(tidx, toff);
+    const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
+    const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(tidx, toff);
     bool success = false, first = true;
     index_t count = 0;
     index_t max_hitlen = 0;
@@ -3213,8 +3239,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
         if(first) {
             first = false;
         } else {
-            localGFM = hierGFM->prevLocalGFM(localGFM);
-            if(localGFM == NULL || localGFM->empty()) break;
+            lGFM = hGFM->prevLocalGFM(lGFM);
+            if(lGFM == NULL || lGFM->empty()) break;
         }
         index_t hitoff = rdlen - 1;
         while(hitoff >= _minK_local - 1) {
@@ -3222,11 +3248,11 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             local_index_t top = (local_index_t)OFF_MASK, bot = (local_index_t)OFF_MASK;
             bool uniqueStop = false;
             index_t nelt = localGFMSearch(
-                                          localGFM,    // BWT index
-                                          ord,         // read to align
-                                          sc,          // scoring scheme
+                                          lGFM,    // BWT index
+                                          ord,     // read to align
+                                          sc,      // scoring scheme
                                           ofw,
-                                          false,       // searchfw,
+                                          false,   // searchfw,
                                           hitoff,
                                           hitlen,
                                           top,
@@ -3241,7 +3267,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                 coords.clear();
                 bool straddled = false;
                 getGenomeCoords_local(
-                                      *localGFM,
+                                      *lGFM,
                                       snpdb,
                                       ref,
                                       rnd,
