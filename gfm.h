@@ -626,6 +626,7 @@ public:
 
 	/// Construct an Ebwt from the given input file
 	GFM(const string& in,
+        SNPDB<index_t>* snpdb,
         int needEntireReverse,
         bool fw,
         int32_t overrideOffRate, // = -1,
@@ -679,7 +680,9 @@ public:
         }
 
         // Read SNPs
-        _snps.clear(); _snpnames.clear();
+        EList<SNP<index_t> >& snps = snpdb->snps();
+        EList<string>& snpnames = snpdb->snpnames();
+        snps.clear(); snpnames.clear();
         string in7Str = in + ".7." + gfm_ext;
         string in8Str = in + ".8." + gfm_ext;
         
@@ -692,11 +695,11 @@ public:
         readU32(in7, this->toBe());
         index_t numSnps = readIndex<index_t>(in7, this->toBe());
         while(!in7.eof()) {
-            _snps.expand();
-            _snps.back().read(in7, this->toBe());
-            if(_snps.size() == numSnps) break;
+            snps.expand();
+            snps.back().read(in7, this->toBe());
+            if(snps.size() == numSnps) break;
         }
-        assert_eq(_snps.size(), numSnps);
+        assert_eq(snps.size(), numSnps);
         in7.close();
         
         if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
@@ -706,13 +709,13 @@ public:
         }
         readU32(in8, this->toBe());
         numSnps = readIndex<index_t>(in8, this->toBe());
-        assert_eq(_snps.size(), numSnps);
+        assert_eq(snps.size(), numSnps);
         while(!in8.eof()) {
-            _snpnames.expand();
-            in8 >> _snpnames.back();
-            if(_snpnames.size() == numSnps) break;
+            snpnames.expand();
+            in8 >> snpnames.back();
+            if(snpnames.size() == numSnps) break;
         }
-        assert_eq(_snpnames.size(), numSnps);
+        assert_eq(snpnames.size(), numSnps);
         in8.close();
         
         assert(repOk());

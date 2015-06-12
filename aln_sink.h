@@ -28,6 +28,7 @@
 #include "simple_func.h"
 #include "outq.h"
 #include <utility>
+#include "snp.h"
 #include "splice_site.h"
 
 // Forward decl
@@ -599,14 +600,16 @@ class AlnSink {
 public:
 
 	explicit AlnSink(
-		OutputQueue& oq,
-		const StrList& refnames,
-		bool quiet,
-        SpliceSiteDB* ssdb = NULL) :
-		oq_(oq),
-		refnames_(refnames),
-		quiet_(quiet),
-        spliceSiteDB_(ssdb)
+                     OutputQueue& oq,
+                     const StrList& refnames,
+                     bool quiet,
+                     SNPDB<index_t>* snpdb = NULL,
+                     SpliceSiteDB* ssdb = NULL) :
+    oq_(oq),
+    refnames_(refnames),
+    quiet_(quiet),
+    snpdb_(snpdb),
+    spliceSiteDB_(ssdb)
 	{ }
 
 	/**
@@ -874,6 +877,7 @@ protected:
 	const StrList&     refnames_;     // reference names
 	bool               quiet_;        // true -> don't print alignment stats at the end
 	ReportingMetrics   met_;          // global repository of reporting metrics
+    SNPDB<index_t>*    snpdb_;
     SpliceSiteDB*      spliceSiteDB_; //
 };
 
@@ -1342,17 +1346,19 @@ class AlnSinkSam : public AlnSink<index_t> {
 public:
 
 	AlnSinkSam(
-		OutputQueue&     oq,           // output queue
-		const SamConfig& samc,         // settings & routines for SAM output
-		const StrList&   refnames,     // reference names
-		bool             quiet,        // don't print alignment summary at end
-        SpliceSiteDB*    ssdb = NULL) :
+               OutputQueue&     oq,           // output queue
+               const SamConfig& samc,         // settings & routines for SAM output
+               const StrList&   refnames,     // reference names
+               bool             quiet,        // don't print alignment summary at end
+               SNPDB<index_t>*  snpdb = NULL,
+               SpliceSiteDB*    ssdb = NULL) :
 		AlnSink<index_t>(
-			oq,
-			refnames,
-			quiet,
-            ssdb),
-		samc_(samc)
+                         oq,
+                         refnames,
+                         quiet,
+                         snpdb,
+                         ssdb),
+    samc_(samc)
 	{ }
 	
 	virtual ~AlnSinkSam() { }

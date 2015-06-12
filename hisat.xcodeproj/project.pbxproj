@@ -99,6 +99,7 @@
 		E85766711970545400D8AAFB /* btypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = btypes.h; sourceTree = "<group>"; };
 		E85F1AFA193501E000F85A12 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		E861E5A51B1B3C2200362002 /* gfm.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = gfm.cpp; sourceTree = "<group>"; };
+		E8645CE01B2B5EE00027075C /* snp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = snp.h; sourceTree = "<group>"; };
 		E88C30AA1B15E23800761CCB /* gfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gfm.h; sourceTree = "<group>"; };
 		E8B0DBE81934F7AA005ED9FA /* aligner_bt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_bt.h; sourceTree = "<group>"; };
 		E8B0DBE91934F7AA005ED9FA /* aligner_cache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_cache.h; sourceTree = "<group>"; };
@@ -223,7 +224,7 @@
 		E8B0DCAA1934F7C5005ED9FA /* NEWS */ = {isa = PBXFileReference; lastKnownFileType = text; path = NEWS; sourceTree = "<group>"; };
 		E8B0DCAC1934F7C5005ED9FA /* TUTORIAL */ = {isa = PBXFileReference; lastKnownFileType = text; path = TUTORIAL; sourceTree = "<group>"; };
 		E8B0DCAD1934F7C5005ED9FA /* VERSION */ = {isa = PBXFileReference; lastKnownFileType = text; path = VERSION; sourceTree = "<group>"; };
-		E8EE06DF1B15F1DE00E75FC3 /* hier_gfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hier_gfm.h; sourceTree = "<group>"; };
+		E8EE06DF1B15F1DE00E75FC3 /* hgfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hgfm.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -333,7 +334,7 @@
 				E88C30AA1B15E23800761CCB /* gfm.h */,
 				E8B0DC081934F7AA005ED9FA /* group_walk.h */,
 				E81BC0841980295300580916 /* hi_aligner.h */,
-				E8EE06DF1B15F1DE00E75FC3 /* hier_gfm.h */,
+				E8EE06DF1B15F1DE00E75FC3 /* hgfm.h */,
 				E8B0DC091934F7AA005ED9FA /* hier_idx_common.h */,
 				E8B0DC0B1934F7AA005ED9FA /* ival_list.h */,
 				E8B0DC0C1934F7AA005ED9FA /* limit.h */,
@@ -361,6 +362,7 @@
 				E8B0DC221934F7AA005ED9FA /* sequence_io.h */,
 				E8B0DC231934F7AA005ED9FA /* shmem.h */,
 				E8B0DC241934F7AA005ED9FA /* simple_func.h */,
+				E8645CE01B2B5EE00027075C /* snp.h */,
 				E819F68819F553B100E1BD32 /* splice_site_mem.h */,
 				E8B0DC251934F7AA005ED9FA /* splice_site.h */,
 				E8B0DC261934F7AA005ED9FA /* spliced_aligner.h */,

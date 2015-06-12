@@ -26,9 +26,10 @@
 
 #include "assert_helpers.h"
 #include "endian_swap.h"
-#include "hier_gfm.h"
+#include "hgfm.h"
 #include "reference.h"
 #include "ds.h"
+#include "snp.h"
 
 using namespace std;
 
@@ -333,8 +334,10 @@ static void print_index_summary(
 	// bool entireReverse = readEntireReverse(fname + ".rev")
     bool entireReverse = false;
     
+    SNPDB<index_t> snpdb;
 	GFM<index_t> gfm(
                      fname,
+                     &snpdb,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -385,9 +388,10 @@ static void driver(
 		print_index_summary<TIndexOffU>(adjustedEbwtFileBase, cout);
 	} else {
         // Initialize Ebwt object
+        SNPDB<TIndexOffU> snpdb;
 		HierGFM<TIndexOffU, uint16_t> gfm(
                                           adjustedEbwtFileBase,
-                                          false,                // index is colorspace
+                                          &snpdb,
                                           -1,                   // don't care about entire-reverse
                                           true,                 // index is for the forward direction
                                           -1,                   // offrate (-1 = index default)

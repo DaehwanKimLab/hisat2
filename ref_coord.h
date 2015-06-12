@@ -40,15 +40,16 @@ public:
 
 	Coord(const Coord& c) { init(c); }
 	
-	Coord(TRefId rf, TRefOff of, bool fw) { init(rf, of, fw); }
+	Coord(TRefId rf, TRefOff of, bool fw, TRefOff jof = 0) { init(rf, of, fw, jof); }
 
 	/**
 	 * Copy given fields into this Coord.
 	 */
-	void init(TRefId rf, TRefOff of, bool fw) {
+	void init(TRefId rf, TRefOff of, bool fw, TRefOff jof = 0) {
 		ref_ = rf;
 		off_ = of;
 		orient_ = (fw ? 1 : 0);
+        joinedOff_ = jof;
 	}
 
 	/**
@@ -58,6 +59,7 @@ public:
 		ref_ = c.ref_;
 		off_ = c.off_;
 		orient_ = c.orient_;
+        joinedOff_ = c.joinedOff_;
 	}
 	
 	/**
@@ -120,6 +122,7 @@ public:
 		ref_ = std::numeric_limits<TRefId>::max();
 		off_ = std::numeric_limits<TRefOff>::max();
 		orient_ = -1;
+        joinedOff_ = std::numeric_limits<TRefOff>::max();
 	}
 	
 	/**
@@ -171,9 +174,11 @@ public:
 	inline TRefId  ref()    const { return ref_; }
 	inline TRefOff off()    const { return off_; }
 	inline int     orient() const { return orient_; }
+    inline TRefOff joinedOff() const { return joinedOff_; }
 	
 	inline void setRef(TRefId  id)  { ref_ = id;  }
 	inline void setOff(TRefOff off) { off_ = off; }
+    inline void setJoinedOff(TRefOff joinedOff) { joinedOff_ = joinedOff; }
 
 	inline void adjustOff(TRefOff off) { off_ += off; }
 
@@ -182,6 +187,7 @@ protected:
 	TRefId  ref_;    // which reference?
 	TRefOff off_;    // 0-based offset into reference
 	int     orient_; // true -> Watson strand
+    TRefOff joinedOff_; // offset in a joined ref. sequence
 };
 
 std::ostream& operator<<(std::ostream& out, const Coord& c);

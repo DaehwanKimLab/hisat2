@@ -33,7 +33,7 @@
 #include "reference.h"
 #include "ds.h"
 #include "gfm.h"
-#include "hier_gfm.h"
+#include "hgfm.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.

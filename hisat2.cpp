@@ -30,7 +30,7 @@
 #include "alphabet.h"
 #include "assert_helpers.h"
 #include "endian_swap.h"
-#include "hier_gfm.h"
+#include "hgfm.h"
 #include "formats.h"
 #include "sequence_io.h"
 #include "tokenize.h"
@@ -1731,14 +1731,14 @@ createPatsrcFactory(PairedPatternSource& _patsrc, int tid) {
 typedef TIndexOffU index_t;
 typedef uint16_t local_index_t;
 static PairedPatternSource*              multiseed_patsrc;
-static HierGFM<index_t>*                 multiseed_gfmFw;
-static HierGFM<index_t>*                 multiseed_gfmBw;
+static HierGFM<index_t>*                 multiseed_gfm;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
 static AlignmentCache<index_t>*          multiseed_ca; // seed cache
 static AlnSink<index_t>*                 multiseed_msink;
 static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
+static SNPDB<index_t>*                   snpdb;
 
 /**
  * Metrics for measuring the work done by the outer read alignment
@@ -2870,11 +2870,10 @@ static inline void printEEScoreMsg(
  */
 static void multiseedSearchWorker_hisat2(void *vp) {
 	int tid = *((int*)vp);
-	assert(multiseed_gfmFw != NULL);
-	assert(multiseedMms == 0 || multiseed_gfmBw != NULL);
+	assert(multiseed_gfm != NULL);
+	assert(multiseedMms == 0);
 	PairedPatternSource&             patsrc   = *multiseed_patsrc;
-	const HierGFM<index_t>&          gfmFw    = *multiseed_gfmFw;
-	const HierGFM<index_t>&          gfmBw    = *multiseed_gfmBw;
+	const HierGFM<index_t>&          gfm      = *multiseed_gfm;
 	const Scoring&                   sc       = *multiseed_sc;
 	const BitPairReference&          ref      = *multiseed_refs;
 	AlignmentCache<index_t>&         scShared = *multiseed_ca;
@@ -2925,7 +2924,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                    secondary);    // secondary alignments
     
     SplicedAligner<index_t, local_index_t> splicedAligner(
-                                                          gfmFw,
+                                                          gfm,
                                                           minIntronLen,
                                                           maxIntronLen,
                                                           secondary,
@@ -3264,7 +3263,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     splicedAligner.initRead(rds[0], nofw[0], norc[0], minsc[0], maxpen[0], filt[1]);
                 }
                 if(filt[0] || filt[1]) {
-                    int ret = splicedAligner.go(sc, gfmFw, gfmBw, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
+                    int ret = splicedAligner.go(sc, gfm, *snpdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
                     MERGE_SW(sw);
                     // daehwan
                     size_t mate = 0;
@@ -3372,50 +3371,31 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 static void multiseedSearch(
 	Scoring& sc,
 	PairedPatternSource& patsrc,  // pattern source
-	AlnSink<index_t>& msink,             // hit sink
-	HierGFM<index_t>& gfmFw,                 // index of original text
-	HierGFM<index_t>& gfmBw,                 // index of mirror text
+	AlnSink<index_t>& msink,      // hit sink
+	HierGFM<index_t>& gfm,        // index of original text
     BitPairReference* refs,
 	OutFileBuf *metricsOfb)
 {
-    multiseed_patsrc = &patsrc;
-	multiseed_msink  = &msink;
-	multiseed_gfmFw  = &gfmFw;
-	multiseed_gfmBw  = &gfmBw;
-	multiseed_sc     = &sc;
-	multiseed_metricsOfb      = metricsOfb;
+    multiseed_patsrc       = &patsrc;
+	multiseed_msink        = &msink;
+	multiseed_gfm          = &gfm;
+	multiseed_sc           = &sc;
+	multiseed_metricsOfb   = metricsOfb;
 	multiseed_refs = refs;
 	AutoArray<tthread::thread*> threads(nthreads);
 	AutoArray<int> tids(nthreads);
 	{
 		// Load the other half of the index into memory
-		assert(!gfmFw.isInMemory());
+		assert(!gfm.isInMemory());
 		Timer _t(cerr, "Time loading forward index: ", timing);
-		gfmFw.loadIntoMemory(
-			-1, // not the reverse index
-			true,         // load SA samp? (yes, need forward index's SA samp)
-			true,         // load ftab (in forward index)
-			true,         // load rstarts (in forward index)
-			!noRefNames,  // load names?
-			startVerbose);
+		gfm.loadIntoMemory(
+                           -1, // not the reverse index
+                           true,         // load SA samp? (yes, need forward index's SA samp)
+                           true,         // load ftab (in forward index)
+                           true,         // load rstarts (in forward index)
+                           !noRefNames,  // load names?
+                           startVerbose);
 	}
-#if 0
-	if(multiseedMms > 0 || do1mmUpFront) {
-		// Load the other half of the index into memory
-		assert(!gfmBw.isInMemory());
-		Timer _t(cerr, "Time loading mirror index: ", timing);
-		gfmBw.loadIntoMemory(
-			0, // colorspace?
-			// It's bidirectional search, so we need the reverse to be
-			// constructed as the reverse of the concatenated strings.
-			1,
-			true,        // load SA samp in reverse index
-			true,         // yes, need ftab in reverse index
-			true,        // load rstarts in reverse index
-			!noRefNames,  // load names?
-			startVerbose);
-	}
-#endif
 	// Start the metrics thread
 	{
 		Timer _t(cerr, "Multiseed full-index search: ", timing);
@@ -3511,9 +3491,11 @@ static void driver(
 	if(gVerbose || startVerbose) {
 		cerr << "About to initialize fw GFM: "; logTime(cerr, true);
 	}
+    snpdb = new SNPDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
 	HierGFM<index_t, local_index_t> gfm(
 		adjIdxBase,
+        snpdb,
 	    -1,       // fw index
 	    true,     // index is for the forward direction
 	    /* overriding: */ offRate,
@@ -3529,33 +3511,6 @@ static void driver(
 	    startVerbose, // talkative during initialization
 	    false /*passMemExc*/,
 	    sanityCheck);
-	HierGFM<index_t, local_index_t>* gfmBw = NULL;
-#if 0
-	// We need the mirror index if mismatches are allowed
-	if(multiseedMms > 0 || do1mmUpFront) {
-		if(gVerbose || startVerbose) {
-			cerr << "About to initialize rev GFM: "; logTime(cerr, true);
-		}
-		gfmBw = new HierGFM<index_t, local_index_t>(
-			adjIdxBase + ".rev",
-			0,       // index is colorspace
-			1,       // TODO: maybe not
-		    false, // index is for the reverse direction
-		    /* overriding: */ offRate,
-			0, // amount to add to index offrate or <= 0 to do nothing
-		    useMm,    // whether to use memory-mapped files
-		    useShmem, // whether to use shared memory
-		    mmSweep,  // sweep memory-mapped files
-		    !noRefNames, // load names?
-			true,        // load SA sample?
-			true,        // load ftab?
-			true,        // load rstarts?
-		    gVerbose,    // whether to be talkative
-		    startVerbose, // talkative during initialization
-		    false /*passMemExc*/,
-		    sanityCheck);
-	}
-#endif
 	if(sanityCheck && !os.empty()) {
 		// Sanity check number of patterns and pattern lengths in GFM
 		// against original strings
@@ -3717,11 +3672,12 @@ static void driver(
 		switch(outType) {
 			case OUTPUT_SAM: {
 				mssink = new AlnSinkSam<index_t>(
-					oq,           // output queue
-					samc,         // settings & routines for SAM output
-					refnames,     // reference names
-					gQuiet,       // don't print alignment summary at end
-                    ssdb);
+                                                 oq,           // output queue
+                                                 samc,         // settings & routines for SAM output
+                                                 refnames,     // reference names
+                                                 gQuiet,       // don't print alignment summary at end
+                                                 snpdb,
+                                                 ssdb);
 				if(!samNoHead) {
 					bool printHd = true, printSq = true;
 					BTString buf;
@@ -3750,15 +3706,11 @@ static void driver(
 			*patsrc, // pattern source
 			*mssink, // hit sink
 			gfm,     // BWT
-			*gfmBw,  // BWT'
             refs.get(),
 			metricsOfb);
 		// Evict any loaded indexes from memory
 		if(gfm.isInMemory()) {
 			gfm.evictFromMemory();
-		}
-		if(gfmBw != NULL) {
-			delete gfmBw;
 		}
 		if(!gQuiet && !seedSumm) {
 			size_t repThresh = mhits;
@@ -3785,6 +3737,7 @@ static void driver(
 		assert_eq(oq.numStarted(), oq.numFlushed());
 		delete patsrc;
 		delete mssink;
+        delete snpdb;
         delete ssdb;
 		delete metricsOfb;
 		if(fout != NULL) {

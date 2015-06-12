@@ -37,6 +37,7 @@ class LocalGFM : public GFM<index_t> {
 public:
 	/// Construct an Ebwt from the given input file
 	LocalGFM(const string& in,
+             SNPDB<index_t>* snpdb,
 			  FILE *in5,
 			  FILE *in6,
 			  char *mmFile5,
@@ -64,6 +65,7 @@ public:
 			  bool passMemExc, // = false,
 			  bool sanityCheck) : // = false) :
 	GFM<index_t>(in,
+                 snpdb,
                  needEntireReverse,
                  fw,
                  overrideOffRate,
@@ -1075,6 +1077,7 @@ class HierGFM : public GFM<index_t> {
 public:
 	/// Construct an Ebwt from the given input file
 	HierGFM(const string& in,
+            SNPDB<index_t>* snpdb,
             int needEntireReverse,
             bool fw,
             int32_t overrideOffRate, // = -1,
@@ -1092,6 +1095,7 @@ public:
             bool sanityCheck, // = false
             bool skipLoading = false) :
     GFM<index_t>(in,
+                 snpdb,
                  needEntireReverse,
                  fw,
                  overrideOffRate,
@@ -1826,6 +1830,7 @@ void HierGFM<index_t, local_index_t>::readIntoMemory(
 	string base = "";
 	for(size_t i = 0; i < _nlocalGFMs; i++) {
 		LocalGFM<local_index_t, index_t> *localGFM = new LocalGFM<local_index_t, index_t>(base,
+                                                                                          NULL,
                                                                                           _in5,
                                                                                           _in6,
                                                                                           mmFile5_,

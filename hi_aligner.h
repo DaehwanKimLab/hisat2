@@ -406,6 +406,8 @@ struct SharedTempVars {
     EList<int64_t> temp_scores2;
     ASSERT_ONLY(SStringExpandable<uint32_t> destU32);
     
+    EList<SNP<index_t> > snps;
+    
     ASSERT_ONLY(BTDnaString editstr);
     ASSERT_ONLY(BTDnaString partialseq);
     ASSERT_ONLY(BTDnaString refstr);
@@ -425,12 +427,13 @@ struct GenomeHit {
 	
 	GenomeHit() :
     _fw(false),
-    _rdoff((index_t)OFF_MASK),
-    _len((index_t)OFF_MASK),
+    _rdoff((index_t)INDEX_MAX),
+    _len((index_t)INDEX_MAX),
     _trim5(0),
     _trim3(0),
-    _tidx((index_t)OFF_MASK),
-    _toff((index_t)OFF_MASK),
+    _tidx((index_t)INDEX_MAX),
+    _toff((index_t)INDEX_MAX),
+    _joinedOff((index_t)INDEX_MAX),
     _edits(NULL),
     _score(MIN_I64),
     _hitcount(1),
@@ -440,18 +443,8 @@ struct GenomeHit {
     }
     
     GenomeHit(const GenomeHit& otherHit) :
-    _fw(false),
-    _rdoff((index_t)OFF_MASK),
-    _len((index_t)OFF_MASK),
-    _trim5(0),
-    _trim3(0),
-    _tidx((index_t)OFF_MASK),
-    _toff((index_t)OFF_MASK),
-    _edits(NULL),
-    _score(MIN_I64),
     _hitcount(1),
-    _edits_node(NULL),
-    _sharedVars(NULL)
+    _edits_node(NULL)
     {
         init(otherHit._fw,
              otherHit._rdoff,
@@ -460,6 +453,7 @@ struct GenomeHit {
              otherHit._trim3,
              otherHit._tidx,
              otherHit._toff,
+             otherHit._joinedOff,
              *(otherHit._sharedVars),
              otherHit._edits,
              otherHit._score,
@@ -475,6 +469,7 @@ struct GenomeHit {
              otherHit._trim3,
              otherHit._tidx,
              otherHit._toff,
+             otherHit._joinedOff,
              *(otherHit._sharedVars),
              otherHit._edits,
              otherHit._score,
@@ -502,6 +497,7 @@ struct GenomeHit {
               index_t                   trim3,
               index_t                   tidx,
               index_t                   toff,
+              index_t                   joinedOff,
               SharedTempVars<index_t>&  sharedVars,
               EList<Edit>*              edits = NULL,
               int64_t                   score = 0,
@@ -514,6 +510,7 @@ struct GenomeHit {
         _trim3 = trim3;
         _tidx = tidx;
         _toff = toff;
+        _joinedOff = joinedOff;
 		_score = score;
         _splicescore = splicescore;
         
@@ -585,6 +582,15 @@ struct GenomeHit {
                 index_t&                leftext,
                 index_t&                rightext,
                 index_t                 mm = 0);
+    
+    /**
+     * Adjust alignment with respect to SNPs, usually updating Edits
+     *
+     */
+    bool adjustWithSNP(
+                       const Read&             rd,
+                       const SNPDB<index_t>&   snpdb,
+                       const BitPairReference& ref);
     
     /**
      * For alignment involving indel, move the indels
@@ -915,6 +921,7 @@ public:
     
     index_t         _tidx;
     index_t         _toff;
+    index_t         _joinedOff;
 	EList<Edit>*    _edits;
     int64_t         _score;
     double          _splicescore;
@@ -1285,104 +1292,6 @@ bool GenomeHit<index_t>::combineWith(
                     }
                 }
             }
-            // daehwan - do not allow indels near splice sites
-#if 0
-            if(maxscore < -sc.canSpl() - min<int64_t>(sc.readGapOpen(), sc.refGapOpen())) {
-                int j1_start = 0, j2_start = len - 1;
-                for(int i = 0; i < (int)len + this_ref_ext - 2; i++) {
-                    assert_lt(i + 2, (int)len + this_ref_ext);
-                    char donor = refbuf[i + 1] << 4 | refbuf[i + 2];
-                    bool donor_canonical = (donor == GT || donor == AGrc);
-                    if(!donor_canonical) continue;
-                    int64_t remainsc2 = max<int64_t>(remainsc, maxscore);
-                    int temp_read_gaps = sc.maxReadGaps(remainsc2 + sc.canSpl(), rdlen);
-                    int temp_ref_gaps = sc.maxRefGaps(remainsc2 + sc.canSpl(), rdlen);
-                    for(int gap_off = -temp_read_gaps; gap_off <= temp_ref_gaps; gap_off++) {
-                        if(gap_off == 0) continue;
-                        int i2 = i + 1 + gap_off;
-                        if(i2 - 2 < -other_ref_ext || i2 >= (int)len) continue;
-                        char acceptor = refbuf2[i2 - 2] << 4 | refbuf2[i2 - 1];
-                        bool GTAG = (donor == GT && acceptor == AG) || (donor == AGrc && acceptor == GTrc);
-                        bool canonical = GTAG;
-                        if(!canonical) continue;
-                        int rd_gap_off = -min<int>(gap_off, 0);
-                        int ref_gap_off = max<int>(gap_off, 0);
-                        int64_t temp_score = (canonical ? -sc.canSpl() : -sc.noncanSpl());
-                        if(rd_gap_off > 0) {
-                            temp_score = -(sc.readGapOpen() + sc.readGapExtend() * (rd_gap_off - 1));
-                        } else if(ref_gap_off > 0) {
-                            temp_score = -(sc.refGapOpen() + sc.refGapExtend() * (ref_gap_off - 1));
-                        }
-                        if(temp_score < remainsc2) continue;
-                        int j;
-                        for(j = j1_start; j < (int)len; j++) {
-                            int rdc_off = this_rdoff + j;
-                            assert_lt(rdc_off, (int)rdlen);
-                            int rdc = seq[rdc_off];
-                            int qv = qual[rdc_off];
-                            int rfc = (j <= i ? refbuf[j] : refbuf2[j + ref_gap_off - rd_gap_off]);
-                            if((int)j > 0) {
-                                temp_scores[j] = temp_scores[j-1];
-                            } else {
-                                temp_scores[j] = 0;
-                            }
-                            if(rdc != rfc) {
-                                temp_scores[j] += sc.score(rdc, 1 << rfc, qv - 33);
-                            }
-                            if(temp_scores[j] + temp_score < remainsc2) {
-                                break;
-                            }
-                        }
-                        j1_start = min<int>(i, j);
-                        int j_limit = min<int>(j, len);
-                        int j2;
-                        for(j2 = max<int>(i2, j2_start); j2 >= 0; j2--) {
-                            int rdc_off = this_rdoff + j2;
-                            assert_lt(rdc_off, (int)rdlen);
-                            int rdc = seq[rdc_off];
-                            int qv = qual[rdc_off];
-                            int rfc = (j2 >= i2 ? refbuf2[j2] : refbuf[j2 - ref_gap_off + rd_gap_off]);
-                            if((index_t)(j2 + 1) < len) {
-                                temp_scores2[j2] = temp_scores2[j2+1];
-                            } else {
-                                temp_scores2[j2] = 0;
-                            }
-                            if(rdc != rfc) {
-                                temp_scores2[j2] += sc.score(rdc, 1 << rfc, qv - 33);
-                            }
-                            if(temp_scores2[j2] + temp_score < remainsc2) {
-                                break;
-                            }
-                        }
-                        j2_start = max<int>(i2, j2) - 1;
-                        int j2_limit = (j2 < ref_gap_off ? 0 : j2 - ref_gap_off);
-                        assert_geq(j2_limit, 0);
-                        int64_t max_gap_score = MIN_I64;
-                        index_t max_gap_j = (index_t)OFF_MASK;
-                        for(j = j2_limit, j2 = j2_limit + 1 + ref_gap_off;
-                            j < j_limit && j2 < (int)len;
-                            j++, j2++) {
-                            int64_t temp_gap_score = temp_scores[j] + temp_scores2[j2];
-                            if(max_gap_score < temp_gap_score) {
-                                max_gap_score = temp_gap_score;
-                                max_gap_j = j;
-                            }
-                        }
-                        if(max_gap_j == (index_t)OFF_MASK) continue;
-                        temp_score += max_gap_score;
-                        index_t temp_maxscorei = ((int)max_gap_j < i ? i + ref_gap_off - rd_gap_off : i);
-                        if(temp_maxscorei <= 0 || temp_maxscorei >= len - 1) continue;
-                        if(maxscore < temp_score) {
-                            maxscore = temp_score;
-                            maxscorei = temp_maxscorei;
-                            splice_gap_maxscorei = max_gap_j;
-                            splice_gap_off = gap_off;
-                            maxspldir = (donor == GT ? EDIT_SPL_FW : EDIT_SPL_RC);
-                        }
-                    }
-                }
-            }
-#endif
         } else {
             // discover an insertion or a deletion
             assert(ins || del);
@@ -1932,6 +1841,54 @@ bool GenomeHit<index_t>::extend(
 }
 
 /**
+ * Adjust alignment with respect to SNPs, usually updating Edits
+ *
+ */
+template <typename index_t>
+bool GenomeHit<index_t>::adjustWithSNP(
+                                       const Read&             rd,
+                                       const SNPDB<index_t>&   snpdb,
+                                       const BitPairReference& ref)
+{
+    assert_lt(this->_tidx, ref.numRefs());
+    index_t rdlen = (index_t)rd.length();
+    
+    assert(_sharedVars != NULL);
+    SStringExpandable<char>& raw_refbuf = _sharedVars->raw_refbuf;
+    ASSERT_ONLY(SStringExpandable<uint32_t>& destU32 = _sharedVars->destU32);
+    
+    EList<SNP<index_t> >& snps = _sharedVars->snps;
+    snps.clear();
+    {
+        SNP<index_t> snp;
+        snp.pos = _joinedOff;
+        if(snp.pos >= 20) snp.pos -= 20;
+        else snp.pos = 0;
+        
+        index_t lower = snpdb.snps().bsearchLoBound(snp);
+        for(index_t i = lower; i < snpdb.snps().size(); i++) {
+            if(snpdb.snps()[i].pos > _joinedOff + this->_len + 20) break;
+            snps.push_back(snpdb.snps()[i]);
+        }
+    }
+    
+    const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
+    index_t reflen = ref.approxLen(_tidx);
+    raw_refbuf.resize(rdlen + 16);
+    int off = ref.getStretch(
+                             reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
+                             (size_t)_tidx,
+                             (size_t)_toff,
+                             this->_len
+                             ASSERT_ONLY(, destU32));
+    assert_lt(off, 16);
+    char *refbuf = raw_refbuf.wbuf() + off;
+    assert(repOk(rd, ref));
+    
+    return true;
+}
+
+/**
  * For alignment involving indel, move the indels
  * to the left most possible position
  */
@@ -2080,9 +2037,7 @@ bool GenomeHit<index_t>::repOk(const Read& rd, const BitPairReference& ref)
         cerr << "    decoded nucs: " << partialseq << endl;
         cerr << "     edited nucs: " << editstr << endl;
         cerr << "  reference nucs: " << refstr << endl;
-        
-        // daehwan - for debugging purposes
-        // assert(0);
+        assert(0);
     }
 
     return true;
@@ -2409,8 +2364,8 @@ public:
     virtual
     int go(
            const Scoring&           sc,
-           const GFM<index_t>&      gfmFw,
-           const GFM<index_t>&      gfmBw,
+           const GFM<index_t>&      gfm,
+           const SNPDB<index_t>&    snpdb,
            const BitPairReference&  ref,
            SwAligner&               swa,
            SpliceSiteDB&            ssdb,
@@ -2427,9 +2382,9 @@ public:
         // given read and its reverse complement
         //  (and mate and the reverse complement of mate in case of pair alignment),
         // pick up one with best partial alignment
-        while(nextBWT(sc, gfmFw, gfmBw, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
+        while(nextBWT(sc, gfm, snpdb, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
             // given the partial alignment, try to extend it to full alignments
-        	found[rdi] = align(sc, gfmFw, gfmBw, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
+        	found[rdi] = align(sc, gfm, snpdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
             if(!found[0] && !found[1]) {
                 break;
             }
@@ -2437,7 +2392,7 @@ public:
             // try to combine this alignment with some of mate alignments
             // to produce pair alignment
             if(this->_paired) {
-                pairReads(sc, gfmFw, gfmBw, ref, wlm, prm, him, rnd, sink);
+                pairReads(sc, gfm, snpdb, ref, wlm, prm, him, rnd, sink);
                 // if(sink.bestPair() >= _minsc[0] + _minsc[1]) break;
             }
         }
@@ -2458,8 +2413,8 @@ public:
                         bool fw = (res.orient() == 1);
                         mate_found |= alignMate(
                                                 sc,
-                                                gfmFw,
-                                                gfmBw,
+                                                gfm,
+                                                snpdb,
                                                 ref,
                                                 swa,
                                                 ssdb,
@@ -2477,7 +2432,7 @@ public:
                 }
                 
                 if(mate_found) {
-                    pairReads(sc, gfmFw, gfmBw, ref, wlm, prm, him, rnd, sink);
+                    pairReads(sc, gfm, snpdb, ref, wlm, prm, him, rnd, sink);
                 }
             }
         }
@@ -2492,8 +2447,8 @@ public:
     virtual
     bool nextBWT(
                  const Scoring&          sc,
-                 const GFM<index_t>&     gfmFw,
-                 const GFM<index_t>&     gfmBw,
+                 const GFM<index_t>&     gfm,
+                 const SNPDB<index_t>&   snpdb,
                  const BitPairReference& ref,
                  index_t&                rdi,
                  bool&                   fw,
@@ -2569,7 +2524,7 @@ public:
             // stops when it is uniquelly mapped with at least 28bp or
             // it may involve processed pseudogene
             partialSearch(
-                          gfmFw,
+                          gfm,
                           *_rds[rdi],
                           sc,
                           sink.reportingParams(),
@@ -2605,8 +2560,8 @@ public:
     virtual
     bool align(
                const Scoring&                   sc,
-               const GFM<index_t>&              gfmFw,
-               const GFM<index_t>&              gfmBw,
+               const GFM<index_t>&              gfm,
+               const SNPDB<index_t>&            snpdb,
                const BitPairReference&          ref,
                SwAligner&                       swa,
                SpliceSiteDB&                    ssdb,
@@ -2626,8 +2581,8 @@ public:
     virtual
     bool alignMate(
                    const Scoring&                   sc,
-                   const GFM<index_t>&              gfmFw,
-                   const GFM<index_t>&              gfmBw,
+                   const GFM<index_t>&              gfm,
+                   const SNPDB<index_t>&            snpdb,
                    const BitPairReference&          ref,
                    SwAligner&                       swa,
                    SpliceSiteDB&                    ssdb,
@@ -2650,8 +2605,8 @@ public:
     virtual
     void hybridSearch(
                       const Scoring&                     sc,
-                      const GFM<index_t>&                gfmFw,
-                      const GFM<index_t>&                gfmBw,
+                      const GFM<index_t>&                gfm,
+                      const SNPDB<index_t>&              snpdb,
                       const BitPairReference&            ref,
                       SwAligner&                         swa,
                       SpliceSiteDB&                      ssdb,
@@ -2673,8 +2628,8 @@ public:
     virtual
     int64_t hybridSearch_recur(
                                const Scoring&                   sc,
-                               const GFM<index_t>&              gfmFw,
-                               const GFM<index_t>&              gfmBw,
+                               const GFM<index_t>&              gfm,
+                               const SNPDB<index_t>&            snpdb,
                                const BitPairReference&          ref,
                                SwAligner&                       swa,
                                SpliceSiteDB&                    ssdb,
@@ -2727,7 +2682,7 @@ public:
      * Align a part of a read without any edits
 	 */
     size_t partialSearch(
-                         const GFM<index_t>&     gfm,    // BWT index
+                         const GFM<index_t>&     gfm,      // BWT index
                          const Read&             read,    // read to align
                          const Scoring&          sc,      // scoring scheme
                          const ReportingParams&  rp,
@@ -2760,8 +2715,7 @@ public:
      * Local FM index search
 	 */
 	size_t localGFMSearch(
-                          const LocalGFM<local_index_t, index_t>*  gfmFw,  // BWT index
-                          const LocalGFM<local_index_t, index_t>*  gfmBw,  // BWT index
+                          const LocalGFM<local_index_t, index_t>*  gfm,  // BWT index
                           const Read&                      read,    // read to align
                           const Scoring&                   sc,      // scoring scheme
                           bool                             fw,
@@ -2779,8 +2733,7 @@ public:
      * Local FM index search
 	 */
 	size_t localGFMSearch_reverse(
-                                  const LocalGFM<local_index_t, index_t>*  gfmFw,  // BWT index
-                                  const LocalGFM<local_index_t, index_t>*  gfmBw,  // BWT index
+                                  const LocalGFM<local_index_t, index_t>*  gfm,  // BWT index
                                   const Read&                      read,    // read to align
                                   const Scoring&                   sc,      // scoring scheme
                                   bool                             fw,
@@ -2799,6 +2752,7 @@ public:
      **/
     bool getGenomeCoords(
                          const GFM<index_t>&        gfm,
+                         const SNPDB<index_t>&      snpdb,
                          const BitPairReference&    ref,
                          RandomSource&              rnd,
                          index_t                    top,
@@ -2822,6 +2776,7 @@ public:
      **/
     bool getGenomeCoords_local(
                                const GFM<local_index_t>&    gfm,
+                               const SNPDB<index_t>&        snpdb,
                                const BitPairReference&      ref,
                                RandomSource&                rnd,
                                local_index_t                top,
@@ -2844,6 +2799,7 @@ public:
      */
     index_t getAnchorHits(
                           const GFM<index_t>&               gfm,
+                          const SNPDB<index_t>&             snpdb,
                           const BitPairReference&           ref,
                           RandomSource&                     rnd,
                           index_t                           rdi,
@@ -2899,6 +2855,7 @@ public:
             bool straddled = false;
             getGenomeCoords(
                             gfm,
+                            snpdb,
                             ref,
                             rnd,
                             partialHit._top,
@@ -2951,7 +2908,12 @@ public:
                                            0, // trim3
                                            coord.ref(),
                                            coord.off(),
+                                           coord.joinedOff(),
                                            _sharedVars);
+                    bool success = genomeHits.back().adjustWithSNP(*_rds[rdi], snpdb, ref);
+                    if(!success) {
+                        genomeHits.pop_back();
+                    }
                 }
                 if(partialHit._hit_type == CANDIDATE_HIT && genomeHits.size() >= maxGenomeHitSize) break;
             }
@@ -2962,8 +2924,8 @@ public:
     
     bool pairReads(
                    const Scoring&          sc,
-                   const GFM<index_t>&     gfmFw,
-                   const GFM<index_t>&     gfmBw,
+                   const GFM<index_t>&     gfm,
+                   const SNPDB<index_t>&   snpdb,
                    const BitPairReference& ref,
                    WalkMetrics&            wlm,
                    PerReadMetrics&         prm,
@@ -2977,6 +2939,7 @@ public:
     bool reportHit(
                    const Scoring&                   sc,
                    const GFM<index_t>&              gfm,
+                   const SNPDB<index_t>&            snpdb,
                    const BitPairReference&          ref,
                    const SpliceSiteDB&              ssdb,
                    AlnSinkWrap<index_t>&            sink,
@@ -3119,8 +3082,8 @@ protected:
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::align(
                                                const Scoring&                   sc,
-                                               const GFM<index_t>&              gfmFw,
-                                               const GFM<index_t>&              gfmBw,
+                                               const GFM<index_t>&              gfm,
+                                               const SNPDB<index_t>&            snpdb,
                                                const BitPairReference&          ref,
                                                SwAligner&                       swa,
                                                SpliceSiteDB&                    ssdb,
@@ -3162,7 +3125,8 @@ bool HI_Aligner<index_t, local_index_t>::align(
     // choose candidate partial alignments for further alignment
     const index_t maxsize = rp.khits;
     index_t numHits = getAnchorHits(
-                                    gfmFw,
+                                    gfm,
+                                    snpdb,
                                     ref,
                                     rnd,
                                     rdi,
@@ -3184,8 +3148,8 @@ bool HI_Aligner<index_t, local_index_t>::align(
     // local search, extension, and (less often) global search
     hybridSearch(
                  sc,
-                 gfmFw,
-                 gfmBw,
+                 gfm,
+                 snpdb,
                  ref,
                  swa,
                  ssdb,
@@ -3209,8 +3173,8 @@ bool HI_Aligner<index_t, local_index_t>::align(
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                    const Scoring&                   sc,
-                                                   const GFM<index_t>&              gfmFw,
-                                                   const GFM<index_t>&              gfmBw,
+                                                   const GFM<index_t>&              gfm,
+                                                   const SNPDB<index_t>&            snpdb,
                                                    const BitPairReference&          ref,
                                                    SwAligner&                       swa,
                                                    SpliceSiteDB&                    ssdb,
@@ -3240,7 +3204,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     EList<Coord>& coords = _coords.front();
     
     // local search to find anchors
-    const HierGFM<index_t, local_index_t>* hierGFM = (const HierGFM<index_t, local_index_t>*)(&gfmFw);
+    const HierGFM<index_t, local_index_t>* hierGFM = (const HierGFM<index_t, local_index_t>*)(&gfm);
     const LocalGFM<local_index_t, index_t>* localGFM = hierGFM->getLocalGFM(tidx, toff);
     bool success = false, first = true;
     index_t count = 0;
@@ -3259,7 +3223,6 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             bool uniqueStop = false;
             index_t nelt = localGFMSearch(
                                           localGFM,    // BWT index
-                                          NULL,        // BWT index
                                           ord,         // read to align
                                           sc,          // scoring scheme
                                           ofw,
@@ -3279,6 +3242,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                 bool straddled = false;
                 getGenomeCoords_local(
                                       *localGFM,
+                                      snpdb,
                                       ref,
                                       rnd,
                                       top,
@@ -3307,6 +3271,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                             0, // trim3
                                             coord.ref(),
                                             coord.off(),
+                                            coord.joinedOff(),
                                             _sharedVars);
                 }
                 max_hitlen = hitlen;
@@ -3349,8 +3314,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                          rightext);
         hybridSearch_recur(
                            sc,
-                           gfmFw,
-                           gfmBw,
+                           gfm,
+                           snpdb,
                            ref,
                            swa,
                            ssdb,
@@ -3376,6 +3341,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
                                                          const GFM<index_t>&        gfm,
+                                                         const SNPDB<index_t>&      snpdb,
                                                          const BitPairReference&    ref,
                                                          RandomSource&              rnd,
                                                          index_t                    top,
@@ -3438,7 +3404,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
         
         straddled |= straddled2;
         
-        if(tidx == (index_t)OFF_MASK) {
+        if(tidx == (index_t)INDEX_MAX) {
             // The seed hit straddled a reference boundary so the seed
             // hit isn't valid
             return false;
@@ -3448,7 +3414,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
         
         // Coordinate of the seed hit w/r/t the pasted reference string
         coords.expand();
-        coords.back().init(global_tidx, (int64_t)global_toff, fw);
+        coords.back().init(global_tidx, (int64_t)global_toff, fw, wr.toff);
     }
     
     return true;
@@ -3460,6 +3426,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
                                                                const GFM<local_index_t>&    gfm,
+                                                               const SNPDB<index_t>&        snpdb,
                                                                const BitPairReference&      ref,
                                                                RandomSource&                rnd,
                                                                local_index_t                top,
@@ -3548,8 +3515,8 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
 template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::pairReads(
                                                    const Scoring&          sc,
-                                                   const GFM<index_t>&     gfmFw,
-                                                   const GFM<index_t>&     gfmBw,
+                                                   const GFM<index_t>&     gfm,
+                                                   const SNPDB<index_t>&   snpdb,
                                                    const BitPairReference& ref,
                                                    WalkMetrics&            wlm,
                                                    PerReadMetrics&         prm,
@@ -3613,6 +3580,7 @@ template <typename index_t, typename local_index_t>
 bool HI_Aligner<index_t, local_index_t>::reportHit(
                                                    const Scoring&                   sc,
                                                    const GFM<index_t>&              gfm,
+                                                   const SNPDB<index_t>&            snpdb,
                                                    const BitPairReference&          ref,
                                                    const SpliceSiteDB&              ssdb,
                                                    AlnSinkWrap<index_t>&            sink,
@@ -4209,8 +4177,7 @@ size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
  **/
 template <typename index_t, typename local_index_t>
 size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
-                                                          const LocalGFM<local_index_t, index_t>*  gfmFw,  // BWT index
-                                                          const LocalGFM<local_index_t, index_t>*  gfmBw,  // BWT index
+                                                          const LocalGFM<local_index_t, index_t>*  gfm_,  // BWT index
                                                           const Read&                      read,    // read to align
                                                           const Scoring&                   sc,      // scoring scheme
                                                           bool                             fw,
@@ -4224,16 +4191,10 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
                                                           local_index_t                    minUniqueLen,
                                                           local_index_t                    maxHitLen)
 {
-#ifndef NDEBUG
-    if(searchfw) {
-        assert(gfmBw != NULL);
-    } else {
-        assert(gfmFw != NULL);
-    }
-#endif
+    assert(gfm_ != NULL);
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
-    const LocalGFM<local_index_t, index_t>& gfm = *(searchfw ? gfmBw : gfmFw);
+    const LocalGFM<local_index_t, index_t>& gfm = *gfm_;
 	const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
 	SideLocus<local_index_t> tloc, bloc;
 	const local_index_t len = (local_index_t)read.length();
@@ -4327,8 +4288,7 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
  **/
 template <typename index_t, typename local_index_t>
 size_t HI_Aligner<index_t, local_index_t>::localGFMSearch_reverse(
-                                                                  const LocalGFM<local_index_t, index_t>*  gfmFw,  // BWT index
-                                                                  const LocalGFM<local_index_t, index_t>*  gfmBw,  // BWT index
+                                                                  const LocalGFM<local_index_t, index_t>*  gfm_,  // BWT index
                                                                   const Read&                      read,    // read to align
                                                                   const Scoring&                   sc,      // scoring scheme
                                                                   bool                             fw,
@@ -4342,16 +4302,10 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch_reverse(
                                                                   local_index_t                    minUniqueLen,
                                                                   local_index_t                    maxHitLen)
 {
-#ifndef NDEBUG
-    if(searchfw) {
-        assert(gfmBw != NULL);
-    } else {
-        assert(gfmFw != NULL);
-    }
-#endif
+    assert(gfm_ != NULL);
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
-    const LocalGFM<local_index_t, index_t>& gfm = *(searchfw ? gfmBw : gfmFw);
+    const LocalGFM<local_index_t, index_t>& gfm = *gfm_;
 	const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
 	SideLocus<local_index_t> tloc, bloc;
 	const local_index_t len = (local_index_t)read.length();

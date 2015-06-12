@@ -71,9 +71,10 @@ struct Edit {
 		int ch,
 		int qc,
 		int ty,
-		bool chrs = true)
+		bool chrs = true,
+        uint32_t snp = std::numeric_limits<uint32_t>::max())
 	{
-		init(po, ch, qc, ty, chrs);
+		init(po, ch, qc, ty, chrs, snp);
 	}
     
     Edit(
@@ -98,6 +99,7 @@ struct Edit {
         splLen = 0;
         splDir = EDIT_SPL_UNKNOWN;
         knownSpl = false;
+        snpID = std::numeric_limits<uint32_t>::max();
 	}
 	
     /**
@@ -111,12 +113,13 @@ struct Edit {
      * Initialize a new Edit.
      */
 	void init(
-		uint32_t po,
-		int ch,
-		int qc,
-		int ty,
-		bool chrs = true)
-	{
+              uint32_t po,
+              int ch,
+              int qc,
+              int ty,
+              bool chrs = true,
+              uint32_t snp = std::numeric_limits<uint32_t>::max())
+    {
 		chr = ch;
 		qchr = qc;
 		type = ty;
@@ -129,6 +132,7 @@ struct Edit {
 		} else {
 			pos2 = std::numeric_limits<uint32_t>::max();
 		}
+        snpID = snp;
 		if(!chrs) {
 			assert_range(0, 4, (int)chr);
 			assert_range(0, 4, (int)qchr);
@@ -373,6 +377,8 @@ struct Edit {
     
     int64_t  donor_seq;
     int64_t  acceptor_seq;
+    
+    uint32_t snpID; // snp ID
 
 	friend std::ostream& operator<< (std::ostream& os, const Edit& e);
 
