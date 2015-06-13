@@ -52,6 +52,22 @@ struct SNP {
         return false;
     }
     
+    bool compatibleWith(const SNP& o) const {
+        if(pos == o.pos) return false;
+        
+        // sort the two SNPs
+        const SNP& a = (pos < o.pos ? *this : o);
+        const SNP& b = (pos < o.pos ? o : *this);
+        
+        if(a.type == SNP_INS) {
+            if(b.pos <= a.pos + a.len) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+    
 #ifndef NDEBUG
     bool repOk() const {
         if(type == SNP_SGL) {

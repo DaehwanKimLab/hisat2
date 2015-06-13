@@ -404,6 +404,9 @@ struct SharedTempVars {
     SStringExpandable<char> raw_refbuf2;
     EList<int64_t> temp_scores;
     EList<int64_t> temp_scores2;
+    
+    ELList<index_t> snp_combinations;
+    
     ASSERT_ONLY(SStringExpandable<uint32_t> destU32);
     
     ASSERT_ONLY(BTDnaString editstr);
@@ -589,6 +592,15 @@ struct GenomeHit {
                        const Read&             rd,
                        const SNPDB<index_t>&   snpdb,
                        const BitPairReference& ref);
+    
+    /*
+     * Find SNPs within the specified region
+     */
+    static void findSNPCombinations(
+                                    const SNPDB<index_t>& snpdb,
+                                    index_t               start,
+                                    index_t&              reflen,
+                                    ELList<index_t>&      snp_combinations);
     
     /**
      * For alignment involving indel, move the indels
@@ -1854,6 +1866,11 @@ bool GenomeHit<index_t>::adjustWithSNP(
     assert(_sharedVars != NULL);
     SStringExpandable<char>& raw_refbuf = _sharedVars->raw_refbuf;
     ASSERT_ONLY(SStringExpandable<uint32_t>& destU32 = _sharedVars->destU32);
+
+    index_t reflen = this->_len;
+    findSNPCombinations(snpdb, this->_joinedOff, reflen, _sharedVars->snp_combinations);
+    assert_geq(reflen, this->_len);
+    
     
     const EList<SNP<index_t> >& snps = snpdb.snps();
     pair<index_t, index_t> snp_range;
@@ -1875,19 +1892,17 @@ bool GenomeHit<index_t>::adjustWithSNP(
     }
     
     const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
-    // index_t reflen = ref.approxLen(_tidx);
     raw_refbuf.resize(rdlen + 16);
     int off = ref.getStretch(
                              reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
                              (size_t)_tidx,
                              (size_t)_toff,
-                             this->_len
+                             reflen
                              ASSERT_ONLY(, destU32));
     assert_lt(off, 16);
     char *refbuf = raw_refbuf.wbuf() + off;
-    cout << "ref: ";
     index_t ref_i = 0, rd_i = 0;
-    for(; ref_i < this->_len && rd_i < this->_len; ref_i++, rd_i++) {
+    for(; ref_i < reflen && rd_i < this->_len; ref_i++, rd_i++) {
         int ref_bp = refbuf[ref_i];
         int rd_bp = seq[this->_rdoff + rd_i];
         while(snp_range.first < snp_range.second) {
@@ -1949,6 +1964,78 @@ bool GenomeHit<index_t>::adjustWithSNP(
     assert(repOk(rd, ref));
     
     return true;
+}
+
+/*
+ * Find SNPs within the specified region
+ */
+template <typename index_t>
+void GenomeHit<index_t>::findSNPCombinations(
+                                             const SNPDB<index_t>& snpdb,
+                                             index_t               start,
+                                             index_t&              reflen,
+                                             ELList<index_t>&      snp_combinations)
+{
+    snp_combinations.clear();
+    const EList<SNP<index_t> >& snps = snpdb.snps();
+    pair<index_t, index_t> snp_range;
+    
+    // Find SNPs included in this region
+    {
+        SNP<index_t> snp;
+        snp.pos = start;
+        snp_range.first = snp_range.second = snpdb.snps().bsearchLoBound(snp);
+        for(snp_range.second = snp_range.first; snp_range.second < snps.size(); snp_range.second++) {
+            if(snps[snp_range.second].pos > start + reflen) break;
+        }
+    }
+    if(snp_range.first >= snp_range.second) return;
+    
+    // For alignment with no snps
+    snp_combinations.expand();
+    snp_combinations.back().clear();
+    for(; snp_range.first < snp_range.second; snp_range.first++) {
+        assert_lt(snp_range.first, snps.size());
+        const SNP<index_t>& snp = snps[snp_range.first];
+        index_t num_cbns = snp_combinations.size();
+        for(index_t i = 0; i < num_cbns; i++) {
+            const EList<index_t>& tmp_snps = snp_combinations[i];
+            if(tmp_snps.empty()) {
+                snp_combinations.expand();
+                snp_combinations.back().clear();
+                snp_combinations.back().push_back(snp_range.first);
+                continue;
+            }
+            
+            index_t prev_snp_idx = tmp_snps.back();
+            assert_lt(prev_snp_idx, snps.size());
+            const SNP<index_t>& prev_snp = snps[prev_snp_idx];
+            if(prev_snp.compatibleWith(snp)) {
+                snp_combinations.expand();
+                snp_combinations.back() = tmp_snps;
+            }
+        }
+    }
+    
+    // Update reflen
+    index_t max_add = 0;
+    for(index_t i = 0; i < snp_combinations.size(); i++) {
+        index_t add = 0;
+        const EList<index_t>& tmp_snps = snp_combinations[i];
+        for(index_t j = 0; j < tmp_snps.size(); j++) {
+            index_t snp_idx = tmp_snps[j];
+            assert_lt(snp_idx, snps.size());
+            const SNP<index_t>& snp = snps[snp_idx];
+            if(snp.type == SNP_DEL) {
+                add += snp.len;
+            }
+        }
+        
+        if(max_add < add) {
+            max_add = add;
+        }
+    }
+    reflen += max_add;
 }
 
 /**
