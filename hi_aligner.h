@@ -1871,25 +1871,8 @@ bool GenomeHit<index_t>::adjustWithSNP(
     findSNPCombinations(snpdb, this->_joinedOff, reflen, _sharedVars->snp_combinations);
     assert_geq(reflen, this->_len);
     
-    
-    const EList<SNP<index_t> >& snps = snpdb.snps();
-    pair<index_t, index_t> snp_range;
-    {
-        SNP<index_t> snp;
-        snp.pos = _joinedOff;
-        if(snp.pos >= 20) snp.pos -= 20;
-        else snp.pos = 0;
-        
-        snp_range.first = snp_range.second = snpdb.snps().bsearchLoBound(snp);
-        for(snp_range.second = snp_range.first; snp_range.second < snps.size(); snp_range.second++) {
-            if(snps[snp_range.second].pos > _joinedOff + this->_len + 20) break;
-        }
-    }
-    
-    if(snp_range.first >= snp_range.second) {
-        assert_eq(snp_range.first, snp_range.second);
-        return true;
-    }
+    const ELList<index_t>& snp_cbns = _sharedVars->snp_combinations;
+    if(snp_cbns.size() <= 1) return true;
     
     const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
     raw_refbuf.resize(rdlen + 16);
@@ -1901,69 +1884,102 @@ bool GenomeHit<index_t>::adjustWithSNP(
                              ASSERT_ONLY(, destU32));
     assert_lt(off, 16);
     char *refbuf = raw_refbuf.wbuf() + off;
-    index_t ref_i = 0, rd_i = 0;
-    for(; ref_i < reflen && rd_i < this->_len; ref_i++, rd_i++) {
-        int ref_bp = refbuf[ref_i];
-        int rd_bp = seq[this->_rdoff + rd_i];
-        while(snp_range.first < snp_range.second) {
-            // Find a relevent SNP
-            for(; snp_range.first < snp_range.second; snp_range.first++) {
-                index_t snp_pos = snps[snp_range.first].pos;
+    
+    bool found = false;
+    const EList<SNP<index_t> >& snps = snpdb.snps();
+    for(index_t c = 0; c < snp_cbns.size() && !found; c++) {
+        _edits->clear();
+        index_t ref_i = 0, rd_i = 0;
+        const EList<index_t>& tmp_snps = snp_cbns[c];
+        index_t snp_i = 0;
+        bool earlyDone = false;
+        for(; ref_i < reflen && rd_i < this->_len && !earlyDone; ref_i++, rd_i++) {
+            int ref_bp = refbuf[ref_i];
+            int rd_bp = seq[this->_rdoff + rd_i];
+            bool snp_found = false;
+            index_t snpID = snps.size();
+            while(snp_i < tmp_snps.size()) {
+                // Find a relevent SNP
+                snpID = tmp_snps[snp_i];
+                assert_lt(snpID, snps.size());
+                index_t snp_pos = snps[snpID].pos;
                 if(snp_pos >= ref_i + _joinedOff) {
+                    snp_found = (snp_pos == ref_i + _joinedOff);
                     break;
                 }
             }
-            if(snp_range.first >= snp_range.second) break;
-            const SNP<index_t>& snp = snps[snp_range.first];
-            if(snp.pos > ref_i + _joinedOff) break;
-            if(snp.type == SNP_SGL) {
-                if(ref_bp != rd_bp && rd_bp == (int)snp.seq) {
-                    Edit e(
-                           rd_i,
-                           "ACGTN"[ref_bp],
-                           "ACGTN"[rd_bp],
-                           EDIT_TYPE_MM,
-                           true, /* chars? */
-                           snp_range.first);
-                    _edits->push_back(e);
-                }
-            } else if(snp.type == SNP_DEL) {
-                if(ref_i + snp.len <= this->_len) {
-                    for(index_t i = 0; i < snp.len; i++) {
-                        ref_bp = refbuf[ref_i + i];
+            
+            if(snp_found) {
+                assert_lt(snpID, snps.size());
+                const SNP<index_t>& snp = snps[snpID];
+                assert_eq(snp.pos, ref_i + _joinedOff);
+                if(snp.type == SNP_SGL) {
+                    if(rd_bp == (int)snp.seq) {
                         Edit e(
                                rd_i,
                                "ACGTN"[ref_bp],
-                               '-',
-                               EDIT_TYPE_READ_GAP,
-                               true, /* chars? */
-                               snp_range.first);
-                        _edits->push_back(e);
-                    }
-                    ref_i += snp.len;
-                }
-            } else if(snp.type == SNP_INS) {
-                if(rd_i + snp.len <= this->_len) {
-                    for(index_t i = 0; i < snp.len; i++) {
-                        rd_bp = seq[this->_rdoff + rd_i + i];
-                        Edit e(
-                               rd_i,
-                               '-',
                                "ACGTN"[rd_bp],
-                               EDIT_TYPE_REF_GAP,
+                               EDIT_TYPE_MM,
                                true, /* chars? */
-                               snp_range.first);
+                               snpID);
                         _edits->push_back(e);
+                    } else {
+                        earlyDone = true;
                     }
-                    rd_i += snp.len;
+                } else if(snp.type == SNP_DEL) {
+                    if(ref_i + snp.len <= this->_len) {
+                        for(index_t i = 0; i < snp.len; i++) {
+                            ref_bp = refbuf[ref_i + i];
+                            Edit e(
+                                   rd_i,
+                                   "ACGTN"[ref_bp],
+                                   '-',
+                                   EDIT_TYPE_READ_GAP,
+                                   true, /* chars? */
+                                   snpID);
+                            _edits->push_back(e);
+                        }
+                        ref_i += snp.len;
+                    }
+                } else if(snp.type == SNP_INS) {
+                    if(rd_i + snp.len <= this->_len) {
+                        for(index_t i = 0; i < snp.len; i++) {
+                            rd_bp = seq[this->_rdoff + rd_i + i];
+                            int snp_bp = snp.seq >> ((snp.len - i - 1) << 1);
+                            if(rd_bp != snp_bp) {
+                                earlyDone = true;
+                                break;
+                            }
+                            Edit e(
+                                   rd_i,
+                                   '-',
+                                   "ACGTN"[rd_bp],
+                                   EDIT_TYPE_REF_GAP,
+                                   true, /* chars? */
+                                   snpID);
+                            _edits->push_back(e);
+                        }
+                        rd_i += snp.len;
+                    }
+                }
+                snp_i++;
+            } else {
+                // Stop this alignment
+                if(ref_bp != rd_bp) {
+                    earlyDone = true;
                 }
             }
-            snp_range.first++;
         }
+        
+        if(!earlyDone) found = true;
     }
-    assert(repOk(rd, ref));
-    
-    return true;
+#ifndef NDEBUG
+    //assert(found);
+    if(found) {
+        assert(repOk(rd, ref));
+    }
+#endif
+    return found;
 }
 
 /*
@@ -2013,6 +2029,7 @@ void GenomeHit<index_t>::findSNPCombinations(
             if(prev_snp.compatibleWith(snp)) {
                 snp_combinations.expand();
                 snp_combinations.back() = tmp_snps;
+                snp_combinations.back().push_back(snp_range.first);
             }
         }
     }
@@ -4171,10 +4188,11 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     // Done
     if(range.first < range.second) {
         assert_leq(node_range.second - node_range.first, range.second - range.first);
+#ifndef NDEBUG
         if(node_range.second - node_range.first == range.second - range.first ||
            _node_iedge_count.size() > 0) {
             // This is an exact hit
-#ifndef NDEBUG
+
             ASSERT_ONLY(index_t add = 0);
             for(index_t e = 0; e < _node_iedge_count.size(); e++) {
                 if(e > 0) {
@@ -4184,13 +4202,15 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                 add += _node_iedge_count[e].second;
             }
             assert_eq(node_range.second - node_range.first + add, range.second - range.first);
+        }
 #endif
-            assert_gt(dep, offset);
-            assert_leq(dep, len);
-            partialHits.expand();
-            index_t hit_type = CANDIDATE_HIT;
-            if(anchorStop) hit_type = ANCHOR_HIT;
-            else if(pseudogeneStop) hit_type = PSEUDOGENE_HIT;
+        assert_gt(dep, offset);
+        assert_leq(dep, len);
+        partialHits.expand();
+        index_t hit_type = CANDIDATE_HIT;
+        if(anchorStop) hit_type = ANCHOR_HIT;
+        else if(pseudogeneStop) hit_type = PSEUDOGENE_HIT;
+        if(node_range.first < node_range.second) {
             partialHits.back().init(range.first,
                                     range.second,
                                     node_range.first,
@@ -4200,13 +4220,23 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                                     (index_t)offset,
                                     (index_t)(dep - offset),
                                     hit_type);
-            
-            nelt += (node_range.second - node_range.first);
-            cur = dep;
-            if(cur >= hit._len) {
-                if(hit_type == CANDIDATE_HIT) hit._numUniqueSearch++;
-                hit.done(true);
-            }
+        } else {
+            partialHits.back().init(INDEX_MAX,
+                                    INDEX_MAX,
+                                    INDEX_MAX,
+                                    INDEX_MAX,
+                                    _node_iedge_count,
+                                    fw,
+                                    (index_t)offset,
+                                    (index_t)(dep - offset),
+                                    hit_type);
+        }
+        
+        nelt += (node_range.second - node_range.first);
+        cur = dep;
+        if(cur >= hit._len) {
+            if(hit_type == CANDIDATE_HIT) hit._numUniqueSearch++;
+            hit.done(true);
         }
     }
     return nelt;
