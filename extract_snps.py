@@ -176,7 +176,6 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
                 print >> alt_testset_file, alt_seq
         else:
             assert classType == "insertion"
-            insSeq = ""
             for allele in allele_list:
                 if allele == "-" or len(allele) <= 0:
                     continue
@@ -185,7 +184,7 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
                     insLen = len(allele)
                     if testset and insLen > 0 and insLen <= 10:
                         ref_seq = chr_seq[start-50:start+50]
-                        alt_seq = chr_seq[start-50:start] + insSeq + chr_seq[start:start+50-insLen]
+                        alt_seq = chr_seq[start-50:start] + allele + chr_seq[start:start+50-insLen]
                         print >> ref_testset_file, ">%s_insertion_%d" % (rs_id, start - 50)
                         print >> ref_testset_file, ref_seq
                         print >> alt_testset_file, ">%s_insertion_%d_%s" % (rs_id, start - 50, ref_seq)

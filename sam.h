@@ -964,10 +964,14 @@ const
     }
     
     bool snp_first = true;
+    index_t prev_snp_idx = INDEX_MAX;
     for(size_t i = 0; i < res.ned().size(); i++) {
         if(res.ned()[i].snpID < snpdb->snps().size()) {
-            const SNP<index_t>& snp = snpdb->snps()[i];
-            const string& snpID = snpdb->snpnames()[i];
+            index_t snp_idx = res.ned()[i].snpID;
+            assert_lt(snp_idx, snpdb->snps().size());
+            const SNP<index_t>& snp = snpdb->snps()[snp_idx];
+            const string& snpID = snpdb->snpnames()[snp_idx];
+            if(snp_idx == prev_snp_idx) continue;
             if(snp_first) {
                 WRITE_SEP();
                 o.append("Zs:Z:");
@@ -988,6 +992,7 @@ const
             o.append(snpID.c_str());
             
             if(snp_first) snp_first = false;
+            prev_snp_idx = snp_idx;
         }
     }
     

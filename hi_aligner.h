@@ -1887,18 +1887,63 @@ bool GenomeHit<index_t>::adjustWithSNP(
     char *refbuf = raw_refbuf.wbuf() + off;
     cout << "ref: ";
     index_t ref_i = 0, rd_i = 0;
-    for(; ref_i < this->_len; ref_i++, rd_i++) {
+    for(; ref_i < this->_len && rd_i < this->_len; ref_i++, rd_i++) {
         int ref_bp = refbuf[ref_i];
         int rd_bp = seq[this->_rdoff + rd_i];
-        if(ref_bp != rd_bp) {
-            Edit e(
-                   rd_i,
-                   "ACGTN"[ref_bp],
-                   "ACGTN"[rd_bp],
-                   EDIT_TYPE_MM,
-                   true, /* chars? */
-                   snp_range.first);
-            _edits->push_back(e);
+        while(snp_range.first < snp_range.second) {
+            // Find a relevent SNP
+            for(; snp_range.first < snp_range.second; snp_range.first++) {
+                index_t snp_pos = snps[snp_range.first].pos;
+                if(snp_pos >= ref_i + _joinedOff) {
+                    break;
+                }
+            }
+            if(snp_range.first >= snp_range.second) break;
+            const SNP<index_t>& snp = snps[snp_range.first];
+            if(snp.pos > ref_i + _joinedOff) break;
+            if(snp.type == SNP_SGL) {
+                if(ref_bp != rd_bp && rd_bp == (int)snp.seq) {
+                    Edit e(
+                           rd_i,
+                           "ACGTN"[ref_bp],
+                           "ACGTN"[rd_bp],
+                           EDIT_TYPE_MM,
+                           true, /* chars? */
+                           snp_range.first);
+                    _edits->push_back(e);
+                }
+            } else if(snp.type == SNP_DEL) {
+                if(ref_i + snp.len <= this->_len) {
+                    for(index_t i = 0; i < snp.len; i++) {
+                        ref_bp = refbuf[ref_i + i];
+                        Edit e(
+                               rd_i,
+                               "ACGTN"[ref_bp],
+                               '-',
+                               EDIT_TYPE_READ_GAP,
+                               true, /* chars? */
+                               snp_range.first);
+                        _edits->push_back(e);
+                    }
+                    ref_i += snp.len;
+                }
+            } else if(snp.type == SNP_INS) {
+                if(rd_i + snp.len <= this->_len) {
+                    for(index_t i = 0; i < snp.len; i++) {
+                        rd_bp = seq[this->_rdoff + rd_i + i];
+                        Edit e(
+                               rd_i,
+                               '-',
+                               "ACGTN"[rd_bp],
+                               EDIT_TYPE_REF_GAP,
+                               true, /* chars? */
+                               snp_range.first);
+                        _edits->push_back(e);
+                    }
+                    rd_i += snp.len;
+                }
+            }
+            snp_range.first++;
         }
     }
     assert(repOk(rd, ref));
