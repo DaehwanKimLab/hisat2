@@ -1951,7 +1951,7 @@ bool GenomeHit<index_t>::adjustWithSNP(
                                 break;
                             }
                             Edit e(
-                                   rd_i,
+                                   rd_i + i,
                                    '-',
                                    "ACGTN"[rd_bp],
                                    EDIT_TYPE_REF_GAP,
@@ -4210,7 +4210,11 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         index_t hit_type = CANDIDATE_HIT;
         if(anchorStop) hit_type = ANCHOR_HIT;
         else if(pseudogeneStop) hit_type = PSEUDOGENE_HIT;
-        if(node_range.first < node_range.second) {
+        bool report = node_range.first < node_range.second;
+        if(node_range.second - node_range.first < range.second - range.first) {
+            if(_node_iedge_count.size() == 0) report = false;
+        }
+        if(report) {
             partialHits.back().init(range.first,
                                     range.second,
                                     node_range.first,
@@ -4221,6 +4225,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                                     (index_t)(dep - offset),
                                     hit_type);
         } else {
+            _node_iedge_count.clear();
             partialHits.back().init(INDEX_MAX,
                                     INDEX_MAX,
                                     INDEX_MAX,
