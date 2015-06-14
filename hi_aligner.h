@@ -1899,7 +1899,7 @@ bool GenomeHit<index_t>::adjustWithSNP(
             }
         }
 #endif
-        if(offDiff.second > 0) {
+        if(offDiff.second >= 0) {
             this->_joinedOff = orig_joinedOff + offDiff.first;
             this->_toff = orig_toff + offDiff.first;
         } else {
@@ -1909,11 +1909,9 @@ bool GenomeHit<index_t>::adjustWithSNP(
             this->_toff = orig_toff - offDiff.first;
         }
         index_t reflen = this->_len;
-        findSNPCombinations(snpdb, this->_joinedOff, reflen, _sharedVars->snp_combinations);
+        ELList<index_t>& snp_cbns = _sharedVars->snp_combinations;
+        findSNPCombinations(snpdb, this->_joinedOff, reflen, snp_cbns);
         assert_geq(reflen, this->_len);
-        
-        const ELList<index_t>& snp_cbns = _sharedVars->snp_combinations;
-        if(snp_cbns.size() <= 1) return true;
         
         const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
         raw_refbuf.resize(rdlen + 16);
@@ -2014,7 +2012,6 @@ bool GenomeHit<index_t>::adjustWithSNP(
         }
     }
 #ifndef NDEBUG
-    assert(found);
     if(found) {
         assert(repOk(rd, ref));
     }

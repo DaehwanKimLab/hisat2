@@ -683,9 +683,13 @@ public:
             for(; e < node_iedge_count.size(); e++) {
                 if(node_iedge_count[e].first >= trimBegin) break;
                 assert_geq(top, node_iedge_count[e].second);
-                top -= node_iedge_count[e].second;
+                top += node_iedge_count[e].second;
             }
             if(e > 0) node_iedge_count.erase(0, e);
+            for(e = 0; e < node_iedge_count.size(); e++) {
+                assert_geq(node_iedge_count[e].first, trimBegin);
+                node_iedge_count[e].first -= trimBegin;
+            }
         }
 		if(trimEnd > 0) {
 			// Trim from end
@@ -693,7 +697,7 @@ public:
             bot -= trimEnd;
             index_t node_range = node_bot - node_top;
             while(node_iedge_count.size() > 0) {
-                if(node_iedge_count.back().second < (node_range - trimEnd)) break;
+                if(node_iedge_count.back().first < (node_range - trimEnd)) break;
                 assert_geq(bot, node_iedge_count.back().second);
                 bot -= node_iedge_count.back().second;
                 node_iedge_count.pop_back();
@@ -701,6 +705,17 @@ public:
 		}
         node_top += trimBegin;
         node_bot -= trimEnd;
+#ifndef NDEBUG
+        assert_leq(node_top, node_bot);
+        index_t num_nodes = node_bot - node_top;
+        index_t add = 0;
+        for(index_t e = 0; e < node_iedge_count.size(); e++) {
+            assert_lt(node_iedge_count[e].first, num_nodes);
+            add += node_iedge_count[e].second;
+        }
+        assert_eq(bot - top, num_nodes + add);
+        
+#endif
 		if(empty) {
 			assert(done());
 #ifndef NDEBUG
@@ -1038,13 +1053,46 @@ public:
                             }
                             assert_lt(new_node_top, new_node_bot);
                             if(new_node_bot - new_node_top < gws.map.size()) {
-                                index_t new_size = new_node_bot - new_node_top;
-                                for(index_t j = new_size; j < gws.map.size(); j++) {
-                                    index_t jmap = gws.map[j];
-                                    assert_lt(jmap, sa.offs.size());
-                                    sa.offs[jmap] = gws.map[new_size - 1];
+                                assert_eq(curbot - curtop, cur_node_bot - cur_node_top);
+                                SideLocus<index_t> tmptloc, tmpbloc;
+                                pair<index_t, index_t> tmp_node_range;
+                                index_t j1 = 0, j2 = 0;
+                                for(index_t c = 0; c < gws.masks[i].size(); c++) {
+                                    if(gws.masks[i][c]) {
+                                        j1 = c;
+                                        break;
+                                    }
                                 }
-                                gws.map.resize(new_size);
+                                for(index_t j = 0; j + 1 < gws.map.size(); j++) {
+                                    for(index_t c = j1 + 1; c < gws.masks[i].size(); c++) {
+                                        if(gws.masks[i][c]) {
+                                            j2 = c;
+                                            break;
+                                        }
+                                    }
+                                    assert_lt(j1, j2);
+                                    SideLocus<index_t>::initFromTopBot(curtop + j1, curtop + j2 + 1, gfm.gh(), gfm.gfm(), tmptloc, tmpbloc);
+                                    gfm.mapGLF(tmptloc, tmpbloc, i, &tmp_node_range);
+                                    assert_gt(tmp_node_range.second - tmp_node_range.first, 0);
+                                    if(tmp_node_range.second - tmp_node_range.first == 1) {
+                                        index_t jmap = gws.map[j];
+                                        assert_lt(jmap, sa.offs.size());
+                                        sa.offs[jmap] = gws.map[j];
+                                        gws.map[j] = (index_t)OFF_MASK;
+                                    }
+                                    j1 = j2;
+                                    j2 = 0;
+                                }
+                                for(index_t j = 0; j < gws.map.size();) {
+                                    if(gws.map[j] == (index_t)OFF_MASK) {
+                                        gws.map.erase(j);
+                                    } else j++;
+                                }
+#ifndef NDEBUG
+                                for(index_t j = 0; j < gws.map.size(); j++) {
+                                    assert_neq(gws.map[j], (index_t)OFF_MASK);
+                                }
+#endif
                             }
                             assert_eq(new_node_bot - new_node_top, (index_t)(gws.map.size()));
                         } else {
@@ -1071,14 +1119,48 @@ public:
                             }
                             assert_lt(node_range.first, node_range.second);
                             if(node_range.second - node_range.first < st.back().map_.size()) {
-                                index_t new_size = node_range.second - node_range.first;
-                                for(index_t j = new_size; j < st.back().map_.size(); j++) {
-                                    index_t jmap = st.back().map_[j];
-                                    assert_lt(jmap, sa.offs.size());
-                                    sa.offs[jmap] = st.back().map_[new_size - 1];
+                                assert_eq(curbot - curtop, cur_node_bot - cur_node_top);
+                                SideLocus<index_t> tmptloc, tmpbloc;
+                                pair<index_t, index_t> tmp_node_range;
+                                index_t j1 = 0, j2 = 0;
+                                for(index_t c = 0; c < gws.masks[i].size(); c++) {
+                                    if(gws.masks[i][c]) {
+                                        j1 = c;
+                                        break;
+                                    }
                                 }
-                                st.back().map_.resize(new_size);
+                                for(index_t j = 0; j + 1 < st.back().map_.size(); j++) {
+                                    for(index_t c = j1 + 1; c < gws.masks[i].size(); c++) {
+                                        if(gws.masks[i][c]) {
+                                            j2 = c;
+                                            break;
+                                        }
+                                    }
+                                    assert_lt(j1, j2);
+                                    SideLocus<index_t>::initFromTopBot(curtop + j1, curtop + j2 + 1, gfm.gh(), gfm.gfm(), tmptloc, tmpbloc);
+                                    gfm.mapGLF(tmptloc, tmpbloc, i, &tmp_node_range);
+                                    assert_gt(tmp_node_range.second - tmp_node_range.first, 0);
+                                    if(tmp_node_range.second - tmp_node_range.first == 1) {
+                                        index_t jmap = st.back().map_[j];
+                                        assert_lt(jmap, sa.offs.size());
+                                        sa.offs[jmap] = st.back().map_[j];
+                                        st.back().map_[j] = (index_t)OFF_MASK;
+                                    }
+                                    j1 = j2;
+                                    j2 = 0;
+                                }
+                                for(index_t j = 0; j < st.back().map_.size();) {
+                                    if(st.back().map_[j] == (index_t)OFF_MASK) {
+                                        st.back().map_.erase(j);
+                                    } else j++;
+                                }
+#ifndef NDEBUG
+                                for(index_t j = 0; j < st.back().map_.size(); j++) {
+                                    assert_neq(st.back().map_[j], (index_t)OFF_MASK);
+                                }
+#endif
                             }
+                            assert_eq(node_range.second - node_range.first, st.back().map_.size());
                             pair<int, int> rret =
                             st.back().init(
                                            gfm,         // forward Bowtie index

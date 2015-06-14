@@ -59,7 +59,7 @@ struct SNP {
         const SNP& a = (pos < o.pos ? *this : o);
         const SNP& b = (pos < o.pos ? o : *this);
         
-        if(a.type == SNP_INS) {
+        if(a.type == SNP_DEL || a.type == SNP_INS) {
             if(b.pos <= a.pos + a.len) {
                 return false;
             }

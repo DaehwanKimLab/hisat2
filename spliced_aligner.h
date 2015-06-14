@@ -132,6 +132,9 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
     // by comparing with the corresponding genomic sequences
     // this extension is performed without any mismatches allowed
     for(index_t hi = 0; hi < this->_genomeHits.size(); hi++) {
+        // daehwan - for debugging purposes
+        break;        
+        
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hi];
         index_t leftext = (index_t)OFF_MASK, rightext = (index_t)OFF_MASK;
         genomeHit.extend(

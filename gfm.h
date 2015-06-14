@@ -1786,7 +1786,6 @@ public:
 			index_t nodeOff = node >> _gh._offRate;
 			assert_lt(nodeOff, _gh._offsLen);
 			index_t off = offs()[nodeOff];
-			assert_neq(INDEX_MAX, off);
 			return off;
 		} else {
 			// Try looking at zoff
@@ -4205,7 +4204,9 @@ index_t GFM<index_t>::getOffset(index_t row, index_t node) const {
         }
         
         if((node_range.first & _gh._offMask) == node_range.first) {
-			return jumps + this->offs()[node_range.first >> _gh._offRate];
+            index_t off = this->offs()[node_range.first >> _gh._offRate];
+            if(off != INDEX_MAX)
+                return jumps + off;
 		}
 		l.initFromRow(row, _gh, gfm());
 	}
