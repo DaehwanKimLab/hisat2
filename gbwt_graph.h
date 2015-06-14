@@ -319,12 +319,12 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             EList<pair<index_t, index_t> > snp_ranges; // each range inclusive
             for(index_t i = 0; i < snps.size(); i++) {
                 const SNP<index_t>& snp = snps[i];
-                index_t relax = 10;
+                index_t left_relax = 10, right_relax = 10;
                 if(snp.type == SNP_INS) {
-                    relax = 128;
+                    right_relax = 128;
                 }
                 pair<index_t, index_t> range;
-                range.first = snp.pos > relax ? snp.pos - relax - 1 : 0;
+                range.first = snp.pos > left_relax ? snp.pos - left_relax - 1 : 0;
                 if(snp.type == SNP_SGL) {
                     range.second = snp.pos + 1;
                 } else if(snp.type == SNP_DEL) {
@@ -334,7 +334,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     assert_gt(snp.len, 0);
                     range.second = snp.pos;
                 } else assert(false);
-                range.second += relax;
+                range.second += right_relax;
                 
                 if(snp_ranges.empty() || snp_ranges.back().second + 1 < range.first) {
                     snp_ranges.push_back(range);
@@ -766,7 +766,9 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                     char ch = "ACGT"[bp];
                     nodes.expand();
                     nodes.back().label = ch;
-                    nodes.back().value = snp.pos;
+                    // daehwan - check out
+                    // nodes.back().value = snp.pos;
+                    nodes.back().value = INDEX_MAX;
                     
                     edges.expand();
                     edges.back().from = (j == 0 ? snp.pos - curr_pos : nodes.size() - 2);
@@ -1043,11 +1045,12 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
                 const Node& next_node = nodes[next_node_id];
                 if(next_node.label != node.label) break;
                 cnodes.back().nodes.push_back(next_node_id);
-
-                if((cnodes[cnode_id].value < (lastNode + lastNode_add)) != (next_node.value < (lastNode + lastNode_add))) {
-                    cnodes[cnode_id].value = min(cnodes[cnode_id].value, next_node.value);
-                } else {
-                    cnodes[cnode_id].value = max(cnodes[cnode_id].value, next_node.value);
+                if(next_node.value != INDEX_MAX) {
+                    if(cnodes[cnode_id].value == INDEX_MAX) {
+                        cnodes[cnode_id].value = next_node.value;
+                    } else {
+                        cnodes[cnode_id].value = max(cnodes[cnode_id].value, next_node.value);
+                    }
                 }
                 cnodes[cnode_id].potential = cnodes[cnode_id].value < (lastNode + lastNode_add);
                 i++;
@@ -1748,8 +1751,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     sortEdgesTo(true);
     status = ready;
     
-    // daehwan - for debugging purposes
-    // return true;
+    return true;
     
     bwt_string.clear();
     F_array.clear();

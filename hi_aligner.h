@@ -405,6 +405,7 @@ struct SharedTempVars {
     EList<int64_t> temp_scores;
     EList<int64_t> temp_scores2;
     
+    EList<pair<index_t, int> >  offDiffs;
     ELList<index_t> snp_combinations;
     
     ASSERT_ONLY(SStringExpandable<uint32_t> destU32);
@@ -590,8 +591,18 @@ struct GenomeHit {
      */
     bool adjustWithSNP(
                        const Read&             rd,
+                       const GFM<index_t>&     gfm,
                        const SNPDB<index_t>&   snpdb,
                        const BitPairReference& ref);
+    
+    /*
+     * Find offset differences due to deletions
+     */
+    static void findOffDiffs(
+                             const SNPDB<index_t>&       snpdb,
+                             index_t                     start,
+                             index_t                     end,
+                             EList<pair<index_t, int> >& offDiffs);
     
     /*
      * Find SNPs within the specified region
@@ -1857,6 +1868,7 @@ bool GenomeHit<index_t>::extend(
 template <typename index_t>
 bool GenomeHit<index_t>::adjustWithSNP(
                                        const Read&             rd,
+                                       const GFM<index_t>&     gfm,
                                        const SNPDB<index_t>&   snpdb,
                                        const BitPairReference& ref)
 {
@@ -1866,121 +1878,206 @@ bool GenomeHit<index_t>::adjustWithSNP(
     assert(_sharedVars != NULL);
     SStringExpandable<char>& raw_refbuf = _sharedVars->raw_refbuf;
     ASSERT_ONLY(SStringExpandable<uint32_t>& destU32 = _sharedVars->destU32);
+    
+    EList<pair<index_t, int> >& offDiffs = _sharedVars->offDiffs;
+    index_t width = 1 << (gfm.gh()._offRate + 1);
+    findOffDiffs(snpdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff, offDiffs);
 
-    index_t reflen = this->_len;
-    findSNPCombinations(snpdb, this->_joinedOff, reflen, _sharedVars->snp_combinations);
-    assert_geq(reflen, this->_len);
-    
-    const ELList<index_t>& snp_cbns = _sharedVars->snp_combinations;
-    if(snp_cbns.size() <= 1) return true;
-    
-    const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
-    raw_refbuf.resize(rdlen + 16);
-    int off = ref.getStretch(
-                             reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
-                             (size_t)_tidx,
-                             (size_t)_toff,
-                             reflen
-                             ASSERT_ONLY(, destU32));
-    assert_lt(off, 16);
-    char *refbuf = raw_refbuf.wbuf() + off;
-    
+    index_t orig_joinedOff = this->_joinedOff;
+    index_t orig_toff = this->_toff;
     bool found = false;
-    const EList<SNP<index_t> >& snps = snpdb.snps();
-    for(index_t c = 0; c < snp_cbns.size() && !found; c++) {
-        _edits->clear();
-        index_t ref_i = 0, rd_i = 0;
-        const EList<index_t>& tmp_snps = snp_cbns[c];
-        index_t snp_i = 0;
-        bool earlyDone = false;
-        for(; ref_i < reflen && rd_i < this->_len && !earlyDone; ref_i++, rd_i++) {
-            int ref_bp = refbuf[ref_i];
-            int rd_bp = seq[this->_rdoff + rd_i];
-            bool snp_found = false;
-            index_t snpID = snps.size();
-            while(snp_i < tmp_snps.size()) {
-                // Find a relevent SNP
-                snpID = tmp_snps[snp_i];
-                assert_lt(snpID, snps.size());
-                index_t snp_pos = snps[snpID].pos;
-                if(snp_pos >= ref_i + _joinedOff) {
-                    snp_found = (snp_pos == ref_i + _joinedOff);
-                    break;
-                }
+    for(index_t o = 0; o < min<index_t>(4, offDiffs.size()) && !found; o++) {
+        const pair<index_t, int>& offDiff = offDiffs[o];
+#ifndef NDEBUG
+        if(o == 0) {
+            assert_eq(offDiff.first, 0);
+            assert_eq(offDiff.second, 0);
+        } else {
+            assert_leq(offDiffs[o-1].first, offDiff.first);
+            if(offDiffs[o-1].first == offDiff.first) {
+                assert_lt(offDiffs[o-1].second, offDiff.second);
             }
-            
-            if(snp_found) {
-                assert_lt(snpID, snps.size());
-                const SNP<index_t>& snp = snps[snpID];
-                assert_eq(snp.pos, ref_i + _joinedOff);
-                if(snp.type == SNP_SGL) {
-                    if(rd_bp == (int)snp.seq) {
-                        Edit e(
-                               rd_i,
-                               "ACGTN"[ref_bp],
-                               "ACGTN"[rd_bp],
-                               EDIT_TYPE_MM,
-                               true, /* chars? */
-                               snpID);
-                        _edits->push_back(e);
-                    } else {
-                        earlyDone = true;
+        }
+#endif
+        if(offDiff.second > 0) {
+            this->_joinedOff = orig_joinedOff + offDiff.first;
+            this->_toff = orig_toff + offDiff.first;
+        } else {
+            if(orig_toff < offDiff.first) continue;
+            assert_geq(orig_joinedOff, offDiff.first);
+            this->_joinedOff = orig_joinedOff - offDiff.first;
+            this->_toff = orig_toff - offDiff.first;
+        }
+        index_t reflen = this->_len;
+        findSNPCombinations(snpdb, this->_joinedOff, reflen, _sharedVars->snp_combinations);
+        assert_geq(reflen, this->_len);
+        
+        const ELList<index_t>& snp_cbns = _sharedVars->snp_combinations;
+        if(snp_cbns.size() <= 1) return true;
+        
+        const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
+        raw_refbuf.resize(rdlen + 16);
+        int off = ref.getStretch(
+                                 reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
+                                 (size_t)this->_tidx,
+                                 (size_t)this->_toff,
+                                 reflen
+                                 ASSERT_ONLY(, destU32));
+        assert_lt(off, 16);
+        char *refbuf = raw_refbuf.wbuf() + off;
+        const EList<SNP<index_t> >& snps = snpdb.snps();
+        for(index_t c = 0; c < snp_cbns.size() && !found; c++) {
+            _edits->clear();
+            index_t ref_i = 0, rd_i = 0;
+            const EList<index_t>& tmp_snps = snp_cbns[c];
+            index_t snp_i = 0;
+            bool earlyDone = false;
+            for(; ref_i < reflen && rd_i < this->_len && !earlyDone; ref_i++, rd_i++) {
+                int ref_bp = refbuf[ref_i];
+                int rd_bp = seq[this->_rdoff + rd_i];
+                bool snp_found = false;
+                index_t snpID = snps.size();
+                while(snp_i < tmp_snps.size()) {
+                    // Find a relevent SNP
+                    snpID = tmp_snps[snp_i];
+                    assert_lt(snpID, snps.size());
+                    index_t snp_pos = snps[snpID].pos;
+                    if(snp_pos >= ref_i + _joinedOff) {
+                        snp_found = (snp_pos == ref_i + _joinedOff);
+                        break;
                     }
-                } else if(snp.type == SNP_DEL) {
-                    if(ref_i + snp.len <= this->_len) {
-                        for(index_t i = 0; i < snp.len; i++) {
-                            ref_bp = refbuf[ref_i + i];
+                }
+                
+                if(snp_found) {
+                    assert_lt(snpID, snps.size());
+                    const SNP<index_t>& snp = snps[snpID];
+                    assert_eq(snp.pos, ref_i + _joinedOff);
+                    if(snp.type == SNP_SGL) {
+                        if(rd_bp == (int)snp.seq) {
                             Edit e(
                                    rd_i,
                                    "ACGTN"[ref_bp],
-                                   '-',
-                                   EDIT_TYPE_READ_GAP,
-                                   true, /* chars? */
-                                   snpID);
-                            _edits->push_back(e);
-                        }
-                        ref_i += snp.len;
-                    }
-                } else if(snp.type == SNP_INS) {
-                    if(rd_i + snp.len <= this->_len) {
-                        for(index_t i = 0; i < snp.len; i++) {
-                            rd_bp = seq[this->_rdoff + rd_i + i];
-                            int snp_bp = snp.seq >> ((snp.len - i - 1) << 1);
-                            if(rd_bp != snp_bp) {
-                                earlyDone = true;
-                                break;
-                            }
-                            Edit e(
-                                   rd_i + i,
-                                   '-',
                                    "ACGTN"[rd_bp],
-                                   EDIT_TYPE_REF_GAP,
+                                   EDIT_TYPE_MM,
                                    true, /* chars? */
                                    snpID);
                             _edits->push_back(e);
+                        } else {
+                            earlyDone = true;
                         }
-                        rd_i += snp.len;
+                    } else if(snp.type == SNP_DEL) {
+                        if(ref_i + snp.len <= this->_len) {
+                            for(index_t i = 0; i < snp.len; i++) {
+                                ref_bp = refbuf[ref_i + i];
+                                Edit e(
+                                       rd_i,
+                                       "ACGTN"[ref_bp],
+                                       '-',
+                                       EDIT_TYPE_READ_GAP,
+                                       true, /* chars? */
+                                       snpID);
+                                _edits->push_back(e);
+                            }
+                            ref_i += snp.len;
+                        }
+                    } else if(snp.type == SNP_INS) {
+                        if(rd_i + snp.len <= this->_len) {
+                            for(index_t i = 0; i < snp.len; i++) {
+                                rd_bp = seq[this->_rdoff + rd_i + i];
+                                int snp_bp = (snp.seq >> ((snp.len - i - 1) << 1)) & 0x3;
+                                if(rd_bp != snp_bp) {
+                                    earlyDone = true;
+                                    break;
+                                }
+                                Edit e(
+                                       rd_i + i,
+                                       '-',
+                                       "ACGTN"[rd_bp],
+                                       EDIT_TYPE_REF_GAP,
+                                       true, /* chars? */
+                                       snpID);
+                                _edits->push_back(e);
+                            }
+                            rd_i += snp.len;
+                        }
                     }
-                }
-                snp_i++;
-            } else {
-                // Stop this alignment
-                if(ref_bp != rd_bp) {
-                    earlyDone = true;
+                    snp_i++;
+                } else {
+                    // Stop this alignment
+                    if(ref_bp != rd_bp) {
+                        earlyDone = true;
+                    }
                 }
             }
+            
+            if(!earlyDone) found = true;
         }
-        
-        if(!earlyDone) found = true;
     }
 #ifndef NDEBUG
-    //assert(found);
+    assert(found);
     if(found) {
         assert(repOk(rd, ref));
     }
 #endif
     return found;
 }
+
+
+/*
+ *
+ */
+template <typename index_t>
+void GenomeHit<index_t>::findOffDiffs(
+                                      const SNPDB<index_t>&       snpdb,
+                                      index_t                     start,
+                                      index_t                     end,
+                                      EList<pair<index_t, int> >& offDiffs)
+{
+    offDiffs.clear();
+    offDiffs.expand();
+    offDiffs.back().first = offDiffs.back().second = 0;
+    const EList<SNP<index_t> >& snps = snpdb.snps();
+    pair<index_t, index_t> snp_range;
+    
+    // Find SNPs included in this region
+    {
+        SNP<index_t> snp;
+        snp.pos = start;
+        snp_range.first = snp_range.second = snpdb.snps().bsearchLoBound(snp);
+        for(snp_range.second = snp_range.first; snp_range.second < snps.size(); snp_range.second++) {
+            if(snps[snp_range.second].pos >= end) break;
+        }
+    }
+    if(snp_range.first >= snp_range.second) return;
+    
+    for(; snp_range.first < snp_range.second; snp_range.first++) {
+        assert_lt(snp_range.first, snps.size());
+        const SNP<index_t>& snp = snps[snp_range.first];
+        if(snp.type != SNP_DEL && snp.type != SNP_INS) continue;
+        index_t numOffs = offDiffs.size();
+        for(index_t i = 0; i < numOffs; i++) {
+            int off = offDiffs[i].first * offDiffs[i].second;
+            if(snp.type == SNP_DEL) {
+                off += snp.len;
+                
+            } else {
+                assert_eq(snp.type, SNP_INS);
+                off -= snp.len;
+            }
+            
+            if(off != 0) {
+                offDiffs.expand();
+                offDiffs.back().first = abs(off);
+                offDiffs.back().second = (off > 0 ? 1 : -1);
+            }
+        }
+    }
+
+    offDiffs.sort();
+    index_t new_size = unique(offDiffs.begin(), offDiffs.end()) - offDiffs.begin();
+    offDiffs.resize(new_size);
+}
+
 
 /*
  * Find SNPs within the specified region
@@ -3085,7 +3182,7 @@ public:
                                            coord.off(),
                                            coord.joinedOff(),
                                            _sharedVars);
-                    bool success = genomeHits.back().adjustWithSNP(*_rds[rdi], snpdb, ref);
+                    bool success = genomeHits.back().adjustWithSNP(*_rds[rdi], gfm, snpdb, ref);
                     if(!success) {
                         genomeHits.pop_back();
                     }
