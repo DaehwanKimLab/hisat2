@@ -626,6 +626,7 @@ struct GenomeHit {
                                  index_t                     joinedOff,
                                  const BTDnaString&          rdseq,
                                  index_t                     rdoff,
+                                 index_t                     rdlen,
                                  const char*                 rfseq,
                                  index_t                     rflen,
                                  bool                        left,
@@ -1668,6 +1669,7 @@ bool GenomeHit<index_t>::extend(
                                                  this->_joinedOff,
                                                  seq,
                                                  this->_rdoff,
+                                                 rdlen,
                                                  refbuf,
                                                  reflen,
                                                  true, /* left? */
@@ -1680,17 +1682,18 @@ bool GenomeHit<index_t>::extend(
             }
             if(best_ext > 0) {
                 index_t num_prev_edits = _edits->size();
-                index_t temp_ext = alignWithSNPs(
-                                                 snpdb.snps(),
-                                                 snp_cbns[best_cbn],
-                                                 this->_joinedOff,
-                                                 seq,
-                                                 this->_rdoff,
-                                                 refbuf,
-                                                 reflen,
-                                                 true, /* left? */
-                                                 _edits,
-                                                 mm);
+                ASSERT_ONLY(index_t temp_ext =) alignWithSNPs(
+                                                              snpdb.snps(),
+                                                              snp_cbns[best_cbn],
+                                                              this->_joinedOff,
+                                                              seq,
+                                                              this->_rdoff,
+                                                              rdlen,
+                                                              refbuf,
+                                                              reflen,
+                                                              true, /* left? */
+                                                              _edits,
+                                                              mm);
                 assert_leq(num_prev_edits, _edits->size());
                 index_t added_edits = _edits->size() - num_prev_edits;
                 int ref_ext = (int)best_ext;
@@ -1715,6 +1718,7 @@ bool GenomeHit<index_t>::extend(
                         (*_edits)[i].pos += best_ext;
                     }
                 }
+                assert(repOk(rd, ref));
             }
         }
     }
@@ -1748,9 +1752,6 @@ bool GenomeHit<index_t>::extend(
             assert_lt(off, 16);
             char *refbuf = raw_refbuf.wbuf() + off;
             int best_ext = 0, best_cbn = 0;
-            // daehwan - for debugging purposes
-            mm = 1;
-            
             for(index_t c = 0; c < snp_cbns.size(); c++) {
                 index_t temp_ext = alignWithSNPs(
                                                  snpdb.snps(),
@@ -1758,6 +1759,7 @@ bool GenomeHit<index_t>::extend(
                                                  this->_joinedOff,
                                                  seq,
                                                  this->_rdoff + this->_len,
+                                                 rdlen - (this->_rdoff + this->_len),
                                                  refbuf,
                                                  reflen,
                                                  false, /* left? */
@@ -1772,22 +1774,24 @@ bool GenomeHit<index_t>::extend(
             
             if(best_ext > 0) {
                 index_t prev_num_edits = _edits->size();
-                index_t temp_ext = alignWithSNPs(
-                                                 snpdb.snps(),
-                                                 snp_cbns[best_cbn],
-                                                 this->_joinedOff,
-                                                 seq,
-                                                 this->_rdoff + this->_len,
-                                                 refbuf,
-                                                 reflen,
-                                                 false, /* left? */
-                                                 _edits,
-                                                 mm);
+                ASSERT_ONLY(index_t temp_ext =) alignWithSNPs(
+                                                              snpdb.snps(),
+                                                              snp_cbns[best_cbn],
+                                                              this->_joinedOff,
+                                                              seq,
+                                                              this->_rdoff + this->_len,
+                                                              rdlen - (this->_rdoff + this->_len),
+                                                              refbuf,
+                                                              reflen,
+                                                              false, /* left? */
+                                                              _edits,
+                                                              mm);
                 assert_eq(best_ext, temp_ext);
                 for(index_t i = prev_num_edits; i < _edits->size(); i++) {
                     (*_edits)[i].pos += this->_len;
                 }
                 _len += best_ext;
+                assert(repOk(rd, ref));
             }
         }
     }
@@ -2196,10 +2200,17 @@ bool GenomeHit<index_t>::adjustWithSNP(
                                                this->_joinedOff,
                                                seq,
                                                this->_rdoff,
+                                               this->_len,
                                                refbuf,
                                                reflen,
                                                false, /* left? */
                                                this->_edits);
+            // daehwan - check out
+            // Disallow having errors on the ends
+            if(this->_edits->size() > 0) {
+                if(this->_edits->front().pos == 0) continue;
+                if(this->_edits->back().pos == this->_len - 1) continue;
+            }
             if(alignedLen == this->_len) found = true;
         }
     }
@@ -2385,13 +2396,13 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                                           index_t                     joinedOff,
                                           const BTDnaString&          rdseq,
                                           index_t                     rdoff,
+                                          index_t                     rdlen,
                                           const char*                 rfseq,
                                           index_t                     rflen,
                                           bool                        left,
                                           EList<Edit>*                edits,
                                           index_t                     mm)
 {
-    index_t rdlen = rdseq.length();
     index_t snp_i = 0, tmp_mm = 0;
     if(left) {
         assert_gt(rdoff, 0);
@@ -2430,9 +2441,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                                    snpID);
                             edits->insert(e, 0);
                         }
-                    } else {
-                        break;
-                    }
+                    } else break;
                 } else if(snp.type == SNP_DEL) {
                     if(rf_i > (int)snp.len) {
                         if(edits != NULL) {
@@ -2448,8 +2457,9 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                                 edits->insert(e, 0);
                             }
                         }
-                        rf_i -= (int)snp.len;
-                    }
+                        rf_i -= (int)(snp.len - 1);
+                        rd_i += 1;
+                    } else break;
                 } else if(snp.type == SNP_INS) {
                     if(rd_i > (int)snp.len) {
                         bool same_seq = true;
@@ -2472,13 +2482,14 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                             }
                         }
                         if(!same_seq) break;
-                        rd_i -= (int)snp.len;
-                    }
+                        rd_i -= (int)(snp.len - 1);
+                        rf_i += 1;
+                    } else break;
                 }
                 snp_i++;
             } else {
                 // Stop this alignment
-                if(rf_bp != rd_bp) {
+                if(rf_bp != rd_bp || rd_bp == 4) {
                     tmp_mm++;
                     if(tmp_mm > mm) break;
                     if(edits != NULL) {
@@ -2496,7 +2507,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
         return rdoff - rd_i - 1;
     } else {
         index_t rf_i = 0, rd_i = 0;
-        for(; rf_i < rflen && rdoff + rd_i < rdlen; rf_i++, rd_i++) {
+        for(; rf_i < rflen && rd_i < rdlen; rf_i++, rd_i++) {
             int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[rdoff + rd_i];
             bool snp_found = false;
@@ -2529,7 +2540,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         break;
                     }
                 } else if(snp.type == SNP_DEL) {
-                    if(rf_i + snp.len <= rflen) {
+                    if(rf_i + snp.len <= rflen && rd_i > 0) {
                         if(edits != NULL) {
                             for(index_t i = 0; i < snp.len; i++) {
                                 rf_bp = rfseq[rf_i + i];
@@ -2543,10 +2554,11 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                                 edits->push_back(e);
                             }
                         }
-                        rf_i += snp.len;
-                    }
+                        rf_i += (snp.len - 1);
+                        rd_i -= 1;
+                    } else break;
                 } else if(snp.type == SNP_INS) {
-                    if(rd_i + snp.len <= rdlen) {
+                    if(rd_i + snp.len <= rdlen && rf_i > 0) {
                         bool same_seq = true;
                         for(index_t i = 0; i < snp.len; i++) {
                             rd_bp = rdseq[rdoff + rd_i + i];
@@ -2567,13 +2579,14 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                             }
                         }
                         if(!same_seq) break;
-                        rd_i += snp.len;
-                    }
+                        rd_i += (snp.len - 1);
+                        rf_i -= 1;
+                    } else break;
                 }
                 snp_i++;
             } else {
                 // Stop this alignment
-                if(rf_bp != rd_bp) {
+                if(rf_bp != rd_bp || rd_bp == 4) {
                     tmp_mm++;
                     if(tmp_mm > mm) break;
                     if(edits != NULL) {
@@ -3227,6 +3240,9 @@ public:
                 }
             }
             
+            // daehwan - for debugging purposes
+            pseudogeneStop = false;
+                        
             // Align this read beginning from previously stopped base
             // stops when it is uniquelly mapped with at least 28bp or
             // it may involve processed pseudogene

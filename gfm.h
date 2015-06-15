@@ -4187,7 +4187,11 @@ index_t GFM<index_t>::getOffset(index_t row, index_t node) const {
     for(index_t i = 0; i < _zOffs.size(); i++) {
         if(row == _zOffs[i]) return 0;
     }
-	if((node & _gh._offMask) == node) return this->offs()[node >> _gh._offRate];
+    if((node & _gh._offMask) == node) {
+        index_t off = this->offs()[node >> _gh._offRate];
+        if(off != INDEX_MAX)
+            return off;
+    }
 	index_t jumps = 0;
 	SideLocus<index_t> l;
 	l.initFromRow(row, _gh, gfm());
