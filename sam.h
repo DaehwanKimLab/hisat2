@@ -957,11 +957,6 @@ const
             o.append(buf);
         }
     }
-    if(print_xr_) {
-        // Original read string
-        WRITE_SEP();
-        printOptFieldNewlineEscapedZ(o, rd.readOrigBuf);
-    }
     
     bool snp_first = true;
     index_t prev_snp_idx = INDEX_MAX;
@@ -996,7 +991,11 @@ const
         }
     }
     
-    o.append("\n");
+    if(print_xr_) {
+        // Original read string
+        o.append("\n");
+        printOptFieldNewlineEscapedZ(o, rd.readOrigBuf);
+    }
 }
 
 /**
