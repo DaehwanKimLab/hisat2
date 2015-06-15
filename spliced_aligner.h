@@ -132,14 +132,13 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
     // by comparing with the corresponding genomic sequences
     // this extension is performed without any mismatches allowed
     for(index_t hi = 0; hi < this->_genomeHits.size(); hi++) {
-        // daehwan - for debugging purposes
-        break;        
-        
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hi];
         index_t leftext = (index_t)OFF_MASK, rightext = (index_t)OFF_MASK;
         genomeHit.extend(
                          *(this->_rds[rdi]),
+                         gfm,
                          ref,
+                         snpdb,
                          ssdb,
                          swa,
                          swm,
@@ -147,7 +146,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                          sc,
                          this->_minsc[rdi],
                          rnd,
-                         this->_minK_local,
+                         INDEX_MAX,
                          this->_minIntronLen,
                          this->_maxIntronLen,
                          leftext,
@@ -308,7 +307,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      this->_sharedVars);
                         if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
                         int64_t minsc = max<int64_t>(this->_minsc[rdi], best_score);
-                        bool combined = tempHit.combineWith(hit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
+                        bool combined = tempHit.combineWith(hit, rd, gfm, ref, snpdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
                         index_t leftAnchorLen = 0, nedits = 0;
@@ -362,7 +361,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                             if(!canHit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
                             GenomeHit<index_t> combinedHit = canHit;
                             int64_t minsc = max<int64_t>(this->_minsc[rdi], best_score);
-                            bool combined = combinedHit.combineWith(tempHit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
+                            bool combined = combinedHit.combineWith(tempHit, rd, gfm, ref, snpdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
                             if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                             else         minsc = max(minsc, sink.bestUnp2());
                             index_t rightAnchorLen = 0, nedits = 0;
@@ -407,7 +406,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             }
             return maxsc;
         }
-    } else if(hitoff > 0 && (hitoff + hitlen == rdlen || hitoff + hitoff < rdlen - hitlen)) {
+    }
+    
+    // daehwan - for debugging purposes
+#if 0
+    else if(hitoff > 0 && (hitoff + hitlen == rdlen || hitoff + hitoff < rdlen - hitlen)) {
         if(!ssdb.empty()) {
             // extend the partial alignment in the left direction
             index_t fragoff = 0, fraglen = 0, left = 0;
@@ -435,7 +438,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  this->_sharedVars);
                     if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
                     int64_t minsc = this->_minsc[rdi];
-                    bool combined = tempHit.combineWith(hit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
+                    bool combined = tempHit.combineWith(hit, rd, gfm, ref, snpdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
@@ -475,7 +478,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
         if(hitoff == hit.rdoff() && hitoff <= this->_minK) {
             index_t leftext = (index_t)OFF_MASK, rightext = (index_t)0;
             GenomeHit<index_t> tempHit = hit;
-            tempHit.extend(rd, ref, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext, 1);
+            tempHit.extend(rd, gfm, ref, snpdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext, 1);
             if(tempHit.rdoff() == 0) {
                 use_localindex = false;
             }
@@ -586,11 +589,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     if(uniqueStop) {
                         assert_eq(coords.size(), 1);
                         index_t leftext = (index_t)OFF_MASK, rightext = (index_t)0;
-                        tempHit.extend(rd, ref, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
+                        tempHit.extend(rd, gfm, ref, snpdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
                     }
                     // combine the partial alignment and the new alignment
                     int64_t minsc = this->_minsc[rdi];
-                    bool combined = tempHit.combineWith(hit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen);
+                    bool combined = tempHit.combineWith(hit, rd, gfm, ref, snpdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen);
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
@@ -721,10 +724,10 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                         if(uniqueStop) {
                             assert_eq(coords.size(), 1);
                             index_t leftext = (index_t)OFF_MASK, rightext = (index_t)0;
-                            tempHit.extend(rd, ref, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
+                            tempHit.extend(rd, gfm, ref, snpdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
                         }
                         int64_t minsc = this->_minsc[rdi];
-                        bool combined = tempHit.combineWith(hit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen);
+                        bool combined = tempHit.combineWith(hit, rd, gfm, ref, snpdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen);
                         if(!this->_secondary) {
                             if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                             else         minsc = max(minsc, sink.bestUnp2());
@@ -793,7 +796,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 num_mismatch_allowed = min<index_t>(tempHit.rdoff(), mm);
             }
             him.localextatts++;
-            tempHit.extend(rd, ref, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext, num_mismatch_allowed);
+            tempHit.extend(rd, gfm, ref, snpdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext, num_mismatch_allowed);
             if(!this->_secondary) {
                 if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                 else         minsc = max(minsc, sink.bestUnp2());
@@ -883,7 +886,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
                     GenomeHit<index_t> combinedHit = hit;
                     int64_t minsc = this->_minsc[rdi];
-                    bool combined = combinedHit.combineWith(tempHit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
+                    bool combined = combinedHit.combineWith(tempHit, rd, gfm, ref, snpdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
@@ -923,7 +926,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
         if(hit.len() == hitlen && hitoff + hitlen + this->_minK > rdlen) {
             index_t leftext = (index_t)0, rightext = (index_t)OFF_MASK;
             GenomeHit<index_t> tempHit = hit;
-            tempHit.extend(rd, ref, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext, 1);
+            tempHit.extend(rd, gfm, ref, snpdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext, 1);
             if(tempHit.rdoff() + tempHit.len()== rdlen) {
                 use_localindex = false;
             }
@@ -1038,11 +1041,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                         else break;
                     }
                     index_t leftext = (index_t)0, rightext = (index_t)OFF_MASK;
-                    tempHit.extend(rd, ref, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
+                    tempHit.extend(rd, gfm, ref, snpdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
                     GenomeHit<index_t> combinedHit = hit;
                     int64_t minsc = this->_minsc[rdi];
                     // combine the partial alignment and the new alignment
-                    bool combined = combinedHit.combineWith(tempHit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen);
+                    bool combined = combinedHit.combineWith(tempHit, rd, gfm, ref, snpdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen);
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
@@ -1170,10 +1173,10 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      this->_sharedVars);
                         if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
                         index_t leftext = (index_t)0, rightext = (index_t)OFF_MASK;
-                        tempHit.extend(rd, ref, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
+                        tempHit.extend(rd, gfm, ref, snpdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
                         GenomeHit<index_t> combinedHit = hit;
                         int64_t minsc = this->_minsc[rdi];
-                        bool combined = combinedHit.combineWith(tempHit, rd, ref, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen);
+                        bool combined = combinedHit.combineWith(tempHit, rd, gfm, ref, snpdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen);
                         if(!this->_secondary) {
                             if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                             else         minsc = max(minsc, sink.bestUnp2());
@@ -1243,7 +1246,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 num_mismatch_allowed = min<index_t>(rdlen - tempHit.rdoff() - tempHit.len(), mm);
             }
             him.localextatts++;
-            tempHit.extend(rd, ref, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext, num_mismatch_allowed);
+            tempHit.extend(rd, gfm, ref, snpdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext, num_mismatch_allowed);
             if(!this->_secondary) {
                 if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                 else         minsc = max(minsc, sink.bestUnp2());
@@ -1301,6 +1304,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             }
         }
     }
+#endif
     
     return maxsc;
 }
