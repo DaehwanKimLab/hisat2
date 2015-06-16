@@ -3303,6 +3303,7 @@ void readEbwtRefnames(istream& in, EList<string>& refnames) {
         assert_eq((1u<<24), one);
         switchEndian = true;
     }
+    readU32(in, switchEndian); // version
     
     // Reads header entries one by one from primary stream
     index_t len           = readIndex<index_t>(in, switchEndian);
@@ -3629,30 +3630,7 @@ void GFM<index_t>::buildToDisk(
                                ostream& out1,
                                ostream& out2)
 {
-    // daehwan - for debugging purposes
-#ifndef NDEBUG
-#   if 0
-    {
-        cout << "i\tBWT\tF\tM\tpos\tfirstseq\tlastseq\tseqlen" << endl;
-        int gbwtChar; // one of A, C, G, T, and Z
-        int F, M;     // either 0 or 1
-        index_t pos;  // pos on joined string
-        index_t count = 0;
-        while(gbwt.nextRow(gbwtChar, F, M, pos)) {
-            cout << count << "\t" << (char)gbwtChar << "\t" << F << "\t" << M << "\t" << pos << endl;
-            count++;
-        }
-        index_t F_loc = 0;
-        while((F_loc = gbwt.nextFLocation()) != std::numeric_limits<index_t>::max()) {
-            cout << F_loc << endl;
-        }
-        exit(1);
-    }
-#   endif
-#endif
-    
-	const GFMParams<index_t>& gh = this->_gh;
-    
+    const GFMParams<index_t>& gh = this->_gh;
 	assert(gh.repOk());
 	assert_lt(s.length(), gh.gbwtLen());
 	assert_eq(s.length(), gh._len);
@@ -3660,7 +3638,7 @@ void GFM<index_t>::buildToDisk(
 	
 	index_t  gbwtLen = gh._gbwtLen;
     streampos out1pos = out1.tellp();
-    out1.seekp(4 + sizeof(index_t));
+    out1.seekp(8 + sizeof(index_t));
     writeIndex<index_t>(out1, gbwtLen, this->toBe());
     writeIndex<index_t>(out1, gh._numNodes, this->toBe());
     out1.seekp(out1pos);
@@ -4031,7 +4009,7 @@ void GFM<index_t>::buildToDisk(
 	}
     // Write eftab to primary file
     out1pos = out1.tellp();
-    out1.seekp(20 + sizeof(index_t) * 3);
+    out1.seekp(24 + sizeof(index_t) * 3);
     writeIndex<index_t>(out1, eftabLen, this->toBe());
     out1.seekp(out1pos);
     for(index_t i = 0; i < eftabLen; i++) {
@@ -4442,6 +4420,7 @@ void GFM<index_t>::readIntoMemory(
     }
     
     // Reads header entries one by one from primary stream
+    readU32(_in1, switchEndian); bytesRead += 4; // version
     index_t len           = readIndex<index_t>(_in1, switchEndian);
     bytesRead += sizeof(index_t);
     index_t gbwtLen       = readIndex<index_t>(_in1, switchEndian);
@@ -4946,6 +4925,7 @@ void readGFMRefnames(istream& in, EList<string>& refnames) {
     }
     
     // Reads header entries one by one from primary stream
+    readU32(in, switchEndian); // version
     index_t len           = readIndex<index_t>(in, switchEndian);
     index_t gbwtLen       = readIndex<index_t>(in, switchEndian);
     index_t numNodes      = readIndex<index_t>(in, switchEndian);
@@ -5049,6 +5029,7 @@ int32_t GFM<index_t>::readFlags(const string& instr) {
         assert_eq(1, endianSwapU32(one));
         switchEndian = true;
     }
+    readU32(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
@@ -5086,11 +5067,29 @@ void GFM<index_t>::writeFromMemory(bool justHeader,
     assert(out1.good());
     assert(out2.good());
     
+    char extra_version[256] = {0,};
+    int second_version, major_version = 0, minor_version = 0;
+    sscanf(HISAT2_VERSION, "%d.%d.%d-%s",
+           &second_version,
+           &major_version,
+           &minor_version,
+           extra_version);
+    int version = second_version & 0xff;
+    version = (version << 8) | (major_version & 0xff);
+    version = (version << 8) | (minor_version & 0xff);
+    version = version << 8;
+    if(strcmp(extra_version, "alpha") == 0) {
+        version |= 0x1;
+    } else if(strcmp(extra_version, "beta") == 0) {
+        version |= 0x2;
+    }
+    
     // When building an Ebwt, these header parameters are known
     // "up-front", i.e., they can be written to disk immediately,
     // before we join() or buildToDisk()
     writeI32(out1, 1, be); // endian hint for priamry stream
     writeI32(out2, 1, be); // endian hint for secondary stream
+    writeI32(out1, version, be); // version
     writeIndex<index_t>(out1, gh._len, be); // length of string (and bwt and suffix array)
     writeIndex<index_t>(out1, 0,       be); // dummy for gbwt len
     writeIndex<index_t>(out1, 0,       be); // dummy for number of nodes
