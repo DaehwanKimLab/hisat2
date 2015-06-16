@@ -146,6 +146,10 @@ public:
 		_len = len;
         _gbwtLen = (gbwtLen == 0 ? len + 1 : gbwtLen);
         _numNodes = (numNodes == 0 ? len + 1 : numNodes);
+        
+        // daehwan - for debugging purposes
+        _noSnp = false;
+        
         if(_noSnp) {
             _sz = (len+3)/4;
             _gbwtSz = _gbwtLen/4 + 1;
@@ -1362,7 +1366,7 @@ public:
 			try {
 #if 1
                 RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _snps, outfile, _nthreads, verbose);
-                PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads);
+                PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads, verbose);
                 pg->printInfo();
                 while(pg->IsSorted()) {
                     if(pg->repOk()) {
@@ -1370,13 +1374,13 @@ public:
                         delete pg; pg = NULL;
                         return;
                     }
-                    PathGraph<index_t>* next = new PathGraph<index_t>(*pg, _nthreads);
+                    PathGraph<index_t>* next = new PathGraph<index_t>(*pg);
                     delete pg; pg = next;
                     pg->printInfo();
                 }
                 
                 if(verbose) { cerr << "Generating edges... " << endl; }
-                if(!pg->generateEdges(*graph, _gh._ftabChars)) { return; }
+                if(!pg->generateEdges(*graph)) { return; }
                 // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
                 _gh.init(
                          _gh.len(),
@@ -1687,7 +1691,7 @@ public:
 		if(ftab[i] <= gbwtLen) {
 			return ftab[i];
 		} else {
-			index_t efIdx = ftab[i] ^ INDEX_MAX;
+			index_t efIdx = ftab[i] ^ (index_t)INDEX_MAX;
 			assert_lt(efIdx*2+1, eftabLen);
 			return eftab[efIdx*2+1];
 		}
@@ -1766,7 +1770,7 @@ public:
 		if(ftab[i] <= gbwtLen) {
 			return ftab[i];
 		} else {
-			index_t efIdx = ftab[i] ^ INDEX_MAX;
+			index_t efIdx = ftab[i] ^ (index_t)INDEX_MAX;
 			assert_lt(efIdx*2+1, eftabLen);
 			return eftab[efIdx*2];
 		}
@@ -1804,7 +1808,7 @@ public:
 		index_t hitlen) const
 	{
 		index_t off = tryOffset(elt);
-		if(off != INDEX_MAX && !fw) {
+		if(off != (index_t)INDEX_MAX && !fw) {
 			assert_lt(off, _gh._len);
 			off = _gh._len - off - 1;
 			assert_geq(off, hitlen-1);
@@ -2955,7 +2959,7 @@ public:
         assert_lt(c, 4);
         assert_geq(c, 0);
         index_t top = mapLF1(row, l, c);
-        if(top == INDEX_MAX) return pair<index_t, index_t>(0, 0);
+        if(top == (index_t)INDEX_MAX) return pair<index_t, index_t>(0, 0);
         index_t bot = top;
         
         l.initFromRow_bit(top + 1, gh(), gfm());
@@ -3016,7 +3020,7 @@ public:
 
         mapLF1(row, l);
         index_t top = row;
-        if(top == INDEX_MAX) return pair<index_t, index_t>(0, 0);
+        if(top == (index_t)INDEX_MAX) return pair<index_t, index_t>(0, 0);
         index_t bot = top;
         
         l.initFromRow_bit(top + 1, gh(), gfm());
@@ -3697,9 +3701,8 @@ void GFM<index_t>::buildToDisk(
 	index_t side = 0;
 
 	// Whether we're assembling a forward or a reverse bucket
-	bool fw;
+    bool fw = true;
 	int sideCur = 0;
-	fw = true;
 
 	index_t si = 0;   // string offset (chars)
 	ASSERT_ONLY(bool inSA = true); // true iff saI still points inside suffix
@@ -3747,9 +3750,9 @@ void GFM<index_t>::buildToDisk(
                     zOffs.push_back(si); // remember GBWT row that corresponds to the 0th suffix
 				} else {
                     gbwtChar = asc2dna[gbwtChar];
-					assert_lt(gbwtChar, 4);
-					// Update the fchr
-					fchr[gbwtChar]++;
+                    assert_lt(gbwtChar, 4);
+                    // Update the fchr
+                    fchr[gbwtChar]++;
 				}
                 
                 assert_lt(F, 2);
@@ -3830,7 +3833,7 @@ void GFM<index_t>::buildToDisk(
 #endif
 			}
 		} // end loop over bit-pairs
-		assert_eq(0, (occ[0] + occ[1] + occ[2] + occ[3] + zOffs.size()) & 3);
+        assert_eq(0, (occ[0] + occ[1] + occ[2] + occ[3] + zOffs.size()) & 3);
 #ifdef SIXTY4_FORMAT
 		assert_eq(0, si & 31);
 #else
@@ -3924,7 +3927,7 @@ void GFM<index_t>::buildToDisk(
             } else {
                 range = mapGLF1(range.first, tloc, nt);
             }
-            if(range.first == INDEX_MAX || range.first >= range.second) {
+            if(range.first == (index_t)INDEX_MAX || range.first >= range.second) {
                 break;
             }
             if(range.first + 1 == range.second) {
@@ -3991,7 +3994,7 @@ void GFM<index_t>::buildToDisk(
             assert_lt(eftabCur*2+1, eftabLen);
             eftab[eftabCur*2] = lo;
             eftab[eftabCur*2+1] = hi;
-            ftab[i] = (eftabCur++) ^ INDEX_MAX; // insert pointer into eftab
+            ftab[i] = (eftabCur++) ^ (index_t)INDEX_MAX; // insert pointer into eftab
             assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
             assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
         }
@@ -4018,7 +4021,7 @@ void GFM<index_t>::buildToDisk(
 	// Note: if you'd like to sanity-check the Ebwt, you'll have to
 	// read it back into memory first!
 	assert(!isInMemory());
-	VMSG_NL("Exiting Ebwt::buildToDisk()");
+	VMSG_NL("Exiting GFM::buildToDisk()");
 }
 
 extern string gLastIOErrMsg;
@@ -4137,7 +4140,7 @@ void GFM<index_t>::joinedToTextOff(
 template <typename index_t>
 index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
 	assert(offs() != NULL);
-	assert_neq(INDEX_MAX, row);
+	assert_neq((index_t)INDEX_MAX, row);
 	SideLocus<index_t> l;
 	if(steps > 0) l.initFromRow(row, _gh, gfm());
 	while(steps > 0) {
@@ -4146,7 +4149,7 @@ index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
         }
         pair<index_t, index_t> range = this->mapGLF1(row, l, NULL ASSERT_ONLY(, false));
         index_t newrow = range.first;
-		assert_neq(INDEX_MAX, newrow);
+		assert_neq((index_t)INDEX_MAX, newrow);
 		assert_neq(newrow, row);
 		row = newrow;
 		steps--;
@@ -4161,13 +4164,13 @@ index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
 template <typename index_t>
 index_t GFM<index_t>::getOffset(index_t row, index_t node) const {
 	assert(offs() != NULL);
-	assert_neq(INDEX_MAX, row);
+	assert_neq((index_t)INDEX_MAX, row);
     for(index_t i = 0; i < _zOffs.size(); i++) {
         if(row == _zOffs[i]) return 0;
     }
     if((node & _gh._offMask) == node) {
         index_t off = this->offs()[node >> _gh._offRate];
-        if(off != INDEX_MAX)
+        if(off != (index_t)INDEX_MAX)
             return off;
     }
 	index_t jumps = 0;
@@ -4178,7 +4181,7 @@ index_t GFM<index_t>::getOffset(index_t row, index_t node) const {
         pair<index_t, index_t> range = this->mapGLF1(row, l, &node_range ASSERT_ONLY(, false));
         index_t newrow = range.first;
 		jumps++;
-		assert_neq(INDEX_MAX, newrow);
+		assert_neq((index_t)INDEX_MAX, newrow);
 		assert_neq(newrow, row);
 		row = newrow;
         for(index_t i = 0; i < _zOffs.size(); i++) {
@@ -4187,7 +4190,7 @@ index_t GFM<index_t>::getOffset(index_t row, index_t node) const {
         
         if((node_range.first & _gh._offMask) == node_range.first) {
             index_t off = this->offs()[node_range.first >> _gh._offRate];
-            if(off != INDEX_MAX)
+            if(off != (index_t)INDEX_MAX)
                 return jumps + off;
 		}
 		l.initFromRow(row, _gh, gfm());
@@ -4206,7 +4209,7 @@ index_t GFM<index_t>::getOffset(
                                 index_t hitlen) const
 {
 	index_t off = getOffset(elt);
-	assert_neq(INDEX_MAX, off);
+	assert_neq((index_t)INDEX_MAX, off);
 	if(!fw) {
 		assert_lt(off, _gh._len);
 		off = _gh._len - off - 1;
@@ -4476,7 +4479,7 @@ void GFM<index_t>::readIntoMemory(
     }
     if(offRateDiff > 0) {
         offsLenSampled >>= offRateDiff;
-        if((offsLen & ~(INDEX_MAX << offRateDiff)) != 0) {
+        if((offsLen & ~(((index_t)INDEX_MAX) << offRateDiff)) != 0) {
             offsLenSampled++;
         }
     }

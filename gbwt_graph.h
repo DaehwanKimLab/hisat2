@@ -346,7 +346,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 }
             }
             
-            const index_t chunk_size = 1 << 20;
+            index_t chunk_size = 1 << 20;
             index_t pos = 0, range_idx = 0;
             for(index_t i = 0; i < szs.size(); i++) {
                 if(szs[i].len == 0) continue;
@@ -1254,10 +1254,10 @@ public:
     
 public:
     // Create a new graph in which paths are represented using nodes
-    PathGraph(RefGraph<index_t>& parent, int nthreads_);
+    PathGraph(RefGraph<index_t>& parent, int nthreads_ = 1, bool verbose_ = false);
     
     // Construct a next 2^(j+1) path graph from a 2^j path graph
-    PathGraph(PathGraph<index_t>& previous, int nthreads_);
+    PathGraph(PathGraph<index_t>& previous);
     
     ~PathGraph() {}
     
@@ -1272,7 +1272,7 @@ public:
     // Writes outdegree to PathNode.key.second, value to PathNode.to, and
     // predecessor labels to PathNode.key.first.
     // Restores the labels of parent.
-    bool generateEdges(RefGraph<index_t>& parent, index_t ftabChars = 10);
+    bool generateEdges(RefGraph<index_t>& parent);
     
     index_t getNumNodes() const { return nodes.size(); }
     index_t getNumEdges() const { return edges.size(); }
@@ -1361,6 +1361,7 @@ private:
     EList<pair<index_t, index_t> >* getSamples(index_t sample_rate, index_t& max_sample, const RefGraph<index_t>& base);
     
     int             nthreads;
+    bool            verbose;
     
     EList<PathNode> nodes;
     EList<PathNode> new_nodes; //keeps track of combined nodes not yet merged into nodes
@@ -1439,8 +1440,8 @@ public: EList<pair<index_t, index_t> > ftab;
 //Creates an initial PathGRaph from the RefGraph
 //All nodes begin as unsorted nodes
 template <typename index_t>
-PathGraph<index_t>::PathGraph(RefGraph<index_t>& base, int nthreads_) :
-nthreads(nthreads_),
+PathGraph<index_t>::PathGraph(RefGraph<index_t>& base, int nthreads_, bool verbose_) :
+nthreads(nthreads_), verbose(verbose_),
 ranks(0), max_label('Z'), temp_nodes(0), generation(0),
 status(error), has_stabilized(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
@@ -1484,8 +1485,8 @@ report_F_node_idx(0), report_F_location(0)
 //merging all nodes together
 //updating ranks and adding nodes that become sorted to sorted.
 template <typename index_t>
-PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous, int nthreads_) :
-nthreads(nthreads_),
+PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
+nthreads(previous.nthreads), verbose(previous.verbose),
 ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1),
 status(error), has_stabilized(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
@@ -1508,7 +1509,7 @@ report_F_node_idx(0), report_F_location(0)
     
     {
       // Initialize array to be used for hash table
-      cerr << "Allocating size " << table_size << " array..." << endl;
+      if(verbose) cerr << "Allocating size " << table_size << " array..." << endl;
       EList<index_t> nodes_table;
       nodes_table.resizeExact(table_size);
       nodes_table.fill(INDEX_MAX);
@@ -1517,7 +1518,7 @@ report_F_node_idx(0), report_F_location(0)
       nodes_list.resizeExact(num_unsorted * 1.1); nodes_list.clear();
       
       // Populate hash table
-      cerr << "Populating the hash table..." << endl;
+      if(verbose) cerr << "Populating the hash table..." << endl;
       for(index_t i = 0; i < previous.nodes.size(); i++) {
 	if(!previous.nodes[i].isSorted()) {
 	  index_t hash = previous.nodes[i].to % nodes_table.size();
@@ -1529,7 +1530,7 @@ report_F_node_idx(0), report_F_location(0)
       }
 
       // Query against hash table
-      cerr << "Querying all nodes against hash table..." << endl;
+      if(verbose) cerr << "Querying all nodes against hash table..." << endl;
     
       // Create combined nodes
       index_t max_rank = previous.nodes.back().key.first;
@@ -1574,7 +1575,7 @@ report_F_node_idx(0), report_F_location(0)
     	}
       }
 
-      cerr << "Merging new nodes into previous.nodes..." << endl;
+      if(verbose) cerr << "Merging new nodes into previous.nodes..." << endl;
       index_t curr_rank = 0;
       index_t prev_idx = 0;
       nodes.resizeExact(previous.nodes.size() + nodes_list2.size()); // this is an overestimate
@@ -1606,7 +1607,7 @@ report_F_node_idx(0), report_F_location(0)
     temp_nodes = nodes.size();
     status = ok;
     
-    cerr << "Pruning and updating ranks..." << endl;
+    if(verbose) cerr << "Pruning and updating ranks..." << endl;
     mergeUpdateRank();
 
     if(previous.has_stabilized || (generation >= 11 || ranks >= 0.8 * new_nodes.size())) {
@@ -1617,14 +1618,16 @@ report_F_node_idx(0), report_F_location(0)
 template <typename index_t>
 void PathGraph<index_t>::printInfo()
 {
-    cerr << "Generation " << generation
-         << " (" << temp_nodes << " -> " << nodes.size() << " nodes, "
-         << ranks << " ranks)" << endl;
+    if(verbose) {
+        cerr << "Generation " << generation
+        << " (" << temp_nodes << " -> " << nodes.size() << " nodes, "
+        << ranks << " ranks)" << endl;
+    }
 }
 
 //--------------------------------------------------------------------------
 template <typename index_t>
-bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChars)
+bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
     if(status != sorted)
         return false;
@@ -1907,44 +1910,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base, index_t ftabChar
     cerr << "Final: " << tmp_F.back() << " vs. " << tmp_M.back() << endl;
 #   endif
     
-#endif
-    
-#ifndef NDEBUG
-    // Ftab
-    if(ftabChars <= 6) {
-        index_t ftabLen = 1 << (ftabChars << 1);
-        ftab.resize(ftabLen);
-        for(index_t i = 0; i < ftabLen; i++) {
-            index_t q = i;
-            index_t top = 0, bot = edges.size();
-            index_t j = 0;
-            for(; j < ftabChars; j++) {
-                if(top >= bot) break;
-                int nt = q & 0x3; q >>= 2;
-                
-                top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
-                bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
-                
-                if(top >= bot) break;
-                
-                top = rank1(M_array, top) - 1;
-                bot = rank1(M_array, bot - 1);
-                
-                top = select1(F_array, top + 1);
-                bot = select1(F_array, bot + 1);
-            }
-            if(j < ftabChars) {
-                if(i == 0) {
-                    ftab[i].first = ftab[i].second = 0;
-                } else {
-                ftab[i].first = ftab[i].second = ftab[i-1].second;
-                }
-            } else {
-                ftab[i].first = top;
-                ftab[i].second = bot;
-            }
-        }
-    }
 #endif
     
     return true;

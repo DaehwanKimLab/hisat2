@@ -38,32 +38,33 @@ public:
 	/// Construct an Ebwt from the given input file
 	LocalGFM(const string& in,
              SNPDB<index_t>* snpdb,
-			  FILE *in5,
-			  FILE *in6,
-			  char *mmFile5,
-			  char *mmFile6,
-			  full_index_t& tidx,
-			  full_index_t& localOffset,
-			  bool switchEndian,
-			  size_t& bytesRead,
-			  int needEntireReverse,
-			  bool fw,
-			  int32_t overrideOffRate, // = -1,
-			  int32_t offRatePlus, // = -1,
-			  uint32_t lineRate,
-			  uint32_t offRate,
-			  uint32_t ftabChars,
-			  bool useMm, // = false,
-			  bool useShmem, // = false,
-			  bool mmSweep, // = false,
-			  bool loadNames, // = false,
-			  bool loadSASamp, // = true,
-			  bool loadFtab, // = true,
-			  bool loadRstarts, // = true,
-			  bool verbose, // = false,
-			  bool startVerbose, // = false,
-			  bool passMemExc, // = false,
-			  bool sanityCheck) : // = false) :
+             FILE *in5,
+             FILE *in6,
+             char *mmFile5,
+             char *mmFile6,
+             full_index_t& tidx,
+             full_index_t& localOffset,
+             full_index_t& joinedOffset,
+             bool switchEndian,
+             size_t& bytesRead,
+             int needEntireReverse,
+             bool fw,
+             int32_t overrideOffRate, // = -1,
+             int32_t offRatePlus, // = -1,
+             uint32_t lineRate,
+             uint32_t offRate,
+             uint32_t ftabChars,
+             bool useMm, // = false,
+             bool useShmem, // = false,
+             bool mmSweep, // = false,
+             bool loadNames, // = false,
+             bool loadSASamp, // = true,
+             bool loadFtab, // = true,
+             bool loadRstarts, // = true,
+             bool verbose, // = false,
+             bool startVerbose, // = false,
+             bool passMemExc, // = false,
+             bool sanityCheck) : // = false) :
 	GFM<index_t>(in,
                  snpdb,
                  needEntireReverse,
@@ -92,6 +93,7 @@ public:
 					   mmFile6,
 					   tidx,
 					   localOffset,
+                       joinedOffset,
 					   switchEndian,
 					   bytesRead,
 					   needEntireReverse,
@@ -108,6 +110,7 @@ public:
 		
 		_tidx = tidx;
 		_localOffset = localOffset;
+        _joinedOffset = joinedOffset;
 		
 		// If the offRate has been overridden, reflect that in the
 		// _eh._offRate field
@@ -130,7 +133,10 @@ public:
 	LocalGFM(
              TStr& s,
              full_index_t tidx,
-             full_index_t local_offset,
+             full_index_t localOffset,
+             full_index_t joinedOffset,
+             const EList<SNP<full_index_t> >& snps,
+             const string& out_basename,
              index_t local_size,
              bool packed,
              int needEntireReverse,
@@ -172,9 +178,17 @@ public:
 		uint32_t be = this->toBe();
 		assert(out5.good());
 		assert(out6.good());
+        _tidx = tidx;
+        _localOffset = localOffset;
+        _joinedOffset = joinedOffset;
 		writeIndex<full_index_t>(out5, tidx, be);
-		writeIndex<full_index_t>(out5, local_offset, be);
-		writeU32(out5, gh._len, be); // length of string (and bwt and suffix array)
+		writeIndex<full_index_t>(out5, localOffset, be);
+        writeIndex<full_index_t>(out5, joinedOffset, be);
+        writeIndex<index_t>(out5, gh._len, be); // length of string (and bwt and suffix array)
+        streampos headerPos = out5.tellp();
+        writeIndex<index_t>(out5, 0, be); // gbwtLen
+        writeIndex<index_t>(out5, 0, be); // num of nodes
+        writeIndex<index_t>(out5, 0, be); // eftabLen        
 		if(gh._len > 0) {
 			assert_gt(szs.size(), 0);
 			assert_gt(sztot, 0);
@@ -219,13 +233,56 @@ public:
 			} else {
 				this->szsToDisk(szs, out5, refparams.reverse);
 			}
-			
-			VMSG_NL("Constructing suffix-array element generator");
-			KarkkainenBlockwiseSA<TStr> bsa(s, s.length()+1, dcv, seed, this->_sanity, this->_passMemExc, this->_verbose);
-			assert(bsa.suffixItrIsReset());
-			assert_eq(bsa.size(), s.length()+1);
-			VMSG_NL("Converting suffix-array elements to index image");
-			buildToDisk(bsa, s, out5, out6);
+            
+#if 1
+            RefGraph<full_index_t>* graph = new RefGraph<full_index_t>(
+                                                                       s,
+                                                                       szs,
+                                                                       snps,
+                                                                       out_basename,
+                                                                       1,        /* num threads */
+                                                                       false);   /* verbose? */
+            PathGraph<full_index_t>* pg = new PathGraph<full_index_t>(
+                                                                      *graph,
+                                                                      1,         /* num threads */
+                                                                      false);    /* verbose? */
+            pg->printInfo();
+            while(pg->IsSorted()) {
+                if(pg->repOk()) {
+                    cerr << "Error: Invalid PathGraph!" << endl;
+                    delete pg; pg = NULL;
+                    return;
+                }
+                PathGraph<full_index_t>* next = new PathGraph<full_index_t>(*pg);
+                delete pg; pg = next;
+                pg->printInfo();
+            }
+            if(!pg->generateEdges(*graph)) {
+                cerr << "An error occurred - generateEdges" << endl;
+                throw 1;
+            }
+            
+            // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
+            this->_gh.init(
+                           this->_gh.len(),
+                           pg->getNumEdges(),
+                           pg->getNumNodes(),
+                           this->_gh.lineRate(),
+                           this->_gh.offRate(),
+                           this->_gh.ftabChars(),
+                           0,
+                           this->_gh.entireReverse());
+            buildToDisk(*pg, s, out5, out6, headerPos);
+            delete pg; pg = NULL;
+            delete graph; graph = NULL;
+#else
+            VMSG_NL("Constructing suffix-array element generator");
+            KarkkainenBlockwiseSA<TStr> bsa(s, s.length()+1, dcv, seed, this->_sanity, this->_passMemExc, this->_verbose);
+            assert(bsa.suffixItrIsReset());
+            assert_eq(bsa.size(), s.length()+1);
+            VMSG_NL("Converting suffix-array elements to index image");
+            buildToDisk(bsa, s, out5, out6);
+#endif
 		}
 		
 		out5.flush(); out6.flush();
@@ -236,10 +293,11 @@ public:
 	}
 	
 	template <typename TStr> void buildToDisk(
-											  InorderBlockwiseSA<TStr>& sa,
+											  PathGraph<full_index_t>& gbwt,
 											  const TStr& s,
 											  ostream& out1, 
-											  ostream& out2);
+											  ostream& out2,
+                                              streampos& headerPos);
 	
 	// I/O
 	void readIntoMemory(
@@ -249,6 +307,7 @@ public:
 						char *mmFile6,
 						full_index_t& tidx,
 						full_index_t& localOffset,
+                        full_index_t& joinedOffset,
 						bool switchEndian,
 						size_t bytesRead,
 						int needEntireRev,
@@ -277,6 +336,7 @@ public:
 public:
 	full_index_t _tidx;
 	full_index_t _localOffset;
+    full_index_t _joinedOffset;
 };
 
 /**
@@ -304,44 +364,48 @@ public:
 template <typename index_t, typename full_index_t>
 template <typename TStr>
 void LocalGFM<index_t, full_index_t>::buildToDisk(
-                                                  InorderBlockwiseSA<TStr>& sa,
+                                                  PathGraph<full_index_t>& gbwt,
                                                   const TStr& s,
                                                   ostream& out5,
-                                                  ostream& out6)
+                                                  ostream& out6,
+                                                  streampos& headerPos)
 {
 	assert_leq(s.length(), std::numeric_limits<index_t>::max());
 	const GFMParams<index_t>& gh = this->_gh;
 	
 	assert(gh.repOk());
-	assert_eq(s.length()+1, sa.size());
-	assert_eq(s.length(), gh._len);
+    assert_lt(s.length(), gh.gbwtLen());
+    assert_eq(s.length(), gh._len);
 	assert_gt(gh._lineRate, 3);
-	assert(sa.suffixItrIsReset());
-	
-	index_t len = gh._len;
+    
+    index_t  gbwtLen = gh._gbwtLen;
+    streampos out5pos = out5.tellp();
+    out5.seekp(headerPos);
+    writeIndex<index_t>(out5, gbwtLen, this->toBe());
+    writeIndex<index_t>(out5, gh._numNodes, this->toBe());
+    headerPos = out5.tellp();
+    out5.seekp(out5pos);
+    
 	index_t ftabLen = gh._ftabLen;
 	index_t sideSz = gh._sideSz;
 	index_t gbwtTotSz = gh._gbwtTotSz;
 	index_t fchr[] = {0, 0, 0, 0, 0};
 	EList<index_t> ftab(EBWT_CAT);
-	index_t zOff = (index_t)OFF_MASK;
+	EList<index_t> zOffs;
 	
 	// Save # of occurrences of each character as we walk along the bwt
 	index_t occ[4] = {0, 0, 0, 0};
 	index_t occSave[4] = {0, 0, 0, 0};
+    // # of occurrences of 1 in M arrays
+    index_t M_occ = 0, M_occSave = 0;
+    // Location in F that corresponds to 1 in M
+    index_t F_loc = 0, F_locSave = 0;
 	
-	// Record rows that should "absorb" adjacent rows in the ftab.
-	// The absorbed rows represent suffixes shorter than the ftabChars
-	// cutoff.
-	uint8_t absorbCnt = 0;
-	EList<uint8_t> absorbFtab(EBWT_CAT);
 	try {
 		VMSG_NL("Allocating ftab, absorbFtab");
 		ftab.resize(ftabLen);
 		ftab.fillZero();
-		absorbFtab.resize(ftabLen);
-		absorbFtab.fillZero();
-	} catch(bad_alloc &e) {
+    } catch(bad_alloc &e) {
 		cerr << "Out of memory allocating ftab[] or absorbFtab[] "
 		<< "in Ebwt::buildToDisk() at " << __FILE__ << ":"
 		<< __LINE__ << endl;
@@ -351,15 +415,17 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 	// Allocate the side buffer; holds a single side as its being
 	// constructed and then written to disk.  Reused across all sides.
 #ifdef SIXTY4_FORMAT
-	EList<uint64_t> gbwtSide(EBWT_CAT);
+	EList<uint64_t> gfmSide(EBWT_CAT);
 #else
-	EList<uint8_t> gbwtSide(EBWT_CAT);
+	EList<uint8_t> gfmSide(EBWT_CAT);
 #endif
 	try {
+        // Used to calculate ftab and eftab, but having gfm costs a lot of memory
+        this->_gfm.init(new uint8_t[gh._gbwtTotLen], gh._gbwtTotLen, true);
 #ifdef SIXTY4_FORMAT
-		gbwtSide.resize(sideSz >> 3);
+		gfmSide.resize(sideSz >> 3);
 #else
-		gbwtSide.resize(sideSz);
+		gfmSide.resize(sideSz);
 #endif
 	} catch(bad_alloc &e) {
 		cerr << "Out of memory allocating ebwtSide[] in "
@@ -373,15 +439,10 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 	index_t side = 0;
 	
 	// Whether we're assembling a forward or a reverse bucket
-	bool fw;
+    bool fw = true;
 	int sideCur = 0;
-	fw = true;
 	
-	// Have we skipped the '$' in the last column yet?
-	ASSERT_ONLY(bool dollarSkipped = false);
-
 	index_t si = 0;   // string offset (chars)
-	ASSERT_ONLY(uint32_t lastSufInt = 0);
 	ASSERT_ONLY(bool inSA = true); // true iff saI still points inside suffix
 	// array (as opposed to the padding at the
 	// end)
@@ -389,12 +450,16 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 	VMSG_NL("Entering Ebwt loop");
 	ASSERT_ONLY(uint32_t beforeGbwtOff = (uint32_t)out5.tellp());
 	while(side < gbwtTotSz) {
-		// Sanity-check our cursor into the side buffer
+        // Sanity-check our cursor into the side buffer
 		assert_geq(sideCur, 0);
 		assert_lt(sideCur, (int)gh._sideGbwtSz);
 		assert_eq(0, side % sideSz); // 'side' must be on side boundary
-		gbwtSide[sideCur] = 0; // clear
-		assert_lt(side + sideCur, gbwtTotSz);
+		gfmSide[sideCur] = 0; // clear
+        if(sideCur == 0) {
+            memset(gfmSide.ptr(), 0, gh._sideGbwtSz);
+            gfmSide[sideCur] = 0; // clear
+        }
+        assert_lt(side + sideCur, gbwtTotSz);
 		// Iterate over bit-pairs in the si'th character of the BWT
 #ifdef SIXTY4_FORMAT
 		for(int bpi = 0; bpi < 32; bpi++, si++) {
@@ -402,107 +467,109 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 		for(int bpi = 0; bpi < 4; bpi++, si++) {
 #endif
 			int gbwtChar;
-			bool count = true;
-			if(si <= len) {
-				// Still in the SA; extract the bwtChar
-				index_t saElt = (index_t)sa.nextSuffix();
+            int F, M;
+            full_index_t pos;
+            bool count = true;
+			if(si < gbwtLen) {
+                gbwt.nextRow(gbwtChar, F, M, pos);
+
 				// (that might have triggered sa to calc next suf block)
-				if(saElt == 0) {
+				if(gbwtChar == 'Z') {
 					// Don't add the '$' in the last column to the BWT
 					// transform; we can't encode a $ (only A C T or G)
 					// and counting it as, say, an A, will mess up the
 					// LR mapping
 					gbwtChar = 0; count = false;
-					ASSERT_ONLY(dollarSkipped = true);
-					zOff = si; // remember the SA row that
-					// corresponds to the 0th suffix
-				} else {
-					gbwtChar = (int)(s[saElt-1]);
-					assert_lt(gbwtChar, 4);
-					// Update the fchr
-					fchr[gbwtChar]++;
-				}
-				// Update ftab
-				if((len-saElt) >= (index_t)gh._ftabChars) {
-					// Turn the first ftabChars characters of the
-					// suffix into an integer index into ftab.  The
-					// leftmost (lowest index) character of the suffix
-					// goes in the most significant bit pair if the
-					// integer.
-					uint32_t sufInt = 0;
-					for(int i = 0; i < gh._ftabChars; i++) {
-						sufInt <<= 2;
-						assert_lt((index_t)i, len-saElt);
-						sufInt |= (unsigned char)(s[saElt+i]);
-					}
-					// Assert that this prefix-of-suffix is greater
-					// than or equal to the last one (true b/c the
-					// suffix array is sorted)
 #ifndef NDEBUG
-					if(lastSufInt > 0) assert_geq(sufInt, lastSufInt);
-					lastSufInt = sufInt;
+                    if(zOffs.size() > 0) {
+                        assert_gt(si, zOffs.back());
+                    }
 #endif
-					// Update ftab
-					assert_lt(sufInt+1, ftabLen);
-					ftab[sufInt+1]++;
-					if(absorbCnt > 0) {
-						// Absorb all short suffixes since the last
-						// transition into this transition
-						absorbFtab[sufInt] = absorbCnt;
-						absorbCnt = 0;
-					}
+                    zOffs.push_back(si); // remember GBWT row that corresponds to the 0th suffix
 				} else {
-					// Otherwise if suffix is fewer than ftabChars
-					// characters long, then add it to the 'absorbCnt';
-					// it will be absorbed into the next transition
-					assert_lt(absorbCnt, 255);
-					absorbCnt++;
+                    gbwtChar = asc2dna[gbwtChar];
+                    assert_lt(gbwtChar, 4);
+                    // Update the fchr
+                    fchr[gbwtChar]++;
 				}
-				// Suffix array offset boundary? - update offset array
-				if((si & gh._offMask) == si) {
-					assert_lt((si >> gh._offRate), gh._offsLen);
-					// Write offsets directly to the secondary output
-					// stream, thereby avoiding keeping them in memory
-					writeIndex(out6, saElt, this->toBe());
-				}
-			} else {
+                assert_lt(F, 2);
+                assert_lt(M, 2);
+                if(M == 1) {
+                    assert_neq(F_loc, numeric_limits<index_t>::max());
+                    F_loc = gbwt.nextFLocation();
+#ifndef NDEBUG
+                    if(F_loc > 0) {
+                        assert_gt(F_loc, F_locSave);
+                    }
+#endif
+                }
+                // Suffix array offset boundary? - update offset array
+                if(M == 1 && (M_occ & gh._offMask) == M_occ) {
+                    assert_lt((M_occ >> gh._offRate), gh._offsLen);
+                    // Write offsets directly to the secondary output
+                    // stream, thereby avoiding keeping them in memory
+                    writeIndex<index_t>(out6, pos, this->toBe());
+                }
+            } else {
 				// Strayed off the end of the SA, now we're just
 				// padding out a bucket
 #ifndef NDEBUG
 				if(inSA) {
 					// Assert that we wrote all the characters in the
 					// string before now
-					assert_eq(si, len+1);
+					assert_eq(si, gbwtLen);
 					inSA = false;
 				}
 #endif
 				// 'A' used for padding; important that padding be
 				// counted in the occ[] array
 				gbwtChar = 0;
+                F = M = 0;
 			}
-			if(count) occ[gbwtChar]++;
-			// Append BWT char to bwt section of current side
-			if(fw) {
-				// Forward bucket: fill from least to most
+            if(count) occ[gbwtChar]++;
+            if(M) M_occ++;
+            // Append BWT char to bwt section of current side
+            if(fw) {
+                // Forward bucket: fill from least to most
 #ifdef SIXTY4_FORMAT
-				gbwtSide[sideCur] |= ((uint64_t)gbwtChar << (bpi << 1));
-				if(gbwtChar > 0) assert_gt(gbwtSide[sideCur], 0);
+                gfmSide[sideCur] |= ((uint64_t)gbwtChar << (bpi << 1));
+                if(gbwtChar > 0) assert_gt(gfmSide[sideCur], 0);
+                assert(false);
+                cerr << "Not implemented" << endl;
+                exit(1);
 #else
-				pack_2b_in_8b(gbwtChar, gbwtSide[sideCur], bpi);
-				assert_eq((gbwtSide[sideCur] >> (bpi*2)) & 3, gbwtChar);
+                pack_2b_in_8b(gbwtChar, gfmSide[sideCur], bpi);
+                assert_eq((gfmSide[sideCur] >> (bpi*2)) & 3, gbwtChar);
+                
+                int F_sideCur = (gh._sideGbwtSz + sideCur) >> 1;
+                int F_bpi = bpi + ((sideCur & 0x1) << 2); // Can be used as M_bpi as well
+                pack_1b_in_8b(F, gfmSide[F_sideCur], F_bpi);
+                assert_eq((gfmSide[F_sideCur] >> F_bpi) & 1, F);
+                
+                int M_sideCur = F_sideCur + (gh._sideGbwtSz >> 2);
+                pack_1b_in_8b(M, gfmSide[M_sideCur], F_bpi);
+                assert_eq((gfmSide[M_sideCur] >> F_bpi) & 1, M);
 #endif
-			} else {
+            } else {
 				// Backward bucket: fill from most to least
 #ifdef SIXTY4_FORMAT
-				gbwtSide[sideCur] |= ((uint64_t)gbwtChar << ((31 - bpi) << 1));
-				if(gbwtChar > 0) assert_gt(gbwtSide[sideCur], 0);
+                gfmSide[sideCur] |= ((uint64_t)gbwtChar << ((31 - bpi) << 1));
+                if(gbwtChar > 0) assert_gt(gfmSide[sideCur], 0);
+                // To be implemented ...
+                assert(false);
+                cerr << "Not implemented" << endl;
+                exit(1);
 #else
-				pack_2b_in_8b(gbwtChar, gbwtSide[sideCur], 3-bpi);
-				assert_eq((gbwtSide[sideCur] >> ((3-bpi)*2)) & 3, gbwtChar);
+                pack_2b_in_8b(gbwtChar, gfmSide[sideCur], 3-bpi);
+				assert_eq((gfmSide[sideCur] >> ((3-bpi)*2)) & 3, gbwtChar);
+                // To be implemented ...
+                assert(false);
+                cerr << "Not implemented" << endl;
+                exit(1);
 #endif
-			}
-		} // end loop over bit-pairs
-		assert_eq(dollarSkipped ? 3 : 0, (occ[0] + occ[1] + occ[2] + occ[3]) & 3);
+            }
+        } // end loop over bit-pairs
+        assert_eq(0, (occ[0] + occ[1] + occ[2] + occ[3] + zOffs.size()) & 3);
 #ifdef SIXTY4_FORMAT
 		assert_eq(0, si & 31);
 #else
@@ -510,115 +577,182 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 #endif
 		
 		sideCur++;
-		if(sideCur == (int)gh._sideGbwtSz) {
+		if((sideCur << 1) == (int)gh._sideGbwtSz) {
 			sideCur = 0;
-			index_t *uside = reinterpret_cast<index_t*>(gbwtSide.ptr());
+			index_t *uside = reinterpret_cast<index_t*>(gfmSide.ptr());
 			// Write 'A', 'C', 'G' and 'T' tallies
 			side += sideSz;
 			assert_leq(side, gh._gbwtTotSz);
+            uside[(sideSz / sizeof(index_t))-6] = endianizeIndex(F_locSave, this->toBe());
+            uside[(sideSz / sizeof(index_t))-5] = endianizeIndex(M_occSave, this->toBe());
 			uside[(sideSz / sizeof(index_t))-4] = endianizeIndex(occSave[0], this->toBe());
 			uside[(sideSz / sizeof(index_t))-3] = endianizeIndex(occSave[1], this->toBe());
 			uside[(sideSz / sizeof(index_t))-2] = endianizeIndex(occSave[2], this->toBe());
 			uside[(sideSz / sizeof(index_t))-1] = endianizeIndex(occSave[3], this->toBe());
+            F_locSave = F_loc;
+            M_occSave = M_occ;
 			occSave[0] = occ[0];
 			occSave[1] = occ[1];
 			occSave[2] = occ[2];
 			occSave[3] = occ[3];
 			// Write backward side to primary file
-			out5.write((const char *)gbwtSide.ptr(), sideSz);
+			out5.write((const char *)gfmSide.ptr(), sideSz);
+            
+            //
+            memcpy(((char*)this->_gfm.get()) + side - sideSz, (const char *)gfmSide.ptr(), sideSz);
 		}
 	}
 	VMSG_NL("Exited Ebwt loop");
-	assert_neq(zOff, (index_t)OFF_MASK);
-	if(absorbCnt > 0) {
-		// Absorb any trailing, as-yet-unabsorbed short suffixes into
-		// the last element of ftab
-		absorbFtab[ftabLen-1] = absorbCnt;
-	}
 	// Assert that our loop counter got incremented right to the end
 	assert_eq(side, gh._gbwtTotSz);
-	// Assert that we wrote the expected amount to out1
+	// Assert that we wrote the expected amount to out5
 	assert_eq(((uint32_t)out5.tellp() - beforeGbwtOff), gh._gbwtTotSz);
 	// assert that the last thing we did was write a forward bucket
 	
-	//
-	// Write zOff to primary stream
-	//
-	writeIndex(out5, zOff, this->toBe());
+    //
+    // Write zOffs to primary stream
+    //
+    assert_gt(zOffs.size(), 0);
+    writeIndex<index_t>(out5, zOffs.size(), this->toBe());
+    for(size_t i = 0; i < zOffs.size(); i++) {
+        writeIndex<index_t>(out5, zOffs[i], this->toBe());
+    }
+        
+    //
+    // Finish building fchr
+    //
+    // Exclusive prefix sum on fchr
+    for(int i = 1; i < 4; i++) {
+        fchr[i] += fchr[i-1];
+    }
+    assert_lt(fchr[3], gbwtLen);
+    // Shift everybody up by one
+    for(int i = 4; i >= 1; i--) {
+        fchr[i] = fchr[i-1];
+    }
+    fchr[0] = 0;
+    // Write fchr to primary file
+    for(int i = 0; i < 5; i++) {
+        writeIndex<index_t>(out5, fchr[i], this->toBe());
+    }
+    this->_fchr.init(new index_t[5], 5, true);
+    memcpy(this->_fchr.get(), fchr, sizeof(index_t) * 5);
+        
+    // Initialize _zGbwtByteOffs and _zGbwtBpOffs
+    this->_zOffs = zOffs;
+    this->postReadInit(gh);
 	
-	//
-	// Finish building fchr
-	//
-	// Exclusive prefix sum on fchr
-	for(int i = 1; i < 4; i++) {
-		fchr[i] += fchr[i-1];
-	}
-	assert_eq(fchr[3], len);
-	// Shift everybody up by one
-	for(int i = 4; i >= 1; i--) {
-		fchr[i] = fchr[i-1];
-	}
-	fchr[0] = 0;
-	if(this->_verbose) {
-		for(int i = 0; i < 5; i++)
-			cout << "fchr[" << "ACGT$"[i] << "]: " << fchr[i] << endl;
-	}
-	// Write fchr to primary file
-	for(int i = 0; i < 5; i++) {
-		writeIndex(out5, fchr[i], this->toBe());
-	}
-	
-	//
-	// Finish building ftab and build eftab
-	//
-	// Prefix sum on ftable
-	index_t eftabLen = 0;
-	assert_eq(0, absorbFtab[0]);
-	for(index_t i = 1; i < ftabLen; i++) {
-		if(absorbFtab[i] > 0) eftabLen += 2;
-	}
-	assert_leq(eftabLen, (index_t)gh._ftabChars*2);
-	eftabLen = gh._ftabChars*2;
-	EList<index_t> eftab(EBWT_CAT);
-	try {
-		eftab.resize(eftabLen);
-		eftab.fillZero();
-	} catch(bad_alloc &e) {
-		cerr << "Out of memory allocating eftab[] "
-		<< "in Ebwt::buildToDisk() at " << __FILE__ << ":"
-		<< __LINE__ << endl;
-		throw e;
-	}
-	index_t eftabCur = 0;
-	for(index_t i = 1; i < ftabLen; i++) {
-		index_t lo = ftab[i] + GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), len, ftabLen, eftabLen, i-1);
-		if(absorbFtab[i] > 0) {
-			// Skip a number of short pattern indicated by absorbFtab[i]
-			index_t hi = lo + absorbFtab[i];
-			assert_lt(eftabCur*2+1, eftabLen);
-			eftab[eftabCur*2] = lo;
-			eftab[eftabCur*2+1] = hi;
-			ftab[i] = (eftabCur++) ^ (index_t)OFF_MASK; // insert pointer into eftab
-			assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), len, ftabLen, eftabLen, i));
-			assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), len, ftabLen, eftabLen, i));
-		} else {
-			ftab[i] = lo;
-		}
-	}
-	assert_eq(GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), len, ftabLen, eftabLen, ftabLen-1), len+1);
-	// Write ftab to primary file
-	for(index_t i = 0; i < ftabLen; i++) {
-		writeIndex(out5, ftab[i], this->toBe());
-	}
-	// Write eftab to primary file
-	for(index_t i = 0; i < eftabLen; i++) {
-		writeIndex(out5, eftab[i], this->toBe());
-	}
-	
-	// Note: if you'd like to sanity-check the Ebwt, you'll have to
-	// read it back into memory first!
-	assert(!this->isInMemory());
-	VMSG_NL("Exiting Ebwt::buildToDisk()");
+    // Build ftab and eftab
+    EList<pair<index_t, index_t> > tFtab;
+    tFtab.resizeExact(ftabLen - 1);
+    for(index_t i = 0; i + 1 < ftabLen; i++) {
+        index_t q = i;
+        pair<index_t, index_t> range(0, gh._gbwtLen);
+        SideLocus<index_t> tloc, bloc;
+        SideLocus<index_t>::initFromTopBot(range.first, range.second, gh, this->gfm(), tloc, bloc);
+        index_t j = 0;
+        for(; j < gh._ftabChars; j++) {
+            int nt = q & 0x3; q >>= 2;
+            if(bloc.valid()) {
+                range = this->mapGLF(tloc, bloc, nt);
+            } else {
+                range = this->mapGLF1(range.first, tloc, nt);
+            }
+            if(range.first == INDEX_MAX || range.first >= range.second) {
+                break;
+            }
+            if(range.first + 1 == range.second) {
+                tloc.initFromRow(range.first, gh, this->gfm());
+                bloc.invalidate();
+            } else {
+                SideLocus<index_t>::initFromTopBot(range.first, range.second, gh, this->gfm(), tloc, bloc);
+            }
+        }
+            
+        if(range.first >= range.second || j < gh._ftabChars) {
+            if(i == 0) {
+                tFtab[i].first = tFtab[i].second = 0;
+            } else {
+                tFtab[i].first = tFtab[i].second = tFtab[i-1].second;
+            }
+        } else {
+            tFtab[i].first = range.first;
+            tFtab[i].second = range.second;
+        }
+            
+#ifndef NDEBUG
+        if(gbwt.ftab.size() > i) {
+            assert_eq(tFtab[i].first, gbwt.ftab[i].first);
+            assert_eq(tFtab[i].second, gbwt.ftab[i].second);
+        }
+#endif
+    }
+        
+    // Clear memory
+    this->_gfm.reset();
+    this->_fchr.reset();
+    this->_zOffs.clear();
+    this->_zGbwtByteOffs.clear();
+    this->_zGbwtBpOffs.clear();
+    
+    //
+    // Finish building ftab and build eftab
+    //
+    // Prefix sum on ftable
+    index_t eftabLen = 0;
+    for(index_t i = 1; i + 1 < ftabLen; i++) {
+        if(tFtab[i-1].second != tFtab[i].first) {
+            eftabLen += 2;
+        }
+    }
+    EList<index_t> eftab(EBWT_CAT);
+    try {
+        eftab.resize(eftabLen);
+        eftab.fillZero();
+    } catch(bad_alloc &e) {
+        cerr << "Out of memory allocating eftab[] "
+        << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << __LINE__ << endl;
+        throw e;
+    }
+    index_t eftabCur = 0;
+    ftab[0] = tFtab[0].first;
+    ftab[1] = tFtab[0].second;
+    for(index_t i = 1; i + 1 < ftabLen; i++) {
+        if(ftab[i] != tFtab[i].first) {
+            index_t lo = ftab[i];
+            index_t hi = tFtab[i].first;
+            assert_lt(eftabCur*2+1, eftabLen);
+            eftab[eftabCur*2] = lo;
+            eftab[eftabCur*2+1] = hi;
+            ftab[i] = (eftabCur++) ^ INDEX_MAX; // insert pointer into eftab
+            assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
+            assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
+        }
+        ftab[i+1] = tFtab[i].second;
+    }
+#ifndef NDEBUG
+    for(index_t i = 0; i + 1 < ftabLen; i++ ){
+        assert_eq(tFtab[i].first, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
+        assert_eq(tFtab[i].second, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i+1));
+    }
+#endif
+    // Write ftab to primary file
+    for(index_t i = 0; i < ftabLen; i++) {
+        writeIndex<index_t>(out5, ftab[i], this->toBe());
+    }
+    // Write eftab to primary file
+    out5pos = out5.tellp();
+    out5.seekp(headerPos);
+    writeIndex<index_t>(out5, eftabLen, this->toBe());
+    out5.seekp(out5pos);
+    for(index_t i = 0; i < eftabLen; i++) {
+        writeIndex<index_t>(out5, eftab[i], this->toBe());
+    }
+    // Note: if you'd like to sanity-check the Ebwt, you'll have to
+    // read it back into memory first!
+    assert(!this->isInMemory());
+    VMSG_NL("Exiting GFM::buildToDisk()");
 }
 
 /**
@@ -632,6 +766,7 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
                                                      char *mmFile6,
                                                      full_index_t& tidx,
                                                      full_index_t& localOffset,
+                                                     full_index_t& joinedOffset,
                                                      bool switchEndian,
                                                      size_t bytesRead,
                                                      int entireRev,
@@ -651,12 +786,13 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 #endif
 	
 	// Reads header entries one by one from primary stream
-	tidx = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
-	localOffset = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
-	uint32_t len      = readU32(in5, switchEndian); bytesRead += 4;
-    uint32_t gbwtLen  = readU32(in5, switchEndian); bytesRead += 4;
-    uint32_t numNodes = readU32(in5, switchEndian); bytesRead += 4;
-    uint32_t eftabLen = readU32(in5, switchEndian); bytesRead += 4;
+	tidx             = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
+	localOffset      = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
+    joinedOffset     = readIndex<full_index_t>(in5, switchEndian); bytesRead += sizeof(full_index_t);
+    index_t len      = readIndex<index_t>(in5, switchEndian); bytesRead += sizeof(index_t);
+    index_t gbwtLen  = readIndex<index_t>(in5, switchEndian); bytesRead += sizeof(index_t);
+    index_t numNodes = readIndex<index_t>(in5, switchEndian); bytesRead += sizeof(index_t);
+    index_t eftabLen = readIndex<index_t>(in5, switchEndian); bytesRead += sizeof(index_t);
 	
 	// Create a new EbwtParams from the entries read from primary stream
 	this->_gh.init(len, gbwtLen, numNodes, lineRate, offRate, ftabChars, eftabLen, entireRev);
@@ -1356,9 +1492,6 @@ HGFM<index_t, local_index_t>::HGFM(
     _in5(NULL),
     _in6(NULL)
 {
-    // daehwan - to be implemented
-    return;
-    
     _in5Str = outfile + ".5." + gfm_ext;
     _in6Str = outfile + ".6." + gfm_ext;
     
@@ -1547,6 +1680,8 @@ HGFM<index_t, local_index_t>::HGFM(
     
     // build local FM indexes
     index_t curr_sztot = 0;
+    index_t curr_joined_offset = 0;
+    EList<SNP<index_t> > snps;
     bool firstIndex = true;
     for(size_t tidx = 0; tidx < _refLens.size(); tidx++) {
         index_t refLen = _refLens[tidx];
@@ -1583,10 +1718,14 @@ HGFM<index_t, local_index_t>::HGFM(
             } else {
                 local_s.install(s.buf() + curr_sztot, local_sztot);
             }
+            
             LocalGFM<local_index_t, index_t>* localGFM = new LocalGFM<local_index_t, index_t>(
                                                                                               local_s,
                                                                                               tidx,
                                                                                               local_offset,
+                                                                                              curr_joined_offset,
+                                                                                              snps,
+                                                                                              outfile,
                                                                                               index_size,
                                                                                               packed,
                                                                                               needEntireReverse,
@@ -1695,10 +1834,7 @@ void HGFM<index_t, local_index_t>::readIntoMemory(
                                  loadNames,
                                  startVerbose);
     
-    // daehwan - for debugging purposes
-    return;
-
-	bool switchEndian; // dummy; caller doesn't care
+    bool switchEndian; // dummy; caller doesn't care
 #ifdef BOWTIE_MM
 	char *mmFile[] = { NULL, NULL };
 #endif
@@ -1826,7 +1962,7 @@ void HGFM<index_t, local_index_t>::readIntoMemory(
 	
 	clearLocalGFMs();
 	
-	index_t tidx = 0, localOffset = 0;
+    index_t tidx = 0, localOffset = 0, joinedOffset = 0;
 	string base = "";
 	for(size_t i = 0; i < _nlocalGFMs; i++) {
 		LocalGFM<local_index_t, index_t> *localGFM = new LocalGFM<local_index_t, index_t>(base,
@@ -1837,6 +1973,7 @@ void HGFM<index_t, local_index_t>::readIntoMemory(
                                                                                           mmFile6_,
                                                                                           tidx,
                                                                                           localOffset,
+                                                                                          joinedOffset,
                                                                                           switchEndian,
                                                                                           bytesRead,
                                                                                           needEntireRev,
