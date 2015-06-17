@@ -313,7 +313,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
 #endif
     
     // a memory-efficient way to create a population graph with known SNPs
-    bool frag_automaton = true;
+    bool frag_automaton = jlen >= (1 << 16);
     if(frag_automaton) {
         {
             EList<pair<index_t, index_t> > snp_ranges; // each range inclusive
@@ -515,7 +515,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         
         if(multipleHeadNodes) {
             if(!isReverseDeterministic(nodes, edges)) {
-                cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
+                if(verbose) cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
                 reverseDeterminize(nodes, edges, lastNode);
             }
         }
@@ -553,22 +553,24 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         // Create nodes and edges for SNPs
         for(size_t i = 0; i < snps.size(); i++) {
             const SNP<index_t>& snp = snps[i];
+            if(snp.pos >= s.length()) break;
             if(snp.type == SNP_SGL) {
                 assert_eq(snp.len, 1);
                 nodes.expand();
                 assert_lt(snp.seq, 4);
-                nodes.back().label = snp.seq;
-                nodes.back().value = nodes.size();
+                assert_neq(snp.seq & 0x3, s[snp.pos]);
+                nodes.back().label = "ACGT"[snp.seq];
+                nodes.back().value = snp.pos;
                 edges.expand();
                 edges.back().from = snp.pos;
                 edges.back().to = nodes.size() - 1;
-                
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
                 edges.back().to = snp.pos + 2;
             }
             else if(snp.type == SNP_DEL) {
                 assert_gt(snp.len, 0);
+                if(snp.pos + snp.len >= s.length()) break;
                 edges.expand();
                 edges.back().from = snp.pos;
                 edges.back().to = snp.pos + snp.len + 1;
@@ -580,8 +582,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     char ch = "ACGT"[bp];
                     nodes.expand();
                     nodes.back().label = ch;
-                    nodes.back().value = nodes.size();
-                    
+                    nodes.back().value = INDEX_MAX;
                     edges.expand();
                     edges.back().from = (j == 0 ? snp.pos : nodes.size() - 2);
                     edges.back().to = nodes.size() - 1;
@@ -595,7 +596,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         }
     
         if(!isReverseDeterministic(nodes, edges)) {
-            cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
+            if(verbose) cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
             reverseDeterminize(nodes, edges, lastNode);
             assert(isReverseDeterministic(nodes, edges));
         }
@@ -745,19 +746,14 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 edges.expand();
                 edges.back().from = snp.pos - curr_pos;
                 edges.back().to = nodes.size() - 1;
-                ASSERT_ONLY(bool head = edges.back().from);
-                
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
                 edges.back().to = snp.pos - curr_pos + 2;
-                ASSERT_ONLY(bool tail = (edges.back().to == lastNode));
-                assert(!head || !tail);
             } else if(snp.type == SNP_DEL) {
                 assert_gt(snp.len, 0);
                 edges.expand();
                 edges.back().from = snp.pos - curr_pos;
-                edges.back().to = snp.pos + - curr_pos + snp.len + 1;
-                assert(edges.back().from != 0 || edges.back().to != lastNode);
+                edges.back().to = snp.pos - curr_pos + snp.len + 1;
             } else if(snp.type == SNP_INS) {
                 assert_gt(snp.len, 0);
                 for(size_t j = 0; j < snp.len; j++) {
@@ -766,10 +762,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                     char ch = "ACGT"[bp];
                     nodes.expand();
                     nodes.back().label = ch;
-                    // daehwan - check out
-                    // nodes.back().value = snp.pos;
                     nodes.back().value = INDEX_MAX;
-                    
                     edges.expand();
                     edges.back().from = (j == 0 ? snp.pos - curr_pos : nodes.size() - 2);
                     edges.back().to = nodes.size() - 1;

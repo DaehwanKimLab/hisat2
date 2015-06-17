@@ -21,7 +21,8 @@
 #define HIERGBWT_COMMON_H_
 
 // maximum size of a sequence represented by a local index
-static const uint32_t local_index_size = (1 << 16) - (1 << 12);  // 1 << 5 is necessary for eftab index
+static const uint32_t local_index_size = (1 << 16) - (1 << 13);  // 1 << 5 is necessary for eftab index
+static const uint32_t local_max_gbwt = (1 << 16) - (1 << 11);
 
 // size of the overlapped sequence between the sequences represented by two consecutive local indexes
 static const uint32_t local_index_overlap  = 1024;

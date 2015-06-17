@@ -582,12 +582,10 @@ int hisat2_build(int argc, const char **argv) {
 				 << "  FTable chars: " << ftabChars << endl
 				 << "  Strings: " << (packed? "packed" : "unpacked") << endl
                  << "  Local offset rate: " << localOffRate << " (one in " << (1<<localOffRate) << ")" << endl
-            << "  Local fTable chars: " << localFtabChars << endl;
-// daehwan - fix the following
-#if 0
+                 << "  Local fTable chars: " << localFtabChars << endl
                  << "  Local sequence length: " << local_index_size << endl
                  << "  Local sequence overlap between the two consecutive indexes: " << local_index_overlap << endl;
-#endif
+#if 0
 			if(bmax == OFF_MASK) {
 				cerr << "  Max bucket size: default" << endl;
 			} else {
@@ -604,6 +602,7 @@ int hisat2_build(int argc, const char **argv) {
 				cerr << "  Max bucket size, len divisor: " << bmaxDivN << endl;
 			}
 			cerr << "  Difference-cover sample period: " << dcv << endl;
+#endif
 			cerr << "  Endianness: " << (bigEndian? "big":"little") << endl
 				 << "  Actual local endianness: " << (currentlyBigEndian()? "big":"little") << endl
 				 << "  Sanity checking: " << (sanityCheck? "enabled":"disabled") << endl;

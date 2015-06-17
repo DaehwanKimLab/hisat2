@@ -851,7 +851,7 @@ public:
 		// Close output files
 		fout1.flush();
 		int64_t tellpSz1 = (int64_t)fout1.tellp();
-		VMSG_NL("Wrote " << fout1.tellp() << " bytes to primary EBWT file: " << _in1Str.c_str());
+		VMSG_NL("Wrote " << fout1.tellp() << " bytes to primary GFM file: " << _in1Str.c_str());
 		fout1.close();
 		bool err = false;
 		if(tellpSz1 > fileSize(_in1Str.c_str())) {
@@ -861,7 +861,7 @@ public:
 		}
 		fout2.flush();
 		int64_t tellpSz2 = (int64_t)fout2.tellp();
-		VMSG_NL("Wrote " << fout2.tellp() << " bytes to secondary EBWT file: " << _in2Str.c_str());
+		VMSG_NL("Wrote " << fout2.tellp() << " bytes to secondary GFM file: " << _in2Str.c_str());
 		fout2.close();
 		if(tellpSz2 > fileSize(_in2Str.c_str())) {
 			err = true;
@@ -891,7 +891,7 @@ public:
 			evictFromMemory();
 			assert(!isInMemory());
 		}
-		VMSG_NL("Returning from Ebwt constructor");
+		VMSG_NL("Returning from GFM constructor");
 	}
 	
 	/**

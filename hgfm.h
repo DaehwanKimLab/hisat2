@@ -135,7 +135,7 @@ public:
              full_index_t tidx,
              full_index_t localOffset,
              full_index_t joinedOffset,
-             const EList<SNP<full_index_t> >& snps,
+             EList<SNP<full_index_t> >& snps,
              const string& out_basename,
              index_t local_size,
              bool packed,
@@ -235,46 +235,62 @@ public:
 			}
             
 #if 1
-            RefGraph<full_index_t>* graph = new RefGraph<full_index_t>(
-                                                                       s,
-                                                                       szs,
-                                                                       snps,
-                                                                       out_basename,
-                                                                       1,        /* num threads */
-                                                                       false);   /* verbose? */
-            PathGraph<full_index_t>* pg = new PathGraph<full_index_t>(
-                                                                      *graph,
-                                                                      1,         /* num threads */
-                                                                      false);    /* verbose? */
-            pg->printInfo();
-            while(pg->IsSorted()) {
-                if(pg->repOk()) {
-                    cerr << "Error: Invalid PathGraph!" << endl;
-                    delete pg; pg = NULL;
-                    return;
-                }
-                PathGraph<full_index_t>* next = new PathGraph<full_index_t>(*pg);
-                delete pg; pg = next;
+            while(true) {
+                RefGraph<full_index_t>* graph = new RefGraph<full_index_t>(
+                                                                           s,
+                                                                           szs,
+                                                                           snps,
+                                                                           out_basename,
+                                                                           1,        /* num threads */
+                                                                           false);   /* verbose? */
+                PathGraph<full_index_t>* pg = new PathGraph<full_index_t>(
+                                                                          *graph,
+                                                                          1,         /* num threads */
+                                                                          false);    /* verbose? */
                 pg->printInfo();
+                while(pg->IsSorted()) {
+                    if(pg->repOk()) {
+                        cerr << "Error: Invalid PathGraph!" << endl;
+                        delete pg; pg = NULL;
+                        return;
+                    }
+                    PathGraph<full_index_t>* next = new PathGraph<full_index_t>(*pg);
+                    delete pg; pg = next;
+                    pg->printInfo();
+                }
+                if(!pg->generateEdges(*graph)) {
+                    cerr << "An error occurred - generateEdges" << endl;
+                    throw 1;
+                }
+                if(pg->getNumEdges() > local_max_gbwt) {
+                    delete pg; pg = NULL;
+                    delete graph; graph = NULL;
+                    if(snps.size() <= 1) {
+                        snps.clear();
+                    } else {
+                        for(index_t s = 2; s < snps.size(); s += 2) {
+                            snps[s >> 1] = snps[s];
+                        }
+                        snps.resize(snps.size() >> 1);
+                    }
+                    continue;
+                }
+                
+                // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
+                this->_gh.init(
+                               this->_gh.len(),
+                               pg->getNumEdges(),
+                               pg->getNumNodes(),
+                               this->_gh.lineRate(),
+                               this->_gh.offRate(),
+                               this->_gh.ftabChars(),
+                               0,
+                               this->_gh.entireReverse());
+                buildToDisk(*pg, s, out5, out6, headerPos);
+                delete pg; pg = NULL;
+                delete graph; graph = NULL;
+                break;
             }
-            if(!pg->generateEdges(*graph)) {
-                cerr << "An error occurred - generateEdges" << endl;
-                throw 1;
-            }
-            
-            // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
-            this->_gh.init(
-                           this->_gh.len(),
-                           pg->getNumEdges(),
-                           pg->getNumNodes(),
-                           this->_gh.lineRate(),
-                           this->_gh.offRate(),
-                           this->_gh.ftabChars(),
-                           0,
-                           this->_gh.entireReverse());
-            buildToDisk(*pg, s, out5, out6, headerPos);
-            delete pg; pg = NULL;
-            delete graph; graph = NULL;
 #else
             VMSG_NL("Constructing suffix-array element generator");
             KarkkainenBlockwiseSA<TStr> bsa(s, s.length()+1, dcv, seed, this->_sanity, this->_passMemExc, this->_verbose);
@@ -1511,13 +1527,13 @@ HGFM<index_t, local_index_t>::HGFM(
         throw 1;
     }
     
-    // split the whole genome into a set of local indexes
+    // Split the whole genome into a set of local indexes
     _nrefs = 0;
     _nlocalGFMs = 0;
     
     index_t cumlen = 0;
     typedef EList<RefRecord, 1> EList_RefRecord;
-    EList<EList<EList_RefRecord> > all_local_recs;
+    ELList<EList_RefRecord> all_local_recs;
     // For each unambiguous stretch...
     for(index_t i = 0; i < szs.size(); i++) {
         const RefRecord& rec = szs[i];
@@ -1680,7 +1696,6 @@ HGFM<index_t, local_index_t>::HGFM(
     
     // build local FM indexes
     index_t curr_sztot = 0;
-    index_t curr_joined_offset = 0;
     EList<SNP<index_t> > snps;
     bool firstIndex = true;
     for(size_t tidx = 0; tidx < _refLens.size(); tidx++) {
@@ -1711,6 +1726,8 @@ HGFM<index_t, local_index_t>::HGFM(
                 local_sztot += local_szs[i].len;
                 local_len += local_szs[i].len;
             }
+            
+            // Extract sequence corresponding to this local index
             TStr local_s;
             local_s.resize(local_sztot);
             if(refparams.reverse == REF_READ_REVERSE) {
@@ -1719,11 +1736,24 @@ HGFM<index_t, local_index_t>::HGFM(
                 local_s.install(s.buf() + curr_sztot, local_sztot);
             }
             
+            // Extract SNPS corresponding to this local index
+            snps.clear();
+            SNP<index_t> snp;
+            snp.pos = curr_sztot;
+            index_t snp_i = this->_snps.bsearchLoBound(snp);
+            for(; snp_i < this->_snps.size(); snp_i++) {
+                if(curr_sztot + local_sztot <= this->_snps[snp_i].pos + this->_snps[snp_i].len + 1) break;
+                if(curr_sztot <= this->_snps[snp_i].pos) {
+                    snps.push_back(this->_snps[snp_i]);
+                    snps.back().pos -= curr_sztot;
+                }
+            }
+            
             LocalGFM<local_index_t, index_t>* localGFM = new LocalGFM<local_index_t, index_t>(
                                                                                               local_s,
                                                                                               tidx,
                                                                                               local_offset,
-                                                                                              curr_joined_offset,
+                                                                                              curr_sztot,
                                                                                               snps,
                                                                                               outfile,
                                                                                               index_size,
@@ -1765,7 +1795,7 @@ HGFM<index_t, local_index_t>::HGFM(
     // Close output files
     fout5.flush();
     int64_t tellpSz5 = (int64_t)fout5.tellp();
-    VMSG_NL("Wrote " << fout5.tellp() << " bytes to primary EBWT file: " << _in5Str.c_str());
+    VMSG_NL("Wrote " << fout5.tellp() << " bytes to primary GFM file: " << _in5Str.c_str());
     fout5.close();
     bool err = false;
     if(tellpSz5 > fileSize(_in5Str.c_str())) {
@@ -1775,7 +1805,7 @@ HGFM<index_t, local_index_t>::HGFM(
     }
     fout6.flush();
     int64_t tellpSz6 = (int64_t)fout6.tellp();
-    VMSG_NL("Wrote " << fout6.tellp() << " bytes to secondary EBWT file: " << _in6Str.c_str());
+    VMSG_NL("Wrote " << fout6.tellp() << " bytes to secondary GFM file: " << _in6Str.c_str());
     fout6.close();
     if(tellpSz6 > fileSize(_in6Str.c_str())) {
         err = true;
