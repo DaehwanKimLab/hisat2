@@ -1,4 +1,0 @@
-#! /bin/bash
-export COPY_EXTENDED_ATTRIBUTES_DISABLE=true
-export COPYFILE_DISABLE=true
-tar cfz $1.tgz --exclude='._*' --exclude='.DS_Store' $1
