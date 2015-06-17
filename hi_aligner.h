@@ -2940,7 +2940,7 @@ public:
             
             // daehwan - for debugging purposes
             pseudogeneStop = false;
-                        
+            
             // Align this read beginning from previously stopped base
             // stops when it is uniquelly mapped with at least 28bp or
             // it may involve processed pseudogene
@@ -4295,6 +4295,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     pair<index_t, index_t> range(0, 0);
     pair<index_t, index_t> rangeTemp(0, 0);
     pair<index_t, index_t> node_range(0, 0);
+    pair<index_t, index_t> node_rangeTemp(0, 0);
     _node_iedge_count.clear();
     _tmp_node_iedge_count.clear();
     index_t left = len - dep;
@@ -4360,13 +4361,15 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         int c = seq[len-dep-1];
         if(c > 3) {
             rangeTemp.first = rangeTemp.second = 0;
+            node_rangeTemp.first = node_rangeTemp.second = 0;
+            _tmp_node_iedge_count.clear();
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_range, &_tmp_node_iedge_count, rp.khits);
+                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, rp.khits);
             } else {
                 bwops_++;
-                rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_range);
+                rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {
@@ -4374,7 +4377,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         }
 
         if(pseudogeneStop_) {
-            if(rangeTemp.second - rangeTemp.first < range.second - range.first && range.second - range.first <= 5) {
+            if(node_rangeTemp.second - node_rangeTemp.first < node_range.second - node_range.first && node_range.second - node_range.first <= min<index_t>(5, rp.khits)) {
                 static const index_t minLenForPseudogene = _minK + 6;
                 if(dep - offset >= minLenForPseudogene && similar_range >= 5) {
                     hit._numUniqueSearch++;
@@ -4382,16 +4385,16 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                     break;
                 }
             }
-            if(rangeTemp.second - rangeTemp.first != 1) {
-                if(rangeTemp.second - rangeTemp.first + 2 >= range.second - range.first) similar_range++;
-                else if(rangeTemp.second - rangeTemp.first + 4 < range.second - range.first) similar_range = 0;
+            if(node_rangeTemp.second - node_rangeTemp.first != 1) {
+                if(node_rangeTemp.second - node_rangeTemp.first + 2 >= node_range.second - node_range.first) similar_range++;
+                else if(node_rangeTemp.second - node_rangeTemp.first + 4 < node_range.second - node_range.first) similar_range = 0;
             } else {
                 pseudogeneStop_ = false;
             }
         }
         
         if(anchorStop_) {
-            if(rangeTemp.second - rangeTemp.first != 1 && range.second - range.first == rangeTemp.second - rangeTemp.first) {
+            if(node_rangeTemp.second - node_rangeTemp.first != 1 && node_range.second - node_range.first == node_rangeTemp.second - node_rangeTemp.first) {
                 same_range++;
                 if(same_range >= 5) {
                     anchorStop_ = false;
@@ -4400,12 +4403,13 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
                 same_range = 0;
             }
         
-            if(dep - offset >= _minK + 8 && rangeTemp.second - rangeTemp.first >= 4) {
+            if(dep - offset >= _minK + 8 && node_rangeTemp.second - node_rangeTemp.first >= 4) {
                 anchorStop_ = false;
             }
         }
         
         range = rangeTemp;
+        node_range = node_rangeTemp;
         if(_tmp_node_iedge_count.size() > 0) {
             _node_iedge_count = _tmp_node_iedge_count;
             _tmp_node_iedge_count.clear();
