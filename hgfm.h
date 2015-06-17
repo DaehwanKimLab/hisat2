@@ -721,13 +721,19 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
             eftabLen += 2;
         }
     }
+    if(gh._gbwtLen + (eftabLen >> 1) < gh._gbwtLen) {
+        cerr << "Too many eftab entries: "
+             << gh._gbwtLen << " + " << (eftabLen >> 1)
+             << " > " << (index_t)INDEX_MAX << endl;
+        throw 1;
+    }
     EList<index_t> eftab(EBWT_CAT);
     try {
         eftab.resize(eftabLen);
         eftab.fillZero();
     } catch(bad_alloc &e) {
         cerr << "Out of memory allocating eftab[] "
-        << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << "in LocalGFM::buildToDisk() at " << __FILE__ << ":"
         << __LINE__ << endl;
         throw e;
     }
@@ -741,7 +747,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
             assert_lt(eftabCur*2+1, eftabLen);
             eftab[eftabCur*2] = lo;
             eftab[eftabCur*2+1] = hi;
-            ftab[i] = (eftabCur++) ^ INDEX_MAX; // insert pointer into eftab
+            ftab[i] = (eftabCur++) ^ (index_t)INDEX_MAX; // insert pointer into eftab
             assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
             assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
         }
@@ -1001,7 +1007,7 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
     for(index_t i = 0; i < num_zOffs; i++) {
         index_t zOff = readIndex<index_t>(in5, switchEndian);
         bytesRead += sizeof(index_t);
-        assert_lt(zOff, len);
+        assert_lt(zOff, gbwtLen);
         this->_zOffs.push_back(zOff);
     }	
 	
@@ -1019,7 +1025,7 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 			this->_fchr.init(new index_t[5], 5, true);
 			for(index_t i = 0; i < 5; i++) {
 				this->fchr()[i] = readIndex<index_t>(in5, switchEndian);
-				assert_leq(this->fchr()[i], len);
+				assert_leq(this->fchr()[i], gbwtLen);
 				assert(i <= 0 || this->fchr()[i] >= this->fchr()[i-1]);
 			}
 		}
@@ -1086,7 +1092,7 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 			}
 			for(uint32_t i = 0; i < this->_gh._eftabLen; i++) {
 				if(i > 0 && this->eftab()[i] > 0) {
-					assert_geq(this->eftab()[i], this->eftab()[i-1]);
+					assert_geq(this->eftab()[i] + 1, this->eftab()[i-1]);
 				} else if(i > 0 && this->eftab()[i-1] == 0) {
 					assert_eq(0, this->eftab()[i]);
 				}

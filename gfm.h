@@ -3974,13 +3974,21 @@ void GFM<index_t>::buildToDisk(
             eftabLen += 2;
         }
 	}
+    
+    if(gh._gbwtLen + (eftabLen >> 1) < gh._gbwtLen) {
+        cerr << "Too many eftab entries: "
+        << gh._gbwtLen << " + " << (eftabLen >> 1)
+        << " > " << (index_t)INDEX_MAX << endl;
+        throw 1;
+    }
+    
     EList<index_t> eftab(EBWT_CAT);
 	try {
 		eftab.resize(eftabLen);
 		eftab.fillZero();
 	} catch(bad_alloc &e) {
 		cerr << "Out of memory allocating eftab[] "
-		     << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+		     << "in GFM::buildToDisk() at " << __FILE__ << ":"
 		     << __LINE__ << endl;
 		throw e;
 	}
