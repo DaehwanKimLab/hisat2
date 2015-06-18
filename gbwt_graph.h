@@ -1246,6 +1246,7 @@ private:
         index_t                          st;
         index_t                          en;
         int                              partitions;
+        int                              nthreads;
      };
      static void seperateNodes(void* vp);
      static void seperateNodesCount(void* vp);
@@ -1528,6 +1529,7 @@ void PathGraph<index_t>::seperateNodes(void * vp) {
     tthread::mutex * mutexes = threadParam->mutexes;
     index_t* from_cur = threadParam->from_cur;
     index_t* to_cur = threadParam->to_cur;
+    int nthreads = threadParam->nthreads;
 
     index_t st = threadParam->st;
     index_t en = threadParam->en;
@@ -1535,16 +1537,16 @@ void PathGraph<index_t>::seperateNodes(void * vp) {
 
 	for(index_t i = st; i < en; i++) {
 		index_t from_hash = (13 * (*previous).nodes[i].from) % partitions;
-		mutexes[from_hash].lock();
+		if(nthreads > 1) mutexes[from_hash].lock();
 		from_nodes[from_hash][from_cur[from_hash]] = (*previous).nodes[i];
 		from_cur[from_hash]++;
-		mutexes[from_hash].unlock();
+		if(nthreads > 1) mutexes[from_hash].unlock();
 		if(!(*previous).nodes[i].isSorted()) {
 			index_t to_hash = (13 * (*previous).nodes[i].to) % partitions;
-			mutexes[to_hash].lock();
+			if(nthreads > 1) mutexes[to_hash].lock();
 			to_nodes[to_hash][to_cur[to_hash]] = (*previous).nodes[i];
 			to_cur[to_hash]++;
-			mutexes[to_hash].unlock();
+			if(nthreads > 1) mutexes[to_hash].unlock();
 		}
 	}
 }
@@ -1561,20 +1563,21 @@ void PathGraph<index_t>::seperateNodesCount(void * vp) {
     index_t st = threadParam->st;
     index_t en = threadParam->en;
     int partitions = threadParam->partitions;
+    int nthreads = threadParam->nthreads;
     
     // daehwan --> joe
     // multiple from_cur arrays and adding up them, as an alternative to using mutexes
 
 	for(index_t i = st; i < en; i++) {
 		index_t from_hash = (13 * (*previous).nodes[i].from) % partitions;
-		mutexes[from_hash].lock();
+		if(nthreads > 1) mutexes[from_hash].lock();
 		from_cur[from_hash]++;
-		mutexes[from_hash].unlock();
+		if(nthreads > 1) mutexes[from_hash].unlock();
 		if(!(*previous).nodes[i].isSorted()) {
 			index_t to_hash = (13 * (*previous).nodes[i].to) % partitions;
-			mutexes[to_hash].lock();
+			if(nthreads > 1) mutexes[to_hash].lock();
 			to_cur[to_hash]++;
-			mutexes[to_hash].unlock();
+			if(nthreads > 1) mutexes[to_hash].unlock();
 		}
 	}
 }
@@ -1775,7 +1778,8 @@ report_F_node_idx(0), report_F_location(0)
     	threadParams.back().from_cur = from_cur;
     	threadParams.back().to_cur = to_cur;
     	threadParams.back().mutexes = mutexes;
-    	threadParams.back().partitions = partitions;
+        threadParams.back().partitions = partitions;
+        threadParams.back().nthreads = nthreads;
 
     	if(nthreads == 1) {
     		seperateNodesCount((void*)&threadParams.back());
@@ -1783,10 +1787,11 @@ report_F_node_idx(0), report_F_location(0)
     		threads[i] = new tthread::thread(seperateNodesCount, (void*)&threadParams.back());
     	}
     	swap(st, en);
-    	if(i + 1 == nthreads) {
+        st = en;
+    	if(i + 2 == nthreads) {
     		en = previous.nodes.size();
     	} else {
-    		en = st + st - en;
+            en = st + st - en;
     	}
     }
     if(nthreads > 1) {
@@ -1877,7 +1882,7 @@ report_F_node_idx(0), report_F_location(0)
     		threads2[i] = new tthread::thread(createCombined, (void*)&threadParams2.back());
     	}
     	swap(st, en);
-    	if(i + 1 == nthreads) {
+    	if(i + 2 == nthreads) {
     		en = partitions;
     	} else {
     		en = st + st - en;
