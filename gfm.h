@@ -142,15 +142,11 @@ public:
               bool entireReverse)
 	{
 		_entireReverse = entireReverse;
-        _noSnp = (len + 1 == gbwtLen || gbwtLen == 0);
+        _linearFM = (len + 1 == gbwtLen || gbwtLen == 0);
 		_len = len;
         _gbwtLen = (gbwtLen == 0 ? len + 1 : gbwtLen);
         _numNodes = (numNodes == 0 ? len + 1 : numNodes);
-        
-        // daehwan - for debugging purposes
-        _noSnp = false;
-        
-        if(_noSnp) {
+        if(_linearFM) {
             _sz = (len+3)/4;
             _gbwtSz = _gbwtLen/4 + 1;
         } else {
@@ -170,7 +166,7 @@ public:
 		_offsSz = _offsLen*sizeof(index_t);
 		_lineSz = 1 << _lineRate;
 		_sideSz = _lineSz * 1 /* lines per side */;
-        if(_noSnp) {
+        if(_linearFM) {
             _sideGbwtSz = _sideSz - (sizeof(index_t) * 4);
         } else {
             _sideGbwtSz = _sideSz - (sizeof(index_t) * 6);
@@ -208,7 +204,7 @@ public:
 	index_t gbwtTotLen() const    { return _gbwtTotLen; }
 	index_t gbwtTotSz() const     { return _gbwtTotSz; }
 	bool entireReverse() const    { return _entireReverse; }
-    bool noSnp() const            { return _noSnp; }
+    bool linearFM() const            { return _linearFM; }
     index_t numNodes() const      { return _numNodes; }
 
 	/**
@@ -266,7 +262,7 @@ public:
 		    << "    gbwtTotLen: "   << _gbwtTotLen << endl
 		    << "    gbwtTotSz: "    << _gbwtTotSz << endl
 		    << "    reverse: "      << _entireReverse << endl
-            << "    snp: "          << (_noSnp ? "No" : "Yes") << endl;
+            << "    linearFM: "     << (_linearFM ? "No" : "Yes") << endl;
 	}
 
 	index_t  _len;
@@ -293,7 +289,7 @@ public:
 	index_t  _gbwtTotLen;
 	index_t  _gbwtTotSz;
 	bool     _entireReverse;
-    bool     _noSnp;
+    bool     _linearFM;
     index_t  _numNodes;
 };
 
@@ -1364,71 +1360,72 @@ public:
 			}
 			iter++;
 			try {
-#if 1
-                RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _snps, outfile, _nthreads, verbose);
-                PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads, verbose);
-                pg->printInfo();
-                while(pg->IsSorted()) {
-                    if(pg->repOk()) {
-                        cerr << "Error: Invalid PathGraph!" << endl;
-                        delete pg; pg = NULL;
-                        return;
+                if(_snps.empty()) {
+                    {
+                        VMSG_NL("  Doing ahead-of-time memory usage test");
+                        // Make a quick-and-dirty attempt to force a bad_alloc iff
+                        // we would have thrown one eventually as part of
+                        // constructing the DifferenceCoverSample
+                        dcv <<= 1;
+                        index_t sz = (index_t)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
+                        AutoArray<uint8_t> tmp(sz, EBWT_CAT);
+                        dcv >>= 1;
+                        // Likewise with the KarkkainenBlockwiseSA
+                        sz = (index_t)KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
+                        AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
+                        // Now throw in the 'ftab' and 'isaSample' structures
+                        // that we'll eventually allocate in buildToDisk
+                        AutoArray<index_t> ftab(_gh._ftabLen * 2, EBWT_CAT);
+                        AutoArray<uint8_t> side(_gh._sideSz, EBWT_CAT);
+                        // Grab another 20 MB out of caution
+                        AutoArray<uint32_t> extra(20*1024*1024, EBWT_CAT);
+                        // If we made it here without throwing bad_alloc, then we
+                        // passed the memory-usage stress test
+                        VMSG("  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv);
+                        if(isPacked()) {
+                            VMSG(" --packed");
+                        }
+                        VMSG_NL("");
                     }
-                    PathGraph<index_t>* next = new PathGraph<index_t>(*pg);
-                    delete pg; pg = next;
+                    VMSG_NL("Constructing suffix-array element generator");
+                    KarkkainenBlockwiseSA<TStr> bsa(s, bmax, dcv, seed, _sanity, _passMemExc, _verbose);
+                    assert(bsa.suffixItrIsReset());
+                    assert_eq(bsa.size(), s.length()+1);
+                    VMSG_NL("Converting suffix-array elements to index image");
+                    buildToDisk(bsa, s, out1, out2);
+                } else {
+                    
+                    RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _snps, outfile, _nthreads, verbose);
+                    PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads, verbose);
                     pg->printInfo();
+                    while(pg->IsSorted()) {
+                        if(pg->repOk()) {
+                            cerr << "Error: Invalid PathGraph!" << endl;
+                            delete pg; pg = NULL;
+                            return;
+                        }
+                        PathGraph<index_t>* next = new PathGraph<index_t>(*pg);
+                        delete pg; pg = next;
+                        pg->printInfo();
+                    }
+                    
+                    if(verbose) { cerr << "Generating edges... " << endl; }
+                    if(!pg->generateEdges(*graph)) { return; }
+                    // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
+                    _gh.init(
+                             _gh.len(),
+                             pg->getNumEdges(),
+                             pg->getNumNodes(),
+                             _gh.lineRate(),
+                             _gh.offRate(),
+                             _gh.ftabChars(),
+                             0,
+                             _gh.entireReverse());
+                    buildToDisk(*pg, s, out1, out2);
+                    delete pg; pg = NULL;
+                    delete graph; graph = NULL;
                 }
-                
-                if(verbose) { cerr << "Generating edges... " << endl; }
-                if(!pg->generateEdges(*graph)) { return; }
-                // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
-                _gh.init(
-                         _gh.len(),
-                         pg->getNumEdges(),
-                         pg->getNumNodes(),
-                         _gh.lineRate(),
-                         _gh.offRate(),
-                         _gh.ftabChars(),
-                         0,
-                         _gh.entireReverse());
-                buildToDisk(*pg, s, out1, out2);
-                delete pg; pg = NULL;
-                delete graph; graph = NULL;
-#else
-				{
-					VMSG_NL("  Doing ahead-of-time memory usage test");
-					// Make a quick-and-dirty attempt to force a bad_alloc iff
-					// we would have thrown one eventually as part of
-					// constructing the DifferenceCoverSample
-					dcv <<= 1;
-					index_t sz = (index_t)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
-					AutoArray<uint8_t> tmp(sz, EBWT_CAT);
-					dcv >>= 1;
-					// Likewise with the KarkkainenBlockwiseSA
-					sz = (index_t)KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
-					AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
-					// Now throw in the 'ftab' and 'isaSample' structures
-					// that we'll eventually allocate in buildToDisk
-					AutoArray<index_t> ftab(_gh._ftabLen * 2, EBWT_CAT);
-					AutoArray<uint8_t> side(_gh._sideSz, EBWT_CAT);
-					// Grab another 20 MB out of caution
-					AutoArray<uint32_t> extra(20*1024*1024, EBWT_CAT);
-					// If we made it here without throwing bad_alloc, then we
-					// passed the memory-usage stress test
-					VMSG("  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv);
-					if(isPacked()) {
-						VMSG(" --packed");
-					}
-					VMSG_NL("");
-				}
-				VMSG_NL("Constructing suffix-array element generator");
-				KarkkainenBlockwiseSA<TStr> bsa(s, bmax, dcv, seed, _sanity, _passMemExc, _verbose);
-				assert(bsa.suffixItrIsReset());
-				assert_eq(bsa.size(), s.length()+1);
-				VMSG_NL("Converting suffix-array elements to index image");
-				buildToDisk(bsa, s, out1, out2);
-#endif
-				out1.flush(); out2.flush();
+                out1.flush(); out2.flush();
 				if(out1.fail() || out2.fail()) {
 					cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
 					throw 1;
@@ -1936,6 +1933,7 @@ public:
 	template <typename TStr> static TStr join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed);
 	template <typename TStr> void joinToDisk(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, TStr& ret, ostream& out1, ostream& out2);
 	template <typename TStr> void buildToDisk(PathGraph<index_t>& gbwt, const TStr& s, ostream& out1, ostream& out2);
+    template <typename TStr> void buildToDisk(InorderBlockwiseSA<TStr>& sa, const TStr& s, ostream& out1, ostream& out2);
 
 	// I/O
 	void readIntoMemory(int needEntireRev, bool loadSASamp, bool loadFtab, bool loadRstarts, bool justHeader, GFMParams<index_t> *params, bool mmSweep, bool loadNames, bool startVerbose);
@@ -2004,7 +2002,7 @@ public:
         index_t ret;
         // Now factor in the occ[] count at the side break
         const uint8_t *acgt8 = side + _gh._sideGbwtSz;
-        if(!_gh._noSnp) {
+        if(!_gh._linearFM) {
             acgt8 += (sizeof(index_t) << 1);
         }
         const index_t *acgt = reinterpret_cast<const index_t*>(acgt8);
@@ -4030,6 +4028,437 @@ void GFM<index_t>::buildToDisk(
 	// read it back into memory first!
 	assert(!isInMemory());
 	VMSG_NL("Exiting GFM::buildToDisk()");
+}
+
+/**
+ * Build an Ebwt from a string 's' and its suffix array 'sa' (which
+ * might actually be a suffix array *builder* that builds blocks of the
+ * array on demand).  The bulk of the Ebwt, i.e. the ebwt and offs
+ * arrays, is written directly to disk.  This is by design: keeping
+ * those arrays in memory needlessly increases the footprint of the
+ * building process.  Instead, we prefer to build the Ebwt directly
+ * "to disk" and then read it back into memory later as necessary.
+ *
+ * It is assumed that the header values and join-related values (nPat,
+ * plen) have already been written to 'out1' before this function
+ * is called.  When this function is finished, it will have
+ * additionally written ebwt, zOff, fchr, ftab and eftab to the primary
+ * file and offs to the secondary file.
+ *
+ * Assume DNA/RNA/any alphabet with 4 or fewer elements.
+ * Assume occ array entries are 32 bits each.
+ *
+ * @param sa            the suffix array to convert to a Ebwt
+ * @param s             the original string
+ * @param out
+ */
+template <typename index_t>
+template <typename TStr>
+void GFM<index_t>::buildToDisk(
+                               InorderBlockwiseSA<TStr>& sa,
+                               const TStr& s,
+                               ostream& out1,
+                               ostream& out2)
+{
+    // daehwan - to be implemented
+#if 0
+    const GFMParams<index_t>& gh = this->_gh;
+    assert(gh.repOk());
+    assert_lt(s.length(), gh.gbwtLen());
+    assert_eq(s.length(), gh._len);
+    assert_gt(gh._lineRate, 3);
+    
+    index_t  gbwtLen = gh._gbwtLen;
+    streampos out1pos = out1.tellp();
+    out1.seekp(8 + sizeof(index_t));
+    writeIndex<index_t>(out1, gbwtLen, this->toBe());
+    writeIndex<index_t>(out1, gh._numNodes, this->toBe());
+    out1.seekp(out1pos);
+    
+    index_t  ftabLen = gh._ftabLen;
+    index_t  sideSz = gh._sideSz;
+    index_t  gbwtTotSz = gh._gbwtTotSz;
+    index_t  fchr[] = {0, 0, 0, 0, 0};
+    EList<index_t> ftab(EBWT_CAT);
+    EList<index_t> zOffs;
+    
+    // Save # of occurrences of each character as we walk along the bwt
+    index_t occ[4] = {0, 0, 0, 0};
+    index_t occSave[4] = {0, 0, 0, 0};
+    // # of occurrences of 1 in M arrays
+    index_t M_occ = 0, M_occSave = 0;
+    // Location in F that corresponds to 1 in M
+    index_t F_loc = 0, F_locSave = 0;
+    
+    // Record rows that should "absorb" adjacent rows in the ftab.
+    try {
+        VMSG_NL("Allocating ftab, absorbFtab");
+        ftab.resize(ftabLen);
+        ftab.fillZero();
+    } catch(bad_alloc &e) {
+        cerr << "Out of memory allocating ftab[] "
+        << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << __LINE__ << endl;
+        throw e;
+    }
+    
+    // Allocate the side buffer; holds a single side as its being
+    // constructed and then written to disk.  Reused across all sides.
+#ifdef SIXTY4_FORMAT
+    EList<uint64_t> gfmSide(EBWT_CAT);
+#else
+    EList<uint8_t> gfmSide(EBWT_CAT);
+#endif
+    try {
+        // Used to calculate ftab and eftab, but having gfm costs a lot of memory
+        _gfm.init(new uint8_t[gh._gbwtTotLen], gh._gbwtTotLen, true);
+#ifdef SIXTY4_FORMAT
+        gfmSide.resize(sideSz >> 3);
+#else
+        gfmSide.resize(sideSz);
+#endif
+    } catch(bad_alloc &e) {
+        cerr << "Out of memory allocating ebwtSide[] in "
+        << "Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << __LINE__ << endl;
+        throw e;
+    }
+    
+    // Points to the base offset within ebwt for the side currently
+    // being written
+    index_t side = 0;
+    
+    // Whether we're assembling a forward or a reverse bucket
+    bool fw = true;
+    int sideCur = 0;
+    
+    index_t si = 0;   // string offset (chars)
+    ASSERT_ONLY(bool inSA = true); // true iff saI still points inside suffix
+    // array (as opposed to the padding at the
+    // end)
+    // Iterate over packed bwt bytes
+    VMSG_NL("Entering GFM loop");
+    ASSERT_ONLY(index_t beforeGbwtOff = (index_t)out1.tellp());
+    while(side < gbwtTotSz) {
+        // Sanity-check our cursor into the side buffer
+        assert_geq(sideCur, 0);
+        assert_lt(sideCur, (int)gh._sideGbwtSz);
+        assert_eq(0, side % sideSz); // 'side' must be on side boundary
+        if(sideCur == 0) {
+            memset(gfmSide.ptr(), 0, gh._sideGbwtSz);
+            gfmSide[sideCur] = 0; // clear
+        }
+        assert_lt(side + sideCur, gbwtTotSz);
+        // Iterate over bit-pairs in the si'th character of the BWT
+#ifdef SIXTY4_FORMAT
+        for(int bpi = 0; bpi < 32; bpi++, si++)
+#else
+            for(int bpi = 0; bpi < 4; bpi++, si++)
+#endif
+            {
+                int gbwtChar; // one of A, C, G, T, and $
+                int F, M;     // either 0 or 1
+                index_t pos;  // pos on joined string
+                bool count = true;
+                if(si < gbwtLen) {
+                    gbwt.nextRow(gbwtChar, F, M, pos);
+                    
+                    // (that might have triggered sa to calc next suf block)
+                    if(gbwtChar == 'Z') {
+                        // Don't add the 'Z' in the last column to the BWT
+                        // transform; we can't encode a $ (only A C T or G)
+                        // and counting it as, say, an A, will mess up the
+                        // LF mapping
+                        gbwtChar = 0; count = false;
+#ifndef NDEBUG
+                        if(zOffs.size() > 0) {
+                            assert_gt(si, zOffs.back());
+                        }
+#endif
+                        zOffs.push_back(si); // remember GBWT row that corresponds to the 0th suffix
+                    } else {
+                        gbwtChar = asc2dna[gbwtChar];
+                        assert_lt(gbwtChar, 4);
+                        // Update the fchr
+                        fchr[gbwtChar]++;
+                    }
+                    
+                    assert_lt(F, 2);
+                    assert_lt(M, 2);
+                    if(M == 1) {
+                        assert_neq(F_loc, numeric_limits<index_t>::max());
+                        F_loc = gbwt.nextFLocation();
+#ifndef NDEBUG
+                        if(F_loc > 0) {
+                            assert_gt(F_loc, F_locSave);
+                        }
+#endif
+                    }
+                    // Suffix array offset boundary? - update offset array
+                    if(M == 1 && (M_occ & gh._offMask) == M_occ) {
+                        assert_lt((M_occ >> gh._offRate), gh._offsLen);
+                        // Write offsets directly to the secondary output
+                        // stream, thereby avoiding keeping them in memory
+                        writeIndex<index_t>(out2, pos, this->toBe());
+                    }
+                } else {
+                    // Strayed off the end of the SA, now we're just
+                    // padding out a bucket
+#ifndef NDEBUG
+                    if(inSA) {
+                        // Assert that we wrote all the characters in the
+                        // string before now
+                        assert_eq(si, gbwtLen);
+                        inSA = false;
+                    }
+#endif
+                    // 'A' used for padding; important that padding be
+                    // counted in the occ[] array
+                    gbwtChar = 0;
+                    F = M = 0;
+                }
+                if(count) occ[gbwtChar]++;
+                if(M) M_occ++;
+                // Append BWT char to bwt section of current side
+                if(fw) {
+                    // Forward bucket: fill from least to most
+#ifdef SIXTY4_FORMAT
+                    gfmSide[sideCur] |= ((uint64_t)gbwtChar << (bpi << 1));
+                    if(gbwtChar > 0) assert_gt(gfmSide[sideCur], 0);
+                    // To be implemented ...
+                    assert(false);
+                    cerr << "Not implemented" << endl;
+                    exit(1);
+#else
+                    pack_2b_in_8b(gbwtChar, gfmSide[sideCur], bpi);
+                    assert_eq((gfmSide[sideCur] >> (bpi*2)) & 3, gbwtChar);
+                    
+                    int F_sideCur = (gh._sideGbwtSz + sideCur) >> 1;
+                    int F_bpi = bpi + ((sideCur & 0x1) << 2); // Can be used as M_bpi as well
+                    pack_1b_in_8b(F, gfmSide[F_sideCur], F_bpi);
+                    assert_eq((gfmSide[F_sideCur] >> F_bpi) & 1, F);
+                    
+                    int M_sideCur = F_sideCur + (gh._sideGbwtSz >> 2);
+                    pack_1b_in_8b(M, gfmSide[M_sideCur], F_bpi);
+                    assert_eq((gfmSide[M_sideCur] >> F_bpi) & 1, M);
+#endif
+                } else {
+                    // Backward bucket: fill from most to least
+#ifdef SIXTY4_FORMAT
+                    gfmSide[sideCur] |= ((uint64_t)gbwtChar << ((31 - bpi) << 1));
+                    if(gbwtChar > 0) assert_gt(gfmSide[sideCur], 0);
+                    // To be implemented ...
+                    assert(false);
+                    cerr << "Not implemented" << endl;
+                    exit(1);
+#else
+                    pack_2b_in_8b(gbwtChar, gfmSide[sideCur], 3-bpi);
+                    assert_eq((gfmSide[sideCur] >> ((3-bpi)*2)) & 3, gbwtChar);
+                    // To be implemented ...
+                    assert(false);
+                    cerr << "Not implemented" << endl;
+                    exit(1);
+#endif
+                }
+            } // end loop over bit-pairs
+        assert_eq(0, (occ[0] + occ[1] + occ[2] + occ[3] + zOffs.size()) & 3);
+#ifdef SIXTY4_FORMAT
+        assert_eq(0, si & 31);
+#else
+        assert_eq(0, si & 3);
+#endif
+        
+        sideCur++;
+        if((sideCur << 1) == (int)gh._sideGbwtSz) {
+            sideCur = 0;
+            index_t *uside = reinterpret_cast<index_t*>(gfmSide.ptr());
+            // Write 'A', 'C', 'G', 'T', and '1' in M tallies
+            side += sideSz;
+            assert_leq(side, gh._gbwtTotSz);
+            uside[(sideSz / sizeof(index_t))-6] = endianizeIndex(F_locSave, this->toBe());
+            uside[(sideSz / sizeof(index_t))-5] = endianizeIndex(M_occSave, this->toBe());
+            uside[(sideSz / sizeof(index_t))-4] = endianizeIndex(occSave[0], this->toBe());
+            uside[(sideSz / sizeof(index_t))-3] = endianizeIndex(occSave[1], this->toBe());
+            uside[(sideSz / sizeof(index_t))-2] = endianizeIndex(occSave[2], this->toBe());
+            uside[(sideSz / sizeof(index_t))-1] = endianizeIndex(occSave[3], this->toBe());
+            F_locSave = F_loc;
+            M_occSave = M_occ;
+            occSave[0] = occ[0];
+            occSave[1] = occ[1];
+            occSave[2] = occ[2];
+            occSave[3] = occ[3];
+            // Write backward side to primary file
+            out1.write((const char *)gfmSide.ptr(), sideSz);
+            
+            //
+            memcpy(((char*)_gfm.get()) + side - sideSz, (const char *)gfmSide.ptr(), sideSz);
+        }
+    }
+    VMSG_NL("Exited GFM loop");
+    // Assert that our loop counter got incremented right to the end
+    assert_eq(side, gh._gbwtTotSz);
+    // Assert that we wrote the expected amount to out1
+    assert_eq(((index_t)out1.tellp() - beforeGbwtOff), gh._gbwtTotSz);
+    // assert that the last thing we did was write a forward bucket
+    
+    //
+    // Write zOffs to primary stream
+    //
+    assert_gt(zOffs.size(), 0);
+    writeIndex<index_t>(out1, zOffs.size(), this->toBe());
+    for(size_t i = 0; i < zOffs.size(); i++) {
+        writeIndex<index_t>(out1, zOffs[i], this->toBe());
+    }
+    
+    //
+    // Finish building fchr
+    //
+    // Exclusive prefix sum on fchr
+    for(int i = 1; i < 4; i++) {
+        fchr[i] += fchr[i-1];
+    }
+    assert_lt(fchr[3], gbwtLen);
+    // Shift everybody up by one
+    for(int i = 4; i >= 1; i--) {
+        fchr[i] = fchr[i-1];
+    }
+    fchr[0] = 0;
+    if(_verbose) {
+        for(int i = 0; i < 5; i++)
+            cout << "fchr[" << "ACGT$"[i] << "]: " << fchr[i] << endl;
+    }
+    // Write fchr to primary file
+    for(int i = 0; i < 5; i++) {
+        writeIndex<index_t>(out1, fchr[i], this->toBe());
+    }
+    _fchr.init(new index_t[5], 5, true);
+    memcpy(_fchr.get(), fchr, sizeof(index_t) * 5);
+    
+    
+    // Initialize _zGbwtByteOffs and _zGbwtBpOffs
+    _zOffs = zOffs;
+    postReadInit(gh);
+    
+    // Build ftab and eftab
+    EList<pair<index_t, index_t> > tFtab;
+    tFtab.resizeExact(ftabLen - 1);
+    for(index_t i = 0; i + 1 < ftabLen; i++) {
+        index_t q = i;
+        pair<index_t, index_t> range(0, gh._gbwtLen);
+        SideLocus<index_t> tloc, bloc;
+        SideLocus<index_t>::initFromTopBot(range.first, range.second, gh, gfm(), tloc, bloc);
+        index_t j = 0;
+        for(; j < gh._ftabChars; j++) {
+            int nt = q & 0x3; q >>= 2;
+            if(bloc.valid()) {
+                range = mapGLF(tloc, bloc, nt);
+            } else {
+                range = mapGLF1(range.first, tloc, nt);
+            }
+            if(range.first == (index_t)INDEX_MAX || range.first >= range.second) {
+                break;
+            }
+            if(range.first + 1 == range.second) {
+                tloc.initFromRow(range.first, gh, gfm());
+                bloc.invalidate();
+            } else {
+                SideLocus<index_t>::initFromTopBot(range.first, range.second, gh, gfm(), tloc, bloc);
+            }
+        }
+        
+        if(range.first >= range.second || j < gh._ftabChars) {
+            if(i == 0) {
+                tFtab[i].first = tFtab[i].second = 0;
+            } else {
+                tFtab[i].first = tFtab[i].second = tFtab[i-1].second;
+            }
+        } else {
+            tFtab[i].first = range.first;
+            tFtab[i].second = range.second;
+        }
+        
+#ifndef NDEBUG
+        if(gbwt.ftab.size() > i) {
+            assert_eq(tFtab[i].first, gbwt.ftab[i].first);
+            assert_eq(tFtab[i].second, gbwt.ftab[i].second);
+        }
+#endif
+    }
+    
+    // Clear memory
+    _gfm.reset();
+    _fchr.reset();
+    _zOffs.clear();
+    _zGbwtByteOffs.clear();
+    _zGbwtBpOffs.clear();
+    
+    //
+    // Finish building ftab and build eftab
+    //
+    // Prefix sum on ftable
+    index_t eftabLen = 0;
+    for(index_t i = 1; i + 1 < ftabLen; i++) {
+        if(tFtab[i-1].second != tFtab[i].first) {
+            eftabLen += 2;
+        }
+    }
+    
+    if(gh._gbwtLen + (eftabLen >> 1) < gh._gbwtLen) {
+        cerr << "Too many eftab entries: "
+        << gh._gbwtLen << " + " << (eftabLen >> 1)
+        << " > " << (index_t)INDEX_MAX << endl;
+        throw 1;
+    }
+    
+    EList<index_t> eftab(EBWT_CAT);
+    try {
+        eftab.resize(eftabLen);
+        eftab.fillZero();
+    } catch(bad_alloc &e) {
+        cerr << "Out of memory allocating eftab[] "
+        << "in GFM::buildToDisk() at " << __FILE__ << ":"
+        << __LINE__ << endl;
+        throw e;
+    }
+    index_t eftabCur = 0;
+    ftab[0] = tFtab[0].first;
+    ftab[1] = tFtab[0].second;
+    for(index_t i = 1; i + 1 < ftabLen; i++) {
+        if(ftab[i] != tFtab[i].first) {
+            index_t lo = ftab[i];
+            index_t hi = tFtab[i].first;
+            assert_lt(eftabCur*2+1, eftabLen);
+            eftab[eftabCur*2] = lo;
+            eftab[eftabCur*2+1] = hi;
+            ftab[i] = (eftabCur++) ^ (index_t)INDEX_MAX; // insert pointer into eftab
+            assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
+            assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
+        }
+        ftab[i+1] = tFtab[i].second;
+    }
+#ifndef NDEBUG
+    for(index_t i = 0; i + 1 < ftabLen; i++ ){
+        assert_eq(tFtab[i].first, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
+        assert_eq(tFtab[i].second, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i+1));
+    }
+#endif
+    // Write ftab to primary file
+    for(index_t i = 0; i < ftabLen; i++) {
+        writeIndex<index_t>(out1, ftab[i], this->toBe());
+    }
+    // Write eftab to primary file
+    out1pos = out1.tellp();
+    out1.seekp(24 + sizeof(index_t) * 3);
+    writeIndex<index_t>(out1, eftabLen, this->toBe());
+    out1.seekp(out1pos);
+    for(index_t i = 0; i < eftabLen; i++) {
+        writeIndex<index_t>(out1, eftab[i], this->toBe());
+    }
+    // Note: if you'd like to sanity-check the Ebwt, you'll have to
+    // read it back into memory first!
+    assert(!isInMemory());
+    VMSG_NL("Exiting GFM::buildToDisk()");
+#endif
 }
 
 extern string gLastIOErrMsg;

@@ -2063,7 +2063,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     
 #ifndef NDEBUG
 
-    Switch char array[x][y]; to char** array;
+    // Switch char array[x][y]; to char** array;
     if(debug) {
         cerr << "after sorting nodes by ranking and edges by label and ranking" << endl;
         cerr << "Path nodes" << endl;
