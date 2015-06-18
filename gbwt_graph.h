@@ -49,62 +49,62 @@ public:
         char    label; // ACGTN + Y(head) + Z(tail)
         index_t value; // location in a whole genome
         bool    backbone; // backbone node, which corresponds to a reference sequence
-        
+
         Node() { reset(); }
         Node(char label_, index_t value_, bool backbone_ = false) : label(label_), value(value_), backbone(backbone_) {}
         void reset() { label = 0; value = 0; backbone = false; }
-        
+
         bool write(ofstream& f_out, bool bigEndian) const {
             writeIndex<index_t>(f_out, value, bigEndian);
             writeU16(f_out, label, bigEndian);
             writeU16(f_out, backbone, bigEndian);
             return true;
         }
-        
+
         bool read(ifstream& f_in, bool bigEndian) {
             value = readIndex<index_t>(f_in, bigEndian);
             label = (char)readU16(f_in, bigEndian);
             backbone = (bool)readU16(f_in, bigEndian);
             return true;
         }
-        
+
         bool operator== (const Node& o) const {
             if(value != o.value) return false;
             if(label != o.label) return false;
             return true;
         }
-        
+
         bool operator< (const Node& o) const {
             if(value != o.value) return value < o.value;
             return label < o.label;
         }
     };
-    
+
     struct Edge {
         index_t from; // from Node
         index_t to;   // to Node
-        
+
         Edge() {}
         Edge(index_t from_, index_t to_) : from(from_), to(to_) {}
-        
+
         bool write(ofstream& f_out, bool bigEndian) const {
             writeIndex<index_t>(f_out, from, bigEndian);
             writeIndex<index_t>(f_out, to, bigEndian);
             return true;
         }
-        
+
         bool read(ifstream& f_in, bool bigEndian) {
             from = readIndex<index_t>(f_in, bigEndian);
             to = readIndex<index_t>(f_in, bigEndian);
             return true;
         }
-        
+
         bool operator< (const Edge& o) const {
             if(from != o.from) return from < o.from;
             return to < o.to;
         }
     };
-    
+
     struct EdgeFromCmp {
         bool operator() (const Edge& a, const Edge& b) const {
             return a.from < b.from;
@@ -116,7 +116,7 @@ public:
             return a.to < b.to;
         };
     };
-    
+
     // for debugging purposes
     struct TempEdgeNodeCmp {
         TempEdgeNodeCmp(const EList<Node>& nodes_) : nodes(nodes_) {}
@@ -138,7 +138,7 @@ public:
             const Node& b_node = nodes[b.to];
             return a_node < b_node;
         }
-        
+
         const EList<Node>& nodes;
     };
 
@@ -149,23 +149,23 @@ public:
              const string& out_fname,
              int nthreads_,
              bool verbose);
-    
+
     bool repOk() { return true; }
-    
+
     void write(const std::string& base_name) {}
     void printInfo() {}
-    
+
 private:
     static bool isReverseDeterministic(EList<Node>& nodes, EList<Edge>& edges);
     static void reverseDeterminize(EList<Node>& nodes, EList<Edge>& edges, index_t& lastNode, index_t lastNode_add = 0);
-    
+
     static void sortEdgesFrom(EList<Edge>& edges) {
         std::sort(edges.begin(), edges.end(), EdgeFromCmp());
     }
     static void sortEdgesTo(EList<Edge>& edges) {
         std::sort(edges.begin(), edges.end(), EdgeToCmp());
     }
-    
+
     // Return edge ranges [begin, end)
     static pair<index_t, index_t> findEdges(const EList<Edge>& edges, index_t node, bool from);
     static pair<index_t, index_t> findEdgesFrom(const EList<Edge>& edges, index_t node) {
@@ -174,18 +174,18 @@ private:
     static pair<index_t, index_t> findEdgesTo(const EList<Edge>& edges, index_t node) {
         return findEdges(edges, node, false);
     }
-    static pair<index_t, index_t> getNextEdgeRange(const EList<Edge>& edges, pair<index_t, index_t> range, bool from) {
-        if(range.second >= edges.size()) {
+    static pair<index_t, index_t> getNextEdgeRange(const EList<Edge>& sep_edges, pair<index_t, index_t> range, bool from) {
+        if(range.second >= sep_edges.size()) {
             return pair<index_t, index_t>(0, 0);
         }
         range.first = range.second; range.second++;
-        
+
         if(from) {
-            while(range.second < edges.size() && edges[range.second].from == edges[range.first].from) {
+            while(range.second < sep_edges.size() && sep_edges[range.second].from == sep_edges[range.first].from) {
                 range.second++;
             }
         } else {
-            while(range.second < edges.size() && edges[range.second].to == edges[range.first].to) {
+            while(range.second < sep_edges.size() && sep_edges[range.second].to == sep_edges[range.first].to) {
                 range.second++;
             }
         }
@@ -201,7 +201,7 @@ private:
         const EList<SNP<index_t> >*  snps;
         string                       out_fname;
         bool                         bigEndian;
-        
+
         // output
         index_t                      num_nodes;
         index_t                      num_edges;
@@ -209,21 +209,21 @@ private:
         bool                         multipleHeadNodes;
     };
     static void buildGraph_worker(void* vp);
-    
+
 private:
     EList<RefRecord> szs;
     EList<RefRecord> tmp_szs;
-    
+
     EList<Node> nodes;
     EList<Edge> edges;
     index_t     lastNode; // Z
-    
+
     int         nthreads;
-    
+
 #ifndef NDEBUG
     bool        debug;
 #endif
-    
+
 private:
     // Following composite nodes and edges are used to reverse-determinize an automaton.
     struct CompositeNode {
@@ -233,19 +233,19 @@ private:
         index_t                    value;
         bool                       backbone;
         bool                       potential;
-        
+
         CompositeNode() { reset(); }
-        
+
         CompositeNode(char label_, index_t node_id) :
         id(0), label(label_)
         {
             nodes.push_back(node_id);
         }
-        
+
         Node getNode() const {
             return Node(label, value, backbone);
         }
-        
+
         void reset() {
             nodes.clear();
             id = 0;
@@ -254,14 +254,14 @@ private:
             backbone = potential = false;
         }
     };
-    
+
     struct CompositeEdge {
         index_t from;
         index_t to;
-        
+
         CompositeEdge() : from(0), to(0) {}
         CompositeEdge(index_t from_, index_t to_) : from(from_), to(to_) {}
-        
+
         Edge getEdge(const EList<CompositeNode>& nodes) const
         {
             assert_lt(from, nodes.size());
@@ -270,13 +270,13 @@ private:
             const CompositeNode& to_node = nodes[to];
             return Edge(from_node.id, to_node.id);
         }
-        
+
         bool operator < (const CompositeEdge& o) const
         {
             return from < o.from;
         }
     };
-    
+
     struct TempNodeLabelCmp {
         TempNodeLabelCmp(const EList<Node>& nodes_) : nodes(nodes_) {}
         bool operator() (index_t a, index_t b) const {
@@ -284,7 +284,7 @@ private:
             assert_lt(b, nodes.size());
             return nodes[a].label < nodes[b].label;
         }
-        
+
         const EList<Node>& nodes;
     };
 };
@@ -303,15 +303,15 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
 : lastNode(0), nthreads(nthreads_)
 {
     const bool bigEndian = false;
-    
+
     assert_gt(nthreads, 0);
     assert_gt(szs.size(), 0);
     index_t jlen = s.length();
-    
+
 #ifndef NDEBUG
     debug = (jlen <= 20);
 #endif
-    
+
     // a memory-efficient way to create a population graph with known SNPs
     bool frag_automaton = jlen >= (1 << 16);
     if(frag_automaton) {
@@ -335,7 +335,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     range.second = snp.pos;
                 } else assert(false);
                 range.second += right_relax;
-                
+
                 if(snp_ranges.empty() || snp_ranges.back().second + 1 < range.first) {
                     snp_ranges.push_back(range);
                 } else {
@@ -345,7 +345,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     }
                 }
             }
-            
+
             index_t chunk_size = 1 << 20;
             index_t pos = 0, range_idx = 0;
             for(index_t i = 0; i < szs.size(); i++) {
@@ -374,20 +374,20 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                                     snp_free_range.first = jlen - 1;
                                 }
                             }
-                        
+
                             if(range_idx == snp_ranges.size()) {
                                 snp_free_range.second = jlen - 1;
                             } else {
                                 snp_free_range.second = snp_ranges[range_idx].first - 1;
                             }
-                            
+
                             assert_leq(snp_free_range.first, snp_free_range.second);
                             if(target_pos < snp_free_range.first) target_pos = snp_free_range.first;
                             if(target_pos > after_pos) target_pos = after_pos;
                         } else {
                             target_pos = after_pos;
                         }
-                        
+
                         tmp_szs.expand();
                         tmp_szs.back().len = target_pos - pos;
                         tmp_szs.back().off = 0;
@@ -428,12 +428,12 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 threads[i] = new tthread::thread(buildGraph_worker, (void*)&threadParams.back());
             }
         }
-        
+
         if(nthreads > 1) {
             for(index_t i = 0; i < (index_t)nthreads; i++)
                 threads[i]->join();
         }
-        
+
         index_t num_nodes = 0, num_edges = 0;
         for(index_t i = 0; i < threadParams.size(); i++) {
             num_nodes += threadParams[i].num_nodes;
@@ -445,7 +445,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         }
         nodes.resizeExact(num_nodes); nodes.clear();
         edges.resizeExact(num_edges); edges.clear();
-        
+
         // Read all the nodes and edges
         EList<index_t> tail_nodes;
         bool multipleHeadNodes = false;
@@ -488,7 +488,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     edges.back().from += curr_num_nodes;
                     edges.back().to += curr_num_nodes;
                 }
-                
+
                 if(nodes.size() >= curr_num_nodes + threadParams[i].num_nodes) {
                     assert_eq(nodes.size(), curr_num_nodes + threadParams[i].num_nodes);
                     assert_eq(edges.size(), curr_num_edges + num_spanning_edges + threadParams[i].num_edges);
@@ -512,7 +512,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 assert_eq(nodes[lastNode].label, 'Z');
             }
         }
-        
+
         if(multipleHeadNodes) {
             if(!isReverseDeterministic(nodes, edges)) {
                 if(verbose) cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
@@ -524,7 +524,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         index_t num_predicted_nodes = (index_t)(jlen * 1.2);
         nodes.reserveExact(num_predicted_nodes);
         edges.reserveExact(num_predicted_nodes);
-        
+
         // Created head node
         nodes.expand();
         nodes.back().label = 'Y';
@@ -534,13 +534,13 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             nodes.expand();
             nodes.back().label = "ACGT"[(int)s[i]];
             nodes.back().value = i;
-            
+
             assert_geq(nodes.size(), 2);
             edges.expand();
             edges.back().from = nodes.size() - 2;
             edges.back().to = nodes.size() - 1;
         }
-        
+
         // Create tail node
         nodes.expand();
         nodes.back().label = 'Z';
@@ -549,7 +549,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         edges.expand();
         edges.back().from = nodes.size() - 2;
         edges.back().to = nodes.size() - 1;
-        
+
         // Create nodes and edges for SNPs
         for(size_t i = 0; i < snps.size(); i++) {
             const SNP<index_t>& snp = snps[i];
@@ -594,7 +594,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 assert(false);
             }
         }
-    
+
         if(!isReverseDeterministic(nodes, edges)) {
             if(verbose) cerr << "\tis not reverse-deterministic, so reverse-determinize..." << endl;
             reverseDeterminize(nodes, edges, lastNode);
@@ -607,7 +607,7 @@ template <typename index_t>
 pair<index_t, index_t> RefGraph<index_t>::findEdges(const EList<Edge>& edges, index_t node, bool from) {
     pair<index_t, index_t> range(0, 0);
     assert_gt(edges.size(), 0);
-    
+
     // Find lower bound
     index_t low = 0, high = edges.size() - 1;
     index_t temp;
@@ -620,7 +620,7 @@ pair<index_t, index_t> RefGraph<index_t>::findEdges(const EList<Edge>& edges, in
             if(mid == 0) {
                 return pair<index_t, index_t>(0, 0);
             }
-            
+
             high = mid - 1;
         } else {
             low = mid + 1;
@@ -632,7 +632,7 @@ pair<index_t, index_t> RefGraph<index_t>::findEdges(const EList<Edge>& edges, in
     } else {
         return range;
     }
-    
+
     // Find upper bound
     high = edges.size() - 1;
     while(low < high)
@@ -658,15 +658,15 @@ template <typename index_t>
 void RefGraph<index_t>::buildGraph_worker(void* vp) {
     ThreadParam* threadParam = (ThreadParam*)vp;
     RefGraph<index_t>& refGraph = *(threadParam->refGraph);
-    
+
     const SString<char>& s = *(threadParam->s);
     index_t jlen = s.length();
-    
+
     const EList<SNP<index_t> >& snps = *(threadParam->snps);
-    
+
     EList<Node> nodes; EList<Edge> edges;
     const EList<RefRecord>& tmp_szs = refGraph.tmp_szs;
-    
+
     index_t thread_id = threadParam->thread_id;
     index_t nthreads = refGraph.nthreads;
     std::ostringstream number; number << thread_id;
@@ -676,11 +676,11 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         cerr << "Could not open file for writing a reference graph: \"" << rg_fname << "\"" << endl;
         throw 1;
     }
-    
+
     const bool bigEndian = threadParam->bigEndian;
-    
+
     index_t& lastNode = threadParam->lastNode;
-    
+
     index_t& num_nodes = threadParam->num_nodes;
     index_t& num_edges = threadParam->num_edges;
     index_t szs_idx = 0, szs_idx_end = tmp_szs.size();
@@ -690,7 +690,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
     if(thread_id + 1 < nthreads) {
         szs_idx_end = (tmp_szs.size() / nthreads) * (thread_id + 1);
     }
-    
+
     index_t curr_pos = 0;
     for(index_t i = 0; i < szs_idx; i++) {
         curr_pos += tmp_szs[i].len;
@@ -703,12 +703,12 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         index_t num_predicted_nodes = (index_t)(curr_len * 1.2);
         nodes.resizeExact(num_predicted_nodes); nodes.clear();
         edges.resizeExact(num_predicted_nodes); edges.clear();
-        
+
         // Created head node
         nodes.expand();
         nodes.back().label = 'Y';
         nodes.back().value = 0;
-        
+
         // Create nodes and edges corresponding to a reference genome
         assert_leq(curr_pos + curr_len, s.length());
         for(size_t i = curr_pos; i < curr_pos + curr_len; i++) {
@@ -720,7 +720,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             edges.back().from = nodes.size() - 2;
             edges.back().to = nodes.size() - 1;
         }
-        
+
         // Create tail node
         nodes.expand();
         nodes.back().label = 'Z';
@@ -729,7 +729,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         edges.expand();
         edges.back().from = nodes.size() - 2;
         edges.back().to = nodes.size() - 1;
-        
+
         // Create nodes and edges for SNPs
         for(; snp_idx < snps.size(); snp_idx++) {
             const SNP<index_t>& snp = snps[snp_idx];
@@ -774,7 +774,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 assert(false);
             }
         }
-        
+
 #ifndef NDEBUG
         if(refGraph.debug) {
             cerr << "Nodes:" << endl;
@@ -791,12 +791,12 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             cerr << endl;
         }
 #endif
-        
+
         if(!isReverseDeterministic(nodes, edges)) {
             reverseDeterminize(nodes, edges, lastNode, curr_pos > 0 ? curr_pos + 1 : 0);
             assert(isReverseDeterministic(nodes, edges));
         }
-        
+
         // Identify head
         index_t head_node = nodes.size();
         for(index_t i = 0; i < nodes.size(); i++) {
@@ -807,7 +807,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         }
         assert_lt(head_node, nodes.size());
         index_t tail_node = lastNode; assert_lt(tail_node, nodes.size());
-        
+
         // Update edges
         const index_t invalid = (index_t)INDEX_MAX;
         bool head_off = curr_pos > 0, tail_off = curr_pos + curr_len < jlen;
@@ -821,7 +821,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             } else {
                 edges[i].from = from;
             }
-            
+
             index_t to = edges[i].to;
             to = to + num_nodes;
             if(head_off && edges[i].to > head_node) to -= 1;
@@ -838,7 +838,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             lastNode += num_nodes;
             if(head_off) lastNode -= 1;
         }
-        
+
         // Connect head nodes with tail nodes in the previous automaton
         index_t num_head_nodes = 0;
         index_t tmp_num_edges = edges.size();
@@ -859,7 +859,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                     }
                 }
             }
-            
+
             if(nodes_to_head.size() > 0) {
                 assert_gt(thread_id, 0);
                 assert_eq(prev_tail_nodes.size(), 0);
@@ -869,12 +869,12 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 }
             }
         }
-        
+
         // Need to check if it's reverse-deterministic
         if(num_head_nodes > 1) {
             threadParam->multipleHeadNodes = true;
         }
-        
+
         // List tail nodes
         prev_tail_nodes.clear();
         if(tail_off) {
@@ -884,7 +884,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 }
             }
         }
-        
+
         // Write nodes and edges
         index_t tmp_num_nodes = nodes.size();
         assert_gt(tmp_num_nodes, 2);
@@ -912,22 +912,22 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             ASSERT_ONLY(num_edges_written++);
         }
         assert_eq(tmp_num_edges, num_edges_written);
-        
+
         // Clear nodes and edges
         nodes.clear(); edges.clear();
-        
+
         curr_pos += curr_len;
         num_nodes += tmp_num_nodes;
         num_edges += tmp_num_edges;
     }
-    
+
     if(nthreads > 1 && thread_id + 1 < (index_t)nthreads && prev_tail_nodes.size() > 0) {
         writeIndex<index_t>(rg_out_file, prev_tail_nodes.size(), bigEndian);
         for(index_t i = 0; i < prev_tail_nodes.size(); i++) {
             writeIndex<index_t>(rg_out_file, prev_tail_nodes[i], bigEndian);
         }
     }
-    
+
     // Close out file handle
     rg_out_file.close();
 }
@@ -936,10 +936,10 @@ template <typename index_t>
 bool RefGraph<index_t>::isReverseDeterministic(EList<Node>& nodes, EList<Edge>& edges)
 {
     if(edges.size() <= 0) return true;
-    
+
     // Sort edges by "to" nodes
     sortEdgesTo(edges);
-    
+
     index_t curr_to = edges.front().to;
     EList<bool> seen; seen.resize(5); seen.fillZero();
     for(index_t i = 1; i < edges.size(); i++) {
@@ -959,7 +959,7 @@ bool RefGraph<index_t>::isReverseDeterministic(EList<Node>& nodes, EList<Edge>& 
             seen[nt] = true;
         }
     }
-    
+
     return true;
 }
 
@@ -971,7 +971,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
     map<basic_string<index_t>, index_t> cnode_map;
     deque<index_t> active_cnodes;
     EList<CompositeEdge> cedges; cedges.ensure(edges.size());
-    
+
     // Start from the final node ('Z')
     assert_lt(lastNode, nodes.size());
     const Node& last_node = nodes[lastNode];
@@ -983,15 +983,15 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
     cnodes.back().nodes.push_back(lastNode);
     active_cnodes.push_back(0);
     cnode_map[cnodes.back().nodes] = 0;
-    
+
     sortEdgesTo(edges);
-  
+
     index_t firstNode = 0; // Y -> ... -> Z
     EList<index_t> predecessors;
     while(!active_cnodes.empty()) {
         index_t cnode_id = active_cnodes.front(); active_cnodes.pop_front();
         assert_lt(cnode_id, cnodes.size());
-        
+
         // Find predecessors of this composite node
         predecessors.clear();
         for(size_t i = 0; i < cnodes[cnode_id].nodes.size(); i++) {
@@ -1004,13 +1004,13 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
                 predecessors.push_back(edges[j].from);
             }
         }
-        
+
         if(predecessors.size() >= 2) {
             // Remove redundant nodes
             predecessors.sort();
             index_t new_size = unique(predecessors.begin(), predecessors.end()) - predecessors.begin();
             predecessors.resize(new_size);
-            
+
             // Create composite nodes by labels
             stable_sort(predecessors.begin(), predecessors.end(), TempNodeLabelCmp(nodes));
         }
@@ -1019,19 +1019,19 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
             index_t node_id = predecessors[i];
             assert_lt(node_id, nodes.size());
             const Node& node = nodes[node_id]; i++;
-            
+
             cnodes.expand();
             cnodes.back().reset();
             cnodes.back().label = node.label;
             cnodes.back().value = node.value;
             cnodes.back().nodes.push_back(node_id);
             cnodes.back().potential = node.value < (lastNode + lastNode_add);
-            
+
             if(node.label == 'Y' && firstNode == 0) {
                 firstNode = cnodes.size() - 1;
                 cnodes.back().backbone = true;
             }
-            
+
             while(i < predecessors.size()) {
                 index_t next_node_id = predecessors[i];
                 assert_lt(next_node_id, nodes.size());
@@ -1048,7 +1048,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
                 cnodes[cnode_id].potential = cnodes[cnode_id].value < (lastNode + lastNode_add);
                 i++;
             }
-            
+
             // Create edges from this new composite node to current composite node
             typename map<basic_string<index_t>, index_t>::iterator existing = cnode_map.find(cnodes.back().nodes);
             if(existing == cnode_map.end()) {
@@ -1059,12 +1059,12 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
                 cnodes.pop_back();
                 cedges.push_back(CompositeEdge((*existing).second, cnode_id));
             }
-            
+
             // Increment indegree
             cnodes[cnode_id].id++;
         }
     }
-    
+
     // Specify backbone nodes
     // Interchange from and to
     for(index_t i = 0; i < cedges.size(); i++) {
@@ -1100,7 +1100,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
         cedges[i].from = cedges[i].to;
         cedges[i].to = tmp;
     }
-    
+
     // Create new nodes
     lastNode = 0; // Invalidate lastNode
     nodes.resizeExact(cnodes.size()); nodes.clear();
@@ -1110,7 +1110,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
     first_node.id = 0;
     nodes.expand();
     nodes.back() = first_node.getNode();
-    active_cnodes.push_back(firstNode);    
+    active_cnodes.push_back(firstNode);
     sort(cedges.begin(), cedges.end());
     while(!active_cnodes.empty()) {
         index_t cnode_id = active_cnodes.front(); active_cnodes.pop_front();
@@ -1138,7 +1138,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
             i++;
         }
     }
-    
+
     // Create new edges
     edges.resizeExact(cedges.size()); edges.clear();
     for(index_t i = 0; i < cedges.size(); i++) {
@@ -1147,7 +1147,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
         edges.back() = edge.getEdge(cnodes);
     }
     sortEdgesFrom(edges);
-    
+
 #if 0
 #ifndef NDEBUG
     if(debug) {
@@ -1179,24 +1179,24 @@ public:
         index_t                from;
         index_t                to;
         pair<index_t, index_t> key;
-        
+
         void setSorted()      { to = (index_t)INDEX_MAX; }
         bool isSorted() const { return to == (index_t)INDEX_MAX; }
-        
+
         index_t value() const { return to; }
         index_t outdegree() const { return key.first; }
-        
+
         bool operator< (const PathNode& o) const {
             return key < o.key;
         };
     };
-    
+
     struct PathNodeFromCmp {
         bool operator() (const PathNode& a, const PathNode& b) const {
             return a.from < b.from;
         }
     };
-    
+
     struct PathNodeToCmp {
     	bool operator() (const PathNode& a, const PathNode& b) const {
     		return a.to < b.to;
@@ -1207,32 +1207,50 @@ public:
         index_t from;
         index_t ranking;
         char    label;
-        
+
         PathEdge() { reset(); }
-        
+
         PathEdge(index_t from_, index_t ranking_, char label_) : from(from_), ranking(ranking_), label(label_) {}
-        
+
         void reset() {
             from = 0;
             ranking = 0;
             label = 0;
         }
-        
+
         bool operator< (const PathEdge& o) const {
             return label < o.label || (label == o.label && ranking < o.ranking);
         };
     };
-    
+
     struct PathEdgeFromCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
             return a.from < b.from || (a.from == b.from && a.ranking < b.ranking);
         }
     };
-    
+
     struct PathEdgeToCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
             return a.ranking < b.ranking;
         }
+    };
+
+    struct TempEdge {
+        index_t from; // from Node
+        index_t to;   // to Node
+
+    };
+
+    struct TempEdgeFromCmp {
+        bool operator() (const TempEdge& a, const TempEdge& b) const {
+            return a.from < b.from;
+        }
+    };
+
+    struct TempEdgeToCmp {
+        bool operator() (const TempEdge& a, const TempEdge& b) const {
+            return a.to < b.to;
+        };
     };
 
 private:
@@ -1242,11 +1260,10 @@ private:
         PathNode** 					     to_nodes;
         index_t*                         from_cur;
         index_t*                         to_cur;
-        tthread::mutex*                  mutexes;
         index_t                          st;
         index_t                          en;
         int                              partitions;
-        int                              nthreads;
+        int                              thread_id;
      };
      static void seperateNodes(void* vp);
      static void seperateNodesCount(void* vp);
@@ -1257,8 +1274,8 @@ private:
 		 index_t                         en;
          PathNode**                      from_nodes;
          PathNode**           	         to_nodes;
-         index_t*                        from_cur;
-         index_t*                        to_cur;
+         index_t*                        from_size;
+         index_t*                        to_size;
          int                             thread_id;
          PathNode**                      new_nodes;
          index_t*                        new_cur;
@@ -1280,29 +1297,38 @@ private:
        };
        static void mergeNodes(void* vp);
 
-    
+       struct ThreadParam4 {
+    	   RefGraph<index_t>*                base;
+           int                               thread_id;
+           EList<PathNode>*                  sep_nodes;
+           EList<TempEdge>*   sep_edges;
+           EList<PathEdge>*                  new_edges;
+        };
+        static void generateEdgesWorker(void* vp);
+
+
 public:
     // Create a new graph in which paths are represented using nodes
     PathGraph(RefGraph<index_t>& parent, int nthreads_ = 1, bool verbose_ = false);
-    
+
     // Construct a next 2^(j+1) path graph from a 2^j path graph
     PathGraph(PathGraph<index_t>& previous);
-    
+
     ~PathGraph() {}
-    
+
     void printInfo();
-    
+
     bool IsSorted() const { return status != sorted; }
     bool repOk() const { return status != ok; }
-    
-    
+
+
     // status must be sorted. Calling this invalidates parent and
     // sets status to ready.
     // Writes outdegree to PathNode.key.second, value to PathNode.to, and
     // predecessor labels to PathNode.key.first.
     // Restores the labels of parent.
     bool generateEdges(RefGraph<index_t>& parent);
-    
+
     index_t getNumNodes() const { return nodes.size(); }
     index_t getNumEdges() const { return edges.size(); }
 
@@ -1357,13 +1383,12 @@ private:
     void      mergeUpdateRank(); //performs pruning step, must have all nodes merged and sorted
 
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> node_range);
-    
+
     void sortByKey() { sort(nodes.begin(), nodes.end()); } // by key
 
     // Can create an index by using key.second in PathNodes.
     void sortByFrom(bool create_index = true);
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
-    pair<index_t, index_t> getNextRange(pair<index_t, index_t> range);  // Use sortByFrom() first.
 
     void sortEdges() { sort(edges.begin(), edges.end()); } // by (from.label, to.rank)
     void sortEdgesFrom() {
@@ -1372,7 +1397,7 @@ private:
     void sortEdgesTo(bool create_index = false) {
         sort(edges.begin(), edges.end(), PathEdgeToCmp());
         status = error;
-        
+
         if(create_index) {
             for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
                 node->key.second = 0;
@@ -1385,23 +1410,55 @@ private:
             }
         }
     }
-    
+
+    static pair<index_t, index_t> getNextRange(EList<PathNode>* sep_nodes, pair<index_t, index_t> range) {
+        if(range.second >= sep_nodes->size())
+            return pair<index_t, index_t>(0, 0);
+
+        if(range.first < range.second) {
+            range.first = range.second; range.second++;
+        }
+
+        while(range.second < sep_nodes->size() && sep_nodes->get(range.second).from == sep_nodes->get(range.first).from) {
+            range.second++;
+        }
+        return range;
+    }
+
+    static pair<index_t, index_t> getNextEdgeRange(EList<TempEdge>* sep_edges, pair<index_t, index_t> range, bool from) {
+        if(range.second >= sep_edges->size()) {
+            return pair<index_t, index_t>(0, 0);
+        }
+        range.first = range.second; range.second++;
+
+        if(from) {
+            while(range.second < sep_edges->size() && sep_edges->get(range.second).from == sep_edges->get(range.first).from) {
+                range.second++;
+            }
+        } else {
+            while(range.second < sep_edges->size() && sep_edges->get(range.second).to == sep_edges->get(range.first).to) {
+                range.second++;
+            }
+        }
+        return range;
+    }
+
 private:
     int             nthreads;
     bool            verbose;
-    
+
     EList<PathNode> nodes;
     EList<PathNode> new_nodes; //keeps track of combined nodes not yet merged into nodes
     EList<PathEdge> edges;
     index_t         ranks;
     index_t         max_label;  // Node label of initial nodes.
     index_t         temp_nodes; // Total number of nodes created before sorting.
-    
+
     index_t         generation; // Sorted by paths of length 2^generation.
-    
+
     enum status_t { error, ok, sorted, ready, edges_sorted } status;
     bool            has_stabilized;  // The number of nodes will probably not explode in subsequent doublings.
-    
+
     // For reporting GBWT char, F, and M values
     index_t                report_node_idx;
     pair<index_t, index_t> report_edge_range;
@@ -1409,23 +1466,23 @@ private:
     // For reporting location in F corresponding to 1 bit in M
     index_t                report_F_node_idx;
     index_t                report_F_location;
-    
+
     // Can create an index by using key.second in PathNodes.
     // If the graph is not ready, its status becomes error.
     // Sorting edges by from actually sorts them by (from, to).
     void      sortEdges(bool by_from, bool create_index);
     pair<index_t, index_t> getEdges(index_t node, bool by_from); // Create index first.
-    
+
     // following variables are for debugging purposes
 #ifndef NDEBUG
     bool               debug;
 #endif
-    
+
     EList<char>        bwt_string;
     EList<char>        F_array;
     EList<char>        M_array;
     EList<index_t>     bwt_counts;
-    
+
     // brute-force implementations
     index_t select(const EList<char>& array, index_t p, char c) {
         if(p <= 0) return 0;
@@ -1439,11 +1496,11 @@ private:
         }
         return array.size();
     }
-    
+
     index_t select1(const EList<char>& array, index_t p) {
         return select(array, p, 1);
     }
-    
+
     index_t rank(const EList<char>& array, index_t p, char c) {
         index_t count = 0;
         assert_lt(p, array.size());
@@ -1453,11 +1510,11 @@ private:
         }
         return count;
     }
-    
+
     index_t rank1(const EList<char>& array, index_t p) {
         return rank(array, p, 1);
     }
-    
+
     // for debugging purposes
 #ifndef NDEBUG
 public: EList<pair<index_t, index_t> > ftab;
@@ -1487,6 +1544,7 @@ report_F_node_idx(0), report_F_location(0)
         nodes.expand();
         nodes.back().from = e.from;
         nodes.back().to = e.to;
+
         switch(base.nodes[e.from].label) {
         case 'A':
         	nodes.back().key = pair<index_t, index_t>(0, 0);
@@ -1526,29 +1584,25 @@ void PathGraph<index_t>::seperateNodes(void * vp) {
     PathGraph<index_t>* previous = threadParam->previous;
     PathNode **from_nodes = threadParam->from_nodes;
     PathNode **to_nodes = threadParam->to_nodes;
-    tthread::mutex * mutexes = threadParam->mutexes;
     index_t* from_cur = threadParam->from_cur;
     index_t* to_cur = threadParam->to_cur;
-    int nthreads = threadParam->nthreads;
 
     index_t st = threadParam->st;
     index_t en = threadParam->en;
     int partitions = threadParam->partitions;
 
 	for(index_t i = st; i < en; i++) {
-		index_t from_hash = (13 * (*previous).nodes[i].from) % partitions;
-		if(nthreads > 1) mutexes[from_hash].lock();
-		from_nodes[from_hash][from_cur[from_hash]] = (*previous).nodes[i];
+		index_t from_hash = (13 * previous->nodes[i].from) % partitions;
+		from_nodes[from_hash][from_cur[from_hash]] = previous->nodes[i];
 		from_cur[from_hash]++;
-		if(nthreads > 1) mutexes[from_hash].unlock();
-		if(!(*previous).nodes[i].isSorted()) {
-			index_t to_hash = (13 * (*previous).nodes[i].to) % partitions;
-			if(nthreads > 1) mutexes[to_hash].lock();
-			to_nodes[to_hash][to_cur[to_hash]] = (*previous).nodes[i];
+		if(!previous->nodes[i].isSorted()) {
+			index_t to_hash = (13 * previous->nodes[i].to) % partitions;
+			to_nodes[to_hash][to_cur[to_hash]] = previous->nodes[i];
 			to_cur[to_hash]++;
-			if(nthreads > 1) mutexes[to_hash].unlock();
 		}
 	}
+	delete[] from_cur;
+	delete[] to_cur;
 }
 
 template <typename index_t>
@@ -1556,32 +1610,22 @@ void PathGraph<index_t>::seperateNodesCount(void * vp) {
     ThreadParam* threadParam = (ThreadParam*)vp;
 
     PathGraph<index_t>* previous = threadParam->previous;
-    tthread::mutex* mutexes = threadParam->mutexes;
     index_t* from_cur = threadParam->from_cur;
     index_t* to_cur = threadParam->to_cur;
 
     index_t st = threadParam->st;
     index_t en = threadParam->en;
     int partitions = threadParam->partitions;
-    int nthreads = threadParam->nthreads;
-    
-    // daehwan --> joe
-    // multiple from_cur arrays and adding up them, as an alternative to using mutexes
 
 	for(index_t i = st; i < en; i++) {
-		index_t from_hash = (13 * (*previous).nodes[i].from) % partitions;
-		if(nthreads > 1) mutexes[from_hash].lock();
+		index_t from_hash = (13 * previous->nodes[i].from) % partitions;
 		from_cur[from_hash]++;
-		if(nthreads > 1) mutexes[from_hash].unlock();
-		if(!(*previous).nodes[i].isSorted()) {
-			index_t to_hash = (13 * (*previous).nodes[i].to) % partitions;
-			if(nthreads > 1) mutexes[to_hash].lock();
+		if(!previous->nodes[i].isSorted()) {
+			index_t to_hash = (13 * previous->nodes[i].to) % partitions;
 			to_cur[to_hash]++;
-			if(nthreads > 1) mutexes[to_hash].unlock();
 		}
 	}
 }
-
 
 template <typename index_t>
 void PathGraph<index_t>::createCombined(void * vp) {
@@ -1597,24 +1641,24 @@ void PathGraph<index_t>::createCombined(void * vp) {
     PathNode** to_nodes   = threadParam->to_nodes;
     PathNode** new_nodes  = threadParam->new_nodes;
 
-    index_t* from_cur = threadParam->from_cur;
-    index_t* to_cur   = threadParam->to_cur;
+    index_t* from_size = threadParam->from_size;
+    index_t* to_size   = threadParam->to_size;
     index_t* new_cur  = threadParam->new_cur;
 
     //count
     //use heuristic sometimes instead of counting exact number?
     //other method for small number of to_nodes[i]?
     for(index_t i = st; i < en; i++) {
-        if(from_cur[i] <= 0 || to_cur[i] <= 0) continue;
-		sort(from_nodes[i], from_nodes[i] + from_cur[i], PathNodeFromCmp());
-		sort(to_nodes[i], to_nodes[i] + to_cur[i], PathNodeToCmp());
+        if(from_size[i] <= 0 || to_size[i] <= 0) continue;
+		sort(from_nodes[i], from_nodes[i] + from_size[i], PathNodeFromCmp());
+		sort(to_nodes[i], to_nodes[i] + to_size[i], PathNodeToCmp());
 		index_t t = 0;
-		for(index_t f = 0; f < from_cur[i]; f++) {
-			while(t < to_cur[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
+		for(index_t f = 0; f < from_size[i]; f++) {
+			while(t < to_size[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
 				t++;
 			}
 			index_t shift = 0;
-			while(t + shift < to_cur[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
+			while(t + shift < to_size[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
 				new_cur[thread_id]++;
 				shift++;
 			}
@@ -1626,12 +1670,12 @@ void PathGraph<index_t>::createCombined(void * vp) {
     //add
     for(index_t i = st; i < en; i++) {
     	index_t t = 0;
-    	for(index_t f = 0; f < from_cur[i]; f++) {
-        	while(t < to_cur[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
+    	for(index_t f = 0; f < from_size[i]; f++) {
+        	while(t < to_size[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
         		t++;
         	}
         	index_t shift = 0;
-        	while(t + shift < to_cur[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
+        	while(t + shift < to_size[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
         		new_nodes[thread_id][new_cur[thread_id]].from = to_nodes[i][t + shift].from;
         		new_nodes[thread_id][new_cur[thread_id]].to   = from_nodes[i][f].to;
                 if(generation < 4) {
@@ -1690,13 +1734,12 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 	}
 	merged_nodes[thread_id] = new PathNode[count];
 
-
 	//skip to first sorted node, this doesn't seem to help so much now, but might with more threads
 	while(pos[nthreads] < breakpoints[nthreads][thread_id + 1] && !previous->nodes[pos[nthreads]].isSorted()) {
 		pos[nthreads]++;
 	}
 	while(true) {
-		pair<index_t, index_t> minRank = pair<index_t, index_t>((index_t)INDEX_MAX, (index_t)INDEX_MAX);  //(index, value) need to change this part!!!!
+		pair<index_t, index_t> minRank = pair<index_t, index_t>((index_t)INDEX_MAX, (index_t)INDEX_MAX);
 		int minIndex = -1;
 		for(int i = 0; i < nthreads; i++) {
 			if(pos[i] < breakpoints[i][thread_id + 1] && new_nodes[i][pos[i]].key <= minRank){
@@ -1760,11 +1803,17 @@ report_F_node_idx(0), report_F_location(0)
 
     PathNode **to_nodes = new PathNode*[partitions];
     PathNode **from_nodes = new PathNode*[partitions];
-    index_t* from_cur = new index_t[partitions] ();
-    index_t* to_cur = new index_t[partitions] ();
-    tthread::mutex* mutexes = new tthread::mutex[partitions] ();
+    index_t** from_cur = new index_t*[nthreads];
+    index_t** to_cur = new index_t*[nthreads];
+
+    for(int i = 0; i < nthreads; i++) {
+        from_cur[i] = new index_t[partitions] ();
+       	to_cur[i] = new index_t[partitions] ();
+    }
+
     AutoArray<tthread::thread*> threads(nthreads);
     EList<ThreadParam> threadParams;
+
 
     index_t st = 0;
     index_t en = previous.nodes.size() / nthreads;
@@ -1775,23 +1824,20 @@ report_F_node_idx(0), report_F_location(0)
     	threadParams.back().previous = &previous;
     	threadParams.back().to_nodes = to_nodes;
     	threadParams.back().from_nodes = from_nodes;
-    	threadParams.back().from_cur = from_cur;
-    	threadParams.back().to_cur = to_cur;
-    	threadParams.back().mutexes = mutexes;
-        threadParams.back().partitions = partitions;
-        threadParams.back().nthreads = nthreads;
+    	threadParams.back().from_cur = from_cur[i];
+    	threadParams.back().to_cur = to_cur[i];
+    	threadParams.back().partitions = partitions;
 
     	if(nthreads == 1) {
     		seperateNodesCount((void*)&threadParams.back());
     	} else {
     		threads[i] = new tthread::thread(seperateNodesCount, (void*)&threadParams.back());
     	}
-    	swap(st, en);
         st = en;
     	if(i + 2 == nthreads) {
     		en = previous.nodes.size();
     	} else {
-            en = st + st - en;
+            en = st + previous.nodes.size() / nthreads;
     	}
     }
     if(nthreads > 1) {
@@ -1801,16 +1847,23 @@ report_F_node_idx(0), report_F_location(0)
 
     // Initialize arrays to be used for hash table
 //    cerr << "Allocating arrays..." << endl;
-
-
-    for(index_t i = 0; i < partitions; ++i) {
-    	from_nodes[i] = new PathNode[from_cur[i]];
-    	from_cur[i] = 0;
-    	to_nodes[i] = new PathNode[to_cur[i]];
-    	to_cur[i] = 0;
+    index_t* from_size = new index_t[partitions] ();
+    index_t* to_size = new index_t[partitions] ();
+    for(int i = 0; i < nthreads; i++) {
+    	for(index_t j = 0; j < partitions; j++) {
+    		from_size[j] += from_cur[i][j];
+    		to_size[j] += to_cur[i][j];
+    		from_cur[i][j] = from_size[j] - from_cur[i][j];
+    		to_cur[i][j] = to_size[j] - to_cur[i][j];
+    	}
     }
 
-  //  cerr << "Separating nodes..." << endl;
+    for(index_t i = 0; i < partitions; ++i) {
+    	from_nodes[i] = new PathNode[from_size[i]];
+    	to_nodes[i] = new PathNode[to_size[i]];
+    }
+
+//    cerr << "Separating nodes..." << endl;
 
     for(index_t i = 0; i < (index_t)nthreads; i++) {
     	if(nthreads == 1) {
@@ -1823,12 +1876,13 @@ report_F_node_idx(0), report_F_location(0)
     	for(index_t i = 0; i < (index_t)nthreads; i++)
               threads[i]->join();
     }
+    delete[] from_cur;
+    delete[] to_cur;
     //--------------------------------------------------------------------------------------------------------------
 
 //    cerr << "Creating new nodes..." << endl;
 
     PathNode **new_nodes = new PathNode*[nthreads];
-
     index_t *new_cur = new index_t[nthreads];
     for(index_t i = 0; i < nthreads; i++) {
     	new_cur[i] = 0;
@@ -1866,8 +1920,8 @@ report_F_node_idx(0), report_F_location(0)
     	threadParams2.back().thread_id = i;
     	threadParams2.back().st = st;
     	threadParams2.back().en = en;
-    	threadParams2.back().from_cur = from_cur;
-    	threadParams2.back().to_cur = to_cur;
+    	threadParams2.back().from_size = from_size;
+    	threadParams2.back().to_size = to_size;
     	threadParams2.back().from_nodes = from_nodes;
     	threadParams2.back().to_nodes = to_nodes;
     	threadParams2.back().new_nodes = new_nodes;
@@ -1881,11 +1935,11 @@ report_F_node_idx(0), report_F_location(0)
     	} else {
     		threads2[i] = new tthread::thread(createCombined, (void*)&threadParams2.back());
     	}
-    	swap(st, en);
+    	st = en;
     	if(i + 2 == nthreads) {
     		en = partitions;
     	} else {
-    		en = st + st - en;
+    		en = st + partitions / nthreads;
     	}
     }
 
@@ -1893,11 +1947,10 @@ report_F_node_idx(0), report_F_location(0)
     	for(int i = 0; i < nthreads; i++)
     		threads2[i]->join();
     }
-    delete[] mutexes;
     delete[] from_nodes;
     delete[] to_nodes;
-    delete[] from_cur;
-    delete[] to_cur;
+    delete[] from_size;
+    delete[] to_size;
 
     //------------------------------------------------------------------------------------------------------------------------------
 
@@ -1991,38 +2044,106 @@ void PathGraph<index_t>::printInfo()
     }
 }
 
+template <typename index_t>
+void PathGraph<index_t>::generateEdgesWorker(void * vp) {
+	ThreadParam4* threadParams = (ThreadParam4*)vp;
+	int thread_id = threadParams->thread_id;
+	RefGraph<index_t>* base = threadParams->base;
+	EList<PathNode>* sep_nodes = threadParams->sep_nodes;
+	EList<TempEdge>* sep_edges = threadParams->sep_edges;
+	EList<PathEdge>* new_edges = threadParams->new_edges;
+
+	sort(sep_nodes[thread_id].begin(), sep_nodes[thread_id].end(), PathNodeFromCmp());
+	sort(sep_edges[thread_id].begin(), sep_edges[thread_id].end(), TempEdgeToCmp());
+
+	pair<index_t, index_t> pn_range = getNextRange(&sep_nodes[thread_id], pair<index_t, index_t>(0, 0));
+	pair<index_t, index_t> ge_range = getNextEdgeRange(&sep_edges[thread_id], pair<index_t, index_t>(0, 0), false /* from? */);
+
+	while(pn_range.first < pn_range.second && ge_range.first < ge_range.second) {
+		if(sep_nodes[thread_id][pn_range.first].from == sep_edges[thread_id][ge_range.first].to) {
+			for(index_t node = pn_range.first; node < pn_range.second; node++) {
+				for(index_t edge = ge_range.first; edge < ge_range.second; edge++) {
+					index_t from = sep_edges[thread_id][edge].from;
+					new_edges[thread_id].push_back(PathEdge(from, sep_nodes[thread_id][node].key.first, base->nodes[from].label));
+				}
+			}
+			pn_range = getNextRange(&sep_nodes[thread_id], pn_range);
+			ge_range = getNextEdgeRange(&sep_edges[thread_id], ge_range, false);
+		} else if(sep_nodes[thread_id][pn_range.first].from < sep_edges[thread_id][ge_range.first].to) {
+			pn_range = getNextRange(&sep_nodes[thread_id], pn_range);
+		} else {
+			ge_range = getNextEdgeRange(&sep_edges[thread_id], ge_range, false);
+		}
+	}
+	sort(new_edges[thread_id].begin(), new_edges[thread_id].end());
+}
+
+
 //--------------------------------------------------------------------------
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
     if(status != sorted)
         return false;
-    
 
-    sortByFrom(false);
-    base.sortEdgesTo(base.edges);
-    
-    // Create edges (from, to) as (from.from, to = rank(to))
-    pair<index_t, index_t> pn_range = getNextRange(pair<index_t, index_t>(0, 0));
-    pair<index_t, index_t> ge_range = base.getNextEdgeRange(base.edges, pair<index_t, index_t>(0, 0), false /* from? */);
-    edges.resizeExact(nodes.size() + nodes.size() / 4); edges.clear();
-    while(pn_range.first < pn_range.second && ge_range.first < ge_range.second) {
-        if(nodes[pn_range.first].from == base.edges[ge_range.first].to) {
-            for(index_t node = pn_range.first; node < pn_range.second; node++) {
-                for(index_t edge = ge_range.first; edge < ge_range.second; edge++) {
-                    index_t from = base.edges[edge].from;
-                    edges.push_back(PathEdge(from, nodes[node].key.first, base.nodes[from].label));
-                }
-            }
-            pn_range = getNextRange(pn_range);
-            ge_range = base.getNextEdgeRange(base.edges, ge_range, false);
-        } else if(nodes[pn_range.first].from < base.edges[ge_range.first].to) {
-            pn_range = getNextRange(pn_range);
-        } else {
-            ge_range = base.getNextEdgeRange(base.edges, ge_range, false);
-        }
+    EList<PathNode>* sep_nodes = new EList<PathNode>[nthreads];
+    EList<TempEdge>* sep_edges = new EList<TempEdge>[nthreads];
+    EList<PathEdge>* new_edges = new EList<PathEdge>[nthreads];
+
+    for(int i = 0; i < nthreads; i++) {
+    	sep_nodes[i].resizeExact(nodes.size() / nthreads);
+    	sep_edges[i].resizeExact(base.edges.size() / nthreads);
+    	new_edges[i].resizeExact((nodes.size() * 5) / (nthreads * 4));
+    	sep_nodes[i].clear();
+    	sep_edges[i].clear();
+    	new_edges[i].clear();
     }
-    
+
+    for(index_t i = 0; i < nodes.size(); i++) {
+    	sep_nodes[nodes[i].from % nthreads].push_back(nodes[i]);
+    }
+    for(index_t i = 0; i < base.edges.size(); i++) {
+    	TempEdge edge;
+    	edge.from = base.edges[i].from;
+    	edge.to = base.edges[i].to;
+    	sep_edges[base.edges[i].to % nthreads].push_back(edge);
+    }
+
+    AutoArray<tthread::thread*> threads4(nthreads);
+    EList<ThreadParam4> threadParams4;
+
+    for(int i = 0; i < nthreads; i++) {
+    	threadParams4.expand();
+    	threadParams4.back().thread_id = i;
+    	threadParams4.back().sep_nodes = sep_nodes;
+    	threadParams4.back().sep_edges = sep_edges;
+    	threadParams4.back().new_edges = new_edges;
+    	threadParams4.back().base = &base;
+
+    	if(nthreads == 1) {
+    		generateEdgesWorker((void*)&threadParams4.back());
+    	} else {
+    		threads4[i] = new tthread::thread(generateEdgesWorker, (void*)&threadParams4.back());
+    	}
+    }
+
+    if(nthreads > 1) {
+    	for(int i = 0; i < nthreads; i++)
+    		threads4[i]->join();
+    }
+
+    index_t count = 0;
+    for(int i = 0; i < nthreads; i++) {
+    	count += new_edges[i].size();
+    }
+    edges.resizeExact(count);
+    edges.clear();
+    for(int i = 0; i < nthreads; i++) {
+    	for(index_t j = 0; j < new_edges[i].size(); j++) {
+    		edges.push_back(new_edges[i][j]);
+    	}
+    }
+
 #ifndef NDEBUG
     if(debug) {
         cerr << "just after creating path edges" << endl;
@@ -2031,14 +2152,14 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             const typename RefGraph<index_t>::Edge& edge = base.edges[i];
             cerr << "\t" << i << "\t" << edge.from << " --> " << edge.to << endl;
         }
-        
+
         cerr << "Path nodes" << endl;
         for(size_t i = 0; i < nodes.size(); i++) {
             const PathNode& node = nodes[i];
             cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
             << node.from << " --> " << node.to << endl;
         }
-        
+
         cerr << "Path edges" << endl;
         for(size_t i = 0; i < edges.size(); i++) {
             const PathEdge& edge = edges[i];
@@ -2046,10 +2167,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
 #endif
-    
-    sortByKey(); // Restore correct node order
+
     sortEdges(); // Sort edges by (from.label, to.rank)
-    
+
 #ifndef NDEBUG
 
     // Switch char array[x][y]; to char** array;
@@ -2061,7 +2181,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
                  << node.from << " --> " << node.to << endl;
         }
-        
+
         cerr << "Path edges" << endl;
         for(size_t i = 0; i < edges.size(); i++) {
             const PathEdge& edge = edges[i];
@@ -2069,7 +2189,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
 #endif
-    
+
     // Sets PathNode.to = GraphNode.value and PathNode.key.first to outdegree
     // Replaces (from.from, to) with (from, to)
     PathNode* node = nodes.begin(); node->key.first = 0;
@@ -2086,7 +2206,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     if(node != nodes.end()) {
         node->to = base.nodes[node->from].value;
     }
-    
+
     // Remove 'Y' node
     assert_gt(nodes.size(), 2);
     nodes.back().key.first = nodes[nodes.size() - 2].key.first;
@@ -2102,7 +2222,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             edge.ranking -= 1;
         }
     }
-    
+
 #ifndef NDEBUG
     if(debug) {
         cerr << "Path nodes" << endl;
@@ -2111,7 +2231,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
             << node.from << " --> " << node.to << endl;
         }
-        
+
         cerr << "Path edges" << endl;
         for(size_t i = 0; i < edges.size(); i++) {
             const PathEdge& edge = edges[i];
@@ -2119,12 +2239,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
 #endif
-    
+
     sortEdgesTo(true);
     status = ready;
-    
+
+
     return true;
-    
+
     bwt_string.clear();
     F_array.clear();
     M_array.clear();
@@ -2139,7 +2260,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             }
             bwt_string.push_back(label);
             F_array.push_back(i == edge_range.first ? 1 : 0);
-            
+
             if(label != 'Z') {
                 char nt = asc2dna[(int)label];
                 assert_lt(nt + 1, bwt_counts.size());
@@ -2153,11 +2274,11 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     assert_gt(bwt_string.size(), 0);
     assert_eq(bwt_string.size(), F_array.size());
     assert_eq(bwt_string.size(), M_array.size());
-    
+
     for(size_t i = 0; i < bwt_counts.size(); i++) {
         if(i > 0) bwt_counts[i] += bwt_counts[i - 1];
     }
- 
+
 #ifndef NDEBUG
     if(debug) {
         cerr << "Path nodes (final)" << endl;
@@ -2166,26 +2287,26 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
             << node.from << " --> " << node.to << endl;
         }
-        
+
         cerr << "Path edges (final)" << endl;
         for(size_t i = 0; i < edges.size(); i++) {
             const PathEdge& edge = edges[i];
             cerr << "\t" << i << "\tfrom: " << edge.from << "\tranking: " << edge.ranking << "\t" << edge.label << endl;
         }
-    
+
         cerr << "i\tBWT\tF\tM" << endl;
         for(index_t i = 0; i < bwt_string.size(); i++) {
             cerr << i << "\t" << bwt_string[i] << "\t"  // BWT char
             << (int)F_array[i] << "\t"             // F bit value
             << (int)M_array[i] << endl;            // M bit value
         }
-        
+
         for(size_t i = 0; i < bwt_counts.size(); i++) {
             cerr << i << "\t" << bwt_counts[i] << endl;
         }
     }
 #endif
-    
+
     // Test searches, based on paper_example
 #if 1
     EList<string> queries;  EList<index_t> answers;
@@ -2202,13 +2323,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     queries.push_back("GGCAGCTCCCATGGGTACACACTGGGCCCAGAACTGGGATGGAGGATGCA");
     // queries.push_back("GGCAGCTCCCATGGGTACACACTGGTCCCAGAACTGGGATGGAGGATGCA");
     // queries.push_back("GGCAGCTCCCATGGGTACACACTGGACCCAGAACTGGGATGGAGGATGCA");
-    
+
     // rs5759268, at 926787, ref, alt, unknown alt
     // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCACACCTGGTTCTCTTTCCAGTGTTAT");
     // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCATACCTGGTTCTCTTTCCAGTGTTAT");
     // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCAGACCTGGTTCTCTTTCCAGTGTTAT");
 #      endif
-    
+
     for(size_t q = 0; q < queries.size(); q++) {
         const string& query = queries[q];
         assert_gt(query.length(), 0);
@@ -2221,17 +2342,17 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             int nt = query[query.length() - i - 1];
             nt = asc2dna[nt];
             assert_lt(nt, 4);
-            
+
             cerr << "\t" << i << "\tBWT range: [" << top << ", " << bot << ")" << endl;
-            
+
             top = bwt_counts[(int)nt] + (top <= 0 ? 0 : rank(bwt_string, top - 1, "ACGT"[nt]));
             bot = bwt_counts[(int)nt] + rank(bwt_string, bot - 1, "ACGT"[nt]);
             cerr << "\t\tLF BWT range: [" << top << ", " << bot << ")" << endl;
-            
+
             node_top = rank1(M_array, top) - 1;
             node_bot = rank1(M_array, bot - 1);
             cerr << "\t\tnode range: [" << node_top << ", " << node_bot << ")" << endl;
-            
+
             top = select1(F_array, node_top + 1);
             bot = select1(F_array, node_bot + 1);
         }
@@ -2247,13 +2368,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
                 if(pos < szs[i].len) break;
                 pos -= szs[i].len;
             }
-            
+
             cerr << "being aligned at " << gpos;
         }
         cerr << endl << endl;
     }
 #   endif
-    
+
     // See inconsistencies between F and M arraystimy thread
 #   if 0
     cerr << endl << endl;
@@ -2261,12 +2382,12 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     for(index_t i = 0; i < F_array.size(); i++) {
         if(F_array[i] == 1) tmp_F.push_back(i);
     }
-    
+
     EList<index_t> tmp_M;
     for(index_t i = 0; i < M_array.size(); i++) {
         if(M_array[i] == 1) tmp_M.push_back(i);
     }
-    
+
     index_t max_diff = 0;
     assert_eq(tmp_F.size(), tmp_M.size());
     for(index_t i = 0; i < tmp_F.size(); i++) {
@@ -2278,9 +2399,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
     cerr << "Final: " << tmp_F.back() << " vs. " << tmp_M.back() << endl;
 #   endif
-    
+
 #endif
-    
     return true;
 }
 
@@ -2439,7 +2559,7 @@ template <typename index_t>
 void PathGraph<index_t>::sortByFrom(bool create_index) {
     sort(nodes.begin(), nodes.end(), PathNodeFromCmp());
     status = error;
-    
+
     if(create_index) {
         index_t current = 0;
         nodes.front().key.second = 0;
@@ -2468,19 +2588,6 @@ pair<index_t, index_t> PathGraph<index_t>::getNodesFrom(index_t node) {
     return pair<index_t, index_t>(nodes[node].key.second, nodes[node + 1].key.second);
 }
 
-template <typename index_t>
-pair<index_t, index_t> PathGraph<index_t>::getNextRange(pair<index_t, index_t> range) {
-    if(range.second >= nodes.size())
-        return pair<index_t, index_t>(0, 0);
-    
-    if(range.first < range.second) {
-        range.first = range.second; range.second++;
-    }
-    
-    while(range.second < nodes.size() && nodes[range.second].from == nodes[range.first].from) {
-        range.second++;
-    }
-    return range;
-}
+
 
 #endif /*GBWT_GRAPH_H_*/
