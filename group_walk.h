@@ -92,7 +92,7 @@
  * Encapsulate an SA range and an associated list of slots where the resolved
  * offsets can be placed.
  */
-template<typename T>
+template<typename T, typename index_t>
 class SARangeWithOffs {
 
 public:
@@ -100,22 +100,22 @@ public:
 	SARangeWithOffs() { reset(); };
 
 	SARangeWithOffs(
-                    TIndexOffU tf,
-                    TIndexOffU bf,
-                    TIndexOffU ntf,
-                    TIndexOffU nbf,
-                    const EList<pair<TIndexOffU, TIndexOffU> >& n_iedge_count,
+                    index_t tf,
+                    index_t bf,
+                    index_t ntf,
+                    index_t nbf,
+                    const EList<pair<index_t, index_t> >& n_iedge_count,
                     size_t len,
                     const T& o) {
 		init(tf, bf, ntf, nbf, n_iedge_count, len, o);
 	}
 	
 	void init(
-              TIndexOffU tf,
-              TIndexOffU bf,
-              TIndexOffU ntf,
-              TIndexOffU nbf,
-              const EList<pair<TIndexOffU, TIndexOffU> >& n_iedge_count,
+              index_t tf,
+              index_t bf,
+              index_t ntf,
+              index_t nbf,
+              const EList<pair<index_t, index_t> >& n_iedge_count,
               size_t len_,
               const T& o) {
         topf = tf;
@@ -132,13 +132,13 @@ public:
 	/**
 	 * Reset to uninitialized state.
 	 */
-	void reset() { topf = std::numeric_limits<TIndexOffU>::max(); }
+	void reset() { topf = (index_t)INDEX_MAX; }
 	
 	/**
 	 * Return true if this is initialized.
 	 */
 	bool inited() const {
-		return topf != std::numeric_limits<TIndexOffU>::max();
+		return topf != (index_t)INDEX_MAX;
 	}
 	
 	/**
@@ -147,11 +147,11 @@ public:
 	 */
 	size_t size() const { return offs.size(); }
 
-	TIndexOffU topf;      // top in GBWT index
-    TIndexOffU botf;
-    TIndexOffU node_top;  // top node
-    TIndexOffU node_bot;
-    EList<pair<TIndexOffU, TIndexOffU> > node_iedge_count;
+	index_t topf;      // top in GBWT index
+    index_t botf;
+    index_t node_top;  // top node
+    index_t node_bot;
+    EList<pair<index_t, index_t> > node_iedge_count;
 	size_t     len;        // length of the reference sequence involved
 	T          offs;       // offsets
 };
@@ -337,7 +337,7 @@ public:
 	 * there's one bool per suffix array element.
 	 */
 	void init(
-		SARangeWithOffs<T>& sa,
+		SARangeWithOffs<T, index_t>& sa,
 		index_t oi,
 		bool f,
 		index_t r)
@@ -373,7 +373,7 @@ public:
 	 * corresponding to this GWHit and check whether the forward and
 	 * reverse mappings match up for the as-yet-unresolved elements.
 	 */
-	bool repOk(const SARangeWithOffs<T>& sa) const {
+	bool repOk(const SARangeWithOffs<T, index_t>& sa) const {
 		assert_eq(reported_.size(), sa.offs.size());
 		assert_eq(fmap.size(), sa.offs.size());
 		// Shouldn't be any repeats among as-yet-unresolveds
@@ -464,7 +464,7 @@ public:
 	pair<int, int> init(
 		const GFM<index_t>& gfm,      // index to walk left in
 		const BitPairReference& ref,  // bitpair-encoded reference
-		SARangeWithOffs<T>& sa,       // SA range with offsets
+		SARangeWithOffs<T, index_t>& sa,       // SA range with offsets
 		EList<GWState, S>& sts,       // EList of GWStates for range being advanced
 		GWHit<index_t, T>& hit,       // Corresponding hit structure
 		index_t range,                // which range is this?
@@ -507,7 +507,7 @@ public:
 	pair<int, int> init(
 		const GFM<index_t>& gfm,      // forward Bowtie index
 		const BitPairReference& ref,  // bitpair-encoded reference
-		SARangeWithOffs<T>& sa,       // SA range with offsets
+		SARangeWithOffs<T, index_t>& sa,       // SA range with offsets
 		EList<GWState, S>& st,        // EList of GWStates for advancing range
 		GWHit<index_t, T>& hit,       // Corresponding hit structure
 		index_t range,                // range being inited
@@ -738,28 +738,110 @@ public:
 			assert(!done());
 		}
 		// Is there a dollar sign in the middle of the range?
+        tmp_zOffs.clear();
         for(index_t i = 0; i < gfm._zOffs.size(); i++) {
+#ifndef NDEBUG
+            if(i > 0) {
+                assert_lt(gfm._zOffs[i-1], gfm._zOffs[i]);
+            }
+#endif
             assert_neq(top, gfm._zOffs[i]);
             assert_neq(bot-1, gfm._zOffs[i]);
             if(gfm._zOffs[i] > top && gfm._zOffs[i] < bot-1) {
-                // Yes, the dollar sign is in the middle of this range.  We
-                // must split it into the two ranges on either side of the
-                // dollar.  Let 'bot' and 'top' delimit the portion of the
-                // range prior to the dollar.
-                index_t oldbot = bot;
-                bot = gfm._zOffs[i];
-                // Note: might be able to do additional trimming off the
-                // end.
+                tmp_zOffs.push_back(gfm._zOffs[i]);
+            }
+        }
+        
+        // Yes, the dollar sign is in the middle of this range.  We
+        // must split it into the two ranges on either side of the
+        // dollar.  Let 'bot' and 'top' delimit the portion of the
+        // range prior to the dollar.
+        if(tmp_zOffs.size() > 0) {
+            tmp_gbwt_to_node.clear();
+            index_t num_iedges = 0, n = 0, e = 0;
+            for(index_t r = 0; r < (bot - top); r++) {
+                tmp_gbwt_to_node.expand();
+                tmp_gbwt_to_node.back() = n;
+                if(e < node_iedge_count.size()) {
+                    assert_leq(n, node_iedge_count[e].first);
+                    if(n < node_iedge_count[e].first) {
+                        num_iedges += 1;
+                    } else {
+                        num_iedges += node_iedge_count[e].second;
+                        e++;
+                    }
+                } else {
+                    num_iedges += 1;
+                }
+                if(r + 1 >= num_iedges) n++;
+            }
+            assert_eq(bot - top, tmp_gbwt_to_node.size());
+            for(index_t i = 0; i < tmp_zOffs.size(); i++) {
+                assert_lt(top, tmp_zOffs[i]);
+                index_t diff = tmp_zOffs[i] - top;
+                assert_lt(diff, tmp_gbwt_to_node.size());
+                for(index_t j = diff + 1; j < tmp_gbwt_to_node.size(); j++) {
+                    if(tmp_gbwt_to_node[i] == tmp_gbwt_to_node[j]) {
+                        tmp_gbwt_to_node[j] = (index_t)INDEX_MAX;
+                    } else {
+                        break;
+                    }
+                }
+                tmp_gbwt_to_node[diff] = (index_t)INDEX_MAX;
+            }
+            for(index_t i = 0; i < tmp_zOffs.size(); i++) {
+                // Note: might be able to do additional trimming off the end.
                 // Create a new range for the portion after the dollar.
+                index_t new_top = tmp_zOffs[i] + 1;
+                while(new_top - top < tmp_gbwt_to_node.size()) {
+                    if(tmp_gbwt_to_node[new_top - top] != (index_t)INDEX_MAX) {
+                        break;
+                    }
+                    new_top++;
+                }
+                assert_lt(new_top - top, tmp_gbwt_to_node.size());
+                index_t new_node_top = tmp_gbwt_to_node[new_top - top] + node_top;
+                assert_lt(new_node_top, node_bot);
+                index_t new_bot;
+                if(i + 1 < tmp_zOffs.size()) {
+                    new_bot = tmp_zOffs[i+1];
+                } else {
+                    new_bot = bot;
+                }
+                while(new_bot - top < tmp_gbwt_to_node.size()) {
+                    if(tmp_gbwt_to_node[new_bot - top] != (index_t)INDEX_MAX) {
+                        break;
+                    }
+                    new_bot++;
+                }
+                index_t new_node_bot = node_bot;
+                if(new_bot - top < tmp_gbwt_to_node.size()) {
+                    new_node_bot = node_top + tmp_gbwt_to_node[new_bot - top];
+                }
+                tmp_node_iedge_count.clear();
+                if(new_top >= new_bot) continue;
+                for(index_t j = new_top - top; j + 1 < new_bot - top;) {
+                    index_t n = tmp_gbwt_to_node[j];
+                    index_t j2 = j + 1;
+                    while(j2 < new_bot - top) {
+                        if(n != tmp_gbwt_to_node[j2]) {
+                            break;
+                        }
+                        j2++;
+                    }
+                    if(j + 1 < j2) {
+                        tmp_node_iedge_count.expand();
+                        tmp_node_iedge_count.back().first = n - new_node_top;
+                        tmp_node_iedge_count.back().second = j2 - j - 1;
+                    }
+                    j = j2;
+                }
                 st.expand();
                 st.back().reset();
-                index_t ztop = gfm._zOffs[i]+1;
-                st.back().initMap(oldbot - ztop);
-                assert_eq((index_t)map_.size(), oldbot-top+mapi_);
-                for(index_t j = ztop; j < oldbot; j++) {
-                    st.back().map_[j - ztop] = map(j-top+mapi_);
+                st.back().initMap(new_node_bot - new_node_top);
+                for(index_t j = new_node_top; j < new_node_bot; j++) {
+                    st.back().map_[j - new_node_top] = map(j - node_top + mapi_);
                 }
-                map_.resize(bot - top + mapi_);
                 st.back().init(
                                gfm,
                                ref,
@@ -769,14 +851,26 @@ public:
                                (index_t)st.size()-1,
                                reportList,
                                res,
-                               ztop,
-                               oldbot,
-                               (index_t)OFF_MASK,
-                               (index_t)OFF_MASK,
-                               node_iedge_count,
+                               new_top,
+                               new_bot,
+                               new_node_top,
+                               new_node_bot,
+                               tmp_node_iedge_count,
                                step,
                                met);
             }
+            assert_eq((index_t)map_.size(), node_bot - node_top + mapi_);
+            bot = tmp_zOffs[0];
+            assert_lt(bot - top, tmp_gbwt_to_node.size());
+            node_bot = tmp_gbwt_to_node[bot - top - 1] + node_top + 1;
+            map_.resize(node_bot - node_top + mapi_);
+            for(index_t e = 0; e < node_iedge_count.size(); e++) {
+                if(node_iedge_count[e].first >= node_bot - node_top) {
+                    node_iedge_count.resize(e);
+                    break;
+                }
+            }
+
         }
 		assert_gt(bot, top);
 		// Prepare SideLocus's for next step
@@ -870,7 +964,7 @@ public:
 	 */
 	index_t off(
 				index_t i,
-				const SARangeWithOffs<T>& sa)
+				const SARangeWithOffs<T, index_t>& sa)
 	{
 		assert_geq(i, mapi_);
 		assert_lt(i, map_.size());
@@ -918,7 +1012,7 @@ public:
 	void setOff(
 		index_t i,
 		index_t off,
-		SARangeWithOffs<T>& sa,
+		SARangeWithOffs<T, index_t>& sa,
 		WalkMetrics& met)
 	{
 		assert_lt(i + mapi_, map_.size());
@@ -943,7 +1037,7 @@ public:
 	pair<int, int> advance(
 		const GFM<index_t>& gfm,     // the forward Bowtie index, for stepping left
 		const BitPairReference& ref, // bitpair-encoded reference
-		SARangeWithOffs<T>& sa,      // SA range with offsets
+		SARangeWithOffs<T, index_t>& sa,      // SA range with offsets
 		GWHit<index_t, T>& hit,      // the associated GWHit object
 		index_t range,               // which range is this?
 		bool reportList,             // if true, "report" resolved offsets immediately by adding them to 'res' list
@@ -1284,7 +1378,7 @@ public:
 	 * Return true iff all rows corresponding to this GWState have been
 	 * resolved (but not necessarily reported).
 	 */
-	bool doneResolving(const SARangeWithOffs<T>& sa) const {
+	bool doneResolving(const SARangeWithOffs<T, index_t>& sa) const {
 		for(size_t i = mapi_; i < map_.size(); i++) {
 			if(sa.offs[map(i)] == (index_t)OFF_MASK) return false;
 		}
@@ -1303,6 +1397,9 @@ public:
     // temporary
     EList<pair<index_t, index_t> > backup_node_iedge_count;
     EList<pair<index_t, index_t> > tmp_node_iedge_count;
+    
+    EList<index_t>                 tmp_zOffs;
+    EList<index_t>                 tmp_gbwt_to_node;
 
 protected:
 	
@@ -1335,7 +1432,7 @@ public:
 	void init(
 		const GFM<index_t>& gfmFw,   // forward Bowtie index for walking left
 		const BitPairReference& ref, // bitpair-encoded reference
-		SARangeWithOffs<T>& sa,      // SA range with offsets
+		SARangeWithOffs<T, index_t>& sa,      // SA range with offsets
 		RandomSource& rnd,           // pseudo-random generator for sampling rows
 		WalkMetrics& met)            // update metrics here
 	{
@@ -1397,7 +1494,7 @@ public:
 		index_t elt,                  // element within the range
 		const GFM<index_t>& gfmFw,    // forward Bowtie index for walking left
 		const BitPairReference& ref,  // bitpair-encoded reference
-		SARangeWithOffs<T>& sa,       // SA range with offsets
+		SARangeWithOffs<T, index_t>& sa,       // SA range with offsets
 		GroupWalkState<index_t>& gws, // GroupWalk state; scratch space
 		WalkResult<index_t>& res,     // put the result here
 		WalkMetrics& met,             // metrics
@@ -1459,7 +1556,7 @@ public:
 	/**
 	 * Check that GroupWalk is internally consistent.
 	 */
-	bool repOk(const SARangeWithOffs<T>& sa) const {
+	bool repOk(const SARangeWithOffs<T, index_t>& sa) const {
 		assert(hit_.repOk(sa));
 		assert_leq(rep_, elt_);
 		// This is a lot of work

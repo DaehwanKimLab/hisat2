@@ -122,7 +122,7 @@ struct BWTHit {
         _node_top = _node_bot = 0;
         _node_iedge_count.clear();
 		_fw = true;
-		_bwoff = (index_t)OFF_MASK;
+		_bwoff = (index_t)INDEX_MAX;
 		_len = 0;
 		_coords.clear();
         _anchor_examined = false;
@@ -194,7 +194,7 @@ struct BWTHit {
 	 */
 	bool repOk(const Read& rd) const {
 		assert_gt(_bot, _top);
-		assert_neq(_bwoff, (index_t)OFF_MASK);
+		assert_neq(_bwoff, (index_t)INDEX_MAX);
 		assert_gt(_len, 0);
 		return true;
 	}
@@ -305,7 +305,7 @@ struct ReadBWTHit {
      *
      */
     index_t minWidth(index_t& offset) const {
-        index_t minWidth_ = (index_t)OFF_MASK;
+        index_t minWidth_ = (index_t)INDEX_MAX;
         index_t minWidthLen_ = 0;
         for(size_t oi = 0; oi < _partialHits.size(); oi++) {
             const BWTHit<index_t>& hit = _partialHits[oi];
@@ -444,8 +444,10 @@ struct GenomeHit {
     }
     
     GenomeHit(const GenomeHit& otherHit) :
+    _edits(NULL),
     _hitcount(1),
-    _edits_node(NULL)
+    _edits_node(NULL),
+    _sharedVars(NULL)
     {
         init(otherHit._fw,
              otherHit._rdoff,
@@ -531,7 +533,7 @@ struct GenomeHit {
 	}
     
     bool inited() const {
-        return _len >= 0 && _len < (index_t)OFF_MASK;
+        return _len >= 0 && _len < (index_t)INDEX_MAX;
     }
     
     /**
@@ -695,10 +697,12 @@ struct GenomeHit {
             if(score != NULL) {
                 if(edit.type == EDIT_TYPE_MM) {
                     assert(qual != NULL);
-                    *score += sc->score(
-                                        dna2col[edit.qchr] - '0',
-                                        asc2dnamask[edit.chr],
-                                        (*qual)[this->_rdoff + edit.pos] - 33);
+                    if(edit.snpID == (index_t)INDEX_MAX) {
+                        *score += sc->score(
+                                            dna2col[edit.qchr] - '0',
+                                            asc2dnamask[edit.chr],
+                                            (*qual)[this->_rdoff + edit.pos] - 33);
+                    }
                 }
             }
         }
@@ -745,10 +749,12 @@ struct GenomeHit {
             if(score != NULL) {
                 if(edit.type == EDIT_TYPE_MM) {
                     assert(qual != NULL);
-                    *score += sc->score(
-                                        dna2col[edit.qchr] - '0',
-                                        asc2dnamask[edit.chr],
-                                        (*qual)[this->_rdoff + edit.pos] - 33);
+                    if(edit.snpID == (index_t)INDEX_MAX) {
+                        *score += sc->score(
+                                            dna2col[edit.qchr] - '0',
+                                            asc2dnamask[edit.chr],
+                                            (*qual)[this->_rdoff + edit.pos] - 33);
+                    }
                 }
             }
         }
@@ -1169,12 +1175,12 @@ bool GenomeHit<index_t>::combineWith(
     char *refbuf = raw_refbuf.wbuf() + off, *refbuf2 = NULL;
     
     // discover a splice site, an insertion, or a deletion
-    index_t maxscorei = (index_t)OFF_MASK;
+    index_t maxscorei = (index_t)INDEX_MAX;
     int64_t maxscore = MIN_I64;
     uint32_t maxspldir = EDIT_SPL_UNKNOWN;
     float maxsplscore = 0.0f;
     // allow an indel near a splice site
-    index_t splice_gap_maxscorei = (index_t)OFF_MASK;
+    index_t splice_gap_maxscorei = (index_t)INDEX_MAX;
     int64_t donor_seq = 0, acceptor_seq = 0;
     int splice_gap_off = 0;
     if(spliced || ins || del) {
@@ -1614,7 +1620,6 @@ bool GenomeHit<index_t>::extend(
     leftext = 0, rightext = 0;
     index_t rdlen = (index_t)rd.length();
     bool doLeftAlign = false;
-    
     assert(_sharedVars != NULL);
     SStringExpandable<char>& raw_refbuf = _sharedVars->raw_refbuf;
     ASSERT_ONLY(SStringExpandable<uint32_t>& destU32 = _sharedVars->destU32);
@@ -1680,6 +1685,7 @@ bool GenomeHit<index_t>::extend(
                 }
             }
             if(best_ext > 0) {
+                leftext = best_ext;
                 index_t num_prev_edits = _edits->size();
                 ASSERT_ONLY(index_t temp_ext =) alignWithSNPs(
                                                               snpdb.snps(),
@@ -1771,6 +1777,7 @@ bool GenomeHit<index_t>::extend(
             }
             
             if(best_ext > 0) {
+                rightext = best_ext;
                 index_t prev_num_edits = _edits->size();
                 ASSERT_ONLY(index_t temp_ext =) alignWithSNPs(
                                                               snpdb.snps(),
@@ -2105,6 +2112,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
     if(left) {
         assert_gt(rdoff, 0);
         int rf_i = rflen - 1, rd_i = rdoff - 1;
+        bool indel_end = false;
         for(; rf_i >= 0 && rd_i >= 0; rf_i--, rd_i--) {
             int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[rd_i];
@@ -2139,6 +2147,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                                    snpID);
                             edits->insert(e, 0);
                         }
+                        indel_end = false;
                     } else break;
                 } else if(snp.type == SNP_DEL) {
                     if(rf_i > (int)snp.len) {
@@ -2157,6 +2166,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         }
                         rf_i -= (int)(snp.len - 1);
                         rd_i += 1;
+                        indel_end = true;
                     } else break;
                 } else if(snp.type == SNP_INS) {
                     if(rd_i > (int)snp.len) {
@@ -2182,6 +2192,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         if(!same_seq) break;
                         rd_i -= (int)(snp.len - 1);
                         rf_i += 1;
+                        indel_end = true;
                     } else break;
                 }
                 snp_i++;
@@ -2189,7 +2200,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                 // Stop this alignment
                 if(rf_bp != rd_bp || rd_bp == 4) {
                     tmp_mm++;
-                    if(tmp_mm > mm) break;
+                    if(tmp_mm > mm || !snps.empty()) break;
                     if(edits != NULL) {
                         Edit e(
                                rd_i,
@@ -2199,12 +2210,15 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         edits->insert(e, 0);
                     }
                 }
+                indel_end = false;
             }
         }
         assert_lt(rd_i, (int)rdoff);
+        if(indel_end) return 0;
         return rdoff - rd_i - 1;
     } else {
         index_t rf_i = 0, rd_i = 0;
+        bool indel_end = false;
         for(; rf_i < rflen && rd_i < rdlen; rf_i++, rd_i++) {
             int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[rdoff + rd_i];
@@ -2234,6 +2248,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                                    snpID);
                             edits->push_back(e);
                         }
+                        indel_end = false;
                     } else {
                         break;
                     }
@@ -2254,6 +2269,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         }
                         rf_i += (snp.len - 1);
                         rd_i -= 1;
+                        indel_end = true;
                     } else break;
                 } else if(snp.type == SNP_INS) {
                     if(rd_i + snp.len <= rdlen && rf_i > 0) {
@@ -2279,6 +2295,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         if(!same_seq) break;
                         rd_i += (snp.len - 1);
                         rf_i -= 1;
+                        indel_end = true;
                     } else break;
                 }
                 snp_i++;
@@ -2286,7 +2303,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                 // Stop this alignment
                 if(rf_bp != rd_bp || rd_bp == 4) {
                     tmp_mm++;
-                    if(tmp_mm > mm) break;
+                    if(tmp_mm > mm || !snps.empty()) break;
                     if(edits != NULL) {
                         Edit e(
                                rd_i,
@@ -2296,8 +2313,10 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         edits->push_back(e);
                     }
                 }
+                indel_end = false;
             }
         }
+        if(indel_end) return 0;
         return rd_i;
     }
 }
@@ -2742,9 +2761,9 @@ public:
         _norc[0] = norc;
         _norc[1] = true;
         _minsc[0] = minsc;
-        _minsc[1] = OFF_MASK;
+        _minsc[1] = INDEX_MAX;
         _maxpen[0] = maxpen;
-        _maxpen[1] = OFF_MASK;
+        _maxpen[1] = INDEX_MAX;
         for(size_t fwi = 0; fwi < 2; fwi++) {
             bool fw = (fwi == 0);
             _hits[0][fwi].init(fw, _rds[0]->length());
@@ -3103,7 +3122,7 @@ public:
      * Align a part of a read without any edits
 	 */
     size_t partialSearch(
-                         const GFM<index_t>&     gfm,      // BWT index
+                         const GFM<index_t>&     gfm,     // GFM index
                          const Read&             read,    // read to align
                          const Scoring&          sc,      // scoring scheme
                          const ReportingParams&  rp,
@@ -3120,53 +3139,42 @@ public:
      * Global FM index search
 	 */
 	size_t globalGFMSearch(
-                           const GFM<index_t>&  gfm,  // BWT index
-                           const Read&          read,  // read to align
-                           const Scoring&       sc,    // scoring scheme
-                           bool                 fw,
-                           index_t              hitoff,
-                           index_t&             hitlen,
-                           index_t&             top,
-                           index_t&             bot,
-                           RandomSource&        rnd,
-                           bool&                uniqueStop,
-                           index_t              maxHitLen = (index_t)OFF_MASK);
+                           const GFM<index_t>&    gfm,   // GFM index
+                           const Read&            read,  // read to align
+                           const Scoring&         sc,    // scoring scheme
+                           const ReportingParams& rp,
+                           bool                   fw,
+                           index_t                hitoff,
+                           index_t&               hitlen,
+                           index_t&               top,
+                           index_t&               bot,
+                           index_t&               node_top,
+                           index_t&               node_bot,
+                           EList<pair<index_t, index_t> >& node_iedge_count,
+                           RandomSource&          rnd,
+                           bool&                  uniqueStop,
+                           index_t                maxHitLen = (index_t)INDEX_MAX);
     
     /**
      * Local FM index search
 	 */
 	size_t localGFMSearch(
-                          const LocalGFM<local_index_t, index_t>*  gfm,  // BWT index
+                          const LocalGFM<local_index_t, index_t>&  gfm,  // GFM index
                           const Read&                      read,    // read to align
                           const Scoring&                   sc,      // scoring scheme
+                          const ReportingParams&           rp,
                           bool                             fw,
-                          bool                             searchfw,
                           index_t                          rdoff,
                           index_t&                         hitlen,
                           local_index_t&                   top,
                           local_index_t&                   bot,
+                          local_index_t&                   node_top,
+                          local_index_t&                   node_bot,
+                          EList<pair<local_index_t, local_index_t> >& local_node_iedge_count,
                           RandomSource&                    rnd,
                           bool&                            uniqueStop,
                           local_index_t                    minUniqueLen,
-                          local_index_t                    maxHitLen = (local_index_t)OFF_MASK);
-    
-    /**
-     * Local FM index search
-	 */
-	size_t localGFMSearch_reverse(
-                                  const LocalGFM<local_index_t, index_t>*  gfm,  // BWT index
-                                  const Read&                      read,    // read to align
-                                  const Scoring&                   sc,      // scoring scheme
-                                  bool                             fw,
-                                  bool                             searchfw,
-                                  index_t                          rdoff,
-                                  index_t&                         hitlen,
-                                  local_index_t&                   top,
-                                  local_index_t&                   bot,
-                                  RandomSource&                    rnd,
-                                  bool&                            uniqueStop,
-                                  local_index_t                    minUniqueLen,
-                                  local_index_t                    maxHitLen = (local_index_t)OFF_MASK);
+                          local_index_t                    maxHitLen = (local_index_t)INDEX_MAX);
     
     /**
      * Convert FM offsets to the corresponding genomic offset (chromosome id, offset)
@@ -3204,6 +3212,7 @@ public:
                                local_index_t                bot,
                                local_index_t                node_top,
                                local_index_t                node_bot,
+                               const EList<pair<local_index_t, local_index_t> >& node_iedge_count,
                                bool                         fw,
                                index_t                      rdoff,
                                index_t                      rdlen,
@@ -3419,12 +3428,12 @@ protected:
     ReadBWTHit<index_t> _hits[2][2];
     
     EList<index_t, 16>                                 _offs;
-    SARangeWithOffs<EListSlice<index_t, 16> >          _sas;
+    SARangeWithOffs<EListSlice<index_t, 16>, index_t>  _sas;
     GroupWalk2S<index_t, EListSlice<index_t, 16>, 16>  _gws;
     GroupWalkState<index_t>                            _gwstate;
     
     EList<local_index_t, 16>                                       _offs_local;
-    SARangeWithOffs<EListSlice<local_index_t, 16> >                _sas_local;
+    SARangeWithOffs<EListSlice<local_index_t, 16>, local_index_t>  _sas_local;
     GroupWalk2S<local_index_t, EListSlice<local_index_t, 16>, 16>  _gws_local;
     GroupWalkState<local_index_t>                                  _gwstate_local;
             
@@ -3462,6 +3471,9 @@ protected:
     //
     EList<pair<index_t, index_t> > _node_iedge_count;
     EList<pair<index_t, index_t> > _tmp_node_iedge_count;
+    
+    EList<pair<local_index_t, local_index_t> > _local_node_iedge_count;
+    EList<pair<local_index_t, local_index_t> > _tmp_local_node_iedge_count;
 
     // For AlnRes::matchesRef
 	ASSERT_ONLY(EList<bool> raw_matches_);
@@ -3632,18 +3644,23 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
         index_t hitoff = rdlen - 1;
         while(hitoff >= _minK_local - 1) {
             index_t hitlen = 0;
-            local_index_t top = (local_index_t)OFF_MASK, bot = (local_index_t)OFF_MASK;
+            local_index_t top = (local_index_t)INDEX_MAX, bot = (local_index_t)INDEX_MAX;
+            local_index_t node_top = (local_index_t)INDEX_MAX, node_bot = (local_index_t)INDEX_MAX;
+            _local_node_iedge_count.clear();
             bool uniqueStop = false;
             index_t nelt = localGFMSearch(
-                                          lGFM,    // BWT index
+                                          *lGFM,   // GFM index
                                           ord,     // read to align
                                           sc,      // scoring scheme
+                                          sink.reportingParams(),
                                           ofw,
-                                          false,   // searchfw,
                                           hitoff,
                                           hitlen,
                                           top,
                                           bot,
+                                          node_top,
+                                          node_bot,
+                                          _local_node_iedge_count,
                                           rnd,
                                           uniqueStop,
                                           _minK_local);
@@ -3660,8 +3677,9 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                       rnd,
                                       top,
                                       bot,
-                                      (local_index_t)OFF_MASK,
-                                      (local_index_t)OFF_MASK,
+                                      node_top,
+                                      node_bot,
+                                      _local_node_iedge_count,
                                       ofw,
                                       hitoff - hitlen + 1,
                                       hitlen,
@@ -3686,6 +3704,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                             coord.off(),
                                             coord.joinedOff(),
                                             _sharedVars);
+                    if(!_genomeHits.back().adjustWithSNP(*this->_rds[rdi], gfm, snpdb, ref)) _genomeHits.pop_back();
                 }
                 max_hitlen = hitlen;
             }
@@ -3709,7 +3728,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     for(index_t hi = 0; hi < _genomeHits.size(); hi++) {
         him.anchoratts++;
         GenomeHit<index_t>& genomeHit = _genomeHits[hi];
-        index_t leftext = (index_t)OFF_MASK, rightext = (index_t)OFF_MASK;
+        index_t leftext = (index_t)INDEX_MAX, rightext = (index_t)INDEX_MAX;
         genomeHit.extend(
                          ord,
                          gfm,
@@ -3781,9 +3800,9 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
     index_t nelt = node_bot - node_top;
     nelt = min<index_t>(nelt, maxelt);
     coords.clear();
-    him.globalgenomecoords += (node_bot - node_top);
+    him.globalgenomecoords += nelt;
     _offs.resize(nelt);
-    _offs.fill(std::numeric_limits<index_t>::max());
+    _offs.fill((index_t)INDEX_MAX);
     _sas.init(
               top,
               bot,
@@ -3806,7 +3825,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
                             wr,           // put the result here
                             met,          // metrics
                             prm);         // per-read metrics
-        assert_neq(wr.toff, (index_t)OFF_MASK);
+        assert_neq(wr.toff, (index_t)INDEX_MAX);
         bool straddled2 = false;
         gfm.joinedToTextOff(
                             wr.elt.len,
@@ -3848,6 +3867,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
                                                                local_index_t                bot,
                                                                local_index_t                node_top,
                                                                local_index_t                node_bot,
+                                                               const EList<pair<local_index_t, local_index_t> >& node_iedge_count,
                                                                bool                         fw,
                                                                index_t                      rdoff,
                                                                index_t                      rdlen,
@@ -3860,15 +3880,12 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
 {
     straddled = false;
     assert_gt(bot, top);
-    index_t nelt = node_bot - node_top;
     assert_leq(node_bot - node_top, bot - top);
+    index_t nelt = node_bot - node_top;
     coords.clear();
-    him.localgenomecoords += (node_bot - node_top);
+    him.localgenomecoords += nelt;
     _offs_local.resize(nelt);
-    _offs_local.fill(std::numeric_limits<local_index_t>::max());
-    
-    // daehwan - to be implemented
-#if 0
+    _offs_local.fill((local_index_t)INDEX_MAX);
     _sas_local.init(
                     top,
                     bot,
@@ -3878,7 +3895,6 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
                     rdlen,
                     EListSlice<local_index_t, 16>(_offs_local, 0, nelt));
     _gws_local.init(gfm, ref, _sas_local, rnd, met);
-#endif
     
     for(local_index_t off = 0; off < nelt; off++) {
         WalkResult<local_index_t> wr;
@@ -3892,7 +3908,7 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
                                   wr,           // put the result here
                                   met,          // metrics
                                   prm);         // per-read metrics
-        assert_neq(wr.toff, (local_index_t)OFF_MASK);
+        assert_neq(wr.toff, (local_index_t)INDEX_MAX);
         bool straddled2 = false;
         gfm.joinedToTextOff(
                             wr.elt.len,
@@ -3905,19 +3921,20 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
         
         straddled |= straddled2;
         
-        if(tidx == (local_index_t)OFF_MASK) {
+        if(tidx == (local_index_t)INDEX_MAX) {
             // The seed hit straddled a reference boundary so the seed
             // hit isn't valid
             return false;
         }
-        index_t global_toff = toff, global_tidx = tidx;
         LocalGFM<local_index_t, index_t>* localGFM = (LocalGFM<local_index_t, index_t>*)&gfm;
-        global_tidx = localGFM->_tidx, global_toff = toff + localGFM->_localOffset;
+        index_t global_tidx = localGFM->_tidx;
+        index_t global_toff = toff + localGFM->_localOffset;
+        index_t joinedOff = wr.toff + localGFM->_joinedOffset;
         if(global_toff < rdoff) continue;
         
         // Coordinate of the seed hit w/r/t the pasted reference string
         coords.expand();
-        coords.back().init(global_tidx, (int64_t)global_toff, fw);
+        coords.back().init(global_tidx, (int64_t)global_toff, fw, joinedOff);
     }
     
     return true;
@@ -4303,10 +4320,10 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     if(left < ftabLen + 1) {
         cur = hit._len;
         partialHits.expand();
-        partialHits.back().init((index_t)OFF_MASK,
-                                (index_t)OFF_MASK,
-                                (index_t)OFF_MASK,
-                                (index_t)OFF_MASK,
+        partialHits.back().init((index_t)INDEX_MAX,
+                                (index_t)INDEX_MAX,
+                                (index_t)INDEX_MAX,
+                                (index_t)INDEX_MAX,
                                 _node_iedge_count,
                                 fw,
                                 (index_t)offset,
@@ -4320,10 +4337,10 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         if(c > 3) {
             cur += (i+1);
             partialHits.expand();
-            partialHits.back().init((index_t)OFF_MASK,
-                                    (index_t)OFF_MASK,
-                                    (index_t)OFF_MASK,
-                                    (index_t)OFF_MASK,
+            partialHits.back().init((index_t)INDEX_MAX,
+                                    (index_t)INDEX_MAX,
+                                    (index_t)INDEX_MAX,
+                                    (index_t)INDEX_MAX,
                                     _node_iedge_count,
                                     fw,
                                     (index_t)offset,
@@ -4341,10 +4358,10 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     if(range.first >= range.second) {
         cur = dep;
         partialHits.expand();
-        partialHits.back().init((index_t)OFF_MASK,
-                                (index_t)OFF_MASK,
-                                (index_t)OFF_MASK,
-                                (index_t)OFF_MASK,
+        partialHits.back().init((index_t)INDEX_MAX,
+                                (index_t)INDEX_MAX,
+                                (index_t)INDEX_MAX,
+                                (index_t)INDEX_MAX,
                                 _node_iedge_count,
                                 fw,
                                 (index_t)offset,
@@ -4370,6 +4387,9 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
+                if(rangeTemp.first + 1 < rangeTemp.second) {
+                    rangeTemp.second = rangeTemp.first + 1;
+                }
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {
@@ -4432,22 +4452,6 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     // Done
     if(range.first < range.second) {
         assert_leq(node_range.second - node_range.first, range.second - range.first);
-#ifndef NDEBUG
-        if(node_range.second - node_range.first == range.second - range.first ||
-           _node_iedge_count.size() > 0) {
-            // This is an exact hit
-
-            ASSERT_ONLY(index_t add = 0);
-            for(index_t e = 0; e < _node_iedge_count.size(); e++) {
-                if(e > 0) {
-                    assert_lt(_node_iedge_count[e-1].first, _node_iedge_count[e].first);
-                }
-                assert_gt(_node_iedge_count[e].second, 0);
-                add += _node_iedge_count[e].second;
-            }
-            assert_eq(node_range.second - node_range.first + add, range.second - range.first);
-        }
-#endif
         assert_gt(dep, offset);
         assert_leq(dep, len);
         partialHits.expand();
@@ -4459,6 +4463,21 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
             if(_node_iedge_count.size() == 0) report = false;
         }
         if(report) {
+#ifndef NDEBUG
+            if(node_range.second - node_range.first < range.second - range.first) {
+                ASSERT_ONLY(index_t add = 0);
+                for(index_t e = 0; e < _node_iedge_count.size(); e++) {
+                    if(e > 0) {
+                        assert_lt(_node_iedge_count[e-1].first, _node_iedge_count[e].first);
+                    }
+                    assert_gt(_node_iedge_count[e].second, 0);
+                    add += _node_iedge_count[e].second;
+                }
+                assert_eq(node_range.second - node_range.first + add, range.second - range.first);
+            } else {
+                assert(_node_iedge_count.empty());
+            }
+#endif
             partialHits.back().init(range.first,
                                     range.second,
                                     node_range.first,
@@ -4496,17 +4515,21 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
  */
 template <typename index_t, typename local_index_t>
 size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
-                                                           const GFM<index_t>&  gfm,  // BWT index
-                                                           const Read&          read,  // read to align
-                                                           const Scoring&       sc,    // scoring scheme
-                                                           bool                 fw,
-                                                           index_t              hitoff,
-                                                           index_t&             hitlen,
-                                                           index_t&             top,
-                                                           index_t&             bot,
-                                                           RandomSource&        rnd,
-                                                           bool&                uniqueStop,
-                                                           index_t              maxHitLen)
+                                                           const GFM<index_t>&    gfm,  // BWT index
+                                                           const Read&            read,  // read to align
+                                                           const Scoring&         sc,    // scoring scheme
+                                                           const ReportingParams& rp,
+                                                           bool                   fw,
+                                                           index_t                hitoff,
+                                                           index_t&               hitlen,
+                                                           index_t&               top,
+                                                           index_t&               bot,
+                                                           index_t&               node_top,
+                                                           index_t&               node_bot,
+                                                           EList<pair<index_t, index_t> >& node_iedge_count,
+                                                           RandomSource&          rnd,
+                                                           bool&                  uniqueStop,
+                                                           index_t                maxHitLen)
 {
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
@@ -4520,89 +4543,103 @@ size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
     
     index_t offset = len - hitoff - 1;
     index_t dep = offset;
-    top = 0, bot = 0;
-    index_t topTemp = 0, botTemp = 0;
+    pair<index_t, index_t> range(0, 0);
+    pair<index_t, index_t> rangeTemp(0, 0);
+    pair<index_t, index_t> node_range(0, 0);
+    pair<index_t, index_t> node_rangeTemp(0, 0);
+    node_iedge_count.clear();
+    _tmp_node_iedge_count.clear();
     index_t left = len - dep;
     assert_gt(left, 0);
-    if(left < ftabLen) {
-#if 1
+    if(left < ftabLen + 1) {
         hitlen = left;
         return 0;
-#else
-        // Use fchr
-        int c = seq[len-dep-1];
-        if(c < 4) {
-            top = gfm.fchr()[c];
-            bot = gfm.fchr()[c+1];
-        } else {
-            hitlen = left;
-            return 0;
-        }
-        dep++;
-#endif
-    } else {
-        // Does N interfere with use of Ftab?
-        for(index_t i = 0; i < ftabLen; i++) {
-            int c = seq[len-dep-1-i];
-            if(c > 3) {
-                hitlen = (i+1);
-                return 0;
-            }
-        }
-        
-        // Use ftab
-        gfm.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
-        dep += ftabLen;
-        if(bot <= top) {
-            hitlen = ftabLen;
+    }
+    
+    // Does N interfere with use of Ftab?
+    for(index_t i = 0; i < ftabLen; i++) {
+        int c = seq[len-dep-1-i];
+        if(c > 3) {
+            hitlen = (i+1);
             return 0;
         }
     }
     
-    HIER_INIT_LOCS(top, bot, tloc, bloc, gfm);
+    // Use ftab
+    gfm.ftabLoHi(seq, len - dep - ftabLen, false, range.first, range.second);
+    dep += ftabLen;
+    if(range.first >= range.second) {
+        hitlen = ftabLen;
+        return 0;
+    }
+    
+    HIER_INIT_LOCS(range.first, range.second, tloc, bloc, gfm);
     // Keep going
     while(dep < len) {
         int c = seq[len-dep-1];
         if(c > 3) {
-            topTemp = botTemp = 0;
+            rangeTemp.first = rangeTemp.second = 0;
+            node_rangeTemp.first = node_rangeTemp.second = 0;
+            _tmp_node_iedge_count.clear();
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                topTemp = gfm.mapLF(tloc, c);
-                botTemp = gfm.mapLF(bloc, c);
+                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, rp.khits);
             } else {
                 bwops_++;
-                topTemp = gfm.mapLF1(top, tloc, c);
-                if(topTemp == (index_t)OFF_MASK) {
-                    topTemp = botTemp = 0;
-                } else {
-                    botTemp = topTemp + 1;
+                rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
+                if(rangeTemp.first + 1 < rangeTemp.second) {
+                    rangeTemp.second = rangeTemp.first + 1;
                 }
             }
         }
-        if(botTemp <= topTemp) {
+        if(rangeTemp.first >= rangeTemp.second) {
             break;
         }
         
-        top = topTemp;
-        bot = botTemp;
+        range = rangeTemp;
+        node_range = node_rangeTemp;
+        if(_tmp_node_iedge_count.size() > 0) {
+            node_iedge_count = _tmp_node_iedge_count;
+            _tmp_node_iedge_count.clear();
+        } else {
+            node_iedge_count.clear();
+        }
         dep++;
         
         if(uniqueStop_) {
-            if(bot - top == 1 && dep - offset >= _minK) {
+            if(range.second - range.first == 1 && dep - offset >= _minK) {
                 uniqueStop = true;
                 break;
             }
         }
         
-        HIER_INIT_LOCS(top, bot, tloc, bloc, gfm);
+        HIER_INIT_LOCS(range.first, range.second, tloc, bloc, gfm);
     }
     
     // Done
-    if(bot > top) {
+    if(node_range.first < node_range.second && node_range.second - node_range.first <= rp.khits) {
+        assert_leq(node_range.second - node_range.first, range.second - range.first);
+#ifndef NDEBUG
+        if(node_range.second - node_range.first < range.second - range.first) {
+            ASSERT_ONLY(index_t add = 0);
+            for(index_t e = 0; e < node_iedge_count.size(); e++) {
+                if(e > 0) {
+                    assert_lt(node_iedge_count[e-1].first, node_iedge_count[e].first);
+                }
+                assert_gt(node_iedge_count[e].second, 0);
+                add += node_iedge_count[e].second;
+            }
+            assert_eq(node_range.second - node_range.first + add, range.second - range.first);
+        } else {
+            assert(node_iedge_count.empty());
+        }
+#endif
         assert_gt(dep, offset);
         assert_leq(dep, len);
-        nelt += (bot - top);
+        top = range.first; bot = range.second;
+        node_top = node_range.first; node_bot = node_range.second;
+        nelt += (node_bot - node_top);
         hitlen = dep - offset;
     }
     return nelt;
@@ -4614,25 +4651,26 @@ size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
  **/
 template <typename index_t, typename local_index_t>
 size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
-                                                          const LocalGFM<local_index_t, index_t>*  gfm_,  // BWT index
+                                                          const LocalGFM<local_index_t, index_t>&  gfm,  // GFM index
                                                           const Read&                      read,    // read to align
                                                           const Scoring&                   sc,      // scoring scheme
+                                                          const ReportingParams&           rp,
                                                           bool                             fw,
-                                                          bool                             searchfw,
                                                           index_t                          rdoff,
                                                           index_t&                         hitlen,
                                                           local_index_t&                   top,
                                                           local_index_t&                   bot,
+                                                          local_index_t&                   node_top,
+                                                          local_index_t&                   node_bot,
+                                                          EList<pair<local_index_t, local_index_t> >& local_node_iedge_count,
                                                           RandomSource&                    rnd,
                                                           bool&                            uniqueStop,
                                                           local_index_t                    minUniqueLen,
                                                           local_index_t                    maxHitLen)
 {
-    assert(gfm_ != NULL);
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
-    const LocalGFM<local_index_t, index_t>& gfm = *gfm_;
-	const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
+    const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
 	SideLocus<local_index_t> tloc, bloc;
 	const local_index_t len = (local_index_t)read.length();
 	size_t nelt = 0;
@@ -4640,194 +4678,106 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
     const BTDnaString& seq = fw ? read.patFw : read.patRc;
     assert(!seq.empty());
     
-    local_index_t offset = searchfw ? rdoff : len - rdoff - 1;
+    local_index_t offset = len - rdoff - 1;
     local_index_t dep = offset;
-    top = 0, bot = 0;
-    local_index_t topTemp = 0, botTemp = 0;
+    pair<local_index_t, local_index_t> range(0, 0);
+    pair<local_index_t, local_index_t> rangeTemp(0, 0);
+    pair<local_index_t, local_index_t> node_range(0, 0);
+    pair<local_index_t, local_index_t> node_rangeTemp(0, 0);
+    local_node_iedge_count.clear();
+    _tmp_local_node_iedge_count.clear();
     local_index_t left = len - dep;
     assert_gt(left, 0);
-    if(left < ftabLen) {
+    if(left < ftabLen + 1) {
         hitlen = left;
 		return 0;
     }
     // Does N interfere with use of Ftab?
     for(local_index_t i = 0; i < ftabLen; i++) {
-        int c = searchfw ? seq[dep+i] : seq[len-dep-1-i];
+        int c = seq[len-dep-1-i];
         if(c > 3) {
             hitlen = i + 1;
 			return 0;
         }
     }
     
-    // Use ftab
-    if(searchfw) {
-        gfm.ftabLoHi(seq, dep, false, top, bot);
-    } else {
-        gfm.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
-    }
+    gfm.ftabLoHi(seq, len - dep - ftabLen, false, range.first, range.second);
     dep += ftabLen;
-    if(bot <= top) {
+    if(range.first >= range.second) {
         hitlen = ftabLen;
         return 0;
     }
-    LOCAL_INIT_LOCS(top, bot, tloc, bloc, gfm);
+    LOCAL_INIT_LOCS(range.first, range.second, tloc, bloc, gfm);
     // Keep going
     while(dep < len) {
-        int c = searchfw ? seq[dep] : seq[len-dep-1];
+        int c = seq[len-dep-1];
         if(c > 3) {
-            topTemp = botTemp = 0;
+            rangeTemp.first = rangeTemp.second = 0;
+            node_rangeTemp.first = node_rangeTemp.second = 0;
+            _tmp_local_node_iedge_count.clear();
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                topTemp = gfm.mapLF(tloc, c);
-                botTemp = gfm.mapLF(bloc, c);
+                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_local_node_iedge_count, rp.khits);
             } else {
                 bwops_++;
-                topTemp = gfm.mapLF1(top, tloc, c);
-                if(topTemp == (local_index_t)OFF_MASK) {
-                    topTemp = botTemp = 0;
-                } else {
-                    botTemp = topTemp + 1;
+                rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
+                if(rangeTemp.first + 1 < rangeTemp.second) {
+                    rangeTemp.second = rangeTemp.first + 1;
                 }
             }
         }
-        if(botTemp <= topTemp) {
+        if(rangeTemp.first >= rangeTemp.second) {
             break;
         }
-        top = topTemp;
-        bot = botTemp;
-        LOCAL_INIT_LOCS(top, bot, tloc, bloc, gfm);
+        
+        range = rangeTemp;
+        node_range = node_rangeTemp;
+        if(_tmp_local_node_iedge_count.size() > 0) {
+            local_node_iedge_count = _tmp_local_node_iedge_count;
+            _tmp_local_node_iedge_count.clear();
+        } else {
+            local_node_iedge_count.clear();
+        }
         dep++;
 
         if(uniqueStop_) {
-            if(bot - top == 1 && dep - offset >= minUniqueLen) {
+            if(range.second - range.first == 1 && dep - offset >= minUniqueLen) {
                 uniqueStop = true;
                 break;
             }
         }
         
         if(dep - offset >= maxHitLen) break;
+        LOCAL_INIT_LOCS(range.first, range.second, tloc, bloc, gfm);
     }
     
     // Done
-    if(bot > top) {
-        assert_gt(dep, offset);
-        assert_leq(dep, len);
-        nelt += (bot - top);
-        hitlen = dep - offset;
-    }
-
-    return nelt;
-}
-
-/**
- *
- **/
-template <typename index_t, typename local_index_t>
-size_t HI_Aligner<index_t, local_index_t>::localGFMSearch_reverse(
-                                                                  const LocalGFM<local_index_t, index_t>*  gfm_,  // BWT index
-                                                                  const Read&                      read,    // read to align
-                                                                  const Scoring&                   sc,      // scoring scheme
-                                                                  bool                             fw,
-                                                                  bool                             searchfw,
-                                                                  index_t                          rdoff,
-                                                                  index_t&                         hitlen,
-                                                                  local_index_t&                   top,
-                                                                  local_index_t&                   bot,
-                                                                  RandomSource&                    rnd,
-                                                                  bool&                         	uniqueStop,
-                                                                  local_index_t                    minUniqueLen,
-                                                                  local_index_t                    maxHitLen)
-{
-    assert(gfm_ != NULL);
-    bool uniqueStop_ = uniqueStop;
-    uniqueStop = false;
-    const LocalGFM<local_index_t, index_t>& gfm = *gfm_;
-	const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
-	SideLocus<local_index_t> tloc, bloc;
-	const local_index_t len = (local_index_t)read.length();
-	size_t nelt = 0;
-    
-    const BTDnaString& seq = fw ? read.patFw : read.patRc;
-    assert(!seq.empty());
-    
-    local_index_t offset = searchfw ? len - rdoff - 1 : rdoff;
-    local_index_t dep = offset;
-    top = 0, bot = 0;
-    local_index_t topTemp = 0, botTemp = 0;
-    local_index_t left = len - dep;
-    assert_gt(left, 0);
-    if(left < ftabLen) {
-        hitlen = left;
-		return 0;
-    }
-    // Does N interfere with use of Ftab?
-    for(local_index_t i = 0; i < ftabLen; i++) {
-        int c = searchfw ? seq[len-dep-1-i] : seq[dep+i];
-        if(c > 3) {
-            hitlen = i + 1;
-			return 0;
-        }
-    }
-    
-    // Use ftab
-    if(searchfw) {
-        gfm.ftabLoHi(seq, len - dep - ftabLen, false, top, bot);
-    } else {
-        gfm.ftabLoHi(seq, dep, false, top, bot);
-    }
-    dep += ftabLen;
-    if(bot <= top) {
-        hitlen = ftabLen;
-        return 0;
-    }
-    LOCAL_INIT_LOCS(top, bot, tloc, bloc, gfm);
-    // Keep going
-    while(dep < len) {
-        int c = searchfw ? seq[len-dep-1] : seq[dep];
-        if(c > 3) {
-            topTemp = botTemp = 0;
-        } else {
-            if(bloc.valid()) {
-                bwops_ += 2;
-                topTemp = gfm.mapLF(tloc, c);
-                botTemp = gfm.mapLF(bloc, c);
-            } else {
-                bwops_++;
-                topTemp = gfm.mapLF1(top, tloc, c);
-                if(topTemp == (local_index_t)OFF_MASK) {
-                    topTemp = botTemp = 0;
-                } else {
-                    botTemp = topTemp + 1;
+    if(node_range.first < node_range.second && node_range.second - node_range.first <= rp.khits) {
+        assert_leq(node_range.second - node_range.first, range.second - range.first);
+#ifndef NDEBUG
+        if(node_range.second - node_range.first < range.second - range.first) {
+            ASSERT_ONLY(index_t add = 0);
+            for(index_t e = 0; e < local_node_iedge_count.size(); e++) {
+                if(e > 0) {
+                    assert_lt(local_node_iedge_count[e-1].first, local_node_iedge_count[e].first);
                 }
+                assert_gt(local_node_iedge_count[e].second, 0);
+                add += local_node_iedge_count[e].second;
             }
+            assert_eq(node_range.second - node_range.first + add, range.second - range.first);
+        } else {
+            assert(local_node_iedge_count.empty());
         }
-        if(botTemp <= topTemp) {
-            break;
-        }
-        top = topTemp;
-        bot = botTemp;
-        LOCAL_INIT_LOCS(top, bot, tloc, bloc, gfm);
-        dep++;
-        
-        if(uniqueStop_) {
-            if(bot - top == 1 && dep - offset >= minUniqueLen) {
-                uniqueStop = true;
-                break;
-            }
-        }
-        
-        if(dep - offset >= maxHitLen) break;
-    }
-    
-    // Done
-    if(bot > top) {
+#endif
         assert_gt(dep, offset);
         assert_leq(dep, len);
-        nelt += (bot - top);
+        top = range.first; bot = range.second;
+        node_top = node_range.first; node_bot = node_range.second;
+        nelt += (node_bot - node_top);
         hitlen = dep - offset;
     }
-    
+
     return nelt;
 }
 

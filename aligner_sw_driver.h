@@ -701,7 +701,7 @@ bool SwDriver<index_t>::eeSaTups(
                     rands_.expand();
                     rands_.back().init(width, all);
                     gws_.expand();
-					SARangeWithOffs<TSlice> sa;
+					SARangeWithOffs<TSlice, index_t> sa;
 					sa.topf = satpos_.back().sat.topf;
 					sa.len = satpos_.back().sat.key.len;
 					sa.offs = satpos_.back().sat.offs;
@@ -790,7 +790,7 @@ bool SwDriver<index_t>::eeSaTups(
                 rands_.expand();
                 rands_.back().init(width, all);
                 gws_.expand();
-				SARangeWithOffs<TSlice> sa;
+				SARangeWithOffs<TSlice, index_t> sa;
 				sa.topf = satpos_.back().sat.topf;
 				sa.len = satpos_.back().sat.key.len;
 				sa.offs = satpos_.back().sat.offs;
@@ -1135,7 +1135,7 @@ void SwDriver<index_t>::prioritizeSATups(
 		rands_.ensure(nrange);
 		for(index_t i = 0; i < nrange; i++) {
 			gws_.expand();
-			SARangeWithOffs<TSlice> sa;
+			SARangeWithOffs<TSlice, index_t> sa;
 			sa.topf = satpos_.back().sat.topf;
 			sa.len = satpos_.back().sat.key.len;
 			sa.offs = satpos_.back().sat.offs;
@@ -1180,7 +1180,7 @@ void SwDriver<index_t>::prioritizeSATups(
 		satpos_.expand();
 		satpos_.back() = satpos2_[j];
 		gws_.expand();
-		SARangeWithOffs<TSlice> sa;
+		SARangeWithOffs<TSlice, index_t> sa;
 		sa.topf = satpos_.back().sat.topf;
 		sa.len = satpos_.back().sat.key.len;
 		sa.offs = satpos_.back().sat.offs;
@@ -1240,7 +1240,7 @@ void SwDriver<index_t>::prioritizeSATups(
 		satpos_.back().pos = satpos2_[ri].pos;
 		// Initialize GroupWalk object
 		gws_.expand();
-		SARangeWithOffs<TSlice> sa;
+		SARangeWithOffs<TSlice, index_t> sa;
 		sa.topf = sat.topf;
 		sa.len = sat.key.len;
 		sa.offs = sat.offs;
@@ -1449,7 +1449,7 @@ int SwDriver<index_t>::extendSeeds(
 				WalkResult<index_t> wr;
 				uint32_t elt = rands_[i].next(rnd);
 				//cerr << "elt=" << elt << endl;
-				SARangeWithOffs<TSlice> sa;
+				SARangeWithOffs<TSlice, index_t> sa;
 				sa.topf = satpos_[i].sat.topf;
 				sa.len = satpos_[i].sat.key.len;
 				sa.offs = satpos_[i].sat.offs;
@@ -2154,7 +2154,7 @@ int SwDriver<index_t>::extendSeedsPaired(
 				// Resolve next element offset
 				WalkResult<index_t> wr;
 				uint32_t elt = rands_[i].next(rnd);
-				SARangeWithOffs<TSlice> sa;
+				SARangeWithOffs<TSlice, index_t> sa;
 				sa.topf = satpos_[i].sat.topf;
 				sa.len = satpos_[i].sat.key.len;
 				sa.offs = satpos_[i].sat.offs;

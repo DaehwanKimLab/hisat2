@@ -2291,7 +2291,7 @@ protected:
 
 	Random1toN rnd_;
 	EList<TIndexOffU, 16> offs_;
-	EList<SARangeWithOffs<EListSlice<TIndexOffU, 16> > > sas_;
+	EList<SARangeWithOffs<EListSlice<TIndexOffU, 16>, index_t> > sas_;
 	EList<GroupWalk2S<index_t, EListSlice<TIndexOffU, 16>, 16> > gws_;
 	GroupWalkState<index_t> gwstate_;
 };
@@ -2491,7 +2491,7 @@ protected:
 
 	Random1toN rnd_;
 	EList<TIndexOff, 16> offs_;
-	EList<SARangeWithOffs<EListSlice<TIndexOff, 16> > > sas_;
+	EList<SARangeWithOffs<EListSlice<TIndexOff, 16>, index_t> > sas_;
 	EList<GroupWalk2S<index_t, EListSlice<TIndexOff, 16>, 16> > gws_;
 	GroupWalkState<index_t> gwstate_;
 };

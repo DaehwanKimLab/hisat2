@@ -1,14 +1,14 @@
 #
-# Copyright 2014, Daehwan Kim <infphilo@gmail.com>
+# Copyright 2015, Daehwan Kim <infphilo@gmail.com>
 #
-# This file is part of HISAT, which is copied and modified from Makefile in the Bowtie2 package.
+# This file is part of HISAT2.
 #
-# HISAT is free software: you can redistribute it and/or modify
+# HISAT 2 is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# HISAT is distributed in the hope that it will be useful,
+# HISAT 2 is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
@@ -17,7 +17,7 @@
 # along with HISAT.  If not, see <http://www.gnu.org/licenses/>.
 #
 #
-# Makefile for hisat-align, hisat-build, hisat-inspect
+# Makefile for hisat2-align, hisat2-build, hisat2-inspect
 #
 
 INC =
