@@ -262,7 +262,7 @@ public:
 		    << "    gbwtTotLen: "   << _gbwtTotLen << endl
 		    << "    gbwtTotSz: "    << _gbwtTotSz << endl
 		    << "    reverse: "      << _entireReverse << endl
-            << "    linearFM: "     << (_linearFM ? "No" : "Yes") << endl;
+            << "    linearFM: "     << (_linearFM ? "Yes" : "No") << endl;
 	}
 
 	index_t  _len;
