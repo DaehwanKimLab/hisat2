@@ -635,7 +635,8 @@ struct GenomeHit {
                                  index_t                     rflen,
                                  bool                        left,
                                  EList<Edit>*                edits = NULL,
-                                 index_t                     mm = 0);
+                                 index_t                     mm = 0,
+                                 index_t*                    numNs = NULL);
     
     /**
      * For alignment involving indel, move the indels
@@ -1590,18 +1591,20 @@ bool GenomeHit<index_t>::combineWith(
     assert_eq(_trim3, 0);
     _trim3 += otherHit._trim3;
 #ifndef NDEBUG
-    ASSERT_ONLY(bool straddled = false);
-    ASSERT_ONLY(index_t tmp_tidx = 0, tmp_toff = 0, tmp_tlen = 0);
-    gfm.joinedToTextOff(
-                        0,
-                        _joinedOff,
-                        tmp_tidx,
-                        tmp_toff,
-                        tmp_tlen,
-                        true,        // reject straddlers?
-                        straddled);  // straddled?
-    assert_eq(tmp_tidx, _tidx);
-    assert_eq(tmp_toff, _toff);
+    if(_joinedOff != (index_t)INDEX_MAX) {
+        ASSERT_ONLY(bool straddled = false);
+        ASSERT_ONLY(index_t tmp_tidx = 0, tmp_toff = 0, tmp_tlen = 0);
+        gfm.joinedToTextOff(
+                            0,
+                            _joinedOff,
+                            tmp_tidx,
+                            tmp_toff,
+                            tmp_tlen,
+                            true,        // reject straddlers?
+                            straddled);  // straddled?
+        assert_eq(tmp_tidx, _tidx);
+        assert_eq(tmp_toff, _toff);
+    }
 #endif
     assert(repOk(rd, ref));
     return true;
@@ -1704,6 +1707,7 @@ bool GenomeHit<index_t>::extend(
             if(best_ext > 0) {
                 leftext = best_ext;
                 index_t num_prev_edits = _edits->size();
+                index_t numNs = 0;
                 ASSERT_ONLY(index_t temp_ext =) alignWithSNPs(
                                                               snpdb.snps(),
                                                               snp_cbns[best_cbn],
@@ -1715,13 +1719,15 @@ bool GenomeHit<index_t>::extend(
                                                               reflen,
                                                               true, /* left? */
                                                               _edits,
-                                                              mm);
+                                                              mm,
+                                                              &numNs);
                 assert_leq(num_prev_edits, _edits->size());
                 index_t added_edits = _edits->size() - num_prev_edits;
                 int ref_ext = (int)best_ext;
                 for(index_t i = 0; i < added_edits; i++) {
-                    if((*_edits)[i].type == EDIT_TYPE_REF_GAP)       ref_ext--;
-                    else if((*_edits)[i].type == EDIT_TYPE_READ_GAP) ref_ext++;
+                    const Edit& edit = (*_edits)[i];
+                    if(edit.type == EDIT_TYPE_REF_GAP)       ref_ext--;
+                    else if(edit.type == EDIT_TYPE_READ_GAP) ref_ext++;
                 }
                 assert_eq(best_ext, temp_ext);
                 assert_leq(best_ext, _rdoff);
@@ -1730,8 +1736,9 @@ bool GenomeHit<index_t>::extend(
                 _toff -= ref_ext;
                 _len += best_ext;
                 assert_leq(_len, rdlen);
-                assert_leq(ref_ext, _joinedOff);
-                _joinedOff -= ref_ext;
+                assert_leq((int)numNs, ref_ext);
+                assert_leq(ref_ext - (int)numNs, _joinedOff);
+                _joinedOff -= (ref_ext - (int)numNs);
                 for(index_t i = 0; i < _edits->size(); i++) {
                     if(i < added_edits) {
                         assert_geq((*_edits)[i].pos, _rdoff);
@@ -1819,18 +1826,20 @@ bool GenomeHit<index_t>::extend(
     }
     
 #ifndef NDEBUG
-    ASSERT_ONLY(bool straddled = false);
-    ASSERT_ONLY(index_t tmp_tidx = 0, tmp_toff = 0, tmp_tlen = 0);
-    gfm.joinedToTextOff(
-                        0,
-                        _joinedOff,
-                        tmp_tidx,
-                        tmp_toff,
-                        tmp_tlen,
-                        true,        // reject straddlers?
-                        straddled);  // straddled?
-    assert_eq(tmp_tidx, _tidx);
-    assert_eq(tmp_toff, _toff);
+    if(_joinedOff != (index_t)INDEX_MAX) {
+        ASSERT_ONLY(bool straddled = false);
+        ASSERT_ONLY(index_t tmp_tidx = 0, tmp_toff = 0, tmp_tlen = 0);
+        gfm.joinedToTextOff(
+                            0,
+                            _joinedOff,
+                            tmp_tidx,
+                            tmp_toff,
+                            tmp_tlen,
+                            true,        // reject straddlers?
+                            straddled);  // straddled?
+        assert_eq(tmp_tidx, _tidx);
+        assert_eq(tmp_toff, _toff);
+    }
 #endif
     
     if(doLeftAlign) leftAlign(rd);
@@ -2130,8 +2139,10 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                                           index_t                     rflen,
                                           bool                        left,
                                           EList<Edit>*                edits,
-                                          index_t                     mm)
+                                          index_t                     mm,
+                                          index_t*                    numNs)
 {
+    if(numNs != NULL) *numNs = 0;
     index_t snp_i = 0, tmp_mm = 0;
     if(left) {
         assert_gt(rdoff, 0);
@@ -2222,7 +2233,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                 snp_i++;
             } else {
                 // Stop this alignment
-                if(rf_bp != rd_bp || rd_bp == 4) {
+                if(rf_bp != rd_bp) {
                     tmp_mm++;
                     if(tmp_mm > mm || !snps.empty()) break;
                     if(edits != NULL) {
@@ -2234,6 +2245,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         edits->insert(e, 0);
                     }
                 }
+                if(rf_bp == 4 && numNs != NULL) (*numNs)++;
                 indel_end = false;
             }
         }
@@ -2325,9 +2337,9 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                 snp_i++;
             } else {
                 // Stop this alignment
-                if(rf_bp != rd_bp || rd_bp == 4) {
+                if(rf_bp != rd_bp) {
                     tmp_mm++;
-                    if(tmp_mm > mm || !snps.empty()) break;
+                    if(tmp_mm > mm) break;
                     if(edits != NULL) {
                         Edit e(
                                rd_i,
@@ -2337,6 +2349,7 @@ index_t GenomeHit<index_t>::alignWithSNPs(
                         edits->push_back(e);
                     }
                 }
+                if(rf_bp == 4 && numNs != NULL) (*numNs)++;
                 indel_end = false;
             }
         }

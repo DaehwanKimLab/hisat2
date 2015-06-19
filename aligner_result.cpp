@@ -679,8 +679,8 @@ void StackedAln::init(
 		if(ed[i].isMismatch()) {
 			int c = s[rdoff++];
 			assert_range(0, 4, c);
-			assert_eq(c, asc2dna[(int)ed[i].qchr]);
-			assert_neq(c, asc2dna[(int)ed[i].chr]);
+            assert_eq(c, asc2dna[(int)ed[i].qchr]);
+            assert_neq(c, asc2dna[(int)ed[i].chr]);
 			stackRef_.push_back(ed[i].chr);
 			stackRel_.push_back('X');
 			stackRead_.push_back("ACGTN"[c]);
