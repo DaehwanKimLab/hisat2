@@ -29,8 +29,6 @@
 #include <deque>
 #include "snp.h"
 
-using namespace std;
-
 // Reference:
 // Jouni Sirén, Niko Välimäki, and Veli Mäkinen: Indexing Graphs for Path Queries with Applications in Genome Research.
 // IEEE/ACM Transactions on Computational Biology and Bioinformatics 11(2):375-388, 2014.
@@ -1975,9 +1973,7 @@ report_F_node_idx(0), report_F_location(0)
 		nodes.resizeExact(count);
 		nodes.clear();
 		for(int i = 0; i < nthreads; i++) {
-			for(index_t j = 0; j < merged_cur[i]; j++) {
-				nodes.push_back(merged_nodes[i][j]);
-			}
+			nodes.push_back_array(merged_nodes[i], merged_cur[i]);
 			delete[] merged_nodes[i];
 			delete[] new_nodes[i];
 			delete[] breakpoints[i];
@@ -2003,11 +1999,7 @@ report_F_node_idx(0), report_F_location(0)
     	nodes.resizeExact(count);
     	nodes.clear();
     	for(int i = 0; i < nthreads; i++) {
-    		for(index_t j = 0; j < new_cur[i]; j++) {
-                // daehwan -> joe
-                // Use memcpy?
-    			nodes.push_back(new_nodes[i][j]);
-    		}
+    		nodes.push_back_array(new_nodes[i], new_cur[i]);
     		delete[] new_nodes[i];
     	}
     	delete[] new_nodes;

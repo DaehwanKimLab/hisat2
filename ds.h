@@ -30,6 +30,8 @@
 #include "threading.h"
 #include "random_source.h"
 #include "btypes.h"
+//added by Joe Paggi to implement EList.push_back_array
+#include <cstring>
 
 /**
  * Tally how much memory is allocated to certain 
@@ -615,6 +617,20 @@ public:
 			list_[i+idx] = l.list_[i];
 		}
 		cur_ += l.cur_;
+	}
+
+	/**
+	 * push first l_size objects of T array l to top of stack
+	 * added by Joe Paggi
+	 */
+	void push_back_array(const T* l, size_t l_size) {
+		if(list_ == NULL) lazyInit();
+		if(l_size == 0) return;
+		if(cur_ + l_size > sz_) expandCopy(cur_ + l_size);
+		int object_sz = sizeof(l[0]);
+		size_t bytes = l_size * object_sz;
+		std::memcpy(list_ + cur_, l, bytes);
+		cur_ += l_size;
 	}
 
 	/**
