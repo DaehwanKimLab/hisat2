@@ -117,31 +117,6 @@ public:
         };
     };
 
-    // for debugging purposes
-    struct TempEdgeNodeCmp {
-        TempEdgeNodeCmp(const EList<Node>& nodes_) : nodes(nodes_) {}
-        bool operator() (const Edge& a, const Edge& b) const {
-            // Compare "from" nodes
-            {
-                assert_lt(a.from, nodes.size());
-                const Node& a_node = nodes[a.from];
-                assert_lt(b.from, nodes.size());
-                const Node& b_node = nodes[b.from];
-                if(!(a_node == b_node))
-                    return a_node < b_node;
-            }
-
-            // Compare "to" nodes
-            assert_lt(a.to, nodes.size());
-            const Node& a_node = nodes[a.to];
-            assert_lt(b.to, nodes.size());
-            const Node& b_node = nodes[b.to];
-            return a_node < b_node;
-        }
-
-        const EList<Node>& nodes;
-    };
-
 public:
     RefGraph(const SString<char>& s,
              const EList<RefRecord>& szs,
@@ -1168,9 +1143,6 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
 #endif
 }
 
-static const uint8_t WORD_BITS = sizeof(TIndexOffU) * 8;
-
-//--------------------------------------------------------------------------
 
 template <typename index_t>
 class PathGraph {
@@ -1649,14 +1621,21 @@ void PathGraph<index_t>::createCombined(void * vp) {
     //use heuristic sometimes instead of counting exact number?
     //other method for small number of to_nodes[i]?
     for(index_t i = st; i < en; i++) {
-        if(from_size[i] <= 0 || to_size[i] <= 0) continue;
-		sort(from_nodes[i], from_nodes[i] + from_size[i], PathNodeFromCmp());
-		sort(to_nodes[i], to_nodes[i] + to_size[i], PathNodeToCmp());
+        if(to_size[i] <= 0) continue;
+        assert_gt(from_size[i], 0);
+        if(from_size[i] > 1) {
+            sort(from_nodes[i], from_nodes[i] + from_size[i], PathNodeFromCmp());
+        }
+        if(to_size[i] > 1) {
+            sort(to_nodes[i], to_nodes[i] + to_size[i], PathNodeToCmp());
+        }
 		index_t t = 0;
 		for(index_t f = 0; f < from_size[i]; f++) {
 			while(t < to_size[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
 				t++;
 			}
+            if(t >= to_size[i]) break;
+            assert_eq(from_nodes[i][f].from, to_nodes[i][t].to);
 			index_t shift = 0;
 			while(t + shift < to_size[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
 				new_cur[thread_id]++;
@@ -1664,8 +1643,11 @@ void PathGraph<index_t>::createCombined(void * vp) {
 			}
 		}
     }
+    if(new_cur[thread_id] <= 0) return;
+    
     //allocate
     new_nodes[thread_id] = new PathNode[new_cur[thread_id]];
+    ASSERT_ONLY(index_t new_cur_count = new_cur[thread_id]);
     new_cur[thread_id] = 0;
     //add
     for(index_t i = st; i < en; i++) {
@@ -1674,6 +1656,8 @@ void PathGraph<index_t>::createCombined(void * vp) {
         	while(t < to_size[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
         		t++;
         	}
+            if(t >= to_size[i]) break;
+            assert_eq(from_nodes[i][f].from, to_nodes[i][t].to);
         	index_t shift = 0;
         	while(t + shift < to_size[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
         		new_nodes[thread_id][new_cur[thread_id]].from = to_nodes[i][t + shift].from;
@@ -1681,7 +1665,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
                 if(generation < 4) {
                     assert_gt(generation, 0);
                     index_t bit_shift = 1 << (generation - 1);
-                    bit_shift *= 3;
+                    bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
                     new_nodes[thread_id][new_cur[thread_id]].key  = pair<index_t, index_t>((to_nodes[i][t + shift].key.first << bit_shift) + from_nodes[i][f].key.first, 0);
                 } else {
                     new_nodes[thread_id][new_cur[thread_id]].key  = pair<index_t, index_t>(to_nodes[i][t + shift].key.first, from_nodes[i][f].key.first);
@@ -1691,6 +1675,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
         	}
     	}
     }
+    assert_eq(new_cur_count, new_cur[thread_id]);
     for(index_t i = st; i < en; i++) {
     	delete[] from_nodes[i];
     	delete[] to_nodes[i];
@@ -1732,6 +1717,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 		count += breakpoints[j][thread_id + 1] - breakpoints[j][thread_id];
 		pos[j] = breakpoints[j][thread_id];
 	}
+    if(count <= 0) return;
 	merged_nodes[thread_id] = new PathNode[count];
 
 	//skip to first sorted node, this doesn't seem to help so much now, but might with more threads
@@ -1762,7 +1748,6 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 			while(pos[nthreads] < breakpoints[nthreads][thread_id + 1] && !previous->nodes[pos[nthreads]].isSorted()) {
 				pos[nthreads]++;
 			}
-
 		} else {
 			merged_nodes[thread_id][merged_cur[thread_id]] = new_nodes[minIndex][pos[minIndex]];
 			pos[minIndex]++;
@@ -2019,6 +2004,8 @@ report_F_node_idx(0), report_F_location(0)
     	nodes.clear();
     	for(int i = 0; i < nthreads; i++) {
     		for(index_t j = 0; j < new_cur[i]; j++) {
+                // daehwan -> joe
+                // Use memcpy?
     			nodes.push_back(new_nodes[i][j]);
     		}
     		delete[] new_nodes[i];
@@ -2091,9 +2078,11 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     EList<PathEdge>* new_edges = new EList<PathEdge>[nthreads];
 
     for(int i = 0; i < nthreads; i++) {
-    	sep_nodes[i].resizeExact(nodes.size() / nthreads);
-    	sep_edges[i].resizeExact(base.edges.size() / nthreads);
-    	new_edges[i].resizeExact((nodes.size() * 5) / (nthreads * 4));
+    	sep_nodes[i].resizeExact(nodes.size() / nthreads + 1);
+    	sep_edges[i].resizeExact(base.edges.size() / nthreads + 1);
+        // daehwan -> joe
+        // possible overflow?
+    	new_edges[i].resizeExact((nodes.size() * 5) / (nthreads * 4) + 1);
     	sep_nodes[i].clear();
     	sep_edges[i].clear();
     	new_edges[i].clear();
