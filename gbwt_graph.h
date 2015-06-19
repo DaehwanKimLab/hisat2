@@ -1612,7 +1612,6 @@ void PathGraph<index_t>::seperateNodesCount(void * vp) {
     PathGraph<index_t>* previous = threadParam->previous;
     index_t* from_cur = threadParam->from_cur;
     index_t* to_cur = threadParam->to_cur;
-
     index_t st = threadParam->st;
     index_t en = threadParam->en;
     int partitions = threadParam->partitions;
@@ -1669,6 +1668,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
     new_cur[thread_id] = 0;
     //add
     for(index_t i = st; i < en; i++) {
+    	if(from_size[i] <= 0 || to_size[i] <= 0) continue;
     	index_t t = 0;
     	for(index_t f = 0; f < from_size[i]; f++) {
         	while(t < to_size[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
