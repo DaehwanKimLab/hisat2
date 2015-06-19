@@ -584,7 +584,7 @@ int hisat2_build(int argc, const char **argv) {
                  << "  Local offset rate: " << localOffRate << " (one in " << (1<<localOffRate) << ")" << endl
                  << "  Local fTable chars: " << localFtabChars << endl
                  << "  Local sequence length: " << local_index_size << endl
-                 << "  Local sequence overlap between the two consecutive indexes: " << local_index_overlap << endl;
+                 << "  Local sequence overlap between two consecutive indexes: " << local_index_overlap << endl;
 #if 0
 			if(bmax == OFF_MASK) {
 				cerr << "  Max bucket size: default" << endl;
