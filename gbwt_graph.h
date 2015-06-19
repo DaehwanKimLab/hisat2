@@ -29,8 +29,6 @@
 #include <deque>
 #include "snp.h"
 
-using namespace std;
-
 // Reference:
 // Jouni Sirén, Niko Välimäki, and Veli Mäkinen: Indexing Graphs for Path Queries with Applications in Genome Research.
 // IEEE/ACM Transactions on Computational Biology and Bioinformatics 11(2):375-388, 2014.
@@ -1584,7 +1582,6 @@ void PathGraph<index_t>::seperateNodesCount(void * vp) {
     PathGraph<index_t>* previous = threadParam->previous;
     index_t* from_cur = threadParam->from_cur;
     index_t* to_cur = threadParam->to_cur;
-
     index_t st = threadParam->st;
     index_t en = threadParam->en;
     int partitions = threadParam->partitions;
@@ -1651,6 +1648,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
     new_cur[thread_id] = 0;
     //add
     for(index_t i = st; i < en; i++) {
+    	if(from_size[i] <= 0 || to_size[i] <= 0) continue;
     	index_t t = 0;
     	for(index_t f = 0; f < from_size[i]; f++) {
         	while(t < to_size[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
@@ -1975,9 +1973,7 @@ report_F_node_idx(0), report_F_location(0)
 		nodes.resizeExact(count);
 		nodes.clear();
 		for(int i = 0; i < nthreads; i++) {
-			for(index_t j = 0; j < merged_cur[i]; j++) {
-				nodes.push_back(merged_nodes[i][j]);
-			}
+			nodes.push_back_array(merged_nodes[i], merged_cur[i]);
 			delete[] merged_nodes[i];
 			delete[] new_nodes[i];
 			delete[] breakpoints[i];
@@ -2003,11 +1999,7 @@ report_F_node_idx(0), report_F_location(0)
     	nodes.resizeExact(count);
     	nodes.clear();
     	for(int i = 0; i < nthreads; i++) {
-    		for(index_t j = 0; j < new_cur[i]; j++) {
-                // daehwan -> joe
-                // Use memcpy?
-    			nodes.push_back(new_nodes[i][j]);
-    		}
+    		nodes.push_back_array(new_nodes[i], new_cur[i]);
     		delete[] new_nodes[i];
     	}
     	delete[] new_nodes;
