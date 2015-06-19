@@ -604,6 +604,7 @@ struct GenomeHit {
      * Find offset differences due to deletions
      */
     static void findOffDiffs(
+                             const GFM<index_t>&         gfm,
                              const SNPDB<index_t>&       snpdb,
                              index_t                     start,
                              index_t                     end,
@@ -613,6 +614,7 @@ struct GenomeHit {
      * Find SNPs within the specified region
      */
     static void findSNPCombinations(
+                                    const GFM<index_t>&   gfm,
                                     const SNPDB<index_t>& snpdb,
                                     index_t               start,
                                     index_t&              reflen,
@@ -1587,6 +1589,20 @@ bool GenomeHit<index_t>::combineWith(
                             ref);
     assert_eq(_trim3, 0);
     _trim3 += otherHit._trim3;
+#ifndef NDEBUG
+    ASSERT_ONLY(bool straddled = false);
+    ASSERT_ONLY(index_t tmp_tidx = 0, tmp_toff = 0, tmp_tlen = 0);
+    gfm.joinedToTextOff(
+                        0,
+                        _joinedOff,
+                        tmp_tidx,
+                        tmp_toff,
+                        tmp_tlen,
+                        true,        // reject straddlers?
+                        straddled);  // straddled?
+    assert_eq(tmp_tidx, _tidx);
+    assert_eq(tmp_toff, _toff);
+#endif
     assert(repOk(rd, ref));
     return true;
 }
@@ -1642,6 +1658,7 @@ bool GenomeHit<index_t>::extend(
             index_t reflen = _rdoff;
             ELList<index_t>& snp_cbns = _sharedVars->snp_combinations;
             findSNPCombinations(
+                                gfm,
                                 snpdb,
                                 this->_joinedOff,
                                 reflen,
@@ -1740,6 +1757,7 @@ bool GenomeHit<index_t>::extend(
             index_t reflen = rr;
             ELList<index_t>& snp_cbns = _sharedVars->snp_combinations;
             findSNPCombinations(
+                                gfm,
                                 snpdb,
                                 this->_joinedOff,
                                 reflen,
@@ -1840,6 +1858,7 @@ bool GenomeHit<index_t>::adjustWithSNP(
                                        const SNPDB<index_t>&   snpdb,
                                        const BitPairReference& ref)
 {
+    if(gfm.gh().linearFM()) return true;
     assert_lt(this->_tidx, ref.numRefs());
     index_t rdlen = (index_t)rd.length();
     
@@ -1849,7 +1868,7 @@ bool GenomeHit<index_t>::adjustWithSNP(
     
     EList<pair<index_t, int> >& offDiffs = _sharedVars->offDiffs;
     index_t width = 1 << (gfm.gh()._offRate + 1);
-    findOffDiffs(snpdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff, offDiffs);
+    findOffDiffs(gfm, snpdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff, offDiffs);
 
     index_t orig_joinedOff = this->_joinedOff;
     index_t orig_toff = this->_toff;
@@ -1879,6 +1898,7 @@ bool GenomeHit<index_t>::adjustWithSNP(
         index_t reflen = this->_len;
         ELList<index_t>& snp_cbns = _sharedVars->snp_combinations;
         findSNPCombinations(
+                            gfm,
                             snpdb,
                             this->_joinedOff,
                             reflen,
@@ -1933,6 +1953,7 @@ bool GenomeHit<index_t>::adjustWithSNP(
  */
 template <typename index_t>
 void GenomeHit<index_t>::findOffDiffs(
+                                      const GFM<index_t>&         gfm,
                                       const SNPDB<index_t>&       snpdb,
                                       index_t                     start,
                                       index_t                     end,
@@ -1941,6 +1962,7 @@ void GenomeHit<index_t>::findOffDiffs(
     offDiffs.clear();
     offDiffs.expand();
     offDiffs.back().first = offDiffs.back().second = 0;
+    if(gfm.gh().linearFM()) return;
     const EList<SNP<index_t> >& snps = snpdb.snps();
     pair<index_t, index_t> snp_range;
     
@@ -1989,6 +2011,7 @@ void GenomeHit<index_t>::findOffDiffs(
  */
 template <typename index_t>
 void GenomeHit<index_t>::findSNPCombinations(
+                                             const GFM<index_t>&   gfm,
                                              const SNPDB<index_t>& snpdb,
                                              index_t               start,
                                              index_t&              reflen,
@@ -2002,6 +2025,7 @@ void GenomeHit<index_t>::findSNPCombinations(
     // For alignment with no snps
     snp_cbns.expand();
     snp_cbns.back().clear();
+    if(gfm.gh().linearFM()) return;
     // Find SNPs included in this region
     if(left) {
         SNP<index_t> snp;

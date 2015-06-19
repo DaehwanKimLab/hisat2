@@ -168,10 +168,11 @@ public:
 		_sideSz = _lineSz * 1 /* lines per side */;
         if(_linearFM) {
             _sideGbwtSz = _sideSz - (sizeof(index_t) * 4);
+            _sideGbwtLen = _sideGbwtSz << 2;
         } else {
             _sideGbwtSz = _sideSz - (sizeof(index_t) * 6);
+            _sideGbwtLen = _sideGbwtSz << 1;
         }
-		_sideGbwtLen = _sideGbwtSz*2;
 		_numSides = (_gbwtSz+(_sideGbwtSz)-1)/(_sideGbwtSz);
 		_numLines = _numSides * 1 /* lines per side */;
 		_gbwtTotLen = _numSides * _sideSz;
@@ -489,16 +490,16 @@ struct SideLocus {
 	/**
 	 * Return a read-only pointer to the beginning of the top side.
 	 */
-	const uint8_t *side(const uint8_t* ebwt) const {
-		return ebwt + _sideByteOff;
+	const uint8_t *side(const uint8_t* gbwt) const {
+		return gbwt + _sideByteOff;
 	}
     
     /**
 	 * Return a read-only pointer to the beginning of the top side.
 	 */
-	const uint8_t *next_side(const GFMParams<index_t>& ep, const uint8_t* ebwt) const {
-        if(_sideByteOff + ep._sideSz < ep._ebwtTotSz) {
-            return ebwt + _sideByteOff + ep._sideSz;
+	const uint8_t *next_side(const GFMParams<index_t>& gp, const uint8_t* gbwt) const {
+        if(_sideByteOff + gp._sideSz < gp._ebwtTotSz) {
+            return gbwt + _sideByteOff + gp._sideSz;
         } else {
             return NULL;
         }
@@ -516,7 +517,7 @@ struct SideLocus {
  */
 template <typename index_t>
 inline index_t SideLocus<index_t>::toBWRow(const GFMParams<index_t>& gp) const {
-    return _sideNum * (gp._sideGbwtSz << 1) + _charOff;
+    return _sideNum * (gp._sideGbwtSz << (gp.linearFM() ? 2 : 1)) + _charOff;
 }
 
 #ifdef POPCNT_CAPABILITY   // wrapping of "struct"
@@ -694,10 +695,12 @@ public:
         
         readU32(in7, this->toBe());
         index_t numSnps = readIndex<index_t>(in7, this->toBe());
-        while(!in7.eof()) {
-            snps.expand();
-            snps.back().read(in7, this->toBe());
-            if(snps.size() == numSnps) break;
+        if(numSnps > 0) {
+            while(!in7.eof()) {
+                snps.expand();
+                snps.back().read(in7, this->toBe());
+                if(snps.size() == numSnps) break;
+            }
         }
         assert_eq(snps.size(), numSnps);
         in7.close();
@@ -710,12 +713,14 @@ public:
         readU32(in8, this->toBe());
         numSnps = readIndex<index_t>(in8, this->toBe());
         assert_eq(snps.size(), numSnps);
-        while(!in8.eof()) {
-            snpnames.expand();
-            in8 >> snpnames.back();
-            if(snpnames.size() == numSnps) break;
+        if(numSnps > 0) {
+            while(!in8.eof()) {
+                snpnames.expand();
+                in8 >> snpnames.back();
+                if(snpnames.size() == numSnps) break;
+            }
+            assert_eq(snpnames.size(), numSnps);
         }
-        assert_eq(snpnames.size(), numSnps);
         in8.close();
         
         assert(repOk());
@@ -1661,7 +1666,7 @@ public:
 		return GFM<index_t>::ftabHi(
 			ftab(),
 			eftab(),
-			_gh._gbwtLen,
+            _gh.linearFM() ? _gh._len : _gh._gbwtLen,
 			_gh._ftabLen,
 		    _gh._eftabLen,
 			i);
@@ -1701,7 +1706,7 @@ public:
 		return GFM<index_t>::ftabLo(
 			ftab(),
 			eftab(),
-			_gh._gbwtLen,
+			_gh.linearFM() ? _gh._len : _gh._gbwtLen,
 			_gh._ftabLen,
 		    _gh._eftabLen,
 			i);
@@ -2060,7 +2065,8 @@ public:
             }
         }
 		// Now factor in the occ[] count at the side break
-		const index_t *acgt = reinterpret_cast<const index_t*>(side + _gh._sideGbwtSz + (sizeof(index_t) << 1));
+        const index_t *acgt = reinterpret_cast<const index_t*>(side + _gh._sideGbwtSz);
+        if(!this->_gh.linearFM()) acgt += 2;
 		assert_leq(acgt[0], this->fchr()[1] + this->_gh.sideGbwtLen());
 		assert_leq(acgt[1], this->fchr()[2]-this->fchr()[1]);
 		assert_leq(acgt[2], this->fchr()[3]-this->fchr()[2]);
@@ -2586,7 +2592,8 @@ public:
 		}
 		int by = iby, bp = ibp;
 		assert_lt(bp, 4);
-		assert_lt(by, (int)(this->_gh._sideGbwtSz >> 1));
+        index_t sideGbwtSz = this->_gh._sideGbwtSz >> (this->_gh.linearFM() ? 0 : 1);
+        assert_lt(by, (int)sideGbwtSz);
 		const uint8_t *side = l.side(this->gfm());
 		while(nm < num) {
 			int c = (side[by] >> (bp * 2)) & 3;
@@ -2602,8 +2609,8 @@ public:
 			if(++bp == 4) {
 				bp = 0;
 				by++;
-				assert_leq(by, (int)(this->_gh._sideGbwtSz >> 1));
-				if(by == (int)(this->_gh._sideGbwtSz >> 1)) {
+                assert_leq(by, (int)sideGbwtSz);
+				if(by == (int)sideGbwtSz) {
 					// Fell off the end of the side
 					break;
 				}
@@ -2768,6 +2775,15 @@ public:
         assert_geq(c, 0);
         index_t top = mapLF(tloc, c);
         index_t bot = mapLF(bloc, c);
+        if(gh().linearFM()) {
+            if(node_range != NULL) {
+                node_range->first = top; node_range->second = bot;
+            }
+            if(node_iedges != NULL) {
+                node_iedges->clear();
+            }
+            return pair<index_t, index_t>(top, bot);
+        }
         if(top + 1 >= gh()._gbwtLen || top >= bot) {
             assert_eq(top, bot);
             return pair<index_t, index_t>(0, 0);
@@ -2958,6 +2974,12 @@ public:
         assert_geq(c, 0);
         index_t top = mapLF1(row, l, c);
         if(top == (index_t)INDEX_MAX) return pair<index_t, index_t>(0, 0);
+        if(gh().linearFM()) {
+            if(node_range != NULL) {
+                node_range->first = top; node_range->second = top + 1;
+            }
+            return pair<index_t, index_t>(top, top + 1);
+        }
         index_t bot = top;
         
         l.initFromRow_bit(top + 1, gh(), gfm());
@@ -3019,6 +3041,12 @@ public:
         mapLF1(row, l);
         index_t top = row;
         if(top == (index_t)INDEX_MAX) return pair<index_t, index_t>(0, 0);
+        if(gh().linearFM()) {
+            if(node_range != NULL) {
+                node_range->first = top; node_range->second = top + 1;
+            }
+            return pair<index_t, index_t>(top, top + 1);
+        }
         index_t bot = top;
         
         l.initFromRow_bit(top + 1, gh(), gfm());
@@ -3667,7 +3695,7 @@ void GFM<index_t>::buildToDisk(
         ftab.fillZero();
     } catch(bad_alloc &e) {
         cerr << "Out of memory allocating ftab[] "
-        << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << "in GFM::buildToDisk() at " << __FILE__ << ":"
         << __LINE__ << endl;
         throw e;
     }
@@ -3689,7 +3717,7 @@ void GFM<index_t>::buildToDisk(
 #endif
 	} catch(bad_alloc &e) {
 		cerr << "Out of memory allocating ebwtSide[] in "
-		     << "Ebwt::buildToDisk() at " << __FILE__ << ":"
+		     << "GFM::buildToDisk() at " << __FILE__ << ":"
 		     << __LINE__ << endl;
 		throw e;
 	}
@@ -4100,7 +4128,7 @@ void GFM<index_t>::buildToDisk(
         absorbFtab.fillZero();
     } catch(bad_alloc &e) {
         cerr << "Out of memory allocating ftab[] or absorbFtab[] "
-        << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << "in GFM::buildToDisk() at " << __FILE__ << ":"
         << __LINE__ << endl;
         throw e;
     }
@@ -4286,6 +4314,12 @@ void GFM<index_t>::buildToDisk(
         }
     }
     VMSG_NL("Exited GFM loop");
+    if(absorbCnt > 0) {
+        // Absorb any trailing, as-yet-unabsorbed short suffixes into
+        // the last element of ftab
+        absorbFtab[ftabLen-1] = absorbCnt;
+    }
+    
     // Assert that our loop counter got incremented right to the end
     assert_eq(side, gh._gbwtTotSz);
     // Assert that we wrote the expected amount to out1
@@ -4298,6 +4332,7 @@ void GFM<index_t>::buildToDisk(
     assert_eq(zOffs.size(), 1);
     writeIndex<index_t>(out1, zOffs.size(), this->toBe());
     for(size_t i = 0; i < zOffs.size(); i++) {
+        assert_neq(zOffs[i], (index_t)OFF_MASK);
         writeIndex<index_t>(out1, zOffs[i], this->toBe());
     }
     
@@ -4340,7 +4375,7 @@ void GFM<index_t>::buildToDisk(
         eftab.fillZero();
     } catch(bad_alloc &e) {
         cerr << "Out of memory allocating eftab[] "
-        << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << "in GFM::buildToDisk() at " << __FILE__ << ":"
         << __LINE__ << endl;
         throw e;
     }

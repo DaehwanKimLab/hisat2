@@ -430,7 +430,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 		ftab.fillZero();
     } catch(bad_alloc &e) {
 		cerr << "Out of memory allocating ftab[] or absorbFtab[] "
-		<< "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+		<< "in LocalGFM::buildToDisk() at " << __FILE__ << ":"
 		<< __LINE__ << endl;
 		throw e;
 	}
@@ -452,7 +452,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 #endif
 	} catch(bad_alloc &e) {
 		cerr << "Out of memory allocating ebwtSide[] in "
-		<< "Ebwt::buildToDisk() at " << __FILE__ << ":"
+		<< "LocalGFM::buildToDisk() at " << __FILE__ << ":"
 		<< __LINE__ << endl;
 		throw e;
 	}
@@ -470,7 +470,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 	// array (as opposed to the padding at the
 	// end)
 	// Iterate over packed bwt bytes
-	VMSG_NL("Entering Ebwt loop");
+	VMSG_NL("Entering LocalGFM loop");
 	ASSERT_ONLY(uint32_t beforeGbwtOff = (uint32_t)out5.tellp());
 	while(side < gbwtTotSz) {
         // Sanity-check our cursor into the side buffer
@@ -625,7 +625,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
             memcpy(((char*)this->_gfm.get()) + side - sideSz, (const char *)gfmSide.ptr(), sideSz);
 		}
 	}
-	VMSG_NL("Exited Ebwt loop");
+	VMSG_NL("Exited LocalGFM loop");
 	// Assert that our loop counter got incremented right to the end
 	assert_eq(side, gh._gbwtTotSz);
 	// Assert that we wrote the expected amount to out5
@@ -857,7 +857,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
         absorbFtab.fillZero();
     } catch(bad_alloc &e) {
         cerr << "Out of memory allocating ftab[] or absorbFtab[] "
-        << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << "in LocalGFM::buildToDisk() at " << __FILE__ << ":"
         << __LINE__ << endl;
         throw e;
     }
@@ -1041,7 +1041,12 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
             out5.write((const char *)gfmSide.ptr(), sideSz);
         }
     }
-    VMSG_NL("Exited Ebwt loop");
+    VMSG_NL("Exited LocalGFM loop");
+    if(absorbCnt > 0) {
+        // Absorb any trailing, as-yet-unabsorbed short suffixes into
+        // the last element of ftab
+        absorbFtab[ftabLen-1] = absorbCnt;
+    }
     // Assert that our loop counter got incremented right to the end
     assert_eq(side, gh._gbwtTotSz);
     // Assert that we wrote the expected amount to out5
@@ -1054,6 +1059,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
     assert_eq(zOffs.size(), 1);
     writeIndex<index_t>(out5, zOffs.size(), this->toBe());
     for(size_t i = 0; i < zOffs.size(); i++) {
+        assert_neq(zOffs[i], (index_t)OFF_MASK);
         writeIndex<index_t>(out5, zOffs[i], this->toBe());
     }
         
@@ -1076,28 +1082,6 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
     }
         
     //
-    // Finish building fchr
-    //
-    // Exclusive prefix sum on fchr
-    for(int i = 1; i < 4; i++) {
-        fchr[i] += fchr[i-1];
-    }
-    assert_eq(fchr[3], len);
-    // Shift everybody up by one
-    for(int i = 4; i >= 1; i--) {
-        fchr[i] = fchr[i-1];
-    }
-    fchr[0] = 0;
-    if(this->_verbose) {
-        for(int i = 0; i < 5; i++)
-            cout << "fchr[" << "ACGT$"[i] << "]: " << fchr[i] << endl;
-    }
-    // Write fchr to primary file
-    for(int i = 0; i < 5; i++) {
-        writeIndex(out5, fchr[i], this->toBe());
-    }
-        
-    //
     // Finish building ftab and build eftab
     //
     // Prefix sum on ftable
@@ -1114,7 +1098,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
         eftab.fillZero();
     } catch(bad_alloc &e) {
         cerr << "Out of memory allocating eftab[] "
-        << "in Ebwt::buildToDisk() at " << __FILE__ << ":"
+        << "in LocalGFM::buildToDisk() at " << __FILE__ << ":"
         << __LINE__ << endl;
         throw e;
     }
