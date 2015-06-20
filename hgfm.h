@@ -132,11 +132,11 @@ public:
 	template<typename TStr>
 	LocalGFM(
              TStr& s,
+             PathGraph<full_index_t>* pg,
              full_index_t tidx,
              full_index_t localOffset,
              full_index_t joinedOffset,
              EList<SNP<full_index_t> >& snps,
-             const string& out_basename,
              index_t local_size,
              bool packed,
              int needEntireReverse,
@@ -235,6 +235,7 @@ public:
 			}
             
             if(snps.empty()) {
+                assert(pg == NULL);
                 VMSG_NL("Constructing suffix-array element generator");
                 KarkkainenBlockwiseSA<TStr> bsa(s, s.length()+1, dcv, seed, this->_sanity, this->_passMemExc, this->_verbose);
                 assert(bsa.suffixItrIsReset());
@@ -242,62 +243,18 @@ public:
                 VMSG_NL("Converting suffix-array elements to index image");
                 buildToDisk(bsa, s, out5, out6, headerPos);
             } else {
-                while(true) {
-                    RefGraph<full_index_t>* graph = new RefGraph<full_index_t>(
-                                                                               s,
-                                                                               szs,
-                                                                               snps,
-                                                                               out_basename,
-                                                                               1,        /* num threads */
-                                                                               false);   /* verbose? */
-                    PathGraph<full_index_t>* pg = new PathGraph<full_index_t>(
-                                                                              *graph,
-                                                                              1,         /* num threads */
-                                                                              false);    /* verbose? */
-                    pg->printInfo();
-                    while(pg->IsSorted()) {
-                        if(pg->repOk()) {
-                            cerr << "Error: Invalid PathGraph!" << endl;
-                            delete pg; pg = NULL;
-                            return;
-                        }
-                        PathGraph<full_index_t>* next = new PathGraph<full_index_t>(*pg);
-                        delete pg; pg = next;
-                        pg->printInfo();
-                    }
-                    if(!pg->generateEdges(*graph)) {
-                        cerr << "An error occurred - generateEdges" << endl;
-                        throw 1;
-                    }
-                    if(pg->getNumEdges() > local_max_gbwt) {
-                        delete pg; pg = NULL;
-                        delete graph; graph = NULL;
-                        if(snps.size() <= 1) {
-                            snps.clear();
-                        } else {
-                            for(index_t s = 2; s < snps.size(); s += 2) {
-                                snps[s >> 1] = snps[s];
-                            }
-                            snps.resize(snps.size() >> 1);
-                        }
-                        continue;
-                    }
-                    
-                    // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
-                    this->_gh.init(
-                                   this->_gh.len(),
-                                   pg->getNumEdges(),
-                                   pg->getNumNodes(),
-                                   this->_gh.lineRate(),
-                                   this->_gh.offRate(),
-                                   this->_gh.ftabChars(),
-                                   0,
-                                   this->_gh.entireReverse());
-                    buildToDisk(*pg, s, out5, out6, headerPos);
-                    delete pg; pg = NULL;
-                    delete graph; graph = NULL;
-                    break;
-                }
+                assert(pg != NULL);
+                // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
+                this->_gh.init(
+                               this->_gh.len(),
+                               pg->getNumEdges(),
+                               pg->getNumNodes(),
+                               this->_gh.lineRate(),
+                               this->_gh.offRate(),
+                               this->_gh.ftabChars(),
+                               0,
+                               this->_gh.entireReverse());
+                buildToDisk(*pg, s, out5, out6, headerPos);
             }
 		}
 		
@@ -408,7 +365,6 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
     writeIndex<index_t>(out5, gh._numNodes, this->toBe());
     headerPos = out5.tellp();
     out5.seekp(out5pos);
-    
 	index_t ftabLen = gh._ftabLen;
 	index_t sideSz = gh._sideSz;
 	index_t gbwtTotSz = gh._gbwtTotSz;
@@ -1813,7 +1769,98 @@ public:
 	
 	char                                     *mmFile5_;
 	char                                     *mmFile6_;
+    
+private:
+    struct ThreadParam {
+        // input
+        SString<char>                s;
+        EList<SNP<index_t> >         snps;
+        bool                         bigEndian;
+        index_t                      local_offset;
+        index_t                      curr_sztot;
+        EList<RefRecord>             conv_local_szs;
+        index_t                      local_sztot;
+        index_t                      index_size;
+        string                       file;
+        
+        // output
+        RefGraph<index_t>*           rg;
+        PathGraph<index_t>*          pg;
+        
+        // communication
+        bool                         done;
+        bool                         last;
+        bool                         mainThread;
+    };
+    static void gbwt_worker(void* vp);
 };
+
+    
+template <typename index_t, typename local_index_t>
+void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
+{
+    ThreadParam& tParam = *(ThreadParam*)vp;
+    while(!tParam.last) {
+        if(tParam.mainThread) {
+            assert(!tParam.done);
+            if(tParam.s.length() <= 0 || tParam.snps.empty()) {
+                tParam.done = true;
+                return;
+            }
+        } else {
+            while(tParam.done) {
+                if(tParam.last) return;
+#if defined(_TTHREAD_WIN32_)
+                Sleep(1);
+#elif defined(_TTHREAD_POSIX_)
+                const static timespec ts = {0, 1000000};  // 1 millisecond
+                nanosleep(&ts, NULL);
+#endif
+            }
+            if(tParam.s.length() <= 0 || tParam.snps.empty()) {
+                tParam.done = true;
+                continue;
+            }
+        }
+        while(true) {
+            tParam.rg = new RefGraph<index_t>(
+                                              tParam.s,
+                                              tParam.conv_local_szs,
+                                              tParam.snps,
+                                              tParam.file,
+                                              1,        /* num threads */
+                                              false);   /* verbose? */
+            tParam.pg = new PathGraph<index_t>(
+                                               *tParam.rg,
+                                               1,         /* num threads */
+                                               false);    /* verbose? */
+            while(tParam.pg->IsSorted()) {
+                PathGraph<index_t>* next = new PathGraph<index_t>(*tParam.pg);
+                delete tParam.pg; tParam.pg = next;
+            }
+            if(!tParam.pg->generateEdges(*tParam.rg)) {
+                cerr << "An error occurred - generateEdges" << endl;
+                throw 1;
+            }
+            if(tParam.pg->getNumEdges() > local_max_gbwt) {
+                delete tParam.pg; tParam.pg = NULL;
+                delete tParam.rg; tParam.rg = NULL;
+                if(tParam.snps.size() <= 1) {
+                    tParam.snps.clear();
+                } else {
+                    for(index_t s = 2; s < tParam.snps.size(); s += 2) {
+                        tParam.snps[s >> 1] = tParam.snps[s];
+                    }
+                    tParam.snps.resize(tParam.snps.size() >> 1);
+                }
+                continue;
+            }
+            break;
+        }
+        tParam.done = true;
+        if(tParam.mainThread) break;
+    }
+}
     
 /// Construct an Ebwt from the given header parameters and string
 /// vector, optionally using a blockwise suffix sorter with the
@@ -2061,95 +2108,161 @@ HGFM<index_t, local_index_t>::HGFM(
     if(this->_gh._entireReverse) flags |= GFM_ENTIRE_REV;
     writeI32(fout5, -flags, be); // BTL: chunkRate is now deprecated
     
+    assert_gt(this->_nthreads, 0);
+    AutoArray<tthread::thread*> threads(this->_nthreads - 1);    
+    EList<ThreadParam> tParams;
+    for(index_t t = 0; t < (index_t)this->_nthreads; t++) {
+        tParams.expand();
+        tParams.back().s.clear();
+        tParams.back().rg = NULL;
+        tParams.back().pg = NULL;
+        tParams.back().file = outfile;
+        tParams.back().done = true;
+        tParams.back().last = false;
+        if(t + 1 < (index_t)this->_nthreads) {
+            tParams.back().mainThread = false;
+            threads[t] = new tthread::thread(gbwt_worker, (void*)&tParams.back());
+        } else {
+            tParams.back().mainThread = true;
+        }
+    }
+    
     // build local FM indexes
     index_t curr_sztot = 0;
     EList<SNP<index_t> > snps;
-    bool firstIndex = true;
     for(size_t tidx = 0; tidx < _refLens.size(); tidx++) {
         index_t refLen = _refLens[tidx];
         index_t local_offset = 0;
         _localGFMs.expand();
         assert_lt(tidx, _localGFMs.size());
         while(local_offset < refLen) {
-            index_t index_size = std::min<index_t>(refLen - local_offset, local_index_size);
-            assert_lt(tidx, all_local_recs.size());
-            assert_lt(local_offset / local_index_interval, all_local_recs[tidx].size());
-            EList_RefRecord& local_szs = all_local_recs[tidx][local_offset / local_index_interval];
-            
-            EList<RefRecord> conv_local_szs;
-            index_t local_len = 0, local_sztot = 0, local_sztot_interval = 0;
-            for(size_t i = 0; i < local_szs.size(); i++) {
-                assert(local_szs[i].off != 0 || local_szs[i].len != 0);
-                assert(i != 0 || local_szs[i].first);
-                conv_local_szs.push_back(local_szs[i]);
-                local_len += local_szs[i].off;
-                if(local_len < local_index_interval && local_szs[i].len > 0) {
-                    if(local_len + local_szs[i].len > local_index_interval) {
-                        local_sztot_interval += (local_index_interval - local_len);
-                    } else {
-                        local_sztot_interval += local_szs[i].len;
+            index_t t = 0;
+            while(local_offset < refLen && t < this->_nthreads) {
+                assert_lt(t, tParams.size());
+                ThreadParam& tParam = tParams[t];
+                
+                tParam.index_size = std::min<index_t>(refLen - local_offset, local_index_size);
+                assert_lt(tidx, all_local_recs.size());
+                assert_lt(local_offset / local_index_interval, all_local_recs[tidx].size());
+                EList_RefRecord& local_szs = all_local_recs[tidx][local_offset / local_index_interval];
+                
+                tParam.conv_local_szs.clear();
+                index_t local_len = 0, local_sztot = 0, local_sztot_interval = 0;
+                for(size_t i = 0; i < local_szs.size(); i++) {
+                    assert(local_szs[i].off != 0 || local_szs[i].len != 0);
+                    assert(i != 0 || local_szs[i].first);
+                    tParam.conv_local_szs.push_back(local_szs[i]);
+                    local_len += local_szs[i].off;
+                    if(local_len < local_index_interval && local_szs[i].len > 0) {
+                        if(local_len + local_szs[i].len > local_index_interval) {
+                            local_sztot_interval += (local_index_interval - local_len);
+                        } else {
+                            local_sztot_interval += local_szs[i].len;
+                        }
+                    }
+                    local_sztot += local_szs[i].len;
+                    local_len += local_szs[i].len;
+                }
+                
+                // Extract sequence corresponding to this local index
+                tParam.s.resize(local_sztot);
+                if(refparams.reverse == REF_READ_REVERSE) {
+                    tParam.s.install(s.buf() + s.length() - curr_sztot - local_sztot, local_sztot);
+                } else {
+                    tParam.s.install(s.buf() + curr_sztot, local_sztot);
+                }
+                
+                // Extract SNPS corresponding to this local index
+                tParam.snps.clear();
+                SNP<index_t> snp;
+                snp.pos = curr_sztot;
+                index_t snp_i = this->_snps.bsearchLoBound(snp);
+                for(; snp_i < this->_snps.size(); snp_i++) {
+                    if(curr_sztot + local_sztot <= this->_snps[snp_i].pos + this->_snps[snp_i].len + 1) break;
+                    if(curr_sztot <= this->_snps[snp_i].pos) {
+                        tParam.snps.push_back(this->_snps[snp_i]);
+                        tParam.snps.back().pos -= curr_sztot;
                     }
                 }
-                local_sztot += local_szs[i].len;
-                local_len += local_szs[i].len;
+                
+                tParam.local_offset = local_offset;
+                tParam.curr_sztot = curr_sztot;
+                tParam.local_sztot = local_sztot;
+                
+                // daehwan - for debugging purposes
+                if(tParam.local_offset == 51194880) {
+                    int kk = 20;
+                    kk += 20;
+                }
+                
+                assert(tParam.rg == NULL);
+                assert(tParam.pg == NULL);
+                tParam.done = false;
+                
+                curr_sztot += local_sztot_interval;
+                local_offset += local_index_interval;
+                
+                t++;
             }
             
-            // Extract sequence corresponding to this local index
-            TStr local_s;
-            local_s.resize(local_sztot);
-            if(refparams.reverse == REF_READ_REVERSE) {
-                local_s.install(s.buf() + s.length() - curr_sztot - local_sztot, local_sztot);
-            } else {
-                local_s.install(s.buf() + curr_sztot, local_sztot);
+            if(!tParams.back().done) {
+                gbwt_worker((void*)&tParams.back());
             }
             
-            // Extract SNPS corresponding to this local index
-            snps.clear();
-            SNP<index_t> snp;
-            snp.pos = curr_sztot;
-            index_t snp_i = this->_snps.bsearchLoBound(snp);
-            for(; snp_i < this->_snps.size(); snp_i++) {
-                if(curr_sztot + local_sztot <= this->_snps[snp_i].pos + this->_snps[snp_i].len + 1) break;
-                if(curr_sztot <= this->_snps[snp_i].pos) {
-                    snps.push_back(this->_snps[snp_i]);
-                    snps.back().pos -= curr_sztot;
+            for(index_t t2 = 0; t2 < t; t2++) {
+                ThreadParam& tParam = tParams[t2];
+                while(!tParam.done) {
+#if defined(_TTHREAD_WIN32_)
+                    Sleep(1);
+#elif defined(_TTHREAD_POSIX_)
+                    const static timespec ts = {0, 1000000};  // 1 millisecond
+                    nanosleep(&ts, NULL);
+#endif
+                }
+                
+                LocalGFM<local_index_t, index_t>* localGFM = new LocalGFM<local_index_t, index_t>(
+                                                                                                  tParam.s,
+                                                                                                  tParam.pg,
+                                                                                                  tidx,
+                                                                                                  tParam.local_offset,
+                                                                                                  tParam.curr_sztot,
+                                                                                                  tParam.snps,
+                                                                                                  tParam.index_size,
+                                                                                                  packed,
+                                                                                                  needEntireReverse,
+                                                                                                  local_lineRate,
+                                                                                                  localOffRate,      // suffix-array sampling rate
+                                                                                                  localFtabChars,    // number of chars in initial arrow-pair calc
+                                                                                                  outfile,           // basename for .?.ebwt files
+                                                                                                  fw,                 // fw
+                                                                                                  dcv,                // difference-cover period
+                                                                                                  tParam.conv_local_szs,     // list of reference sizes
+                                                                                                  tParam.local_sztot,        // total size of all unambiguous ref chars
+                                                                                                  refparams,          // reference read-in parameters
+                                                                                                  seed,               // pseudo-random number generator seed
+                                                                                                  fout5,
+                                                                                                  fout6,
+                                                                                                  -1,                 // override offRate
+                                                                                                  false,              // be silent
+                                                                                                  passMemExc,         // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                                                                                                  sanityCheck);       // verify results and internal consistency
+                _localGFMs[tidx].push_back(localGFM);
+                tParam.s.clear();
+                if(tParam.rg != NULL) {
+                    assert(tParam.pg != NULL);
+                    delete tParam.rg; tParam.rg = NULL;
+                    delete tParam.pg; tParam.pg = NULL;
                 }
             }
-            
-            LocalGFM<local_index_t, index_t>* localGFM = new LocalGFM<local_index_t, index_t>(
-                                                                                              local_s,
-                                                                                              tidx,
-                                                                                              local_offset,
-                                                                                              curr_sztot,
-                                                                                              snps,
-                                                                                              outfile,
-                                                                                              index_size,
-                                                                                              packed,
-                                                                                              needEntireReverse,
-                                                                                              local_lineRate,
-                                                                                              localOffRate,      // suffix-array sampling rate
-                                                                                              localFtabChars,    // number of chars in initial arrow-pair calc
-                                                                                              outfile,           // basename for .?.ebwt files
-                                                                                              fw,                 // fw
-                                                                                              dcv,                // difference-cover period
-                                                                                              conv_local_szs,     // list of reference sizes
-                                                                                              local_sztot,        // total size of all unambiguous ref chars
-                                                                                              refparams,          // reference read-in parameters
-                                                                                              seed,               // pseudo-random number generator seed
-                                                                                              fout5,
-                                                                                              fout6,
-                                                                                              -1,                 // override offRate
-                                                                                              false,              // be silent
-                                                                                              passMemExc,         // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                                                                                              sanityCheck);       // verify results and internal consistency
-            firstIndex = false;
-            _localGFMs[tidx].push_back(localGFM);
-            curr_sztot += local_sztot_interval;
-            local_offset += local_index_interval;
         }
     }
     assert_eq(curr_sztot, sztot);
-    
+    if(this->_nthreads > 1) {
+        for(index_t i = 0; i + 1 < (index_t)this->_nthreads; i++) {
+            tParams[i].last = true;
+            threads[i]->join();
+        }
+    }
     
     fout5 << '\0';
     fout5.flush(); fout6.flush();

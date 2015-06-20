@@ -1632,7 +1632,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
 				t++;
 			}
             if(t >= to_size[i]) break;
-            assert_eq(from_nodes[i][f].from, to_nodes[i][t].to);
+            // assert_eq(from_nodes[i][f].from, to_nodes[i][t].to);
 			index_t shift = 0;
 			while(t + shift < to_size[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
 				new_cur[thread_id]++;
@@ -1655,7 +1655,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
         		t++;
         	}
             if(t >= to_size[i]) break;
-            assert_eq(from_nodes[i][f].from, to_nodes[i][t].to);
+            // assert_eq(from_nodes[i][f].from, to_nodes[i][t].to);
         	index_t shift = 0;
         	while(t + shift < to_size[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
         		new_nodes[thread_id][new_cur[thread_id]].from = to_nodes[i][t + shift].from;

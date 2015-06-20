@@ -3923,7 +3923,7 @@ void GFM<index_t>::buildToDisk(
     fchr[0] = 0;
     if(_verbose) {
         for(int i = 0; i < 5; i++)
-            cout << "fchr[" << "ACGT$"[i] << "]: " << fchr[i] << endl;
+            cerr << "fchr[" << "ACGT$"[i] << "]: " << fchr[i] << endl;
     }
     // Write fchr to primary file
     for(int i = 0; i < 5; i++) {
@@ -4351,7 +4351,7 @@ void GFM<index_t>::buildToDisk(
     fchr[0] = 0;
     if(_verbose) {
         for(int i = 0; i < 5; i++)
-            cout << "fchr[" << "ACGT$"[i] << "]: " << fchr[i] << endl;
+            cerr << "fchr[" << "ACGT$"[i] << "]: " << fchr[i] << endl;
     }
     // Write fchr to primary file
     for(int i = 0; i < 5; i++) {
