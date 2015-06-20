@@ -691,6 +691,7 @@ public:
                 node_iedge_count[e].first -= trimBegin;
             }
         }
+        node_top += trimBegin;
 		if(trimEnd > 0) {
 			// Trim from end
 			map_.resize(map_.size() - trimEnd);
@@ -703,7 +704,6 @@ public:
                 node_iedge_count.pop_back();
             }
 		}
-        node_top += trimBegin;
         node_bot -= trimEnd;
 #ifndef NDEBUG
         assert_leq(node_top, node_bot);
@@ -764,15 +764,12 @@ public:
                 tmp_gbwt_to_node.back() = n;
                 if(e < node_iedge_count.size()) {
                     assert_leq(n, node_iedge_count[e].first);
-                    if(n < node_iedge_count[e].first) {
-                        num_iedges += 1;
-                    } else {
+                    if(n == node_iedge_count[e].first) {
                         num_iedges += node_iedge_count[e].second;
                         e++;
                     }
-                } else {
-                    num_iedges += 1;
                 }
+                num_iedges += 1;
                 if(r + 1 >= num_iedges) n++;
             }
             assert_eq(bot - top, tmp_gbwt_to_node.size());
@@ -831,7 +828,8 @@ public:
                     }
                     if(j + 1 < j2) {
                         tmp_node_iedge_count.expand();
-                        tmp_node_iedge_count.back().first = n - new_node_top;
+                        assert_lt(node_top, new_node_top);
+                        tmp_node_iedge_count.back().first = n - (new_node_top - node_top);
                         tmp_node_iedge_count.back().second = j2 - j - 1;
                     }
                     j = j2;
