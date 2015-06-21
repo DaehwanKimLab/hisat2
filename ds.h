@@ -627,7 +627,7 @@ public:
 		if(list_ == NULL) lazyInit();
 		if(l_size == 0) return;
 		if(cur_ + l_size > sz_) expandCopy(cur_ + l_size);
-		int object_sz = sizeof(l[0]);
+		int object_sz = sizeof(T);
 		size_t bytes = l_size * object_sz;
 		std::memcpy(list_ + cur_, l, bytes);
 		cur_ += l_size;

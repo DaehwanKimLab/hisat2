@@ -574,6 +574,23 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             assert(isReverseDeterministic(nodes, edges));
         }
     }
+    
+    // daehwan - for debugging purposes
+#if 0
+    cout << "num nodes: " << nodes.size() << endl;
+    for(index_t i = 0; i < nodes.size(); i++) {
+        const Node& n = nodes[i];
+        cout << i << "\t" << n.label << "\t" << n.value << endl;
+    }
+    
+    sort(edges.begin(), edges.end());
+    cout << "num edges: " << edges.size() << endl;
+    for(index_t i = 0; i < edges.size(); i++) {
+        const Edge& e = edges[i];
+        cout << i << "\t" << e.from << " --> " << e.to << endl;
+    }
+    exit(1);
+#endif
 }
 
 template <typename index_t>
@@ -1612,7 +1629,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
 
     index_t* from_size = threadParam->from_size;
     index_t* to_size   = threadParam->to_size;
-    index_t* new_cur  = threadParam->new_cur;
+    index_t* new_cur   = threadParam->new_cur;
 
     //count
     //use heuristic sometimes instead of counting exact number?
@@ -1640,7 +1657,9 @@ void PathGraph<index_t>::createCombined(void * vp) {
 			}
 		}
     }
-    if(new_cur[thread_id] <= 0) return;
+    if(new_cur[thread_id] <= 0) {
+        return;
+    }
     
     //allocate
     new_nodes[thread_id] = new PathNode[new_cur[thread_id]];
@@ -1701,8 +1720,8 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 	//might want to implement heap instead
 
 	ThreadParam3*       threadParam  = (ThreadParam3*)vp;
-	int             thread_id    = threadParam->thread_id;
-	int             nthreads     = threadParam->nthreads;
+	int                 thread_id    = threadParam->thread_id;
+	int                 nthreads     = threadParam->nthreads;
 	PathGraph<index_t>* previous     = threadParam->previous;
 	PathNode**          new_nodes    = threadParam->new_nodes;
 	index_t**           breakpoints  = threadParam->breakpoints;
@@ -1715,8 +1734,11 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 		count += breakpoints[j][thread_id + 1] - breakpoints[j][thread_id];
 		pos[j] = breakpoints[j][thread_id];
 	}
-    if(count <= 0) return;
-	merged_nodes[thread_id] = new PathNode[count];
+    if(count <= 0) {
+        delete[] pos;
+        return;
+    }
+    merged_nodes[thread_id] = new PathNode[count];
 
 	//skip to first sorted node, this doesn't seem to help so much now, but might with more threads
 	while(pos[nthreads] < breakpoints[nthreads][thread_id + 1] && !previous->nodes[pos[nthreads]].isSorted()) {
@@ -1735,7 +1757,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 			minIndex = nthreads;
 			minRank = previous->nodes[pos[nthreads]].key;
 		}
-		if(minIndex == -1) {break;}
+		if(minIndex == -1) break;
 
 		if(minIndex == nthreads) {
 			merged_nodes[thread_id][merged_cur[thread_id]] = previous->nodes[pos[nthreads]];
@@ -1784,19 +1806,18 @@ report_F_node_idx(0), report_F_location(0)
 
 //    cerr << "Counting array sizes..." << endl;
 
-    PathNode **to_nodes = new PathNode*[partitions];
-    PathNode **from_nodes = new PathNode*[partitions];
-    index_t** from_cur = new index_t*[nthreads];
-    index_t** to_cur = new index_t*[nthreads];
+    PathNode** to_nodes   = new PathNode*[partitions]; memset(to_nodes,   0, partitions * sizeof(to_nodes[0]));
+    PathNode** from_nodes = new PathNode*[partitions]; memset(from_nodes, 0, partitions * sizeof(from_nodes[0]));
+    index_t** to_cur      = new index_t*[nthreads];
+    index_t** from_cur    = new index_t*[nthreads];
 
     for(int i = 0; i < nthreads; i++) {
-        from_cur[i] = new index_t[partitions] ();
-       	to_cur[i] = new index_t[partitions] ();
+        from_cur[i] = new index_t[partitions]();
+        to_cur[i]   = new index_t[partitions]();
     }
 
     AutoArray<tthread::thread*> threads(nthreads);
     EList<ThreadParam> threadParams;
-
 
     index_t st = 0;
     index_t en = previous.nodes.size() / nthreads;
@@ -1830,8 +1851,8 @@ report_F_node_idx(0), report_F_location(0)
 
     // Initialize arrays to be used for hash table
 //    cerr << "Allocating arrays..." << endl;
-    index_t* from_size = new index_t[partitions] ();
-    index_t* to_size = new index_t[partitions] ();
+    index_t* from_size = new index_t[partitions]();
+    index_t* to_size = new index_t[partitions]();
     for(int i = 0; i < nthreads; i++) {
     	for(index_t j = 0; j < partitions; j++) {
     		from_size[j] += from_cur[i][j];
@@ -1865,32 +1886,30 @@ report_F_node_idx(0), report_F_location(0)
 
 //    cerr << "Creating new nodes..." << endl;
 
-    PathNode **new_nodes = new PathNode*[nthreads];
-    index_t *new_cur = new index_t[nthreads];
-    for(index_t i = 0; i < nthreads; i++) {
-    	new_cur[i] = 0;
-    }
+    PathNode** new_nodes = new PathNode*[nthreads]; memset(new_nodes, 0, nthreads * sizeof(new_nodes[0]));
+    index_t*   new_cur   = new index_t[nthreads]();
 
-    index_t * breakvalues = new index_t[nthreads + 1];
-    index_t ** breakpoints = new index_t*[nthreads + 1];
+    index_t*  breakvalues = new index_t[nthreads + 1]();
+    index_t** breakpoints = new index_t*[nthreads + 1];  memset(breakpoints, 0, (nthreads + 1) * sizeof(breakpoints[0]));
     if(generation > 3) {
     	for(int i = 0; i < nthreads + 1; i++) {
     		breakvalues[i] = 0;
-    		breakpoints[i] = new index_t[nthreads + 1] ();
+    		breakpoints[i] = new index_t[nthreads + 1]();
     	}
     	if(generation == 4) {
     		index_t max_rank = previous.nodes.back().key.first;
-    		for(index_t i = 0; i < nthreads + 1; i++) {
-    		    breakvalues[i] = i * max_rank / nthreads;
+    		for(uint64_t i = 0; i < nthreads; i++) {
+    		    breakvalues[i] = (index_t)(i * max_rank / nthreads);
     		}
     	} else {
     		breakpoints[nthreads][0] = 0;
-    		breakpoints[nthreads][nthreads] = previous.nodes.size();
-    		for(int i = 1; i < nthreads; i++) {
-    			breakpoints[nthreads][i] = i * previous.nodes.size() / nthreads;
+    		for(uint64_t i = 1; i < nthreads; i++) {
+    			breakpoints[nthreads][i] = (index_t)(i * previous.nodes.size() / nthreads);
     			breakvalues[i] = previous.nodes[breakpoints[nthreads][i] - 1].key.first;
     		}
+            breakpoints[nthreads][nthreads] = (index_t)previous.nodes.size();
     	}
+        breakvalues[nthreads] = (index_t)INDEX_MAX;
     }
 
     AutoArray<tthread::thread*> threads2(nthreads);
@@ -1934,6 +1953,18 @@ report_F_node_idx(0), report_F_location(0)
     delete[] to_nodes;
     delete[] from_size;
     delete[] to_size;
+    
+    if(verbose) {
+        if(generation > 3) {
+            cout << "\tgeneration " << generation << endl;
+            for(int i = 0; i < nthreads + 1; i++) {
+                cout << "\t\tbreakvalue " << i << ": " << breakvalues[i] << endl;
+                for(int j = 0; j < nthreads + 1; j++) {
+                    cout << "\t\t\tbreakpoint " << j << ": " << breakpoints[j][i] << endl;
+                }
+            }
+        }
+    }
 
     //------------------------------------------------------------------------------------------------------------------------------
 
@@ -1942,8 +1973,8 @@ report_F_node_idx(0), report_F_location(0)
 		AutoArray<tthread::thread*> threads3(nthreads);
 		EList<ThreadParam3> threadParams3;
 
-		PathNode** merged_nodes = new PathNode*[nthreads];
-		index_t* merged_cur = new index_t[nthreads] ();
+		PathNode** merged_nodes = new PathNode*[nthreads]; memset(merged_nodes, 0, nthreads * sizeof(merged_nodes[0]));
+		index_t* merged_cur = new index_t[nthreads]();
 
 		for(int i = 0; i < nthreads; i++) {
 			threadParams3.expand();
