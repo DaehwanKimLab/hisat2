@@ -1311,19 +1311,19 @@ public:
 		// Succesfully obtained joined reference string
 		assert_geq(s.length(), jlen);
 		if(bmax != (index_t)OFF_MASK) {
-			VMSG_NL("bmax according to bmax setting: " << bmax);
+			// VMSG_NL("bmax according to bmax setting: " << bmax);
 		}
 		else if(bmaxSqrtMult != (index_t)OFF_MASK) {
 			bmax *= bmaxSqrtMult;
-			VMSG_NL("bmax according to bmaxSqrtMult setting: " << bmax);
+			// VMSG_NL("bmax according to bmaxSqrtMult setting: " << bmax);
 		}
 		else if(bmaxDivN != (index_t)OFF_MASK) {
 			bmax = max<uint32_t>(jlen / bmaxDivN, 1);
-			VMSG_NL("bmax according to bmaxDivN setting: " << bmax);
+			// VMSG_NL("bmax according to bmaxDivN setting: " << bmax);
 		}
 		else {
 			bmax = (uint32_t)sqrt(s.length());
-			VMSG_NL("bmax defaulted to: " << bmax);
+			// VMSG_NL("bmax defaulted to: " << bmax);
 		}
 		int iter = 0;
 		bool first = true;

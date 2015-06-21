@@ -170,7 +170,7 @@ static void printUsage(ostream& out) {
 		cerr << endl
         << "*** Warning ***" << endl
         << "'" << tool_name << "' was run directly.  It is recommended "
-        << "that you run the wrapper script 'bowtie2-build' instead."
+        << "that you run the wrapper script 'hisat2-build' instead."
         << endl << endl;
 	}
 }
