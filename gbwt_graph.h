@@ -1265,9 +1265,9 @@ private:
          index_t*                        to_size;
          int                             thread_id;
          PathNode**                      new_nodes;
-         index_t*                        new_cur;
-         index_t*                        breakvalues;
-         index_t**                       breakpoints;
+         EList<index_t>*                 new_cur;
+         EList<index_t>*                 breakvalues;
+         ELList<index_t>*                breakpoints;
          int                             nthreads;
          int                             generation;
       };
@@ -1277,7 +1277,7 @@ private:
     	  PathGraph<index_t>*             previous;
           int                             thread_id;
           PathNode**                      new_nodes;
-          index_t**                       breakpoints;
+          ELList<index_t>*                breakpoints;
           int                             nthreads;
           PathNode**                      merged_nodes;
           index_t*                        merged_cur;
@@ -1288,7 +1288,7 @@ private:
     	   RefGraph<index_t>*                base;
            int                               thread_id;
            EList<PathNode>*                  sep_nodes;
-           EList<TempEdge>*   sep_edges;
+           EList<TempEdge>*                  sep_edges;
            EList<PathEdge>*                  new_edges;
         };
         static void generateEdgesWorker(void* vp);
@@ -1629,7 +1629,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
 
     index_t* from_size = threadParam->from_size;
     index_t* to_size   = threadParam->to_size;
-    index_t* new_cur   = threadParam->new_cur;
+    EList<index_t>& new_cur = *(threadParam->new_cur);
 
     //count
     //use heuristic sometimes instead of counting exact number?
@@ -1698,10 +1698,12 @@ void PathGraph<index_t>::createCombined(void * vp) {
     	delete[] to_nodes[i];
     }
 
-    index_t*  breakvalues = threadParam->breakvalues;
-    index_t** breakpoints = threadParam->breakpoints;
+    EList<index_t>&  breakvalues = *(threadParam->breakvalues);
+    ELList<index_t>& breakpoints = *(threadParam->breakpoints);
     if(generation > 3) {
     	sort(new_nodes[thread_id], new_nodes[thread_id] + new_cur[thread_id]); // get rid of sort somehow??????
+        assert_lt(thread_id, breakpoints.size());
+        breakpoints[thread_id].fillZero();
     	for(index_t i = 0; i < new_cur[thread_id]; i++) {
 			for(index_t j = 1; j < nthreads; j++) {
 				if(new_nodes[thread_id][i].key.first < breakvalues[j]) {
@@ -1709,7 +1711,6 @@ void PathGraph<index_t>::createCombined(void * vp) {
 				}
 			}
     	}
-    	breakpoints[thread_id][0] = 0;
     	breakpoints[thread_id][nthreads] = new_cur[thread_id];
     }
 }
@@ -1724,18 +1725,18 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 	int                 nthreads     = threadParam->nthreads;
 	PathGraph<index_t>* previous     = threadParam->previous;
 	PathNode**          new_nodes    = threadParam->new_nodes;
-	index_t**           breakpoints  = threadParam->breakpoints;
+	ELList<index_t>&    breakpoints  = *(threadParam->breakpoints);
 	PathNode**          merged_nodes = threadParam->merged_nodes;
 	index_t*            merged_cur   = threadParam->merged_cur;
 
 	index_t count = 0;
-	index_t* pos  = new index_t[nthreads + 1];
+    EList<index_t> pos;
+    pos.resizeExact(nthreads + 1);
 	for(int j = 0; j < nthreads + 1; j++) {
 		count += breakpoints[j][thread_id + 1] - breakpoints[j][thread_id];
 		pos[j] = breakpoints[j][thread_id];
 	}
     if(count <= 0) {
-        delete[] pos;
         return;
     }
     merged_nodes[thread_id] = new PathNode[count];
@@ -1745,7 +1746,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 		pos[nthreads]++;
 	}
 	while(true) {
-		pair<index_t, index_t> minRank = pair<index_t, index_t>((index_t)INDEX_MAX, (index_t)INDEX_MAX);
+		pair<index_t, index_t> minRank((index_t)INDEX_MAX, (index_t)INDEX_MAX);
 		int minIndex = -1;
 		for(int i = 0; i < nthreads; i++) {
 			if(pos[i] < breakpoints[i][thread_id + 1] && new_nodes[i][pos[i]].key <= minRank){
@@ -1774,7 +1775,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 			merged_cur[thread_id]++;
 		}
 	}
-	delete[] pos;
+    assert_lt(merged_cur[thread_id], count);
 }
 
 
@@ -1887,14 +1888,14 @@ report_F_node_idx(0), report_F_location(0)
 //    cerr << "Creating new nodes..." << endl;
 
     PathNode** new_nodes = new PathNode*[nthreads]; memset(new_nodes, 0, nthreads * sizeof(new_nodes[0]));
-    index_t*   new_cur   = new index_t[nthreads]();
+    EList<index_t> new_cur; new_cur.resizeExact(nthreads); new_cur.fillZero();
 
-    index_t*  breakvalues = new index_t[nthreads + 1]();
-    index_t** breakpoints = new index_t*[nthreads + 1];  memset(breakpoints, 0, (nthreads + 1) * sizeof(breakpoints[0]));
+    EList<index_t>  breakvalues; breakvalues.resizeExact(nthreads + 1); breakvalues.fillZero();
+    ELList<index_t> breakpoints;
     if(generation > 3) {
-    	for(int i = 0; i < nthreads + 1; i++) {
-    		breakvalues[i] = 0;
-    		breakpoints[i] = new index_t[nthreads + 1]();
+    	for(index_t i = 0; i < (index_t)nthreads + 1; i++) {
+            breakpoints.expand();
+            breakpoints.back().resizeExact(nthreads + 1); breakpoints.back().fillZero();
     	}
     	if(generation == 4) {
     		index_t max_rank = previous.nodes.back().key.first;
@@ -1902,10 +1903,10 @@ report_F_node_idx(0), report_F_location(0)
     		    breakvalues[i] = (index_t)(i * max_rank / nthreads);
     		}
     	} else {
-    		breakpoints[nthreads][0] = 0;
-    		for(uint64_t i = 1; i < nthreads; i++) {
-    			breakpoints[nthreads][i] = (index_t)(i * previous.nodes.size() / nthreads);
-    			breakvalues[i] = previous.nodes[breakpoints[nthreads][i] - 1].key.first;
+            breakpoints[nthreads][0] = 0;
+            for(uint64_t i = 1; i < nthreads; i++) {
+                breakpoints[nthreads][i] = (index_t)(i * previous.nodes.size() / nthreads);
+                breakvalues[i] = previous.nodes[breakpoints[nthreads][i] - 1].key.first;
     		}
             breakpoints[nthreads][nthreads] = (index_t)previous.nodes.size();
     	}
@@ -1927,9 +1928,9 @@ report_F_node_idx(0), report_F_location(0)
     	threadParams2.back().from_nodes = from_nodes;
     	threadParams2.back().to_nodes = to_nodes;
     	threadParams2.back().new_nodes = new_nodes;
-    	threadParams2.back().new_cur = new_cur;
-    	threadParams2.back().breakvalues = breakvalues;
-    	threadParams2.back().breakpoints = breakpoints;
+    	threadParams2.back().new_cur = &new_cur;
+    	threadParams2.back().breakvalues = &breakvalues;
+    	threadParams2.back().breakpoints = &breakpoints;
     	threadParams2.back().nthreads = nthreads;
     	threadParams2.back().generation = generation;
     	if(nthreads == 1) {
@@ -1957,10 +1958,10 @@ report_F_node_idx(0), report_F_location(0)
     if(verbose) {
         if(generation > 3) {
             cout << "\tgeneration " << generation << endl;
-            for(int i = 0; i < nthreads + 1; i++) {
-                cout << "\t\tbreakvalue " << i << ": " << breakvalues[i] << endl;
-                for(int j = 0; j < nthreads + 1; j++) {
-                    cout << "\t\t\tbreakpoint " << j << ": " << breakpoints[j][i] << endl;
+            for(index_t i = 0; i < breakvalues.size(); i++) {
+                cout << "\t\tbreakvalue b" << i << ": " << breakvalues[i] << endl;
+                for(index_t j = 0; j < breakpoints.size(); j++) {
+                    cout << "\t\t\tbreakpoint t" << j << ": " << breakpoints[j][i] << endl;
                 }
             }
         }
@@ -1982,7 +1983,7 @@ report_F_node_idx(0), report_F_location(0)
 			threadParams3.back().nthreads = nthreads;
 			threadParams3.back().thread_id = i;
 			threadParams3.back().new_nodes = new_nodes;
-			threadParams3.back().breakpoints = breakpoints;
+			threadParams3.back().breakpoints = &breakpoints;
 			threadParams3.back().merged_nodes = merged_nodes;
 			threadParams3.back().merged_cur = merged_cur;
 			if(nthreads == 1) {
@@ -2007,14 +2008,10 @@ report_F_node_idx(0), report_F_location(0)
 			nodes.push_back_array(merged_nodes[i], merged_cur[i]);
 			delete[] merged_nodes[i];
 			delete[] new_nodes[i];
-			delete[] breakpoints[i];
 		}
 		delete[] merged_cur;
 		delete[] merged_nodes;
 		delete[] new_nodes;
-		delete[] new_cur;
-		delete[] breakpoints;
-		delete[] breakvalues;
 
 		status = ok;
 		temp_nodes = nodes.size();
@@ -2034,11 +2031,8 @@ report_F_node_idx(0), report_F_location(0)
     		delete[] new_nodes[i];
     	}
     	delete[] new_nodes;
-    	delete[] new_cur;
-    	delete[] breakpoints;
-    	delete[] breakvalues;
 
-    	status = ok;
+        status = ok;
     	temp_nodes = nodes.size();
     }
 }
