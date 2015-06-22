@@ -2425,31 +2425,6 @@ void PathGraph<index_t>::createPathNode(const PathNode& left, const PathNode& ri
     new_nodes.back().key = pair<index_t, index_t>(left.key.first, right.key.first);
 }
 
-// Performs a simple "two finger" merge
-// Importantly only writes sorted nodes from previous.nodes
-template <typename index_t>
-void PathGraph<index_t>::mergeAllNodes(PathGraph& previous)
-{
-	index_t curr_s = 0;
-	index_t curr_u = 0;
-	nodes.resizeExact(previous.nodes.size() + new_nodes.size()); // this is an overestimate
-	nodes.clear();
-
-	while(previous.nodes.size() > curr_s || new_nodes.size() > curr_u) {
-		if(new_nodes.size() > curr_u && (previous.nodes.size() <= curr_s || new_nodes[curr_u] < previous.nodes[curr_s])) {
-			nodes.push_back(new_nodes[curr_u]);
-			curr_u++;
-		} else {
-			//only write if sorted
-			if(previous.nodes[curr_s].isSorted()) {
-				nodes.push_back(previous.nodes[curr_s]);
-			}
-			curr_s++;
-		}
-	previous.new_nodes.clear();
-	}
-}
-
 
 template <typename index_t>
 void PathGraph<index_t>::mergeUpdateRank()
