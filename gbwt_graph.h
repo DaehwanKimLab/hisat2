@@ -2409,20 +2409,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 }
 
 //--------------------------------------------------------------------------
-template <typename index_t>
-void PathGraph<index_t>::createPathNode(const PathNode& left, const PathNode& right)
-{
-    if(new_nodes.size() == new_nodes.capacity()) {
-        index_t size = new_nodes.size();
-        new_nodes.resizeExact(new_nodes.size() * 1.1);
-        new_nodes.resize(size);
-    }
-    new_nodes.expand();
-    new_nodes.back().from = left.from;
-    new_nodes.back().to = right.to;
-    new_nodes.back().key = pair<index_t, index_t>(left.key.first, right.key.first);
-}
-
 
 template <typename index_t>
 void PathGraph<index_t>::mergeUpdateRank()
@@ -2516,7 +2502,6 @@ pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t>
     }
     range.second = nodes.size();
     return range;
-
 }
 
 template <typename index_t>
