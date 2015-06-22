@@ -2097,9 +2097,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     for(int i = 0; i < nthreads; i++) {
     	sep_nodes[i].resizeExact(nodes.size() / nthreads + 1);
     	sep_edges[i].resizeExact(base.edges.size() / nthreads + 1);
-        // daehwan -> joe
-        // possible overflow?
-    	new_edges[i].resizeExact((nodes.size() * 5) / (nthreads * 4) + 1);
+    	new_edges[i].resizeExact(nodes.size() / nthreads + nodes.size() / (nthreads * 4) + 1);
     	sep_nodes[i].clear();
     	sep_edges[i].clear();
     	new_edges[i].clear();
