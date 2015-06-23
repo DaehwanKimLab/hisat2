@@ -1776,46 +1776,26 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
     assert_lt(merged_cur[thread_id], count);
 
 
-	index_t*            mranks       = threadParam->mranks;
-    if(nthreads == 1) {
-    	mergeUpdateRank(merged_nodes, merged_cur, mranks, thread_id, 0);
-    	return;
-    }
-
-	tthread::mutex*     merge_mutex  = threadParam->merge_mutex;
-	tthread::mutex*     bound_mutex  = threadParam->bound_mutex;
-    if(thread_id != 0) {
-    	merge_mutex[thread_id - 1].unlock();
-    }
-    if(thread_id + 1 != nthreads) {
-    	merge_mutex[thread_id].lock();
-    	if(merged_nodes[thread_id + 1][0].from == merged_nodes[thread_id][merged_cur[thread_id] - 1].from) {
-        	//find beginning and end of potentially mergable region
-        	index_t start = merged_cur[thread_id] - 1;
-        	while(nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], pair<index_t, index_t>(start, start)).second
-        			== merged_cur[thread_id]) {
-        	    start--;
-        	}
-        	start++;
-        	index_t end = nextMaximalSet(merged_nodes[thread_id + 1], merged_cur[thread_id + 1], pair<index_t, index_t>(0, 0)).second;
-    		// if this passes then entire region is mergable
-    		if(merged_nodes[thread_id][start].key != merged_nodes[thread_id][start - 1].key &&
-    				merged_nodes[thread_id + 1][end - 1].key != merged_nodes[thread_id + 1][end].key) {
-    			//delete all nodes that should be merged into next bin
-    			merged_cur[thread_id] = start + 1;
-    		}
-    	}
-    	bound_mutex[thread_id].unlock();
-    }
-	if(thread_id != 0) {
-		bound_mutex[thread_id - 1].lock();
-	}
-
+	index_t* mranks = threadParam->mranks;
 	index_t rank = 0;
 	for(int j = 0; j < nthreads + 1; j++) {
 		rank += breakpoints[j][thread_id];
 	}
 	mergeUpdateRank(merged_nodes, merged_cur, mranks, thread_id, rank);
+
+	//removes extra sorted node if separated by boundary
+	//needs access to first member of next bin so need mutex
+    if(thread_id != 0) {
+    	threadParam->merge_mutex[thread_id - 1].unlock();
+    }
+    if(thread_id + 1 != nthreads) {
+    	threadParam->merge_mutex[thread_id].lock();
+    	PathNode& first = merged_nodes[thread_id + 1][0];
+    	PathNode& last = merged_nodes[thread_id][merged_cur[thread_id] - 1];
+    	if(last.isSorted() && first.isSorted() && last.from == first.from) {
+    		merged_cur[thread_id]--;
+    	}
+    }
 }
 
 
