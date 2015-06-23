@@ -1735,6 +1735,9 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 		pos[j] = breakpoints[j][thread_id];
 	}
     if(count <= 0) {
+        if(thread_id != 0) {
+        	threadParam->merge_mutex[thread_id - 1].unlock();
+        }
         return;
     }
     merged_nodes[thread_id] = new PathNode[count];
