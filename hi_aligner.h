@@ -1826,7 +1826,7 @@ bool GenomeHit<index_t>::extend(
     }
     
 #ifndef NDEBUG
-    if(_joinedOff != (index_t)INDEX_MAX) {
+    if(_joinedOff != (index_t)INDEX_MAX && seq[_rdoff] < 4) {
         ASSERT_ONLY(bool straddled = false);
         ASSERT_ONLY(index_t tmp_tidx = 0, tmp_toff = 0, tmp_tlen = 0);
         gfm.joinedToTextOff(

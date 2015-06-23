@@ -689,7 +689,7 @@ static void printArgDesc(ostream& out) {
  */
 static void printUsage(ostream& out) {
 	out << "HISAT version " << string(HISAT_VERSION).c_str() << " by Daehwan Kim (infphilo@gmail.com, www.ccb.jhu.edu/people/infphilo)" << endl;
-	string tool_name = "hisat-align";
+	string tool_name = "hisat2-align";
 	if(wrapper == "basic-0") {
 		tool_name = "hisat";
 	}
@@ -845,7 +845,7 @@ static void printUsage(ostream& out) {
 	if(wrapper.empty()) {
 		cerr << endl
 		     << "*** Warning ***" << endl
-			 << "'hisat-align' was run directly.  It is recommended that you run the wrapper script 'hisat' instead." << endl
+			 << "'hisat2-align' was run directly.  It is recommended that you run the wrapper script 'hisat' instead." << endl
 			 << endl;
 	}
 }

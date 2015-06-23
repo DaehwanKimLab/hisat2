@@ -1357,12 +1357,14 @@ public:
 			} else {
 				bmax -= (bmax >> 2); // reduce by 25%
 			}
+#if 0
 			VMSG("Using parameters --bmax " << bmax);
 			if(dcv == 0) {
 				VMSG_NL(" and *no difference cover*");
 			} else {
 				VMSG_NL(" --dcv " << dcv);
 			}
+#endif
 			iter++;
 			try {
                 if(_snps.empty()) {
@@ -4487,7 +4489,6 @@ void GFM<index_t>::joinedToTextOff(
 					if(rejectStraddle) {
 						// it falls off; signal no-go and return
 						tidx = (index_t)INDEX_MAX;
-						assert_lt(elt, _nFrag-1);
 						return;
 					}
 				}
