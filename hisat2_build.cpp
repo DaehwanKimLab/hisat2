@@ -134,7 +134,7 @@ static void printUsage(ostream& out) {
 	string tool_name = "hisat2-build-s";
 #endif
 	if(wrapper == "basic-0") {
-		tool_name = "hisat-build";
+		tool_name = "hisat2-build";
 	}
     
 	out << "Usage: hisat2-build [options]* <reference_in> <bt2_index_base>" << endl

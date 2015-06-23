@@ -459,7 +459,7 @@
 				);
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-s-debug copy";
+				PRODUCT_NAME = "hisat-bp-bin-debug";
 			};
 			name = Debug;
 		};
@@ -468,7 +468,7 @@
 			buildSettings = {
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "hisat-align-s-debug copy";
+				PRODUCT_NAME = "hisat-bp-bin-debug";
 			};
 			name = Release;
 		};

@@ -881,7 +881,7 @@ static void printUsage(ostream& out) {
 	if(wrapper.empty()) {
 		cerr << endl
 		     << "*** Warning ***" << endl
-			 << "'hisat-align' was run directly.  It is recommended that you run the wrapper script 'hisat' instead." << endl
+			 << "'hisat2-align' was run directly.  It is recommended that you run the wrapper script 'hisat' instead." << endl
 			 << endl;
 	}
 }

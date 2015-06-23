@@ -55,11 +55,8 @@ ifneq (,$(findstring Darwin,$(shell uname)))
 	MACOS = 1
 endif
 
-POPCNT_CAPABILITY ?= 1
-ifeq (1, $(POPCNT_CAPABILITY))
-    EXTRA_FLAGS += -DPOPCNT_CAPABILITY
-    INC += -I third_party
-endif
+EXTRA_FLAGS += -DPOPCNT_CAPABILITY
+INC += -I third_party
 
 MM_DEF = 
 
@@ -228,13 +225,13 @@ BIN_PKG_LIST = $(GENERAL_LIST)
 
 .PHONY: all allall both both-debug
 
-all: $(HISAT_BIN_LIST)
+all: $(HISAT2_BIN_LIST)
 
-allall: $(HISAT_BIN_LIST) $(HISAT_BIN_LIST_AUX)
+allall: $(HISAT2_BIN_LIST) $(HISAT2_BIN_LIST_AUX)
 
-both: hisat-align-s hisat-align-l  hisat-build-s hisat-build-l
+both: hisat2-align-s hisat2-align-l hisat2-build-s hisat2-build-l
 
-both-debug: hisat-align-s-debug hisat-align-l-debug hisat-build-s-debug hisat-build-l-debug
+both-debug: hisat2-align-s-debug hisat2-align-l-debug hisat2-build-s-debug hisat2-build-l-debug
 
 DEFS=-fno-strict-aliasing \
      -DHISAT2_VERSION="\"`cat VERSION`\"" \
@@ -384,55 +381,55 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 
 
 
-hisat: ;
+hisat2: ;
 
-hisat.bat:
-	echo "@echo off" > hisat.bat
-	echo "perl %~dp0/hisat %*" >> hisat.bat
+hisat2.bat:
+	echo "@echo off" > hisat2.bat
+	echo "perl %~dp0/hisat2 %*" >> hisat2.bat
 
-hisat-build.bat:
-	echo "@echo off" > hisat-build.bat
-	echo "python %~dp0/hisat-build %*" >> hisat-build.bat
+hisat2-build.bat:
+	echo "@echo off" > hisat2-build.bat
+	echo "python %~dp0/hisat2-build %*" >> hisat2-build.bat
 
-hisat-inspect.bat:
-	echo "@echo off" > hisat-inspect.bat
-	echo "python %~dp0/hisat-inspect %*" >> hisat-inspect.bat
+hisat2-inspect.bat:
+	echo "@echo off" > hisat2-inspect.bat
+	echo "python %~dp0/hisat2-inspect %*" >> hisat2-inspect.bat
 
 
-.PHONY: hisat-src
-hisat-src: $(SRC_PKG_LIST)
+.PHONY: hisat2-src
+hisat2-src: $(SRC_PKG_LIST)
 	chmod a+x scripts/*.sh scripts/*.pl
 	mkdir .src.tmp
-	mkdir .src.tmp/hisat-$(VERSION)
+	mkdir .src.tmp/hisat2-$(VERSION)
 	zip tmp.zip $(SRC_PKG_LIST)
-	mv tmp.zip .src.tmp/hisat-$(VERSION)
-	cd .src.tmp/hisat-$(VERSION) ; unzip tmp.zip ; rm -f tmp.zip
-	cd .src.tmp ; zip -r hisat-$(VERSION)-source.zip hisat-$(VERSION)
-	cp .src.tmp/hisat-$(VERSION)-source.zip .
+	mv tmp.zip .src.tmp/hisat2-$(VERSION)
+	cd .src.tmp/hisat2-$(VERSION) ; unzip tmp.zip ; rm -f tmp.zip
+	cd .src.tmp ; zip -r hisat2-$(VERSION)-source.zip hisat2-$(VERSION)
+	cp .src.tmp/hisat2-$(VERSION)-source.zip .
 	rm -rf .src.tmp
 
-.PHONY: hisat-bin
-hisat-bin: $(BIN_PKG_LIST) $(HISAT_BIN_LIST) $(HISAT_BIN_LIST_AUX)
+.PHONY: hisat2-bin
+hisat2-bin: $(BIN_PKG_LIST) $(HISAT2_BIN_LIST) $(HISAT2_BIN_LIST_AUX)
 	chmod a+x scripts/*.sh scripts/*.pl
 	rm -rf .bin.tmp
 	mkdir .bin.tmp
-	mkdir .bin.tmp/hisat-$(VERSION)
-	if [ -f hisat.exe ] ; then \
-		zip tmp.zip $(BIN_PKG_LIST) $(addsuffix .exe,$(HISAT_BIN_LIST) $(HISAT_BIN_LIST_AUX)) ; \
+	mkdir .bin.tmp/hisat2-$(VERSION)
+	if [ -f hisat2.exe ] ; then \
+		zip tmp.zip $(BIN_PKG_LIST) $(addsuffix .exe,$(HISAT2_BIN_LIST) $(HISAT2_BIN_LIST_AUX)) ; \
 	else \
-		zip tmp.zip $(BIN_PKG_LIST) $(HISAT_BIN_LIST) $(HISAT_BIN_LIST_AUX) ; \
+		zip tmp.zip $(BIN_PKG_LIST) $(HISAT2_BIN_LIST) $(HISAT2_BIN_LIST_AUX) ; \
 	fi
-	mv tmp.zip .bin.tmp/hisat-$(VERSION)
-	cd .bin.tmp/hisat-$(VERSION) ; unzip tmp.zip ; rm -f tmp.zip
-	cd .bin.tmp ; zip -r hisat-$(VERSION)-$(BITS).zip hisat-$(VERSION)
-	cp .bin.tmp/hisat-$(VERSION)-$(BITS).zip .
+	mv tmp.zip .bin.tmp/hisat2-$(VERSION)
+	cd .bin.tmp/hisat2-$(VERSION) ; unzip tmp.zip ; rm -f tmp.zip
+	cd .bin.tmp ; zip -r hisat2-$(VERSION)-$(BITS).zip hisat2-$(VERSION)
+	cp .bin.tmp/hisat2-$(VERSION)-$(BITS).zip .
 	rm -rf .bin.tmp
 
 .PHONY: doc
 doc: doc/manual.inc.html MANUAL
 
 doc/manual.inc.html: MANUAL.markdown
-	pandoc -T "HISAT Manual" -o $@ \
+	pandoc -T "HISAT2 Manual" -o $@ \
 	 --from markdown --to HTML --toc $^
 	perl -i -ne \
 	 '$$w=0 if m|^</body>|;print if $$w;$$w=1 if m|^<body>|;' $@
@@ -442,13 +439,13 @@ MANUAL: MANUAL.markdown
 
 .PHONY: clean
 clean:
-	rm -f $(HISAT_BIN_LIST) $(HISAT_BIN_LIST_AUX) \
-	$(addsuffix .exe,$(HISAT_BIN_LIST) $(HISAT_BIN_LIST_AUX)) \
-	hisat-src.zip hisat-bin.zip
+	rm -f $(HISAT2_BIN_LIST) $(HISAT2_BIN_LIST_AUX) \
+	$(addsuffix .exe,$(HISAT2_BIN_LIST) $(HISAT2_BIN_LIST_AUX)) \
+	hisat2-src.zip hisat2-bin.zip
 	rm -f core.* .tmp.head
 	rm -rf *.dSYM
 
 .PHONY: push-doc
 push-doc: doc/manual.inc.html
-	scp doc/*.*html igm1:/data1/igm3/www/ccb.jhu.edu/html/software/hisat/
+	scp doc/*.*html igm1:/data1/igm3/www/ccb.jhu.edu/html/software/hisat2/
 	

@@ -752,6 +752,7 @@ void StackedAln::leftAlign(bool pastMms) {
 			EList<char>& gp  = ((rel == 'I') ? stackRef_ : stackRead_);
 			const EList<char>& ngp = ((rel == 'I') ? stackRead_ : stackRef_);
 			while(l > 0 && ngp[l] == ngp[r]) {
+                if(stackRel_[l] == 'I' || stackRel_[l] == 'D') break;
                 assert(stackRel_[l] == '=' || stackRel_[l] == 'X' || stackRel_[l] == 'N');
 				assert(stackRel_[r] == 'D' || stackRel_[r] == 'I');
 				if(!pastMms && (stackRel_[l] == 'X' || stackRel_[l] == 'N')) {
