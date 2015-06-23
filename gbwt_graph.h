@@ -1368,7 +1368,7 @@ public:
     }
 
 private:
-    void      mergeUpdateRank(); //performs pruning step, must have all nodes merged and sorted
+    static void mergeUpdateRank(PathNode** merged_nodes, index_t* merged_cur, index_t* mranks, int thread_id, index_t rank);
 
     static pair<index_t, index_t> nextMaximalSet(PathNode* merged_nodes, index_t merged_nodes_size, pair<index_t, index_t> range);
 
@@ -1776,93 +1776,34 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
     assert_lt(merged_cur[thread_id], count);
 
 
-    if(nthreads == 1) return;
-
 	index_t*            mranks       = threadParam->mranks;
+    if(nthreads == 1) {
+    	mergeUpdateRank(merged_nodes, merged_cur, mranks, thread_id, 0);
+    	return;
+    }
+
 	tthread::mutex*     merge_mutex  = threadParam->merge_mutex;
 	tthread::mutex*     bound_mutex  = threadParam->bound_mutex;
-
-	index_t rank = 0;
-	for(int j = 0; j < nthreads + 1; j++) {
-		rank += breakpoints[j][thread_id];
-	}
-
     if(thread_id != 0) {
     	merge_mutex[thread_id - 1].unlock();
     }
-
-    // this code handles combining equivalent nodes at the beginning and ends of the individual
-    // sections, to avoid incorrectly merging nodes, if the mergable set spans the boundary
-    // or a node with different from but the same rank lies on the other side of the boundary
     if(thread_id + 1 != nthreads) {
     	merge_mutex[thread_id].lock();
-    	PathNode& first = merged_nodes[thread_id + 1][0];
-    	PathNode& last = merged_nodes[thread_id][merged_cur[thread_id] - 1];
-    	//if the first on top and bottom have same from attribute, need to merge them in unison
-    	if(first.from == last.from) {
-    		//find start of potentially mergeable region
-    		index_t start = merged_cur[thread_id] - 1;
-    		while(nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], pair<index_t, index_t>(start, start)).second
-    				== merged_cur[thread_id]) {
-    			start--;
-    		}
-    		//find end of potentially mergable region
-    		index_t end = nextMaximalSet(merged_nodes[thread_id + 1], merged_cur[thread_id + 1], pair<index_t, index_t>(0, 0)).second;
-
+    	if(merged_nodes[thread_id + 1][0].from == merged_nodes[thread_id][merged_cur[thread_id] - 1].from) {
+        	//find beginning and end of potentially mergable region
+        	index_t start = merged_cur[thread_id] - 1;
+        	while(nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], pair<index_t, index_t>(start, start)).second
+        			== merged_cur[thread_id]) {
+        	    start--;
+        	}
+        	start++;
+        	index_t end = nextMaximalSet(merged_nodes[thread_id + 1], merged_cur[thread_id + 1], pair<index_t, index_t>(0, 0)).second;
     		// if this passes then entire region is mergable
     		if(merged_nodes[thread_id][start].key != merged_nodes[thread_id][start - 1].key &&
     				merged_nodes[thread_id + 1][end - 1].key != merged_nodes[thread_id + 1][end].key) {
-    			merged_nodes[thread_id + 1][0].setSorted();
-    			for(index_t i = 1; i < end; i++) {
-    				merged_nodes[thread_id + 1][i] = merged_nodes[thread_id + 1][end];
-    			}
+    			//delete all nodes that should be merged into next bin
     			merged_cur[thread_id] = start + 1;
-
-    		// o/w either side could be independently mergable if ranks differ
-    		} else if(first.key != last.key) {
-    			if(end > 1) {
-    			    merged_nodes[thread_id + 1][0].setSorted();
-    			    for(index_t i = 1; i < end; i++) {
-    			    	merged_nodes[thread_id + 1][i] = merged_nodes[thread_id + 1][end];
-    			    }
-    			}
-    			index_t start = merged_cur[thread_id] - 1;
-    			while(nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], pair<index_t, index_t>(start, start)).second
-    					== merged_cur[thread_id]) {
-    			   		start--;
-    			}
-    			if(start + 2 < merged_cur[thread_id]) {
-    				merged_nodes[thread_id][start].setSorted();
-    				merged_cur[thread_id] = start + 1;
-    			}
     		}
-    	// in this case we can handle each side independently
-    	} else if(last.key != first.key) {
-    		index_t end = nextMaximalSet(merged_nodes[thread_id + 1], merged_cur[thread_id + 1], pair<index_t, index_t>(0, 0)).second;
-    		if(merged_nodes[thread_id + 1][end - 1].key != merged_nodes[thread_id + 1][end].key) {
-    			cerr << "end update" << endl;
-    			merged_nodes[thread_id + 1][0].setSorted();
-    			for(index_t i = 1; i < end; i++) {
-    				merged_nodes[thread_id + 1][i] = merged_nodes[thread_id + 1][end];
-    			}
-    		}
-    		cerr << thread_id << " end " << end << endl;
-    		index_t start = merged_cur[thread_id] - 1;
-    		while(nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], pair<index_t, index_t>(start, start)).second
-    				== merged_cur[thread_id]) {
-    			start--;
-    		}
-    		start++;
-    		cerr << thread_id << " start " << merged_cur[thread_id] - start << endl;
-    		if(merged_nodes[thread_id][start].key != merged_nodes[thread_id][start - 1].key) {
-    			merged_nodes[thread_id][start].setSorted();
-    			merged_cur[thread_id] = start + 1;
-    			cerr << "start update" << endl;
-    		}
-
-    	}
-    	if(first.key == last.key) {
-    		cerr << "!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
     	}
     	bound_mutex[thread_id].unlock();
     }
@@ -1870,67 +1811,11 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 		bound_mutex[thread_id - 1].lock();
 	}
 
-
-	//merge equivalent nodes, ignoring the first and last group of mergeable nodes
-	// Update ranks
-	// Set rank initially to the number of nodes in groups of lower rank
-	// This leaves gaps but I don't think it matters
-
-	pair<index_t, index_t> key = merged_nodes[thread_id][0].key;
-	for(index_t i = 0; i < merged_cur[thread_id]; i++) {
-		PathNode& node = merged_nodes[thread_id][i];
-		if(node.key != key) {
-			key = node.key;
-			rank++;
-		}
-		node.key = pair<index_t, index_t>(rank, 0);
+	index_t rank = 0;
+	for(int j = 0; j < nthreads + 1; j++) {
+		rank += breakpoints[j][thread_id];
 	}
-
-    // Merge equivalent nodes
-    index_t curr = 0;
-    pair<index_t, index_t> range(0, 0); // Empty range
-    //skip the first range, if not the first thread
-    if(thread_id != 0) {
-    	range = nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], range);
-    	curr += range.second - range.first;
-    }
-    while(true) {
-        range = nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], range);
-        if(range.first == range.second)
-			break;
-        //skip last, if not the last thread
-        if(range.second == merged_cur[thread_id] && thread_id + 1 != nthreads) {
-        	curr += range.second - range.first;
-        	break;
-        }
-        merged_nodes[thread_id][curr] = merged_nodes[thread_id][range.first]; curr++;
-    }
-    merged_cur[thread_id] = curr;
-
-    // Set nodes that become sorted as sorted
-    PathNode* candidate = NULL;
-    if(thread_id == 0) {
-    	candidate = merged_nodes[thread_id];
-    }
-    key = merged_nodes[thread_id][0].key; mranks[thread_id] = 1;
-    for(index_t i = 1; i < merged_cur[thread_id] - 1; i++) {
-        if(merged_nodes[thread_id][i].key != key) {
-            if(candidate != NULL) {
-                candidate->setSorted();
-            }
-            candidate = &merged_nodes[thread_id][i];
-            key = candidate->key; mranks[thread_id]++;
-        } else {
-            candidate = NULL;
-        }
-    }
-    mranks[thread_id]++;
-    if(candidate != NULL && merged_nodes[thread_id][merged_cur[thread_id] - 2].key != merged_nodes[thread_id][merged_cur[thread_id] - 1].key) {
-        candidate->setSorted();
-    }
-    if(thread_id + 1 == nthreads && merged_nodes[thread_id][merged_cur[thread_id] - 2].key != merged_nodes[thread_id][merged_cur[thread_id] - 1].key) {
-    	merged_nodes[thread_id][merged_cur[thread_id] - 1].setSorted();
-    }
+	mergeUpdateRank(merged_nodes, merged_cur, mranks, thread_id, rank);
 }
 
 
@@ -2062,6 +1947,12 @@ report_F_node_idx(0), report_F_location(0)
             for(uint64_t i = 1; i < nthreads; i++) {
                 breakpoints[nthreads][i] = (index_t)(i * previous.nodes.size() / nthreads);
                 breakvalues[i] = previous.nodes[breakpoints[nthreads][i] - 1].key.first;
+                //added this part to simplify parallelizing merge and rank update
+                //sets breakpoint to be 1 + last index with key.first == breakvalues[i]
+                while(previous.nodes[breakpoints[nthreads][i] - 1].key.first == breakvalues[i]
+						&& breakpoints[nthreads][i] > 1) {
+                	breakpoints[nthreads][i]--;
+                }
     		}
             breakpoints[nthreads][nthreads] = (index_t)previous.nodes.size();
     	}
@@ -2125,7 +2016,6 @@ report_F_node_idx(0), report_F_location(0)
     //------------------------------------------------------------------------------------------------------------------------------
 
     if(generation > 3) {
-//		cerr << "Merging new nodes into nodes..." << endl;
 		AutoArray<tthread::thread*> threads3(nthreads);
 		EList<ThreadParam3> threadParams3;
 
@@ -2133,6 +2023,7 @@ report_F_node_idx(0), report_F_location(0)
 		index_t* merged_cur = new index_t[nthreads] ();
 		index_t* mranks = new index_t[nthreads] ();
 
+		if(nthreads > 1) {
 			tthread::mutex* merge_mutex = new tthread::mutex[nthreads - 1] ();
 			tthread::mutex* bound_mutex = new tthread::mutex[nthreads - 1] ();
 			for(int i = 0; i < nthreads - 1; i++) {
@@ -2140,33 +2031,40 @@ report_F_node_idx(0), report_F_location(0)
 				bound_mutex[i].lock();
 			}
 
-		for(int i = 0; i < nthreads; i++) {
+			for(int i = 0; i < nthreads; i++) {
+				threadParams3.expand();
+				threadParams3.back().previous = &previous;
+				threadParams3.back().nthreads = nthreads;
+				threadParams3.back().thread_id = i;
+				threadParams3.back().new_nodes = new_nodes;
+				threadParams3.back().breakpoints = &breakpoints;
+				threadParams3.back().merged_nodes = merged_nodes;
+				threadParams3.back().merged_cur = merged_cur;
+				threadParams3.back().mranks = mranks;
+				threadParams3.back().merge_mutex = merge_mutex;
+				threadParams3.back().bound_mutex = bound_mutex;
+
+				threads3[i] = new tthread::thread(mergeNodes, (void*)&threadParams3.back());
+			}
+			for(int i = 0; i < nthreads; i++) {
+				threads3[i]->join();
+			}
+			delete[] merge_mutex;
+			delete[] bound_mutex;
+		} else {
 			threadParams3.expand();
 			threadParams3.back().previous = &previous;
 			threadParams3.back().nthreads = nthreads;
-			threadParams3.back().thread_id = i;
+			threadParams3.back().thread_id = 0;
 			threadParams3.back().new_nodes = new_nodes;
 			threadParams3.back().breakpoints = &breakpoints;
 			threadParams3.back().merged_nodes = merged_nodes;
 			threadParams3.back().merged_cur = merged_cur;
 			threadParams3.back().mranks = mranks;
 
-				threadParams3.back().merge_mutex = merge_mutex;
-				threadParams3.back().bound_mutex = bound_mutex;
-
-			if(nthreads == 1) {
-				mergeNodes((void*)&threadParams3.back());
-			} else {
-				threads3[i] = new tthread::thread(mergeNodes, (void*)&threadParams3.back());
-			}
-		}
-		if(nthreads > 1) {
-			for(int i = 0; i < nthreads; i++)
-				threads3[i]->join();
+			mergeNodes((void*)&threadParams3.back());
 		}
 
-
-//		cerr << "copying to nodes..." << endl;
 		index_t count = 0;
 		for(int i = 0; i < nthreads; i++) {
 		    count += merged_cur[i];
@@ -2192,10 +2090,7 @@ report_F_node_idx(0), report_F_location(0)
 				nodes[i].key.first = i;
 			}
 		}
-//		cerr << "Combine equivalent, update rank..." << endl;
-//		mergeUpdateRank();
     } else {
-//    	cerr << "copying to nodes..." << endl;
     	index_t count = 0;
     	for(int i = 0; i < nthreads; i++) {
     		count += new_cur[i];
@@ -2585,73 +2480,49 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 }
 
 //--------------------------------------------------------------------------
-#if 0
+
 template <typename index_t>
-void PathGraph<index_t>::mergeUpdateRank()
+void PathGraph<index_t>::mergeUpdateRank(PathNode** merged_nodes, index_t* merged_cur, index_t* mranks, int thread_id, index_t rank)
 {
-    // Update ranks
-    index_t rank = 0;
-    pair<index_t, index_t> key = nodes.front().key;
-    for(index_t i = 0; i < nodes.size(); i++) {
-        PathNode& node = nodes[i];
-        if(node.key != key) {
-            key = node.key;
-            rank++;
-        }
-        node.key = pair<index_t, index_t>(rank, 0);
-    }
+	pair<index_t, index_t> key = merged_nodes[thread_id][0].key;
+	for(index_t i = 0; i < merged_cur[thread_id]; i++) {
+		PathNode& node = merged_nodes[thread_id][i];
+		if(node.key != key) {
+			key = node.key;
+			rank++;
+		}
+		node.key = pair<index_t, index_t>(rank, 0);
+	}
 
     // Merge equivalent nodes
     index_t curr = 0;
     pair<index_t, index_t> range(0, 0); // Empty range
     while(true) {
-        range = nextMaximalSet(range);
-        if(range.first >= range.second)
-            break;
-        nodes[curr] = nodes[range.first]; curr++;
+        range = nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], range);
+        if(range.first == range.second)
+			break;
+        merged_nodes[thread_id][curr] = merged_nodes[thread_id][range.first]; curr++;
     }
-    nodes.resize(curr);
+    merged_cur[thread_id] = curr;
 
     // Set nodes that become sorted as sorted
-    PathNode* candidate = &nodes.front();
-    key = candidate->key; ranks = 1;
-    for(index_t i = 1; i < nodes.size(); i++) {
-        if(nodes[i].key != key) {
+    PathNode* candidate = merged_nodes[thread_id];
+    key = candidate->key; mranks[thread_id] = 1;
+    for(index_t i = 1; i < merged_cur[thread_id]; i++) {
+        if(merged_nodes[thread_id][i].key != key) {
             if(candidate != NULL) {
                 candidate->setSorted();
             }
-            candidate = &nodes[i];
-            key = candidate->key; ranks++;
+            candidate = &merged_nodes[thread_id][i];
+            key = candidate->key; mranks[thread_id]++;
         } else {
             candidate = NULL;
         }
     }
     if(candidate != NULL) {
-        candidate->setSorted();
+    	candidate->setSorted();
     }
-
-    // Only done on last iteration
-    // Replace the ranks of a sorted graph so that rank(i) = i
-    // Merges may otherwise leave gaps in the ranks
-    if(ranks == nodes.size()) {
-        for(index_t i = 0; i < nodes.size(); i++) {
-            nodes[i].key.first = i;
-        }
-        status = sorted;
-    }
-
-#ifndef NDEBUG
-    if(debug) {
-        cerr << "Path nodes (" << generation << "-generation) after merge" << endl;
-        for(size_t i = 0; i < nodes.size(); i++) {
-            const PathNode& node = nodes[i];
-            cerr << "\t" << i << "\t(" << node.key.first << ", " << node.key.second << ")\t"
-                 << node.from << " --> " << node.to << (node.isSorted() ? "\tsorted" : "") << endl;
-        }
-    }
-#endif
 }
-#endif
 
 
 // Returns the next maximal mergeable set of PathNodes.
