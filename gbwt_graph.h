@@ -1698,19 +1698,28 @@ void PathGraph<index_t>::createCombined(void * vp) {
     	delete[] to_nodes[i];
     }
 
-    EList<index_t>&  breakvalues = *(threadParam->breakvalues);
-    ELList<index_t>& breakpoints = *(threadParam->breakpoints);
     if(generation > 3) {
-    	sort(new_nodes[thread_id], new_nodes[thread_id] + new_cur[thread_id]); // get rid of sort somehow??????
+        EList<index_t>&  breakvalues = *(threadParam->breakvalues);
+        ELList<index_t>& breakpoints = *(threadParam->breakpoints);
+
+    	sort(new_nodes[thread_id], new_nodes[thread_id] + new_cur[thread_id]);
         assert_lt(thread_id, breakpoints.size());
         breakpoints[thread_id].fillZero();
-    	for(index_t i = 0; i < new_cur[thread_id]; i++) {
-			for(index_t j = 1; j < nthreads; j++) {
-				if(new_nodes[thread_id][i].key.first < breakvalues[j]) {
-					breakpoints[thread_id][j]++;
-				}
-			}
-    	}
+        index_t low = 0;
+        index_t high = 0;
+        for(int i = 1; i < nthreads; i++) {
+        	low = high;
+        	high = new_cur[thread_id];
+        	while(high > low + 1) {
+        		index_t mid = low + (high - low) / 2;
+        		if(new_nodes[thread_id][mid].key.first < breakvalues[i]) {
+        			low = mid;
+        		} else {
+        			high = mid;
+        		}
+        	}
+        	breakpoints[thread_id][i] = high;
+        }
     	breakpoints[thread_id][nthreads] = new_cur[thread_id];
     }
 }
