@@ -1283,7 +1283,6 @@ private:
           index_t*                        merged_cur;
           index_t*                        mranks;
           tthread::mutex*                 merge_mutex;
-          tthread::mutex*                 bound_mutex;
        };
        static void mergeNodes(void* vp);
 
@@ -2008,10 +2007,8 @@ report_F_node_idx(0), report_F_location(0)
 
 		if(nthreads > 1) {
 			tthread::mutex* merge_mutex = new tthread::mutex[nthreads - 1] ();
-			tthread::mutex* bound_mutex = new tthread::mutex[nthreads - 1] ();
 			for(int i = 0; i < nthreads - 1; i++) {
 				merge_mutex[i].lock();
-				bound_mutex[i].lock();
 			}
 
 			for(int i = 0; i < nthreads; i++) {
@@ -2025,7 +2022,6 @@ report_F_node_idx(0), report_F_location(0)
 				threadParams3.back().merged_cur = merged_cur;
 				threadParams3.back().mranks = mranks;
 				threadParams3.back().merge_mutex = merge_mutex;
-				threadParams3.back().bound_mutex = bound_mutex;
 
 				threads3[i] = new tthread::thread(mergeNodes, (void*)&threadParams3.back());
 			}
@@ -2033,7 +2029,6 @@ report_F_node_idx(0), report_F_location(0)
 				threads3[i]->join();
 			}
 			delete[] merge_mutex;
-			delete[] bound_mutex;
 		} else {
 			threadParams3.expand();
 			threadParams3.back().previous = &previous;
