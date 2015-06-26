@@ -1296,6 +1296,8 @@ private:
        struct ThreadParam4 {
     	   RefGraph<index_t>*                base;
            int                               thread_id;
+           int								 st;
+		   int                               en;
            EList<PathNode>*                  sep_nodes;
            EList<TempEdge>*                  sep_edges;
            EList<PathEdge>*                  new_edges;
@@ -1755,6 +1757,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
         }
         return;
     }
+
     merged_nodes[thread_id] = new PathNode[count];
 
 	//skip to first sorted node, this doesn't seem to help so much now, but might with more threads
@@ -1843,7 +1846,7 @@ report_F_node_idx(0), report_F_location(0)
     assert_neq(previous.nodes.size(), previous.ranks);
     int partitions = 1000;
 
-//    cerr << "Counting array sizes..." << endl;
+ //   cerr << "Counting array sizes..." << endl;
 
     PathNode** to_nodes   = new PathNode*[partitions]; memset(to_nodes,   0, partitions * sizeof(to_nodes[0]));
     PathNode** from_nodes = new PathNode*[partitions]; memset(from_nodes, 0, partitions * sizeof(from_nodes[0]));
@@ -1889,7 +1892,6 @@ report_F_node_idx(0), report_F_location(0)
     }
 
     // Initialize arrays to be used for hash table
-//    cerr << "Allocating arrays..." << endl;
     index_t* from_size = new index_t[partitions]();
     index_t* to_size = new index_t[partitions]();
     for(int i = 0; i < nthreads; i++) {
@@ -2014,6 +2016,7 @@ report_F_node_idx(0), report_F_location(0)
     //------------------------------------------------------------------------------------------------------------------------------
 
     if(generation > 3) {
+//    	cerr << "merging nodes..." << endl;
 		AutoArray<tthread::thread*> threads3(nthreads);
 		EList<ThreadParam3> threadParams3;
 
@@ -2064,6 +2067,7 @@ report_F_node_idx(0), report_F_location(0)
 		    count += merged_cur[i];
 		    ranks += mranks[i];
 		}
+//		cerr << "copying to nodes..." << endl;
 		nodes.resizeExact(count);
 		nodes.clear();
 		for(int i = 0; i < nthreads; i++) {
@@ -2071,6 +2075,7 @@ report_F_node_idx(0), report_F_location(0)
 			delete[] merged_nodes[i];
 			delete[] new_nodes[i];
 		}
+		delete[] mranks;
 		delete[] merged_cur;
 		delete[] merged_nodes;
 		delete[] new_nodes;
@@ -2117,31 +2122,36 @@ template <typename index_t>
 void PathGraph<index_t>::generateEdgesWorker(void * vp) {
 	ThreadParam4* threadParams = (ThreadParam4*)vp;
 	int thread_id = threadParams->thread_id;
+	int st = threadParams->st;
+	int en = threadParams->en;
 	RefGraph<index_t>* base = threadParams->base;
 	EList<PathNode>* sep_nodes = threadParams->sep_nodes;
 	EList<TempEdge>* sep_edges = threadParams->sep_edges;
 	EList<PathEdge>* new_edges = threadParams->new_edges;
 
-	sort(sep_nodes[thread_id].begin(), sep_nodes[thread_id].end(), PathNodeFromCmp());
-	sort(sep_edges[thread_id].begin(), sep_edges[thread_id].end(), TempEdgeToCmp());
+	for(int i = st; i < en; i++) {
 
-	pair<index_t, index_t> pn_range = getNextRange(&sep_nodes[thread_id], pair<index_t, index_t>(0, 0));
-	pair<index_t, index_t> ge_range = getNextEdgeRange(&sep_edges[thread_id], pair<index_t, index_t>(0, 0), false /* from? */);
+		sort(sep_nodes[i].begin(), sep_nodes[i].end(), PathNodeFromCmp());
+		sort(sep_edges[i].begin(), sep_edges[i].end(), TempEdgeToCmp());
 
-	while(pn_range.first < pn_range.second && ge_range.first < ge_range.second) {
-		if(sep_nodes[thread_id][pn_range.first].from == sep_edges[thread_id][ge_range.first].to) {
-			for(index_t node = pn_range.first; node < pn_range.second; node++) {
-				for(index_t edge = ge_range.first; edge < ge_range.second; edge++) {
-					index_t from = sep_edges[thread_id][edge].from;
-					new_edges[thread_id].push_back(PathEdge(from, sep_nodes[thread_id][node].key.first, base->nodes[from].label));
+		pair<index_t, index_t> pn_range = getNextRange(&sep_nodes[thread_id], pair<index_t, index_t>(0, 0));
+		pair<index_t, index_t> ge_range = getNextEdgeRange(&sep_edges[thread_id], pair<index_t, index_t>(0, 0), false /* from? */);
+
+		while(pn_range.first < pn_range.second && ge_range.first < ge_range.second) {
+			if(sep_nodes[thread_id][pn_range.first].from == sep_edges[thread_id][ge_range.first].to) {
+				for(index_t node = pn_range.first; node < pn_range.second; node++) {
+					for(index_t edge = ge_range.first; edge < ge_range.second; edge++) {
+						index_t from = sep_edges[thread_id][edge].from;
+						new_edges[thread_id].push_back(PathEdge(from, sep_nodes[thread_id][node].key.first, base->nodes[from].label));
+					}
 				}
+				pn_range = getNextRange(&sep_nodes[thread_id], pn_range);
+				ge_range = getNextEdgeRange(&sep_edges[thread_id], ge_range, false);
+			} else if(sep_nodes[thread_id][pn_range.first].from < sep_edges[thread_id][ge_range.first].to) {
+				pn_range = getNextRange(&sep_nodes[thread_id], pn_range);
+			} else {
+				ge_range = getNextEdgeRange(&sep_edges[thread_id], ge_range, false);
 			}
-			pn_range = getNextRange(&sep_nodes[thread_id], pn_range);
-			ge_range = getNextEdgeRange(&sep_edges[thread_id], ge_range, false);
-		} else if(sep_nodes[thread_id][pn_range.first].from < sep_edges[thread_id][ge_range.first].to) {
-			pn_range = getNextRange(&sep_nodes[thread_id], pn_range);
-		} else {
-			ge_range = getNextEdgeRange(&sep_edges[thread_id], ge_range, false);
 		}
 	}
 	sort(new_edges[thread_id].begin(), new_edges[thread_id].end(), PathEdgeReverseCmp());
@@ -2152,64 +2162,78 @@ void PathGraph<index_t>::generateEdgesWorker(void * vp) {
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
+
     if(status != sorted)
         return false;
+    //separating into more than nthreads partitions improves speed
+    //I think this is because we sort smaller portions at a time
+    int partitions = 100; //make this a fxn of input size?
+    EList<PathNode>* sep_nodes = new EList<PathNode>[partitions];
+	EList<TempEdge>* sep_edges = new EList<TempEdge>[partitions];
+	EList<PathEdge>* new_edges = new EList<PathEdge>[nthreads];
 
-    EList<PathNode>* sep_nodes = new EList<PathNode>[nthreads];
-    EList<TempEdge>* sep_edges = new EList<TempEdge>[nthreads];
-    EList<PathEdge>* new_edges = new EList<PathEdge>[nthreads];
+	for(int i = 0; i < partitions; i++) {
+		sep_nodes[i].resizeExact(nodes.size() / partitions + 1);
+		sep_edges[i].resizeExact(base.edges.size() / partitions + 1);
+		sep_nodes[i].clear();
+		sep_edges[i].clear();
+	}
 
-    for(int i = 0; i < nthreads; i++) {
-    	sep_nodes[i].resizeExact(nodes.size() / nthreads + 1);
-    	sep_edges[i].resizeExact(base.edges.size() / nthreads + 1);
-    	new_edges[i].resizeExact(nodes.size() / nthreads + nodes.size() / (nthreads * 4) + 1);
-    	sep_nodes[i].clear();
-    	sep_edges[i].clear();
-    	new_edges[i].clear();
-    }
+	for(index_t i = 0; i < nodes.size(); i++) {
+		sep_nodes[nodes[i].from % partitions].push_back(nodes[i]);
+	}
+	for(index_t i = 0; i < base.edges.size(); i++) {
+		TempEdge edge;
+		edge.from = base.edges[i].from;
+		edge.to = base.edges[i].to;
+		sep_edges[base.edges[i].to % partitions].push_back(edge);
+	}
 
-    for(index_t i = 0; i < nodes.size(); i++) {
-    	sep_nodes[nodes[i].from % nthreads].push_back(nodes[i]);
-    }
-    for(index_t i = 0; i < base.edges.size(); i++) {
-    	TempEdge edge;
-    	edge.from = base.edges[i].from;
-    	edge.to = base.edges[i].to;
-    	sep_edges[base.edges[i].to % nthreads].push_back(edge);
-    }
+	AutoArray<tthread::thread*> threads4(nthreads);
+	EList<ThreadParam4> threadParams4;
 
-    AutoArray<tthread::thread*> threads4(nthreads);
-    EList<ThreadParam4> threadParams4;
+	int st = 0;
+	int en = partitions / nthreads;
 
-    for(int i = 0; i < nthreads; i++) {
-    	threadParams4.expand();
-    	threadParams4.back().thread_id = i;
-    	threadParams4.back().sep_nodes = sep_nodes;
-    	threadParams4.back().sep_edges = sep_edges;
-    	threadParams4.back().new_edges = new_edges;
-    	threadParams4.back().base = &base;
+	for(int i = 0; i < nthreads; i++) {
+		new_edges[i].resizeExact(nodes.size() / nthreads + nodes.size() / (nthreads * 4) + 1);
+		new_edges[i].clear();
+		threadParams4.expand();
+		threadParams4.back().thread_id = i;
+		threadParams4.back().sep_nodes = sep_nodes;
+		threadParams4.back().sep_edges = sep_edges;
+		threadParams4.back().new_edges = new_edges;
+		threadParams4.back().base = &base;
+		threadParams4.back().st = st;
+		threadParams4.back().en = en;
 
-    	if(nthreads == 1) {
-    		generateEdgesWorker((void*)&threadParams4.back());
-    	} else {
-    		threads4[i] = new tthread::thread(generateEdgesWorker, (void*)&threadParams4.back());
-    	}
-    }
+		if(nthreads == 1) {
+			generateEdgesWorker((void*)&threadParams4.back());
+		} else {
+			threads4[i] = new tthread::thread(generateEdgesWorker, (void*)&threadParams4.back());
+		}
+		st = en;
+		if(i + 2 == nthreads) {
+			en = partitions;
+		} else {
+			en = st + partitions / nthreads;
+		}
+	}
 
-    if(nthreads > 1) {
-    	for(int i = 0; i < nthreads; i++)
-    		threads4[i]->join();
-    }
+	if(nthreads > 1) {
+		for(int i = 0; i < nthreads; i++)
+			threads4[i]->join();
+	}
 
-    index_t count = 0;
-    for(int i = 0; i < nthreads; i++) {
-    	count += new_edges[i].size();
-    }
-    edges.resizeExact(count);
-    edges.clear();
-    //merge edges together
-    while(true) {
-    	pair<char, index_t> minRank('Z', (index_t)INDEX_MAX);
+	index_t count = 0;
+	for(int i = 0; i < nthreads; i++) {
+		count += new_edges[i].size();
+	}
+	edges.resizeExact(count);
+	edges.clear();
+	//merge edges together
+	while(true) {
+		pair<char, index_t> minRank('Z', (index_t)INDEX_MAX);
 		int minIndex = -1;
 		for(int i = 0; i < nthreads; i++) {
 			if(!new_edges[i].empty() && pair<char, index_t>(new_edges[i].back().label,new_edges[i].back().ranking)  <= minRank){
@@ -2220,7 +2244,11 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 		if(minIndex == -1) break;
 		edges.push_back(new_edges[minIndex].back());
 		new_edges[minIndex].pop_back();
-    }
+	}
+	//these previously missing partially caused memory leak
+	delete[] sep_nodes;
+	delete[] sep_edges;
+	delete[] new_edges;
 
 #ifndef NDEBUG
     if(debug) {
@@ -2317,7 +2345,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 #endif
 
     //parrallelize this
+
     sortEdgesTo(true);
+
     status = ready;
 
 
