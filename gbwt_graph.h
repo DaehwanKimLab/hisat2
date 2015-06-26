@@ -1208,13 +1208,20 @@ public:
         bool operator< (const PathEdge& o) const {
             return label < o.label || (label == o.label && ranking < o.ranking);
         };
+
     };
 
+    struct PathEdgeReverseCmp {
+    	bool operator() (const PathEdge& a, const PathEdge& b) const {
+			return a.label > b.label || (a.label == b.label && a.ranking > b.ranking);
+		}
+    };
     struct PathEdgeFromCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
             return a.from < b.from || (a.from == b.from && a.ranking < b.ranking);
         }
     };
+
 
     struct PathEdgeToCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
@@ -2137,7 +2144,7 @@ void PathGraph<index_t>::generateEdgesWorker(void * vp) {
 			ge_range = getNextEdgeRange(&sep_edges[thread_id], ge_range, false);
 		}
 	}
-	sort(new_edges[thread_id].begin(), new_edges[thread_id].end());
+	sort(new_edges[thread_id].begin(), new_edges[thread_id].end(), PathEdgeReverseCmp());
 }
 
 
@@ -2200,10 +2207,19 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
     edges.resizeExact(count);
     edges.clear();
-    for(int i = 0; i < nthreads; i++) {
-    	for(index_t j = 0; j < new_edges[i].size(); j++) {
-    		edges.push_back(new_edges[i][j]);
-    	}
+    //merge edges together
+    while(true) {
+    	pair<char, index_t> minRank('Z', (index_t)INDEX_MAX);
+		int minIndex = -1;
+		for(int i = 0; i < nthreads; i++) {
+			if(!new_edges[i].empty() && pair<char, index_t>(new_edges[i].back().label,new_edges[i].back().ranking)  <= minRank){
+				minIndex = i;
+				minRank = pair<char, index_t>(new_edges[i].back().label,new_edges[i].back().ranking);
+			}
+		}
+		if(minIndex == -1) break;
+		edges.push_back(new_edges[minIndex].back());
+		new_edges[minIndex].pop_back();
     }
 
 #ifndef NDEBUG
@@ -2229,8 +2245,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
 #endif
-
-    sortEdges(); // Sort edges by (from.label, to.rank)
 
 #ifndef NDEBUG
 
@@ -2302,6 +2316,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #endif
 
+    //parrallelize this
     sortEdgesTo(true);
     status = ready;
 
