@@ -1775,7 +1775,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 			merged_cur[thread_id]++;
 		}
 	}
-    assert_lt(merged_cur[thread_id], count);
+    assert_leq(merged_cur[thread_id], count);
 }
 
 
@@ -2097,9 +2097,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     for(int i = 0; i < nthreads; i++) {
     	sep_nodes[i].resizeExact(nodes.size() / nthreads + 1);
     	sep_edges[i].resizeExact(base.edges.size() / nthreads + 1);
-        // daehwan -> joe
-        // possible overflow?
-    	new_edges[i].resizeExact((nodes.size() * 5) / (nthreads * 4) + 1);
+        uint64_t num_nodes_per_thread = ((uint64_t)nodes.size() * 5) / (nthreads * 4) + 1;
+        new_edges[i].resizeExact(num_nodes_per_thread);
     	sep_nodes[i].clear();
     	sep_edges[i].clear();
     	new_edges[i].clear();
@@ -2249,7 +2248,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     sortEdgesTo(true);
     status = ready;
 
-
     return true;
 
     bwt_string.clear();
@@ -2314,10 +2312,10 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 #endif
 
     // Test searches, based on paper_example
-#if 1
+#if 0
     EList<string> queries;  EList<index_t> answers;
 #   if 1
-#      if 1
+#      if 0
     queries.push_back("GACGT"); answers.push_back(9);
     queries.push_back("GATGT"); answers.push_back(9);
     queries.push_back("GACT");  answers.push_back(9);
@@ -2325,15 +2323,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     queries.push_back("GTAC");  answers.push_back(10);
     queries.push_back("ACTG");  answers.push_back(3);
 #      else
-    // rs55902548, at 402, ref, alt, unknown alt
-    queries.push_back("GGCAGCTCCCATGGGTACACACTGGGCCCAGAACTGGGATGGAGGATGCA");
-    // queries.push_back("GGCAGCTCCCATGGGTACACACTGGTCCCAGAACTGGGATGGAGGATGCA");
-    // queries.push_back("GGCAGCTCCCATGGGTACACACTGGACCCAGAACTGGGATGGAGGATGCA");
-
-    // rs5759268, at 926787, ref, alt, unknown alt
-    // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCACACCTGGTTCTCTTTCCAGTGTTAT");
-    // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCATACCTGGTTCTCTTTCCAGTGTTAT");
-    // queries.push_back("AAATTGCTCAGCCTTGTGCTGTGCAGACCTGGTTCTCTTTCCAGTGTTAT");
+    queries.push_back("GAGC"); answers.push_back(0);
 #      endif
 
     for(size_t q = 0; q < queries.size(); q++) {
@@ -2381,7 +2371,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #   endif
 
-    // See inconsistencies between F and M arraystimy thread
+    // See inconsistencies between F and M arrays
 #   if 0
     cerr << endl << endl;
     EList<index_t> tmp_F;

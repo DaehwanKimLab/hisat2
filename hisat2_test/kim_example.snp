@@ -1,4 +1,4 @@
 #snp_id	type	chr	pos(zero-based)	diff
 r01	single	kim_example	1	T
-r02	deletion	kim_example	1	1
-r03	insertion	kim_example	2	A
+r02	deletion	kim_example	4	1
+r03	insertion	kim_example	5	A
