@@ -2189,12 +2189,6 @@ HGFM<index_t, local_index_t>::HGFM(
                 tParam.curr_sztot = curr_sztot;
                 tParam.local_sztot = local_sztot;
                 
-                // daehwan - for debugging purposes
-                if(tParam.local_offset == 51194880) {
-                    int kk = 20;
-                    kk += 20;
-                }
-                
                 assert(tParam.rg == NULL);
                 assert(tParam.pg == NULL);
                 tParam.done = false;
@@ -2220,33 +2214,32 @@ HGFM<index_t, local_index_t>::HGFM(
 #endif
                 }
                 
-                LocalGFM<local_index_t, index_t>* localGFM = new LocalGFM<local_index_t, index_t>(
-                                                                                                  tParam.s,
-                                                                                                  tParam.pg,
-                                                                                                  tidx,
-                                                                                                  tParam.local_offset,
-                                                                                                  tParam.curr_sztot,
-                                                                                                  tParam.snps,
-                                                                                                  tParam.index_size,
-                                                                                                  packed,
-                                                                                                  needEntireReverse,
-                                                                                                  local_lineRate,
-                                                                                                  localOffRate,      // suffix-array sampling rate
-                                                                                                  localFtabChars,    // number of chars in initial arrow-pair calc
-                                                                                                  outfile,           // basename for .?.ebwt files
-                                                                                                  fw,                 // fw
-                                                                                                  dcv,                // difference-cover period
-                                                                                                  tParam.conv_local_szs,     // list of reference sizes
-                                                                                                  tParam.local_sztot,        // total size of all unambiguous ref chars
-                                                                                                  refparams,          // reference read-in parameters
-                                                                                                  seed,               // pseudo-random number generator seed
-                                                                                                  fout5,
-                                                                                                  fout6,
-                                                                                                  -1,                 // override offRate
-                                                                                                  false,              // be silent
-                                                                                                  passMemExc,         // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                                                                                                  sanityCheck);       // verify results and internal consistency
-                _localGFMs[tidx].push_back(localGFM);
+                LocalGFM<local_index_t, index_t>(
+                                                 tParam.s,
+                                                 tParam.pg,
+                                                 tidx,
+                                                 tParam.local_offset,
+                                                 tParam.curr_sztot,
+                                                 tParam.snps,
+                                                 tParam.index_size,
+                                                 packed,
+                                                 needEntireReverse,
+                                                 local_lineRate,
+                                                 localOffRate,      // suffix-array sampling rate
+                                                 localFtabChars,    // number of chars in initial arrow-pair calc
+                                                 outfile,           // basename for .?.ebwt files
+                                                 fw,                 // fw
+                                                 dcv,                // difference-cover period
+                                                 tParam.conv_local_szs,     // list of reference sizes
+                                                 tParam.local_sztot,        // total size of all unambiguous ref chars
+                                                 refparams,          // reference read-in parameters
+                                                 seed,               // pseudo-random number generator seed
+                                                 fout5,
+                                                 fout6,
+                                                 -1,                 // override offRate
+                                                 false,              // be silent
+                                                 passMemExc,         // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                                                 sanityCheck);       // verify results and internal consistency
                 tParam.s.clear();
                 if(tParam.rg != NULL) {
                     assert(tParam.pg != NULL);
