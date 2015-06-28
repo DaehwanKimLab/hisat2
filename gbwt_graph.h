@@ -199,8 +199,44 @@ private:
 
 private:
     // Following composite nodes and edges are used to reverse-determinize an automaton.
+    struct CompositeNodeIDs {
+        index_t id;
+        EList<index_t> add_ids;
+        
+        CompositeNodeIDs() {
+            id = (index_t)INDEX_MAX;
+        }      
+        
+        bool operator<(const CompositeNodeIDs& o) const {
+            if(id != o.id) return id < o.id;
+            if(add_ids.size() != o.add_ids.size()) return add_ids.size() < o.add_ids.size();
+            for(index_t i = 0; i < add_ids.size(); i++) {
+                assert_lt(i, o.add_ids.size());
+                if(add_ids[i] != o.add_ids[i]) return add_ids[i] < o.add_ids[i];
+            }
+            return false;
+        }
+        
+        index_t size() const {
+            if(id == (index_t)INDEX_MAX) return 0;
+            return add_ids.size() + 1;
+        }
+        index_t getID(index_t i) const {
+            if(i == 0) return id;
+            else {
+                i -= 1;
+                assert_lt(i, add_ids.size());
+                return add_ids[i];
+            }
+        }
+        void push_back(index_t node_id) {
+            if(id == (index_t)INDEX_MAX) id = node_id;
+            else add_ids.push_back(node_id);
+        }
+    };
+    
     struct CompositeNode {
-        std::basic_string<index_t> nodes;
+        CompositeNodeIDs           nodes;
         index_t                    id;
         char                       label;
         index_t                    value;
@@ -220,7 +256,8 @@ private:
         }
 
         void reset() {
-            nodes.clear();
+            nodes.id = (index_t)INDEX_MAX;
+            nodes.add_ids.clear();
             id = 0;
             label = 0;
             value = 0;
@@ -958,7 +995,7 @@ template <typename index_t>
 void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edges, index_t& lastNode, index_t lastNode_add)
 {
     EList<CompositeNode> cnodes; cnodes.ensure(nodes.size());
-    map<basic_string<index_t>, index_t> cnode_map;
+    map<CompositeNodeIDs, index_t> cnode_map;
     deque<index_t> active_cnodes;
     EList<CompositeEdge> cedges; cedges.ensure(edges.size());
 
@@ -973,7 +1010,6 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
     cnodes.back().nodes.push_back(lastNode);
     active_cnodes.push_back(0);
     cnode_map[cnodes.back().nodes] = 0;
-
     sortEdgesTo(edges);
 
     index_t firstNode = 0; // Y -> ... -> Z
@@ -985,7 +1021,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
         // Find predecessors of this composite node
         predecessors.clear();
         for(size_t i = 0; i < cnodes[cnode_id].nodes.size(); i++) {
-            index_t node_id = cnodes[cnode_id].nodes[i];
+            index_t node_id = cnodes[cnode_id].nodes.getID(i);
             pair<index_t, index_t> edge_range = findEdgesTo(edges, node_id);
             assert_leq(edge_range.first, edge_range.second);
             assert_leq(edge_range.second, edges.size());
@@ -1040,7 +1076,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
             }
 
             // Create edges from this new composite node to current composite node
-            typename map<basic_string<index_t>, index_t>::iterator existing = cnode_map.find(cnodes.back().nodes);
+            typename map<CompositeNodeIDs, index_t>::iterator existing = cnode_map.find(cnodes.back().nodes);
             if(existing == cnode_map.end()) {
                 cnode_map[cnodes.back().nodes] = cnodes.size() - 1;
                 active_cnodes.push_back(cnodes.size() - 1);
