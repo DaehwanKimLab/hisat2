@@ -1834,7 +1834,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                                                *tParam.rg,
                                                1,         /* num threads */
                                                false);    /* verbose? */
-            while(tParam.pg->IsSorted()) {
+            while(!tParam.pg->isSorted()) {
                 PathGraph<index_t>* next = new PathGraph<index_t>(*tParam.pg);
                 delete tParam.pg; tParam.pg = next;
             }

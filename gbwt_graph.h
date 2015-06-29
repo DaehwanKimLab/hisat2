@@ -1354,19 +1354,12 @@ public:
 
     void printInfo();
 
-    bool IsSorted() const { return status != sorted; }
-    bool repOk() const { return status != ok; }
-
-
-    // status must be sorted. Calling this invalidates parent and
-    // sets status to ready.
-    // Writes outdegree to PathNode.key.second, value to PathNode.to, and
-    // predecessor labels to PathNode.key.first.
-    // Restores the labels of parent.
     bool generateEdges(RefGraph<index_t>& parent);
 
     index_t getNumNodes() const { return nodes.size(); }
     index_t getNumEdges() const { return edges.size(); }
+    
+    bool isSorted() const { return sorted; }
 
     //
     bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos) {
@@ -1430,8 +1423,6 @@ private:
     }
     void sortEdgesTo(bool create_index = false) {
         sort(edges.begin(), edges.end(), PathEdgeToCmp());
-        status = error;
-
         if(create_index) {
             for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
                 node->key.second = 0;
@@ -1489,10 +1480,8 @@ private:
     index_t         temp_nodes; // Total number of nodes created before sorting.
 
     index_t         generation; // Sorted by paths of length 2^generation.
-
-    enum status_t { error, ok, sorted, ready, edges_sorted } status;
-    bool            has_stabilized;  // The number of nodes will probably not explode in subsequent doublings.
-
+    bool            sorted;
+    
     // For reporting GBWT char, F, and M values
     index_t                report_node_idx;
     pair<index_t, index_t> report_edge_range;
@@ -1501,9 +1490,6 @@ private:
     index_t                report_F_node_idx;
     index_t                report_F_location;
 
-    // Can create an index by using key.second in PathNodes.
-    // If the graph is not ready, its status becomes error.
-    // Sorting edges by from actually sorts them by (from, to).
     void      sortEdges(bool by_from, bool create_index);
     pair<index_t, index_t> getEdges(index_t node, bool by_from); // Create index first.
 
@@ -1560,8 +1546,7 @@ public: EList<pair<index_t, index_t> > ftab;
 template <typename index_t>
 PathGraph<index_t>::PathGraph(RefGraph<index_t>& base, int nthreads_, bool verbose_) :
 nthreads(nthreads_), verbose(verbose_),
-ranks(0), max_label('Z'), temp_nodes(0), generation(0),
-status(error), has_stabilized(false),
+ranks(0), max_label('Z'), temp_nodes(0), generation(0), sorted(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
@@ -1606,8 +1591,6 @@ report_F_node_idx(0), report_F_location(0)
     nodes.expand();
     nodes.back().from = nodes.back().to = base.lastNode;
     nodes.back().key = pair<index_t, index_t>(5, 0);
-
-    status = ok;
 }
 
 
@@ -1840,6 +1823,9 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 		rank += breakpoints[j][thread_id];
 	}
     mergeUpdateRank(merged_nodes, merged_cur, mranks, thread_id, rank);
+    
+    // daehwan -> joe: I think the code below might be moved outside this thread function
+    //                 to avoid lock/unlock and to make the code clear
 
 	//removes extra sorted node if separated by boundary
 	//needs access to first member of next bin so need mutex
@@ -1874,16 +1860,11 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 template <typename index_t>
 PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
 nthreads(previous.nthreads), verbose(previous.verbose),
-ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1),
-status(error), has_stabilized(false),
+ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1), sorted(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
     assert_gt(nthreads, 0);
-    if(previous.status != ok) {
-        return;
-	}
-
 #ifndef NDEBUG
     debug = previous.debug;
 #endif
@@ -2134,11 +2115,9 @@ report_F_node_idx(0), report_F_location(0)
 		delete[] merged_nodes;
 		delete[] new_nodes;
 
-		status = ok;
 		temp_nodes = nodes.size();
-
 		if(ranks == nodes.size()) {
-			status = sorted;
+            sorted = true;
 			for(index_t i = 0; i < nodes.size(); i++) {
 				nodes[i].key.first = i;
 			}
@@ -2156,7 +2135,6 @@ report_F_node_idx(0), report_F_location(0)
     	}
     	delete[] new_nodes;
 
-        status = ok;
     	temp_nodes = nodes.size();
     }
 }
@@ -2216,9 +2194,6 @@ void PathGraph<index_t>::generateEdgesWorker(void * vp) {
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
-
-    if(status != sorted)
-        return false;
     //separating into more than nthreads partitions improves speed
     //I think this is because we sort smaller portions at a time
     int partitions = 100; //make this a fxn of input size?
@@ -2401,10 +2376,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     //parrallelize this
 
     sortEdgesTo(true);
-
-    status = ready;
-
-
     return true;
 
     bwt_string.clear();
@@ -2657,8 +2628,6 @@ pair<index_t, index_t> PathGraph<index_t>::getEdges(index_t node, bool by_from) 
 template <typename index_t>
 void PathGraph<index_t>::sortByFrom(bool create_index) {
     sort(nodes.begin(), nodes.end(), PathNodeFromCmp());
-    status = error;
-
     if(create_index) {
         index_t current = 0;
         nodes.front().key.second = 0;

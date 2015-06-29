@@ -1405,12 +1405,7 @@ public:
                     RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _snps, outfile, _nthreads, verbose);
                     PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads, verbose);
                     pg->printInfo();
-                    while(pg->IsSorted()) {
-                        if(pg->repOk()) {
-                            cerr << "Error: Invalid PathGraph!" << endl;
-                            delete pg; pg = NULL;
-                            return;
-                        }
+                    while(!pg->isSorted()) {
                         PathGraph<index_t>* next = new PathGraph<index_t>(*pg);
                         delete pg; pg = next;
                         pg->printInfo();
