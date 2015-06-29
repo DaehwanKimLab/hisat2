@@ -1286,10 +1286,10 @@ public:
 private:
     struct ThreadParam {
         PathGraph<index_t>*              previous;
-        PathNode**                       from_nodes;
-        PathNode** 					     to_nodes;
-        index_t*                         from_cur;
-        index_t*                         to_cur;
+        EList<PathNode>*                 from_nodes;
+        EList<PathNode>*			     to_nodes;
+        EList<index_t>*                  from_cur;
+        EList<index_t>*                  to_cur;
         index_t                          st;
         index_t                          en;
         int                              partitions;
@@ -1302,10 +1302,12 @@ private:
      struct ThreadParam2 {
     	 index_t                         st;
 		 index_t                         en;
-         PathNode**                      from_nodes;
-         PathNode**           	         to_nodes;
-         index_t*                        from_size;
-         index_t*                        to_size;
+         EList<PathNode>*                from_nodes;
+         EList<PathNode>*     	         to_nodes;
+         EList<index_t>*                 from_size;
+         EList<index_t>*                 to_size;
+         EList<index_t>*                 from_off;
+         EList<index_t>*                 to_off;
          int                             thread_id;
          PathNode**                      new_nodes;
          EList<index_t>*                 new_cur;
@@ -1614,10 +1616,10 @@ void PathGraph<index_t>::seperateNodes(void * vp) {
     ThreadParam* threadParam = (ThreadParam*)vp;
 
     PathGraph<index_t>* previous = threadParam->previous;
-    PathNode **from_nodes = threadParam->from_nodes;
-    PathNode **to_nodes = threadParam->to_nodes;
-    index_t* from_cur = threadParam->from_cur;
-    index_t* to_cur = threadParam->to_cur;
+    EList<PathNode>& from_nodes = *(threadParam->from_nodes);
+    EList<PathNode>& to_nodes = *(threadParam->to_nodes);
+    EList<index_t>& from_cur = *(threadParam->from_cur);
+    EList<index_t>& to_cur = *(threadParam->to_cur);
 
     index_t st = threadParam->st;
     index_t en = threadParam->en;
@@ -1625,16 +1627,14 @@ void PathGraph<index_t>::seperateNodes(void * vp) {
 
 	for(index_t i = st; i < en; i++) {
 		index_t from_hash = (13 * previous->nodes[i].from) % partitions;
-		from_nodes[from_hash][from_cur[from_hash]] = previous->nodes[i];
+		from_nodes[from_cur[from_hash]] = previous->nodes[i];
 		from_cur[from_hash]++;
 		if(!previous->nodes[i].isSorted()) {
 			index_t to_hash = (13 * previous->nodes[i].to) % partitions;
-			to_nodes[to_hash][to_cur[to_hash]] = previous->nodes[i];
+			to_nodes[to_cur[to_hash]] = previous->nodes[i];
 			to_cur[to_hash]++;
 		}
 	}
-	delete[] from_cur;
-	delete[] to_cur;
 }
 
 template <typename index_t>
@@ -1642,8 +1642,8 @@ void PathGraph<index_t>::seperateNodesCount(void * vp) {
     ThreadParam* threadParam = (ThreadParam*)vp;
 
     PathGraph<index_t>* previous = threadParam->previous;
-    index_t* from_cur = threadParam->from_cur;
-    index_t* to_cur = threadParam->to_cur;
+    EList<index_t>& from_cur = *(threadParam->from_cur);
+    EList<index_t>& to_cur = *(threadParam->to_cur);
     index_t st = threadParam->st;
     index_t en = threadParam->en;
     int partitions = threadParam->partitions;
@@ -1668,12 +1668,14 @@ void PathGraph<index_t>::createCombined(void * vp) {
     int nthreads   = threadParam->nthreads;
     int generation = threadParam->generation;
 
-    PathNode** from_nodes = threadParam->from_nodes;
-    PathNode** to_nodes   = threadParam->to_nodes;
+    EList<PathNode>& from_nodes = *(threadParam->from_nodes);
+    EList<PathNode>& to_nodes   = *(threadParam->to_nodes);
     PathNode** new_nodes  = threadParam->new_nodes;
 
-    index_t* from_size = threadParam->from_size;
-    index_t* to_size   = threadParam->to_size;
+    const EList<index_t>& from_size = *(threadParam->from_size);
+    const EList<index_t>& to_size   = *(threadParam->to_size);
+    const EList<index_t>& from_off = *(threadParam->from_off);
+    const EList<index_t>& to_off = *(threadParam->to_off);
     EList<index_t>& new_cur = *(threadParam->new_cur);
 
     //count
@@ -1683,20 +1685,22 @@ void PathGraph<index_t>::createCombined(void * vp) {
         if(to_size[i] <= 0) continue;
         assert_gt(from_size[i], 0);
         if(from_size[i] > 1) {
-            sort(from_nodes[i], from_nodes[i] + from_size[i], PathNodeFromCmp());
+            PathNode* node = from_nodes.begin() + from_off[i];
+            sort(node, node + from_size[i], PathNodeFromCmp());
         }
         if(to_size[i] > 1) {
-            sort(to_nodes[i], to_nodes[i] + to_size[i], PathNodeToCmp());
+            PathNode* node = to_nodes.begin() + to_off[i];
+            sort(node, node + to_size[i], PathNodeToCmp());
         }
 		index_t t = 0;
 		for(index_t f = 0; f < from_size[i]; f++) {
-			while(t < to_size[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
+			while(t < to_size[i] && from_nodes[from_off[i] + f].from > to_nodes[to_off[i] + t].to) {
 				t++;
 			}
             if(t >= to_size[i]) break;
             // assert_eq(from_nodes[i][f].from, to_nodes[i][t].to);
 			index_t shift = 0;
-			while(t + shift < to_size[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
+			while(t + shift < to_size[i] && from_nodes[from_off[i] + f].from == to_nodes[to_off[i] + t + shift].to) {
 				new_cur[thread_id]++;
 				shift++;
 			}
@@ -1716,22 +1720,22 @@ void PathGraph<index_t>::createCombined(void * vp) {
     	if(from_size[i] <= 0 || to_size[i] <= 0) continue;
     	index_t t = 0;
     	for(index_t f = 0; f < from_size[i]; f++) {
-        	while(t < to_size[i] && from_nodes[i][f].from > to_nodes[i][t].to) {
+        	while(t < to_size[i] && from_nodes[from_off[i] + f].from > to_nodes[to_off[i] + t].to) {
         		t++;
         	}
             if(t >= to_size[i]) break;
             // assert_eq(from_nodes[i][f].from, to_nodes[i][t].to);
         	index_t shift = 0;
-        	while(t + shift < to_size[i] && from_nodes[i][f].from == to_nodes[i][t + shift].to) {
-        		new_nodes[thread_id][new_cur[thread_id]].from = to_nodes[i][t + shift].from;
-        		new_nodes[thread_id][new_cur[thread_id]].to   = from_nodes[i][f].to;
+        	while(t + shift < to_size[i] && from_nodes[from_off[i] + f].from == to_nodes[to_off[i] + t + shift].to) {
+        		new_nodes[thread_id][new_cur[thread_id]].from = to_nodes[to_off[i] + t + shift].from;
+        		new_nodes[thread_id][new_cur[thread_id]].to   = from_nodes[from_off[i] + f].to;
                 if(generation < 4) {
                     assert_gt(generation, 0);
                     index_t bit_shift = 1 << (generation - 1);
                     bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
-                    new_nodes[thread_id][new_cur[thread_id]].key  = pair<index_t, index_t>((to_nodes[i][t + shift].key.first << bit_shift) + from_nodes[i][f].key.first, 0);
+                    new_nodes[thread_id][new_cur[thread_id]].key  = pair<index_t, index_t>((to_nodes[to_off[i] + t + shift].key.first << bit_shift) + from_nodes[from_off[i] + f].key.first, 0);
                 } else {
-                    new_nodes[thread_id][new_cur[thread_id]].key  = pair<index_t, index_t>(to_nodes[i][t + shift].key.first, from_nodes[i][f].key.first);
+                    new_nodes[thread_id][new_cur[thread_id]].key  = pair<index_t, index_t>(to_nodes[to_off[i] + t + shift].key.first, from_nodes[from_off[i] + f].key.first);
                 }
         		new_cur[thread_id]++;
         		shift++;
@@ -1739,11 +1743,7 @@ void PathGraph<index_t>::createCombined(void * vp) {
     	}
     }
     assert_eq(new_cur_count, new_cur[thread_id]);
-    for(index_t i = st; i < en; i++) {
-    	delete[] from_nodes[i];
-    	delete[] to_nodes[i];
-    }
-
+    
     if(generation > 3) {
         EList<index_t>&  breakvalues = *(threadParam->breakvalues);
         ELList<index_t>& breakpoints = *(threadParam->breakpoints);
@@ -1756,10 +1756,10 @@ void PathGraph<index_t>::createCombined(void * vp) {
         for(int i = 1; i < nthreads; i++) {
         	low = high;
         	high = new_cur[thread_id];
-        	while(high > low + 1) {
-        		index_t mid = low + (high - low) / 2;
+        	while(high > low) {
+        		index_t mid = (low + high) >> 1;
         		if(new_nodes[thread_id][mid].key.first < breakvalues[i]) {
-        			low = mid;
+        			low = mid + 1;
         		} else {
         			high = mid;
         		}
@@ -1839,7 +1839,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 	for(int j = 0; j < nthreads + 1; j++) {
 		rank += breakpoints[j][thread_id];
 	}
-	mergeUpdateRank(merged_nodes, merged_cur, mranks, thread_id, rank);
+    mergeUpdateRank(merged_nodes, merged_cur, mranks, thread_id, rank);
 
 	//removes extra sorted node if separated by boundary
 	//needs access to first member of next bin so need mutex
@@ -1847,12 +1847,20 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
     	threadParam->merge_mutex[thread_id - 1].unlock();
     }
     if(thread_id + 1 != nthreads) {
-    	threadParam->merge_mutex[thread_id].lock();
-    	PathNode& first = merged_nodes[thread_id + 1][0];
-    	PathNode& last = merged_nodes[thread_id][merged_cur[thread_id] - 1];
-    	if(last.isSorted() && first.isSorted() && last.from == first.from) {
-    		merged_cur[thread_id]--;
-    	}
+        PathNode& last = merged_nodes[thread_id][merged_cur[thread_id] - 1];
+        index_t tmp_thread_id = thread_id;
+        while(tmp_thread_id + 1 < nthreads) {
+            if(merged_cur[tmp_thread_id + 1] > 0) break;
+            tmp_thread_id++;
+        }
+        if(tmp_thread_id + 1 < nthreads) {
+            threadParam->merge_mutex[tmp_thread_id].lock();
+            PathNode& first = merged_nodes[tmp_thread_id + 1][0];
+            
+            if(last.isSorted() && first.isSorted() && last.from == first.from) {
+                merged_cur[thread_id]--;
+            }
+        }
     }
 }
 
@@ -1879,87 +1887,96 @@ report_F_node_idx(0), report_F_location(0)
 #ifndef NDEBUG
     debug = previous.debug;
 #endif
-
+    
     assert_neq(previous.nodes.size(), previous.ranks);
-    int partitions = 1000;
+    const index_t partitions = min<index_t>(1 << 16, previous.nodes.size() >> 8);
+    
+    AutoArray<tthread::thread*> threads(nthreads);
 
  //   cerr << "Counting array sizes..." << endl;
 
-    PathNode** to_nodes   = new PathNode*[partitions]; memset(to_nodes,   0, partitions * sizeof(to_nodes[0]));
-    PathNode** from_nodes = new PathNode*[partitions]; memset(from_nodes, 0, partitions * sizeof(from_nodes[0]));
-    index_t** to_cur      = new index_t*[nthreads];
-    index_t** from_cur    = new index_t*[nthreads];
+    EList<PathNode>* from_nodes = new EList<PathNode>;
+    EList<PathNode>* to_nodes = new EList<PathNode>;
+    EList<index_t> from_size; from_size.resizeExact(partitions); from_size.fillZero();
+    EList<index_t> to_size; to_size.resizeExact(partitions); to_size.fillZero();
+    EList<index_t> from_off; from_off.resizeExact(partitions); from_off.fillZero();
+    EList<index_t> to_off; to_off.resizeExact(partitions); to_off.fillZero();
+    {
+        ELList<index_t> from_cur;
+        ELList<index_t> to_cur;
+        for(int i = 0; i < nthreads; i++) {
+            from_cur.expand();
+            from_cur.back().resizeExact(partitions);
+            from_cur.back().fillZero();
+            to_cur.expand();
+            to_cur.back().resizeExact(partitions);
+            to_cur.back().fillZero();
+        }
+        
+        EList<ThreadParam> threadParams;
+        index_t st = 0;
+        index_t en = previous.nodes.size() / nthreads;
+        for(int i = 0; i < (index_t)nthreads; i++) {
+            threadParams.expand();
+            threadParams.back().st = st;
+            threadParams.back().en = en;
+            threadParams.back().previous = &previous;
+            threadParams.back().to_nodes = to_nodes;
+            threadParams.back().from_nodes = from_nodes;
+            threadParams.back().from_cur = &from_cur[i];
+            threadParams.back().to_cur = &to_cur[i];
+            threadParams.back().partitions = partitions;
+            if(nthreads == 1) {
+                seperateNodesCount((void*)&threadParams.back());
+            } else {
+                threads[i] = new tthread::thread(seperateNodesCount, (void*)&threadParams.back());
+            }
+            st = en;
+            if(i + 2 == nthreads) {
+                en = previous.nodes.size();
+            } else {
+                en = st + previous.nodes.size() / nthreads;
+            }
+        }
+        if(nthreads > 1) {
+            for(int i = 0; i < nthreads; i++)
+                threads[i]->join();
+        }
+        
+        // Initialize arrays to be used for hash table
+        for(index_t i = 0; i < partitions; i++) {
+            if(i > 0) {
+                from_off[i] = from_off[i-1] + from_size[i-1];
+                to_off[i] = to_off[i-1] + to_size[i-1];
+            }
+            for(index_t j = 0; j < (index_t)nthreads; j++) {
+                from_size[i] += from_cur[j][i];
+                to_size[i] += to_cur[j][i];
+                from_cur[j][i] = from_off[i] + from_size[i] - from_cur[j][i];
+                to_cur[j][i] = to_off[i] + to_size[i] - to_cur[j][i];
+            }
+        }
 
-    for(int i = 0; i < nthreads; i++) {
-        from_cur[i] = new index_t[partitions]();
-        to_cur[i]   = new index_t[partitions]();
+        index_t num_from_nodes = from_off.back() + from_size.back();
+        assert_eq(num_from_nodes, previous.nodes.size());
+        from_nodes->resizeExact(num_from_nodes);
+        index_t num_to_nodes = to_off.back() + to_size.back();
+        to_nodes->resizeExact(num_to_nodes);
+
+        //    cerr << "Separating nodes..." << endl;
+        
+        for(index_t i = 0; i < (index_t)nthreads; i++) {
+            if(nthreads == 1) {
+                seperateNodes((void*)&threadParams[i]);
+            } else {
+                threads[i] = new tthread::thread(seperateNodes, (void*)&threadParams[i]);
+            }
+        }
+        if(nthreads > 1) {
+            for(index_t i = 0; i < (index_t)nthreads; i++)
+                threads[i]->join();
+        }
     }
-
-    AutoArray<tthread::thread*> threads(nthreads);
-    EList<ThreadParam> threadParams;
-
-    index_t st = 0;
-    index_t en = previous.nodes.size() / nthreads;
-    for(int i = 0; i < (index_t)nthreads; i++) {
-    	threadParams.expand();
-    	threadParams.back().st = st;
-    	threadParams.back().en = en;
-    	threadParams.back().previous = &previous;
-    	threadParams.back().to_nodes = to_nodes;
-    	threadParams.back().from_nodes = from_nodes;
-    	threadParams.back().from_cur = from_cur[i];
-    	threadParams.back().to_cur = to_cur[i];
-    	threadParams.back().partitions = partitions;
-
-    	if(nthreads == 1) {
-    		seperateNodesCount((void*)&threadParams.back());
-    	} else {
-    		threads[i] = new tthread::thread(seperateNodesCount, (void*)&threadParams.back());
-    	}
-        st = en;
-    	if(i + 2 == nthreads) {
-    		en = previous.nodes.size();
-    	} else {
-            en = st + previous.nodes.size() / nthreads;
-    	}
-    }
-    if(nthreads > 1) {
-    	for(int i = 0; i < nthreads; i++)
-              threads[i]->join();
-    }
-
-    // Initialize arrays to be used for hash table
-    index_t* from_size = new index_t[partitions]();
-    index_t* to_size = new index_t[partitions]();
-    for(int i = 0; i < nthreads; i++) {
-    	for(index_t j = 0; j < partitions; j++) {
-    		from_size[j] += from_cur[i][j];
-    		to_size[j] += to_cur[i][j];
-    		from_cur[i][j] = from_size[j] - from_cur[i][j];
-    		to_cur[i][j] = to_size[j] - to_cur[i][j];
-    	}
-    }
-
-    for(index_t i = 0; i < partitions; ++i) {
-    	from_nodes[i] = new PathNode[from_size[i]];
-    	to_nodes[i] = new PathNode[to_size[i]];
-    }
-
-//    cerr << "Separating nodes..." << endl;
-
-    for(index_t i = 0; i < (index_t)nthreads; i++) {
-    	if(nthreads == 1) {
-    		seperateNodes((void*)&threadParams[i]);
-    	} else {
-    		threads[i] = new tthread::thread(seperateNodes, (void*)&threadParams[i]);
-    	}
-    }
-    if(nthreads > 1) {
-    	for(index_t i = 0; i < (index_t)nthreads; i++)
-              threads[i]->join();
-    }
-    delete[] from_cur;
-    delete[] to_cur;
     //--------------------------------------------------------------------------------------------------------------
 
 //    cerr << "Creating new nodes..." << endl;
@@ -1999,17 +2016,19 @@ report_F_node_idx(0), report_F_location(0)
     AutoArray<tthread::thread*> threads2(nthreads);
     EList<ThreadParam2> threadParams2;
 
-    st = 0;
-    en = partitions / nthreads;
+    index_t st = 0;
+    index_t en = partitions / nthreads;
     for(int i = 0; i < nthreads; i++) {
     	threadParams2.expand();
     	threadParams2.back().thread_id = i;
     	threadParams2.back().st = st;
     	threadParams2.back().en = en;
-    	threadParams2.back().from_size = from_size;
-    	threadParams2.back().to_size = to_size;
+    	threadParams2.back().from_size = &from_size;
+    	threadParams2.back().to_size = &to_size;
     	threadParams2.back().from_nodes = from_nodes;
     	threadParams2.back().to_nodes = to_nodes;
+        threadParams2.back().from_off = &from_off;
+        threadParams2.back().to_off = &to_off;
     	threadParams2.back().new_nodes = new_nodes;
     	threadParams2.back().new_cur = &new_cur;
     	threadParams2.back().breakvalues = &breakvalues;
@@ -2033,18 +2052,16 @@ report_F_node_idx(0), report_F_location(0)
     	for(int i = 0; i < nthreads; i++)
     		threads2[i]->join();
     }
-    delete[] from_nodes;
-    delete[] to_nodes;
-    delete[] from_size;
-    delete[] to_size;
+    delete from_nodes; from_nodes = NULL;
+    delete to_nodes; to_nodes = NULL;
     
     if(verbose) {
         if(generation > 3) {
-            cout << "\tgeneration " << generation << endl;
+            cerr << "\tgeneration " << generation << endl;
             for(index_t i = 0; i < breakvalues.size(); i++) {
-                cout << "\t\tbreakvalue b" << i << ": " << breakvalues[i] << endl;
+                cerr << "\t\tbreakvalue b" << i << ": " << breakvalues[i] << endl;
                 for(index_t j = 0; j < breakpoints.size(); j++) {
-                    cout << "\t\t\tbreakpoint t" << j << ": " << breakpoints[j][i] << endl;
+                    cerr << "\t\t\tbreakpoint t" << j << ": " << breakpoints[j][i] << endl;
                 }
             }
         }
@@ -2098,7 +2115,7 @@ report_F_node_idx(0), report_F_location(0)
 
 			mergeNodes((void*)&threadParams3.back());
 		}
-
+        
 		index_t count = 0;
 		for(int i = 0; i < nthreads; i++) {
 		    count += merged_cur[i];
