@@ -1613,8 +1613,6 @@ report_F_node_idx(0), report_F_location(0)
     nodes.expand();
     nodes.back().from = nodes.back().to = base.lastNode;
     nodes.back().key = pair<index_t, index_t>(5, 0);
-    sort(nodes.begin(), nodes.end());
-    mergeUpdateRank();
 }
 
 
@@ -1944,22 +1942,32 @@ report_F_node_idx(0), report_F_location(0)
 				nodes.expand();
 				nodes.back().from = previous.nodes[i].from;
 				nodes.back().to = from_table[j].first;
-				nodes.back().key = pair<index_t, index_t>(previous.nodes[i].key.first, from_table[j].second);
+                if(generation < 4) {
+                    assert_gt(generation, 0);
+                    index_t bit_shift = 1 << (generation - 1);
+                    bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
+                    nodes.back().key  = pair<index_t, index_t>((previous.nodes[i].key.first << bit_shift) + from_table[j].second, 0);
+                } else {
+                    nodes.back().key  = pair<index_t, index_t>(previous.nodes[i].key.first, from_table[j].second);
+                }
 			}
 		}
 	}
 
 	// Now make all nodes properly sorted
-
-	PathNode* block_start = nodes.begin();
-	for(PathNode* curr = nodes.begin() + 1; curr < nodes.end(); curr++) {
-		if(curr->key.first != block_start->key.first) {
-			sort(block_start, curr);
-			block_start = curr;
+	if(generation > 4) {
+		PathNode* block_start = nodes.begin();
+		for(PathNode* curr = nodes.begin() + 1; curr < nodes.end(); curr++) {
+			if(curr->key.first != block_start->key.first) {
+				sort(block_start, curr);
+				block_start = curr;
+			}
 		}
+		mergeUpdateRank();
+	} else if(generation == 4) {
+		sort(nodes.begin(), nodes.end());
+		mergeUpdateRank();
 	}
-
-	mergeUpdateRank();
 }
 
 
