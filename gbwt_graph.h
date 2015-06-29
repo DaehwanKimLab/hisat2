@@ -1427,9 +1427,9 @@ public:
     }
 
 private:
-    static void mergeUpdateRank(PathNode** merged_nodes, index_t* merged_cur, index_t* mranks, int thread_id, index_t rank);
+    void mergeUpdateRank();
 
-    static pair<index_t, index_t> nextMaximalSet(PathNode* merged_nodes, index_t merged_nodes_size, pair<index_t, index_t> range);
+    pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> range);
 
     void sortByKey() { sort(nodes.begin(), nodes.end()); } // by key
 
@@ -1493,11 +1493,12 @@ private:
     bool            verbose;
 
     EList<PathNode> nodes;
-    EList<PathNode> new_nodes; //keeps track of combined nodes not yet merged into nodes
     EList<PathEdge> edges;
     index_t         ranks;
     index_t         max_label;  // Node label of initial nodes.
+    index_t         max_from; //number of nodes in RefGraph
     index_t         temp_nodes; // Total number of nodes created before sorting.
+
 
     index_t         generation; // Sorted by paths of length 2^generation.
     bool            sorted;
@@ -1577,6 +1578,7 @@ report_F_node_idx(0), report_F_location(0)
 
     // Create a path node per edge with a key set to from node's label
     temp_nodes = base.edges.size() + 1;
+    max_from = temp_nodes;
     nodes.reserveExact(temp_nodes);
     for(index_t i = 0; i < base.edges.size(); i++) {
         const typename RefGraph<index_t>::Edge& e = base.edges[i];
@@ -1611,6 +1613,8 @@ report_F_node_idx(0), report_F_location(0)
     nodes.expand();
     nodes.back().from = nodes.back().to = base.lastNode;
     nodes.back().key = pair<index_t, index_t>(5, 0);
+    sort(nodes.begin(), nodes.end());
+    mergeUpdateRank();
 }
 
 
@@ -1864,6 +1868,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
             }
         }
     }
+
 }
 
 
@@ -1876,7 +1881,7 @@ void PathGraph<index_t>::mergeNodes(void * vp) {
 template <typename index_t>
 PathGraph<index_t>::PathGraph(PathGraph<index_t>& previous) :
 nthreads(previous.nthreads), verbose(previous.verbose),
-ranks(0), max_label(previous.max_label), temp_nodes(0), generation(previous.generation + 1), sorted(false),
+ranks(0), max_label(previous.max_label), max_from(previous.max_from), temp_nodes(0), generation(previous.generation + 1), sorted(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
@@ -1886,273 +1891,75 @@ report_F_node_idx(0), report_F_location(0)
 #endif
     
     assert_neq(previous.nodes.size(), previous.ranks);
-    const index_t partitions = min<index_t>(1 << 16, previous.nodes.size() >> 8);
-    
-    AutoArray<tthread::thread*> threads(nthreads);
 
- //   cerr << "Counting array sizes..." << endl;
+    // first count where to start each from value
 
-    EList<PathNode>* from_nodes = new EList<PathNode>;
-    EList<PathNode>* to_nodes = new EList<PathNode>;
-    EList<index_t> from_size; from_size.resizeExact(partitions); from_size.fillZero();
-    EList<index_t> to_size; to_size.resizeExact(partitions); to_size.fillZero();
-    EList<index_t> from_off; from_off.resizeExact(partitions); from_off.fillZero();
-    EList<index_t> to_off; to_off.resizeExact(partitions); to_off.fillZero();
-    {
-        ELList<index_t> from_cur;
-        ELList<index_t> to_cur;
-        for(int i = 0; i < nthreads; i++) {
-            from_cur.expand();
-            from_cur.back().resizeExact(partitions);
-            from_cur.back().fillZero();
-            to_cur.expand();
-            to_cur.back().resizeExact(partitions);
-            to_cur.back().fillZero();
-        }
-        
-        EList<ThreadParam> threadParams;
-        index_t st = 0;
-        index_t en = previous.nodes.size() / nthreads;
-        for(int i = 0; i < (index_t)nthreads; i++) {
-            threadParams.expand();
-            threadParams.back().st = st;
-            threadParams.back().en = en;
-            threadParams.back().previous = &previous;
-            threadParams.back().to_nodes = to_nodes;
-            threadParams.back().from_nodes = from_nodes;
-            threadParams.back().from_cur = &from_cur[i];
-            threadParams.back().to_cur = &to_cur[i];
-            threadParams.back().partitions = partitions;
-            if(nthreads == 1) {
-                seperateNodesCount((void*)&threadParams.back());
-            } else {
-                threads[i] = new tthread::thread(seperateNodesCount, (void*)&threadParams.back());
-            }
-            st = en;
-            if(i + 2 == nthreads) {
-                en = previous.nodes.size();
-            } else {
-                en = st + previous.nodes.size() / nthreads;
-            }
-        }
-        if(nthreads > 1) {
-            for(int i = 0; i < nthreads; i++)
-                threads[i]->join();
-        }
-        
-        // Initialize arrays to be used for hash table
-        for(index_t i = 0; i < partitions; i++) {
-            if(i > 0) {
-                from_off[i] = from_off[i-1] + from_size[i-1];
-                to_off[i] = to_off[i-1] + to_size[i-1];
-            }
-            for(index_t j = 0; j < (index_t)nthreads; j++) {
-                from_size[i] += from_cur[j][i];
-                to_size[i] += to_cur[j][i];
-                from_cur[j][i] = from_off[i] + from_size[i] - from_cur[j][i];
-                to_cur[j][i] = to_off[i] + to_size[i] - to_cur[j][i];
-            }
-        }
+	EList<index_t> from_index;
+	from_index.resizeExact(max_from + 1); //TODO: get this from somewhere
+	from_index.fillZero();
 
-        index_t num_from_nodes = from_off.back() + from_size.back();
-        assert_eq(num_from_nodes, previous.nodes.size());
-        from_nodes->resizeExact(num_from_nodes);
-        index_t num_to_nodes = to_off.back() + to_size.back();
-        to_nodes->resizeExact(num_to_nodes);
+	for(index_t i = 0; i < previous.nodes.size(); i++) {
+		from_index[previous.nodes[i].from]++;
+	}
+	index_t tot = from_index[0];
+	from_index[0] = 0;
+	for(index_t i = 1; i < from_index.size(); i++) {
+		tot += from_index[i];
+		from_index[i] = tot - from_index[i];
+	}
+	//initialize and fill direct-access table
+	//use from_index to keep track of where to add next
+	EList<pair<index_t, index_t> > from_table;
+	from_table.resizeExact(previous.nodes.size());
+	from_table.fillZero();
+	for(index_t i = 0; i < previous.nodes.size(); i++) {
+		from_table[from_index[previous.nodes[i].from]++] = pair<index_t, index_t>(previous.nodes[i].to, previous.nodes[i].key.first);
+	}
+	//reset from_index
+	for(index_t i = from_index.size() - 1; i > 0; i--) {
+		from_index[i] = from_index[i - 1];
+	}
+	from_index[0] = 0;
 
-        //    cerr << "Separating nodes..." << endl;
-        
-        for(index_t i = 0; i < (index_t)nthreads; i++) {
-            if(nthreads == 1) {
-                seperateNodes((void*)&threadParams[i]);
-            } else {
-                threads[i] = new tthread::thread(seperateNodes, (void*)&threadParams[i]);
-            }
-        }
-        if(nthreads > 1) {
-            for(index_t i = 0; i < (index_t)nthreads; i++)
-                threads[i]->join();
-        }
-    }
-    //--------------------------------------------------------------------------------------------------------------
 
-//    cerr << "Creating new nodes..." << endl;
+	// Now query against hash-table
 
-    PathNode** new_nodes = new PathNode*[nthreads]; memset(new_nodes, 0, nthreads * sizeof(new_nodes[0]));
-    EList<index_t> new_cur; new_cur.resizeExact(nthreads); new_cur.fillZero();
-
-    EList<index_t>  breakvalues; breakvalues.resizeExact(nthreads + 1); breakvalues.fillZero();
-    ELList<index_t> breakpoints;
-    if(generation > 3) {
-    	for(index_t i = 0; i < (index_t)nthreads + 1; i++) {
-            breakpoints.expand();
-            breakpoints.back().resizeExact(nthreads + 1); breakpoints.back().fillZero();
-    	}
-    	if(generation == 4) {
-    		index_t max_rank = previous.nodes.back().key.first;
-    		for(uint64_t i = 0; i < nthreads; i++) {
-    		    breakvalues[i] = (index_t)(i * max_rank / nthreads);
-    		}
-    	} else {
-            breakpoints[nthreads][0] = 0;
-            for(uint64_t i = 1; i < nthreads; i++) {
-                breakpoints[nthreads][i] = (index_t)(i * previous.nodes.size() / nthreads);
-                breakvalues[i] = previous.nodes[breakpoints[nthreads][i] - 1].key.first;
-                //added this part to simplify parallelizing merge and rank update
-                //sets breakpoint to be 1 + last index with key.first == breakvalues[i]
-                while(previous.nodes[breakpoints[nthreads][i] - 1].key.first == breakvalues[i]
-						&& breakpoints[nthreads][i] > 1) {
-                	breakpoints[nthreads][i]--;
-                }
-    		}
-            breakpoints[nthreads][nthreads] = (index_t)previous.nodes.size();
-    	}
-        breakvalues[nthreads] = (index_t)INDEX_MAX;
-    }
-
-    AutoArray<tthread::thread*> threads2(nthreads);
-    EList<ThreadParam2> threadParams2;
-
-    index_t st = 0;
-    index_t en = partitions / nthreads;
-    for(int i = 0; i < nthreads; i++) {
-    	threadParams2.expand();
-    	threadParams2.back().thread_id = i;
-    	threadParams2.back().st = st;
-    	threadParams2.back().en = en;
-    	threadParams2.back().from_size = &from_size;
-    	threadParams2.back().to_size = &to_size;
-    	threadParams2.back().from_nodes = from_nodes;
-    	threadParams2.back().to_nodes = to_nodes;
-        threadParams2.back().from_off = &from_off;
-        threadParams2.back().to_off = &to_off;
-    	threadParams2.back().new_nodes = new_nodes;
-    	threadParams2.back().new_cur = &new_cur;
-    	threadParams2.back().breakvalues = &breakvalues;
-    	threadParams2.back().breakpoints = &breakpoints;
-    	threadParams2.back().nthreads = nthreads;
-    	threadParams2.back().generation = generation;
-    	if(nthreads == 1) {
-    		createCombined((void*)&threadParams2.back());
-    	} else {
-    		threads2[i] = new tthread::thread(createCombined, (void*)&threadParams2.back());
-    	}
-    	st = en;
-    	if(i + 2 == nthreads) {
-    		en = partitions;
-    	} else {
-    		en = st + partitions / nthreads;
-    	}
-    }
-
-    if(nthreads > 1) {
-    	for(int i = 0; i < nthreads; i++)
-    		threads2[i]->join();
-    }
-    delete from_nodes; from_nodes = NULL;
-    delete to_nodes; to_nodes = NULL;
-    
-    if(verbose) {
-        if(generation > 3) {
-            cerr << "\tgeneration " << generation << endl;
-            for(index_t i = 0; i < breakvalues.size(); i++) {
-                cerr << "\t\tbreakvalue b" << i << ": " << breakvalues[i] << endl;
-                for(index_t j = 0; j < breakpoints.size(); j++) {
-                    cerr << "\t\t\tbreakpoint t" << j << ": " << breakpoints[j][i] << endl;
-                }
-            }
-        }
-    }
-
-    //------------------------------------------------------------------------------------------------------------------------------
-
-    if(generation > 3) {
-//    	cerr << "merging nodes..." << endl;
-		AutoArray<tthread::thread*> threads3(nthreads);
-		EList<ThreadParam3> threadParams3;
-
-		PathNode** merged_nodes = new PathNode*[nthreads]; memset(merged_nodes, 0, nthreads * sizeof(merged_nodes[0]));
-		index_t* merged_cur = new index_t[nthreads] ();
-		index_t* mranks = new index_t[nthreads] ();
-
-		if(nthreads > 1) {
-			tthread::mutex* merge_mutex = new tthread::mutex[nthreads - 1] ();
-			for(int i = 0; i < nthreads - 1; i++) {
-				merge_mutex[i].lock();
-			}
-
-			for(int i = 0; i < nthreads; i++) {
-				threadParams3.expand();
-				threadParams3.back().previous = &previous;
-				threadParams3.back().nthreads = nthreads;
-				threadParams3.back().thread_id = i;
-				threadParams3.back().new_nodes = new_nodes;
-				threadParams3.back().breakpoints = &breakpoints;
-				threadParams3.back().merged_nodes = merged_nodes;
-				threadParams3.back().merged_cur = merged_cur;
-				threadParams3.back().mranks = mranks;
-				threadParams3.back().merge_mutex = merge_mutex;
-
-				threads3[i] = new tthread::thread(mergeNodes, (void*)&threadParams3.back());
-			}
-			for(int i = 0; i < nthreads; i++) {
-				threads3[i]->join();
-			}
-			delete[] merge_mutex;
+	//count number of nodes
+	temp_nodes = 0;
+	for(index_t i = 0; i < previous.nodes.size(); i++) {
+		if(previous.nodes[i].isSorted()) {
+			temp_nodes++;
 		} else {
-			threadParams3.expand();
-			threadParams3.back().previous = &previous;
-			threadParams3.back().nthreads = nthreads;
-			threadParams3.back().thread_id = 0;
-			threadParams3.back().new_nodes = new_nodes;
-			threadParams3.back().breakpoints = &breakpoints;
-			threadParams3.back().merged_nodes = merged_nodes;
-			threadParams3.back().merged_cur = merged_cur;
-			threadParams3.back().mranks = mranks;
-
-			mergeNodes((void*)&threadParams3.back());
+			temp_nodes += from_index[previous.nodes[i].to + 1] - from_index[previous.nodes[i].to];
 		}
-        
-		index_t count = 0;
-		for(int i = 0; i < nthreads; i++) {
-		    count += merged_cur[i];
-		    ranks += mranks[i];
-		}
-//		cerr << "copying to nodes..." << endl;
-		nodes.resizeExact(count);
-		nodes.clear();
-		for(int i = 0; i < nthreads; i++) {
-			nodes.push_back_array(merged_nodes[i], merged_cur[i]);
-			delete[] merged_nodes[i];
-			delete[] new_nodes[i];
-		}
-		delete[] mranks;
-		delete[] merged_cur;
-		delete[] merged_nodes;
-		delete[] new_nodes;
-
-		temp_nodes = nodes.size();
-		if(ranks == nodes.size()) {
-            sorted = true;
-			for(index_t i = 0; i < nodes.size(); i++) {
-				nodes[i].key.first = i;
+	}
+    // make new nodes
+    nodes.resizeExact(temp_nodes);
+    nodes.clear();
+	for(index_t i = 0; i < previous.nodes.size(); i++) {
+		if(previous.nodes[i].isSorted()) {
+			nodes.push_back(previous.nodes[i]);
+		} else {
+			for(index_t j = from_index[previous.nodes[i].to]; j < from_index[previous.nodes[i].to + 1]; j++) {
+				nodes.expand();
+				nodes.back().from = previous.nodes[i].from;
+				nodes.back().to = from_table[j].first;
+				nodes.back().key = pair<index_t, index_t>(previous.nodes[i].key.first, from_table[j].second);
 			}
 		}
-    } else {
-    	index_t count = 0;
-    	for(int i = 0; i < nthreads; i++) {
-    		count += new_cur[i];
-    	}
-    	nodes.resizeExact(count);
-    	nodes.clear();
-    	for(int i = 0; i < nthreads; i++) {
-    		nodes.push_back_array(new_nodes[i], new_cur[i]);
-    		delete[] new_nodes[i];
-    	}
-    	delete[] new_nodes;
+	}
 
-    	temp_nodes = nodes.size();
-    }
+	// Now make all nodes properly sorted
+
+	PathNode* block_start = nodes.begin();
+	for(PathNode* curr = nodes.begin() + 1; curr < nodes.end(); curr++) {
+		if(curr->key.first != block_start->key.first) {
+			sort(block_start, curr);
+			block_start = curr;
+		}
+	}
+
+	mergeUpdateRank();
 }
 
 
@@ -2566,45 +2373,58 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 //--------------------------------------------------------------------------
 
 template <typename index_t>
-void PathGraph<index_t>::mergeUpdateRank(PathNode** merged_nodes, index_t* merged_cur, index_t* mranks, int thread_id, index_t rank)
+void PathGraph<index_t>::mergeUpdateRank()
 {
-	pair<index_t, index_t> key = merged_nodes[thread_id][0].key;
-	for(index_t i = 0; i < merged_cur[thread_id]; i++) {
-		PathNode& node = merged_nodes[thread_id][i];
-		if(node.key != key) {
-			key = node.key;
-			rank++;
-		}
-		node.key = pair<index_t, index_t>(rank, 0);
-	}
+
+    // Update ranks
+    index_t rank = 0;
+    pair<index_t, index_t> key = nodes.front().key;
+    for(index_t i = 0; i < nodes.size(); i++) {
+        PathNode& node = nodes[i];
+        if(node.key != key) {
+            key = node.key;
+            rank++;
+        }
+        node.key = pair<index_t, index_t>(rank, 0);
+    }
 
     // Merge equivalent nodes
     index_t curr = 0;
     pair<index_t, index_t> range(0, 0); // Empty range
     while(true) {
-        range = nextMaximalSet(merged_nodes[thread_id], merged_cur[thread_id], range);
-        if(range.first == range.second)
-			break;
-        merged_nodes[thread_id][curr] = merged_nodes[thread_id][range.first]; curr++;
+        range = nextMaximalSet(range);
+        if(range.first >= range.second)
+            break;
+        nodes[curr] = nodes[range.first]; curr++;
     }
-    merged_cur[thread_id] = curr;
+    nodes.resize(curr);
 
     // Set nodes that become sorted as sorted
-    PathNode* candidate = merged_nodes[thread_id];
-    key = candidate->key; mranks[thread_id] = 1;
-    for(index_t i = 1; i < merged_cur[thread_id]; i++) {
-        if(merged_nodes[thread_id][i].key != key) {
+    PathNode* candidate = &nodes.front();
+    key = candidate->key; ranks = 1;
+    for(index_t i = 1; i < nodes.size(); i++) {
+        if(nodes[i].key != key) {
             if(candidate != NULL) {
                 candidate->setSorted();
             }
-            candidate = &merged_nodes[thread_id][i];
-            key = candidate->key; mranks[thread_id]++;
+            candidate = &nodes[i];
+            key = candidate->key; ranks++;
         } else {
             candidate = NULL;
         }
     }
     if(candidate != NULL) {
-    	candidate->setSorted();
+        candidate->setSorted();
+    }
+
+    // Only done on last iteration
+    // Replace the ranks of a sorted graph so that rank(i) = i
+    // Merges may otherwise leave gaps in the ranks
+    if(ranks == nodes.size()) {
+        for(index_t i = 0; i < nodes.size(); i++) {
+            nodes[i].key.first = i;
+        }
+        sorted = true;
     }
 }
 
@@ -2614,26 +2434,25 @@ void PathGraph<index_t>::mergeUpdateRank(PathNode** merged_nodes, index_t* merge
 // PathNodes begins in the same GraphNode, and no other PathNode shares
 // the key. If the maximal set is empty, returns the next PathNode.
 template <typename index_t>
-pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(PathNode* merged_nodes, index_t merged_nodes_size, pair<index_t, index_t> range) {
-    if(range.second >= merged_nodes_size) {
+pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t> range) {
+    if(range.second >= nodes.size()) {
         return pair<index_t, index_t>(0, 0);
     }
-
     range.first = range.second;
     range.second = range.first + 1;
-    if(range.first > 0 && merged_nodes[range.first - 1].key == merged_nodes[range.first].key) {
+    if(range.first > 0 && nodes[range.first - 1].key == nodes[range.first].key) {
         return range;
     }
 
-    for(index_t i = range.second; i < merged_nodes_size; i++) {
-        if(merged_nodes[i - 1].key != merged_nodes[i].key) {
+    for(index_t i = range.second; i < nodes.size(); i++) {
+        if(nodes[i - 1].key != nodes[i].key) {
             range.second = i;
         }
-        if(merged_nodes[i].from != merged_nodes[range.first].from) {
+        if(nodes[i].from != nodes[range.first].from) {
             return range;
         }
     }
-    range.second = merged_nodes_size;
+    range.second = nodes.size();
     return range;
 }
 
