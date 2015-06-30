@@ -1484,6 +1484,7 @@ private:
     int             nthreads;
     bool            verbose;
 
+    EList<PathNode> past_nodes;
     EList<PathNode> nodes;
     EList<PathEdge> edges;
     index_t         ranks;
@@ -1571,28 +1572,28 @@ report_F_node_idx(0), report_F_location(0)
     // Create a path node per edge with a key set to from node's label
     temp_nodes = base.edges.size() + 1;
     max_from = temp_nodes;
-    nodes.reserveExact(temp_nodes);
+    past_nodes.reserveExact(temp_nodes);
     for(index_t i = 0; i < base.edges.size(); i++) {
         const typename RefGraph<index_t>::Edge& e = base.edges[i];
-        nodes.expand();
-        nodes.back().from = e.from;
-        nodes.back().to = e.to;
+        past_nodes.expand();
+        past_nodes.back().from = e.from;
+        past_nodes.back().to = e.to;
 
         switch(base.nodes[e.from].label) {
         case 'A':
-        	nodes.back().key = pair<index_t, index_t>(0, 0);
+        	past_nodes.back().key = pair<index_t, index_t>(0, 0);
         	break;
         case 'C':
-        	nodes.back().key = pair<index_t, index_t>(1, 0);
+        	past_nodes.back().key = pair<index_t, index_t>(1, 0);
         	break;
         case 'G':
-        	nodes.back().key = pair<index_t, index_t>(2, 0);
+        	past_nodes.back().key = pair<index_t, index_t>(2, 0);
         	break;
         case 'T':
-        	nodes.back().key = pair<index_t, index_t>(3, 0);
+        	past_nodes.back().key = pair<index_t, index_t>(3, 0);
         	break;
         case 'Y':
-            nodes.back().key = pair<index_t, index_t>(4, 0);
+            past_nodes.back().key = pair<index_t, index_t>(4, 0);
             break;
         default:
             assert(false);
@@ -1602,12 +1603,105 @@ report_F_node_idx(0), report_F_location(0)
     // Final node.
     assert_lt(base.lastNode, base.nodes.size());
     assert_eq(base.nodes[base.lastNode].label, 'Z');
-    nodes.expand();
-    nodes.back().from = nodes.back().to = base.lastNode;
-    nodes.back().key = pair<index_t, index_t>(5, 0);
+    past_nodes.expand();
+    past_nodes.back().from = past_nodes.back().to = base.lastNode;
+    past_nodes.back().key = pair<index_t, index_t>(5, 0);
+
+    printInfo();
+    //------------------------------------------------------------------
+
+    while(true) {
+    	generation++;
+        assert_gt(nthreads, 0);
+
+        assert_neq(past_nodes.size(), ranks);
+
+        // first count where to start each from value
+        EList<index_t> from_index;
+        from_index.resizeExact(max_from + 1);
+
+        from_index.fillZero();
+
+    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+    		from_index[node->from]++;
+    	}
+    	index_t tot = from_index[0];
+    	from_index[0] = 0;
+    	for(index_t i = 1; i < from_index.size(); i++) {
+    		tot += from_index[i];
+    		from_index[i] = tot - from_index[i];
+    	}
+    	//initialize and fill direct-access table
+    	//use from_index to keep track of where to add next
+
+    	EList<pair<index_t, index_t> > from_table;
+    	from_table.resizeExact(past_nodes.size());
+    	from_table.fillZero();
+    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+    		from_table[from_index[node->from]++] = pair<index_t, index_t>(node->to, node->key.first);
+    	}
+    	//reset from_index
+    	for(index_t i = from_index.size() - 1; i > 0; i--) {
+    		from_index[i] = from_index[i - 1];
+    	}
+    	from_index[0] = 0;
+
+
+    	// Now query against hash-table
+
+    	//count number of nodes
+    	temp_nodes = 0;
+    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+    		if(node->isSorted()) {
+    			temp_nodes++;
+    		} else {
+    			temp_nodes += from_index[node->to + 1] - from_index[node->to];
+    		}
+    	}
+        // make new nodes
+        nodes.resizeExact(temp_nodes);
+        nodes.clear();
+    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+    		if(node->isSorted()) {
+    			nodes.push_back(*node);
+    		} else {
+    			for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
+    				nodes.expand();
+    				nodes.back().from = node->from;
+    				nodes.back().to = from_table[j].first;
+                    if(generation < 4) {
+                        assert_gt(generation, 0);
+                        index_t bit_shift = 1 << (generation - 1);
+                        bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
+                        nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + from_table[j].second, 0);
+                    } else {
+                        nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].second);
+                    }
+    			}
+    		}
+    	}
+    	// Now make all nodes properly sorted
+    	if(generation > 4) {
+    		PathNode* block_start = nodes.begin();
+    		for(PathNode* curr = nodes.begin() + 1; curr != nodes.end(); curr++) {
+    			if(curr->key.first != block_start->key.first) {
+    				if(curr - block_start > 1) sort(block_start, curr);
+    				block_start = curr;
+    			}
+    		}
+    		if(nodes.end() - block_start > 1) sort(block_start, nodes.end());
+    		mergeUpdateRank();
+    	} else if(generation == 4) {
+    		sort(nodes.begin(), nodes.end());
+    		mergeUpdateRank();
+    	}
+    	printInfo();
+    	if(isSorted()) break;
+    	past_nodes.swap(nodes);
+    }
 }
 
-
+#if 0
 template <typename index_t>
 void PathGraph<index_t>::seperateNodes(void * vp) {
     ThreadParam* threadParam = (ThreadParam*)vp;
@@ -1946,7 +2040,6 @@ report_F_node_idx(0), report_F_location(0)
 			}
 		}
 	}
-
 	// Now make all nodes properly sorted
 	if(generation > 4) {
 		PathNode* block_start = nodes.begin();
@@ -1956,13 +2049,14 @@ report_F_node_idx(0), report_F_location(0)
 				block_start = curr;
 			}
 		}
+		if(nodes.end() - block_start > 1) sort(block_start, nodes.end());
 		mergeUpdateRank();
 	} else if(generation == 4) {
 		sort(nodes.begin(), nodes.end());
 		mergeUpdateRank();
 	}
 }
-
+#endif
 
 template <typename index_t>
 void PathGraph<index_t>::printInfo()
