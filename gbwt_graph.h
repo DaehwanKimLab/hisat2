@@ -1443,6 +1443,7 @@ private:
     }
     void sortEdgesTo(bool create_index = false) {
         sort(edges.begin(), edges.end(), PathEdgeToCmp());
+
         if(create_index) {
             for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
                 node->key.second = 0;
@@ -1893,11 +1894,11 @@ report_F_node_idx(0), report_F_location(0)
     // first count where to start each from value
 
 	EList<index_t> from_index;
-	from_index.resizeExact(max_from + 1); //TODO: get this from somewhere
+	from_index.resizeExact(max_from + 1);
 	from_index.fillZero();
 
-	for(index_t i = 0; i < previous.nodes.size(); i++) {
-		from_index[previous.nodes[i].from]++;
+	for(PathNode* node = previous.nodes.begin(); node != previous.nodes.end(); node++) {
+		from_index[node->from]++;
 	}
 	index_t tot = from_index[0];
 	from_index[0] = 0;
@@ -1910,8 +1911,8 @@ report_F_node_idx(0), report_F_location(0)
 	EList<pair<index_t, index_t> > from_table;
 	from_table.resizeExact(previous.nodes.size());
 	from_table.fillZero();
-	for(index_t i = 0; i < previous.nodes.size(); i++) {
-		from_table[from_index[previous.nodes[i].from]++] = pair<index_t, index_t>(previous.nodes[i].to, previous.nodes[i].key.first);
+	for(PathNode* node = previous.nodes.begin(); node != previous.nodes.end(); node++) {
+		from_table[from_index[node->from]++] = pair<index_t, index_t>(node->to, node->key.first);
 	}
 	//reset from_index
 	for(index_t i = from_index.size() - 1; i > 0; i--) {
@@ -1924,31 +1925,31 @@ report_F_node_idx(0), report_F_location(0)
 
 	//count number of nodes
 	temp_nodes = 0;
-	for(index_t i = 0; i < previous.nodes.size(); i++) {
-		if(previous.nodes[i].isSorted()) {
+	for(PathNode* node = previous.nodes.begin(); node != previous.nodes.end(); node++) {
+		if(node->isSorted()) {
 			temp_nodes++;
 		} else {
-			temp_nodes += from_index[previous.nodes[i].to + 1] - from_index[previous.nodes[i].to];
+			temp_nodes += from_index[node->to + 1] - from_index[node->to];
 		}
 	}
     // make new nodes
     nodes.resizeExact(temp_nodes);
     nodes.clear();
-	for(index_t i = 0; i < previous.nodes.size(); i++) {
-		if(previous.nodes[i].isSorted()) {
-			nodes.push_back(previous.nodes[i]);
+	for(PathNode* node = previous.nodes.begin(); node != previous.nodes.end(); node++) {
+		if(node->isSorted()) {
+			nodes.push_back(*node);
 		} else {
-			for(index_t j = from_index[previous.nodes[i].to]; j < from_index[previous.nodes[i].to + 1]; j++) {
+			for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
 				nodes.expand();
-				nodes.back().from = previous.nodes[i].from;
+				nodes.back().from = node->from;
 				nodes.back().to = from_table[j].first;
                 if(generation < 4) {
                     assert_gt(generation, 0);
                     index_t bit_shift = 1 << (generation - 1);
                     bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
-                    nodes.back().key  = pair<index_t, index_t>((previous.nodes[i].key.first << bit_shift) + from_table[j].second, 0);
+                    nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + from_table[j].second, 0);
                 } else {
-                    nodes.back().key  = pair<index_t, index_t>(previous.nodes[i].key.first, from_table[j].second);
+                    nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].second);
                 }
 			}
 		}
@@ -1957,9 +1958,9 @@ report_F_node_idx(0), report_F_location(0)
 	// Now make all nodes properly sorted
 	if(generation > 4) {
 		PathNode* block_start = nodes.begin();
-		for(PathNode* curr = nodes.begin() + 1; curr < nodes.end(); curr++) {
+		for(PathNode* curr = nodes.begin() + 1; curr != nodes.end(); curr++) {
 			if(curr->key.first != block_start->key.first) {
-				sort(block_start, curr);
+				if(curr - block_start > 1) sort(block_start, curr);
 				block_start = curr;
 			}
 		}
@@ -2025,101 +2026,116 @@ void PathGraph<index_t>::generateEdgesWorker(void * vp) {
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
-	{
-		//separating into more than nthreads partitions improves speed
-		//I think this is because we sort smaller portions at a time
-		int partitions = 100; //make this a fxn of input size?
-		EList<PathNode>* sep_nodes = new EList<PathNode>[partitions];
-		EList<TempEdge>* sep_edges = new EList<TempEdge>[partitions];
-		EList<PathEdge>* new_edges = new EList<PathEdge>[nthreads];
 
-		for(int i = 0; i < partitions; i++) {
-			sep_nodes[i].resizeExact(nodes.size() / partitions + 1);
-			sep_edges[i].resizeExact(base.edges.size() / partitions + 1);
-			sep_nodes[i].clear();
-			sep_edges[i].clear();
-		}
+	if(!sorted) return false;
 
-		for(index_t i = 0; i < nodes.size(); i++) {
-			sep_nodes[nodes[i].from % partitions].push_back(nodes[i]);
-		}
-		for(index_t i = 0; i < base.edges.size(); i++) {
-			TempEdge edge;
-			edge.from = base.edges[i].from;
-			edge.to = base.edges[i].to;
-			sep_edges[base.edges[i].to % partitions].push_back(edge);
-		}
+	//build hash table of base.edges binned by .to
+	//query nodes against in rank order
+	//put into the correct bin based on edge.label
 
-		AutoArray<tthread::thread*> threads4(nthreads);
-		EList<ThreadParam4> threadParams4;
+	//first find breakpoints
 
-		int st = 0;
-		int en = partitions / nthreads;
+	EList<index_t> to_index;
+	to_index.resizeExact(max_from + 1);
+	to_index.fillZero();
 
-		for(int i = 0; i < nthreads; i++) {
-			new_edges[i].resizeExact(nodes.size() / nthreads + nodes.size() / (nthreads * 4) + 1);
-			new_edges[i].clear();
-			threadParams4.expand();
-			threadParams4.back().thread_id = i;
-			threadParams4.back().sep_nodes = sep_nodes;
-			threadParams4.back().sep_edges = sep_edges;
-			threadParams4.back().new_edges = new_edges;
-			threadParams4.back().base = &base;
-			threadParams4.back().st = st;
-			threadParams4.back().en = en;
-
-			if(nthreads == 1) {
-				generateEdgesWorker((void*)&threadParams4.back());
-			} else {
-				threads4[i] = new tthread::thread(generateEdgesWorker, (void*)&threadParams4.back());
-			}
-			st = en;
-			if(i + 2 == nthreads) {
-				en = partitions;
-			} else {
-				en = st + partitions / nthreads;
-			}
-		}
-
-		if(nthreads > 1) {
-			for(int i = 0; i < nthreads; i++)
-				threads4[i]->join();
-		}
-
-		index_t count = 0;
-		for(int i = 0; i < nthreads; i++) {
-			count += new_edges[i].size();
-		}
-		edges.resizeExact(count);
-		edges.clear();
-		//merge edges together
-		EList<PathEdgeSlice> active;
-		active.resizeExact(nthreads);
-		active.clear();
-		for(int j = 0; j < nthreads; j++) {
-			active.expand();
-			active.back().place = new_edges[j].begin();
-			active.back().end = new_edges[j].end();
-		}
-		sort(active.begin(), active.end());
-		while(active.size() > 0) {
-			int i = 1;
-			while(i < active.size() && active[i] < active[i - 1]) {
-				swap(active[i], active[i - 1]);
-				i++;
-			}
-			edges.push_back(*(active.front().place++));
-			if(active.front().place == active.front().end) {
-				active.front() = active.back();
-				active.pop_back();
-			}
-		}
-
-		//these previously missing partially caused memory leak
-		delete[] sep_nodes;
-		delete[] sep_edges;
-		delete[] new_edges;
+	for(typename RefGraph<index_t>::Edge* edge = base.edges.begin(); edge != base.edges.end(); edge++) {
+		to_index[edge->to]++;
 	}
+	index_t tot = to_index[0];
+	to_index[0] = 0;
+	for(index_t i = 1; i < to_index.size(); i++) {
+		tot += to_index[i];
+		to_index[i] = tot - to_index[i];
+	}
+	//initialize and fill direct-access table
+	//use from_index to keep track of where to add next
+	EList<index_t> to_table;
+	to_table.resizeExact(base.edges.size());
+	to_table.fillZero();
+	for(typename RefGraph<index_t>::Edge* edge = base.edges.begin(); edge != base.edges.end(); edge++) {
+		to_table[to_index[edge->to]++] = edge->from;
+	}
+	//reset from_index
+	for(index_t i = to_index.size() - 1; i > 0; i--) {
+		to_index[i] = to_index[i - 1];
+	}
+	to_index[0] = 0;
+
+	// Now query against hash-table
+
+	//count number of edges
+	index_t label_index[7] = {0};
+	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
+			switch(base.nodes[to_table[j]].label) {
+				case 'A':
+					label_index[0]++;
+					break;
+				case 'C':
+					label_index[1]++;
+					break;
+				case 'G':
+					label_index[2]++;
+					break;
+				case 'T':
+					label_index[3]++;
+					break;
+				case 'N':
+					label_index[4]++;
+					break;
+				case 'Y':
+					label_index[5]++;
+					break;
+				case 'Z':
+					label_index[6]++;
+					break;
+				default:
+					assert(false);
+					throw 1;
+			}
+		}
+	}
+	// make new nodes
+	tot = label_index[0];
+	label_index[0] = 0;
+	for(int i = 1; i < 7; i++) {
+		tot += label_index[i];
+		label_index[i] = tot - label_index[i];
+	}
+	edges.resizeExact(tot);
+	edges.fillZero();
+	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
+			switch(base.nodes[to_table[j]].label) {
+				case 'A':
+					edges[label_index[0]++] = PathEdge(to_table[j], node->key.first, 'A');
+					break;
+				case 'C':
+					edges[label_index[1]++] = PathEdge(to_table[j], node->key.first, 'C');
+					break;
+				case 'G':
+					edges[label_index[2]++] = PathEdge(to_table[j], node->key.first, 'G');
+					break;
+				case 'T':
+					edges[label_index[3]++] = PathEdge(to_table[j], node->key.first, 'T');
+					break;
+				case 'N':
+					edges[label_index[4]++] = PathEdge(to_table[j], node->key.first, 'N');
+					break;
+				case 'Y':
+					edges[label_index[5]++] = PathEdge(to_table[j], node->key.first, 'Y');
+					break;
+				case 'Z':
+					edges[label_index[6]++] = PathEdge(to_table[j], node->key.first, 'Z');
+					break;
+				default:
+					assert(false);
+					throw 1;
+			}
+		}
+	}
+
 
 #ifndef NDEBUG
     if(debug) {
