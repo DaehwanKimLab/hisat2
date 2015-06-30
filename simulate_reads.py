@@ -22,6 +22,7 @@
 from sys import stdout, stderr, exit
 from collections import defaultdict, Counter
 from argparse import ArgumentParser, FileType
+from math import exp
 
 """
 """
@@ -77,7 +78,7 @@ def read_genome(genome_file):
 """
 def read_transcript(gtf_file):
     genes = defaultdict(list)
-    trans = {}
+    transcripts = {}
 
     # Parse valid exon lines from the GTF file into a dict by transcript_id
     for line in gtf_file:
@@ -86,14 +87,13 @@ def read_transcript(gtf_file):
             continue
         if '#' in line:
             line = line.split('#')[0].strip()
-
         try:
             chrom, source, feature, left, right, score, \
                 strand, frame, values = line.split('\t')
         except ValueError:
             continue
-        left, right = int(left), int(right)
-
+        # Zero-based offset
+        left, right = int(left) - 1, int(right) - 1
         if feature != 'exon' or left >= right:
             continue
 
@@ -107,14 +107,14 @@ def read_transcript(gtf_file):
             continue
 
         transcript_id = values_dict['transcript_id']
-        if transcript_id not in trans:
-            trans[transcript_id] = [chrom, strand, [[left, right]]]
+        if transcript_id not in transcripts:
+            transcripts[transcript_id] = [chrom, strand, [[left, right]]]
             genes[values_dict['gene_id']].append(transcript_id)
         else:
-            trans[transcript_id][2].append([left, right])
+            transcripts[transcript_id][2].append([left, right])
 
     # Sort exons and merge where separating introns are <=5 bps
-    for tran, [chrom, strand, exons] in trans.items():
+    for tran, [chr, strand, exons] in transcripts.items():
             exons.sort()
             tmp_exons = [exons[0]]
             for i in range(1, len(exons)):
@@ -122,35 +122,119 @@ def read_transcript(gtf_file):
                     tmp_exons[-1][1] = exons[i][1]
                 else:
                     tmp_exons.append(exons[i])
-            trans[tran] = [chrom, strand, tmp_exons]
+            transcripts[tran] = [chr, strand, tmp_exons]
+
+    return genes, transcripts
+    
 
 """
 """
 def read_snp(snp_file):
-    None
+    snps = []
+    for line in snp_file:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        try:
+            snpID, type, chr, pos, data = line.split('\t')
+        except ValueError:
+            continue
+
+        assert type in ["single", "deletion", "insertion"]
+        if type == "deletion":
+            data = int(data)
+        snps.append([snpID, type, chr, int(pos), data])
+
+    return snps
 
 
+"""
+"""
+def sanity_check_input(genome_seq, genes, transcripts, snps):
+    num_canon_ss, num_ss = 0, 0
+    for transcript, [chr, strand, exons] in transcripts.items():
+        if len(exons) <= 1:
+            continue
+        if chr not in genome_seq:
+            continue
+        chr_seq = genome_seq[chr]
+        for i in range(len(exons) - 1):
+            left1, right1 = exons[i]
+            assert left1 < right1
+            left2, right2 = exons[i+1]
+            assert left2 < right2
+            assert left1 < left2 and right1 < right2
+            donor = chr_seq[right1+1:right1+3]
+            acceptor = chr_seq[left2-2:left2]
+            if strand == "-":
+                donor, acceptor = reverse_complement(acceptor), reverse_complement(donor)
+            if donor == "GT" and acceptor == "AG":
+                num_canon_ss += 1
+            num_ss += 1
+
+    print >> stdout, "GT/AG splice sites: {}/{} ({:.2%})".format(num_canon_ss, num_ss, (float(num_canon_ss) / num_ss))
+
+    num_alt_single, num_single = 0, 0
+    for snp in snps:
+        snpID, type, chr, pos, data = snp
+        if type != "single":
+            continue
+        if chr not in genome_seq:
+            continue
+        chr_seq = genome_seq[chr]
+        assert pos < len(chr_seq)
+        if chr_seq[pos] != data:
+            num_alt_single += 1
+        num_single += 1
+
+    print >> stdout, "Alternative bases: {}/{} ({:.2%})".format(num_alt_single, num_single, (float(num_alt_single) / num_single))
+
+
+"""
+"""
+def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
+    # Modelling and simulating generic RNA-Seq experiments with the flux simulator
+    # http://nar.oxfordjournals.org/content/suppl/2012/06/29/gks666.DC1/nar-02667-n-2011-File002.pdf
+    def calc_expr(x, a):
+        x, a = float(x), float(a)
+        b = a
+        k = -0.6
+        return (x**k) * exp(x/a * (x/b)**2)
+    
+    expr_profile = [0.0] * num_transcripts
+    for i in range(len(expr_profile)):
+        if expr_profile_type == "flux":
+            expr_profile[i] = calc_expr(i + 1, num_transcripts)
+        elif expr_profile_type == "constant":
+            expr_profile[i] = 1.0
+        else:
+            assert False
+
+    expr_sum = sum(expr_profile)
+    expr_profile = [expr_profile[i] / expr_sum for i in range(len(expr_profile))]
+    assert abs(sum(expr_profile) - 1.0) < 0.001
+    return expr_profile
+
+
+"""
+"""
 def simulate_reads(genome_file, gtf_file, snp_file, \
                        rna, paired_end, read_length, frag_length, \
-                       num_frag, expression_profile, sam_file, verbose):
+                       num_frag, expr_profile_type, sam_file, \
+                       sanity_check, verbose):
 
     genome_seq = read_genome(genome_file)
-    transcripts = read_transcript(gtf_file)
+    genes, transcripts = read_transcript(gtf_file)
     snps = read_snp(snp_file)
 
-    print >> sam_file, genome_seq.keys()
+    if sanity_check:
+        sanity_check_input(genome_seq, genes, transcripts, snps)
+
+    expr_profile = generate_expr_profile(expr_profile_type)
+    print expr_profile[:10]
+
 
     """
-    # Calculate and print the unique junctions
-    junctions = set()
-    for chrom, strand, exons in trans.values():
-        for i in range(1, len(exons)):
-            junctions.add((chrom, exons[i-1][1], exons[i][0], strand))
-    junctions = sorted(junctions)
-    for chrom, left, right, strand in junctions:
-        # Zero-based offset
-        print('{}\t{}\t{}\t{}'.format(chrom, left-1, right-1, strand))
-
     # Print some stats if asked
     if verbose:
         exon_lengths, intron_lengths, trans_lengths = \
@@ -166,22 +250,9 @@ def simulate_reads(genome_file, gtf_file, snp_file, \
                 intron_lengths[exon[0] - exons[i-1][1]] += 1
             trans_lengths[tran_len] += 1
 
-        print('genes: {}, genes with multiple isoforms: {}'.format(
-                len(genes), sum(len(v) > 1 for v in genes.values())),
-              file=stderr)
-        print('transcripts: {}, transcript avg. length: {:d}'.format(
-                len(trans), sum(trans_lengths.elements())/len(trans)),
-              file=stderr)
         print('exons: {}, exon avg. length: {:d}'.format(
                 sum(exon_lengths.values()),
                 sum(exon_lengths.elements())/sum(exon_lengths.values())),
-              file=stderr)
-        print('introns: {}, intron avg. length: {:d}'.format(
-                sum(intron_lengths.values()),
-                sum(intron_lengths.elements())/sum(intron_lengths.values())),
-              file=stderr)
-        print('average number of exons per transcript: {:d}'.format(
-                sum(exon_lengths.values())/len(trans)),
               file=stderr)
     """
 
@@ -229,8 +300,8 @@ if __name__ == '__main__':
                         type=int,
                         default=1000000,
                         help='number of fragments (default: 1000000)')
-    parser.add_argument('-e', '--expression-profile',
-                        dest='expression_profile',
+    parser.add_argument('-e', '--expr-profile',
+                        dest='expr_profile',
                         action='store',
                         type=str,
                         default='flux',
@@ -240,6 +311,10 @@ if __name__ == '__main__':
                         type=FileType('w'),
                         default=stdout,
                         help='output SAM file (use "-" for stdin)')
+    parser.add_argument('--sanity-check',
+                        dest='sanity_check',
+                        action='store_true',
+                        help='sanity check')
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -253,5 +328,5 @@ if __name__ == '__main__':
         exit(1)
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, \
                        args.rna, args.paired_end, args.read_length, args.frag_length, \
-                       args.num_frag, args.expression_profile, \
-                       args.sam_file, args.verbose)
+                       args.num_frag, args.expr_profile, \
+                       args.sam_file, args.sanity_check, args.verbose)
