@@ -19,10 +19,10 @@
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from sys import stdout, stderr, exit
+import sys, math, random
 from collections import defaultdict, Counter
 from argparse import ArgumentParser, FileType
-from math import exp
+
 
 """
 """
@@ -76,7 +76,7 @@ def read_genome(genome_file):
 
 """
 """
-def read_transcript(gtf_file):
+def read_transcript(gtf_file, frag_len):
     genes = defaultdict(list)
     transcripts = {}
 
@@ -124,6 +124,15 @@ def read_transcript(gtf_file):
                     tmp_exons.append(exons[i])
             transcripts[tran] = [chr, strand, tmp_exons]
 
+    tmp_transcripts = {}
+    for tran, [chr, strand, exons] in transcripts.items():
+        exon_lens = [e[1] - e[0] + 1 for e in exons]
+        transcript_len = sum(exon_lens)
+        if transcript_len >= frag_len:
+            tmp_transcripts[tran] = [chr, strand, transcript_len, exons]
+
+    transcripts = tmp_transcripts
+
     return genes, transcripts
     
 
@@ -150,9 +159,10 @@ def read_snp(snp_file):
 
 """
 """
-def sanity_check_input(genome_seq, genes, transcripts, snps):
+def sanity_check_input(genome_seq, genes, transcripts, snps, frag_len):
     num_canon_ss, num_ss = 0, 0
-    for transcript, [chr, strand, exons] in transcripts.items():
+    for transcript, [chr, strand, transcript_len, exons] in transcripts.items():
+        assert transcript_len >= frag_len
         if len(exons) <= 1:
             continue
         if chr not in genome_seq:
@@ -172,7 +182,7 @@ def sanity_check_input(genome_seq, genes, transcripts, snps):
                 num_canon_ss += 1
             num_ss += 1
 
-    print >> stdout, "GT/AG splice sites: {}/{} ({:.2%})".format(num_canon_ss, num_ss, (float(num_canon_ss) / num_ss))
+    print >> sys.stderr, "GT/AG splice sites: {}/{} ({:.2%})".format(num_canon_ss, num_ss, (float(num_canon_ss) / num_ss))
 
     num_alt_single, num_single = 0, 0
     for snp in snps:
@@ -187,7 +197,7 @@ def sanity_check_input(genome_seq, genes, transcripts, snps):
             num_alt_single += 1
         num_single += 1
 
-    print >> stdout, "Alternative bases: {}/{} ({:.2%})".format(num_alt_single, num_single, (float(num_alt_single) / num_single))
+    print >> sys.stderr, "Alternative bases: {}/{} ({:.2%})".format(num_alt_single, num_single, (float(num_alt_single) / num_single))
 
 
 """
@@ -196,10 +206,9 @@ def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
     # Modelling and simulating generic RNA-Seq experiments with the flux simulator
     # http://nar.oxfordjournals.org/content/suppl/2012/06/29/gks666.DC1/nar-02667-n-2011-File002.pdf
     def calc_expr(x, a):
-        x, a = float(x), float(a)
-        b = a
+        x, a, b = float(x), 9500.0, 9500.0
         k = -0.6
-        return (x**k) * exp(x/a * (x/b)**2)
+        return (x**k) * math.exp(x/a * (x/b)**2)
     
     expr_profile = [0.0] * num_transcripts
     for i in range(len(expr_profile)):
@@ -218,43 +227,75 @@ def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
 
 """
 """
-def simulate_reads(genome_file, gtf_file, snp_file, \
-                       rna, paired_end, read_length, frag_length, \
-                       num_frag, expr_profile_type, sam_file, \
+def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
+                       rna, paired_end, read_len, frag_len, \
+                       num_frag, expr_profile_type, \
                        sanity_check, verbose):
+    if read_len > frag_len:
+        frag_len = read_len
 
     genome_seq = read_genome(genome_file)
-    genes, transcripts = read_transcript(gtf_file)
+    genes, transcripts = read_transcript(gtf_file, frag_len)
     snps = read_snp(snp_file)
 
     if sanity_check:
-        sanity_check_input(genome_seq, genes, transcripts, snps)
+        sanity_check_input(genome_seq, genes, transcripts, snps, frag_len)
 
-    expr_profile = generate_expr_profile(expr_profile_type)
-    print expr_profile[:10]
+    num_transcripts = min(len(transcripts), 10000)
+    expr_profile = generate_expr_profile(expr_profile_type, num_transcripts)
+    expr_profile = [int(expr_profile[i] * num_frag) for i in range(len(expr_profile))]
 
+    assert num_frag >= sum(expr_profile)
+    expr_profile[0] += (num_frag - sum(expr_profile))
+    assert num_frag == sum(expr_profile)
 
-    """
-    # Print some stats if asked
-    if verbose:
-        exon_lengths, intron_lengths, trans_lengths = \
-            Counter(), Counter(), Counter()
-        for chrom, strand, exons in trans.values():
-            tran_len = 0
-            for i, exon in enumerate(exons):
-                exon_len = exon[1]-exon[0]+1
-                exon_lengths[exon_len] += 1
-                tran_len += exon_len
-                if i == 0:
-                    continue
-                intron_lengths[exon[0] - exons[i-1][1]] += 1
-            trans_lengths[tran_len] += 1
+    transcript_ids = transcripts.keys()
+    random.shuffle(transcript_ids)
 
-        print('exons: {}, exon avg. length: {:d}'.format(
-                sum(exon_lengths.values()),
-                sum(exon_lengths.elements())/sum(exon_lengths.values())),
-              file=stderr)
-    """
+    sam_file = open(base_fname + ".sam", "w")
+    read_file = open(base_fname + "_1.fa", "w")
+    if paired_end:
+        read2_file = open(base_fname + "_2.fa", "w")
+
+    assert len(transcript_ids) >= len(expr_profile)
+    cur_read_id = 1
+    for t in range(len(expr_profile)):
+        transcript_id = transcript_ids[t]
+        chr, strand, transcript_len, exons = transcripts[transcript_id]
+        t_num_frags = expr_profile[t]
+        t_seq = ""
+        assert chr in genome_seq
+        chr_seq = genome_seq[chr]
+        for e in exons:
+            assert e[0] < e[1]
+            t_seq += chr_seq[e[0]:e[1]+1]
+
+        assert len(t_seq) == transcript_len
+
+        for f in range(t_num_frags):
+            frag_pos = random.randint(0, transcript_len - frag_len)
+            assert frag_pos + frag_len <= transcript_len
+            read_seq = t_seq[frag_pos:frag_pos+read_len]
+            print >> read_file, ">{}".format(cur_read_id)
+            print >> read_file, read_seq
+
+            flag, flag2 = 99, 163
+            pos, pos2 = 0, 0
+            cigar, cigar2 = "100M", "100M"
+
+            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}0\t{}\t*\tAS:i:0\tXM:i:0\tNM:i:0\tMD:Z:100\tTI:Z:{}".format(cur_read_id, flag, chr, pos, cigar, chr, pos2, read_seq, transcript_id)
+            if paired_end:
+                read2_seq = t_seq[frag_pos+frag_len-read_len:frag_pos+frag_len]
+                print >> read2_file, ">{}".format(cur_read_id)
+                print >> read2_file, reverse_complement(read2_seq)
+                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}0\t{}\t*\tAS:i:0\tXM:i:0\tNM:i:0\tMD:Z:100\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2, chr, pos, read2_seq, transcript_id)
+
+            cur_read_id += 1                
+        
+    sam_file.close()
+    read_file.close()
+    if paired_end:
+        read2_file.close()
 
 
 if __name__ == '__main__':
@@ -272,6 +313,10 @@ if __name__ == '__main__':
                         nargs='?',
                         type=FileType('r'),
                         help='input SNP file')
+    parser.add_argument('base_fname',
+                        nargs='?',
+                        type=str,
+                        help='output base filename')
     parser.add_argument('-d', '--dna',
                         dest='rna',
                         action='store_false',
@@ -283,13 +328,13 @@ if __name__ == '__main__':
                         default=True,
                         help='single-end reads (default: paired-end reads)')
     parser.add_argument('-r', '--read-length',
-                        dest='read_length',
+                        dest='read_len',
                         action='store',
                         type=int,
                         default=100,
                         help='read length (default: 100)')
     parser.add_argument('-f', '--fragment-length',
-                        dest='frag_length',
+                        dest='frag_len',
                         action='store',
                         type=int,
                         default=250,
@@ -306,11 +351,6 @@ if __name__ == '__main__':
                         type=str,
                         default='flux',
                         help='expression profile: flux or constant (default: flux)')
-    parser.add_argument('-s', '--sam-file',
-                        dest='sam_file',
-                        type=FileType('w'),
-                        default=stdout,
-                        help='output SAM file (use "-" for stdin)')
     parser.add_argument('--sanity-check',
                         dest='sanity_check',
                         action='store_true',
@@ -326,7 +366,7 @@ if __name__ == '__main__':
     if not args.gtf_file:
         parser.print_help()
         exit(1)
-    simulate_reads(args.genome_file, args.gtf_file, args.snp_file, \
-                       args.rna, args.paired_end, args.read_length, args.frag_length, \
+    simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
+                       args.rna, args.paired_end, args.read_len, args.frag_len, \
                        args.num_frag, args.expr_profile, \
-                       args.sam_file, args.sanity_check, args.verbose)
+                       args.sanity_check, args.verbose)
