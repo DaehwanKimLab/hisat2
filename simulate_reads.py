@@ -275,23 +275,82 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         for f in range(t_num_frags):
             frag_pos = random.randint(0, transcript_len - frag_len)
             assert frag_pos + frag_len <= transcript_len
-            read_seq = t_seq[frag_pos:frag_pos+read_len]
-            print >> read_file, ">{}".format(cur_read_id)
-            print >> read_file, read_seq
 
-            flag, flag2 = 99, 163
-            pos, pos2 = 0, 0
-            cigar, cigar2 = "100M", "100M"
+            def getMapInfo(exons, frag_pos, read_len):
+                pos, cigar = exons[0][0], ""
+                e_pos = 0
+                prev_e = None
+                for e_i in range(len(exons)):
+                    e = exons[e_i]
+                    if prev_e:
+                        i_len = e[0] - prev_e[1] - 1
+                        pos += i_len
+                    e_len = e[1] - e[0] + 1
+                    if e_len <= frag_pos:
+                        frag_pos -= e_len
+                        pos += e_len
+                    else:
+                        pos += frag_pos
+                        e_pos = frag_pos
+                        break                        
+                    prev_e = e
+                    
+                assert e_i < len(exons)
+                assert e_pos < exons[e_i][1] - exons[e_i][0] + 1
+                prev_e = None
+                for e in exons[e_i:]:
+                    if prev_e:
+                        i_len = e[0] - prev_e[1] - 1
+                        cigar += ("{}N".format(i_len))
+                    e_len = e[1] - e[0] + 1
+                    if e_len < e_pos + read_len:
+                        m_len = e_len - e_pos
+                        e_pos = 0
+                        read_len -= m_len
+                        cigar += ("{}M".format(m_len))
+                    else:
+                        cigar += ("{}M".format(read_len))
+                        read_len = 0
+                        break
+                    prev_e = e
 
-            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}0\t{}\t*\tAS:i:0\tXM:i:0\tNM:i:0\tMD:Z:100\tTI:Z:{}".format(cur_read_id, flag, chr, pos, cigar, chr, pos2, read_seq, transcript_id)
+                return pos, cigar
+            
+            flag, flag2 = 99, 163  # 83, 147
+            pos, cigar = getMapInfo(exons, frag_pos, read_len)
+            pos2, cigar2 = getMapInfo(exons, frag_pos+frag_len-read_len, read_len)
+            read_seq, read2_seq  = t_seq[frag_pos:frag_pos+read_len], t_seq[frag_pos+frag_len-read_len:frag_pos+frag_len]
+
+            swapped = False
             if paired_end:
-                read2_seq = t_seq[frag_pos+frag_len-read_len:frag_pos+frag_len]
-                print >> read2_file, ">{}".format(cur_read_id)
-                print >> read2_file, reverse_complement(read2_seq)
-                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}0\t{}\t*\tAS:i:0\tXM:i:0\tNM:i:0\tMD:Z:100\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2, chr, pos, read2_seq, transcript_id)
+                if random.randint(0, 1) == 1:
+                    swapped = True
+                if swapped:
+                    flag, flag2 = flag2 - 16, flag - 16
+                    pos, pos2 = pos2, pos
+                    cigar, cigar2 = cigar2, cigar
+                    read_seq, read2_seq = read2_seq, read_seq                    
+                
+            if sanity_check:
+                None
 
-            cur_read_id += 1                
-        
+            print >> read_file, ">{}".format(cur_read_id)
+            if swapped:
+                print >> read_file, reverse_complement(read_seq)
+            else:
+                print >> read_file, read_seq
+            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tAS:i:0\tXM:i:0\tNM:i:0\tMD:Z:100\tTI:Z:{}".format(cur_read_id, flag, chr, pos, cigar, chr, pos2, read_seq, transcript_id)
+            if paired_end:
+                print >> read2_file, ">{}".format(cur_read_id)
+                if swapped:
+                    print >> read2_file, read2_seq
+                else:
+                    print >> read2_file, reverse_complement(read2_seq)
+                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tAS:i:0\tXM:i:0\tNM:i:0\tMD:Z:100\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2, chr, pos, read2_seq, transcript_id)
+
+            cur_read_id += 1
+
+            
     sam_file.close()
     read_file.close()
     if paired_end:
