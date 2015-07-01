@@ -19,7 +19,7 @@
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys, math, random
+import sys, math, random, re
 from collections import defaultdict, Counter
 from argparse import ArgumentParser, FileType
 
@@ -227,10 +227,45 @@ def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
 
 """
 """
+cigar_re = re.compile('\d+\w')
+def mapRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD):
+    assert chr in genome_seq
+    chr_seq = genome_seq[chr]
+    assert pos < len(chr_seq)
+
+    tXM, tNM, tMD = 0, 0, ""
+    cigars = cigar_re.findall(cigar)
+    cigars = [[int(cigars[i][:-1]), cigars[i][-1]] for i in range(len(cigars))]
+    read_pos, ref_pos = 0, pos
+    for i in range(len(cigars)):
+        cigar_len, cigar_op = cigars[i]
+        if cigar_op == "M":
+            read_partial_seq = read_seq[read_pos:read_pos+cigar_len]
+            ref_partial_seq = chr_seq[ref_pos:ref_pos+cigar_len]
+            assert len(read_partial_seq) == len(ref_partial_seq)
+            for j in range(len(read_partial_seq)):
+                if read_partial_seq[j] != ref_partial_seq[j]:
+                    tXM += 1
+                    tNM += 1
+
+        # if cigar_op == "N":
+        #    left, right = ref_pos - 1, ref_pos + cigar_len
+
+        if cigar_op in "MND":
+            ref_pos += cigar_len
+        if cigar_op in "MI":
+            read_pos += cigar_len
+
+    assert tXM == XM and tNM == NM
+
+    
+"""
+"""
 def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                        rna, paired_end, read_len, frag_len, \
-                       num_frag, expr_profile_type, \
+                       num_frag, expr_profile_type, random_seed, \
                        sanity_check, verbose):
+    random.seed(random_seed)
     if read_len > frag_len:
         frag_len = read_len
 
@@ -320,6 +355,9 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             pos, cigar = getMapInfo(exons, frag_pos, read_len)
             pos2, cigar2 = getMapInfo(exons, frag_pos+frag_len-read_len, read_len)
             read_seq, read2_seq  = t_seq[frag_pos:frag_pos+read_len], t_seq[frag_pos+frag_len-read_len:frag_pos+frag_len]
+            XM, XM2 = 0, 0
+            NM, NM2 = 0, 0
+            MD, MD2 = "100", "100"
 
             swapped = False
             if paired_end:
@@ -329,24 +367,28 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                     flag, flag2 = flag2 - 16, flag - 16
                     pos, pos2 = pos2, pos
                     cigar, cigar2 = cigar2, cigar
-                    read_seq, read2_seq = read2_seq, read_seq                    
+                    read_seq, read2_seq = read2_seq, read_seq
+                    XM, XM2 = XM2, XM
+                    NM, NM2 = NM2, NM
+                    MD, MD2 = MD2, MD
                 
             if sanity_check:
-                None
+                mapRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD)
+                mapRepOk(genome_seq, read2_seq, chr, pos2, cigar2, XM2, NM2, MD2)
 
             print >> read_file, ">{}".format(cur_read_id)
             if swapped:
                 print >> read_file, reverse_complement(read_seq)
             else:
                 print >> read_file, read_seq
-            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tAS:i:0\tXM:i:0\tNM:i:0\tMD:Z:100\tTI:Z:{}".format(cur_read_id, flag, chr, pos, cigar, chr, pos2, read_seq, transcript_id)
+            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}\tTI:Z:{}".format(cur_read_id, flag, chr, pos, cigar, chr, pos2, read_seq, XM, NM, MD, transcript_id)
             if paired_end:
                 print >> read2_file, ">{}".format(cur_read_id)
                 if swapped:
                     print >> read2_file, read2_seq
                 else:
                     print >> read2_file, reverse_complement(read2_seq)
-                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tAS:i:0\tXM:i:0\tNM:i:0\tMD:Z:100\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2, chr, pos, read2_seq, transcript_id)
+                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2, chr, pos, read2_seq, XM2, NM2, MD2, transcript_id)
 
             cur_read_id += 1
 
@@ -410,6 +452,12 @@ if __name__ == '__main__':
                         type=str,
                         default='flux',
                         help='expression profile: flux or constant (default: flux)')
+    parser.add_argument('--random-seed',
+                        dest='random_seed',
+                        action='store',
+                        type=int,
+                        default=0,
+                        help='random seeding value (default: 0)')
     parser.add_argument('--sanity-check',
                         dest='sanity_check',
                         action='store_true',
@@ -427,5 +475,5 @@ if __name__ == '__main__':
         exit(1)
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
                        args.rna, args.paired_end, args.read_len, args.frag_len, \
-                       args.num_frag, args.expr_profile, \
+                       args.num_frag, args.expr_profile, args.random_seed, \
                        args.sanity_check, args.verbose)
