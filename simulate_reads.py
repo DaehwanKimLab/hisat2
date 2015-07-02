@@ -233,7 +233,7 @@ def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
 """
 """
 cigar_re = re.compile('\d+\w')
-def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD):
+def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
     assert chr in genome_seq
     chr_seq = genome_seq[chr]
     assert pos < len(chr_seq)
@@ -287,10 +287,10 @@ def getSNPs(chr_snps, left, right):
         pos2 = pos
         if type == "deletion":
             pos2 += data
-        if pos >= right:
+        if pos2 >= right:
             break
         if pos >= left:
-            if len(snps) > 1:
+            if len(snps) > 0:
                 _, prev_type, prev_pos, prev_data = snps[-1]
                 assert prev_pos <= pos
                 prev_pos2 = prev_pos
@@ -327,7 +327,7 @@ def getSamAlignment(exons, trans_seq, frag_pos, read_len, chr_snps, error_rate):
             break                        
         prev_e = e
 
-    # Define Cigar and its description
+    # Define Cigar and its descriptions
     assert e_i < len(exons)
     e_len = exons[e_i][1] - exons[e_i][0] + 1
     assert e_pos < e_len
@@ -364,35 +364,48 @@ def getSamAlignment(exons, trans_seq, frag_pos, read_len, chr_snps, error_rate):
             tmp_read_len = 0
             break
         prev_e = e
-    
+
     # Define MD, XM, NM, Zs, read_seq
-    assert frag_pos + read_len <= len(trans_seq)
-    MD, XM, NM, Zs, read_seq = "", 0, 0, "", trans_seq[frag_pos:frag_pos+read_len]
+    MD, XM, NM, Zs, read_seq = "", 0, 0, "", ""
     assert len(cigars) == len(cigar_descs)
     match_len = 0
+    cur_trans_pos = frag_pos
     for c in range(len(cigars)):
         cigar = cigars[c]
-        cigar_len, cigar_op = cigar[:-1], cigar[-1]
+        cigar_len, cigar_op = int(cigar[:-1]), cigar[-1]
         cigar_desc = cigar_descs[c]
         if cigar_op == 'N':
             continue
         if cigar_op == 'M':
             for add_match_len, alt_base, snp_id in cigar_desc:
                 match_len += add_match_len
+                assert cur_trans_pos + add_match_len <= len(trans_seq)
+                read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
+                cur_trans_pos += add_match_len
                 if alt_base != "":
                     if match_len > 0:
                         MD += ("{}".format(match_len))
                     MD += alt_base
+                    if snp_id != "":
+                        if Zs != "":
+                            Zs += ","
+                        Zs += ("{}|S|{}".format(match_len, snp_id))
                     match_len = 0
-                    if snp_id == "":
+                    # daehwan - for debugging purposes
+                    # if snp_id == "":
+                    if snp_id == "" or True:
                         XM += 1
                         NM += 1
+                    read_seq += alt_base
+                    cur_trans_pos += 1
         elif cigar_op == 'D':
             assert False
         elif cigar_op == 'I':
             assert False
         else:
             assert False
+        
+    assert len(read_seq) == read_len
     if match_len > 0:
         MD += ("{}".format(match_len))
 
@@ -478,8 +491,13 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
 
             cigar_str, cigar2_str = "".join(cigars), "".join(cigars2)
             if sanity_check:
-                samRepOk(genome_seq, read_seq, chr, pos, cigar_str, XM, NM, MD)
-                samRepOk(genome_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2)
+                samRepOk(genome_seq, read_seq, chr, pos, cigar_str, XM, NM, MD, Zs)
+                samRepOk(genome_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2, Zs2)
+
+            if Zs != "":
+                Zs = ("\tZs:Z:{}".format(Zs))
+            if Zs2 != "":
+                Zs2 = ("\tZs:Z:{}".format(Zs2))
 
             print >> read_file, ">{}".format(cur_read_id)
             if swapped:
@@ -496,7 +514,6 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                 print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2_str, chr, pos, read2_seq, XM2, NM2, MD2, Zs2, transcript_id)
 
             cur_read_id += 1
-
             
     sam_file.close()
     read_file.close()
@@ -581,7 +598,7 @@ if __name__ == '__main__':
                         action='version',
                         version='%(prog)s 2.0.0-alpha')
     args = parser.parse_args()
-    if not args.gtf_file:
+    if not args.genome_file or not args.gtf_file or not args.snp_file:
         parser.print_help()
         exit(1)
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
