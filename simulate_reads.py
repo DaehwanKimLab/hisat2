@@ -232,45 +232,6 @@ def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
 
 """
 """
-cigar_re = re.compile('\d+\w')
-def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
-    assert chr in genome_seq
-    chr_seq = genome_seq[chr]
-    assert pos < len(chr_seq)
-
-    tXM, tNM, tMD = 0, 0, ""
-    cigars = cigar_re.findall(cigar)
-    cigars = [[int(cigars[i][:-1]), cigars[i][-1]] for i in range(len(cigars))]
-    read_pos, ref_pos = 0, pos
-    for i in range(len(cigars)):
-        cigar_len, cigar_op = cigars[i]
-        if cigar_op == "M":
-            read_partial_seq = read_seq[read_pos:read_pos+cigar_len]
-            ref_partial_seq = chr_seq[ref_pos:ref_pos+cigar_len]
-            assert len(read_partial_seq) == len(ref_partial_seq)
-            for j in range(len(read_partial_seq)):
-                if read_partial_seq[j] != ref_partial_seq[j]:
-                    tXM += 1
-                    tNM += 1
-
-        # if cigar_op == "N":
-        #    left, right = ref_pos - 1, ref_pos + cigar_len
-
-        if cigar_op in "MND":
-            ref_pos += cigar_len
-        if cigar_op in "MI":
-            read_pos += cigar_len
-
-    # daehwan - for debugging purposes
-    if tXM != XM or tNM != NM:
-        print chr, pos, cigar, XM, NM, MD
-        print tXM, tNM
-        sys.exit(1)
-    assert tXM == XM and tNM == NM
-
-
-"""
-"""
 def getSNPs(chr_snps, left, right):
     low, high = 0, len(chr_snps)
     while low < high:
@@ -385,15 +346,13 @@ def getSamAlignment(exons, trans_seq, frag_pos, read_len, chr_snps, error_rate):
                 if alt_base != "":
                     if match_len > 0:
                         MD += ("{}".format(match_len))
-                    MD += alt_base
+                    MD += trans_seq[cur_trans_pos]
                     if snp_id != "":
                         if Zs != "":
                             Zs += ","
                         Zs += ("{}|S|{}".format(match_len, snp_id))
                     match_len = 0
-                    # daehwan - for debugging purposes
-                    # if snp_id == "":
-                    if snp_id == "" or True:
+                    if snp_id == "":
                         XM += 1
                         NM += 1
                     read_seq += alt_base
@@ -410,6 +369,109 @@ def getSamAlignment(exons, trans_seq, frag_pos, read_len, chr_snps, error_rate):
         MD += ("{}".format(match_len))
 
     return pos, cigars, cigar_desc, MD, XM, NM, Zs, read_seq
+
+
+"""
+"""
+cigar_re = re.compile('\d+\w')
+def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
+    assert chr in genome_seq
+    chr_seq = genome_seq[chr]
+    assert pos < len(chr_seq)
+
+    # Calculate XM and NM based on Cigar and Zs
+    cigars = cigar_re.findall(cigar)
+    cigars = [[int(cigars[i][:-1]), cigars[i][-1]] for i in range(len(cigars))]
+    read_pos, ref_pos = 0, pos
+    tXM, tNM = 0, 0
+    Zss, Zs_i, snp_pos_add = [], 0, 0
+    if Zs != "":
+        Zss = Zs.split(',')
+        Zss = [zs.split('|') for zs in Zss]
+    for i in range(len(cigars)):
+        cigar_len, cigar_op = cigars[i]
+        if cigar_op == "M":
+            partial_ref_seq = chr_seq[ref_pos:ref_pos+cigar_len]
+            partial_read_seq = read_seq[read_pos:read_pos+cigar_len]
+            for j in range(cigar_len):
+                if partial_ref_seq[j] != partial_read_seq[j]:
+                    isSNP = False
+                    if Zs_i < len(Zss):
+                        snp_pos, snp_type, _ = Zss[Zs_i]
+                        snp_pos = int(snp_pos)
+                        if snp_type == 'S':
+                            if read_pos + j == snp_pos + snp_pos_add:
+                                isSNP = True
+                                Zs_i += 1
+                                snp_pos_add += (snp_pos + 1)
+
+                    if not isSNP:
+                        tXM += 1
+                        tNM += 1
+            
+        if cigar_op in "MND":
+            ref_pos += cigar_len
+        if cigar_op in "MI":
+            read_pos += cigar_len
+
+    # daehwan - for debugging purposes
+    if tXM != XM or tNM != NM:
+        print chr, pos, cigar, XM, NM, MD, Zs
+        print tXM, tNM
+        sys.exit(1)
+        
+    assert tXM == XM and tNM == NM
+
+    # Reconstruct read sequence from the corresponding ref. sequence for this alignment
+    ref_pos, ref_seq, = pos, ""
+    for i in range(len(cigars)):
+        cigar_len, cigar_op = cigars[i]
+        if cigar_op == "M":
+            ref_seq += chr_seq[ref_pos:ref_pos+cigar_len]
+        if cigar_op in "MND":
+            ref_pos += cigar_len
+
+    MDs, MD_str, MD_number = [], "", True
+    for i in range(len(MD)):
+        MD_number2 = (MD[i] >= "0" and MD[i] <= "9")
+        if MD_str == "":
+            MD_str = MD[i]
+            MD_number = MD_number2
+            continue
+        if MD_number != MD_number2:
+            if MD_number:
+                MDs.append(int(MD_str))
+            else:
+                MDs.append(MD_str)
+            MD_str = ""
+
+        MD_str += MD[i]
+        MD_number = MD_number2
+    assert MD_str != ""
+    if MD_number:
+        MDs.append(int(MD_str))
+    else:
+        MDs.append(MD_str)
+
+    read_pos, tmp_ref_seq = 0, ""
+    for md in MDs:
+        if type(md) == int:
+            tmp_ref_seq += read_seq[read_pos:read_pos+md]
+            read_pos += md
+        else:
+            tmp_ref_seq += md
+            read_pos += 1
+
+    # daehwan - for debugging purposes
+    if ref_seq != tmp_ref_seq:
+        print chr, pos, cigar, XM, NM, MD, Zs
+        print ref_seq
+        print "\tvs."
+        print tmp_ref_seq
+        sys.exit(1)        
+
+    assert len(ref_seq) == len(tmp_ref_seq)
+    assert ref_seq == tmp_ref_seq
 
 
 """
