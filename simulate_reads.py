@@ -259,7 +259,6 @@ def getSNPs(chr_snps, left, right):
                     prev_pos2 += prev_data
                 if pos <= prev_pos2:
                     continue
-
             snps.append(snp)
 
     return snps
@@ -382,98 +381,95 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
     # Calculate XM and NM based on Cigar and Zs
     cigars = cigar_re.findall(cigar)
     cigars = [[int(cigars[i][:-1]), cigars[i][-1]] for i in range(len(cigars))]
-    read_pos, ref_pos = 0, pos
-    tXM, tNM = 0, 0
-    Zss, Zs_i, snp_pos_add = [], 0, 0
-    if Zs != "":
-        Zss = Zs.split(',')
-        Zss = [zs.split('|') for zs in Zss]
+    ref_pos, read_pos = pos, 0
+    ann_ref_seq, ann_ref_rel, ann_read_seq, ann_read_rel = [], [], [], []
     for i in range(len(cigars)):
         cigar_len, cigar_op = cigars[i]
         if cigar_op == "M":
             partial_ref_seq = chr_seq[ref_pos:ref_pos+cigar_len]
             partial_read_seq = read_seq[read_pos:read_pos+cigar_len]
-            for j in range(cigar_len):
-                if partial_ref_seq[j] != partial_read_seq[j]:
-                    isSNP = False
-                    if Zs_i < len(Zss):
-                        snp_pos, snp_type, _ = Zss[Zs_i]
-                        snp_pos = int(snp_pos)
-                        if snp_type == 'S':
-                            if read_pos + j == snp_pos + snp_pos_add:
-                                isSNP = True
-                                Zs_i += 1
-                                snp_pos_add += (snp_pos + 1)
-
-                    if not isSNP:
-                        tXM += 1
-                        tNM += 1
-            
-        if cigar_op in "MND":
+            assert len(partial_ref_seq) == len(partial_read_seq)
+            ann_ref_seq += list(partial_ref_seq)
+            ann_read_seq += list(partial_read_seq)
+            for j in range(len(partial_ref_seq)):
+                if partial_ref_seq[j] == partial_read_seq[j]:
+                    ann_ref_rel.append("=")
+                    ann_read_rel.append("=")
+                else:
+                    ann_ref_rel.append("X")
+                    ann_read_rel.append("X")
             ref_pos += cigar_len
-        if cigar_op in "MI":
             read_pos += cigar_len
+        elif cigar_op == "D":
+            partial_ref_seq = chr_seq[ref_pos:ref_pos+cigar_len]
+            ann_ref_rel += list(partial_ref_seq)
+            ann_read_rel += (["-"] * cigar_len)
+            ref_pos += cigar_len
+        elif cigar_op == "I":
+            partial_read_seq = read_seq[read_pos:read_pos+cigar_len]
+            ann_ref_rel += (["-"] * cigar_len)
+            ann_read_rel += list(read_seq) 
+            read_pos += cigar_len
+        elif cigar_op == "N":
+            ref_pos += cigar_len
+        else:
+            assert False
+    assert len(ann_ref_seq) == len(ann_read_seq)
+    assert len(ann_ref_seq) == len(ann_ref_rel)
+    assert len(ann_ref_seq) == len(ann_read_rel)
+    ann_Zs_seq = ["0" for i in range(len(ann_ref_seq))]
+
+    Zss, Zs_i, snp_pos_add = [], 0, 0
+    if Zs != "":
+        Zss = Zs.split(',')
+        Zss = [zs.split('|') for zs in Zss]
+    ann_read_pos = 0
+    for zs in Zss:
+        zs_pos, zs_type, zs_id = zs
+        zs_pos = int(zs_pos)
+        for i in range(zs_pos):
+            ann_read_pos += 1
+        ann_Zs_seq[ann_read_pos] = "1"
+        ann_read_pos += 1
 
     # daehwan - for debugging purposes
-    if tXM != XM or tNM != NM:
-        print chr, pos, cigar, XM, NM, MD, Zs
-        print tXM, tNM
+    if len(Zss) > 2 and False:
+        print len(ann_ref_seq), "".join(ann_ref_seq)
+        print len(ann_ref_rel), "".join(ann_ref_rel)
+        print len(ann_read_rel), "".join(ann_read_rel)
+        print len(ann_Zs_seq), "".join(ann_Zs_seq)
+        print len(ann_read_seq), "".join(ann_read_seq)
         sys.exit(1)
         
-    assert tXM == XM and tNM == NM
-
-    # Reconstruct read sequence from the corresponding ref. sequence for this alignment
-    ref_pos, ref_seq, = pos, ""
-    for i in range(len(cigars)):
-        cigar_len, cigar_op = cigars[i]
-        if cigar_op == "M":
-            ref_seq += chr_seq[ref_pos:ref_pos+cigar_len]
-        if cigar_op in "MND":
-            ref_pos += cigar_len
-
-    MDs, MD_str, MD_number = [], "", True
-    for i in range(len(MD)):
-        MD_number2 = (MD[i] >= "0" and MD[i] <= "9")
-        if MD_str == "":
-            MD_str = MD[i]
-            MD_number = MD_number2
+    tMD, tXM, tNM = "", 0, 0
+    match_len = 0
+    for i in range(len(ann_ref_seq)):
+        if ann_ref_rel[i] == "=":
+            assert ann_read_rel[i] == "="
+            match_len += 1
             continue
-        if MD_number != MD_number2:
-            if MD_number:
-                MDs.append(int(MD_str))
-            else:
-                MDs.append(MD_str)
-            MD_str = ""
-
-        MD_str += MD[i]
-        MD_number = MD_number2
-    assert MD_str != ""
-    if MD_number:
-        MDs.append(int(MD_str))
-    else:
-        MDs.append(MD_str)
-
-    read_pos, tmp_ref_seq = 0, ""
-    for md in MDs:
-        if type(md) == int:
-            tmp_ref_seq += read_seq[read_pos:read_pos+md]
-            read_pos += md
+        assert ann_read_rel[i] != "="
+        if ann_ref_rel[i] == "X" and ann_read_rel[i] == "X":
+            if match_len > 0:
+                tMD += ("{}".format(match_len))
+            match_len = 0
+            tMD += ann_ref_seq[i]
+            if ann_Zs_seq[i] == "0":
+                XM += 1
+                NM += 1
         else:
-            tmp_ref_seq += md
-            read_pos += 1
+            assert ann_ref_rel[i] == "-" or ann_read_rel[i] == "-"
+            if ann_Zs_seq[i] == "0":
+                NM += 1
+    if match_len > 0:
+        tMD += ("{}".format(match_len))
 
-    # daehwan - for debugging purposes
-    if ref_seq != tmp_ref_seq:
-        print chr, pos, cigar, XM, NM, MD, Zs
-        print ref_seq
-        print "\tvs."
-        print tmp_ref_seq
-        sys.exit(1)        
-
-    assert len(ref_seq) == len(tmp_ref_seq)
-    assert ref_seq == tmp_ref_seq
-
-
+    if tMD != MD or tXM != XM or tNM != NM:
+        print chr, pos, cigar, MD, XM, NM, Zs
+        print tMD, tXM, tNM
+        assert False
+        
+        
 """
 """
 def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
