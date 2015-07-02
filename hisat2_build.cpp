@@ -517,7 +517,7 @@ extern "C" {
 int hisat2_build(int argc, const char **argv) {
     
     // daehwan - for debugging purposes
-#if 0
+#if 1
     size_t num_elts = (uint64_t)6 << 30;
     time_t prev = time(0);
     EList<size_t> elts; elts.resizeExact(num_elts); elts.fillZero();
@@ -547,7 +547,8 @@ int hisat2_build(int argc, const char **argv) {
         }
     }
     cout << "Sequential memory access: " << time(0) - prev << " secs" << endl;
-    
+
+    #if 0
     prev = time(0);
     for(size_t r = 0; r < rep; r++) {
         size_t next = 0;
@@ -559,6 +560,11 @@ int hisat2_build(int argc, const char **argv) {
         }
     }
     cout << "Random memory access: " << time(0) - prev << " secs" << endl;
+    #endif
+
+    prev = time(0);
+    elts.sort();
+    cout << "Sorting: " << time(0) - prev << " secs" << endl;
     
     exit(1);
 #endif

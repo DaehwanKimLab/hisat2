@@ -139,7 +139,7 @@ def read_transcript(gtf_file, frag_len):
 """
 """
 def read_snp(snp_file):
-    snps = []
+    snps = defaultdict(list)
     for line in snp_file:
         line = line.strip()
         if not line or line.startswith('#'):
@@ -152,7 +152,7 @@ def read_snp(snp_file):
         assert type in ["single", "deletion", "insertion"]
         if type == "deletion":
             data = int(data)
-        snps.append([snpID, type, chr, int(pos), data])
+        snps[chr].append([snpID, type, int(pos), data])
 
     return snps
 
@@ -185,17 +185,22 @@ def sanity_check_input(genome_seq, genes, transcripts, snps, frag_len):
     print >> sys.stderr, "GT/AG splice sites: {}/{} ({:.2%})".format(num_canon_ss, num_ss, (float(num_canon_ss) / num_ss))
 
     num_alt_single, num_single = 0, 0
-    for snp in snps:
-        snpID, type, chr, pos, data = snp
-        if type != "single":
-            continue
+    for chr, chr_snps in snps.items():
         if chr not in genome_seq:
             continue
         chr_seq = genome_seq[chr]
-        assert pos < len(chr_seq)
-        if chr_seq[pos] != data:
-            num_alt_single += 1
-        num_single += 1
+        prev_snp = None
+        for snp in chr_snps:
+            snpID, type, pos, data = snp
+            if prev_snp:
+                assert prev_snp[2] <= pos
+            prev_snp = snp
+            if type != "single":
+                continue
+            assert pos < len(chr_seq)
+            if chr_seq[pos] != data:
+                num_alt_single += 1
+            num_single += 1
 
     print >> sys.stderr, "Alternative bases: {}/{} ({:.2%})".format(num_alt_single, num_single, (float(num_alt_single) / num_single))
 
@@ -228,7 +233,7 @@ def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
 """
 """
 cigar_re = re.compile('\d+\w')
-def mapRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD):
+def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD):
     assert chr in genome_seq
     chr_seq = genome_seq[chr]
     assert pos < len(chr_seq)
@@ -256,14 +261,149 @@ def mapRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD):
         if cigar_op in "MI":
             read_pos += cigar_len
 
+    # daehwan - for debugging purposes
+    if tXM != XM or tNM != NM:
+        print chr, pos, cigar, XM, NM, MD
+        print tXM, tNM
+        sys.exit(1)
     assert tXM == XM and tNM == NM
 
+
+"""
+"""
+def getSNPs(chr_snps, left, right):
+    low, high = 0, len(chr_snps)
+    while low < high:
+        mid = (low + high) / 2
+        snpID, type, pos, data = chr_snps[mid]
+        if pos < left:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    snps = []
+    for snp in chr_snps[low:]:
+        snpID, type, pos, data = snp
+        pos2 = pos
+        if type == "deletion":
+            pos2 += data
+        if pos >= right:
+            break
+        if pos >= left:
+            if len(snps) > 1:
+                _, prev_type, prev_pos, prev_data = snps[-1]
+                assert prev_pos <= pos
+                prev_pos2 = prev_pos
+                if prev_type == "deletion":
+                    prev_pos2 += prev_data
+                if pos <= prev_pos2:
+                    continue
+
+            snps.append(snp)
+
+    return snps
+
+
+"""
+"""
+def getSamAlignment(exons, trans_seq, frag_pos, read_len, chr_snps, error_rate):
+    # Find the genomic position for frag_pos and exon number
+    tmp_frag_pos, tmp_read_len = frag_pos, read_len
+    pos, cigars, cigar_descs = exons[0][0], [], []
+    e_pos = 0
+    prev_e = None
+    for e_i in range(len(exons)):
+        e = exons[e_i]
+        if prev_e:
+            i_len = e[0] - prev_e[1] - 1
+            pos += i_len
+        e_len = e[1] - e[0] + 1
+        if e_len <= tmp_frag_pos:
+            tmp_frag_pos -= e_len
+            pos += e_len
+        else:
+            pos += tmp_frag_pos
+            e_pos = tmp_frag_pos
+            break                        
+        prev_e = e
+
+    # Define Cigar and its description
+    assert e_i < len(exons)
+    e_len = exons[e_i][1] - exons[e_i][0] + 1
+    assert e_pos < e_len
+    cur_pos = pos
+    match_len = 0
+    prev_e = None
+    for e in exons[e_i:]:
+        if prev_e:
+            i_len = e[0] - prev_e[1] - 1
+            cur_pos += i_len
+            cigars.append(("{}N".format(i_len)))
+            cigar_descs.append([])
+        tmp_e_left = e_left = e[0] + e_pos
+        e_right = min(e[1], e_left + tmp_read_len - 1)
+        e_pos = 0
+        snps = getSNPs(chr_snps, e_left, e_right)
+        cigar_descs.append([])
+        for snp in snps:
+            snp_id, snp_type, snp_pos, snp_data = snp
+            if snp_type != "single":
+                continue
+            cigar_descs[-1].append([snp_pos - tmp_e_left, snp_data, snp_id])
+            tmp_e_left = snp_pos + 1
+        e_len = e_right - e_left + 1
+        remain_e_len = e_right - tmp_e_left + 1
+        if remain_e_len > 0:
+            cigar_descs[-1].append([remain_e_len, "", ""])
+        if e_len < tmp_read_len:
+            tmp_read_len -= e_len
+            cigars.append(("{}M".format(e_len)))
+        else:
+            assert e_len == tmp_read_len
+            cigars.append(("{}M".format(tmp_read_len)))
+            tmp_read_len = 0
+            break
+        prev_e = e
     
+    # Define MD, XM, NM, Zs, read_seq
+    assert frag_pos + read_len <= len(trans_seq)
+    MD, XM, NM, Zs, read_seq = "", 0, 0, "", trans_seq[frag_pos:frag_pos+read_len]
+    assert len(cigars) == len(cigar_descs)
+    match_len = 0
+    for c in range(len(cigars)):
+        cigar = cigars[c]
+        cigar_len, cigar_op = cigar[:-1], cigar[-1]
+        cigar_desc = cigar_descs[c]
+        if cigar_op == 'N':
+            continue
+        if cigar_op == 'M':
+            for add_match_len, alt_base, snp_id in cigar_desc:
+                match_len += add_match_len
+                if alt_base != "":
+                    if match_len > 0:
+                        MD += ("{}".format(match_len))
+                    MD += alt_base
+                    match_len = 0
+                    if snp_id == "":
+                        XM += 1
+                        NM += 1
+        elif cigar_op == 'D':
+            assert False
+        elif cigar_op == 'I':
+            assert False
+        else:
+            assert False
+    if match_len > 0:
+        MD += ("{}".format(match_len))
+
+    return pos, cigars, cigar_desc, MD, XM, NM, Zs, read_seq
+
+
 """
 """
 def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                        rna, paired_end, read_len, frag_len, \
-                       num_frag, expr_profile_type, random_seed, \
+                       num_frag, expr_profile_type, error_rate, random_seed, \
                        sanity_check, verbose):
     random.seed(random_seed)
     if read_len > frag_len:
@@ -311,54 +451,16 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             frag_pos = random.randint(0, transcript_len - frag_len)
             assert frag_pos + frag_len <= transcript_len
 
-            def getMapInfo(exons, frag_pos, read_len):
-                pos, cigar = exons[0][0], ""
-                e_pos = 0
-                prev_e = None
-                for e_i in range(len(exons)):
-                    e = exons[e_i]
-                    if prev_e:
-                        i_len = e[0] - prev_e[1] - 1
-                        pos += i_len
-                    e_len = e[1] - e[0] + 1
-                    if e_len <= frag_pos:
-                        frag_pos -= e_len
-                        pos += e_len
-                    else:
-                        pos += frag_pos
-                        e_pos = frag_pos
-                        break                        
-                    prev_e = e
-                    
-                assert e_i < len(exons)
-                assert e_pos < exons[e_i][1] - exons[e_i][0] + 1
-                prev_e = None
-                for e in exons[e_i:]:
-                    if prev_e:
-                        i_len = e[0] - prev_e[1] - 1
-                        cigar += ("{}N".format(i_len))
-                    e_len = e[1] - e[0] + 1
-                    if e_len < e_pos + read_len:
-                        m_len = e_len - e_pos
-                        e_pos = 0
-                        read_len -= m_len
-                        cigar += ("{}M".format(m_len))
-                    else:
-                        cigar += ("{}M".format(read_len))
-                        read_len = 0
-                        break
-                    prev_e = e
+            if chr in snps:
+                chr_snps = snps[chr]
+            else:
+                chr_snps = []
 
-                return pos, cigar
-            
+            # SAM specification (v1.4)
+            # http://samtools.sourceforge.net/
             flag, flag2 = 99, 163  # 83, 147
-            pos, cigar = getMapInfo(exons, frag_pos, read_len)
-            pos2, cigar2 = getMapInfo(exons, frag_pos+frag_len-read_len, read_len)
-            read_seq, read2_seq  = t_seq[frag_pos:frag_pos+read_len], t_seq[frag_pos+frag_len-read_len:frag_pos+frag_len]
-            XM, XM2 = 0, 0
-            NM, NM2 = 0, 0
-            MD, MD2 = "100", "100"
-
+            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSamAlignment(exons, t_seq, frag_pos, read_len, chr_snps, error_rate)
+            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(exons, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, error_rate)
             swapped = False
             if paired_end:
                 if random.randint(0, 1) == 1:
@@ -366,29 +468,32 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                 if swapped:
                     flag, flag2 = flag2 - 16, flag - 16
                     pos, pos2 = pos2, pos
-                    cigar, cigar2 = cigar2, cigar
+                    cigars, cigars2 = cigars2, cigars
+                    cigar_descs, cigar2_descs = cigar2_descs, cigar_descs
                     read_seq, read2_seq = read2_seq, read_seq
                     XM, XM2 = XM2, XM
                     NM, NM2 = NM2, NM
                     MD, MD2 = MD2, MD
-                
+                    Zs, Zs2 = Zs2, Zs
+
+            cigar_str, cigar2_str = "".join(cigars), "".join(cigars2)
             if sanity_check:
-                mapRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD)
-                mapRepOk(genome_seq, read2_seq, chr, pos2, cigar2, XM2, NM2, MD2)
+                samRepOk(genome_seq, read_seq, chr, pos, cigar_str, XM, NM, MD)
+                samRepOk(genome_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2)
 
             print >> read_file, ">{}".format(cur_read_id)
             if swapped:
                 print >> read_file, reverse_complement(read_seq)
             else:
                 print >> read_file, read_seq
-            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}\tTI:Z:{}".format(cur_read_id, flag, chr, pos, cigar, chr, pos2, read_seq, XM, NM, MD, transcript_id)
+            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tTI:Z:{}".format(cur_read_id, flag, chr, pos, cigar_str, chr, pos2, read_seq, XM, NM, MD, Zs, transcript_id)
             if paired_end:
                 print >> read2_file, ">{}".format(cur_read_id)
                 if swapped:
                     print >> read2_file, read2_seq
                 else:
                     print >> read2_file, reverse_complement(read2_seq)
-                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2, chr, pos, read2_seq, XM2, NM2, MD2, transcript_id)
+                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2_str, chr, pos, read2_seq, XM2, NM2, MD2, Zs2, transcript_id)
 
             cur_read_id += 1
 
@@ -452,6 +557,12 @@ if __name__ == '__main__':
                         type=str,
                         default='flux',
                         help='expression profile: flux or constant (default: flux)')
+    parser.add_argument('--error-rate',
+                        dest='error_rate',
+                        action='store',
+                        type=float,
+                        default=0.0,
+                        help='per-base sequencing error rate (default: 0.0)')
     parser.add_argument('--random-seed',
                         dest='random_seed',
                         action='store',
@@ -475,5 +586,5 @@ if __name__ == '__main__':
         exit(1)
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
                        args.rna, args.paired_end, args.read_len, args.frag_len, \
-                       args.num_frag, args.expr_profile, args.random_seed, \
+                       args.num_frag, args.expr_profile, args.error_rate, args.random_seed, \
                        args.sanity_check, args.verbose)
