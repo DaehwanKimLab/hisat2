@@ -301,16 +301,57 @@ def getSamAlignment(exons, trans_seq, frag_pos, read_len, chr_snps, error_rate):
             cigars.append(("{}N".format(i_len)))
             cigar_descs.append([])
         tmp_e_left = e_left = e[0] + e_pos
-        e_right = min(e[1], e_left + tmp_read_len - 1)
         e_pos = 0
-        snps = getSNPs(chr_snps, e_left, e_right)
+        snps = getSNPs(chr_snps, e_left, e[1])
         cigar_descs.append([])
+        prev_snp = None
         for snp in snps:
             snp_id, snp_type, snp_pos, snp_data = snp
-            if snp_type != "single":
+            if prev_snp:
+                prev_snp_id, prev_snp_type, prev_snp_pos, prev_snp_data = prev_snp
+                if prev_snp_type == "deletion":
+                    prev_snp_pos += prev_snp_data
+                assert prev_snp_pos < snp_pos
+            snp_pos2 = snp_pos
+            if snp_type == "deletion":
+                snp_pos2 += snp_data
+            if e_left + tmp_read_len - 1 < snp_pos2 or e[1] < snp_pos2:
+                break            
+            if snp_type == "single":
+                cigar_descs[-1].append([snp_pos - tmp_e_left, snp_data, snp_id])
+                tmp_e_left = snp_pos + 1
+            elif snp_type == "deletion":
+                if len(cigars) > 0:
+                    del_len = snp_data
+                    if snp_pos - e_left > 0:
+                        cigars.append("{}M".format(snp_pos - e_left))
+                        cigar_descs[-1].append([snp_pos - tmp_e_left, "", ""])
+                        cigar_descs.append([])
+                    cigars.append("{}D".format(del_len))
+                    cigar_descs[-1].append([0, del_len, snp_id])
+                    cigar_descs.append([])
+                    tmp_read_len -= (snp_pos - e_left)
+                    e_left = tmp_e_left = snp_pos + del_len
+            elif snp_type == "insertion":
+                # To be implemented
                 continue
-            cigar_descs[-1].append([snp_pos - tmp_e_left, snp_data, snp_id])
-            tmp_e_left = snp_pos + 1
+                if len(cigars) > 0:
+                    ins_len = len(snp_data)
+                    if snp_pos - e_left > 0:
+                        cigars.append("{}M".format(snp_pos - e_left))
+                        cigar_descs[-1].append([snp_pos - tmp_e_left, "", ""])
+                        cigar_descs.append([])
+                    cigars.append("{}I".format(ins_len))
+                    cigar_descs[-1].append([0, snp_data, snp_id])
+                    cigar_descs.append([])
+                    tmp_read_len -= (snp_pos - e_left)
+                    tmp_read_len -= ins_len
+                    e_left = tmp_e_left = snp_pos
+            else:
+                assert False
+            prev_snp = snp
+
+        e_right = min(e[1], e_left + tmp_read_len - 1)
         e_len = e_right - e_left + 1
         remain_e_len = e_right - tmp_e_left + 1
         if remain_e_len > 0:
@@ -357,17 +398,46 @@ def getSamAlignment(exons, trans_seq, frag_pos, read_len, chr_snps, error_rate):
                     read_seq += alt_base
                     cur_trans_pos += 1
         elif cigar_op == 'D':
-            assert False
+            assert len(cigar_desc) == 1
+            add_match_len, del_len, snp_id = cigar_desc[0]
+            match_len += add_match_len
+            if match_len > 0:
+                MD += ("{}".format(match_len))
+            MD += ("^{}".format(trans_seq[cur_trans_pos:cur_trans_pos+cigar_len]))
+            read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
+            if Zs != "":
+                Zs += ","
+            Zs += ("{}|D|{}".format(match_len, cigar_desc[0][-1]))
+            match_len = 0
+            cur_trans_pos += cigar_len
         elif cigar_op == 'I':
-            assert False
+            assert len(cigar_desc) == 1
+            add_match_len, ins_len, snp_id = cigar_desc[0]
+            match_len += add_match_len
+            if match_len > 0:
+                MD += ("{}".format(match_len))
+            read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
+            if Zs != "":
+                Zs += ","
+            Zs += ("{}|I|{}".format(match_len, cigar_desc[0][-1]))
+            match_len = 0
+            read_pos += cigar_len
         else:
             assert False
-        
-    assert len(read_seq) == read_len
+
     if match_len > 0:
         MD += ("{}".format(match_len))
 
-    return pos, cigars, cigar_desc, MD, XM, NM, Zs, read_seq
+    # daehwan - for debugging purposes
+    if "I" in "".join(cigars) and False:
+        print >> sys.stderr, pos, "".join(cigars), cigar_descs, MD, XM, NM, Zs, read_seq
+        # sys.exit(1)
+
+    if len(read_seq) != read_len:
+        print >> sys.stderr, "read length differs:", len(read_seq), "vs.", read_len
+        assert False
+
+    return pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq
 
 
 """
@@ -403,17 +473,22 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
         elif cigar_op == "D":
             partial_ref_seq = chr_seq[ref_pos:ref_pos+cigar_len]
             ann_ref_rel += list(partial_ref_seq)
+            ann_ref_seq += list(partial_ref_seq)
             ann_read_rel += (["-"] * cigar_len)
+            ann_read_seq += (["-"] * cigar_len)
             ref_pos += cigar_len
         elif cigar_op == "I":
             partial_read_seq = read_seq[read_pos:read_pos+cigar_len]
             ann_ref_rel += (["-"] * cigar_len)
-            ann_read_rel += list(read_seq) 
+            ann_ref_seq += (["-"] * cigar_len)
+            ann_read_rel += list(read_seq)
+            ann_read_seq += list(read_seq) 
             read_pos += cigar_len
         elif cigar_op == "N":
             ref_pos += cigar_len
         else:
-            assert False
+            assert False        
+    
     assert len(ann_ref_seq) == len(ann_read_seq)
     assert len(ann_ref_seq) == len(ann_ref_rel)
     assert len(ann_ref_seq) == len(ann_read_rel)
@@ -423,50 +498,84 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
     if Zs != "":
         Zss = Zs.split(',')
         Zss = [zs.split('|') for zs in Zss]
+
     ann_read_pos = 0
     for zs in Zss:
         zs_pos, zs_type, zs_id = zs
         zs_pos = int(zs_pos)
         for i in range(zs_pos):
+            while ann_read_rel[ann_read_pos] == '-':
+                ann_read_pos += 1
             ann_read_pos += 1
-        ann_Zs_seq[ann_read_pos] = "1"
-        ann_read_pos += 1
+        if zs_type == "S":
+            ann_Zs_seq[ann_read_pos] = "1"
+            ann_read_pos += 1
+        elif zs_type == "D":
+            while ann_read_rel[ann_read_pos] == '-':
+                ann_Zs_seq[ann_read_pos] = "1"
+                ann_read_pos += 1
+        elif zs_type == "I":
+            assert False
+        else:
+            assert False
 
     # daehwan - for debugging purposes
-    if len(Zss) > 2 and False:
+    if "D" in cigar and False:
+        # print cigar
+        # print Zss
         print len(ann_ref_seq), "".join(ann_ref_seq)
         print len(ann_ref_rel), "".join(ann_ref_rel)
         print len(ann_read_rel), "".join(ann_read_rel)
         print len(ann_Zs_seq), "".join(ann_Zs_seq)
         print len(ann_read_seq), "".join(ann_read_seq)
         sys.exit(1)
-        
+
+
     tMD, tXM, tNM = "", 0, 0
     match_len = 0
-    for i in range(len(ann_ref_seq)):
+    i = 0
+    while i < len(ann_ref_seq):
         if ann_ref_rel[i] == "=":
             assert ann_read_rel[i] == "="
             match_len += 1
+            i += 1
             continue
         assert ann_read_rel[i] != "="
         if ann_ref_rel[i] == "X" and ann_read_rel[i] == "X":
             if match_len > 0:
                 tMD += ("{}".format(match_len))
-            match_len = 0
+                match_len = 0
             tMD += ann_ref_seq[i]
             if ann_Zs_seq[i] == "0":
                 XM += 1
                 NM += 1
+            i += 1
         else:
             assert ann_ref_rel[i] == "-" or ann_read_rel[i] == "-"
-            if ann_Zs_seq[i] == "0":
-                NM += 1
+            if ann_ref_rel[i] == '-':
+                while ann_ref_rel[i] == '-':
+                    if ann_Zs_seq[i] == "0":
+                        NM += 1
+                    i += 1
+            else:
+                assert ann_read_rel[i] == '-'
+                del_seq = ""
+                while  ann_read_rel[i] == '-':
+                    del_seq += ann_ref_seq[i]
+                    if ann_Zs_seq[i] == "0":
+                        NM += 1
+                    i += 1
+                if match_len > 0:
+                    tMD += ("{}".format(match_len))
+                    match_len = 0
+                tMD += ("^{}".format(del_seq))
+
     if match_len > 0:
         tMD += ("{}".format(match_len))
 
     if tMD != MD or tXM != XM or tNM != NM:
-        print chr, pos, cigar, MD, XM, NM, Zs
-        print tMD, tXM, tNM
+        print >> sys.stderr, chr, pos, cigar, MD, XM, NM, Zs
+        print >> sys.stderr, tMD, tXM, tNM
         assert False
         
         
@@ -508,6 +617,12 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
     for t in range(len(expr_profile)):
         transcript_id = transcript_ids[t]
         chr, strand, transcript_len, exons = transcripts[transcript_id]
+
+        # daehwan - for debugging purposes
+        # if transcript_id != "ENST00000354373":
+        #    continue
+        print >> sys.stderr, transcript_id
+        
         t_num_frags = expr_profile[t]
         t_seq = ""
         assert chr in genome_seq
@@ -517,7 +632,6 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             t_seq += chr_seq[e[0]:e[1]+1]
 
         assert len(t_seq) == transcript_len
-
         for f in range(t_num_frags):
             frag_pos = random.randint(0, transcript_len - frag_len)
             assert frag_pos + frag_len <= transcript_len
