@@ -316,6 +316,7 @@ def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err
     cur_pos = pos
     match_len = 0
     prev_e = None
+    mismatch = 0
     for e in exons[e_i:]:
         if prev_e:
             i_len = e[0] - prev_e[1] - 1
@@ -376,8 +377,12 @@ def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err
             if e_left + tmp_read_len - 1 < diff_pos2 or e[1] < diff_pos2:
                 break            
             if diff_type == "single":
+                if diff_id == "" and mismatch >= max_mismatch:
+                    continue                
                 cigar_descs[-1].append([diff_pos - tmp_e_left, diff_data, diff_id])
                 tmp_e_left = diff_pos + 1
+                if diff_id == "":
+                    mismatch += 1
             elif diff_type == "deletion":
                 if len(cigars) > 0:
                     del_len = diff_data
@@ -452,6 +457,8 @@ def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err
                             Zs += ","
                         Zs += ("{}|S|{}".format(Zs_match_len, snp_id))
                         Zs_match_len = 0
+                    else:
+                        Zs_match_len += 1
                     if snp_id == "":
                         XM += 1
                         NM += 1
@@ -500,7 +507,7 @@ def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err
 """
 """
 cigar_re = re.compile('\d+\w')
-def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
+def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch):
     assert chr in genome_seq
     chr_seq = genome_seq[chr]
     assert pos < len(chr_seq)
@@ -578,6 +585,15 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
         else:
             assert False
 
+    # daehwan - for debugging purposes
+    if pos == 4828604 and False:
+        print "".join(ann_ref_seq)
+        print "".join(ann_ref_rel)
+        print "".join(ann_read_rel)
+        print "".join(ann_Zs_seq)
+        print "".join(ann_read_seq)
+        print MD, XM, NM, Zs
+
     tMD, tXM, tNM = "", 0, 0
     match_len = 0
     i = 0
@@ -620,7 +636,7 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs):
     if match_len > 0:
         tMD += ("{}".format(match_len))
 
-    if tMD != MD or tXM != XM or tNM != NM:
+    if tMD != MD or tXM != XM or tNM != NM or XM > max_mismatch or XM != NM:
         print >> sys.stderr, chr, pos, cigar, MD, XM, NM, Zs
         print >> sys.stderr, tMD, tXM, tNM
         assert False
@@ -712,8 +728,8 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
 
             cigar_str, cigar2_str = "".join(cigars), "".join(cigars2)
             if sanity_check:
-                samRepOk(genome_seq, read_seq, chr, pos, cigar_str, XM, NM, MD, Zs)
-                samRepOk(genome_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2, Zs2)
+                samRepOk(genome_seq, read_seq, chr, pos, cigar_str, XM, NM, MD, Zs, max_mismatch)
+                samRepOk(genome_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
 
             if Zs != "":
                 Zs = ("\tZs:Z:{}".format(Zs))
