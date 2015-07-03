@@ -316,8 +316,10 @@ def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err
     cur_pos = pos
     match_len = 0
     prev_e = None
-    mismatch = 0
-    for e in exons[e_i:]:
+    mismatch, remain_trans_len = 0, len(trans_seq) - (frag_pos + read_len)
+    assert remain_trans_len >= 0
+    for e_i in range(e_i, len(exons)):
+        e = exons[e_i]
         if prev_e:
             i_len = e[0] - prev_e[1] - 1
             cur_pos += i_len
@@ -384,17 +386,21 @@ def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err
                 if diff_id == "":
                     mismatch += 1
             elif diff_type == "deletion":
-                if len(cigars) > 0:
-                    del_len = diff_data
-                    if diff_pos - e_left > 0:
-                        cigars.append("{}M".format(diff_pos - e_left))
-                        cigar_descs[-1].append([diff_pos - tmp_e_left, "", ""])
-                        cigar_descs.append([])
-                    cigars.append("{}D".format(del_len))
-                    cigar_descs[-1].append([0, del_len, diff_id])
+                if len(cigars) <= 0:
+                    continue
+                del_len = diff_data
+                if remain_trans_len < del_len:
+                    continue
+                remain_trans_len -= del_len
+                if diff_pos - e_left > 0:
+                    cigars.append("{}M".format(diff_pos - e_left))
+                    cigar_descs[-1].append([diff_pos - tmp_e_left, "", ""])
                     cigar_descs.append([])
-                    tmp_read_len -= (diff_pos - e_left)
-                    e_left = tmp_e_left = diff_pos + del_len
+                cigars.append("{}D".format(del_len))
+                cigar_descs[-1].append([0, del_len, diff_id])
+                cigar_descs.append([])
+                tmp_read_len -= (diff_pos - e_left)
+                e_left = tmp_e_left = diff_pos + del_len
             elif diff_type == "insertion":
                 if len(cigars) > 0:
                     ins_len = len(diff_data)
@@ -499,6 +505,7 @@ def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err
 
     if len(read_seq) != read_len:
         print >> sys.stderr, "read length differs:", len(read_seq), "vs.", read_len
+        print >> sys.stderr, pos, "".join(cigars), cigar_descs, MD, XM, NM, Zs
         assert False
 
     return pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq
@@ -587,12 +594,12 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch
 
     # daehwan - for debugging purposes
     if pos == 4828604 and False:
-        print "".join(ann_ref_seq)
-        print "".join(ann_ref_rel)
-        print "".join(ann_read_rel)
-        print "".join(ann_Zs_seq)
-        print "".join(ann_read_seq)
-        print MD, XM, NM, Zs
+        print >> sys.stderr, "".join(ann_ref_seq)
+        print >> sys.stderr, "".join(ann_ref_rel)
+        print >> sys.stderr, "".join(ann_read_rel)
+        print >> sys.stderr, "".join(ann_Zs_seq)
+        print >> sys.stderr, "".join(ann_read_seq)
+        print >> sys.stderr, MD, XM, NM, Zs
 
     tMD, tXM, tNM = "", 0, 0
     match_len = 0
@@ -685,7 +692,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         t_num_frags = expr_profile[t]
 
         # daehwan - for debugging purposes
-        # if transcript_id != "ENST00000422506":
+        # if transcript_id != "ENST00000398359":
         #    continue
         print >> sys.stderr, transcript_id, t_num_frags
         
