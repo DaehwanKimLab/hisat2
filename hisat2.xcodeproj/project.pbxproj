@@ -14,6 +14,9 @@
 		E818AEAE1987FD5100ED141B /* hisat_bp.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat_bp.cpp; sourceTree = "<group>"; };
 		E819F68819F553B100E1BD32 /* splice_site_mem.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = splice_site_mem.h; sourceTree = "<group>"; };
 		E81BC0841980295300580916 /* hi_aligner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hi_aligner.h; sourceTree = "<group>"; };
+		E84A38961B42CC02007343EB /* extract_snps.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = extract_snps.py; sourceTree = "<group>"; };
+		E84A38971B42CC02007343EB /* extract_splice_sites.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = extract_splice_sites.py; sourceTree = "<group>"; };
+		E84A38981B42CC34007343EB /* simulate_reads.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = simulate_reads.py; sourceTree = "<group>"; };
 		E85452591B1A2B720049F2AC /* hisat2_inspect.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_inspect.cpp; sourceTree = "<group>"; };
 		E854525A1B1A2B7C0049F2AC /* hisat2_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_main.cpp; sourceTree = "<group>"; };
 		E854525B1B1A2B870049F2AC /* hisat2.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2.cpp; sourceTree = "<group>"; };
@@ -208,6 +211,8 @@
 				E8B0DC021934F7AA005ED9FA /* ds.h */,
 				E8B0DC031934F7AA005ED9FA /* edit.h */,
 				E8B0DC041934F7AA005ED9FA /* endian_swap.h */,
+				E84A38961B42CC02007343EB /* extract_snps.py */,
+				E84A38971B42CC02007343EB /* extract_splice_sites.py */,
 				E8B0DC051934F7AA005ED9FA /* fast_mutex.h */,
 				E8B0DC061934F7AA005ED9FA /* filebuf.h */,
 				E8B0DC071934F7AA005ED9FA /* formats.h */,
@@ -243,6 +248,7 @@
 				E8B0DC221934F7AA005ED9FA /* sequence_io.h */,
 				E8B0DC231934F7AA005ED9FA /* shmem.h */,
 				E8B0DC241934F7AA005ED9FA /* simple_func.h */,
+				E84A38981B42CC34007343EB /* simulate_reads.py */,
 				E8645CE01B2B5EE00027075C /* snp.h */,
 				E819F68819F553B100E1BD32 /* splice_site_mem.h */,
 				E8B0DC251934F7AA005ED9FA /* splice_site.h */,

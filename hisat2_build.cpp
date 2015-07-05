@@ -515,6 +515,60 @@ extern "C" {
  * main function.  Parses command-line arguments.
  */
 int hisat2_build(int argc, const char **argv) {
+    
+    // daehwan - for debugging purposes
+#if 1
+    size_t num_elts = (uint64_t)6 << 30;
+    time_t prev = time(0);
+    EList<size_t> elts; elts.resizeExact(num_elts); elts.fillZero();
+    cout << "Num elts: " << elts.size() << "\t" << time(0) - prev << " secs" << endl;
+    prev = time(0); elts.fillZero();
+    cout << "Num elts (second): " << elts.size() << "\t" << time(0) - prev << " secs" << endl;
+    
+    prev = time(0);
+    for(size_t i = 0; i < elts.size(); i++) {
+        elts[i] = i;
+    }
+    for(size_t i = 0; i < elts.size(); i++) {
+        size_t r = ((size_t)rand() << 32 | (size_t)rand()) % elts.size();
+        size_t t = elts[i];
+        elts[i] = elts[r];
+        elts[r] = t;
+    }
+    cout << "Random number generation: " << time(0) - prev << " secs" << endl;
+
+    const size_t rep = 1;
+    prev = time(0);
+    for(size_t r = 0; r < rep; r++) {
+        for(size_t i = 0; i < elts.size(); i++) {
+            size_t tmp = elts[i];
+            if(argc == 0) tmp += 1;
+            elts[i] = tmp;
+        }
+    }
+    cout << "Sequential memory access: " << time(0) - prev << " secs" << endl;
+
+    #if 0
+    prev = time(0);
+    for(size_t r = 0; r < rep; r++) {
+        size_t next = 0;
+        for(size_t i = 0; i < elts.size(); i++) {
+            size_t tmp = elts[next];
+            if(argc == 0) tmp += 1;
+            elts[next] = tmp;
+            next = elts[next];
+        }
+    }
+    cout << "Random memory access: " << time(0) - prev << " secs" << endl;
+    #endif
+
+    prev = time(0);
+    elts.sort();
+    cout << "Sorting: " << time(0) - prev << " secs" << endl;
+    
+    exit(1);
+#endif
+    
     string outfile;
 	try {
 		// Reset all global state, including getopt state
