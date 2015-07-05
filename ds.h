@@ -406,6 +406,19 @@ public:
 		o.sz_ = o.cur_ = 0;
 		o.allocCat_ = -1;
 	}
+	//Added by Joe
+	void swap(EList<T, S>& o) {
+		assert_eq(cat_, o.cat());
+		T* temp_l = list_;
+		size_t temp_sz = sz_;
+		size_t temp_cur = cur_;
+		list_ = o.list_;
+		sz_ = o.sz_;
+		cur_ = o.cur_;
+		o.list_ = temp_l;
+		o.sz_ = temp_sz;
+		o.cur_ = temp_cur;
+	}
 
 	/**
 	 * Return number of elements.
