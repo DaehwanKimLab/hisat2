@@ -28,6 +28,7 @@
 #include <map>
 #include <deque>
 #include "snp.h"
+#include <time.h>
 
 // Reference:
 // Jouni Sirén, Niko Välimäki, and Veli Mäkinen: Indexing Graphs for Path Queries with Applications in Genome Research.
@@ -1426,6 +1427,8 @@ private:
 
     // Can create an index by using key.second in PathNodes.
     void sortByFrom(bool create_index = true);
+    void binSortByFrom(PathNode* begin);
+    void binSortByFromWorker(PathNode* begin, PathNode* end, int log_size);
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
 
     void sortEdges() { sort(edges.begin(), edges.end()); } // by (from.label, to.rank)
@@ -1571,29 +1574,29 @@ report_F_node_idx(0), report_F_location(0)
 
     // Create a path node per edge with a key set to from node's label
     temp_nodes = base.edges.size() + 1;
-    max_from = temp_nodes;
-    past_nodes.reserveExact(temp_nodes);
+    max_from = temp_nodes + 1;
+    nodes.reserveExact(temp_nodes);
     for(index_t i = 0; i < base.edges.size(); i++) {
         const typename RefGraph<index_t>::Edge& e = base.edges[i];
-        past_nodes.expand();
-        past_nodes.back().from = e.from;
-        past_nodes.back().to = e.to;
+        nodes.expand();
+        nodes.back().from = e.from;
+        nodes.back().to = e.to;
 
         switch(base.nodes[e.from].label) {
         case 'A':
-        	past_nodes.back().key = pair<index_t, index_t>(0, 0);
+        	nodes.back().key = pair<index_t, index_t>(0, 0);
         	break;
         case 'C':
-        	past_nodes.back().key = pair<index_t, index_t>(1, 0);
+        	nodes.back().key = pair<index_t, index_t>(1, 0);
         	break;
         case 'G':
-        	past_nodes.back().key = pair<index_t, index_t>(2, 0);
+        	nodes.back().key = pair<index_t, index_t>(2, 0);
         	break;
         case 'T':
-        	past_nodes.back().key = pair<index_t, index_t>(3, 0);
+        	nodes.back().key = pair<index_t, index_t>(3, 0);
         	break;
         case 'Y':
-            past_nodes.back().key = pair<index_t, index_t>(4, 0);
+            nodes.back().key = pair<index_t, index_t>(4, 0);
             break;
         default:
             assert(false);
@@ -1603,14 +1606,216 @@ report_F_node_idx(0), report_F_location(0)
     // Final node.
     assert_lt(base.lastNode, base.nodes.size());
     assert_eq(base.nodes[base.lastNode].label, 'Z');
-    past_nodes.expand();
-    past_nodes.back().from = past_nodes.back().to = base.lastNode;
-    past_nodes.back().key = pair<index_t, index_t>(5, 0);
+    nodes.expand();
+    nodes.back().from = nodes.back().to = base.lastNode;
+    nodes.back().key = pair<index_t, index_t>(5, 0);
 
     printInfo();
     //------------------------------------------------------------------
 
+    {
+    	//Do the first generation here
+    	//past_nodes come in ALMOST sorted by .from so counting sort is
+    	// very efficient here.
+    	// Leave past_nodes sorted by from attribute so sorting is avoided on
+    	// subsequent generations
+
+    	generation++;
+    	// first count where to start each from value
+    	clock_t start = clock();
+    	EList<index_t> from_index;
+    	from_index.resizeExact(max_from + 1);
+    	from_index.fillZero();
+    	//Build from_index
+    	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+    		from_index[node->from]++;
+    	}
+    	index_t tot = from_index[0];
+    	from_index[0] = 0;
+    	for(index_t i = 1; i < max_from + 1; i++) {
+    		tot += from_index[i];
+    		from_index[i] = tot - from_index[i];
+    	}
+
+    	cerr << "COUNT NODES: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+        // use past_nodes as from_table
+    	past_nodes.resizeExact(nodes.size());
+    	past_nodes.fillZero();
+
+    	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+    		past_nodes[from_index[node->from]++] = *node;
+    	}
+
+    	cerr << "SORT NODES: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+    	//reset index
+    	for(index_t i = from_index.size(); i > 0; i--) {
+    		from_index[i] = from_index[i - 1];
+    	}
+    	from_index[0] = 0;
+
+    	//Now query direct access table
+    	temp_nodes = 0;
+    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+    		temp_nodes += from_index[node->to + 1] - from_index[node->to];
+    	}
+    	nodes.resizeExact(temp_nodes); //currently getting seg fault during local index creation
+    	nodes.clear();
+    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+    		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
+    			nodes.expand();
+    			nodes.back().from = node->from;
+    			nodes.back().to = past_nodes[j].to;
+    			assert_gt(generation, 0);
+    			index_t bit_shift = 1 << (generation - 1);
+				bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
+				nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + past_nodes[j].key.first, 0);
+    		}
+    	}
+    	printInfo();
+    	past_nodes.swap(nodes);
+    }
+    while(generation < 3) {
+    	generation++;
+    	//here past_nodes is already sorted by .from
+        // first count where to start each from value
+        EList<index_t> from_index;
+        from_index.resizeExact(max_from + 1);
+        from_index.fillZero();
+
+        //Build from_index
+        for(index_t i = 0; i < past_nodes.size(); i++) {
+        	from_index[past_nodes[i].from + 1] = i + 1;
+        }
+
+    	// Now query against hash-table
+    	//count number of nodes
+    	temp_nodes = 0;
+    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+    		temp_nodes += from_index[node->to + 1] - from_index[node->to];
+    	}
+        // make new nodes
+        nodes.resizeExact(temp_nodes);
+        nodes.clear();
+		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+			for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
+				nodes.expand();
+				nodes.back().from = node->from;
+				nodes.back().to = past_nodes[j].to;
+				assert_gt(generation, 0);
+				index_t bit_shift = 1 << (generation - 1);
+				bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
+				nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + past_nodes[j].key.first, 0);
+			}
+		}
+    	printInfo();
+    	past_nodes.swap(nodes);
+    }
+    {
+    	//here do generation 4.
+    	generation++;
+		//here past_nodes is already sorted by .from
+		// first count where to start each from value
+		EList<index_t> from_index;
+		from_index.resizeExact(max_from + 1);
+		from_index.fillZero();
+
+		//Build from_index
+		for(index_t i = 0; i < past_nodes.size(); i++) {
+			from_index[past_nodes[i].from + 1] = i + 1;
+		}
+
+		// Now query against hash-table
+		//count number of nodes
+		temp_nodes = 0;
+		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+			temp_nodes += from_index[node->to + 1] - from_index[node->to];
+		}
+		// make new nodes
+		nodes.resizeExact(temp_nodes);
+		nodes.clear();
+		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+			for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
+				nodes.expand();
+				nodes.back().from = node->from;
+				nodes.back().to = past_nodes[j].to;
+				assert_gt(generation, 0);
+				nodes.back().key  = pair<index_t, index_t>(node->key.first, past_nodes[j].key.first);
+			}
+		}
+
+		sort(nodes.begin(), nodes.end());
+		mergeUpdateRank();
+
+		printInfo();
+		if(isSorted()) return;
+		past_nodes.swap(nodes);
+    }
+    //In this loop do all remaining generations
     while(true) {
+    	generation++;
+		assert_gt(nthreads, 0);
+
+		assert_neq(past_nodes.size(), ranks);
+
+		EList<PathNode> from_table; from_table.resizeExact(past_nodes.size()); from_table.fillZero();
+		cerr << "enter sort" << endl;
+		binSortByFrom(from_table.begin());
+//		for(index_t i = 0; i < past_nodes.size(); i++) {
+//			from_table[i] = past_nodes[i];
+//		}
+//		sort(from_table.begin(), from_table.end(), PathNodeFromCmp());
+		cerr << "end sort" << endl;
+
+		//Build from_index
+		EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();
+		for(index_t i = 0; i < past_nodes.size(); i++) {
+			from_index[from_table[i].from + 1] = i + 1;
+		}
+
+
+		// Now query against hash-table
+
+		//count number of nodes
+		temp_nodes = 0;
+		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+			if(node->isSorted()) {
+				temp_nodes++;
+			} else {
+				temp_nodes += from_index[node->to + 1] - from_index[node->to];
+			}
+		}
+		// make new nodes
+		nodes.resizeExact(temp_nodes);
+		nodes.clear();
+		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+			if(node->isSorted()) {
+				nodes.push_back(*node);
+			} else {
+				for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
+					nodes.expand();
+					nodes.back().from = node->from;
+					nodes.back().to = from_table[j].to;
+					nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
+				}
+			}
+		}
+		// Now make all nodes properly sorted
+		PathNode* block_start = nodes.begin();
+		for(PathNode* curr = nodes.begin() + 1; curr != nodes.end(); curr++) {
+			if(curr->key.first != block_start->key.first) {
+				if(curr - block_start > 1) sort(block_start, curr);
+				block_start = curr;
+			}
+		}
+		if(nodes.end() - block_start > 1) sort(block_start, nodes.end());
+
+		mergeUpdateRank();
+
+		printInfo();
+		if(isSorted()) break;
+		past_nodes.swap(nodes);
+	}
+#if 0
     	generation++;
         assert_gt(nthreads, 0);
 
@@ -1619,32 +1824,24 @@ report_F_node_idx(0), report_F_location(0)
         // first count where to start each from value
         EList<index_t> from_index;
         from_index.resizeExact(max_from + 1);
-
         from_index.fillZero();
 
+    	EList<PathNode> from_table;
+    	from_table.resizeExact(past_nodes.size());
+    	from_table.fillZero();
+
+    	binSortByFrom(from_table.begin(), from_index.begin());
+
+    	//Build from_index
     	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
     		from_index[node->from]++;
     	}
     	index_t tot = from_index[0];
     	from_index[0] = 0;
-    	for(index_t i = 1; i < from_index.size(); i++) {
+    	for(index_t i = 1; i < max_from + 1; i++) {
     		tot += from_index[i];
     		from_index[i] = tot - from_index[i];
     	}
-    	//initialize and fill direct-access table
-    	//use from_index to keep track of where to add next
-
-    	EList<pair<index_t, index_t> > from_table;
-    	from_table.resizeExact(past_nodes.size());
-    	from_table.fillZero();
-    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-    		from_table[from_index[node->from]++] = pair<index_t, index_t>(node->to, node->key.first);
-    	}
-    	//reset from_index
-    	for(index_t i = from_index.size() - 1; i > 0; i--) {
-    		from_index[i] = from_index[i - 1];
-    	}
-    	from_index[0] = 0;
 
 
     	// Now query against hash-table
@@ -1673,8 +1870,8 @@ report_F_node_idx(0), report_F_location(0)
 						for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
 							nodes.expand();
 							nodes.back().from = node->from;
-							nodes.back().to = from_table[j].first;
-							nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].second);
+							nodes.back().to = from_table[j].to;
+							nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
 						}
 						node++;
 					}
@@ -1691,8 +1888,8 @@ report_F_node_idx(0), report_F_location(0)
 					for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
 						nodes.expand();
 						nodes.back().from = node->from;
-						nodes.back().to = from_table[j].first;
-						nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].second);
+						nodes.back().to = from_table[j].to;
+						nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
 					}
 				}
 			}
@@ -1706,11 +1903,11 @@ report_F_node_idx(0), report_F_location(0)
 					for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
 						nodes.expand();
 						nodes.back().from = node->from;
-						nodes.back().to = from_table[j].first;
+						nodes.back().to = from_table[j].to;
 						assert_gt(generation, 0);
 						index_t bit_shift = 1 << (generation - 1);
 						bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
-						nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + from_table[j].second, 0);
+						nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + from_table[j].key.first, 0);
 					}
 				}
 			}
@@ -1720,6 +1917,7 @@ report_F_node_idx(0), report_F_location(0)
     	if(isSorted()) break;
     	past_nodes.swap(nodes);
     }
+#endif
 }
 
 #if 0
@@ -2619,6 +2817,86 @@ void PathGraph<index_t>::sortByFrom(bool create_index) {
             nodes[current].key.second = nodes.size();
         }
     }
+}
+
+template <typename index_t>
+void PathGraph<index_t>::binSortByFrom(PathNode* begin) {
+	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
+	const int BLOCKS = (1 << (SHIFT + 1));
+
+	// count number in each bin
+	clock_t start = clock();
+	int log_size = sizeof(max_from) * 8;
+	while(!((1 << log_size) & max_from)) log_size--;
+	int right_shift = log_size - SHIFT;
+	int occupied = (max_from >> right_shift) + 1;
+	index_t count[BLOCKS] = {0};
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		count[node->from >> right_shift]++;
+	}
+	// sum numbers to create an index
+	PathNode* index[BLOCKS];
+	index[0] = begin;
+	for(int i = 1; i < occupied; i++) {
+		index[i] = index[i - 1] + count[i - 1];
+	}
+	cerr << "BUILD INDEX: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+	// hash objects
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		*index[node->from >> right_shift]++ = *node;
+	}
+	cerr << "HASH OBJECTS: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+	//sort partitions
+
+	binSortByFromWorker(begin, index[0], right_shift);
+	for(int bin = 1; bin < occupied; bin++) {
+		binSortByFromWorker(index[bin - 1], index[bin], right_shift);
+	}
+	cerr << "TOTAL TIME: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+}
+
+template <typename index_t>
+void PathGraph<index_t>::binSortByFromWorker(PathNode* begin, PathNode* end, int log_size) {
+	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
+	const int BLOCKS = (1 << (SHIFT + 1));
+	if(log_size == 0 || end < begin + 2) return;
+	if(end - begin < 2000) {
+		sort(begin, end, PathNodeFromCmp());
+		return;
+	}
+
+	index_t count[BLOCKS] = {0};
+	// count number in each bin
+	int right_shift = 0;
+	if(log_size > SHIFT) right_shift = log_size - SHIFT;
+	for(PathNode* node = begin; node != end; node++) {
+		count[(node->from >> right_shift) & (BLOCKS - 1)]++;
+	}
+	// sum numbers to create an index
+	PathNode* index[BLOCKS + 1];
+	PathNode* place[BLOCKS];
+	index[0] = place[0] = begin;
+	for(int i = 1; i < BLOCKS; i++) {
+		index[i] = place[i] = index[i - 1] + count[i - 1];
+	}
+	index[BLOCKS] = end;
+	// hash objects
+	for(int bin = 0; bin < BLOCKS; bin++) {
+		PathNode* node = place[bin];
+		while(node != index[bin + 1]) {
+			if(((node->from >> right_shift) & (BLOCKS - 1)) != bin) {
+				std::swap(*place[(node->from >> right_shift) & (BLOCKS - 1)]++, *node);
+			} else {
+				node++;
+			}
+		}
+	}
+
+	//sort partitions
+	if(right_shift) {
+		for(int bin = 0; bin < BLOCKS; bin++)
+			if(index[bin + 1] - index[bin] > 1) binSortByFromWorker(index[bin], index[bin + 1], right_shift);
+	}
 }
 
 template <typename index_t>
