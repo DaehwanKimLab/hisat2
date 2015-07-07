@@ -1574,7 +1574,7 @@ report_F_node_idx(0), report_F_location(0)
 
     // Create a path node per edge with a key set to from node's label
     temp_nodes = base.edges.size() + 1;
-    max_from = temp_nodes + 1;
+    max_from = temp_nodes + 2;
     nodes.reserveExact(temp_nodes);
     for(index_t i = 0; i < base.edges.size(); i++) {
         const typename RefGraph<index_t>::Edge& e = base.edges[i];
@@ -1622,7 +1622,7 @@ report_F_node_idx(0), report_F_location(0)
 
     	generation++;
     	// first count where to start each from value
-    	clock_t start = clock();
+ //   	clock_t start = clock();
     	EList<index_t> from_index;
     	from_index.resizeExact(max_from + 1);
     	from_index.fillZero();
@@ -1637,7 +1637,7 @@ report_F_node_idx(0), report_F_location(0)
     		from_index[i] = tot - from_index[i];
     	}
 
-    	cerr << "COUNT NODES: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+//    	cerr << "COUNT NODES: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
         // use past_nodes as from_table
     	past_nodes.resizeExact(nodes.size());
     	past_nodes.fillZero();
@@ -1646,13 +1646,12 @@ report_F_node_idx(0), report_F_location(0)
     		past_nodes[from_index[node->from]++] = *node;
     	}
 
-    	cerr << "SORT NODES: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+//    	cerr << "SORT NODES: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
     	//reset index
-    	for(index_t i = from_index.size(); i > 0; i--) {
+    	for(index_t i = from_index.size() - 1; i > 0; i--) {
     		from_index[i] = from_index[i - 1];
     	}
     	from_index[0] = 0;
-
     	//Now query direct access table
     	temp_nodes = 0;
     	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
@@ -1743,7 +1742,7 @@ report_F_node_idx(0), report_F_location(0)
 			}
 		}
 
-		sort(nodes.begin(), nodes.end());
+		sort(nodes.begin(), nodes.end()); // should be changed to radix sort, could use array in past_nodes for auxillary space
 		mergeUpdateRank();
 
 		printInfo();
@@ -1758,13 +1757,7 @@ report_F_node_idx(0), report_F_location(0)
 		assert_neq(past_nodes.size(), ranks);
 
 		EList<PathNode> from_table; from_table.resizeExact(past_nodes.size()); from_table.fillZero();
-		cerr << "enter sort" << endl;
 		binSortByFrom(from_table.begin());
-//		for(index_t i = 0; i < past_nodes.size(); i++) {
-//			from_table[i] = past_nodes[i];
-//		}
-//		sort(from_table.begin(), from_table.end(), PathNodeFromCmp());
-		cerr << "end sort" << endl;
 
 		//Build from_index
 		EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();
@@ -1815,109 +1808,6 @@ report_F_node_idx(0), report_F_location(0)
 		if(isSorted()) break;
 		past_nodes.swap(nodes);
 	}
-#if 0
-    	generation++;
-        assert_gt(nthreads, 0);
-
-        assert_neq(past_nodes.size(), ranks);
-
-        // first count where to start each from value
-        EList<index_t> from_index;
-        from_index.resizeExact(max_from + 1);
-        from_index.fillZero();
-
-    	EList<PathNode> from_table;
-    	from_table.resizeExact(past_nodes.size());
-    	from_table.fillZero();
-
-    	binSortByFrom(from_table.begin(), from_index.begin());
-
-    	//Build from_index
-    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-    		from_index[node->from]++;
-    	}
-    	index_t tot = from_index[0];
-    	from_index[0] = 0;
-    	for(index_t i = 1; i < max_from + 1; i++) {
-    		tot += from_index[i];
-    		from_index[i] = tot - from_index[i];
-    	}
-
-
-    	// Now query against hash-table
-
-    	//count number of nodes
-    	temp_nodes = 0;
-    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-    		if(node->isSorted()) {
-    			temp_nodes++;
-    		} else {
-    			temp_nodes += from_index[node->to + 1] - from_index[node->to];
-    		}
-    	}
-        // make new nodes
-        nodes.resizeExact(temp_nodes);
-        nodes.clear();
-        if(generation > 4) {
-			for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-				if(node->isSorted()) {
-					nodes.push_back(*node);
-				} else {
-					//add all nodes with the same key.first at once, then sort
-					PathNode* block_start = nodes.end();
-					index_t key = node->key.first;
-					while(node != past_nodes.end() && node->key.first == key) {
-						for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-							nodes.expand();
-							nodes.back().from = node->from;
-							nodes.back().to = from_table[j].to;
-							nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
-						}
-						node++;
-					}
-					sort(block_start, nodes.end());
-					node--; // otherwise we would lose a node
-				}
-			}
-			mergeUpdateRank();
-    	} else if(generation == 4) {
-			for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-				if(node->isSorted()) {
-					nodes.push_back(*node);
-				} else {
-					for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-						nodes.expand();
-						nodes.back().from = node->from;
-						nodes.back().to = from_table[j].to;
-						nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
-					}
-				}
-			}
-    		sort(nodes.begin(), nodes.end()); // takes a lot of time
-    		mergeUpdateRank();
-    	} else {
-    		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-				if(node->isSorted()) {
-					nodes.push_back(*node);
-				} else {
-					for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-						nodes.expand();
-						nodes.back().from = node->from;
-						nodes.back().to = from_table[j].to;
-						assert_gt(generation, 0);
-						index_t bit_shift = 1 << (generation - 1);
-						bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
-						nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + from_table[j].key.first, 0);
-					}
-				}
-			}
-		}
-
-    	printInfo();
-    	if(isSorted()) break;
-    	past_nodes.swap(nodes);
-    }
-#endif
 }
 
 #if 0
@@ -2331,6 +2221,8 @@ void PathGraph<index_t>::generateEdgesWorker(void * vp) {
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
+	//TODO: Make similar changes to the below procedure as we applied above
+	// Make sortByTo linear time sort
 
 	if(!sorted) return false;
 
@@ -2825,7 +2717,7 @@ void PathGraph<index_t>::binSortByFrom(PathNode* begin) {
 	const int BLOCKS = (1 << (SHIFT + 1));
 
 	// count number in each bin
-	clock_t start = clock();
+//	clock_t start = clock();
 	int log_size = sizeof(max_from) * 8;
 	while(!((1 << log_size) & max_from)) log_size--;
 	int right_shift = log_size - SHIFT;
@@ -2840,19 +2732,19 @@ void PathGraph<index_t>::binSortByFrom(PathNode* begin) {
 	for(int i = 1; i < occupied; i++) {
 		index[i] = index[i - 1] + count[i - 1];
 	}
-	cerr << "BUILD INDEX: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+//	cerr << "BUILD INDEX: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
 	// hash objects
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		*index[node->from >> right_shift]++ = *node;
 	}
-	cerr << "HASH OBJECTS: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+//	cerr << "HASH OBJECTS: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
 	//sort partitions
 
 	binSortByFromWorker(begin, index[0], right_shift);
 	for(int bin = 1; bin < occupied; bin++) {
 		binSortByFromWorker(index[bin - 1], index[bin], right_shift);
 	}
-	cerr << "TOTAL TIME: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
+//	cerr << "TOTAL TIME: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
 }
 
 template <typename index_t>
@@ -2860,7 +2752,7 @@ void PathGraph<index_t>::binSortByFromWorker(PathNode* begin, PathNode* end, int
 	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
 	const int BLOCKS = (1 << (SHIFT + 1));
 	if(log_size == 0 || end < begin + 2) return;
-	if(end - begin < 2000) {
+	if(end - begin < 2000) { //picked arbitrarily
 		sort(begin, end, PathNodeFromCmp());
 		return;
 	}
