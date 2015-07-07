@@ -517,7 +517,7 @@ extern "C" {
 int hisat2_build(int argc, const char **argv) {
     
     // daehwan - for debugging purposes
-#if 1
+#if 0
     size_t num_elts = (uint64_t)6 << 30;
     time_t prev = time(0);
     EList<size_t> elts; elts.resizeExact(num_elts); elts.fillZero();

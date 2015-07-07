@@ -1622,7 +1622,6 @@ report_F_node_idx(0), report_F_location(0)
 
     	generation++;
     	// first count where to start each from value
- //   	clock_t start = clock();
     	EList<index_t> from_index;
     	from_index.resizeExact(max_from + 1);
     	from_index.fillZero();
@@ -1637,7 +1636,6 @@ report_F_node_idx(0), report_F_location(0)
     		from_index[i] = tot - from_index[i];
     	}
 
-//    	cerr << "COUNT NODES: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
         // use past_nodes as from_table
     	past_nodes.resizeExact(nodes.size());
     	past_nodes.fillZero();
@@ -1646,7 +1644,6 @@ report_F_node_idx(0), report_F_location(0)
     		past_nodes[from_index[node->from]++] = *node;
     	}
 
-//    	cerr << "SORT NODES: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
     	//reset index
     	for(index_t i = from_index.size() - 1; i > 0; i--) {
     		from_index[i] = from_index[i - 1];
@@ -1752,18 +1749,26 @@ report_F_node_idx(0), report_F_location(0)
     //In this loop do all remaining generations
     while(true) {
     	generation++;
+    	clock_t overall = clock();
+    	clock_t indiv = clock();
 		assert_gt(nthreads, 0);
 
 		assert_neq(past_nodes.size(), ranks);
 
 		EList<PathNode> from_table; from_table.resizeExact(past_nodes.size()); from_table.fillZero();
+		if(verbose) cerr << "ALLOCATE FROM_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		indiv = clock();
 		binSortByFrom(from_table.begin());
+		if(verbose) cerr << "BUILD TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		indiv = clock();
 
 		//Build from_index
 		EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();
 		for(index_t i = 0; i < past_nodes.size(); i++) {
 			from_index[from_table[i].from + 1] = i + 1;
 		}
+		if(verbose) cerr << "BUILD INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		indiv = clock();
 
 
 		// Now query against hash-table
@@ -1777,6 +1782,8 @@ report_F_node_idx(0), report_F_location(0)
 				temp_nodes += from_index[node->to + 1] - from_index[node->to];
 			}
 		}
+		if(verbose) cerr << "COUNT NEW NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		indiv = clock();
 		// make new nodes
 		nodes.resizeExact(temp_nodes);
 		nodes.clear();
@@ -1792,6 +1799,8 @@ report_F_node_idx(0), report_F_location(0)
 				}
 			}
 		}
+		if(verbose) cerr << "MADE NEW NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		indiv = clock();
 		// Now make all nodes properly sorted
 		PathNode* block_start = nodes.begin();
 		for(PathNode* curr = nodes.begin() + 1; curr != nodes.end(); curr++) {
@@ -1801,12 +1810,15 @@ report_F_node_idx(0), report_F_location(0)
 			}
 		}
 		if(nodes.end() - block_start > 1) sort(block_start, nodes.end());
-
+		if(verbose) cerr << "SORTED ALL NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		indiv = clock();
 		mergeUpdateRank();
-
+		if(verbose) cerr << "MERGEUPDATERANK: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		if(verbose) cerr << "TOTAL TIME: " << (float)(clock() - overall) / CLOCKS_PER_SEC << endl;
 		printInfo();
 		if(isSorted()) break;
 		past_nodes.swap(nodes);
+
 	}
 }
 
