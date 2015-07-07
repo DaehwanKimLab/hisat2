@@ -1657,7 +1657,7 @@ report_F_node_idx(0), report_F_location(0)
     	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
     		temp_nodes += from_index[node->to + 1] - from_index[node->to];
     	}
-    	nodes.resizeExact(temp_nodes); //currently getting seg fault during local index creation
+    	nodes.resizeExact(temp_nodes);
     	nodes.clear();
     	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
     		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
@@ -2721,7 +2721,7 @@ void PathGraph<index_t>::binSortByFrom(PathNode* begin) {
 	int log_size = sizeof(max_from) * 8;
 	while(!((1 << log_size) & max_from)) log_size--;
 	int right_shift = log_size - SHIFT;
-	int occupied = (max_from >> right_shift) + 1;
+	int occupied = (max_from >> right_shift) + 1; //index of largest block that isn't empty
 	index_t count[BLOCKS] = {0};
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		count[node->from >> right_shift]++;
