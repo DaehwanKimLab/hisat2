@@ -1605,7 +1605,7 @@ report_F_node_idx(0), report_F_location(0)
     	printInfo();
     	past_nodes.swap(nodes);
     }
-    while(generation < 3) {
+    while(generation < 3) { // this needs to be changed to account for different size index_t's
     	generation++;
     	//here past_nodes is already sorted by .from
         // first count where to start each from value
@@ -1777,6 +1777,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	if(!sorted) return false;
 
+	clock_t indiv = clock();
+	clock_t overall = clock();
+
 	//build hash table of base.edges binned by .to
 	//query nodes against in rank order
 	//put into the correct bin based on edge.label
@@ -1784,12 +1787,15 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	EList<typename RefGraph<index_t>::Edge> to_table; to_table.resizeExact(base.edges.size());
 	bin_sort_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
 			base.edges.begin(), base.edges.end(), to_table.ptr(), &RefGraph<index_t>::EdgeTo, max_from);
+	if(verbose) cerr << "BUILD TO_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
 	//Build to_index
 	EList<index_t> to_index; to_index.resizeExact(max_from + 1); to_index.fillZero();
 	for(index_t i = 0; i < base.edges.size(); i++) {
 		to_index[to_table[i].to + 1] = i + 1;
 	}
-
+	if(verbose) cerr << "BUILD TO_INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
 	// Now query against hash-table
 
 	//count number of edges
@@ -1814,6 +1820,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 		tot += label_index[i];
 		label_index[i] = tot - label_index[i];
 	}
+	if(verbose) cerr << "COUNT NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
 	edges.resizeExact(tot);
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
@@ -1842,7 +1850,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 			}
 		}
 	}
-
+	if(verbose) cerr << "MADE NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
 
 #ifndef NDEBUG
     if(debug) {
@@ -1905,6 +1914,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         node->to = base.nodes[node->from].value;
     }
 
+    if(verbose) cerr << "PROCESS EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+    indiv = clock();
+
     // Remove 'Y' node
     assert_gt(nodes.size(), 2);
     nodes.back().key.first = nodes[nodes.size() - 2].key.first;
@@ -1920,6 +1932,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             edge.ranking -= 1;
         }
     }
+    if(verbose) cerr << "REMOVE Y: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+    indiv = clock();
 
 #ifndef NDEBUG
     if(debug) {
@@ -1947,6 +1961,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     for(index_t i = 0; i < edges.size(); i++) {
         nodes[edges[i].ranking].key.second = i + 1;
     }
+    if(verbose) cerr << "SORT, Make index: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+    if(verbose) cerr << "TOTAL: " << (float)(clock() - overall) / CLOCKS_PER_SEC << endl;
     return true;
 
     bwt_string.clear();
