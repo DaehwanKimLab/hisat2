@@ -666,9 +666,14 @@ int hisat2_build(int argc, const char **argv) {
     
     // daehwan - for debugging purposes
 #if 0
+<<<<<<< HEAD
     size_t num_elts = (size_t)6 << 30;
     //size_t num_elts = (size_t)6 << 22;
     clock_t prev = clock();
+=======
+    size_t num_elts = (uint64_t)6 << 30;
+    time_t prev = time(0);
+>>>>>>> 0f5701fa34687fa5226fb6f83f9be6003b6e5c4f
     EList<size_t> elts; elts.resizeExact(num_elts); elts.fillZero();
     cout << "Num elts: " << elts.size() << "\t" << (clock() - prev) / (CLOCKS_PER_SEC / 1000) << " ms" << endl;
     prev = clock(); elts.fillZero();
