@@ -2392,80 +2392,92 @@ void PathGraph<index_t>::sortByFrom(bool create_index) {
 
 template <typename index_t>
 void PathGraph<index_t>::binSortByFrom(PathNode* begin) {
-	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
+	/*
+	 * aproximate times not counting recursive sorts
+	 * shift = 4 -> .16
+	 * shift = 5 -> .17
+	 * shift = 6 -> .23 //seems that we overflow cache here?
+	 * shift = 7 -> .25
+	 * shift = 8 -> .257
+	 * shift = 9 -> .275
+	 * shift = 10 -> .30
+	 *
+	 * times per layer with shift = 7 for chr21
+	 * 25 - 18 -> .25
+	 * 18 - 11 -> .32
+	 * 11 - 4  -> .23
+	 * std::sort remaining -> .53
+	 * total -> 1.33
+	 */
+	const int SHIFT = 7;
 	const int BLOCKS = (1 << (SHIFT + 1));
 
-	// count number in each bin
-//	clock_t start = clock();
 	int log_size = sizeof(max_from) * 8;
 	while(!((1 << log_size) & max_from)) log_size--;
 	int right_shift = log_size - SHIFT;
-	int occupied = (max_from >> right_shift) + 1; //index of largest block that isn't empty
+	int occupied = (max_from >> right_shift) + 1;
 	index_t count[BLOCKS] = {0};
+	// count number in each bin ~ 1/5 of time
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		count[node->from >> right_shift]++;
 	}
-	// sum numbers to create an index
+	// sum numbers to create an index ~ takes very little time
 	PathNode* index[BLOCKS];
 	index[0] = begin;
 	for(int i = 1; i < occupied; i++) {
 		index[i] = index[i - 1] + count[i - 1];
 	}
-//	cerr << "BUILD INDEX: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
-	// hash objects
+	// hash objects ~ 4/5 of time
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		*index[node->from >> right_shift]++ = *node;
 	}
-//	cerr << "HASH OBJECTS: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
 	//sort partitions
-
 	binSortByFromWorker(begin, index[0], right_shift);
 	for(int bin = 1; bin < occupied; bin++) {
 		binSortByFromWorker(index[bin - 1], index[bin], right_shift);
 	}
-//	cerr << "TOTAL TIME: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
 }
 
 template <typename index_t>
 void PathGraph<index_t>::binSortByFromWorker(PathNode* begin, PathNode* end, int log_size) {
-	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
-	const int BLOCKS = (1 << (SHIFT + 1));
+	//throughout this function replaced BLOCKS and SHIFT by their numerical values
 	if(log_size == 0 || end < begin + 2) return;
 	if(end - begin < 2000) { //picked arbitrarily
 		sort(begin, end, PathNodeFromCmp());
 		return;
 	}
-
-	index_t count[BLOCKS] = {0};
+	// compute maximum of log_size - 7 and 0
+	int right_shift = (log_size - 7) * (log_size > 7);
 	// count number in each bin
-	int right_shift = 0;
-	if(log_size > SHIFT) right_shift = log_size - SHIFT;
+	index_t count[256] = {0};
 	for(PathNode* node = begin; node != end; node++) {
-		count[(node->from >> right_shift) & (BLOCKS - 1)]++;
+		count[(node->from >> right_shift) & 255]++;
 	}
 	// sum numbers to create an index
-	PathNode* index[BLOCKS + 1];
-	PathNode* place[BLOCKS];
+	PathNode* index[257];
+	PathNode* place[256];
 	index[0] = place[0] = begin;
-	for(int i = 1; i < BLOCKS; i++) {
+	for(int i = 1; i < 256; i++) {
 		index[i] = place[i] = index[i - 1] + count[i - 1];
 	}
-	index[BLOCKS] = end;
-	// hash objects
-	for(int bin = 0; bin < BLOCKS; bin++) {
-		PathNode* node = place[bin];
-		while(node != index[bin + 1]) {
-			if(((node->from >> right_shift) & (BLOCKS - 1)) != bin) {
-				std::swap(*place[(node->from >> right_shift) & (BLOCKS - 1)]++, *node);
-			} else {
-				node++;
+	index[256] = end;
+	//put objects in proper place
+	for(int bin = 0; bin < 256; bin++) {
+		while(place[bin] != index[bin + 1]) {
+			PathNode node = *place[bin];
+			int x = (node.from >> right_shift) & 255;
+			while(x != bin) { // switched inner loop here, removed branch statement
+				PathNode temp = *place[x];
+				*place[x]++ = node;
+				node = temp;
+				x = (node.from >> right_shift) & 255;
 			}
+			*place[bin]++ = node;
 		}
 	}
-
 	//sort partitions
 	if(right_shift) {
-		for(int bin = 0; bin < BLOCKS; bin++)
+		for(int bin = 0; bin < 256; bin++)
 			if(index[bin + 1] - index[bin] > 1) binSortByFromWorker(index[bin], index[bin + 1], right_shift);
 	}
 }
