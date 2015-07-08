@@ -2719,7 +2719,7 @@ void PathGraph<index_t>::binSortByFrom(PathNode* begin) {
 	// count number in each bin
 //	clock_t start = clock();
 	int log_size = sizeof(max_from) * 8;
-	while(!((1 << log_size) & max_from)) log_size--;
+	while(!(((size_t)1 << log_size) & max_from)) log_size--;
 	int right_shift = log_size - SHIFT;
 	int occupied = (max_from >> right_shift) + 1; //index of largest block that isn't empty
 	index_t count[BLOCKS] = {0};

@@ -510,6 +510,154 @@ static void driver(
 
 static const char *argv0 = NULL;
 
+#if 0
+
+const size_t SHIFT = 4;
+const size_t BLOCKS = 1 << SHIFT;
+const size_t BLOCK_MASK = BLOCKS - 1;
+
+inline size_t radix(size_t num, size_t shift) {
+    return (num >> shift) & BLOCK_MASK;
+}
+
+ELList<size_t> counts, indexes, indexes2;
+
+inline void binSort(size_t* elts, size_t size, size_t depth = 0, size_t right_shift = 0) {
+    if(depth == 0) {
+        size_t log_size = sizeof(size_t) * 8;
+        while(!(((size_t)1 << log_size) & size)) log_size--;
+        right_shift = log_size + 1 - SHIFT;
+    }
+    
+    if(right_shift <= 10) {
+        sort(elts, elts + size);
+        return;
+    }
+
+    size_t occupied = BLOCKS + 1;
+    if(counts.size() <= depth) {
+        counts.expand();
+        indexes.expand();
+        indexes2.expand();
+    }
+    EList<size_t>& count = counts[depth]; count.resizeExact(occupied); count.fillZero();
+    for(size_t i = 0; i < size; i++) {
+        size_t r = radix(elts[i], right_shift);
+        count[r]++;
+    }
+    EList<size_t>& index = indexes[depth]; index.resizeExact(occupied); index.fillZero();
+    for(size_t i = 1; i < occupied; i++) {
+        index[i] = index[i - 1] + count[i - 1];
+    }
+    EList<size_t>& index2 = indexes2[depth]; index2 = index;
+    for(size_t i = 0; i < occupied - 1; i++) {
+        while(index2[i] < index[i+1]) {
+            size_t elt = elts[index2[i]];
+            size_t r = radix(elt, right_shift);
+            while(true) {
+                if(r == i) {
+                    elts[index2[i]] = elt;
+                    index2[i]++;
+                    break;
+                }
+                size_t new_elt = elts[index2[r]];
+                elts[index2[r]] = elt;
+                index2[r]++;
+                elt = new_elt;
+                r = radix(elt, right_shift);
+            }
+        }
+    }
+    for(size_t i = 0; i < occupied - 1; i++) {
+        binSort(elts + index[i], count[i], depth + 1, right_shift - SHIFT);
+    }
+}
+
+inline void binSort2(size_t* elts, size_t size) {
+    size_t log_size = sizeof(size_t) * 8;
+    while(!(((size_t)1 << log_size) & size)) log_size--;
+    size_t right_shift = log_size + 1 - SHIFT;
+    
+    EList<size_t*> elts_list; elts_list.resizeExact(16); elts_list.clear();
+    EList<size_t> blocks; blocks.resizeExact(16); blocks.clear();
+    ELList<size_t> counts, indexes, indexes2;
+    
+    size_t cur_depth = 0;
+    while(true) {
+        size_t* cur_elts = NULL;
+        size_t cur_block = 0, cur_size = 0;
+        int cur_shift = 0;
+        if(cur_depth == 0) {
+            cur_elts = elts;
+            cur_block = 0;
+            cur_size = size;
+            cur_shift = right_shift;
+        } else {
+            cur_elts = elts_list.back();
+            cur_block = blocks.back();
+            cur_size = counts[cur_depth - 1][cur_block];
+            cur_shift = (int)right_shift - (int)SHIFT * cur_depth;
+        }
+        if(cur_shift <= SHIFT) {
+            sort(cur_elts, cur_elts + cur_size);
+            elts_list.back() += cur_size;
+            blocks.back() += 1;
+            while(blocks.back() == BLOCKS || counts[cur_depth - 1][blocks.back()] == 0) {
+                elts_list.pop_back();
+                blocks.pop_back();
+                cur_depth -= 1;
+                if(cur_depth == 0) break;
+                elts_list.back() += counts[cur_depth - 1][blocks.back()];
+                blocks.back() += 1;
+            }
+            if(cur_depth == 0) break;
+            continue;
+        }
+        if(counts.size() <= cur_depth) {
+            counts.expand();
+            indexes.expand();
+            indexes2.expand();
+        }
+        size_t occupied = BLOCKS + 1;
+        counts[cur_depth].resizeExact(occupied); counts[cur_depth].fillZero();
+        size_t* count = counts[cur_depth].begin();
+        for(size_t i = 0; i < cur_size; i++) {
+            size_t r = radix(cur_elts[i], cur_shift);
+            count[r]++;
+        }
+        indexes[cur_depth].resizeExact(occupied); indexes[cur_depth].fillZero();
+        size_t* index = indexes[cur_depth].begin();
+        for(size_t i = 1; i < occupied; i++) {
+            index[i] = index[i - 1] + count[i - 1];
+        }
+        indexes2[cur_depth] = indexes[cur_depth];
+        size_t* index2 = indexes2[cur_depth].begin();
+        for(size_t i = 0; i < occupied - 1; i++) {
+            size_t next = index[i+1];
+            while(index2[i] < next) {
+                size_t elt = cur_elts[index2[i]];
+                size_t r = radix(elt, cur_shift);
+                while(r != i) {
+                    size_t new_elt = cur_elts[index2[r]];
+                    cur_elts[index2[r]] = elt;
+                    index2[r]++;
+                    elt = new_elt;
+                    r = radix(elt, cur_shift);
+                }
+                cur_elts[index2[i]] = elt;
+                index2[i]++;
+            }
+        }
+        cur_depth++;
+        elts_list.push_back(cur_elts);
+        blocks.push_back(0);
+        assert_eq(cur_depth, elts_list.size());
+        assert_eq(cur_depth, blocks.size());
+    }
+}
+
+#endif
+
 extern "C" {
 /**
  * main function.  Parses command-line arguments.
@@ -517,15 +665,16 @@ extern "C" {
 int hisat2_build(int argc, const char **argv) {
     
     // daehwan - for debugging purposes
-#if 1
-    size_t num_elts = (uint64_t)6 << 30;
-    time_t prev = time(0);
+#if 0
+    size_t num_elts = (size_t)6 << 30;
+    //size_t num_elts = (size_t)6 << 22;
+    clock_t prev = clock();
     EList<size_t> elts; elts.resizeExact(num_elts); elts.fillZero();
-    cout << "Num elts: " << elts.size() << "\t" << time(0) - prev << " secs" << endl;
-    prev = time(0); elts.fillZero();
-    cout << "Num elts (second): " << elts.size() << "\t" << time(0) - prev << " secs" << endl;
+    cout << "Num elts: " << elts.size() << "\t" << (clock() - prev) / (CLOCKS_PER_SEC / 1000) << " ms" << endl;
+    prev = clock(); elts.fillZero();
+    cout << "Num elts: " << elts.size() << "\t" << (clock() - prev) / (CLOCKS_PER_SEC / 1000) << " ms" << endl;
     
-    prev = time(0);
+    prev = clock();
     for(size_t i = 0; i < elts.size(); i++) {
         elts[i] = i;
     }
@@ -535,10 +684,10 @@ int hisat2_build(int argc, const char **argv) {
         elts[i] = elts[r];
         elts[r] = t;
     }
-    cout << "Random number generation: " << time(0) - prev << " secs" << endl;
+    cout << "Random number generation: " << (clock() - prev) / (CLOCKS_PER_SEC / 1000) << " ms" << endl;
 
     const size_t rep = 1;
-    prev = time(0);
+    prev = clock();
     for(size_t r = 0; r < rep; r++) {
         for(size_t i = 0; i < elts.size(); i++) {
             size_t tmp = elts[i];
@@ -546,10 +695,10 @@ int hisat2_build(int argc, const char **argv) {
             elts[i] = tmp;
         }
     }
-    cout << "Sequential memory access: " << time(0) - prev << " secs" << endl;
+    cout << "Sequential memory access: " << (clock() - prev) / (CLOCKS_PER_SEC / 1000) << " ms" << endl;
 
     #if 0
-    prev = time(0);
+    prev = clock();
     for(size_t r = 0; r < rep; r++) {
         size_t next = 0;
         for(size_t i = 0; i < elts.size(); i++) {
@@ -559,12 +708,26 @@ int hisat2_build(int argc, const char **argv) {
             next = elts[next];
         }
     }
-    cout << "Random memory access: " << time(0) - prev << " secs" << endl;
+    cout << "Random memory access: " << (clock() - prev) / (CLOCKS_PER_SEC / 1000) << " ms" << endl;
     #endif
-
-    prev = time(0);
+    
+    prev = clock();
+#if 1
+    binSort2(elts.begin(), elts.size());
+    cout << "Bin ";
+#else
+    cout << "Standard: ";
     elts.sort();
-    cout << "Sorting: " << time(0) - prev << " secs" << endl;
+#endif
+    cout << "Sorting: " << (clock() - prev) / (CLOCKS_PER_SEC / 1000) << " ms" << endl;
+    
+    for(size_t i = 0; i < elts.size(); i++) {
+        if(elts[i] != i) {
+            cout << "Not sorted: " << i << "\t" << elts[i] << endl;
+            exit(1);
+        }
+    }
+    cout << "Sorted" << endl;
     
     exit(1);
 #endif
