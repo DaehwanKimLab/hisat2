@@ -1740,6 +1740,7 @@ report_F_node_idx(0), report_F_location(0)
 		// Now make all nodes properly sorted
 		PathNode* block_start = nodes.begin();
 		PathNode* curr = nodes.begin();
+		ranks = 0;
 		for(PathNode* node = nodes.begin() + 1; node != nodes.end(); node++) {
 			if(node->key.first != block_start->key.first) {
 				if(node - block_start > 1) {
@@ -1761,15 +1762,20 @@ report_F_node_idx(0), report_F_location(0)
 
 						//if not mergable, just write all to array
 						if(!merge) {
-							for(PathNode* n = block_start; n != (block_start + shift); n++)
+							for(PathNode* n = block_start; n != (block_start + shift); n++) {
+								n->key.first = ranks;
 								*curr++ = *n;
+							}
+							ranks++;
 						} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
 							block_start->setSorted();
+							block_start->key.first = ranks++;
 							*curr++ = *block_start;
 						}
 						block_start += shift;
 					}
-				} else if(curr != nodes.begin() && (!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from)){
+				} else if(curr == nodes.begin() || (!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from)){
+					block_start->key.first = ranks++;
 					*curr++ = *block_start;
 				}
 				block_start = node;
@@ -1785,7 +1791,7 @@ report_F_node_idx(0), report_F_location(0)
 			}
 			//check if all share .from
 			bool merge = true;
-			for(PathNode* n = block_start; (n != (block_start + shift)) && merge; n++) {
+			for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
 				if(n->from != block_start->from) merge = false;
 			}
 			//if they share same from, then they are a mergable set
@@ -1794,10 +1800,14 @@ report_F_node_idx(0), report_F_location(0)
 
 			//if not mergable, just write all to array
 			if(!merge) {
-				for(PathNode* n = block_start; n != (block_start + shift); n++)
+				for(PathNode* n = block_start; n != (block_start + shift); n++) {
+					n->key.first = ranks;
 					*curr++ = *n;
+				}
+				ranks++;
 			} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
 				block_start->setSorted();
+				block_start->key.first = ranks++;
 				*curr++ = *block_start;
 			}
 			block_start += shift;
@@ -2188,6 +2198,7 @@ template <typename index_t>
 void PathGraph<index_t>::mergeUpdateRank()
 {
     // Update ranks
+    if(generation == 4) {
     index_t rank = 0;
     pair<index_t, index_t> key = nodes.front().key;
     for(index_t i = 0; i < nodes.size(); i++) {
@@ -2198,17 +2209,15 @@ void PathGraph<index_t>::mergeUpdateRank()
         }
         node.key = pair<index_t, index_t>(rank, 0);
 	}
+    ranks = rank + 1;
     // Merge equivalent nodes
+
     index_t curr = 0;
     pair<index_t, index_t> range(0, 0); // Empty range
     while(true) {
         range = nextMaximalSet(range);
         if(range.first >= range.second)
             break;
-        if(range.second - range.first > 1 && generation > 4) {
-        	for(index_t i = range.first - 10; i < range.second + 1; i++)
-        		cerr << nodes[i].from << " " << nodes[i].to << " " << nodes[i].key.first << " " << nodes[i].key.second << endl;
-        }
         nodes[curr] = nodes[range.first]; curr++;
     }
     nodes.resize(curr);
@@ -2219,7 +2228,6 @@ void PathGraph<index_t>::mergeUpdateRank()
     for(index_t i = 1; i < nodes.size(); i++) {
         if(nodes[i].key != key) {
             if(candidate != NULL) {
-            	if(generation != 4 && !candidate->isSorted()) cerr << "setSorted" << endl;
                 candidate->setSorted();
             }
             candidate = &nodes[i];
@@ -2228,10 +2236,11 @@ void PathGraph<index_t>::mergeUpdateRank()
             candidate = NULL;
         }
     }
+
     if(candidate != NULL) {
         candidate->setSorted();
     }
-
+    }
     // Only done on last iteration
     // Replace the ranks of a sorted graph so that rank(i) = i
     // Merges may otherwise leave gaps in the ranks
