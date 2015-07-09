@@ -225,6 +225,12 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
                 assert classType1 == "insertion" and classType2 == "deletion"
                 return 1
 
+        if len(allele1) != len(allele2):
+            if len(allele1) < len(allele2):
+                return -1
+            else:
+                return 1
+            
         if allele1 < allele2:
             return -1
         elif allele2 < allele1:

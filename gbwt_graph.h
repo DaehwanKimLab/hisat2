@@ -27,8 +27,8 @@
 #include <stdlib.h>
 #include <map>
 #include <deque>
-#include "snp.h"
 #include <time.h>
+#include "alt.h"
 
 // Reference:
 // Jouni Sirén, Niko Välimäki, and Veli Mäkinen: Indexing Graphs for Path Queries with Applications in Genome Research.
@@ -116,7 +116,7 @@ public:
 public:
     RefGraph(const SString<char>& s,
              const EList<RefRecord>& szs,
-             const EList<SNP<index_t> >& snps,
+             const EList<ALT<index_t> >& alts,
              const string& out_fname,
              int nthreads_,
              bool verbose);
@@ -171,7 +171,7 @@ private:
         index_t                      thread_id;
         RefGraph<index_t>*           refGraph;
         const SString<char>*         s;
-        const EList<SNP<index_t> >*  snps;
+        const EList<ALT<index_t> >*  alts;
         string                       out_fname;
         bool                         bigEndian;
 
@@ -297,13 +297,13 @@ private:
 };
 
 /**
- * Load reference sequence file and snp information.
+ * Load reference sequence file and alt information.
  * Construct a reference graph
  */
 template <typename index_t>
 RefGraph<index_t>::RefGraph(const SString<char>& s,
                             const EList<RefRecord>& szs,
-                            const EList<SNP<index_t> >& snps,
+                            const EList<ALT<index_t> >& alts,
                             const string& out_fname,
                             int nthreads_,
                             bool verbose)
@@ -319,36 +319,40 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
     debug = (jlen <= 20);
 #endif
 
-    // a memory-efficient way to create a population graph with known SNPs
+    // a memory-efficient way to create a population graph with known ALTs
     bool frag_automaton = jlen >= (1 << 16);
     if(frag_automaton) {
         {
-            EList<pair<index_t, index_t> > snp_ranges; // each range inclusive
-            for(index_t i = 0; i < snps.size(); i++) {
-                const SNP<index_t>& snp = snps[i];
+            EList<pair<index_t, index_t> > alt_ranges; // each range inclusive
+            for(index_t i = 0; i < alts.size(); i++) {
+                const ALT<index_t>& alt = alts[i];
+                // daehwan - for debugging purposes
+                if(alt.type == ALT_SPLICESITE)
+                    continue;
+                
                 index_t left_relax = 10, right_relax = 10;
-                if(snp.type == SNP_INS) {
+                if(alt.type == ALT_SNP_INS) {
                     right_relax = 128;
                 }
                 pair<index_t, index_t> range;
-                range.first = snp.pos > left_relax ? snp.pos - left_relax - 1 : 0;
-                if(snp.type == SNP_SGL) {
-                    range.second = snp.pos + 1;
-                } else if(snp.type == SNP_DEL) {
-                    assert_gt(snp.len, 0);
-                    range.second = snp.pos + snp.len;
-                } else if(snp.type == SNP_INS) {
-                    assert_gt(snp.len, 0);
-                    range.second = snp.pos;
+                range.first = alt.pos > left_relax ? alt.pos - left_relax - 1 : 0;
+                if(alt.type == ALT_SNP_SGL) {
+                    range.second = alt.pos + 1;
+                } else if(alt.type == ALT_SNP_DEL) {
+                    assert_gt(alt.len, 0);
+                    range.second = alt.pos + alt.len;
+                } else if(alt.type == ALT_SNP_INS) {
+                    assert_gt(alt.len, 0);
+                    range.second = alt.pos;
                 } else assert(false);
                 range.second += right_relax;
 
-                if(snp_ranges.empty() || snp_ranges.back().second + 1 < range.first) {
-                    snp_ranges.push_back(range);
+                if(alt_ranges.empty() || alt_ranges.back().second + 1 < range.first) {
+                    alt_ranges.push_back(range);
                 } else {
-                    assert_leq(snp_ranges.back().first, range.first);
-                    if(snp_ranges.back().second < range.second) {
-                        snp_ranges.back().second = range.second;
+                    assert_leq(alt_ranges.back().first, range.first);
+                    if(alt_ranges.back().second < range.second) {
+                        alt_ranges.back().second = range.second;
                     }
                 }
             }
@@ -369,27 +373,27 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     while(pos < after_pos) {
                         index_t target_pos = pos + modified_chunk_size;
                         if(target_pos < after_pos) {
-                            for(; range_idx < snp_ranges.size(); range_idx++) {
-                                if(target_pos < snp_ranges[range_idx].first) break;
+                            for(; range_idx < alt_ranges.size(); range_idx++) {
+                                if(target_pos < alt_ranges[range_idx].first) break;
                             }
-                            pair<index_t, index_t> snp_free_range;
+                            pair<index_t, index_t> alt_free_range;
                             if(range_idx == 0) {
-                                snp_free_range.first = 0;
+                                alt_free_range.first = 0;
                             } else {
-                                snp_free_range.first = snp_ranges[range_idx - 1].second + 1;
-                                if(snp_free_range.first >= jlen) {
-                                    snp_free_range.first = jlen - 1;
+                                alt_free_range.first = alt_ranges[range_idx - 1].second + 1;
+                                if(alt_free_range.first >= jlen) {
+                                    alt_free_range.first = jlen - 1;
                                 }
                             }
 
-                            if(range_idx == snp_ranges.size()) {
-                                snp_free_range.second = jlen - 1;
+                            if(range_idx == alt_ranges.size()) {
+                                alt_free_range.second = jlen - 1;
                             } else {
-                                snp_free_range.second = snp_ranges[range_idx].first - 1;
+                                alt_free_range.second = alt_ranges[range_idx].first - 1;
                             }
 
-                            assert_leq(snp_free_range.first, snp_free_range.second);
-                            if(target_pos < snp_free_range.first) target_pos = snp_free_range.first;
+                            assert_leq(alt_free_range.first, alt_free_range.second);
+                            if(target_pos < alt_free_range.first) target_pos = alt_free_range.first;
                             if(target_pos > after_pos) target_pos = after_pos;
                         } else {
                             target_pos = after_pos;
@@ -422,7 +426,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             threadParams.back().thread_id = i;
             threadParams.back().refGraph = this;
             threadParams.back().s = &s;
-            threadParams.back().snps = &snps;
+            threadParams.back().alts = &alts;
             threadParams.back().out_fname = out_fname;
             threadParams.back().bigEndian = bigEndian;
             threadParams.back().num_nodes = 0;
@@ -558,45 +562,45 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         edges.back().to = nodes.size() - 1;
 
         // Create nodes and edges for SNPs
-        for(size_t i = 0; i < snps.size(); i++) {
-            const SNP<index_t>& snp = snps[i];
-            if(snp.pos >= s.length()) break;
-            if(snp.type == SNP_SGL) {
-                assert_eq(snp.len, 1);
+        for(size_t i = 0; i < alts.size(); i++) {
+            const ALT<index_t>& alt = alts[i];
+            if(alt.pos >= s.length()) break;
+            if(alt.type == ALT_SNP_SGL) {
+                assert_eq(alt.len, 1);
                 nodes.expand();
-                assert_lt(snp.seq, 4);
-                assert_neq(snp.seq & 0x3, s[snp.pos]);
-                nodes.back().label = "ACGT"[snp.seq];
-                nodes.back().value = snp.pos;
+                assert_lt(alt.seq, 4);
+                assert_neq(alt.seq & 0x3, s[alt.pos]);
+                nodes.back().label = "ACGT"[alt.seq];
+                nodes.back().value = alt.pos;
                 edges.expand();
-                edges.back().from = snp.pos;
+                edges.back().from = alt.pos;
                 edges.back().to = nodes.size() - 1;
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
-                edges.back().to = snp.pos + 2;
+                edges.back().to = alt.pos + 2;
             }
-            else if(snp.type == SNP_DEL) {
-                assert_gt(snp.len, 0);
-                if(snp.pos + snp.len >= s.length()) break;
+            else if(alt.type == ALT_SNP_DEL) {
+                assert_gt(alt.len, 0);
+                if(alt.pos + alt.len >= s.length()) break;
                 edges.expand();
-                edges.back().from = snp.pos;
-                edges.back().to = snp.pos + snp.len + 1;
-            } else if(snp.type == SNP_INS) {
-                assert_gt(snp.len, 0);
-                for(size_t j = 0; j < snp.len; j++) {
-                    uint64_t bp = snp.seq >> ((snp.len - j - 1) << 1);
+                edges.back().from = alt.pos;
+                edges.back().to = alt.pos + alt.len + 1;
+            } else if(alt.type == ALT_SNP_INS) {
+                assert_gt(alt.len, 0);
+                for(size_t j = 0; j < alt.len; j++) {
+                    uint64_t bp = alt.seq >> ((alt.len - j - 1) << 1);
                     bp &= 0x3;
                     char ch = "ACGT"[bp];
                     nodes.expand();
                     nodes.back().label = ch;
                     nodes.back().value = (index_t)INDEX_MAX;
                     edges.expand();
-                    edges.back().from = (j == 0 ? snp.pos : nodes.size() - 2);
+                    edges.back().from = (j == 0 ? alt.pos : nodes.size() - 2);
                     edges.back().to = nodes.size() - 1;
                 }
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
-                edges.back().to = snp.pos + 1;
+                edges.back().to = alt.pos + 1;
             } else {
                 assert(false);
             }
@@ -686,7 +690,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
     const SString<char>& s = *(threadParam->s);
     index_t jlen = s.length();
 
-    const EList<SNP<index_t> >& snps = *(threadParam->snps);
+    const EList<ALT<index_t> >& alts = *(threadParam->alts);
 
     EList<Node> nodes; EList<Edge> edges;
     const EList<RefRecord>& tmp_szs = refGraph.tmp_szs;
@@ -720,7 +724,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         curr_pos += tmp_szs[i].len;
     }
     EList<index_t> prev_tail_nodes;
-    index_t snp_idx = 0;
+    index_t alt_idx = 0;
     for(; szs_idx < szs_idx_end; szs_idx++) {
         index_t curr_len = tmp_szs[szs_idx].len;
         if(curr_len <= 0) continue;
@@ -755,45 +759,49 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         edges.back().to = nodes.size() - 1;
 
         // Create nodes and edges for SNPs
-        for(; snp_idx < snps.size(); snp_idx++) {
-            const SNP<index_t>& snp = snps[snp_idx];
-            if(snp.pos < curr_pos) continue;
-            assert_geq(snp.pos, curr_pos);
-            if(snp.pos >= curr_pos + curr_len) break;
-            if(snp.type == SNP_SGL) {
-                assert_eq(snp.len, 1);
+        for(; alt_idx < alts.size(); alt_idx++) {
+            const ALT<index_t>& alt = alts[alt_idx];
+            // daehwan - for debugging purposes
+            if(alt.type == ALT_SPLICESITE)
+                continue;
+            
+            if(alt.pos < curr_pos) continue;
+            assert_geq(alt.pos, curr_pos);
+            if(alt.pos >= curr_pos + curr_len) break;
+            if(alt.type == ALT_SNP_SGL) {
+                assert_eq(alt.len, 1);
                 nodes.expand();
-                assert_lt(snp.seq, 4);
-                assert_neq(snp.seq & 0x3, s[snp.pos]);
-                nodes.back().label = "ACGT"[snp.seq];
-                nodes.back().value = snp.pos;
+                assert_lt(alt.seq, 4);
+                assert_neq(alt.seq & 0x3, s[alt.pos]);
+                nodes.back().label = "ACGT"[alt.seq];
+                nodes.back().value = alt.pos;
                 edges.expand();
-                edges.back().from = snp.pos - curr_pos;
+                edges.back().from = alt.pos - curr_pos;
                 edges.back().to = nodes.size() - 1;
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
-                edges.back().to = snp.pos - curr_pos + 2;
-            } else if(snp.type == SNP_DEL) {
-                assert_gt(snp.len, 0);
+                edges.back().to = alt.pos - curr_pos + 2;
+            } else if(alt.type == ALT_SNP_DEL) {
+                assert_gt(alt.len, 0);
                 edges.expand();
-                edges.back().from = snp.pos - curr_pos;
-                edges.back().to = snp.pos - curr_pos + snp.len + 1;
-            } else if(snp.type == SNP_INS) {
-                assert_gt(snp.len, 0);
-                for(size_t j = 0; j < snp.len; j++) {
-                    uint64_t bp = snp.seq >> ((snp.len - j - 1) << 1);
+                edges.back().from = alt.pos - curr_pos;
+                edges.back().to = alt.pos - curr_pos + alt.len + 1;
+            } else if(alt.type == ALT_SNP_INS) {
+                assert_gt(alt.len, 0);
+                for(size_t j = 0; j < alt.len; j++) {
+                    uint64_t bp = alt.seq >> ((alt.len - j - 1) << 1);
                     bp &= 0x3;
                     char ch = "ACGT"[bp];
                     nodes.expand();
                     nodes.back().label = ch;
                     nodes.back().value = (index_t)INDEX_MAX;
                     edges.expand();
-                    edges.back().from = (j == 0 ? snp.pos - curr_pos : nodes.size() - 2);
+                    edges.back().from = (j == 0 ? alt.pos - curr_pos : nodes.size() - 2);
                     edges.back().to = nodes.size() - 1;
                 }
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
-                edges.back().to = snp.pos - curr_pos + 1;
+                edges.back().to = alt.pos - curr_pos + 1;
             } else {
                 assert(false);
             }

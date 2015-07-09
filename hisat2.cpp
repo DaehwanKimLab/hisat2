@@ -1738,7 +1738,7 @@ static AlignmentCache<index_t>*          multiseed_ca; // seed cache
 static AlnSink<index_t>*                 multiseed_msink;
 static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
-static SNPDB<index_t>*                   snpdb;
+static ALTDB<index_t>*                   altdb;
 
 /**
  * Metrics for measuring the work done by the outer read alignment
@@ -3263,7 +3263,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     splicedAligner.initRead(rds[0], nofw[0], norc[0], minsc[0], maxpen[0], filt[1]);
                 }
                 if(filt[0] || filt[1]) {
-                    int ret = splicedAligner.go(sc, gfm, *snpdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
+                    int ret = splicedAligner.go(sc, gfm, *altdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
                     MERGE_SW(sw);
                     // daehwan
                     size_t mate = 0;
@@ -3491,11 +3491,11 @@ static void driver(
 	if(gVerbose || startVerbose) {
 		cerr << "About to initialize fw GFM: "; logTime(cerr, true);
 	}
-    snpdb = new SNPDB<index_t>();
+    altdb = new ALTDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
 	HGFM<index_t, local_index_t> gfm(
                                      adjIdxBase,
-                                     snpdb,
+                                     altdb,
                                      -1,       // fw index
                                      true,     // index is for the forward direction
                                      /* overriding: */ offRate,
@@ -3676,7 +3676,7 @@ static void driver(
                                                  samc,         // settings & routines for SAM output
                                                  refnames,     // reference names
                                                  gQuiet,       // don't print alignment summary at end
-                                                 snpdb,
+                                                 altdb,
                                                  ssdb);
 				if(!samNoHead) {
 					bool printHd = true, printSq = true;
@@ -3737,7 +3737,7 @@ static void driver(
 		assert_eq(oq.numStarted(), oq.numFlushed());
 		delete patsrc;
 		delete mssink;
-        delete snpdb;
+        delete altdb;
         delete ssdb;
 		delete metricsOfb;
 		if(fout != NULL) {

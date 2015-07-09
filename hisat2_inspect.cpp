@@ -29,13 +29,15 @@
 #include "hgfm.h"
 #include "reference.h"
 #include "ds.h"
-#include "snp.h"
+#include "alt.h"
 
 using namespace std;
 
 static bool showVersion = false; // just print version and quit?
 int verbose             = 0;  // be talkative
 static int names_only   = 0;  // just print the sequence names in the index
+static int snp_only     = 0;
+static int splicesite_only = 0;
 static int summarize_only = 0; // just print summary of index and quit
 static int across       = 60; // number of characters across in FASTA output
 static bool refFromGFM  = false; // true -> when printing reference, decode it from Gbwt instead of reading it from BitPairReference
@@ -46,6 +48,8 @@ enum {
 	ARG_VERSION = 256,
     ARG_WRAPPER,
 	ARG_USAGE,
+    ARG_SNP,
+    ARG_SPLICESITE
 };
 
 static struct option long_options[] = {
@@ -53,6 +57,8 @@ static struct option long_options[] = {
 	{(char*)"version",  no_argument,        0, ARG_VERSION},
 	{(char*)"usage",    no_argument,        0, ARG_USAGE},
 	{(char*)"names",    no_argument,        0, 'n'},
+    {(char*)"snp",      no_argument,        0, ARG_SNP},
+    {(char*)"ss",       no_argument,        0, ARG_SPLICESITE},
 	{(char*)"summary",  no_argument,        0, 's'},
 	{(char*)"help",     no_argument,        0, 'h'},
 	{(char*)"across",   required_argument,  0, 'a'},
@@ -81,6 +87,8 @@ static void printUsage(ostream& out) {
 	}
 	out << "  -a/--across <int>  Number of characters across in FASTA output (default: 60)" << endl
 	<< "  -n/--names         Print reference sequence names only" << endl
+    << "  --snp              Print SNPs" << endl
+    << "  --ss               Print splice sites" << endl
 	<< "  -s/--summary       Print summary incl. ref names, lengths, index properties" << endl
 	<< "  -e/--bt2-ref      Reconstruct reference from ." << gfm_ext << " (slow, preserves colors)" << endl
 	<< "  -v/--verbose       Verbose output (for debugging)" << endl
@@ -140,6 +148,8 @@ static void parseOptions(int argc, char **argv) {
 			case ARG_VERSION: showVersion = true; break;
 			case 'g': refFromGFM = true; break;
 			case 'n': names_only = true; break;
+            case ARG_SNP: snp_only = true; break;
+            case ARG_SPLICESITE: splicesite_only = true; break;
 			case 's': summarize_only = true; break;
 			case 'a': across = parseInt(-1, "-a/--across arg must be at least 1"); break;
 			case -1: break; /* Done with options. */
@@ -324,20 +334,163 @@ static void print_index_sequence_names(const string& fname, ostream& fout)
  * Print a short summary of what's in the index and its flags.
  */
 template <typename index_t>
+static void print_snps(
+                       const string& fname,
+                       ostream& fout)
+{
+    ALTDB<index_t> altdb;
+    GFM<index_t> gfm(
+                     fname,
+                     &altdb,
+                     -1,                   // don't require entire reverse
+                     true,                 // index is for the forward direction
+                     -1,                   // offrate (-1 = index default)
+                     0,                    // offrate-plus (0 = index default)
+                     false,                // use memory-mapped IO
+                     false,                // use shared memory
+                     false,                // sweep memory-mapped memory
+                     true,                 // load names?
+                     false,                // load SA sample?
+                     false,                // load ftab?
+                     false,                // load rstarts?
+                     verbose,              // be talkative?
+                     verbose,              // be talkative at startup?
+                     false,                // pass up memory exceptions?
+                     false);               // sanity check?
+    gfm.loadIntoMemory(
+                       -1,     // need entire reverse
+                       true,   // load SA sample
+                       true,   // load ftab
+                       true,   // load rstarts
+                       true,   // load names
+                       verbose);  // verbose
+    EList<string> p_refnames;
+    readEbwtRefnames<index_t>(fname, p_refnames);
+    const EList<ALT<index_t> >& alts = altdb.alts();
+    const EList<string>& altnames = altdb.altnames();
+    assert_eq(alts.size(), altnames.size());
+    for(size_t i = 0; i < alts.size(); i++) {
+        const ALT<index_t>& alt = alts[i];
+        if(alt.type != ALT_SNP_SGL && alt.type != ALT_SNP_DEL && alt.type != ALT_SNP_INS)
+            continue;
+        string type = "single";
+        if(alt.type == ALT_SNP_DEL) {
+            type = "deletion";
+        } else if(alt.type == ALT_SNP_INS) {
+            type = "insertion";
+        }
+        index_t tidx = 0, toff = 0, tlen = 0;
+        bool straddled2 = false;
+        gfm.joinedToTextOff(
+                            1,
+                            alt.pos,
+                            tidx,
+                            toff,
+                            tlen,
+                            true,        // reject straddlers?
+                            straddled2); // straddled?
+        cout << altnames[i] << "\t"
+             << type << "\t";
+        assert_lt(tidx, p_refnames.size());
+        cout << p_refnames[tidx] << "\t"
+             << toff << "\t";
+        if(alt.type == ALT_SNP_SGL) {
+            cout << "ACGT"[alt.seq & 0x3];
+        } else if(alt.type == ALT_SNP_DEL) {
+            cout << alt.len;
+        } else if(alt.type == ALT_SNP_INS) {
+            for(index_t i = 0; i < alt.len; i++) {
+                int nt = (alt.seq >> ((alt.len - i - 1) << 1)) & 0x3;
+                cout << "ACGT"[nt];
+            }
+        }
+        cout << endl;
+    }
+}
+
+/**
+ * Print a short summary of what's in the index and its flags.
+ */
+template <typename index_t>
+static void print_splicesites(
+                       const string& fname,
+                       ostream& fout)
+{
+    ALTDB<index_t> altdb;
+    GFM<index_t> gfm(
+                     fname,
+                     &altdb,
+                     -1,                   // don't require entire reverse
+                     true,                 // index is for the forward direction
+                     -1,                   // offrate (-1 = index default)
+                     0,                    // offrate-plus (0 = index default)
+                     false,                // use memory-mapped IO
+                     false,                // use shared memory
+                     false,                // sweep memory-mapped memory
+                     true,                 // load names?
+                     false,                // load SA sample?
+                     false,                // load ftab?
+                     false,                // load rstarts?
+                     verbose,              // be talkative?
+                     verbose,              // be talkative at startup?
+                     false,                // pass up memory exceptions?
+                     false);               // sanity check?
+    gfm.loadIntoMemory(
+                       -1,     // need entire reverse
+                       true,   // load SA sample
+                       true,   // load ftab
+                       true,   // load rstarts
+                       true,   // load names
+                       verbose);  // verbose
+    EList<string> p_refnames;
+    readEbwtRefnames<index_t>(fname, p_refnames);
+    const EList<ALT<index_t> >& alts = altdb.alts();
+    for(size_t i = 0; i < alts.size(); i++) {
+        const ALT<index_t>& alt = alts[i];
+        if(alt.type != ALT_SPLICESITE)
+            continue;
+        index_t tidx = 0, toff = 0, tlen = 0;
+        bool straddled2 = false;
+        gfm.joinedToTextOff(
+                            1,
+                            alt.pos,
+                            tidx,
+                            toff,
+                            tlen,
+                            true,        // reject straddlers?
+                            straddled2); // straddled?
+        index_t tidx2 = 0, toff2 = 0, tlen2 = 0;
+        gfm.joinedToTextOff(
+                            1,
+                            alt.len,
+                            tidx2,
+                            toff2,
+                            tlen2,
+                            true,        // reject straddlers?
+                            straddled2); // straddled?
+        assert_eq(tidx, tidx2);
+        assert_lt(tidx, p_refnames.size());
+        cout << p_refnames[tidx] << "\t"
+             << toff << "\t"
+             << toff2 << "\t"
+        << (alt.seq > 0 ? "+" : "-") << endl;
+    }
+}
+
+/**
+ * Print a short summary of what's in the index and its flags.
+ */
+template <typename index_t>
 static void print_index_summary(
 	const string& fname,
 	ostream& fout)
 {
 	int32_t flags = GFM<index_t>::readFlags(fname);
-	int32_t flagsr = GFM<index_t>::readFlags(fname + ".rev");
-    // daehwan - for debugging purposes
-	// bool entireReverse = readEntireReverse(fname + ".rev")
-    bool entireReverse = false;
-    
-    SNPDB<index_t> snpdb;
+	bool entireReverse = false;    
+    ALTDB<index_t> altdb;
 	GFM<index_t> gfm(
                      fname,
-                     &snpdb,
+                     &altdb,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -356,7 +509,6 @@ static void print_index_summary(
 	EList<string> p_refnames;
 	readEbwtRefnames<index_t>(fname, p_refnames);
 	cout << "Flags" << '\t' << (-flags) << endl;
-	cout << "Reverse flags" << '\t' << (-flagsr) << endl;
 	cout << "2.0-compatible" << '\t' << (entireReverse ? "1" : "0") << endl;
 	cout << "SA-Sample" << "\t1 in " << (1 << gfm.gh().offRate()) << endl;
 	cout << "FTab-Chars" << '\t' << gfm.gh().ftabChars() << endl;
@@ -367,6 +519,20 @@ static void print_index_summary(
 		     << '\t' << gfm.plen()[i]
 		     << endl;
 	}
+    index_t numSnps = 0, numSpliceSites = 0;
+    const EList<ALT<index_t> >& alts = altdb.alts();
+    for(size_t i = 0; i < alts.size(); i++) {
+        const ALT<index_t>& alt = alts[i];
+        if(alt.type == ALT_SNP_SGL ||
+           alt.type == ALT_SNP_DEL ||
+           alt.type == ALT_SNP_INS) {
+            numSnps++;
+        } else if(alt.type == ALT_SPLICESITE) {
+            numSpliceSites++;
+        }
+    }
+    cout << "Num. SNPs: " << numSnps << endl;
+    cout << "Num. Splice Sites: " << numSpliceSites << endl;
 }
 
 extern void initializeCntLut();
@@ -386,12 +552,16 @@ static void driver(
 		print_index_sequence_names<TIndexOffU>(adjustedEbwtFileBase, cout);
 	} else if(summarize_only) {
 		print_index_summary<TIndexOffU>(adjustedEbwtFileBase, cout);
-	} else {
+    } else if(snp_only) {
+        print_snps<TIndexOffU>(adjustedEbwtFileBase, cout);
+    } else if(splicesite_only) {
+        print_splicesites<TIndexOffU>(adjustedEbwtFileBase, cout);
+    } else {
         // Initialize Ebwt object
-        SNPDB<TIndexOffU> snpdb;
+        ALTDB<TIndexOffU> altdb;
 		HGFM<TIndexOffU, uint16_t> gfm(
                                        adjustedEbwtFileBase,
-                                       &snpdb,
+                                       &altdb,
                                        -1,                   // don't care about entire-reverse
                                        true,                 // index is for the forward direction
                                        -1,                   // offrate (-1 = index default)

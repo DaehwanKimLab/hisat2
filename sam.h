@@ -27,7 +27,7 @@
 #include "util.h"
 #include "aligner_result.h"
 #include "scoring.h"
-#include "snp.h"
+#include "alt.h"
 #include "filebuf.h"
 
 enum {
@@ -301,7 +301,7 @@ public:
 		const PerReadMetrics& prm,   // per-read metics
 		const Scoring& sc,           // scoring scheme
 		const char *mapqInp,         // inputs to MAPQ calculation
-        const SNPDB<index_t>* snpdb)
+        const ALTDB<index_t>* altdb)
 		const;
 
 	/**
@@ -511,7 +511,7 @@ void SamConfig<index_t>::printAlignedOptFlags(
                                      const PerReadMetrics& prm, // per-read metrics
                                      const Scoring& sc,         // scoring scheme
                                      const char *mapqInp,       // inputs to MAPQ calculation
-                                     const SNPDB<index_t>* snpdb)
+                                     const ALTDB<index_t>* altdb)
 const
 {
     char buf[1024];
@@ -554,11 +554,11 @@ const
     size_t num_gx = 0;
     for(size_t i = 0; i < res.ned().size(); i++) {
         if(res.ned()[i].isMismatch()) {
-            if(res.ned()[i].snpID >= snpdb->snps().size()) {
+            if(res.ned()[i].snpID >= altdb->alts().size()) {
                 num_mm++;
             }
         } else if(res.ned()[i].isReadGap()) {
-            if(res.ned()[i].snpID >= snpdb->snps().size()) {
+            if(res.ned()[i].snpID >= altdb->alts().size()) {
                 num_go++;
                 num_gx++;
             }
@@ -567,12 +567,12 @@ const
                   res.ned()[i+1].isReadGap())
             {
                 i++;
-                if(res.ned()[i].snpID >= snpdb->snps().size()) {
+                if(res.ned()[i].snpID >= altdb->alts().size()) {
                     num_gx++;
                 }
             }
         } else if(res.ned()[i].isRefGap()) {
-            if(res.ned()[i].snpID >= snpdb->snps().size()) {
+            if(res.ned()[i].snpID >= altdb->alts().size()) {
                 num_go++;
                 num_gx++;
             }
@@ -581,7 +581,7 @@ const
                   res.ned()[i+1].isRefGap())
             {
                 i++;
-                if(res.ned()[i].snpID >= snpdb->snps().size()) {
+                if(res.ned()[i].snpID >= altdb->alts().size()) {
                     num_gx++;
                 }
             }
@@ -613,7 +613,7 @@ const
         size_t NM = 0;
         for(size_t i = 0; i < res.ned().size(); i++) {
             if(res.ned()[i].type != EDIT_TYPE_SPL) {
-                if(res.ned()[i].snpID >= snpdb->snps().size()) {
+                if(res.ned()[i].snpID >= altdb->alts().size()) {
                     NM++;
                 }
             }
@@ -961,11 +961,11 @@ const
     bool snp_first = true;
     index_t prev_snp_idx = INDEX_MAX;
     for(size_t i = 0; i < res.ned().size(); i++) {
-        if(res.ned()[i].snpID < snpdb->snps().size()) {
+        if(res.ned()[i].snpID < altdb->alts().size()) {
             index_t snp_idx = res.ned()[i].snpID;
-            assert_lt(snp_idx, snpdb->snps().size());
-            const SNP<index_t>& snp = snpdb->snps()[snp_idx];
-            const string& snpID = snpdb->snpnames()[snp_idx];
+            assert_lt(snp_idx, altdb->alts().size());
+            const ALT<index_t>& snp = altdb->alts()[snp_idx];
+            const string& snpID = altdb->altnames()[snp_idx];
             if(snp_idx == prev_snp_idx) continue;
             if(snp_first) {
                 WRITE_SEP();
@@ -975,12 +975,12 @@ const
             itoa10<uint64_t>(res.ned()[i].pos, buf);
             o.append(buf);
             o.append("|");
-            if(snp.type == SNP_SGL) {
+            if(snp.type == ALT_SNP_SGL) {
                 o.append("S");
-            } else if(snp.type == SNP_DEL) {
+            } else if(snp.type == ALT_SNP_DEL) {
                 o.append("D");
             } else {
-                assert_eq(snp.type, SNP_INS);
+                assert_eq(snp.type, ALT_SNP_INS);
                 o.append("I");
             }
             o.append("|");

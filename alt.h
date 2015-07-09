@@ -17,8 +17,8 @@
  * along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SNP_H_
-#define SNP_H_
+#ifndef ALT_H_
+#define ALT_H_
 
 #include <iostream>
 #include <fstream>
@@ -29,22 +29,23 @@
 
 using namespace std;
 
-enum SNP_TYPE {
-    SNP_SGL = 0, // single nucleotide substitution
-    SNP_INS,     // small insertion wrt reference genome
-    SNP_DEL,     // small deletion wrt reference genome
-    SNP_ALT,     // alternative sequence (to be implemented ...)
+enum ALT_TYPE {
+    ALT_SNP_SGL = 0, // single nucleotide substitution
+    ALT_SNP_INS,     // small insertion wrt reference genome
+    ALT_SNP_DEL,     // small deletion wrt reference genome
+    ALT_SNP_ALT,     // alternative sequence (to be implemented ...)
+    ALT_SPLICESITE,
 };
 
 template <typename index_t>
-struct SNP {
+struct ALT {
     index_t   pos;
-    SNP_TYPE  type;
+    ALT_TYPE  type;
     uint32_t  len;
     uint64_t  seq;  // used to store 32 bp, but it can be used to store a pointer to EList<uint64_t>
     // in order to support a sequence longer than 32 bp
     
-    bool operator< (const SNP& o) const {
+    bool operator< (const ALT& o) const {
         if(pos != o.pos) return pos < o.pos;
         if(type != o.type) return type < o.type;
         if(len != o.len) return len < o.len;
@@ -52,14 +53,14 @@ struct SNP {
         return false;
     }
     
-    bool compatibleWith(const SNP& o) const {
+    bool compatibleWith(const ALT& o) const {
         if(pos == o.pos) return false;
         
         // sort the two SNPs
-        const SNP& a = (pos < o.pos ? *this : o);
-        const SNP& b = (pos < o.pos ? o : *this);
+        const ALT& a = (pos < o.pos ? *this : o);
+        const ALT& b = (pos < o.pos ? o : *this);
         
-        if(a.type == SNP_DEL || a.type == SNP_INS) {
+        if(a.type == ALT_SNP_DEL || a.type == ALT_SNP_INS) {
             if(b.pos <= a.pos + a.len) {
                 return false;
             }
@@ -70,7 +71,7 @@ struct SNP {
     
 #ifndef NDEBUG
     bool repOk() const {
-        if(type == SNP_SGL) {
+        if(type == ALT_SNP_SGL) {
             if(len != 1) {
                 assert(false);
                 return false;
@@ -80,7 +81,7 @@ struct SNP {
                 assert(false);
                 return false;
             }
-        } else if(type == SNP_DEL) {
+        } else if(type == ALT_SNP_DEL) {
             if(len <= 0) {
                 assert(false);
                 return false;
@@ -89,7 +90,7 @@ struct SNP {
                 assert(false);
                 return false;
             }
-        } else if(type == SNP_INS) {
+        } else if(type == ALT_SNP_INS) {
             if(len <= 0) {
                 assert(false);
                 return false;
@@ -112,7 +113,7 @@ struct SNP {
     
     bool read(ifstream& f_in, bool bigEndian) {
         pos = readIndex<index_t>(f_in, bigEndian);
-        type = (SNP_TYPE)readU32(f_in, bigEndian);
+        type = (ALT_TYPE)readU32(f_in, bigEndian);
         len = readU32(f_in, bigEndian);
         seq = readIndex<uint64_t>(f_in, bigEndian);
         return true;
@@ -121,25 +122,25 @@ struct SNP {
 
 
 template <typename index_t>
-class SNPDB {
+class ALTDB {
 public:
-    SNPDB() {
+    ALTDB() {
         
     }
     
-    virtual ~SNPDB() {
+    virtual ~ALTDB() {
         
     }
     
-    EList<SNP<index_t> >& snps()     { return _snps; }
-    EList<string>&        snpnames() { return _snpnames; }
+    EList<ALT<index_t> >& alts()     { return _alts; }
+    EList<string>&        altnames() { return _altnames; }
     
-    const EList<SNP<index_t> >& snps() const     { return _snps; }
-    const EList<string>&        snpnames() const { return _snpnames; }
+    const EList<ALT<index_t> >& alts() const     { return _alts; }
+    const EList<string>&        altnames() const { return _altnames; }
 
 private:
-    EList<SNP<index_t> > _snps;
-    EList<string>        _snpnames;
+    EList<ALT<index_t> > _alts;
+    EList<string>        _altnames;
 };
 
-#endif /*ifndef SNP_H_*/
+#endif /*ifndef ALT_H_*/
