@@ -73,6 +73,8 @@ static bool justRef;
 static bool reverseEach;
 static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
+static string snp_fname;
+static string ss_fname;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -119,7 +121,9 @@ enum {
     ARG_SA,
 	ARG_WRAPPER,
     ARG_LOCAL_OFFRATE,
-    ARG_LOCAL_FTABCHARS
+    ARG_LOCAL_FTABCHARS,
+    ARG_SNP,
+    ARG_SPLICESITE
 };
 
 /**
@@ -199,6 +203,8 @@ static struct option long_options[] = {
 	{(char*)"ftabchars",      required_argument, 0,            't'},
     {(char*)"localoffrate",   required_argument, 0,            ARG_LOCAL_OFFRATE},
 	{(char*)"localftabchars", required_argument, 0,            ARG_LOCAL_FTABCHARS},
+    {(char*)"snp",            required_argument, 0,            ARG_SNP},
+    {(char*)"ss",             required_argument, 0,            ARG_SPLICESITE},
 	{(char*)"help",           no_argument,       0,            'h'},
 	{(char*)"ntoa",           no_argument,       0,            ARG_NTOA},
 	{(char*)"justref",        no_argument,       0,            '3'},
@@ -284,6 +290,12 @@ static void parseOptions(int argc, const char **argv) {
 				printUsage(cout);
 				throw 0;
 				break;
+            case ARG_SNP:
+                snp_fname = optarg;
+                break;
+            case ARG_SPLICESITE:
+                ss_fname = optarg;
+                break;
 			case ARG_BMAX:
 				bmax = parseNumber<TIndexOffU>(1, "--bmax arg must be at least 1");
 				bmaxMultSqrt = OFF_MASK; // don't use multSqrt
@@ -365,6 +377,7 @@ static void driver(
 	const string& infile,
 	EList<string>& infiles,
     const string& snpfile,
+    const string& ssfile,
 	const string& outfile,
 	bool packed,
 	int reverse)
@@ -608,9 +621,7 @@ int hisat2_build(int argc, const char **argv) {
 			return 1;
 		}
 		infile = argv[optind++];
-        string snpfile;
-        snpfile = argv[optind++];
-
+        
 		// Get output filename
 		if(optind >= argc) {
 			cerr << "No output file specified!" << endl;
@@ -677,7 +688,7 @@ int hisat2_build(int argc, const char **argv) {
 		{
 			Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, snpfile, outfile, false, REF_READ_FORWARD);
+                driver<SString<char> >(infile, infiles, snp_fname, ss_fname, outfile, false, REF_READ_FORWARD);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;
