@@ -29,6 +29,7 @@
 #include <deque>
 #include <time.h>
 #include "alt.h"
+#include "radix_sort.h"
 
 // Reference:
 // Jouni Sirén, Niko Välimäki, and Veli Mäkinen: Indexing Graphs for Path Queries with Applications in Genome Research.
@@ -100,6 +101,9 @@ public:
             return to < o.to;
         }
     };
+    static index_t EdgeTo (Edge& a) {
+    	return a.to;
+    }
 
     struct EdgeFromCmp {
         bool operator() (const Edge& a, const Edge& b) const {
@@ -162,8 +166,6 @@ private:
         }
         return range;
     }
-    void binSortByTo(Edge* begin, index_t max_from);
-    void binSortByToWorker(Edge* begin, Edge* end, int log_size);
 
 private:
     struct ThreadParam {
@@ -1193,87 +1195,6 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
 }
 
 template <typename index_t>
-void RefGraph<index_t>::binSortByTo(Edge* begin, index_t max_from) {
-	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
-	const int BLOCKS = (1 << (SHIFT + 1));
-
-	// count number in each bin
-//	clock_t start = clock();
-	int log_size = sizeof(max_from) * 8;
-	while(!((1 << log_size) & max_from)) log_size--;
-	int right_shift = log_size - SHIFT;
-	int occupied = (max_from >> right_shift) + 1; //index of largest block that isn't empty
-	index_t count[BLOCKS] = {0};
-	for(Edge* edge = edges.begin(); edge != edges.end(); edge++) {
-		count[edge->to >> right_shift]++;
-	}
-	// sum numbers to create an index
-	Edge* index[BLOCKS];
-	index[0] = begin;
-	for(int i = 1; i < occupied; i++) {
-		index[i] = index[i - 1] + count[i - 1];
-	}
-//	cerr << "BUILD INDEX: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
-	// hash objects
-	for(Edge* edge = edges.begin(); edge != edges.end(); edge++) {
-		*index[edge->to >> right_shift]++ = *edge;
-	}
-//	cerr << "HASH OBJECTS: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
-	//sort partitions
-
-	binSortByToWorker(begin, index[0], right_shift);
-	for(int bin = 1; bin < occupied; bin++) {
-		binSortByToWorker(index[bin - 1], index[bin], right_shift);
-	}
-//	cerr << "TOTAL TIME: " << (float)(clock() - start) / CLOCKS_PER_SEC << endl;
-}
-
-template <typename index_t>
-void RefGraph<index_t>::binSortByToWorker(Edge* begin, Edge* end, int log_size) {
-	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
-	const int BLOCKS = (1 << (SHIFT + 1));
-	if(log_size == 0 || end < begin + 2) return;
-	if(end - begin < 2000) { //picked arbitrarily
-		sort(begin, end, EdgeToCmp());
-		return;
-	}
-
-	index_t count[BLOCKS] = {0};
-	// count number in each bin
-	int right_shift = 0;
-	if(log_size > SHIFT) right_shift = log_size - SHIFT;
-	for(Edge* edge = begin; edge != end; edge++) {
-		count[(edge->to >> right_shift) & (BLOCKS - 1)]++;
-	}
-	// sum numbers to create an index
-	Edge* index[BLOCKS + 1];
-	Edge* place[BLOCKS];
-	index[0] = place[0] = begin;
-	for(int i = 1; i < BLOCKS; i++) {
-		index[i] = place[i] = index[i - 1] + count[i - 1];
-	}
-	index[BLOCKS] = end;
-	// hash objects
-	for(int bin = 0; bin < BLOCKS; bin++) {
-		Edge* edge = place[bin];
-		while(edge != index[bin + 1]) {
-			if(((edge->to >> right_shift) & (BLOCKS - 1)) != bin) {
-				std::swap(*place[(edge->to >> right_shift) & (BLOCKS - 1)]++, *edge);
-			} else {
-				edge++;
-			}
-		}
-	}
-
-	//sort partitions
-	if(right_shift) {
-		for(int bin = 0; bin < BLOCKS; bin++)
-			if(index[bin + 1] - index[bin] > 1) binSortByToWorker(index[bin], index[bin + 1], right_shift);
-	}
-}
-
-
-template <typename index_t>
 class PathGraph {
 public:
     struct PathNode {
@@ -1292,15 +1213,13 @@ public:
         };
     };
 
-    struct PathNodeSlice {
-    	PathNode*     place;
-    	PathNode*     end;
-    	bool          just_made;
+    static index_t PathNodeFrom (PathNode& a) {
+    	return a.from;
+    }
 
-    	bool operator< (const PathNodeSlice& o) const {
-    		return *place < *(o.place);
-    	}
-    };
+    static index_t PathNodeKey (PathNode& a) {
+       	return a.key.first;
+    }
 
     struct PathNodeFromCmp {
         bool operator() (const PathNode& a, const PathNode& b) const {
@@ -1334,22 +1253,10 @@ public:
         };
 
     };
+    static index_t PathEdgeTo (PathEdge& a) {
+        	return a.ranking;
+        }
 
-    struct PathEdgeSlice {
-    	PathEdge*     place;
-    	PathEdge*     end;
-
-    	bool operator< (const PathEdgeSlice& o) const {
-    		return *place < *(o.place);
-    	}
-    };
-
-
-    struct PathEdgeReverseCmp {
-    	bool operator() (const PathEdge& a, const PathEdge& b) const {
-			return a.label > b.label || (a.label == b.label && a.ranking > b.ranking);
-		}
-    };
     struct PathEdgeFromCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
             return a.from < b.from || (a.from == b.from && a.ranking < b.ranking);
@@ -1517,63 +1424,7 @@ private:
 
     // Can create an index by using key.second in PathNodes.
     void sortByFrom(bool create_index = true);
-    void binSortByFrom(PathNode* begin);
-    void binSortByFromWorker(PathNode* begin, PathNode* end, int log_size);
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
-
-    void sortEdges() { sort(edges.begin(), edges.end()); } // by (from.label, to.rank)
-    void sortEdgesFrom() {
-        sort(edges.begin(), edges.end(), PathEdgeFromCmp());
-    }
-    void sortEdgesTo(bool create_index = false) {
-        sort(edges.begin(), edges.end(), PathEdgeToCmp());
-
-        if(create_index) {
-            for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
-                node->key.second = 0;
-            }
-            for(PathEdge* edge = edges.begin(); edge != edges.end(); edge++) {
-                nodes[edge->ranking].key.second++;
-            }
-            for(index_t i = 1; i < nodes.size(); i++) {
-                nodes[i].key.second += nodes[i - 1].key.second;
-            }
-        }
-    }
-    void binSortByTo(bool create_index);
-    void binSortByToWorker(PathEdge* begin, PathEdge* end, int log_size);
-
-    static pair<index_t, index_t> getNextRange(EList<PathNode>* sep_nodes, pair<index_t, index_t> range) {
-        if(range.second >= sep_nodes->size())
-            return pair<index_t, index_t>(0, 0);
-
-        if(range.first < range.second) {
-            range.first = range.second; range.second++;
-        }
-
-        while(range.second < sep_nodes->size() && sep_nodes->get(range.second).from == sep_nodes->get(range.first).from) {
-            range.second++;
-        }
-        return range;
-    }
-
-    static pair<index_t, index_t> getNextEdgeRange(EList<TempEdge>* sep_edges, pair<index_t, index_t> range, bool from) {
-        if(range.second >= sep_edges->size()) {
-            return pair<index_t, index_t>(0, 0);
-        }
-        range.first = range.second; range.second++;
-
-        if(from) {
-            while(range.second < sep_edges->size() && sep_edges->get(range.second).from == sep_edges->get(range.first).from) {
-                range.second++;
-            }
-        } else {
-            while(range.second < sep_edges->size() && sep_edges->get(range.second).to == sep_edges->get(range.first).to) {
-                range.second++;
-            }
-        }
-        return range;
-    }
 
 private:
     int             nthreads;
@@ -1762,7 +1613,7 @@ report_F_node_idx(0), report_F_location(0)
     	printInfo();
     	past_nodes.swap(nodes);
     }
-    while(generation < 3) {
+    while(generation < 3) { // this needs to be changed to account for different size index_t's
     	generation++;
     	//here past_nodes is already sorted by .from
         // first count where to start each from value
@@ -1830,8 +1681,9 @@ report_F_node_idx(0), report_F_location(0)
 				nodes.back().key  = pair<index_t, index_t>(node->key.first, past_nodes[j].key.first);
 			}
 		}
-
-		sort(nodes.begin(), nodes.end()); // should be changed to radix sort, could use array in past_nodes for auxillary space
+		past_nodes.resizeExact(nodes.size());
+		bin_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, (index_t)-1);
+		nodes.swap(past_nodes);
 		mergeUpdateRank();
 
 		printInfo();
@@ -1847,10 +1699,10 @@ report_F_node_idx(0), report_F_location(0)
 
 		assert_neq(past_nodes.size(), ranks);
 
-		EList<PathNode> from_table; from_table.resizeExact(past_nodes.size()); from_table.fillZero();
+		EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
 		if(verbose) cerr << "ALLOCATE FROM_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 		indiv = clock();
-		binSortByFrom(from_table.begin());
+		bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from);
 		if(verbose) cerr << "BUILD TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 		indiv = clock();
 
@@ -1895,12 +1747,80 @@ report_F_node_idx(0), report_F_location(0)
 		indiv = clock();
 		// Now make all nodes properly sorted
 		PathNode* block_start = nodes.begin();
-		for(PathNode* curr = nodes.begin() + 1; curr != nodes.end(); curr++) {
-			if(curr->key.first != block_start->key.first) {
-				if(curr - block_start > 1) sort(block_start, curr);
-				block_start = curr;
+		PathNode* curr = nodes.begin();
+		ranks = 0;
+		for(PathNode* node = nodes.begin() + 1; node != nodes.end(); node++) {
+			if(node->key.first != block_start->key.first) {
+				if(node - block_start > 1) {
+					sort(block_start, node);
+					while(block_start != node) {
+						//extend while share same key
+						index_t shift = 1;
+						while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
+							shift++;
+						}
+						//check if all share .from
+						bool merge = true;
+						for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
+							if(n->from != block_start->from) merge = false;
+						}
+						//if they share same from, then they are a mergable set
+						//check if they are able to be merged into the previous node (second clause)
+						//otherwise write single node to array
+
+						//if not mergable, just write all to array
+						if(!merge) {
+							for(PathNode* n = block_start; n != (block_start + shift); n++) {
+								n->key.first = ranks;
+								*curr++ = *n;
+							}
+							ranks++;
+						} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
+							block_start->setSorted();
+							block_start->key.first = ranks++;
+							*curr++ = *block_start;
+						}
+						block_start += shift;
+					}
+				} else if(curr == nodes.begin() || (!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from)){
+					block_start->key.first = ranks++;
+					*curr++ = *block_start;
+				}
+				block_start = node;
 			}
 		}
+		PathNode* node = nodes.end();
+		sort(block_start, node);
+		while(block_start != node) {
+			//extend while share same key
+			index_t shift = 1;
+			while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
+				shift++;
+			}
+			//check if all share .from
+			bool merge = true;
+			for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
+				if(n->from != block_start->from) merge = false;
+			}
+			//if they share same from, then they are a mergable set
+			//check if they are able to be merged into the previous node (second clause)
+			//otherwise write single node to array
+
+			//if not mergable, just write all to array
+			if(!merge) {
+				for(PathNode* n = block_start; n != (block_start + shift); n++) {
+					n->key.first = ranks;
+					*curr++ = *n;
+				}
+				ranks++;
+			} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
+				block_start->setSorted();
+				block_start->key.first = ranks++;
+				*curr++ = *block_start;
+			}
+			block_start += shift;
+		}
+		nodes.resizeExact(curr - nodes.begin());
 		if(nodes.end() - block_start > 1) sort(block_start, nodes.end());
 		if(verbose) cerr << "SORTED ALL NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 		indiv = clock();
@@ -1933,62 +1853,52 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	if(!sorted) return false;
 
+	clock_t indiv = clock();
+	clock_t overall = clock();
+
 	//build hash table of base.edges binned by .to
 	//query nodes against in rank order
 	//put into the correct bin based on edge.label
 
-	EList<typename RefGraph<index_t>::Edge> to_table; to_table.resizeExact(base.edges.size()); to_table.fillZero();
-	base.binSortByTo(to_table.begin(), max_from);
-
+	EList<typename RefGraph<index_t>::Edge> to_table; to_table.resizeExact(base.edges.size());
+	bin_sort_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
+			base.edges.begin(), base.edges.end(), to_table.ptr(), &RefGraph<index_t>::EdgeTo, max_from);
+	if(verbose) cerr << "BUILD TO_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
 	//Build to_index
 	EList<index_t> to_index; to_index.resizeExact(max_from + 1); to_index.fillZero();
 	for(index_t i = 0; i < base.edges.size(); i++) {
 		to_index[to_table[i].to + 1] = i + 1;
 	}
-
+	if(verbose) cerr << "BUILD TO_INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
 	// Now query against hash-table
 
 	//count number of edges
-	index_t label_index[7] = {0};
+	index_t label_index[6] = {0};
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
 			switch(base.nodes[to_table[j].from].label) {
-				case 'A':
-					label_index[0]++;
-					break;
-				case 'C':
-					label_index[1]++;
-					break;
-				case 'G':
-					label_index[2]++;
-					break;
-				case 'T':
-					label_index[3]++;
-					break;
-				case 'N':
-					label_index[4]++;
-					break;
-				case 'Y':
-					label_index[5]++;
-					break;
-				case 'Z':
-					label_index[6]++;
-					break;
-				default:
-					assert(false);
-					throw 1;
+				case 'A': label_index[0]++; break;
+				case 'C': label_index[1]++; break;
+				case 'G': label_index[2]++; break;
+				case 'T': label_index[3]++; break;
+				case 'Y': label_index[4]++; break;
+				case 'Z': label_index[5]++; break;
+				default: assert(false); throw 1;
 			}
 		}
 	}
 	// make new nodes
 	index_t tot = label_index[0];
 	label_index[0] = 0;
-	for(int i = 1; i < 7; i++) {
+	for(int i = 1; i < 6; i++) {
 		tot += label_index[i];
 		label_index[i] = tot - label_index[i];
 	}
+	if(verbose) cerr << "COUNT NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
 	edges.resizeExact(tot);
-	edges.fillZero();
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
 			switch(base.nodes[to_table[j].from].label) {
@@ -2004,14 +1914,11 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 				case 'T':
 					edges[label_index[3]++] = PathEdge(to_table[j].from, node->key.first, 'T');
 					break;
-				case 'N':
-					edges[label_index[4]++] = PathEdge(to_table[j].from, node->key.first, 'N');
-					break;
 				case 'Y':
-					edges[label_index[5]++] = PathEdge(to_table[j].from, node->key.first, 'Y');
+					edges[label_index[4]++] = PathEdge(to_table[j].from, node->key.first, 'Y');
 					break;
 				case 'Z':
-					edges[label_index[6]++] = PathEdge(to_table[j].from, node->key.first, 'Z');
+					edges[label_index[5]++] = PathEdge(to_table[j].from, node->key.first, 'Z');
 					break;
 				default:
 					assert(false);
@@ -2020,6 +1927,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 		}
 	}
 
+	if(verbose) cerr << "MADE NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
 
 #ifndef NDEBUG
     if(debug) {
@@ -2082,6 +1991,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         node->to = base.nodes[node->from].value;
     }
 
+    if(verbose) cerr << "PROCESS EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+    indiv = clock();
+
     // Remove 'Y' node
     assert_gt(nodes.size(), 2);
     nodes.back().key.first = nodes[nodes.size() - 2].key.first;
@@ -2097,6 +2009,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             edge.ranking -= 1;
         }
     }
+    if(verbose) cerr << "REMOVE Y: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+    indiv = clock();
 
 #ifndef NDEBUG
     if(debug) {
@@ -2115,9 +2029,17 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #endif
 
-    //parallelize this
-
-    binSortByTo(true);
+    int log_size = sizeof(edges.size()) * 8;
+    while(!((1 << log_size) & edges.size())) log_size--;
+    bin_sort<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, log_size);
+    for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+        node->key.second = 0;
+    }
+    for(index_t i = 0; i < edges.size(); i++) {
+        nodes[edges[i].ranking].key.second = i + 1;
+    }
+    if(verbose) cerr << "SORT, Make index: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+    if(verbose) cerr << "TOTAL: " << (float)(clock() - overall) / CLOCKS_PER_SEC << endl;
     return true;
 
     bwt_string.clear();
@@ -2283,8 +2205,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 template <typename index_t>
 void PathGraph<index_t>::mergeUpdateRank()
 {
-
     // Update ranks
+    if(generation == 4) {
     index_t rank = 0;
     pair<index_t, index_t> key = nodes.front().key;
     for(index_t i = 0; i < nodes.size(); i++) {
@@ -2294,9 +2216,10 @@ void PathGraph<index_t>::mergeUpdateRank()
             rank++;
         }
         node.key = pair<index_t, index_t>(rank, 0);
-    }
-
+	}
+    ranks = rank + 1;
     // Merge equivalent nodes
+
     index_t curr = 0;
     pair<index_t, index_t> range(0, 0); // Empty range
     while(true) {
@@ -2321,10 +2244,11 @@ void PathGraph<index_t>::mergeUpdateRank()
             candidate = NULL;
         }
     }
+
     if(candidate != NULL) {
         candidate->setSorted();
     }
-
+    }
     // Only done on last iteration
     // Replace the ranks of a sorted graph so that rank(i) = i
     // Merges may otherwise leave gaps in the ranks
@@ -2378,7 +2302,7 @@ pair<index_t, index_t> PathGraph<index_t>::getEdges(index_t node, bool by_from) 
         return pair<index_t, index_t>(nodes[node - 1].key.second, nodes[node].key.second);
     }
 }
-
+#if 0
 template <typename index_t>
 void PathGraph<index_t>::sortByFrom(bool create_index) {
     sort(nodes.begin(), nodes.end(), PathNodeFromCmp());
@@ -2399,194 +2323,6 @@ void PathGraph<index_t>::sortByFrom(bool create_index) {
 }
 
 template <typename index_t>
-void PathGraph<index_t>::binSortByFrom(PathNode* begin) {
-	/*
-	 * aproximate times not counting recursive sorts
-	 * shift = 4 -> .16
-	 * shift = 5 -> .17
-	 * shift = 6 -> .23 //seems that we overflow cache here?
-	 * shift = 7 -> .25
-	 * shift = 8 -> .257
-	 * shift = 9 -> .275
-	 * shift = 10 -> .30
-	 *
-	 * times per layer with shift = 7 for chr21
-	 * 25 - 18 -> .25
-	 * 18 - 11 -> .32
-	 * 11 - 4  -> .23
-	 * std::sort remaining -> .53
-	 * total -> 1.33
-	 */
-	const int SHIFT = 7;
-	const int BLOCKS = (1 << (SHIFT + 1));
-
-	int log_size = sizeof(max_from) * 8;
-	while(!((1 << log_size) & max_from)) log_size--;
-	int right_shift = log_size - SHIFT;
-	int occupied = (max_from >> right_shift) + 1;
-	index_t count[BLOCKS] = {0};
-	// count number in each bin ~ 1/5 of time
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		count[node->from >> right_shift]++;
-	}
-	// sum numbers to create an index ~ takes very little time
-	PathNode* index[BLOCKS];
-	index[0] = begin;
-	for(int i = 1; i < occupied; i++) {
-		index[i] = index[i - 1] + count[i - 1];
-	}
-	// hash objects ~ 4/5 of time
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		*index[node->from >> right_shift]++ = *node;
-	}
-	//sort partitions
-	binSortByFromWorker(begin, index[0], right_shift);
-	for(int bin = 1; bin < occupied; bin++) {
-		binSortByFromWorker(index[bin - 1], index[bin], right_shift);
-	}
-}
-
-template <typename index_t>
-void PathGraph<index_t>::binSortByFromWorker(PathNode* begin, PathNode* end, int log_size) {
-	//throughout this function replaced BLOCKS and SHIFT by their numerical values
-	if(log_size == 0 || end < begin + 2) return;
-	if(end - begin < 2000) { //picked arbitrarily
-		sort(begin, end, PathNodeFromCmp());
-		return;
-	}
-	// compute maximum of log_size - 7 and 0
-	int right_shift = (log_size - 7) * (log_size > 7);
-	// count number in each bin
-	index_t count[256] = {0};
-	for(PathNode* node = begin; node != end; node++) {
-		count[(node->from >> right_shift) & 255]++;
-	}
-	// sum numbers to create an index
-	PathNode* index[257];
-	PathNode* place[256];
-	index[0] = place[0] = begin;
-	for(int i = 1; i < 256; i++) {
-		index[i] = place[i] = index[i - 1] + count[i - 1];
-	}
-	index[256] = end;
-	//put objects in proper place
-	for(int bin = 0; bin < 256; bin++) {
-		while(place[bin] != index[bin + 1]) {
-			PathNode node = *place[bin];
-			int x = (node.from >> right_shift) & 255;
-			while(x != bin) { // switched inner loop here, removed branch statement
-				PathNode temp = *place[x];
-				*place[x]++ = node;
-				node = temp;
-				x = (node.from >> right_shift) & 255;
-			}
-			*place[bin]++ = node;
-		}
-	}
-	//sort partitions
-	if(right_shift) {
-		for(int bin = 0; bin < 256; bin++)
-			if(index[bin + 1] - index[bin] > 1) binSortByFromWorker(index[bin], index[bin + 1], right_shift);
-	}
-}
-
-template <typename index_t>
-void PathGraph<index_t>::binSortByTo(bool create_index) {
-	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
-	const int BLOCKS = (1 << (SHIFT + 1));
-	max_from = edges.size();
-	// count number in each bin
-//	clock_t start = clock();
-	int log_size = sizeof(max_from) * 8;
-	while(!((1 << log_size) & max_from)) log_size--;
-	int right_shift = log_size - SHIFT;
-	int occupied = (max_from >> right_shift) + 1; //index of largest block that isn't empty
-	index_t count[BLOCKS] = {0};
-	for(PathEdge* edge = edges.begin(); edge != edges.end(); edge++) {
-		count[edge->ranking >> right_shift]++;
-	}
-	// sum numbers to create an index
-	PathEdge* index[BLOCKS + 1];
-	PathEdge* place[BLOCKS];
-	index[0] = place[0] = edges.begin();
-	for(int i = 1; i < occupied; i++) {
-		index[i] = place[i] = index[i - 1] + count[i - 1];
-	}
-	index[occupied] = edges.end();
-	// hash objects
-	for(int bin = 0; bin < occupied; bin++) {
-		PathEdge* edge = place[bin];
-		while(edge != index[bin + 1]) {
-			if((edge->ranking >> right_shift) >= BLOCKS) cerr << (edge->ranking >> right_shift) << endl;
-			if((edge->ranking >> right_shift) != bin) {
-				std::swap(*place[edge->ranking >> right_shift]++, *edge);
-			} else {
-				edge++;
-			}
-		}
-	}
-	//sort partitions
-	if(right_shift) {
-		for(int bin = 0; bin < occupied; bin++)
-			if(index[bin + 1] - index[bin] > 1) binSortByToWorker(index[bin], index[bin + 1], right_shift);
-	}
-
-    if(create_index) {
-        for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
-            node->key.second = 0;
-        }
-        for(index_t i = 0; i < edges.size(); i++) {
-            nodes[edges[i].ranking].key.second = i + 1;
-        }
-    }
-}
-
-template <typename index_t>
-void PathGraph<index_t>::binSortByToWorker(PathEdge* begin, PathEdge* end, int log_size) {
-	const int SHIFT = 7; //seems to level off here, assuming cache v. work done trade off
-	const int BLOCKS = (1 << (SHIFT + 1));
-	if(log_size == 0 || end < begin + 2) return;
-	if(end - begin < 2000) { //picked arbitrarily
-		sort(begin, end, PathEdgeToCmp());
-		return;
-	}
-
-	index_t count[BLOCKS] = {0};
-	// count number in each bin
-	int right_shift = 0;
-	if(log_size > SHIFT) right_shift = log_size - SHIFT;
-	for(PathEdge* edge = begin; edge != end; edge++) {
-		count[(edge->ranking >> right_shift) & (BLOCKS - 1)]++;
-	}
-	// sum numbers to create an index
-	PathEdge* index[BLOCKS + 1];
-	PathEdge* place[BLOCKS];
-	index[0] = place[0] = begin;
-	for(int i = 1; i < BLOCKS; i++) {
-		index[i] = place[i] = index[i - 1] + count[i - 1];
-	}
-	index[BLOCKS] = end;
-	// hash objects
-	for(int bin = 0; bin < BLOCKS; bin++) {
-		PathEdge* edge = place[bin];
-		while(edge != index[bin + 1]) {
-			if(((edge->ranking >> right_shift) & (BLOCKS - 1)) != bin) {
-				std::swap(*place[(edge->ranking >> right_shift) & (BLOCKS - 1)]++, *edge);
-			} else {
-				edge++;
-			}
-		}
-	}
-
-	//sort partitions
-	if(right_shift) {
-		for(int bin = 0; bin < BLOCKS; bin++)
-			if(index[bin + 1] - index[bin] > 1) binSortByToWorker(index[bin], index[bin + 1], right_shift);
-	}
-}
-
-
-template <typename index_t>
 pair<index_t, index_t> PathGraph<index_t>::getNodesFrom(index_t node) {
     if(node + 1 >= nodes.size()) {
         assert_eq(node + 1, nodes.size());
@@ -2598,7 +2334,7 @@ pair<index_t, index_t> PathGraph<index_t>::getNodesFrom(index_t node) {
     return pair<index_t, index_t>(nodes[node].key.second, nodes[node + 1].key.second);
 }
 
-#if 0
+
 template <typename index_t>
 void PathGraph<index_t>::seperateNodes(void * vp) {
     ThreadParam* threadParam = (ThreadParam*)vp;

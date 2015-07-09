@@ -2181,6 +2181,8 @@ HGFM<index_t, local_index_t>::HGFM(
                 alt.pos = curr_sztot;
                 index_t alt_i = this->_alts.bsearchLoBound(alt);
                 for(; alt_i < this->_alts.size(); alt_i++) {
+                    // daehwan - for debugging purposes
+                    if(this->_alts[alt_i].type == ALT_SPLICESITE) continue;
                     if(curr_sztot + local_sztot <= this->_alts[alt_i].pos + this->_alts[alt_i].len + 1) break;
                     if(curr_sztot <= this->_alts[alt_i].pos) {
                         tParam.alts.push_back(this->_alts[alt_i]);
