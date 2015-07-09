@@ -1834,10 +1834,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                                                *tParam.rg,
                                                1,         /* num threads */
                                                false);    /* verbose? */
-            while(!tParam.pg->isSorted()) {
-                PathGraph<index_t>* next = new PathGraph<index_t>(*tParam.pg);
-                delete tParam.pg; tParam.pg = next;
-            }
+
             if(!tParam.pg->generateEdges(*tParam.rg)) {
                 cerr << "An error occurred - generateEdges" << endl;
                 throw 1;
