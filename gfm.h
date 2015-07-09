@@ -1348,8 +1348,8 @@ public:
                         _alts.expand();
                         ALT<index_t>& alt = _alts.back();
                         alt.type = ALT_SPLICESITE;
-                        alt.pos = left;
-                        alt.len = right;
+                        alt.left = left;
+                        alt.right = right;
                         alt.seq = (strand == '+' ? 1 : 0);
                         
                         _altnames.push_back("ss");

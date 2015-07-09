@@ -453,7 +453,7 @@ static void print_splicesites(
         bool straddled2 = false;
         gfm.joinedToTextOff(
                             1,
-                            alt.pos,
+                            alt.left,
                             tidx,
                             toff,
                             tlen,
@@ -462,7 +462,7 @@ static void print_splicesites(
         index_t tidx2 = 0, toff2 = 0, tlen2 = 0;
         gfm.joinedToTextOff(
                             1,
-                            alt.len,
+                            alt.right,
                             tidx2,
                             toff2,
                             tlen2,

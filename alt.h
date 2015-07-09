@@ -39,9 +39,15 @@ enum ALT_TYPE {
 
 template <typename index_t>
 struct ALT {
-    index_t   pos;
-    ALT_TYPE  type;
-    uint32_t  len;
+    union {
+        index_t pos;
+        index_t left;
+    };
+    ALT_TYPE type;
+    union {
+        index_t len;
+        index_t right;
+    };
     uint64_t  seq;  // used to store 32 bp, but it can be used to store a pointer to EList<uint64_t>
     // in order to support a sequence longer than 32 bp
     
@@ -106,7 +112,7 @@ struct ALT {
     bool write(ofstream& f_out, bool bigEndian) const {
         writeIndex<index_t>(f_out, pos, bigEndian);
         writeU32(f_out, type, bigEndian);
-        writeU32(f_out, len, bigEndian);
+        writeIndex<index_t>(f_out, len, bigEndian);
         writeIndex<uint64_t>(f_out, seq, bigEndian);
         return true;
     }
@@ -114,7 +120,7 @@ struct ALT {
     bool read(ifstream& f_in, bool bigEndian) {
         pos = readIndex<index_t>(f_in, bigEndian);
         type = (ALT_TYPE)readU32(f_in, bigEndian);
-        len = readU32(f_in, bigEndian);
+        len = readIndex<index_t>(f_in, bigEndian);
         seq = readIndex<uint64_t>(f_in, bigEndian);
         return true;
     }
