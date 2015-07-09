@@ -8,7 +8,7 @@ void bin_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
 	const int BLOCKS_MASK = BLOCKS - 1;
 
 	if(end - begin < 2000 || !log_size) { //picked arbitrarily
-		if(end > begin + 2) sort(begin, end, CMP());
+		if(end > begin + 1) sort(begin, end, CMP());
 		return;
 	}
 

@@ -1850,6 +1850,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 			}
 		}
 	}
+
 	if(verbose) cerr << "MADE NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 
@@ -1952,7 +1953,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #endif
 
-    int log_size = sizeof(max_from) * 8;
+    int log_size = sizeof(edges.size()) * 8;
     while(!((1 << log_size) & edges.size())) log_size--;
     bin_sort<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, log_size);
     for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
@@ -2242,7 +2243,6 @@ void PathGraph<index_t>::sortByFrom(bool create_index) {
         }
     }
 }
-
 
 template <typename index_t>
 pair<index_t, index_t> PathGraph<index_t>::getNodesFrom(index_t node) {
