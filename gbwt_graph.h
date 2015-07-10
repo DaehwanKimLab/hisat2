@@ -328,10 +328,6 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             EList<pair<index_t, index_t> > alt_ranges; // each range inclusive
             for(index_t i = 0; i < alts.size(); i++) {
                 const ALT<index_t>& alt = alts[i];
-                // daehwan - for debugging purposes
-                if(alt.type == ALT_SPLICESITE)
-                    continue;
-                
                 index_t left_relax = 10, right_relax = 10;
                 if(alt.type == ALT_SNP_INS) {
                     right_relax = 128;
@@ -346,6 +342,9 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 } else if(alt.type == ALT_SNP_INS) {
                     assert_gt(alt.len, 0);
                     range.second = alt.pos;
+                } else if (alt.type == ALT_SPLICESITE) {
+                    assert_lt(alt.left, alt.right);
+                    range.second = alt.right + 1;
                 } else assert(false);
                 range.second += right_relax;
 
@@ -603,6 +602,11 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
                 edges.back().to = alt.pos + 1;
+            } else if(alt.type == ALT_SPLICESITE) {
+                assert_lt(alt.left, alt.right);
+                edges.expand();
+                edges.back().from = alt.left + 1;
+                edges.back().to = alt.right + 1;
             } else {
                 assert(false);
             }
@@ -758,15 +762,11 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         lastNode = nodes.size() - 1;
         edges.expand();
         edges.back().from = nodes.size() - 2;
-        edges.back().to = nodes.size() - 1;
-
+        edges.back().to = nodes.size() - 1;        
+        ASSERT_ONLY(index_t backbone_nodes = nodes.size());
         // Create nodes and edges for SNPs
         for(; alt_idx < alts.size(); alt_idx++) {
             const ALT<index_t>& alt = alts[alt_idx];
-            // daehwan - for debugging purposes
-            if(alt.type == ALT_SPLICESITE)
-                continue;
-            
             if(alt.pos < curr_pos) continue;
             assert_geq(alt.pos, curr_pos);
             if(alt.pos >= curr_pos + curr_len) break;
@@ -780,14 +780,18 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 edges.expand();
                 edges.back().from = alt.pos - curr_pos;
                 edges.back().to = nodes.size() - 1;
+                assert_lt(edges.back().from, backbone_nodes);
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
                 edges.back().to = alt.pos - curr_pos + 2;
+                assert_lt(edges.back().to, backbone_nodes);
             } else if(alt.type == ALT_SNP_DEL) {
                 assert_gt(alt.len, 0);
                 edges.expand();
                 edges.back().from = alt.pos - curr_pos;
                 edges.back().to = alt.pos - curr_pos + alt.len + 1;
+                assert_lt(edges.back().from, backbone_nodes);
+                assert_lt(edges.back().to, backbone_nodes);
             } else if(alt.type == ALT_SNP_INS) {
                 assert_gt(alt.len, 0);
                 for(size_t j = 0; j < alt.len; j++) {
@@ -804,6 +808,29 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 edges.expand();
                 edges.back().from = nodes.size() - 1;
                 edges.back().to = alt.pos - curr_pos + 1;
+            } else if(alt.type == ALT_SPLICESITE) {
+                assert_lt(alt.left, alt.right);
+                edges.expand();
+                edges.back().from = alt.left - curr_pos + 1;
+                edges.back().to = alt.right - curr_pos + 1;
+                assert_lt(edges.back().from, backbone_nodes);
+                assert_lt(edges.back().to, backbone_nodes);
+                
+                // daehwan - for debugging purposes
+#if 0
+                char fp1, fp2, tp1, tp2;
+                if(alt.fw) {
+                    fp1 = "ACGTN"[s[alt.left+1]],  fp2 = "ACGTN"[s[alt.left+2]];
+                    tp1 = "ACGTN"[s[alt.right-2]], tp2 = "ACGTN"[s[alt.right-1]];
+                } else {
+                    fp1 = "TGCAN"[s[alt.right-1]], fp2 = "TGCAN"[s[alt.right-2]];
+                    tp1 = "TGCAN"[s[alt.left+2]],  tp2 = "TGCAN"[s[alt.left+1]];
+                }
+                if(fp1 == 'G' && fp2 == 'T' && tp1 == 'A' && tp2 == 'G') {
+                    int kk = 0;
+                    kk += 20;
+                }
+#endif
             } else {
                 assert(false);
             }

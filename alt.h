@@ -48,7 +48,10 @@ struct ALT {
         index_t len;
         index_t right;
     };
-    uint64_t  seq;  // used to store 32 bp, but it can be used to store a pointer to EList<uint64_t>
+    union {
+        uint64_t seq;  // used to store 32 bp, but it can be used to store a pointer to EList<uint64_t>
+        uint64_t fw;
+    };
     // in order to support a sequence longer than 32 bp
     
     bool operator< (const ALT& o) const {
@@ -101,7 +104,10 @@ struct ALT {
                 assert(false);
                 return false;
             }
-        } else {
+        } else if(type == ALT_SPLICESITE) {
+            assert_lt(left, right);
+            assert_leq(fw, 1);
+        }else {
             assert(false);
             return false;
         }

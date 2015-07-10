@@ -1112,7 +1112,7 @@ public:
 			}
             
             {
-                Timer timer(cerr, "  Time to read SNPs and Splice Sites: ", _verbose);
+                Timer timer(cerr, "  Time to read SNPs and splice sites: ", _verbose);
                 _alts.clear();
                 _altnames.clear();
                 EList<pair<index_t, index_t> > chr_szs;
@@ -1246,26 +1246,30 @@ public:
                         } else if(type == "insertion") {
                             snp.type = ALT_SNP_INS;
                             snp.len = ins_seq.size();
-                            if(snp.len > sizeof(uint64_t) * 4) {
+                            if(snp.len > sizeof(snp.seq) * 4) {
                                 _alts.pop_back();
                                 continue;
                             }
                             snp.seq = 0;
+                            bool failed = false;
                             for(size_t i = 0; i < ins_seq.size(); i++) {
                                 char ch = toupper(ins_seq[i]);
                                 if(ch != 'A' && ch != 'C' && ch != 'G' && ch != 'T') {
-                                    _alts.pop_back();
-                                    continue;
+                                    failed = true;
+                                    break;
                                 }
                                 uint64_t bp = asc2dna[(int)ch];
                                 assert_lt(bp, 4);
                                 snp.seq = (snp.seq << 2) | bp;
                             }
+                            if(failed) {
+                                _alts.pop_back();
+                                break;
+                            }
                         } else {
                             cerr << "Error: unknown snp type " << type << endl;
                             throw 1;
                         }
-                        
                         _altnames.push_back(snp_id);
                         assert_eq(_alts.size(), _altnames.size());
                     }
@@ -1278,7 +1282,8 @@ public:
                     if(!ss_file.is_open()) {
                         cerr << "Error: could not open "<< ssfile.c_str() << endl;
                         throw 1;
-                    }                    
+                    }
+
                     while(!ss_file.eof()) {
                         // 22	16062315	16062810	+
                         string chr;
@@ -1312,33 +1317,21 @@ public:
                                 break;
                             } else {
                                 left -= szs[i].off;
+                                right -= szs[i].off;
                                 if(left < szs[i].len) {
+                                    if(right >= szs[i].len) {
+                                        inside_Ns = true;
+                                    }
                                     break;
                                 } else {
                                     left -= szs[i].len;
-                                    add_pos += szs[i].len;
-                                }
-                            }
-                        }
-                        if(inside_Ns) continue;
-                        left = sofar_len + add_pos + left;
-                        add_pos = 0;
-                        for(index_t i = szs_idx; i < szs.size(); i++) {
-                            if(i != szs_idx && szs[i].first) break;
-                            if(right < szs[i].off) {
-                                inside_Ns = true;
-                                break;
-                            } else {
-                                right -= szs[i].off;
-                                if(right < szs[i].len) {
-                                    break;
-                                } else {
                                     right -= szs[i].len;
                                     add_pos += szs[i].len;
                                 }
                             }
                         }
                         if(inside_Ns) continue;
+                        left = sofar_len + add_pos + left;
                         right = sofar_len + add_pos + right;
                         if(chr_idx + 1 < chr_szs.size()) {
                             if(right >= chr_szs[chr_idx + 1].first) continue;
@@ -1350,8 +1343,7 @@ public:
                         alt.type = ALT_SPLICESITE;
                         alt.left = left;
                         alt.right = right;
-                        alt.seq = (strand == '+' ? 1 : 0);
-                        
+                        alt.fw = (strand == '+' ? 1 : 0);
                         _altnames.push_back("ss");
                     }
                     ss_file.close();
@@ -1527,8 +1519,7 @@ public:
                     assert_eq(bsa.size(), s.length()+1);
                     VMSG_NL("Converting suffix-array elements to index image");
                     buildToDisk(bsa, s, out1, out2);
-                } else {
-                    
+                } else {                    
                     RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, outfile, _nthreads, verbose);
                     PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads, verbose);
 

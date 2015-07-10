@@ -85,7 +85,7 @@ def extract_splice_sites(gtf_file, verbose=False):
     for chrom, left, right, strand in junctions:
         # Zero-based offset
         print('{}\t{}\t{}\t{}'.format(chrom, left-1, right-1, strand))
-
+        
     # Print some stats if asked
     if verbose:
         exon_lengths, intron_lengths, trans_lengths = \

@@ -2181,11 +2181,18 @@ HGFM<index_t, local_index_t>::HGFM(
                 alt.pos = curr_sztot;
                 index_t alt_i = this->_alts.bsearchLoBound(alt);
                 for(; alt_i < this->_alts.size(); alt_i++) {
-                    // daehwan - for debugging purposes
-                    if(this->_alts[alt_i].type == ALT_SPLICESITE) continue;
-                    if(curr_sztot + local_sztot <= this->_alts[alt_i].pos + this->_alts[alt_i].len + 1) break;
-                    if(curr_sztot <= this->_alts[alt_i].pos) {
-                        tParam.alts.push_back(this->_alts[alt_i]);
+                    const ALT<index_t>& alt = this->_alts[alt_i];
+                    if(alt.type == ALT_SNP_SGL || alt.type == ALT_SNP_DEL || alt.type == ALT_SNP_INS) {
+                        if(curr_sztot + local_sztot <= alt.pos + alt.len + 1) break;
+                    } else if(alt.type == ALT_SPLICESITE) {
+                        // daehwan - for debugging purposes
+                        continue;
+                        if(curr_sztot + local_sztot <= alt.right) continue;
+                    } else {
+                        assert(false);
+                    }
+                    if(curr_sztot <= alt.pos) {
+                        tParam.alts.push_back(alt);
                         tParam.alts.back().pos -= curr_sztot;
                     }
                 }

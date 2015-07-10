@@ -473,7 +473,7 @@ static void print_splicesites(
         cout << p_refnames[tidx] << "\t"
              << toff << "\t"
              << toff2 << "\t"
-        << (alt.seq > 0 ? "+" : "-") << endl;
+        << (alt.fw > 0 ? "+" : "-") << endl;
     }
 }
 
