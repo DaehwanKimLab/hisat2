@@ -1872,7 +1872,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	//put into the correct bin based on edge.label
 
 	bin_sort_no_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
-			base.edges.begin(), base.edges.end(), &RefGraph<index_t>::EdgeTo, max_from, nthreads);
+			base.edges.begin(), base.edges.end(), &RefGraph<index_t>::EdgeTo, (index_t)-1, nthreads);
 	if(verbose) cerr << "BUILD TO_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 	//Build to_index
@@ -1951,10 +1951,10 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	if(verbose) cerr << "MADE NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 		indiv = clock();
 
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, edges.size());
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, edges.size());
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, edges.size());
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, edges.size());
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, (index_t)-1);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, (index_t)-1);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, (index_t)-1);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, (index_t)-1);
 
 	sort(edges.begin() + label_index[3], edges.begin() + label_index[4]);
 	sort(edges.begin() + label_index[4], edges.begin() + label_index[5]);
@@ -2068,7 +2068,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     // this should be a merge not a sort!!
     // edges with a given label are sorted by ranking
     // only 4 labels so should be pretty trivial to do a 4-way merge
-    bin_sort_no_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, edges.size(), nthreads);
+    bin_sort_no_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, (index_t)-1, nthreads);
     for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
         node->key.second = 0;
     }
