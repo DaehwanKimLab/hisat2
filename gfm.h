@@ -4137,6 +4137,8 @@ void GFM<index_t>::buildToDisk(
             assert_lt(eftabCur*2+1, eftabLen);
             eftab[eftabCur*2] = lo;
             eftab[eftabCur*2+1] = hi;
+            // one node can be shared, and one node can have at most four incoming edges
+            assert_leq(lo, hi + 4);
             ftab[i] = (eftabCur++) ^ (index_t)INDEX_MAX; // insert pointer into eftab
             assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
             assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
@@ -5248,7 +5250,7 @@ void GFM<index_t>::readIntoMemory(
             }
             for(index_t i = 0; i < gh->_eftabLen; i++) {
                 if(i > 0 && this->eftab()[i] > 0) {
-                    assert_geq(this->eftab()[i] + 1, this->eftab()[i-1]);
+                    assert_geq(this->eftab()[i] + 4, this->eftab()[i-1]);
                 } else if(i > 0 && this->eftab()[i-1] == 0) {
                     assert_eq(0, this->eftab()[i]);
                 }
