@@ -1862,9 +1862,6 @@ void PathGraph<index_t>::printInfo()
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
-	//TODO: Make similar changes to the below procedure as we applied above
-	// Make sortByTo linear time sort
-
 	if(!sorted) return false;
 
 	clock_t indiv = clock();
@@ -1874,25 +1871,34 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	//query nodes against in rank order
 	//put into the correct bin based on edge.label
 
-	EList<typename RefGraph<index_t>::Edge> to_table; to_table.resizeExact(base.edges.size());
-	bin_sort_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
-			base.edges.begin(), base.edges.end(), to_table.ptr(), &RefGraph<index_t>::EdgeTo, max_from, nthreads);
+	bin_sort_no_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
+			base.edges.begin(), base.edges.end(), &RefGraph<index_t>::EdgeTo, max_from, nthreads);
 	if(verbose) cerr << "BUILD TO_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 	//Build to_index
 	EList<index_t> to_index; to_index.resizeExact(max_from + 1); to_index.fillZero();
 	for(index_t i = 0; i < base.edges.size(); i++) {
-		to_index[to_table[i].to + 1] = i + 1;
+		to_index[base.edges[i].to + 1] = i + 1;
 	}
 	if(verbose) cerr << "BUILD TO_INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
+
+	//sort nodes by from before we query against hash_table in order to improve cache performance
+	//copy so that we don't have to re-sort by rank to do next step
+	past_nodes.resizeExact(nodes.size());
+	bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(
+				nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeFrom, max_from, nthreads);
+
+	if(verbose) cerr << "Sort nodes by from: "  << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
+
 	// Now query against hash-table
 
 	//count number of edges
 	index_t label_index[6] = {0};
-	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
-			switch(base.nodes[to_table[j].from].label) {
+			switch(base.nodes[base.edges[j].from].label) {
 				case 'A': label_index[0]++; break;
 				case 'C': label_index[1]++; break;
 				case 'G': label_index[2]++; break;
@@ -1913,26 +1919,26 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	if(verbose) cerr << "COUNT NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 	edges.resizeExact(tot);
-	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
-			switch(base.nodes[to_table[j].from].label) {
+			switch(base.nodes[base.edges[j].from].label) {
 				case 'A':
-					edges[label_index[0]++] = PathEdge(to_table[j].from, node->key.first, 'A');
+					edges[label_index[0]++] = PathEdge(base.edges[j].from, node->key.first, 'A');
 					break;
 				case 'C':
-					edges[label_index[1]++] = PathEdge(to_table[j].from, node->key.first, 'C');
+					edges[label_index[1]++] = PathEdge(base.edges[j].from, node->key.first, 'C');
 					break;
 				case 'G':
-					edges[label_index[2]++] = PathEdge(to_table[j].from, node->key.first, 'G');
+					edges[label_index[2]++] = PathEdge(base.edges[j].from, node->key.first, 'G');
 					break;
 				case 'T':
-					edges[label_index[3]++] = PathEdge(to_table[j].from, node->key.first, 'T');
+					edges[label_index[3]++] = PathEdge(base.edges[j].from, node->key.first, 'T');
 					break;
 				case 'Y':
-					edges[label_index[4]++] = PathEdge(to_table[j].from, node->key.first, 'Y');
+					edges[label_index[4]++] = PathEdge(base.edges[j].from, node->key.first, 'Y');
 					break;
 				case 'Z':
-					edges[label_index[5]++] = PathEdge(to_table[j].from, node->key.first, 'Z');
+					edges[label_index[5]++] = PathEdge(base.edges[j].from, node->key.first, 'Z');
 					break;
 				default:
 					assert(false);
@@ -1942,6 +1948,16 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	}
 
 	if(verbose) cerr << "MADE NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		indiv = clock();
+
+	sort(edges.begin(), edges.begin() + label_index[0]);
+	sort(edges.begin() + label_index[0], edges.begin() + label_index[1]);
+	sort(edges.begin() + label_index[1], edges.begin() + label_index[2]);
+	sort(edges.begin() + label_index[2], edges.begin() + label_index[3]);
+	sort(edges.begin() + label_index[3], edges.begin() + label_index[4]);
+	sort(edges.begin() + label_index[4], edges.begin() + label_index[5]);
+
+	if(verbose) cerr << "SORTED NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 
 #ifndef NDEBUG
