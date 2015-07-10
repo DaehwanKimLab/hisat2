@@ -47,8 +47,29 @@ void bin_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
 	}
 }
 
+template <typename T, typename index_t>
+struct Params {
+	index_t     (*hash)(T&);
+	T**         begin;
+	int         log_size;
+	int         num;
+};
+
+//basically used to wrap together calls to bin_sort
 template <typename T, typename CMP, typename index_t>
-void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv) {
+void bin_sort_worker(void* vp) {
+	Params<T, index_t>* params = (Params<T, index_t>*)vp;
+	index_t (*hash)(T&) = params->hash;
+	T**     begin       = params->begin;
+	int     log_size    = params->log_size;
+	int     num         = params->num;
+	for(int i = 0; i < num; i++) {
+		if(begin[i + 1] - begin[i] > 1) bin_sort<T, CMP, index_t>(begin[i], begin[i + 1], hash, log_size);
+	}
+}
+
+template <typename T, typename CMP, typename index_t>
+void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
 	const int SHIFT = 7;
 	const int BLOCKS = (1 << (SHIFT + 1));
 
@@ -72,9 +93,31 @@ void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv) {
 		*index[hash(*curr) >> right_shift]++ = *curr;
 	}
 	//sort partitions
-	bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
-	for(int bin = 1; bin < occupied; bin++) {
-		if(index[bin] - index[bin - 1] > 1) bin_sort<T, CMP, index_t>(index[bin - 1], index[bin], hash, right_shift);
+	if(nthreads == 1) {
+		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
+		for(int bin = 1; bin < occupied; bin++) {
+			if(index[bin] - index[bin - 1] > 1) bin_sort<T, CMP, index_t>(index[bin - 1], index[bin], hash, right_shift);
+		}
+	} else {
+		tthread::thread* threads[nthreads];
+		Params<T, index_t> params[nthreads];
+		for(int i = 0; i < nthreads; i++) {
+			params[i].hash = hash;
+			params[i].begin = index + i * occupied / (nthreads + 1);
+			params[i].log_size = right_shift;
+			params[i].num = occupied / (nthreads + 1);
+			threads[i] = new tthread::thread(&bin_sort_worker<T, CMP, index_t>, (void*)&params[i]);
+		}
+		//do the first bin and any remaining bins using main thread
+		int last = (occupied * (nthreads - 1)) / (nthreads + 1) + occupied / (nthreads + 1);
+		for(int bin = last; bin < occupied - 1; bin++) {
+			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+		}
+		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
+		for(int i = 0; i < nthreads; i++) {
+			threads[i]->join();
+			delete threads[i];
+		}
 	}
 }
 

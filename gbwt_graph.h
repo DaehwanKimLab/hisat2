@@ -1674,7 +1674,7 @@ report_F_node_idx(0), report_F_location(0)
 			}
 		}
 		past_nodes.resizeExact(nodes.size());
-		bin_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, (index_t)-1);
+		bin_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, (index_t)-1, nthreads);
 		nodes.swap(past_nodes);
 		mergeUpdateRank();
 
@@ -1694,7 +1694,7 @@ report_F_node_idx(0), report_F_location(0)
 		EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
 		if(verbose) cerr << "ALLOCATE FROM_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 		indiv = clock();
-		bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from);
+		bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
 		if(verbose) cerr << "BUILD TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 		indiv = clock();
 
@@ -1854,7 +1854,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	EList<typename RefGraph<index_t>::Edge> to_table; to_table.resizeExact(base.edges.size());
 	bin_sort_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
-			base.edges.begin(), base.edges.end(), to_table.ptr(), &RefGraph<index_t>::EdgeTo, max_from);
+			base.edges.begin(), base.edges.end(), to_table.ptr(), &RefGraph<index_t>::EdgeTo, max_from, nthreads);
 	if(verbose) cerr << "BUILD TO_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 	//Build to_index
