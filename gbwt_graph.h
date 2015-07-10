@@ -1246,8 +1246,8 @@ public:
 
     };
     static index_t PathEdgeTo (PathEdge& a) {
-        	return a.ranking;
-        }
+        return a.ranking;
+    }
 
     struct PathEdgeFromCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
@@ -2021,9 +2021,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #endif
 
-    int log_size = sizeof(edges.size()) * 8;
-    while(!((1 << log_size) & edges.size())) log_size--;
-    bin_sort<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, log_size);
+    bin_sort_no_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, edges.size(), nthreads);
     for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
         node->key.second = 0;
     }
@@ -2034,6 +2032,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     if(verbose) cerr << "TOTAL: " << (float)(clock() - overall) / CLOCKS_PER_SEC << endl;
     return true;
 
+//-----------------------------------------------------------------------------------------------------
     bwt_string.clear();
     F_array.clear();
     M_array.clear();

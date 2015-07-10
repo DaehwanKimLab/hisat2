@@ -69,6 +69,71 @@ void bin_sort_worker(void* vp) {
 }
 
 template <typename T, typename CMP, typename index_t>
+void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
+	const int SHIFT = 7;
+	const int BLOCKS = (1 << (SHIFT + 1));
+	const int BLOCKS_MASK = BLOCKS - 1;
+
+	int log_size = sizeof(maxv) * 8;
+	while(!((1 << log_size) & maxv)) log_size--;
+	int right_shift = log_size - SHIFT;
+	int occupied = (maxv >> right_shift) + 1;
+	// count number in each bin
+	index_t count[BLOCKS] = {0};
+	for(T* curr = begin; curr != end; curr++) {
+		count[(hash(*curr) >> right_shift) & BLOCKS_MASK]++;
+	}
+	// sum numbers to create an index
+	T* index[BLOCKS + 1];
+	T* place[BLOCKS];
+	index[0] = place[0] = begin;
+	for(int i = 1; i < occupied; i++) {
+		index[i] = place[i] = index[i - 1] + count[i - 1];
+	}
+	index[occupied] = end;
+	//put objects in proper place
+	for(int bin = 0; bin < occupied; bin++) {
+		while(place[bin] != index[bin + 1]) {
+			T curr = *place[bin];
+			int x = (hash(curr) >> right_shift) & BLOCKS_MASK;
+			while(x != bin) { // switched inner loop here, removed branch statement
+				T temp = *place[x];
+				*place[x]++ = curr;
+				curr = temp;
+				x = (hash(curr) >> right_shift) & BLOCKS_MASK;
+			}
+			*place[bin]++ = curr;
+		}
+	}
+	//sort partitions
+	if(nthreads == 1) {
+		for(int bin = 0; bin < occupied - 1; bin++) {
+			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+		}
+	} else {
+		tthread::thread* threads[nthreads];
+		Params<T, index_t> params[nthreads];
+		int st = 0;
+		for(int i = 0; i < nthreads; i++) {
+			params[i].hash = hash;
+			params[i].begin = index + st;
+			params[i].log_size = right_shift;
+			params[i].num = occupied / (nthreads + 1);
+			threads[i] = new tthread::thread(&bin_sort_worker<T, CMP, index_t>, (void*)&params[i]);
+			st += params[i].num;
+		}
+		//do any remaining bins using main thread
+		for(int bin = st; bin < occupied - 1; bin++) {
+			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+		}
+		for(int i = 0; i < nthreads; i++) {
+			threads[i]->join();
+			delete threads[i];
+		}
+	}
+}
+
+template <typename T, typename CMP, typename index_t>
 void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
 	const int SHIFT = 7;
 	const int BLOCKS = (1 << (SHIFT + 1));
@@ -101,16 +166,17 @@ void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, in
 	} else {
 		tthread::thread* threads[nthreads];
 		Params<T, index_t> params[nthreads];
+		int st = 0;
 		for(int i = 0; i < nthreads; i++) {
 			params[i].hash = hash;
-			params[i].begin = index + i * occupied / (nthreads + 1);
+			params[i].begin = index + st;
 			params[i].log_size = right_shift;
 			params[i].num = occupied / (nthreads + 1);
 			threads[i] = new tthread::thread(&bin_sort_worker<T, CMP, index_t>, (void*)&params[i]);
+			st += params[i].num;
 		}
 		//do the first bin and any remaining bins using main thread
-		int last = (occupied * (nthreads - 1)) / (nthreads + 1) + occupied / (nthreads + 1);
-		for(int bin = last; bin < occupied - 1; bin++) {
+		for(int bin = st; bin < occupied - 1; bin++) {
 			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
 		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
