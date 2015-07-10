@@ -2184,16 +2184,19 @@ HGFM<index_t, local_index_t>::HGFM(
                     const ALT<index_t>& alt = this->_alts[alt_i];
                     if(alt.type == ALT_SNP_SGL || alt.type == ALT_SNP_DEL || alt.type == ALT_SNP_INS) {
                         if(curr_sztot + local_sztot <= alt.pos + alt.len + 1) break;
+                        if(curr_sztot <= alt.pos) {
+                            tParam.alts.push_back(alt);
+                            tParam.alts.back().pos -= curr_sztot;
+                        }
                     } else if(alt.type == ALT_SPLICESITE) {
-                        // daehwan - for debugging purposes
-                        continue;
                         if(curr_sztot + local_sztot <= alt.right) continue;
+                        if(curr_sztot <= alt.left) {
+                            tParam.alts.push_back(alt);
+                            tParam.alts.back().left -= curr_sztot;
+                            tParam.alts.back().right -= curr_sztot;
+                        }
                     } else {
                         assert(false);
-                    }
-                    if(curr_sztot <= alt.pos) {
-                        tParam.alts.push_back(alt);
-                        tParam.alts.back().pos -= curr_sztot;
                     }
                 }
                 

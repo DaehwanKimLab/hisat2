@@ -762,7 +762,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         lastNode = nodes.size() - 1;
         edges.expand();
         edges.back().from = nodes.size() - 2;
-        edges.back().to = nodes.size() - 1;        
+        edges.back().to = nodes.size() - 1;
         ASSERT_ONLY(index_t backbone_nodes = nodes.size());
         // Create nodes and edges for SNPs
         for(; alt_idx < alts.size(); alt_idx++) {
@@ -815,22 +815,6 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 edges.back().to = alt.right - curr_pos + 1;
                 assert_lt(edges.back().from, backbone_nodes);
                 assert_lt(edges.back().to, backbone_nodes);
-                
-                // daehwan - for debugging purposes
-#if 0
-                char fp1, fp2, tp1, tp2;
-                if(alt.fw) {
-                    fp1 = "ACGTN"[s[alt.left+1]],  fp2 = "ACGTN"[s[alt.left+2]];
-                    tp1 = "ACGTN"[s[alt.right-2]], tp2 = "ACGTN"[s[alt.right-1]];
-                } else {
-                    fp1 = "TGCAN"[s[alt.right-1]], fp2 = "TGCAN"[s[alt.right-2]];
-                    tp1 = "TGCAN"[s[alt.left+2]],  tp2 = "TGCAN"[s[alt.left+1]];
-                }
-                if(fp1 == 'G' && fp2 == 'T' && tp1 == 'A' && tp2 == 'G') {
-                    int kk = 0;
-                    kk += 20;
-                }
-#endif
             } else {
                 assert(false);
             }
