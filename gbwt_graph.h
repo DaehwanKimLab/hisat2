@@ -1792,7 +1792,7 @@ void PathGraph<index_t>::lateGeneration() {
 							*curr++ = *n;
 						}
 						ranks++;
-					} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
+					} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
 						block_start->setSorted();
 						block_start->key.first = ranks++;
 						*curr++ = *block_start;
@@ -1880,6 +1880,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	for(index_t i = 0; i < base.edges.size(); i++) {
 		to_index[base.edges[i].to + 1] = i + 1;
 	}
+
 	if(verbose) cerr << "BUILD TO_INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 
@@ -1914,7 +1915,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	label_index[0] = 0;
 	for(int i = 1; i < 6; i++) {
 		tot += label_index[i];
-		label_index[i] = tot - label_index[i];
+		label_index[i] =  tot - label_index[i];
 	}
 	if(verbose) cerr << "COUNT NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
@@ -1950,12 +1951,17 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	if(verbose) cerr << "MADE NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 		indiv = clock();
 
-	sort(edges.begin(), edges.begin() + label_index[0]);
-	sort(edges.begin() + label_index[0], edges.begin() + label_index[1]);
-	sort(edges.begin() + label_index[1], edges.begin() + label_index[2]);
-	sort(edges.begin() + label_index[2], edges.begin() + label_index[3]);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, edges.size());
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, edges.size());
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, edges.size());
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, edges.size());
+
 	sort(edges.begin() + label_index[3], edges.begin() + label_index[4]);
 	sort(edges.begin() + label_index[4], edges.begin() + label_index[5]);
+
+    for(index_t i = 1; i < edges.size(); i++) {
+    	if(edges[i] < edges[i - 1] && verbose) cerr << "WRONG " << i << endl;
+    }
 
 	if(verbose) cerr << "SORTED NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
@@ -2059,10 +2065,14 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #endif
 
+    // this should be a merge not a sort!!
+    // edges with a given label are sorted by ranking
+    // only 4 labels so should be pretty trivial to do a 4-way merge
     bin_sort_no_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, edges.size(), nthreads);
     for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
         node->key.second = 0;
     }
+
     for(index_t i = 0; i < edges.size(); i++) {
         nodes[edges[i].ranking].key.second = i + 1;
     }
