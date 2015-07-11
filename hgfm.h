@@ -2183,13 +2183,13 @@ HGFM<index_t, local_index_t>::HGFM(
                 index_t alt_i = this->_alts.bsearchLoBound(alt);
                 for(; alt_i < this->_alts.size(); alt_i++) {
                     const ALT<index_t>& alt = this->_alts[alt_i];
-                    if(alt.type == ALT_SNP_SGL || alt.type == ALT_SNP_DEL || alt.type == ALT_SNP_INS) {
+                    if(alt.snp()) {
                         if(curr_sztot + local_sztot <= alt.pos + alt.len + 1) break;
                         if(curr_sztot <= alt.pos) {
                             tParam.alts.push_back(alt);
                             tParam.alts.back().pos -= curr_sztot;
                         }
-                    } else if(alt.type == ALT_SPLICESITE) {
+                    } else if(alt.splicesite()) {
                         if(curr_sztot + local_sztot <= alt.right) continue;
                         if(curr_sztot <= alt.left) {
                             tParam.alts.push_back(alt);

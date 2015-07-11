@@ -54,6 +54,9 @@ struct ALT {
     };
     // in order to support a sequence longer than 32 bp
     
+    bool snp() const { return type == ALT_SNP_SGL || type == ALT_SNP_DEL || type == ALT_SNP_INS; }
+    bool splicesite() const { return type == ALT_SPLICESITE; }
+    
     bool operator< (const ALT& o) const {
         if(pos != o.pos) return pos < o.pos;
         if(type != o.type) return type < o.type;
@@ -69,10 +72,18 @@ struct ALT {
         const ALT& a = (pos < o.pos ? *this : o);
         const ALT& b = (pos < o.pos ? o : *this);
         
-        if(a.type == ALT_SNP_DEL || a.type == ALT_SNP_INS) {
-            if(b.pos <= a.pos + a.len) {
+        if(a.snp()) {
+            if(a.type == ALT_SNP_DEL || a.type == ALT_SNP_INS) {
+                if(b.pos <= a.pos + a.len) {
+                    return false;
+                }
+            }
+        } else if(a.splicesite()) {
+            if(b.pos <= a.right + 2) {
                 return false;
             }
+        } else {
+            assert(false);
         }
 
         return true;

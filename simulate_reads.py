@@ -723,7 +723,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                 if random.randint(0, 1) == 1:
                     swapped = True
                 if swapped:
-                    flag, flag2 = flag2 - 16, flag - 16
+                    flag, flag2 = flag - 16, flag2 - 16
                     pos, pos2 = pos2, pos
                     cigars, cigars2 = cigars2, cigars
                     cigar_descs, cigar2_descs = cigar2_descs, cigar_descs

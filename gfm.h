@@ -1296,6 +1296,9 @@ public:
                         index_t left, right;
                         char strand;
                         ss_file >> left >> right >> strand;
+                        // Convert exonic position to intronic position
+                        left += 1; right -= 1;
+                        if(left >= right) continue;
                         index_t chr_idx = 0;
                         for(; chr_idx < _refnames.size(); chr_idx++) {
                             if(chr == _refnames[chr_idx])
@@ -1376,12 +1379,12 @@ public:
                             assert(_alts[i] < _alts[i+1]);
                         }
                         const ALT<index_t>& alt = _alts[i];
-                        if(alt.type == ALT_SNP_SGL ||
-                           alt.type == ALT_SNP_DEL ||
-                           alt.type == ALT_SNP_INS) {
+                        if(alt.snp()) {
                             assert(_altnames[i] != "");
-                        } else {
+                        } else if(alt.splicesite()) {
                             assert(_altnames[i] == "ss");
+                        } else {
+                            assert(false);
                         }
                     }
 #endif

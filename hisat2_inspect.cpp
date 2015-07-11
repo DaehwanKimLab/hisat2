@@ -371,7 +371,7 @@ static void print_snps(
     assert_eq(alts.size(), altnames.size());
     for(size_t i = 0; i < alts.size(); i++) {
         const ALT<index_t>& alt = alts[i];
-        if(alt.type != ALT_SNP_SGL && alt.type != ALT_SNP_DEL && alt.type != ALT_SNP_INS)
+        if(!alt.snp())
             continue;
         string type = "single";
         if(alt.type == ALT_SNP_DEL) {
@@ -447,7 +447,7 @@ static void print_splicesites(
     const EList<ALT<index_t> >& alts = altdb.alts();
     for(size_t i = 0; i < alts.size(); i++) {
         const ALT<index_t>& alt = alts[i];
-        if(alt.type != ALT_SPLICESITE)
+        if(!alt.splicesite())
             continue;
         index_t tidx = 0, toff = 0, tlen = 0;
         bool straddled2 = false;
@@ -471,8 +471,8 @@ static void print_splicesites(
         assert_eq(tidx, tidx2);
         assert_lt(tidx, p_refnames.size());
         cout << p_refnames[tidx] << "\t"
-             << toff << "\t"
-             << toff2 << "\t"
+             << toff - 1 << "\t"
+             << toff2 + 1 << "\t"
         << (alt.fw > 0 ? "+" : "-") << endl;
     }
 }
@@ -523,11 +523,9 @@ static void print_index_summary(
     const EList<ALT<index_t> >& alts = altdb.alts();
     for(size_t i = 0; i < alts.size(); i++) {
         const ALT<index_t>& alt = alts[i];
-        if(alt.type == ALT_SNP_SGL ||
-           alt.type == ALT_SNP_DEL ||
-           alt.type == ALT_SNP_INS) {
+        if(alt.snp()) {
             numSnps++;
-        } else if(alt.type == ALT_SPLICESITE) {
+        } else if(alt.splicesite()) {
             numSpliceSites++;
         }
     }

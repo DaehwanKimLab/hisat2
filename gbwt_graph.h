@@ -605,8 +605,8 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             } else if(alt.type == ALT_SPLICESITE) {
                 assert_lt(alt.left, alt.right);
                 edges.expand();
-                edges.back().from = alt.left + 1;
-                edges.back().to = alt.right + 1;
+                edges.back().from = alt.left;
+                edges.back().to = alt.right + 2;
             } else {
                 assert(false);
             }
@@ -811,8 +811,8 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             } else if(alt.type == ALT_SPLICESITE) {
                 assert_lt(alt.left, alt.right);
                 edges.expand();
-                edges.back().from = alt.left - curr_pos + 1;
-                edges.back().to = alt.right - curr_pos + 1;
+                edges.back().from = alt.left - curr_pos;
+                edges.back().to = alt.right - curr_pos + 2;
                 assert_lt(edges.back().from, backbone_nodes);
                 assert_lt(edges.back().to, backbone_nodes);
             } else {
