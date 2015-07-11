@@ -20,6 +20,7 @@
 		E85452591B1A2B720049F2AC /* hisat2_inspect.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_inspect.cpp; sourceTree = "<group>"; };
 		E854525A1B1A2B7C0049F2AC /* hisat2_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_main.cpp; sourceTree = "<group>"; };
 		E854525B1B1A2B870049F2AC /* hisat2.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2.cpp; sourceTree = "<group>"; };
+		E8562A631B515EE5003062A4 /* radix_sort.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = radix_sort.h; sourceTree = "<group>"; };
 		E85766711970545400D8AAFB /* btypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = btypes.h; sourceTree = "<group>"; };
 		E85F1AFA193501E000F85A12 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		E861E5A51B1B3C2200362002 /* gfm.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = gfm.cpp; sourceTree = "<group>"; };
@@ -237,6 +238,7 @@
 				E8B0DC161934F7AA005ED9FA /* presets.h */,
 				E8B0DC171934F7AA005ED9FA /* processor_support.h */,
 				E8B0DC181934F7AA005ED9FA /* qual.h */,
+				E8562A631B515EE5003062A4 /* radix_sort.h */,
 				E8B0DC191934F7AA005ED9FA /* random_source.h */,
 				E8B0DC1A1934F7AA005ED9FA /* random_util.h */,
 				E8B0DC1B1934F7AA005ED9FA /* read.h */,

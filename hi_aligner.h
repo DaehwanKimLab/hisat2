@@ -4746,9 +4746,6 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
-                if(rangeTemp.first + 1 < rangeTemp.second) {
-                    rangeTemp.second = rangeTemp.first + 1;
-                }
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {
@@ -4947,9 +4944,6 @@ size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
-                if(rangeTemp.first + 1 < rangeTemp.second) {
-                    rangeTemp.second = rangeTemp.first + 1;
-                }
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {
@@ -5081,9 +5075,6 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
-                if(rangeTemp.first + 1 < rangeTemp.second) {
-                    rangeTemp.second = rangeTemp.first + 1;
-                }
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {

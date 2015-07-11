@@ -3866,7 +3866,7 @@ void GFM<index_t>::buildToDisk(
 		for(int bpi = 0; bpi < 4; bpi++, si++)
 #endif
 		{
-			int gbwtChar; // one of A, C, G, T, and $
+			int gbwtChar; // one of A, C, G, T, and Z
             int F, M;     // either 0 or 1
             index_t pos;  // pos on joined string
             bool count = true;

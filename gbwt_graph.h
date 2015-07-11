@@ -1246,7 +1246,10 @@ public:
 
     struct PathEdge {
         index_t from;
-        index_t ranking;
+        union {
+            index_t to;
+            index_t ranking;
+        };
         char    label;
 
         PathEdge() { reset(); }
@@ -1265,19 +1268,19 @@ public:
 
     };
     static index_t PathEdgeTo (PathEdge& a) {
-        	return a.ranking;
-        }
+        return a.ranking;
+    }
 
     struct PathEdgeFromCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
-            return a.from < b.from || (a.from == b.from && a.ranking < b.ranking);
+            return a.from < b.from || (a.from == b.from && a.to < b.to);
         }
     };
 
 
     struct PathEdgeToCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
-            return a.ranking < b.ranking;
+            return a.to < b.to || (a.to == b.to && a.from < b.from);
         }
     };
 
@@ -1427,6 +1430,12 @@ public:
     }
 
 private:
+    void makeFromRef(RefGraph<index_t>& base);
+    void generationOne();
+    void earlyGeneration();
+    void firstPruneGeneration();
+    void lateGeneration();
+
     void mergeUpdateRank();
 
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> range);
@@ -1521,329 +1530,345 @@ ranks(0), max_label('Z'), temp_nodes(0), generation(0), sorted(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
-
 #ifndef NDEBUG
     debug = base.nodes.size() <= 20;
 #endif
 
-    // Create a path node per edge with a key set to from node's label
-    temp_nodes = base.edges.size() + 1;
-    max_from = temp_nodes + 2;
-    nodes.reserveExact(temp_nodes);
-    for(index_t i = 0; i < base.edges.size(); i++) {
-        const typename RefGraph<index_t>::Edge& e = base.edges[i];
-        nodes.expand();
-        nodes.back().from = e.from;
-        nodes.back().to = e.to;
+    //fill nodes and set max_from
+    makeFromRef(base);
 
-        switch(base.nodes[e.from].label) {
-        case 'A':
-        	nodes.back().key = pair<index_t, index_t>(0, 0);
-        	break;
-        case 'C':
-        	nodes.back().key = pair<index_t, index_t>(1, 0);
-        	break;
-        case 'G':
-        	nodes.back().key = pair<index_t, index_t>(2, 0);
-        	break;
-        case 'T':
-        	nodes.back().key = pair<index_t, index_t>(3, 0);
-        	break;
-        case 'Y':
-            nodes.back().key = pair<index_t, index_t>(4, 0);
-            break;
-        default:
-            assert(false);
-            throw 1;
-        }
-    }
-    // Final node.
-    assert_lt(base.lastNode, base.nodes.size());
-    assert_eq(base.nodes[base.lastNode].label, 'Z');
-    nodes.expand();
-    nodes.back().from = nodes.back().to = base.lastNode;
-    nodes.back().key = pair<index_t, index_t>(5, 0);
+    generationOne();
 
-    printInfo();
-    //------------------------------------------------------------------
-
-    {
-    	//Do the first generation here
-    	//past_nodes come in ALMOST sorted by .from so counting sort is
-    	// very efficient here.
-    	// Leave past_nodes sorted by from attribute so sorting is avoided on
-    	// subsequent generations
-
-    	generation++;
-    	// first count where to start each from value
-    	EList<index_t> from_index;
-    	from_index.resizeExact(max_from + 1);
-    	from_index.fillZero();
-    	//Build from_index
-    	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
-    		from_index[node->from]++;
-    	}
-    	index_t tot = from_index[0];
-    	from_index[0] = 0;
-    	for(index_t i = 1; i < max_from + 1; i++) {
-    		tot += from_index[i];
-    		from_index[i] = tot - from_index[i];
-    	}
-
-        // use past_nodes as from_table
-    	past_nodes.resizeExact(nodes.size());
-    	past_nodes.fillZero();
-
-    	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
-    		past_nodes[from_index[node->from]++] = *node;
-    	}
-
-    	//reset index
-    	for(index_t i = from_index.size() - 1; i > 0; i--) {
-    		from_index[i] = from_index[i - 1];
-    	}
-    	from_index[0] = 0;
-    	//Now query direct access table
-    	temp_nodes = 0;
-    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-    		temp_nodes += from_index[node->to + 1] - from_index[node->to];
-    	}
-    	nodes.resizeExact(temp_nodes);
-    	nodes.clear();
-    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-    		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-    			nodes.expand();
-    			nodes.back().from = node->from;
-    			nodes.back().to = past_nodes[j].to;
-    			assert_gt(generation, 0);
-    			index_t bit_shift = 1 << (generation - 1);
-				bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
-				nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + past_nodes[j].key.first, 0);
-    		}
-    	}
-    	printInfo();
-    	past_nodes.swap(nodes);
-    }
     while(generation < 3) { // this needs to be changed to account for different size index_t's
-    	generation++;
-    	//here past_nodes is already sorted by .from
-        // first count where to start each from value
-        EList<index_t> from_index;
-        from_index.resizeExact(max_from + 1);
-        from_index.fillZero();
-
-        //Build from_index
-        for(index_t i = 0; i < past_nodes.size(); i++) {
-        	from_index[past_nodes[i].from + 1] = i + 1;
-        }
-
-    	// Now query against hash-table
-    	//count number of nodes
-    	temp_nodes = 0;
-    	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-    		temp_nodes += from_index[node->to + 1] - from_index[node->to];
-    	}
-        // make new nodes
-        nodes.resizeExact(temp_nodes);
-        nodes.clear();
-		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-			for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-				nodes.expand();
-				nodes.back().from = node->from;
-				nodes.back().to = past_nodes[j].to;
-				assert_gt(generation, 0);
-				index_t bit_shift = 1 << (generation - 1);
-				bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
-				nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + past_nodes[j].key.first, 0);
-			}
-		}
-    	printInfo();
-    	past_nodes.swap(nodes);
+    	earlyGeneration();
     }
-    {
-    	//here do generation 4.
-    	generation++;
-		//here past_nodes is already sorted by .from
-		// first count where to start each from value
-		EList<index_t> from_index;
-		from_index.resizeExact(max_from + 1);
-		from_index.fillZero();
 
-		//Build from_index
-		for(index_t i = 0; i < past_nodes.size(); i++) {
-			from_index[past_nodes[i].from + 1] = i + 1;
+    firstPruneGeneration();
+    if(isSorted()) return;
+    past_nodes.swap(nodes);
+
+    while(true) {
+    	lateGeneration();
+    	if(isSorted()) break;
+    	past_nodes.swap(nodes);
+	}
+}
+
+template <typename index_t>
+void PathGraph<index_t>::makeFromRef(RefGraph<index_t>& base) {
+	// Create a path node per edge with a key set to from node's label
+	temp_nodes = base.edges.size() + 1;
+	max_from = temp_nodes + 2;
+	nodes.reserveExact(temp_nodes);
+	for(index_t i = 0; i < base.edges.size(); i++) {
+		const typename RefGraph<index_t>::Edge& e = base.edges[i];
+		nodes.expand();
+		nodes.back().from = e.from;
+		nodes.back().to = e.to;
+
+		switch(base.nodes[e.from].label) {
+		case 'A':
+			nodes.back().key = pair<index_t, index_t>(0, 0);
+			break;
+		case 'C':
+			nodes.back().key = pair<index_t, index_t>(1, 0);
+			break;
+		case 'G':
+			nodes.back().key = pair<index_t, index_t>(2, 0);
+			break;
+		case 'T':
+			nodes.back().key = pair<index_t, index_t>(3, 0);
+			break;
+		case 'Y':
+			nodes.back().key = pair<index_t, index_t>(4, 0);
+			break;
+		default:
+			assert(false);
+			throw 1;
 		}
+	}
+	// Final node.
+	assert_lt(base.lastNode, base.nodes.size());
+	assert_eq(base.nodes[base.lastNode].label, 'Z');
+	nodes.expand();
+	nodes.back().from = nodes.back().to = base.lastNode;
+	nodes.back().key = pair<index_t, index_t>(5, 0);
 
-		// Now query against hash-table
-		//count number of nodes
-		temp_nodes = 0;
-		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+	printInfo();
+}
+
+template <typename index_t>
+void PathGraph<index_t>::generationOne() {
+	generation++;
+	// first count where to start each from value
+	EList<index_t> from_index;
+	from_index.resizeExact(max_from + 1);
+	from_index.fillZero();
+	//Build from_index
+	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+		from_index[node->from]++;
+	}
+	index_t tot = from_index[0];
+	from_index[0] = 0;
+	for(index_t i = 1; i < max_from + 1; i++) {
+		tot += from_index[i];
+		from_index[i] = tot - from_index[i];
+	}
+
+	// use past_nodes as from_table
+	past_nodes.resizeExact(nodes.size());
+	past_nodes.fillZero();
+
+	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+		past_nodes[from_index[node->from]++] = *node;
+	}
+
+	//reset index
+	for(index_t i = from_index.size() - 1; i > 0; i--) {
+		from_index[i] = from_index[i - 1];
+	}
+	from_index[0] = 0;
+	//Now query direct access table
+	temp_nodes = 0;
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		temp_nodes += from_index[node->to + 1] - from_index[node->to];
+	}
+	nodes.resizeExact(temp_nodes);
+	nodes.clear();
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
+			nodes.expand();
+			nodes.back().from = node->from;
+			nodes.back().to = past_nodes[j].to;
+			assert_gt(generation, 0);
+			index_t bit_shift = 1 << (generation - 1);
+			bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
+			nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + past_nodes[j].key.first, 0);
+		}
+	}
+	printInfo();
+	past_nodes.swap(nodes);
+}
+
+template <typename index_t>
+void PathGraph<index_t>::earlyGeneration() {
+	generation++;
+	//here past_nodes is already sorted by .from
+	// first count where to start each from value
+	EList<index_t> from_index;
+	from_index.resizeExact(max_from + 1);
+	from_index.fillZero();
+
+	//Build from_index
+	for(index_t i = 0; i < past_nodes.size(); i++) {
+		from_index[past_nodes[i].from + 1] = i + 1;
+	}
+
+	// Now query against hash-table
+	//count number of nodes
+	temp_nodes = 0;
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		temp_nodes += from_index[node->to + 1] - from_index[node->to];
+	}
+	// make new nodes
+	nodes.resizeExact(temp_nodes);
+	nodes.clear();
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
+			nodes.expand();
+			nodes.back().from = node->from;
+			nodes.back().to = past_nodes[j].to;
+			assert_gt(generation, 0);
+			index_t bit_shift = 1 << (generation - 1);
+			bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
+			nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + past_nodes[j].key.first, 0);
+		}
+	}
+	printInfo();
+	past_nodes.swap(nodes);
+}
+
+template <typename index_t>
+void PathGraph<index_t>::firstPruneGeneration() {
+	generation++;
+	//here past_nodes is already sorted by .from
+	// first count where to start each from value
+	EList<index_t> from_index;
+	from_index.resizeExact(max_from + 1);
+	from_index.fillZero();
+
+	//Build from_index
+	for(index_t i = 0; i < past_nodes.size(); i++) {
+		from_index[past_nodes[i].from + 1] = i + 1;
+	}
+
+	// Now query against hash-table
+	//count number of nodes
+	temp_nodes = 0;
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		temp_nodes += from_index[node->to + 1] - from_index[node->to];
+	}
+	// make new nodes
+	nodes.resizeExact(temp_nodes);
+	nodes.clear();
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
+			nodes.expand();
+			nodes.back().from = node->from;
+			nodes.back().to = past_nodes[j].to;
+			assert_gt(generation, 0);
+			nodes.back().key  = pair<index_t, index_t>(node->key.first, past_nodes[j].key.first);
+		}
+	}
+	past_nodes.resizeExact(nodes.size());
+	bin_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, (index_t)-1, nthreads);
+	nodes.swap(past_nodes);
+	mergeUpdateRank();
+
+	printInfo();
+}
+
+
+template <typename index_t>
+void PathGraph<index_t>::lateGeneration() {
+	generation++;
+	clock_t overall = clock();
+	clock_t indiv = clock();
+	assert_gt(nthreads, 0);
+
+	assert_neq(past_nodes.size(), ranks);
+
+	EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
+	if(verbose) cerr << "ALLOCATE FROM_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
+	bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
+	if(verbose) cerr << "BUILD TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
+
+	//Build from_index
+	EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();
+	for(index_t i = 0; i < past_nodes.size(); i++) {
+		from_index[from_table[i].from + 1] = i + 1;
+	}
+	if(verbose) cerr << "BUILD INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
+
+
+	// Now query against hash-table
+
+	//count number of nodes
+	temp_nodes = 0;
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		if(node->isSorted()) {
+			temp_nodes++;
+		} else {
 			temp_nodes += from_index[node->to + 1] - from_index[node->to];
 		}
-		// make new nodes
-		nodes.resizeExact(temp_nodes);
-		nodes.clear();
-		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+	}
+	if(verbose) cerr << "COUNT NEW NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
+	// make new nodes
+	nodes.resizeExact(temp_nodes);
+	nodes.clear();
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
+		if(node->isSorted()) {
+			nodes.push_back(*node);
+		} else {
 			for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
 				nodes.expand();
 				nodes.back().from = node->from;
-				nodes.back().to = past_nodes[j].to;
-				assert_gt(generation, 0);
-				nodes.back().key  = pair<index_t, index_t>(node->key.first, past_nodes[j].key.first);
+				nodes.back().to = from_table[j].to;
+				nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
 			}
 		}
-		past_nodes.resizeExact(nodes.size());
-		bin_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, (index_t)-1);
-		nodes.swap(past_nodes);
-		mergeUpdateRank();
-
-		printInfo();
-		if(isSorted()) return;
-		past_nodes.swap(nodes);
-    }
-    //In this loop do all remaining generations
-    while(true) {
-    	generation++;
-    	clock_t overall = clock();
-    	clock_t indiv = clock();
-		assert_gt(nthreads, 0);
-
-		assert_neq(past_nodes.size(), ranks);
-
-		EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
-		if(verbose) cerr << "ALLOCATE FROM_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-		indiv = clock();
-		bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from);
-		if(verbose) cerr << "BUILD TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-		indiv = clock();
-
-		//Build from_index
-		EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();
-		for(index_t i = 0; i < past_nodes.size(); i++) {
-			from_index[from_table[i].from + 1] = i + 1;
-		}
-		if(verbose) cerr << "BUILD INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-		indiv = clock();
-
-
-		// Now query against hash-table
-
-		//count number of nodes
-		temp_nodes = 0;
-		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-			if(node->isSorted()) {
-				temp_nodes++;
-			} else {
-				temp_nodes += from_index[node->to + 1] - from_index[node->to];
-			}
-		}
-		if(verbose) cerr << "COUNT NEW NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-		indiv = clock();
-		// make new nodes
-		nodes.resizeExact(temp_nodes);
-		nodes.clear();
-		for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-			if(node->isSorted()) {
-				nodes.push_back(*node);
-			} else {
-				for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-					nodes.expand();
-					nodes.back().from = node->from;
-					nodes.back().to = from_table[j].to;
-					nodes.back().key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
-				}
-			}
-		}
-		if(verbose) cerr << "MADE NEW NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-		indiv = clock();
-		// Now make all nodes properly sorted
-		PathNode* block_start = nodes.begin();
-		PathNode* curr = nodes.begin();
-		ranks = 0;
-		for(PathNode* node = nodes.begin() + 1; node != nodes.end(); node++) {
-			if(node->key.first != block_start->key.first) {
-				if(node - block_start > 1) {
-					sort(block_start, node);
-					while(block_start != node) {
-						//extend while share same key
-						index_t shift = 1;
-						while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
-							shift++;
-						}
-						//check if all share .from
-						bool merge = true;
-						for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
-							if(n->from != block_start->from) merge = false;
-						}
-						//if they share same from, then they are a mergable set
-						//check if they are able to be merged into the previous node (second clause)
-						//otherwise write single node to array
-
-						//if not mergable, just write all to array
-						if(!merge) {
-							for(PathNode* n = block_start; n != (block_start + shift); n++) {
-								n->key.first = ranks;
-								*curr++ = *n;
-							}
-							ranks++;
-						} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
-							block_start->setSorted();
-							block_start->key.first = ranks++;
-							*curr++ = *block_start;
-						}
-						block_start += shift;
+	}
+	if(verbose) cerr << "MADE NEW NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
+	// Now make all nodes properly sorted
+	PathNode* block_start = nodes.begin();
+	PathNode* curr = nodes.begin();
+	ranks = 0;
+	for(PathNode* node = nodes.begin() + 1; node != nodes.end(); node++) {
+		if(node->key.first != block_start->key.first) {
+			if(node - block_start > 1) {
+				sort(block_start, node);
+				while(block_start != node) {
+					//extend while share same key
+					index_t shift = 1;
+					while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
+						shift++;
 					}
-				} else if(curr == nodes.begin() || (!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from)){
-					block_start->key.first = ranks++;
-					*curr++ = *block_start;
-				}
-				block_start = node;
-			}
-		}
-		PathNode* node = nodes.end();
-		sort(block_start, node);
-		while(block_start != node) {
-			//extend while share same key
-			index_t shift = 1;
-			while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
-				shift++;
-			}
-			//check if all share .from
-			bool merge = true;
-			for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
-				if(n->from != block_start->from) merge = false;
-			}
-			//if they share same from, then they are a mergable set
-			//check if they are able to be merged into the previous node (second clause)
-			//otherwise write single node to array
+					//check if all share .from
+					bool merge = true;
+					for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
+						if(n->from != block_start->from) merge = false;
+					}
+					//if they share same from, then they are a mergable set
+					//check if they are able to be merged into the previous node (second clause)
+					//otherwise write single node to array
 
-			//if not mergable, just write all to array
-			if(!merge) {
-				for(PathNode* n = block_start; n != (block_start + shift); n++) {
-					n->key.first = ranks;
-					*curr++ = *n;
+					//if not mergable, just write all to array
+					if(!merge) {
+						for(PathNode* n = block_start; n != (block_start + shift); n++) {
+							n->key.first = ranks;
+							*curr++ = *n;
+						}
+						ranks++;
+					} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
+						block_start->setSorted();
+						block_start->key.first = ranks++;
+						*curr++ = *block_start;
+					}
+					block_start += shift;
 				}
-				ranks++;
-			} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
-				block_start->setSorted();
+			} else if(curr == nodes.begin() || (!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from)){
 				block_start->key.first = ranks++;
 				*curr++ = *block_start;
 			}
-			block_start += shift;
+			block_start = node;
 		}
-		nodes.resizeExact(curr - nodes.begin());
-		if(nodes.end() - block_start > 1) sort(block_start, nodes.end());
-		if(verbose) cerr << "SORTED ALL NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-		indiv = clock();
-		mergeUpdateRank();
-		if(verbose) cerr << "MERGEUPDATERANK: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-		if(verbose) cerr << "TOTAL TIME: " << (float)(clock() - overall) / CLOCKS_PER_SEC << endl;
-		printInfo();
-		if(isSorted()) break;
-		past_nodes.swap(nodes);
-
 	}
+	PathNode* node = nodes.end();
+	sort(block_start, node);
+	while(block_start != node) {
+		//extend while share same key
+		index_t shift = 1;
+		while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
+			shift++;
+		}
+		//check if all share .from
+		bool merge = true;
+		for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
+			if(n->from != block_start->from) merge = false;
+		}
+		//if they share same from, then they are a mergable set
+		//check if they are able to be merged into the previous node (second clause)
+		//otherwise write single node to array
+
+		//if not mergable, just write all to array
+		if(!merge) {
+			for(PathNode* n = block_start; n != (block_start + shift); n++) {
+				n->key.first = ranks;
+				*curr++ = *n;
+			}
+			ranks++;
+		} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
+			block_start->setSorted();
+			block_start->key.first = ranks++;
+			*curr++ = *block_start;
+		}
+		block_start += shift;
+	}
+	nodes.resizeExact(curr - nodes.begin());
+	if(nodes.end() - block_start > 1) sort(block_start, nodes.end());
+	if(verbose) cerr << "SORTED ALL NODES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
+	mergeUpdateRank();
+	if(verbose) cerr << "MERGEUPDATERANK: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	if(verbose) cerr << "TOTAL TIME: " << (float)(clock() - overall) / CLOCKS_PER_SEC << endl;
+	printInfo();
 }
+
 
 template <typename index_t>
 void PathGraph<index_t>::printInfo()
@@ -1859,9 +1884,6 @@ void PathGraph<index_t>::printInfo()
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
-	//TODO: Make similar changes to the below procedure as we applied above
-	// Make sortByTo linear time sort
-
 	if(!sorted) return false;
 
 	clock_t indiv = clock();
@@ -1871,25 +1893,35 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	//query nodes against in rank order
 	//put into the correct bin based on edge.label
 
-	EList<typename RefGraph<index_t>::Edge> to_table; to_table.resizeExact(base.edges.size());
-	bin_sort_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
-			base.edges.begin(), base.edges.end(), to_table.ptr(), &RefGraph<index_t>::EdgeTo, max_from);
+	bin_sort_no_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
+			base.edges.begin(), base.edges.end(), &RefGraph<index_t>::EdgeTo, (index_t)-1, nthreads);
 	if(verbose) cerr << "BUILD TO_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 	//Build to_index
 	EList<index_t> to_index; to_index.resizeExact(max_from + 1); to_index.fillZero();
 	for(index_t i = 0; i < base.edges.size(); i++) {
-		to_index[to_table[i].to + 1] = i + 1;
+		to_index[base.edges[i].to + 1] = i + 1;
 	}
+
 	if(verbose) cerr << "BUILD TO_INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
+
+	//sort nodes by from before we query against hash_table in order to improve cache performance
+	//copy so that we don't have to re-sort by rank to do next step
+	past_nodes.resizeExact(nodes.size());
+	bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(
+				nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeFrom, max_from, nthreads);
+
+	if(verbose) cerr << "Sort nodes by from: "  << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+	indiv = clock();
+
 	// Now query against hash-table
 
 	//count number of edges
 	index_t label_index[6] = {0};
-	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
-			switch(base.nodes[to_table[j].from].label) {
+			switch(base.nodes[base.edges[j].from].label) {
 				case 'A': label_index[0]++; break;
 				case 'C': label_index[1]++; break;
 				case 'G': label_index[2]++; break;
@@ -1905,31 +1937,31 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	label_index[0] = 0;
 	for(int i = 1; i < 6; i++) {
 		tot += label_index[i];
-		label_index[i] = tot - label_index[i];
+		label_index[i] =  tot - label_index[i];
 	}
 	if(verbose) cerr << "COUNT NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 	edges.resizeExact(tot);
-	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
-			switch(base.nodes[to_table[j].from].label) {
+			switch(base.nodes[base.edges[j].from].label) {
 				case 'A':
-					edges[label_index[0]++] = PathEdge(to_table[j].from, node->key.first, 'A');
+					edges[label_index[0]++] = PathEdge(base.edges[j].from, node->key.first, 'A');
 					break;
 				case 'C':
-					edges[label_index[1]++] = PathEdge(to_table[j].from, node->key.first, 'C');
+					edges[label_index[1]++] = PathEdge(base.edges[j].from, node->key.first, 'C');
 					break;
 				case 'G':
-					edges[label_index[2]++] = PathEdge(to_table[j].from, node->key.first, 'G');
+					edges[label_index[2]++] = PathEdge(base.edges[j].from, node->key.first, 'G');
 					break;
 				case 'T':
-					edges[label_index[3]++] = PathEdge(to_table[j].from, node->key.first, 'T');
+					edges[label_index[3]++] = PathEdge(base.edges[j].from, node->key.first, 'T');
 					break;
 				case 'Y':
-					edges[label_index[4]++] = PathEdge(to_table[j].from, node->key.first, 'Y');
+					edges[label_index[4]++] = PathEdge(base.edges[j].from, node->key.first, 'Y');
 					break;
 				case 'Z':
-					edges[label_index[5]++] = PathEdge(to_table[j].from, node->key.first, 'Z');
+					edges[label_index[5]++] = PathEdge(base.edges[j].from, node->key.first, 'Z');
 					break;
 				default:
 					assert(false);
@@ -1939,6 +1971,21 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	}
 
 	if(verbose) cerr << "MADE NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
+		indiv = clock();
+
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, (index_t)-1);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, (index_t)-1);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, (index_t)-1);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, (index_t)-1);
+
+	sort(edges.begin() + label_index[3], edges.begin() + label_index[4]);
+	sort(edges.begin() + label_index[4], edges.begin() + label_index[5]);
+
+    for(index_t i = 1; i < edges.size(); i++) {
+    	if(edges[i] < edges[i - 1] && verbose) cerr << "WRONG " << i << endl;
+    }
+
+	if(verbose) cerr << "SORTED NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
 	indiv = clock();
 
 #ifndef NDEBUG
@@ -2040,12 +2087,14 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #endif
 
-    int log_size = sizeof(edges.size()) * 8;
-    while(!((1 << log_size) & edges.size())) log_size--;
-    bin_sort<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, log_size);
+    // this should be a merge not a sort!!
+    // edges with a given label are sorted by ranking
+    // only 4 labels so should be pretty trivial to do a 4-way merge
+    bin_sort_no_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, (index_t)-1, nthreads);
     for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
         node->key.second = 0;
     }
+
     for(index_t i = 0; i < edges.size(); i++) {
         nodes[edges[i].ranking].key.second = i + 1;
     }
@@ -2053,6 +2102,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     if(verbose) cerr << "TOTAL: " << (float)(clock() - overall) / CLOCKS_PER_SEC << endl;
     return true;
 
+//-----------------------------------------------------------------------------------------------------
     bwt_string.clear();
     F_array.clear();
     M_array.clear();
