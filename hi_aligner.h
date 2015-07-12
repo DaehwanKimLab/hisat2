@@ -2005,8 +2005,13 @@ void GenomeHit<index_t>::findOffDiffs(
         ALT<index_t> alt;
         alt.pos = start;
         alt_range.first = alt_range.second = altdb.alts().bsearchLoBound(alt);
+        index_t add = 0;
         for(alt_range.second = alt_range.first; alt_range.second < alts.size(); alt_range.second++) {
-            if(alts[alt_range.second].pos >= end) break;
+            const ALT<index_t>& alt = alts[alt_range.second];
+            if(alt.pos >= end + (alt.splicesite() ? add : 0)) break;
+            if(alt.type == ALT_SPLICESITE) {
+                add += (alt.right - alt.left + 1);
+            }
         }
     }
     if(alt_range.first >= alt_range.second) return;
@@ -2014,16 +2019,16 @@ void GenomeHit<index_t>::findOffDiffs(
     for(; alt_range.first < alt_range.second; alt_range.first++) {
         assert_lt(alt_range.first, alts.size());
         const ALT<index_t>& alt = alts[alt_range.first];
-        if(alt.type != ALT_SNP_DEL && alt.type != ALT_SNP_INS) continue;
+        if(!alt.gap()) continue;
         index_t numOffs = offDiffs.size();
         for(index_t i = 0; i < numOffs; i++) {
             int off = offDiffs[i].first * offDiffs[i].second;
             if(alt.type == ALT_SNP_DEL) {
                 off += alt.len;
-                
-            } else {
-                assert_eq(alt.type, ALT_SNP_INS);
+            } else if(alt.type == ALT_SNP_INS) {
                 off -= alt.len;
+            } else if(alt.type == ALT_SPLICESITE) {
+                off += (alt.right - alt.left + 1);
             }
             
             if(off != 0) {

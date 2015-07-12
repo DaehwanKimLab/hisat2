@@ -56,6 +56,7 @@ struct ALT {
     
     bool snp() const { return type == ALT_SNP_SGL || type == ALT_SNP_DEL || type == ALT_SNP_INS; }
     bool splicesite() const { return type == ALT_SPLICESITE; }
+    bool gap() const { return type == ALT_SNP_DEL || type == ALT_SNP_INS || type == ALT_SPLICESITE; }
     
     bool operator< (const ALT& o) const {
         if(pos != o.pos) return pos < o.pos;

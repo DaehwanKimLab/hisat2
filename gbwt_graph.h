@@ -1267,8 +1267,9 @@ public:
         };
 
     };
+    
     static index_t PathEdgeTo (PathEdge& a) {
-        return a.ranking;
+        return a.to;
     }
 
     struct PathEdgeFromCmp {
@@ -1276,7 +1277,6 @@ public:
             return a.from < b.from || (a.from == b.from && a.to < b.to);
         }
     };
-
 
     struct PathEdgeToCmp {
         bool operator() (const PathEdge& a, const PathEdge& b) const {
