@@ -138,7 +138,12 @@ private:
         std::sort(edges.begin(), edges.end(), EdgeFromCmp());
     }
     static void sortEdgesTo(EList<Edge>& edges) {
-        std::sort(edges.begin(), edges.end(), EdgeToCmp());
+    	bin_sort_no_copy<Edge, EdgeToCmp, index_t>(
+    	    				edges.begin(), edges.end(), &EdgeTo, (index_t)-1);
+    }
+    void sortEdgesByTo() {
+    	bin_sort_no_copy<Edge, EdgeToCmp, index_t>(
+    				edges.begin(), edges.end(), &EdgeTo, edges.size(), nthreads);
     }
 
     // Return edge ranges [begin, end)
@@ -1421,7 +1426,11 @@ private:
     void sortByKey() { sort(nodes.begin(), nodes.end()); } // by key
 
     // Can create an index by using key.second in PathNodes.
-    void sortByFrom(bool create_index = true);
+    void sortNodesByFrom() {
+    	past_nodes.resizeExact(nodes.size());
+    	bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(
+    				nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeFrom, max_from, nthreads);
+    }
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
 
 private:
@@ -1864,34 +1873,35 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
 	if(!sorted) return false;
 
-	clock_t indiv = clock();
-	clock_t overall = clock();
+	time_t indiv = time(0);
+	time_t overall = time(0);
 
 	//build hash table of base.edges binned by .to
 	//query nodes against in rank order
 	//put into the correct bin based on edge.label
 
-	bin_sort_no_copy<typename RefGraph<index_t>::Edge, typename RefGraph<index_t>::EdgeToCmp, index_t>(
-			base.edges.begin(), base.edges.end(), &RefGraph<index_t>::EdgeTo, (index_t)-1, nthreads);
-	if(verbose) cerr << "BUILD TO_TABLE: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-	indiv = clock();
+	base.sortEdgesByTo();
+
+	if(verbose) cerr << "BUILD TO_TABLE: " << time(0) - indiv << endl;
+	indiv = time(0);
+
 	//Build to_index
 	EList<index_t> to_index; to_index.resizeExact(max_from + 1); to_index.fillZero();
 	for(index_t i = 0; i < base.edges.size(); i++) {
 		to_index[base.edges[i].to + 1] = i + 1;
 	}
 
-	if(verbose) cerr << "BUILD TO_INDEX: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-	indiv = clock();
+	if(verbose) cerr << "BUILD TO_INDEX: " << time(0) - indiv << endl;
+	indiv = time(0);
 
 	//sort nodes by from before we query against hash_table in order to improve cache performance
 	//copy so that we don't have to re-sort by rank to do next step
-	past_nodes.resizeExact(nodes.size());
-	bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(
-				nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeFrom, max_from, nthreads);
+	// later maybe change to only sort locally? Don't really need whole thing sorted to get better
+	// cache performance
+	sortNodesByFrom();
 
-	if(verbose) cerr << "Sort nodes by from: "  << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-	indiv = clock();
+	if(verbose) cerr << "Sort nodes by from: "  << time(0) - indiv << endl;
+	indiv = time(0);
 
 	// Now query against hash-table
 
@@ -1917,8 +1927,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 		tot += label_index[i];
 		label_index[i] =  tot - label_index[i];
 	}
-	if(verbose) cerr << "COUNT NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-	indiv = clock();
+	if(verbose) cerr << "COUNT NEW EDGES: " << time(0) - indiv << endl;
+	indiv = time(0);
 	edges.resizeExact(tot);
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
@@ -1948,23 +1958,19 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 		}
 	}
 
-	if(verbose) cerr << "MADE NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-		indiv = clock();
+	if(verbose) cerr << "MADE NEW EDGES: " << time(0) - indiv << endl;
+	indiv = time(0);
 
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, (index_t)-1);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, (index_t)-1);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, (index_t)-1);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, (index_t)-1);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, edges.size());
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, edges.size());
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, edges.size());
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, edges.size());
 
 	sort(edges.begin() + label_index[3], edges.begin() + label_index[4]);
 	sort(edges.begin() + label_index[4], edges.begin() + label_index[5]);
 
-    for(index_t i = 1; i < edges.size(); i++) {
-    	if(edges[i] < edges[i - 1] && verbose) cerr << "WRONG " << i << endl;
-    }
-
-	if(verbose) cerr << "SORTED NEW EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-	indiv = clock();
+	if(verbose) cerr << "SORTED NEW EDGES: " << time(0) - indiv << endl;
+	indiv = time(0);
 
 #ifndef NDEBUG
     if(debug) {
@@ -2027,8 +2033,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         node->to = base.nodes[node->from].value;
     }
 
-    if(verbose) cerr << "PROCESS EDGES: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-    indiv = clock();
+    if(verbose) cerr << "PROCESS EDGES: " << time(0) - indiv << endl;
+	indiv = time(0);
 
     // Remove 'Y' node
     assert_gt(nodes.size(), 2);
@@ -2045,8 +2051,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             edge.ranking -= 1;
         }
     }
-    if(verbose) cerr << "REMOVE Y: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-    indiv = clock();
+    if(verbose) cerr << "REMOVE Y: " << time(0) - indiv << endl;
+	indiv = time(0);
 
 #ifndef NDEBUG
     if(debug) {
@@ -2068,16 +2074,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     // this should be a merge not a sort!!
     // edges with a given label are sorted by ranking
     // only 4 labels so should be pretty trivial to do a 4-way merge
-    bin_sort_no_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, (index_t)-1, nthreads);
-    for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
-        node->key.second = 0;
-    }
-
+    bin_sort_no_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, edges.size(), nthreads);
     for(index_t i = 0; i < edges.size(); i++) {
         nodes[edges[i].ranking].key.second = i + 1;
     }
-    if(verbose) cerr << "SORT, Make index: " << (float)(clock() - indiv) / CLOCKS_PER_SEC << endl;
-    if(verbose) cerr << "TOTAL: " << (float)(clock() - overall) / CLOCKS_PER_SEC << endl;
+
+    if(verbose) cerr << "SORT, Make index: " << time(0) - indiv << endl;
+    if(verbose) cerr << "TOTAL: " << time(0) - overall << endl;
     return true;
 
 //-----------------------------------------------------------------------------------------------------

@@ -72,16 +72,18 @@ template <typename T, typename CMP, typename index_t>
 void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
 	const int SHIFT = 7;
 	const int BLOCKS = (1 << (SHIFT + 1));
-	const int BLOCKS_MASK = BLOCKS - 1;
 
 	int log_size = sizeof(maxv) * 8;
 	while(!((1 << log_size) & maxv)) log_size--;
 	int right_shift = log_size - SHIFT;
+
+	// {(maxv >> right_shift) + 1 <= BLOCKS},
 	int occupied = (maxv >> right_shift) + 1;
+
 	// count number in each bin
 	index_t count[BLOCKS] = {0};
 	for(T* curr = begin; curr != end; curr++) {
-		count[(hash(*curr) >> right_shift) & BLOCKS_MASK]++;
+		count[hash(*curr) >> right_shift]++;
 	}
 	// sum numbers to create an index
 	T* index[BLOCKS + 1];
@@ -95,19 +97,19 @@ void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int n
 	for(int bin = 0; bin < occupied; bin++) {
 		while(place[bin] != index[bin + 1]) {
 			T curr = *place[bin];
-			int x = (hash(curr) >> right_shift) & BLOCKS_MASK;
+			int x = hash(curr) >> right_shift;
 			while(x != bin) { // switched inner loop here, removed branch statement
 				T temp = *place[x];
 				*place[x]++ = curr;
 				curr = temp;
-				x = (hash(curr) >> right_shift) & BLOCKS_MASK;
+				x = hash(curr) >> right_shift;
 			}
 			*place[bin]++ = curr;
 		}
 	}
 	//sort partitions
 	if(nthreads == 1) {
-		for(int bin = 0; bin < occupied - 1; bin++) {
+		for(int bin = 0; bin < occupied; bin++) {
 			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
 	} else {
@@ -123,7 +125,7 @@ void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int n
 			st += params[i].num;
 		}
 		//do any remaining bins using main thread
-		for(int bin = st; bin < occupied - 1; bin++) {
+		for(int bin = st; bin < occupied; bin++) {
 			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
 		for(int i = 0; i < nthreads; i++) {
