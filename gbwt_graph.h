@@ -1880,16 +1880,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	//query nodes against in rank order
 	//put into the correct bin based on edge.label
 
-	base.sortEdgesByTo();
+	base.sortEdgesByTo();                                                                  //fully parallel
 
 	if(verbose) cerr << "BUILD TO_TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
 
 	//Build to_index
-	EList<index_t> to_index; to_index.resizeExact(max_from + 1); to_index.fillZero();
-	for(index_t i = 0; i < base.edges.size(); i++) {
-		to_index[base.edges[i].to + 1] = i + 1;
-	}
+
 
 	if(verbose) cerr << "BUILD TO_INDEX: " << time(0) - indiv << endl;
 	indiv = time(0);
@@ -1898,27 +1895,33 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	//copy so that we don't have to re-sort by rank to do next step
 	// later maybe change to only sort locally? Don't really need whole thing sorted to get better
 	// cache performance
-	sortNodesByFrom();
+	sortNodesByFrom();                                                                      //fully parallel
+	EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();      //serial, not worth it?
+	for(index_t i = 0; i < past_nodes.size(); i++) {
+		from_index[past_nodes[i].from + 1] = i + 1;
+	}
+
 
 	if(verbose) cerr << "Sort nodes by from: "  << time(0) - indiv << endl;
 	indiv = time(0);
 
 	// Now query against hash-table
 
-	//count number of edges
+	//count number of edges                                                                 //serial, need to parallelize
 	index_t label_index[6] = {0};
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
-			switch(base.nodes[base.edges[j].from].label) {
-				case 'A': label_index[0]++; break;
-				case 'C': label_index[1]++; break;
-				case 'G': label_index[2]++; break;
-				case 'T': label_index[3]++; break;
-				case 'Y': label_index[4]++; break;
-				case 'Z': label_index[5]++; break;
-				default: assert(false); throw 1;
-			}
+	for(typename RefGraph<index_t>::Edge* edge = base.edges.begin(); edge != base.edges.end(); edge++) {
+		char curr_label = base.nodes[edge->from].label;
+		int curr_label_index;
+		switch(curr_label) {
+			case 'A': curr_label_index = 0; break;
+			case 'C': curr_label_index = 1; break;
+			case 'G': curr_label_index = 2; break;
+			case 'T': curr_label_index = 3; break;
+			case 'Y': curr_label_index = 4; break;
+			case 'Z': curr_label_index = 5; break;
+			default: assert(false); throw 1;
 		}
+		label_index[curr_label_index] += from_index[edge->to + 1] - from_index[edge->to];
 	}
 	// make new nodes
 	index_t tot = label_index[0];
@@ -1930,36 +1933,27 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	if(verbose) cerr << "COUNT NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
 	edges.resizeExact(tot);
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		for(index_t j = to_index[node->from]; j < to_index[node->from + 1]; j++) {
-			switch(base.nodes[base.edges[j].from].label) {
-				case 'A':
-					edges[label_index[0]++] = PathEdge(base.edges[j].from, node->key.first, 'A');
-					break;
-				case 'C':
-					edges[label_index[1]++] = PathEdge(base.edges[j].from, node->key.first, 'C');
-					break;
-				case 'G':
-					edges[label_index[2]++] = PathEdge(base.edges[j].from, node->key.first, 'G');
-					break;
-				case 'T':
-					edges[label_index[3]++] = PathEdge(base.edges[j].from, node->key.first, 'T');
-					break;
-				case 'Y':
-					edges[label_index[4]++] = PathEdge(base.edges[j].from, node->key.first, 'Y');
-					break;
-				case 'Z':
-					edges[label_index[5]++] = PathEdge(base.edges[j].from, node->key.first, 'Z');
-					break;
-				default:
-					assert(false);
-					throw 1;
-			}
+	for(typename RefGraph<index_t>::Edge* edge = base.edges.begin(); edge != base.edges.end(); edge++) {
+		char curr_label = base.nodes[edge->from].label;
+		int curr_label_index;
+		switch(curr_label) {
+			case 'A': curr_label_index = 0; break;
+			case 'C': curr_label_index = 1; break;
+			case 'G': curr_label_index = 2; break;
+			case 'T': curr_label_index = 3; break;
+			case 'Y': curr_label_index = 4; break;
+			case 'Z': curr_label_index = 5; break;
+			default: assert(false); throw 1;
+		}
+		for(index_t j = from_index[edge->to]; j < from_index[edge->to + 1]; j++) {
+			edges[label_index[curr_label_index]++] = PathEdge(edge->from, past_nodes[j].key.first, curr_label);
 		}
 	}
 
 	if(verbose) cerr << "MADE NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
+
+	// know breakpoints
 
 	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, edges.size());
 	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, edges.size());
