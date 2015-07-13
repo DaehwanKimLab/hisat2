@@ -1908,7 +1908,7 @@ bool GenomeHit<index_t>::adjustWithALT(
     
     EList<pair<index_t, int> >& offDiffs = _sharedVars->offDiffs;
     index_t width = 1 << (gfm.gh()._offRate + 1);
-    findOffDiffs(gfm, altdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff, offDiffs);
+    findOffDiffs(gfm, altdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff + width, offDiffs);
 
     index_t orig_joinedOff = this->_joinedOff;
     index_t orig_toff = this->_toff;
@@ -1948,6 +1948,7 @@ bool GenomeHit<index_t>::adjustWithALT(
         
         const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
         const EList<ALT<index_t> >& alts = altdb.alts();
+        if(alt_cbns.size() > 16) alt_cbns.resize(16);
         for(index_t c = 0; c < alt_cbns.size() && !found; c++) {
             this->_edits->clear();
             index_t alignedLen = alignWithALTs(
@@ -1966,9 +1967,27 @@ bool GenomeHit<index_t>::adjustWithALT(
                                                false, /* left? */
                                                this->_edits);
             // Disallow having errors on the ends
+            // Daehwan - check this out
             if(this->_edits->size() > 0) {
-                if(this->_edits->front().pos == 0) continue;
-                if(this->_edits->back().pos == this->_len - 1) continue;
+                {
+                    const Edit& e = this->_edits->front();
+                    if(e.pos == 0) {
+                        if(e.type == EDIT_TYPE_READ_GAP ||
+                           e.type == EDIT_TYPE_REF_GAP  ||
+                           e.type == EDIT_TYPE_SPL) {
+                            continue;
+                        }
+                    }
+                }
+                {
+                    const Edit& e = this->_edits->back();
+                    if(e.pos == this->_len - 1) {
+                        if(e.type == EDIT_TYPE_READ_GAP ||
+                           e.type == EDIT_TYPE_REF_GAP) {
+                            continue;
+                        }
+                    }
+                }
             }
             if(alignedLen == this->_len) found = true;
         }
@@ -2009,9 +2028,11 @@ void GenomeHit<index_t>::findOffDiffs(
         for(alt_range.second = alt_range.first; alt_range.second < alts.size(); alt_range.second++) {
             const ALT<index_t>& alt = alts[alt_range.second];
             if(alt.pos >= end + (alt.splicesite() ? add : 0)) break;
+#if 0
             if(alt.type == ALT_SPLICESITE) {
                 add += (alt.right - alt.left + 1);
             }
+#endif
         }
     }
     if(alt_range.first >= alt_range.second) return;
@@ -2029,6 +2050,8 @@ void GenomeHit<index_t>::findOffDiffs(
                 off -= alt.len;
             } else if(alt.type == ALT_SPLICESITE) {
                 off += (alt.right - alt.left + 1);
+            } else {
+                assert(false);
             }
             
             if(off != 0) {
@@ -2084,12 +2107,17 @@ void GenomeHit<index_t>::findALTCombinations(
         ALT<index_t> alt;
         alt.pos = start;
         alt_range.first = alt_range.second = altdb.alts().bsearchLoBound(alt);
+        index_t max_right = start + reflen;
         for(; alt_range.second < alts.size(); alt_range.second++) {
             const ALT<index_t>& alt = alts[alt_range.second];
             if(alt.snp()) {
-                if(alt.pos > start + reflen) break;
+                if(alt.pos > max_right) break;
+                if(alt.pos > start + reflen) continue;
             } else if(alt.splicesite()) {
-                if(alt.left > start + reflen) break;
+                if(alt.left > max_right) break;
+                if(alt.right + reflen > max_right) {
+                    max_right = alt.right + reflen;
+                }
             } else {
                 assert(false);
             }
@@ -2098,7 +2126,7 @@ void GenomeHit<index_t>::findALTCombinations(
     if(alt_range.first >= alt_range.second) return;
     if(left) {
         assert_gt(alt_range.second, alt_range.first);
-        for(; alt_range.second > alt_range.first; alt_range.second--) {
+        for(; alt_range.second > alt_range.first && alt_cbns.size() <= 16; alt_range.second--) {
             assert_lt(alt_range.second - 1, alts.size());
             const ALT<index_t>& alt = alts[alt_range.second - 1];
             index_t num_cbns = alt_cbns.size();
@@ -2122,9 +2150,12 @@ void GenomeHit<index_t>::findALTCombinations(
             }
         }
     } else {
-        for(; alt_range.first < alt_range.second; alt_range.first++) {
+        for(; alt_range.first < alt_range.second && alt_cbns.size() <= 16; alt_range.first++) {
             assert_lt(alt_range.first, alts.size());
             const ALT<index_t>& alt = alts[alt_range.first];
+            if(alt.snp()) {
+                if(alt.pos > start + reflen) continue;
+            }
             index_t num_cbns = alt_cbns.size();
             for(index_t i = 0; i < num_cbns; i++) {
                 const EList<index_t>& tmp_alts = alt_cbns[i];
@@ -2549,6 +2580,7 @@ index_t GenomeHit<index_t>::alignWithALTs(
     } else {
         index_t rf_i = 0, rd_i = 0;
         bool indel_end = false;
+        index_t cum_intronLen = 0;
         for(; rf_i < rflen && rd_i < rdlen; rf_i++, rd_i++) {
             int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[rdoff + rd_i];
@@ -2559,13 +2591,13 @@ index_t GenomeHit<index_t>::alignWithALTs(
                 altID = tmp_alts[alt_i];
                 assert_lt(altID, alts.size());
                 const ALT<index_t>& alt = alts[altID];
-                alt_found = (alt.pos == rf_i + joinedOff);
+                alt_found = (alt.pos == rf_i + joinedOff + cum_intronLen);
             }
             
             if(alt_found) {
                 assert_lt(altID, alts.size());
                 const ALT<index_t>& alt = alts[altID];
-                assert_eq(alt.pos, rf_i + joinedOff);
+                assert_eq(alt.pos, rf_i + joinedOff + cum_intronLen);
                 if(alt.type == ALT_SNP_SGL) {
                     if(rd_bp == (int)alt.seq) {
                         if(edits != NULL) {
@@ -2630,17 +2662,16 @@ index_t GenomeHit<index_t>::alignWithALTs(
                 } else if(alt.type == ALT_SPLICESITE) {
                     if(rd_i <= 0) break;
                     assert_lt(rd_i, rflen);
-                    rflen = rflen - rd_i;
-                    rf_i = 0;
                     index_t intronLen = alt.right - alt.left + 1;
+                    cum_intronLen += intronLen;
                     off = ref.getStretch(
                                          reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
                                          tidx,
-                                         rfoff + rd_i + intronLen,
-                                         rflen
+                                         rfoff + rd_i + cum_intronLen,
+                                         rflen - rd_i
                                          ASSERT_ONLY(, destU32));
                     assert_lt(off, 16);
-                    rfseq = raw_refbuf.wbuf() + off;
+                    rfseq = raw_refbuf.wbuf() + off - rf_i;
                     if(rd_bp == (int)rfseq[rf_i]) {
                         if(edits != NULL) {
                             Edit e(rd_i,
@@ -3322,7 +3353,7 @@ public:
             pseudogeneStop = false;
             
             // daehwan - for debugging purposes
-            anchorStop = false;
+            // anchorStop = false;
             
             // Align this read beginning from previously stopped base
             // stops when it is uniquelly mapped with at least 28bp or
@@ -4751,6 +4782,13 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
+                if(rangeTemp.first + 1 < rangeTemp.second) {
+                    assert_eq(node_rangeTemp.first + 1, node_rangeTemp.second);
+                    _tmp_node_iedge_count.clear();
+                    _tmp_node_iedge_count.expand();
+                    _tmp_node_iedge_count.back().first = 0;
+                    _tmp_node_iedge_count.back().second = rangeTemp.second - rangeTemp.first - 1;
+                }
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {
@@ -4949,6 +4987,13 @@ size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
+                if(rangeTemp.first + 1 < rangeTemp.second) {
+                    assert_eq(node_rangeTemp.first + 1, node_rangeTemp.second);
+                    _tmp_node_iedge_count.clear();
+                    _tmp_node_iedge_count.expand();
+                    _tmp_node_iedge_count.back().first = 0;
+                    _tmp_node_iedge_count.back().second = rangeTemp.second - rangeTemp.first - 1;
+                }
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {
@@ -5080,6 +5125,13 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
+                if(rangeTemp.first + 1 < rangeTemp.second) {
+                    assert_eq(node_rangeTemp.first + 1, node_rangeTemp.second);
+                    _tmp_node_iedge_count.clear();
+                    _tmp_node_iedge_count.expand();
+                    _tmp_node_iedge_count.back().first = 0;
+                    _tmp_node_iedge_count.back().second = rangeTemp.second - rangeTemp.first - 1;
+                }
             }
         }
         if(rangeTemp.first >= rangeTemp.second) {

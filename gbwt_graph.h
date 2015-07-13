@@ -1068,7 +1068,7 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
             cnodes.back().label = node.label;
             cnodes.back().value = node.value;
             cnodes.back().nodes.push_back(node_id);
-
+            
             if(node.label == 'Y' && firstNode == 0) {
                 firstNode = cnodes.size() - 1;
             }
@@ -1080,10 +1080,10 @@ void RefGraph<index_t>::reverseDeterminize(EList<Node>& nodes, EList<Edge>& edge
                 if(next_node.label != node.label) break;
                 cnodes.back().nodes.push_back(next_node_id);
                 if(next_node.value != (index_t)INDEX_MAX) {
-                    if(cnodes[cnode_id].value == (index_t)INDEX_MAX) {
-                        cnodes[cnode_id].value = next_node.value;
+                    if(cnodes.back().value == (index_t)INDEX_MAX) {
+                        cnodes.back().value = next_node.value;
                     } else {
-                        cnodes[cnode_id].value = max(cnodes[cnode_id].value, next_node.value);
+                        cnodes.back().value = max(cnodes.back().value, next_node.value);
                     }
                 }
                 i++;
