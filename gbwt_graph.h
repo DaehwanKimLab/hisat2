@@ -1906,7 +1906,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	//TODO:
 	// parallelize edge creation
-	// split work
+	// split work more evenly in sort new edges
+	// change sort edges by key to a merge operation
+	// implicit: update radix sort to increase parallelism
 
 	if(!sorted) return false;
 
@@ -1922,11 +1924,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	//replace nodes.to with genomic position
 	//fast because both roughly ordered by from
-	//could just store an array of index_t's insterad of base.nodes?
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		node->to = base.nodes[node->from].value;
 	}
-
 
 	if(verbose) cerr << "NODE.TO -> GENOME POS: "  << time(0) - indiv << endl;
 	indiv = time(0);
@@ -1987,17 +1987,23 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 			edges[label_index[curr_label_index]++] = PathEdge(edge->from, nodes[j].key.first, curr_label);
 		}
 	}
+	//might want to not do this in local index generation stage?
 	base.nodes.nullify();
+	base.edges.nullify();
 
 	if(verbose) cerr << "MADE NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
 	// could switch to doing each with its own core
 	// I think this would shorten the time that we are running with only a single core
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, edges.size(), nthreads);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, edges.size(), nthreads);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, edges.size(), nthreads);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, edges.size(), nthreads);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin()                 , edges.begin() + label_index[0],
+			&PathEdgeTo, edges.size(), nthreads);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1],
+			&PathEdgeTo, edges.size(), nthreads);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2],
+			&PathEdgeTo, edges.size(), nthreads);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3],
+			&PathEdgeTo, edges.size(), nthreads);
 
 	sort(edges.begin() + label_index[3], edges.begin() + label_index[4]);
 	sort(edges.begin() + label_index[4], edges.begin() + label_index[5]);
@@ -2005,6 +2011,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	if(verbose) cerr << "SORTED NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
+	//change comparison to only look at key.first?
 	bin_sort_no_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), &PathNodeKey, ranks, nthreads);
 
 	if(verbose) cerr << "RE-SORTED NODES: " << time(0) - indiv << endl;
