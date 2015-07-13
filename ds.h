@@ -487,6 +487,11 @@ public:
 		list_[cur_++] = el;
 	}
 
+	void nullify() {
+		free();
+	}
+
+
 	/**
 	 * Add an element to the back.  No intialization is done.
 	 */

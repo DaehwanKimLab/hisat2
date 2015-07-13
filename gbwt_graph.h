@@ -1560,6 +1560,7 @@ report_F_node_idx(0), report_F_location(0)
     	if(isSorted()) break;
     	past_nodes.swap(nodes);
 	}
+    past_nodes.nullify();
 }
 
 template <typename index_t>
@@ -1903,6 +1904,10 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	// nodes.from -> base.edges.to
 	// nodes.from -> edges.from
 
+	//TODO:
+	// parallelize edge creation
+	// split work
+
 	if(!sorted) return false;
 
 	time_t indiv = time(0);
@@ -1917,9 +1922,11 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	//replace nodes.to with genomic position
 	//fast because both roughly ordered by from
+	//could just store an array of index_t's insterad of base.nodes?
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		node->to = base.nodes[node->from].value;
 	}
+
 
 	if(verbose) cerr << "NODE.TO -> GENOME POS: "  << time(0) - indiv << endl;
 	indiv = time(0);
@@ -1980,11 +1987,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 			edges[label_index[curr_label_index]++] = PathEdge(edge->from, nodes[j].key.first, curr_label);
 		}
 	}
+	base.nodes.nullify();
 
 	if(verbose) cerr << "MADE NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
-	// could switch to doing each
+	// could switch to doing each with its own core
+	// I think this would shorten the time that we are running with only a single core
 	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, edges.size(), nthreads);
 	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, edges.size(), nthreads);
 	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, edges.size(), nthreads);
