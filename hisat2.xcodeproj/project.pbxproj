@@ -20,10 +20,11 @@
 		E85452591B1A2B720049F2AC /* hisat2_inspect.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_inspect.cpp; sourceTree = "<group>"; };
 		E854525A1B1A2B7C0049F2AC /* hisat2_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_main.cpp; sourceTree = "<group>"; };
 		E854525B1B1A2B870049F2AC /* hisat2.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2.cpp; sourceTree = "<group>"; };
+		E8562A631B515EE5003062A4 /* radix_sort.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = radix_sort.h; sourceTree = "<group>"; };
 		E85766711970545400D8AAFB /* btypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = btypes.h; sourceTree = "<group>"; };
 		E85F1AFA193501E000F85A12 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		E861E5A51B1B3C2200362002 /* gfm.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = gfm.cpp; sourceTree = "<group>"; };
-		E8645CE01B2B5EE00027075C /* snp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = snp.h; sourceTree = "<group>"; };
+		E8645CE01B2B5EE00027075C /* alt.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = alt.h; sourceTree = "<group>"; };
 		E88C30AA1B15E23800761CCB /* gfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gfm.h; sourceTree = "<group>"; };
 		E8B0DBE81934F7AA005ED9FA /* aligner_bt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_bt.h; sourceTree = "<group>"; };
 		E8B0DBE91934F7AA005ED9FA /* aligner_cache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_cache.h; sourceTree = "<group>"; };
@@ -199,6 +200,7 @@
 				E8B0DBF51934F7AA005ED9FA /* aligner_swsse.h */,
 				E8B0DBF61934F7AA005ED9FA /* aln_sink.h */,
 				E8B0DBF71934F7AA005ED9FA /* alphabet.h */,
+				E8645CE01B2B5EE00027075C /* alt.h */,
 				E8B0DBF81934F7AA005ED9FA /* assert_helpers.h */,
 				E8B0DBF91934F7AA005ED9FA /* banded.h */,
 				E8B0DBFA1934F7AA005ED9FA /* binary_sa_search.h */,
@@ -236,6 +238,7 @@
 				E8B0DC161934F7AA005ED9FA /* presets.h */,
 				E8B0DC171934F7AA005ED9FA /* processor_support.h */,
 				E8B0DC181934F7AA005ED9FA /* qual.h */,
+				E8562A631B515EE5003062A4 /* radix_sort.h */,
 				E8B0DC191934F7AA005ED9FA /* random_source.h */,
 				E8B0DC1A1934F7AA005ED9FA /* random_util.h */,
 				E8B0DC1B1934F7AA005ED9FA /* read.h */,
@@ -249,7 +252,6 @@
 				E8B0DC231934F7AA005ED9FA /* shmem.h */,
 				E8B0DC241934F7AA005ED9FA /* simple_func.h */,
 				E84A38981B42CC34007343EB /* simulate_reads.py */,
-				E8645CE01B2B5EE00027075C /* snp.h */,
 				E819F68819F553B100E1BD32 /* splice_site_mem.h */,
 				E8B0DC251934F7AA005ED9FA /* splice_site.h */,
 				E8B0DC261934F7AA005ED9FA /* spliced_aligner.h */,

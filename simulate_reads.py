@@ -723,7 +723,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                 if random.randint(0, 1) == 1:
                     swapped = True
                 if swapped:
-                    flag, flag2 = flag2 - 16, flag - 16
+                    flag, flag2 = flag - 16, flag2 - 16
                     pos, pos2 = pos2, pos
                     cigars, cigars2 = cigars2, cigars
                     cigar_descs, cigar2_descs = cigar2_descs, cigar_descs
@@ -748,14 +748,14 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                 print >> read_file, reverse_complement(read_seq)
             else:
                 print >> read_file, read_seq
-            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tTI:Z:{}".format(cur_read_id, flag, chr, pos, cigar_str, chr, pos2, read_seq, XM, NM, MD, Zs, transcript_id)
+            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tTI:Z:{}".format(cur_read_id, flag, chr, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, transcript_id)
             if paired_end:
                 print >> read2_file, ">{}".format(cur_read_id)
                 if swapped:
                     print >> read2_file, read2_seq
                 else:
                     print >> read2_file, reverse_complement(read2_seq)
-                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2, cigar2_str, chr, pos, read2_seq, XM2, NM2, MD2, Zs2, transcript_id)
+                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, transcript_id)
 
             cur_read_id += 1
             

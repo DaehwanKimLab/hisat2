@@ -37,7 +37,7 @@ class LocalGFM : public GFM<index_t> {
 public:
 	/// Construct an Ebwt from the given input file
 	LocalGFM(const string& in,
-             SNPDB<index_t>* snpdb,
+             ALTDB<index_t>* altdb,
              FILE *in5,
              FILE *in6,
              char *mmFile5,
@@ -66,7 +66,7 @@ public:
              bool passMemExc, // = false,
              bool sanityCheck) : // = false) :
 	GFM<index_t>(in,
-                 snpdb,
+                 altdb,
                  needEntireReverse,
                  fw,
                  overrideOffRate,
@@ -136,7 +136,7 @@ public:
              full_index_t tidx,
              full_index_t localOffset,
              full_index_t joinedOffset,
-             EList<SNP<full_index_t> >& snps,
+             EList<ALT<full_index_t> >& alts,
              index_t local_size,
              bool packed,
              int needEntireReverse,
@@ -234,7 +234,7 @@ public:
 				this->szsToDisk(szs, out5, refparams.reverse);
 			}
             
-            if(snps.empty()) {
+            if(alts.empty()) {
                 assert(pg == NULL);
                 VMSG_NL("Constructing suffix-array element generator");
                 KarkkainenBlockwiseSA<TStr> bsa(s, s.length()+1, dcv, seed, this->_sanity, this->_passMemExc, this->_verbose);
@@ -710,6 +710,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
             assert_lt(eftabCur*2+1, eftabLen);
             eftab[eftabCur*2] = lo;
             eftab[eftabCur*2+1] = hi;
+            assert_leq(lo, hi + 4);
             ftab[i] = (eftabCur++) ^ (index_t)INDEX_MAX; // insert pointer into eftab
             assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
             assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
@@ -1409,7 +1410,7 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 			}
 			for(uint32_t i = 0; i < this->_gh._eftabLen; i++) {
 				if(i > 0 && this->eftab()[i] > 0) {
-					assert_geq(this->eftab()[i] + 1, this->eftab()[i-1]);
+					assert_geq(this->eftab()[i] + 4, this->eftab()[i-1]);
 				} else if(i > 0 && this->eftab()[i-1] == 0) {
 					assert_eq(0, this->eftab()[i]);
 				}
@@ -1552,7 +1553,7 @@ class HGFM : public GFM<index_t> {
 public:
 	/// Construct an Ebwt from the given input file
 	HGFM(const string& in,
-         SNPDB<index_t>* snpdb,
+         ALTDB<index_t>* altdb,
          int needEntireReverse,
          bool fw,
          int32_t overrideOffRate, // = -1,
@@ -1570,7 +1571,7 @@ public:
          bool sanityCheck, // = false
          bool skipLoading = false) :
     GFM<index_t>(in,
-                 snpdb,
+                 altdb,
                  needEntireReverse,
                  fw,
                  overrideOffRate,
@@ -1633,6 +1634,8 @@ public:
          int32_t localFtabChars,
          int nthreads,
          const string& snpfile,
+         const string& ssfile,
+         const string& svfile,
          const string& outfile,   // base filename for GFM files
          bool fw,
          bool useBlockwise,
@@ -1774,7 +1777,7 @@ private:
     struct ThreadParam {
         // input
         SString<char>                s;
-        EList<SNP<index_t> >         snps;
+        EList<ALT<index_t> >         alts;
         bool                         bigEndian;
         index_t                      local_offset;
         index_t                      curr_sztot;
@@ -1803,7 +1806,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
     while(!tParam.last) {
         if(tParam.mainThread) {
             assert(!tParam.done);
-            if(tParam.s.length() <= 0 || tParam.snps.empty()) {
+            if(tParam.s.length() <= 0 || tParam.alts.empty()) {
                 tParam.done = true;
                 return;
             }
@@ -1817,7 +1820,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                 nanosleep(&ts, NULL);
 #endif
             }
-            if(tParam.s.length() <= 0 || tParam.snps.empty()) {
+            if(tParam.s.length() <= 0 || tParam.alts.empty()) {
                 tParam.done = true;
                 continue;
             }
@@ -1826,7 +1829,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
             tParam.rg = new RefGraph<index_t>(
                                               tParam.s,
                                               tParam.conv_local_szs,
-                                              tParam.snps,
+                                              tParam.alts,
                                               tParam.file,
                                               1,        /* num threads */
                                               false);   /* verbose? */
@@ -1842,13 +1845,13 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
             if(tParam.pg->getNumEdges() > local_max_gbwt) {
                 delete tParam.pg; tParam.pg = NULL;
                 delete tParam.rg; tParam.rg = NULL;
-                if(tParam.snps.size() <= 1) {
-                    tParam.snps.clear();
+                if(tParam.alts.size() <= 1) {
+                    tParam.alts.clear();
                 } else {
-                    for(index_t s = 2; s < tParam.snps.size(); s += 2) {
-                        tParam.snps[s >> 1] = tParam.snps[s];
+                    for(index_t s = 2; s < tParam.alts.size(); s += 2) {
+                        tParam.alts[s >> 1] = tParam.alts[s];
                     }
-                    tParam.snps.resize(tParam.snps.size() >> 1);
+                    tParam.alts.resize(tParam.alts.size() >> 1);
                 }
                 continue;
             }
@@ -1876,6 +1879,8 @@ HGFM<index_t, local_index_t>::HGFM(
                                    int32_t localFtabChars,
                                    int nthreads,
                                    const string& snpfile,
+                                   const string& ssfile,
+                                   const string& svfile,
                                    const string& outfile,   // base filename for EBWT files
                                    bool fw,
                                    bool useBlockwise,
@@ -1900,6 +1905,8 @@ HGFM<index_t, local_index_t>::HGFM(
                  ftabChars,
                  nthreads,
                  snpfile,
+                 ssfile,
+                 svfile,
                  outfile,
                  fw,
                  useBlockwise,
@@ -2126,7 +2133,7 @@ HGFM<index_t, local_index_t>::HGFM(
     
     // build local FM indexes
     index_t curr_sztot = 0;
-    EList<SNP<index_t> > snps;
+    EList<ALT<index_t> > alts;
     for(size_t tidx = 0; tidx < _refLens.size(); tidx++) {
         index_t refLen = _refLens[tidx];
         index_t local_offset = 0;
@@ -2169,16 +2176,28 @@ HGFM<index_t, local_index_t>::HGFM(
                     tParam.s.install(s.buf() + curr_sztot, local_sztot);
                 }
                 
-                // Extract SNPS corresponding to this local index
-                tParam.snps.clear();
-                SNP<index_t> snp;
-                snp.pos = curr_sztot;
-                index_t snp_i = this->_snps.bsearchLoBound(snp);
-                for(; snp_i < this->_snps.size(); snp_i++) {
-                    if(curr_sztot + local_sztot <= this->_snps[snp_i].pos + this->_snps[snp_i].len + 1) break;
-                    if(curr_sztot <= this->_snps[snp_i].pos) {
-                        tParam.snps.push_back(this->_snps[snp_i]);
-                        tParam.snps.back().pos -= curr_sztot;
+                // Extract ALTs corresponding to this local index
+                tParam.alts.clear();
+                ALT<index_t> alt;
+                alt.pos = curr_sztot;
+                index_t alt_i = this->_alts.bsearchLoBound(alt);
+                for(; alt_i < this->_alts.size(); alt_i++) {
+                    const ALT<index_t>& alt = this->_alts[alt_i];
+                    if(alt.snp()) {
+                        if(curr_sztot + local_sztot <= alt.pos + alt.len + 1) break;
+                        if(curr_sztot <= alt.pos) {
+                            tParam.alts.push_back(alt);
+                            tParam.alts.back().pos -= curr_sztot;
+                        }
+                    } else if(alt.splicesite()) {
+                        if(curr_sztot + local_sztot <= alt.right) continue;
+                        if(curr_sztot <= alt.left) {
+                            tParam.alts.push_back(alt);
+                            tParam.alts.back().left -= curr_sztot;
+                            tParam.alts.back().right -= curr_sztot;
+                        }
+                    } else {
+                        assert(false);
                     }
                 }
                 
@@ -2217,7 +2236,7 @@ HGFM<index_t, local_index_t>::HGFM(
                                                  tidx,
                                                  tParam.local_offset,
                                                  tParam.curr_sztot,
-                                                 tParam.snps,
+                                                 tParam.alts,
                                                  tParam.index_size,
                                                  packed,
                                                  needEntireReverse,

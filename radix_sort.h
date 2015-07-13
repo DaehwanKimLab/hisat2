@@ -113,8 +113,8 @@ void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int n
 			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
 	} else {
-		tthread::thread* threads[nthreads];
-		Params<T, index_t> params[nthreads];
+		AutoArray<tthread::thread*> threads(nthreads);
+        EList<Params<T, index_t> > params; params.resizeExact(nthreads);
 		int st = 0;
 		for(int i = 0; i < nthreads; i++) {
 			params[i].hash = hash;
@@ -130,7 +130,6 @@ void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int n
 		}
 		for(int i = 0; i < nthreads; i++) {
 			threads[i]->join();
-			delete threads[i];
 		}
 	}
 }
@@ -166,8 +165,8 @@ void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, in
 			if(index[bin] - index[bin - 1] > 1) bin_sort<T, CMP, index_t>(index[bin - 1], index[bin], hash, right_shift);
 		}
 	} else {
-		tthread::thread* threads[nthreads];
-		Params<T, index_t> params[nthreads];
+		AutoArray<tthread::thread*> threads(nthreads);
+        EList<Params<T, index_t> > params; params.resizeExact(nthreads);
 		int st = 0;
 		for(int i = 0; i < nthreads; i++) {
 			params[i].hash = hash;
@@ -184,7 +183,6 @@ void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, in
 		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
 		for(int i = 0; i < nthreads; i++) {
 			threads[i]->join();
-			delete threads[i];
 		}
 	}
 }

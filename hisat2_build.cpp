@@ -73,6 +73,9 @@ static bool justRef;
 static bool reverseEach;
 static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
+static string snp_fname;
+static string ss_fname;
+static string sv_fname;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -102,6 +105,9 @@ static void resetOptions() {
 	reverseEach    = false;
     nthreads       = 1;
     wrapper.clear();
+    snp_fname = "";
+    ss_fname = "";
+    sv_fname = "";
 }
 
 // Argument constants for getopts
@@ -119,7 +125,10 @@ enum {
     ARG_SA,
 	ARG_WRAPPER,
     ARG_LOCAL_OFFRATE,
-    ARG_LOCAL_FTABCHARS
+    ARG_LOCAL_FTABCHARS,
+    ARG_SNP,
+    ARG_SPLICESITE,
+    ARG_SV,
 };
 
 /**
@@ -159,6 +168,8 @@ static void printUsage(ostream& out) {
 	    << "    -t/--ftabchars <int>    # of chars consumed in initial lookup (default: 10)" << endl
         << "    --localoffrate <int>    SA (local) is sampled every 2^offRate BWT chars (default: 3)" << endl
         << "    --localftabchars <int>  # of chars consumed in initial lookup in a local index (default: 6)" << endl
+        << "    --snp <filename>        SNP file name" << endl
+        << "    --ss <filename>         Splice site file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
 	    << "    -q/--quiet              verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
@@ -199,6 +210,9 @@ static struct option long_options[] = {
 	{(char*)"ftabchars",      required_argument, 0,            't'},
     {(char*)"localoffrate",   required_argument, 0,            ARG_LOCAL_OFFRATE},
 	{(char*)"localftabchars", required_argument, 0,            ARG_LOCAL_FTABCHARS},
+    {(char*)"snp",            required_argument, 0,            ARG_SNP},
+    {(char*)"ss",             required_argument, 0,            ARG_SPLICESITE},
+    {(char*)"sv",             required_argument, 0,            ARG_SV},
 	{(char*)"help",           no_argument,       0,            'h'},
 	{(char*)"ntoa",           no_argument,       0,            ARG_NTOA},
 	{(char*)"justref",        no_argument,       0,            '3'},
@@ -284,6 +298,15 @@ static void parseOptions(int argc, const char **argv) {
 				printUsage(cout);
 				throw 0;
 				break;
+            case ARG_SNP:
+                snp_fname = optarg;
+                break;
+            case ARG_SPLICESITE:
+                ss_fname = optarg;
+                break;
+            case ARG_SV:
+                sv_fname = optarg;
+                break;
 			case ARG_BMAX:
 				bmax = parseNumber<TIndexOffU>(1, "--bmax arg must be at least 1");
 				bmaxMultSqrt = OFF_MASK; // don't use multSqrt
@@ -365,6 +388,8 @@ static void driver(
 	const string& infile,
 	EList<string>& infiles,
     const string& snpfile,
+    const string& ssfile,
+    const string& svfile,
 	const string& outfile,
 	bool packed,
 	int reverse)
@@ -449,6 +474,8 @@ static void driver(
                           localFtabChars,
                           nthreads,
                           snpfile,
+                          ssfile,
+                          svfile,
                           outfile,      // basename for .?.ht2 files
                           reverse == 0, // fw
                           !entireSA,    // useBlockwise
@@ -666,14 +693,8 @@ int hisat2_build(int argc, const char **argv) {
     
     // daehwan - for debugging purposes
 #if 0
-<<<<<<< HEAD
-    size_t num_elts = (size_t)6 << 30;
-    //size_t num_elts = (size_t)6 << 22;
-    clock_t prev = clock();
-=======
     size_t num_elts = (uint64_t)6 << 30;
     time_t prev = time(0);
->>>>>>> 0f5701fa34687fa5226fb6f83f9be6003b6e5c4f
     EList<size_t> elts; elts.resizeExact(num_elts); elts.fillZero();
     cout << "Num elts: " << elts.size() << "\t" << (clock() - prev) / (CLOCKS_PER_SEC / 1000) << " ms" << endl;
     prev = clock(); elts.fillZero();
@@ -776,9 +797,7 @@ int hisat2_build(int argc, const char **argv) {
 			return 1;
 		}
 		infile = argv[optind++];
-        string snpfile;
-        snpfile = argv[optind++];
-
+        
 		// Get output filename
 		if(optind >= argc) {
 			cerr << "No output file specified!" << endl;
@@ -845,7 +864,7 @@ int hisat2_build(int argc, const char **argv) {
 		{
 			Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, snpfile, outfile, false, REF_READ_FORWARD);
+                driver<SString<char> >(infile, infiles, snp_fname, ss_fname, sv_fname, outfile, false, REF_READ_FORWARD);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;

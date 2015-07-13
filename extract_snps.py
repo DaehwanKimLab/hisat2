@@ -179,7 +179,7 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
             for allele in allele_list:
                 if allele == "-" or len(allele) <= 0:
                     continue
-                if re.match('[ACGT]+', allele):
+                if re.match('^[ACGT]+$', allele):
                     snp_list.append([rs_id, classType, chr, start, end, allele])
                     insLen = len(allele)
                     if testset and insLen > 0 and insLen <= 10:
@@ -225,6 +225,12 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
                 assert classType1 == "insertion" and classType2 == "deletion"
                 return 1
 
+        if len(allele1) != len(allele2):
+            if len(allele1) < len(allele2):
+                return -1
+            else:
+                return 1
+            
         if allele1 < allele2:
             return -1
         elif allele2 < allele1:

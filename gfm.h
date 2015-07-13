@@ -627,7 +627,7 @@ public:
 
 	/// Construct an Ebwt from the given input file
 	GFM(const string& in,
-        SNPDB<index_t>* snpdb,
+        ALTDB<index_t>* altdb,
         int needEntireReverse,
         bool fw,
         int32_t overrideOffRate, // = -1,
@@ -680,10 +680,10 @@ public:
             assert_eq(_overrideOffRate, _gh._offRate);
         }
 
-        // Read SNPs
-        EList<SNP<index_t> >& snps = snpdb->snps();
-        EList<string>& snpnames = snpdb->snpnames();
-        snps.clear(); snpnames.clear();
+        // Read ALTs
+        EList<ALT<index_t> >& alts = altdb->alts();
+        EList<string>& altnames = altdb->altnames();
+        alts.clear(); altnames.clear();
         string in7Str = in + ".7." + gfm_ext;
         string in8Str = in + ".8." + gfm_ext;
         
@@ -694,35 +694,35 @@ public:
         }
         
         readU32(in7, this->toBe());
-        index_t numSnps = readIndex<index_t>(in7, this->toBe());
-        if(numSnps > 0) {
+        index_t numAlts = readIndex<index_t>(in7, this->toBe());
+        if(numAlts > 0) {
             while(!in7.eof()) {
-                snps.expand();
-                snps.back().read(in7, this->toBe());
-                if(snps.size() == numSnps) break;
+                alts.expand();
+                alts.back().read(in7, this->toBe());
+                if(alts.size() == numAlts) break;
             }
         }
-        assert_eq(snps.size(), numSnps);
-        in7.close();
+        assert_eq(alts.size(), numAlts);
         
         if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
         ifstream in8(in8Str.c_str(), ios::binary);
         if(!in8.good()) {
             cerr << "Could not open index file " << in8Str.c_str() << endl;
         }
-        readU32(in8, this->toBe());
-        numSnps = readIndex<index_t>(in8, this->toBe());
-        assert_eq(snps.size(), numSnps);
-        if(numSnps > 0) {
-            while(!in8.eof()) {
-                snpnames.expand();
-                in8 >> snpnames.back();
-                if(snpnames.size() == numSnps) break;
-            }
-            assert_eq(snpnames.size(), numSnps);
-        }
-        in8.close();
         
+        readU32(in8, this->toBe());
+        numAlts = readIndex<index_t>(in8, this->toBe());
+        if(numAlts > 0) {
+            while(!in8.eof()) {
+                altnames.expand();
+                in8 >> altnames.back();
+                if(altnames.size() == numAlts) break;
+            }
+            assert_eq(altnames.size(), numAlts);
+        }
+        
+        in7.close();
+        in8.close();
         assert(repOk());
 	}
 	
@@ -779,6 +779,8 @@ public:
 		int32_t ftabChars,
         int nthreads,
         const string& snpfile,
+        const string& ssfile,
+        const string& svfile,
 		const string& outfile,   // base filename for GFM files
 		bool fw,
 		bool useBlockwise,
@@ -835,6 +837,8 @@ public:
 		initFromVector<TStr>(
 							 s,
                              snpfile,
+                             ssfile,
+                             svfile,
 							 is,
 							 szs,
 							 sztot,
@@ -1062,6 +1066,8 @@ public:
 	template <typename TStr>
 	void initFromVector(TStr& s,
                         const string& snpfile,
+                        const string& ssfile,
+                        const string& svfile,
 						EList<FileBuf*>& is,
 	                    EList<RefRecord>& szs,
 	                    index_t sztot,
@@ -1106,9 +1112,9 @@ public:
 			}
             
             {
-                Timer timer(cerr, "  Time to read SNPs: ", _verbose);
-                _snps.clear();
-                _snpnames.clear();
+                Timer timer(cerr, "  Time to read SNPs and splice sites: ", _verbose);
+                _alts.clear();
+                _altnames.clear();
                 EList<pair<index_t, index_t> > chr_szs;
                 index_t tmp_len = 0;
                 for(index_t i = 0; i < szs.size(); i++) {
@@ -1120,131 +1126,6 @@ public:
                     tmp_len += (index_t)szs[i].len;
                 }
                 
-                ifstream snp_file(snpfile.c_str(), ios::in);
-                if(!snp_file.is_open()) {
-                    cerr << "Error: could not open "<< snpfile.c_str() << endl;
-                    throw 1;
-                }
-                
-                while(!snp_file.eof()) {
-                    // rs73387790	single	22:20000001-21000000	145	A
-                    string snp_id;
-                    snp_file >> snp_id;
-                    if(snp_id.empty() || snp_id[0] == '#') {
-                        string line;
-                        getline(snp_file, line);
-                        continue;
-                    }
-                    string type, chr;
-                    index_t pos;
-                    char snp_ch;
-                    string ins_seq;
-                    index_t del_len;
-                    snp_file >> type >> chr >> pos;
-                    if(type == "single") {
-                        snp_file >> snp_ch;
-                    } else if(type == "deletion") {
-                        snp_file >> del_len;
-                    } else if(type == "insertion") {
-                        snp_file >> ins_seq;
-                    }
-                    
-                    index_t chr_idx = 0;
-                    for(; chr_idx < _refnames.size(); chr_idx++) {
-                        if(chr == _refnames[chr_idx])
-                            break;
-                    }
-                    if(chr_idx >= _refnames.size()) continue;
-                    assert_eq(chr_szs.size(), _refnames.size());
-                    assert_lt(chr_idx, chr_szs.size());
-                    pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
-                    const index_t sofar_len = tmp_pair.first;
-                    const index_t szs_idx = tmp_pair.second;
-                    bool inside_Ns = false;
-                    index_t add_pos = 0;
-                    assert(szs[szs_idx].first);
-                    for(index_t i = szs_idx; i < szs.size(); i++) {
-                        if(i != szs_idx && szs[i].first) break;
-                        if(pos < szs[i].off) {
-                            inside_Ns = true;
-                            break;
-                        } else {
-                            pos -= szs[i].off;
-                            if(pos < szs[i].len) {
-                                break;
-                            } else {
-                                pos -= szs[i].len;
-                                add_pos += szs[i].len;
-                            }
-                        }
-                    }
-                    
-                    if(inside_Ns) continue;
-                    pos = sofar_len + add_pos + pos;
-                    if(chr_idx + 1 < chr_szs.size()) {
-                        if(pos >= chr_szs[chr_idx + 1].first) continue;
-                    } else {
-                        if(pos >= jlen) continue;
-                    }
-                    
-                    _snps.expand();
-                    SNP<index_t>& snp = _snps.back();
-                    snp.pos = pos;
-                    if(type == "single") {
-                        snp.type = SNP_SGL;
-                        snp_ch = toupper(snp_ch);
-                        if(snp_ch != 'A' && snp_ch != 'C' && snp_ch != 'G' && snp_ch != 'T') {
-                            _snps.pop_back();
-                            continue;
-                        }
-                        uint64_t bp = asc2dna[(int)snp_ch];
-                        assert_lt(bp, 4);
-                        if(bp == s[pos]) {
-                            cerr << "Error: single type (" << "ACGTN"[(int)s[pos]]
-                                 << ") should have a different base than " << "ACGTN"[(int)s[pos]]
-                                 << " (" << snp_id << ")" << endl;
-                            throw 1;
-                        }
-                        snp.len = 1;
-                        snp.seq = bp;
-                    } else if(type == "deletion") {
-                        snp.type = SNP_DEL;
-                        snp.len = del_len;
-                        snp.seq = 0;
-                    } else if(type == "insertion") {
-                        snp.type = SNP_INS;
-                        snp.len = ins_seq.size();
-                        if(snp.len > sizeof(uint64_t) * 4) {
-                            _snps.pop_back();
-                            continue;
-                        }
-                        snp.seq = 0;
-                        for(size_t i = 0; i < ins_seq.size(); i++) {
-                            char ch = toupper(ins_seq[i]);
-                            if(ch != 'A' && ch != 'C' && ch != 'G' && ch != 'T') {
-                                _snps.pop_back();
-                                continue;
-                            }
-                            uint64_t bp = asc2dna[(int)ch];
-                            assert_lt(bp, 4);
-                            snp.seq = (snp.seq << 2) | bp;
-                        }
-                    } else {
-                        cerr << "Error: unknown snp type " << type << endl;
-                        throw 1;
-                    }
-                    
-                    _snpnames.push_back(snp_id);
-                    assert_eq(_snps.size(), _snpnames.size());
-                }
-                snp_file.close();
-                assert_eq(_snps.size(), _snpnames.size());
-                
-                // Sort SNPs based on positions
-                if(_snps.size() > 1) {
-                    sort(_snps.begin(), _snps.end());
-                }
-      
                 // Write SNPs into 7.ht2 and 8.ht2
                 string file7 = outfile + ".7." + gfm_ext;
                 string file8 = outfile + ".8." + gfm_ext;
@@ -1254,8 +1135,8 @@ public:
                 ofstream fout7(file7.c_str(), ios::binary);
                 if(!fout7.good()) {
                     cerr << "Could not open index file for writing: \"" << file7.c_str() << "\"" << endl
-                         << "Please make sure the directory exists and that permissions allow writing by" << endl
-                         << "HISAT2." << endl;
+                    << "Please make sure the directory exists and that permissions allow writing by" << endl
+                    << "HISAT2." << endl;
                     throw 1;
                 }
                 // Open output stream for the '.8.gfm_ext' file which will
@@ -1263,18 +1144,259 @@ public:
                 ofstream fout8(file8.c_str(), ios::binary);
                 if(!fout8.good()) {
                     cerr << "Could not open index file for writing: \"" << file8.c_str() << "\"" << endl
-                         << "Please make sure the directory exists and that permissions allow writing by" << endl
-                         << "HISAT2." << endl;
+                    << "Please make sure the directory exists and that permissions allow writing by" << endl
+                    << "HISAT2." << endl;
                     throw 1;
                 }
                 writeIndex<int32_t>(fout7, 1, this->toBe()); // endianness sentinel
                 writeIndex<int32_t>(fout8, 1, this->toBe()); // endianness sentinel
-                writeIndex<int32_t>(fout7, _snps.size(), this->toBe());
-                writeIndex<int32_t>(fout8, _snps.size(), this->toBe());
-                for(index_t i = 0; i < _snps.size(); i++) {
-                    _snps[i].write(fout7, this->toBe());
-                    fout8 << _snpnames[i] << endl;
+                
+                if(snpfile != "") {
+                    ifstream snp_file(snpfile.c_str(), ios::in);
+                    if(!snp_file.is_open()) {
+                        cerr << "Error: could not open "<< snpfile.c_str() << endl;
+                        throw 1;
+                    }
+                    
+                    while(!snp_file.eof()) {
+                        // rs73387790	single	22:20000001-21000000	145	A
+                        string snp_id;
+                        snp_file >> snp_id;
+                        if(snp_id.empty() || snp_id[0] == '#') {
+                            string line;
+                            getline(snp_file, line);
+                            continue;
+                        }
+                        string type, chr;
+                        index_t pos;
+                        char snp_ch;
+                        string ins_seq;
+                        index_t del_len;
+                        snp_file >> type >> chr >> pos;
+                        if(type == "single") {
+                            snp_file >> snp_ch;
+                        } else if(type == "deletion") {
+                            snp_file >> del_len;
+                        } else if(type == "insertion") {
+                            snp_file >> ins_seq;
+                        }
+                        
+                        index_t chr_idx = 0;
+                        for(; chr_idx < _refnames.size(); chr_idx++) {
+                            if(chr == _refnames[chr_idx])
+                                break;
+                        }
+                        if(chr_idx >= _refnames.size()) continue;
+                        assert_eq(chr_szs.size(), _refnames.size());
+                        assert_lt(chr_idx, chr_szs.size());
+                        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+                        const index_t sofar_len = tmp_pair.first;
+                        const index_t szs_idx = tmp_pair.second;
+                        bool inside_Ns = false;
+                        index_t add_pos = 0;
+                        assert(szs[szs_idx].first);
+                        for(index_t i = szs_idx; i < szs.size(); i++) {
+                            if(i != szs_idx && szs[i].first) break;
+                            if(pos < szs[i].off) {
+                                inside_Ns = true;
+                                break;
+                            } else {
+                                pos -= szs[i].off;
+                                if(pos < szs[i].len) {
+                                    break;
+                                } else {
+                                    pos -= szs[i].len;
+                                    add_pos += szs[i].len;
+                                }
+                            }
+                        }
+                        
+                        if(inside_Ns) continue;
+                        pos = sofar_len + add_pos + pos;
+                        if(chr_idx + 1 < chr_szs.size()) {
+                            if(pos >= chr_szs[chr_idx + 1].first) continue;
+                        } else {
+                            if(pos >= jlen) continue;
+                        }
+                        
+                        _alts.expand();
+                        ALT<index_t>& snp = _alts.back();
+                        snp.pos = pos;
+                        if(type == "single") {
+                            snp.type = ALT_SNP_SGL;
+                            snp_ch = toupper(snp_ch);
+                            if(snp_ch != 'A' && snp_ch != 'C' && snp_ch != 'G' && snp_ch != 'T') {
+                                _alts.pop_back();
+                                continue;
+                            }
+                            uint64_t bp = asc2dna[(int)snp_ch];
+                            assert_lt(bp, 4);
+                            if(bp == s[pos]) {
+                                cerr << "Error: single type (" << "ACGTN"[(int)s[pos]]
+                                << ") should have a different base than " << "ACGTN"[(int)s[pos]]
+                                << " (" << snp_id << ")" << endl;
+                                throw 1;
+                            }
+                            snp.len = 1;
+                            snp.seq = bp;
+                        } else if(type == "deletion") {
+                            snp.type = ALT_SNP_DEL;
+                            snp.len = del_len;
+                            snp.seq = 0;
+                        } else if(type == "insertion") {
+                            snp.type = ALT_SNP_INS;
+                            snp.len = ins_seq.size();
+                            if(snp.len > sizeof(snp.seq) * 4) {
+                                _alts.pop_back();
+                                continue;
+                            }
+                            snp.seq = 0;
+                            bool failed = false;
+                            for(size_t i = 0; i < ins_seq.size(); i++) {
+                                char ch = toupper(ins_seq[i]);
+                                if(ch != 'A' && ch != 'C' && ch != 'G' && ch != 'T') {
+                                    failed = true;
+                                    break;
+                                }
+                                uint64_t bp = asc2dna[(int)ch];
+                                assert_lt(bp, 4);
+                                snp.seq = (snp.seq << 2) | bp;
+                            }
+                            if(failed) {
+                                _alts.pop_back();
+                                break;
+                            }
+                        } else {
+                            cerr << "Error: unknown snp type " << type << endl;
+                            throw 1;
+                        }
+                        _altnames.push_back(snp_id);
+                        assert_eq(_alts.size(), _altnames.size());
+                    }
+                    snp_file.close();
+                    assert_eq(_alts.size(), _altnames.size());
                 }
+                
+                if(ssfile != "") {
+                    ifstream ss_file(ssfile.c_str(), ios::in);
+                    if(!ss_file.is_open()) {
+                        cerr << "Error: could not open "<< ssfile.c_str() << endl;
+                        throw 1;
+                    }
+
+                    while(!ss_file.eof()) {
+                        // 22	16062315	16062810	+
+                        string chr;
+                        ss_file >> chr;
+                        if(chr.empty() || chr[0] == '#') {
+                            string line;
+                            getline(ss_file, line);
+                            continue;
+                        }
+                        index_t left, right;
+                        char strand;
+                        ss_file >> left >> right >> strand;
+                        // Convert exonic position to intronic position
+                        left += 1; right -= 1;
+                        if(left >= right) continue;
+                        index_t chr_idx = 0;
+                        for(; chr_idx < _refnames.size(); chr_idx++) {
+                            if(chr == _refnames[chr_idx])
+                                break;
+                        }
+                        if(chr_idx >= _refnames.size()) continue;
+                        assert_eq(chr_szs.size(), _refnames.size());
+                        assert_lt(chr_idx, chr_szs.size());
+                        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+                        const index_t sofar_len = tmp_pair.first;
+                        const index_t szs_idx = tmp_pair.second;
+                        bool inside_Ns = false;
+                        index_t add_pos = 0;
+                        assert(szs[szs_idx].first);
+                        for(index_t i = szs_idx; i < szs.size(); i++) {
+                            if(i != szs_idx && szs[i].first) break;
+                            if(left < szs[i].off) {
+                                inside_Ns = true;
+                                break;
+                            } else {
+                                left -= szs[i].off;
+                                right -= szs[i].off;
+                                if(left < szs[i].len) {
+                                    if(right >= szs[i].len) {
+                                        inside_Ns = true;
+                                    }
+                                    break;
+                                } else {
+                                    left -= szs[i].len;
+                                    right -= szs[i].len;
+                                    add_pos += szs[i].len;
+                                }
+                            }
+                        }
+                        if(inside_Ns) continue;
+                        left = sofar_len + add_pos + left;
+                        right = sofar_len + add_pos + right;
+                        if(chr_idx + 1 < chr_szs.size()) {
+                            if(right >= chr_szs[chr_idx + 1].first) continue;
+                        } else {
+                            if(right >= jlen) continue;
+                        }
+                        _alts.expand();
+                        ALT<index_t>& alt = _alts.back();
+                        alt.type = ALT_SPLICESITE;
+                        alt.left = left;
+                        alt.right = right;
+                        alt.fw = (strand == '+' ? 1 : 0);
+                        _altnames.push_back("ss");
+                    }
+                    ss_file.close();
+                    assert_eq(_alts.size(), _altnames.size());
+                }
+                
+                // Todo - implement structural variations
+                if(svfile != "") {
+                    cerr << "Warning: SV option is not implemented "<< svfile.c_str() << endl;
+                }
+                
+                // Sort SNPs and Splice Sites based on positions
+                if(_alts.size() > 1) {
+                    assert_eq(_alts.size(), _altnames.size());
+                    EList<pair<ALT<index_t>, index_t> > buf; buf.resize(_alts.size());
+                    EList<string> buf2; buf2.resize(_alts.size());
+                    for(size_t i = 0; i < _alts.size(); i++) {
+                        buf[i].first = _alts[i];
+                        buf[i].second = i;
+                        buf2[i] = _altnames[i];
+                    }
+                    buf.sort();
+                    for(size_t i = 0; i < _alts.size(); i++) {
+                        _alts[i] = buf[i].first;
+                        _altnames[i] = buf2[buf[i].second];
+                    }
+#ifndef NDEBUG
+                    for(size_t i = 0; i < _alts.size(); i++) {
+                        if(i + 1 < _alts.size()) {
+                            assert(_alts[i] < _alts[i+1]);
+                        }
+                        const ALT<index_t>& alt = _alts[i];
+                        if(alt.snp()) {
+                            assert(_altnames[i] != "");
+                        } else if(alt.splicesite()) {
+                            assert(_altnames[i] == "ss");
+                        } else {
+                            assert(false);
+                        }
+                    }
+#endif
+                }
+                
+                writeIndex<int32_t>(fout7, _alts.size(), this->toBe());
+                writeIndex<int32_t>(fout8, _alts.size(), this->toBe());
+                for(index_t i = 0; i < _alts.size(); i++) {
+                    _alts[i].write(fout7, this->toBe());
+                    fout8 << _altnames[i] << endl;
+                }
+                
                 fout7.close();
                 fout8.close();
             }
@@ -1367,7 +1489,7 @@ public:
 #endif
 			iter++;
 			try {
-                if(_snps.empty()) {
+                if(_alts.empty()) {
                     {
                         VMSG_NL("  Doing ahead-of-time memory usage test");
                         // Make a quick-and-dirty attempt to force a bad_alloc iff
@@ -1400,9 +1522,8 @@ public:
                     assert_eq(bsa.size(), s.length()+1);
                     VMSG_NL("Converting suffix-array elements to index image");
                     buildToDisk(bsa, s, out1, out2);
-                } else {
-                    
-                    RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _snps, outfile, _nthreads, verbose);
+                } else {                    
+                    RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, outfile, _nthreads, verbose);
                     PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads, verbose);
 
                     if(verbose) { cerr << "Generating edges... " << endl; }
@@ -1508,8 +1629,8 @@ public:
 	inline const index_t* plen() const    { return _plen.get(); }
 	inline const index_t* rstarts() const { return _rstarts.get(); }
 	inline const uint8_t* gfm() const     { return _gfm.get(); }
-    inline const EList<SNP<index_t> >& snps() const  { return _snps; }
-    inline const EList<string>& snpnames() const     { return _snps; }
+    inline const EList<ALT<index_t> >& alts() const  { return _alts; }
+    inline const EList<string>& altnames() const     { return _altnames; }
 	bool        toBe() const         { return _toBigEndian; }
 	bool        verbose() const      { return _verbose; }
 	bool        sanityCheck() const  { return _sanity; }
@@ -3203,7 +3324,7 @@ public:
             assert_lt(_zOffs[i], gh._gbwtLen);
         }
 		assert_geq(_nFrag, _nPat);
-        assert_eq(_snps.size(), _snpnames.size());
+        assert_eq(_alts.size(), _altnames.size());
 		return true;
 	}
 
@@ -3287,8 +3408,8 @@ public:
 	static const int      default_ftabChars = 10;
 	static const bool     default_bigEndian = false;
     
-    EList<SNP<index_t> >  _snps;
-    EList<string>         _snpnames;
+    EList<ALT<index_t> >  _alts;
+    EList<string>         _altnames;
 
 protected:
 
@@ -3745,7 +3866,7 @@ void GFM<index_t>::buildToDisk(
 		for(int bpi = 0; bpi < 4; bpi++, si++)
 #endif
 		{
-			int gbwtChar; // one of A, C, G, T, and $
+			int gbwtChar; // one of A, C, G, T, and Z
             int F, M;     // either 0 or 1
             index_t pos;  // pos on joined string
             bool count = true;
@@ -4019,6 +4140,8 @@ void GFM<index_t>::buildToDisk(
             assert_lt(eftabCur*2+1, eftabLen);
             eftab[eftabCur*2] = lo;
             eftab[eftabCur*2+1] = hi;
+            // one node can be shared, and one node can have at most four incoming edges
+            assert_leq(lo, hi + 4);
             ftab[i] = (eftabCur++) ^ (index_t)INDEX_MAX; // insert pointer into eftab
             assert_eq(lo, GFM<index_t>::ftabLo(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
             assert_eq(hi, GFM<index_t>::ftabHi(ftab.ptr(), eftab.ptr(), gbwtLen, ftabLen, eftabLen, i));
@@ -5130,7 +5253,7 @@ void GFM<index_t>::readIntoMemory(
             }
             for(index_t i = 0; i < gh->_eftabLen; i++) {
                 if(i > 0 && this->eftab()[i] > 0) {
-                    assert_geq(this->eftab()[i] + 1, this->eftab()[i-1]);
+                    assert_geq(this->eftab()[i] + 4, this->eftab()[i-1]);
                 } else if(i > 0 && this->eftab()[i-1] == 0) {
                     assert_eq(0, this->eftab()[i]);
                 }

@@ -28,7 +28,7 @@
 #include "simple_func.h"
 #include "outq.h"
 #include <utility>
-#include "snp.h"
+#include "alt.h"
 #include "splice_site.h"
 
 // Forward decl
@@ -603,12 +603,12 @@ public:
                      OutputQueue& oq,
                      const StrList& refnames,
                      bool quiet,
-                     SNPDB<index_t>* snpdb = NULL,
+                     ALTDB<index_t>* altdb = NULL,
                      SpliceSiteDB* ssdb = NULL) :
     oq_(oq),
     refnames_(refnames),
     quiet_(quiet),
-    snpdb_(snpdb),
+    altdb_(altdb),
     spliceSiteDB_(ssdb)
 	{ }
 
@@ -877,7 +877,7 @@ protected:
 	const StrList&     refnames_;     // reference names
 	bool               quiet_;        // true -> don't print alignment stats at the end
 	ReportingMetrics   met_;          // global repository of reporting metrics
-    SNPDB<index_t>*    snpdb_;
+    ALTDB<index_t>*    altdb_;
     SpliceSiteDB*      spliceSiteDB_; //
 };
 
@@ -1350,13 +1350,13 @@ public:
                const SamConfig<index_t>& samc, // settings & routines for SAM output
                const StrList&   refnames,      // reference names
                bool             quiet,         // don't print alignment summary at end
-               SNPDB<index_t>*  snpdb = NULL,
-               SpliceSiteDB*    ssdb = NULL) :
+               ALTDB<index_t>*  altdb = NULL,
+               SpliceSiteDB*    ssdb  = NULL) :
 		AlnSink<index_t>(
                          oq,
                          refnames,
                          quiet,
-                         snpdb,
+                         altdb,
                          ssdb),
     samc_(samc)
 	{ }
@@ -3015,7 +3015,7 @@ void AlnSinkSam<index_t>::appendMate(
 								   prm,         // per-read metrics
 								   sc,          // scoring scheme
 								   mapqInps,    // inputs to MAPQ calculation
-                                   this->snpdb_);
+                                   this->altdb_);
 	} else {
 		samc_.printEmptyOptFlags(
 								 o,           // output buffer
