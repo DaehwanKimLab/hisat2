@@ -1427,9 +1427,8 @@ private:
 
     // Can create an index by using key.second in PathNodes.
     void sortNodesByFrom() {
-    	past_nodes.resizeExact(nodes.size());
-    	bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(
-    				nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeFrom, max_from, nthreads);
+    	bin_sort_no_copy<PathNode, PathNodeFromCmp, index_t>(
+    				nodes.begin(), nodes.end(), &PathNodeFrom, max_from, nthreads);
     }
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
 
@@ -1871,41 +1870,49 @@ void PathGraph<index_t>::printInfo()
 template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
+	//entering we have:
+	// nodes - sorted by rank
+	// edges - empty
+	// base.nodes - almost sorted by from/to
+	// base.edges - almost sorted by from/to
+
+	//need to join:
+	// nodes.from -> base.nodes[]
+	// nodes.from -> base.edges.to
+	// nodes.from -> edges.from
+
 	if(!sorted) return false;
 
 	time_t indiv = time(0);
 	time_t overall = time(0);
 
-	//build hash table of base.edges binned by .to
-	//query nodes against in rank order
-	//put into the correct bin based on edge.label
-
-	base.sortEdgesByTo();                                                                  //fully parallel
-
-	if(verbose) cerr << "BUILD TO_TABLE: " << time(0) - indiv << endl;
-	indiv = time(0);
-
-	//Build to_index
-
-
-	if(verbose) cerr << "BUILD TO_INDEX: " << time(0) - indiv << endl;
-	indiv = time(0);
-
-	//sort nodes by from before we query against hash_table in order to improve cache performance
-	//copy so that we don't have to re-sort by rank to do next step
-	// later maybe change to only sort locally? Don't really need whole thing sorted to get better
-	// cache performance
-	sortNodesByFrom();                                                                      //fully parallel
-	EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();      //serial, not worth it?
-	for(index_t i = 0; i < past_nodes.size(); i++) {
-		from_index[past_nodes[i].from + 1] = i + 1;
-	}
-
+	//sort nodes by from using in-place radix sort
+	//could switch to out of place and get speed increase, if have space
+	sortNodesByFrom();
 
 	if(verbose) cerr << "Sort nodes by from: "  << time(0) - indiv << endl;
 	indiv = time(0);
 
-	// Now query against hash-table
+	//replace nodes.to with genomic position
+	//fast because both roughly ordered by from
+	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+		node->to = base.nodes[node->from].value;
+	}
+
+	if(verbose) cerr << "NODE.TO -> GENOME POS: "  << time(0) - indiv << endl;
+	indiv = time(0);
+
+	// build an index for nodes
+	EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();
+	for(index_t i = 0; i < nodes.size(); i++) {
+		from_index[nodes[i].from + 1] = i + 1;
+	}
+
+	if(verbose) cerr << "BUILD FROM_INDEX "  << time(0) - indiv << endl;
+	indiv = time(0);
+
+	// Now join nodes.from to edges.to
+	// fast because base.edges roughly sorted by to
 
 	//count number of edges                                                                 //serial, need to parallelize
 	index_t label_index[6] = {0};
@@ -1930,8 +1937,10 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 		tot += label_index[i];
 		label_index[i] =  tot - label_index[i];
 	}
+
 	if(verbose) cerr << "COUNT NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
+
 	edges.resizeExact(tot);
 	for(typename RefGraph<index_t>::Edge* edge = base.edges.begin(); edge != base.edges.end(); edge++) {
 		char curr_label = base.nodes[edge->from].label;
@@ -1946,7 +1955,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 			default: assert(false); throw 1;
 		}
 		for(index_t j = from_index[edge->to]; j < from_index[edge->to + 1]; j++) {
-			edges[label_index[curr_label_index]++] = PathEdge(edge->from, past_nodes[j].key.first, curr_label);
+			edges[label_index[curr_label_index]++] = PathEdge(edge->from, nodes[j].key.first, curr_label);
 		}
 	}
 
@@ -1964,6 +1973,11 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	sort(edges.begin() + label_index[4], edges.begin() + label_index[5]);
 
 	if(verbose) cerr << "SORTED NEW EDGES: " << time(0) - indiv << endl;
+	indiv = time(0);
+
+	bin_sort_no_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), &PathNodeKey, ranks, nthreads);
+
+	if(verbose) cerr << "RE-SORTED NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
 #ifndef NDEBUG
@@ -2019,12 +2033,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             edge->from = node - nodes.begin(); edge++;
             node->key.first++;
         } else {
-            node->to = base.nodes[node->from].value;
             node++; node->key.first = 0;
         }
-    }
-    if(node != nodes.end()) {
-        node->to = base.nodes[node->from].value;
     }
 
     if(verbose) cerr << "PROCESS EDGES: " << time(0) - indiv << endl;
