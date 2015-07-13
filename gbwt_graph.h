@@ -1908,7 +1908,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	time_t indiv = time(0);
 	time_t overall = time(0);
 
-	//sort nodes by from using in-place radix sort
+	//sort nodes by .from using in-place radix sort
 	//could switch to out of place and get speed increase, if have space
 	sortNodesByFrom();
 
@@ -1984,12 +1984,11 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	if(verbose) cerr << "MADE NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
-	// know breakpoints
-
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, edges.size());
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, edges.size());
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, edges.size());
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, edges.size());
+	// could switch to doing each
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin(), edges.begin() + label_index[0], &PathEdgeTo, edges.size(), nthreads);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[0], edges.begin() + label_index[1], &PathEdgeTo, edges.size(), nthreads);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[1], edges.begin() + label_index[2], &PathEdgeTo, edges.size(), nthreads);
+	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + label_index[2], edges.begin() + label_index[3], &PathEdgeTo, edges.size(), nthreads);
 
 	sort(edges.begin() + label_index[3], edges.begin() + label_index[4]);
 	sort(edges.begin() + label_index[4], edges.begin() + label_index[5]);
