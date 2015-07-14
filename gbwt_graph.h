@@ -1568,12 +1568,13 @@ template <typename index_t>
 void PathGraph<index_t>::makeFromRef(RefGraph<index_t>& base) {
 	// Create a path node per edge with a key set to from node's label
 	temp_nodes = base.edges.size() + 1;
-	max_from = temp_nodes + 2;
+	max_from = 0;
 	nodes.reserveExact(temp_nodes);
 	for(index_t i = 0; i < base.edges.size(); i++) {
 		const typename RefGraph<index_t>::Edge& e = base.edges[i];
 		nodes.expand();
 		nodes.back().from = e.from;
+		if(e.from > max_from) max_from = e.from;
 		nodes.back().to = e.to;
 
 		switch(base.nodes[e.from].label) {
@@ -1602,8 +1603,8 @@ void PathGraph<index_t>::makeFromRef(RefGraph<index_t>& base) {
 	assert_eq(base.nodes[base.lastNode].label, 'Z');
 	nodes.expand();
 	nodes.back().from = nodes.back().to = base.lastNode;
+	if(base.lastNode > max_from) max_from = base.lastNode;
 	nodes.back().key = pair<index_t, index_t>(5, 0);
-
 	printInfo();
 }
 
@@ -1612,7 +1613,7 @@ void PathGraph<index_t>::generationOne() {
 	generation++;
 	// first count where to start each from value
 	EList<index_t> from_index;
-	from_index.resizeExact(max_from + 1);
+	from_index.resizeExact(max_from + 2);
 	from_index.fillZero();
 	//Build from_index
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
@@ -1620,7 +1621,7 @@ void PathGraph<index_t>::generationOne() {
 	}
 	index_t tot = from_index[0];
 	from_index[0] = 0;
-	for(index_t i = 1; i < max_from + 1; i++) {
+	for(index_t i = 1; i < from_index.size(); i++) {
 		tot += from_index[i];
 		from_index[i] = tot - from_index[i];
 	}
@@ -1666,7 +1667,7 @@ void PathGraph<index_t>::earlyGeneration() {
 	//here past_nodes is already sorted by .from
 	// first count where to start each from value
 	EList<index_t> from_index;
-	from_index.resizeExact(max_from + 1);
+	from_index.resizeExact(max_from + 2);
 	from_index.fillZero();
 
 	//Build from_index
@@ -1705,7 +1706,7 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	// first count where to start each from value
 	time_t start = time(0);
 	EList<index_t> from_index;
-	from_index.resizeExact(max_from + 1);
+	from_index.resizeExact(max_from + 2);
 	from_index.fillZero();
 	if(verbose) cerr << "ALLOCATED FROM_INDEX: " << time(0) - start << endl;
 	start = time(0);
@@ -1741,7 +1742,11 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	past_nodes.resizeExact(nodes.size());
 	if(verbose) cerr << "RESIZE NODES: " << time(0) - start << endl;
 	start = time(0);
-	bin_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, (index_t)-1, nthreads);
+	//max_rank always corresponds to repeated Z's
+	// Z is mapped to 0x101
+	// therefore max rank = 0x101101101101101101101101 = (101) 8 times
+	index_t max_rank = 11983725;
+	bin_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, max_rank, nthreads);
 	if(verbose) cerr << "SORT NODES: " << time(0) - start << endl;
 	start = time(0);
 	nodes.swap(past_nodes);
@@ -1770,7 +1775,7 @@ void PathGraph<index_t>::lateGeneration() {
 	indiv = time(0);
 
 	//Build from_index
-	EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();
+	EList<index_t> from_index; from_index.resizeExact(max_from + 2); from_index.fillZero();
 	for(index_t i = 0; i < past_nodes.size(); i++) {
 		from_index[from_table[i].from + 1] = i + 1;
 	}
@@ -2004,7 +2009,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	indiv = time(0);
 
 	// build an index for nodes
-	EList<index_t> from_index; from_index.resizeExact(max_from + 1); from_index.fillZero();
+	EList<index_t> from_index; from_index.resizeExact(max_from + 2); from_index.fillZero();
 	for(index_t i = 0; i < nodes.size(); i++) {
 		from_index[nodes[i].from + 1] = i + 1;
 	}
