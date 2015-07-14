@@ -1628,8 +1628,6 @@ void PathGraph<index_t>::generationOne() {
 
 	// use past_nodes as from_table
 	past_nodes.resizeExact(nodes.size());
-	past_nodes.fillZero();
-
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		past_nodes[from_index[node->from]++] = *node;
 	}
