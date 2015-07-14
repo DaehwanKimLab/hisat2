@@ -1759,16 +1759,17 @@ void PathGraph<index_t>::createNewNodesCounter(void* vp) {
 	CreateNewNodesParams* params = (CreateNewNodesParams*)vp;
 	PathNode*        st             = params->st;
 	PathNode*        en             = params->en;
-	index_t&         sub_temp_nodes = *(params->sub_temp_nodes);
 	EList<index_t>&  from_index     = *(params->from_index);
 
+	index_t count = 0;
 	for(PathNode* node = st; node != en; node++) {
 		if(node->isSorted()) {
-			sub_temp_nodes++;
+			count++;
 		} else {
-			sub_temp_nodes += from_index[node->to + 1] - from_index[node->to];
+			count += from_index[node->to + 1] - from_index[node->to];
 		}
 	}
+	*(params->sub_temp_nodes) = count;
 }
 template <typename index_t>
 void PathGraph<index_t>::createNewNodesMaker(void* vp) {
