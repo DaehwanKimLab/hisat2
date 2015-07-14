@@ -1347,25 +1347,24 @@ private:
     static void createCombined(void* vp);
     
     struct CreateNewNodesParams {
-    	index_t        st;
-    	index_t        en;
+    	PathNode*        st;
+    	PathNode*        en;
+    	PathNode*        curr;
     	index_t*         sub_temp_nodes;
     	EList<index_t>*  from_index;
     	EList<PathNode>* from_table;
-    	PathGraph<index_t>*       graph;
     };
     static void createNewNodesCounter(void* vp);
     static void createNewNodesMaker(void* vp);
     
     struct GenEdgesParams {
-    	index_t     st;
-    	index_t     en;
+    	typename RefGraph<index_t>::Edge*     st;
+    	typename RefGraph<index_t>::Edge*     en;
 		index_t*                              label_index;
 		EList<index_t>*                       from_index;
 		EList<PathNode>*                      nodes;
 		EList<PathEdge>*                      edges;
-		RefGraph<index_t>* ref;
-		PathGraph<index_t>* graph;
+		EList<typename RefGraph<index_t>::Node>* ref_nodes;
     };
     static void generateEdgesCounter(void* vp);
     static void generateEdgesMaker(void* vp);
@@ -1758,12 +1757,12 @@ void PathGraph<index_t>::firstPruneGeneration() {
 template <typename index_t>
 void PathGraph<index_t>::createNewNodesCounter(void* vp) {
 	CreateNewNodesParams* params = (CreateNewNodesParams*)vp;
-	index_t        st             = params->st;
-	index_t        en             = params->en;
+	PathNode*        st             = params->st;
+	PathNode*        en             = params->en;
 	index_t&         sub_temp_nodes = *(params->sub_temp_nodes);
 	EList<index_t>&  from_index     = *(params->from_index);
-	PathGraph<index_t>& graph = *(params->graph);
-	for(PathNode* node = graph.past_nodes.begin() + st; node != graph.past_nodes.begin() + en; node++) {
+
+	for(PathNode* node = st; node != en; node++) {
 		if(node->isSorted()) {
 			sub_temp_nodes++;
 		} else {
@@ -1774,21 +1773,20 @@ void PathGraph<index_t>::createNewNodesCounter(void* vp) {
 template <typename index_t>
 void PathGraph<index_t>::createNewNodesMaker(void* vp) {
 	CreateNewNodesParams* params = (CreateNewNodesParams*)vp;
-	index_t        st         = params->st;
-	index_t        en         = params->en;
-	index_t&        sub_temp_nodes   = *(params->sub_temp_nodes);
+	PathNode*       st         = params->st;
+	PathNode*       en         = params->en;
+	PathNode*       curr  = params->curr;
 	EList<index_t>&  from_index = *(params->from_index);
 	EList<PathNode>& from_table = *(params->from_table);
-	PathGraph<index_t>& graph = *(params->graph);
 
-	for(PathNode* node = graph.past_nodes.begin() + st; node != graph.past_nodes.begin() + en; node++) {
+	for(PathNode* node = st; node != en; node++) {
 		if(node->isSorted()) {
-			graph.nodes[sub_temp_nodes++] = *node;
+			*curr++ = *node;
 		} else {
 			for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-				graph.nodes[sub_temp_nodes].from = node->from;
-				graph.nodes[sub_temp_nodes].to = from_table[j].to;
-				graph.nodes[sub_temp_nodes++].key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
+				curr->from = node->from;
+				curr->to = from_table[j].to;
+				(curr++)->key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
 			}
 		}
 	}
@@ -1825,45 +1823,55 @@ void PathGraph<index_t>::lateGeneration() {
 	tthread::thread** threads = new tthread::thread*[nthreads];
 	CreateNewNodesParams* params = new CreateNewNodesParams[nthreads];
 	index_t* sub_temp_nodes = new index_t[nthreads]();
-	index_t st = 0;
-	index_t en = st + past_nodes.size() / nthreads;
+	PathNode* st = past_nodes.begin();
+	PathNode* en = st + past_nodes.size() / nthreads;
 	for(int i = 0; i < nthreads; i++) {
 		params[i].from_index = &from_index;
 		params[i].sub_temp_nodes = &sub_temp_nodes[i];
 		params[i].st = st;
 		params[i].en = en;
 		params[i].from_table = &from_table;
-		params[i].graph = this;
-		if(i  > 0) threads[i] = new tthread::thread(&createNewNodesCounter, (void*)&params[i]);
+		if(nthreads == 1) {
+			createNewNodesCounter((void*)&params[0]);
+		} else {
+			threads[i] = new tthread::thread(&createNewNodesCounter, (void*)&params[i]);
+		}
 		st = en;
 		if(i + 2 == nthreads) {
-			en = past_nodes.size();
+			en = past_nodes.end();
 		} else {
 			en = st + past_nodes.size() / nthreads;
 		}
 	}
-	createNewNodesCounter((void*)&params[0]);
+
 	if(nthreads > 1) {
-		for(int i = 1; i < nthreads; i++)
+		for(int i = 0; i < nthreads; i++)
 			threads[i]->join();
 	}
 	if(verbose) cerr << "COUNTED NEW NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
 	//update all label indexes
-	temp_nodes = sub_temp_nodes[0];
-	sub_temp_nodes[0] = 0;
-	for(int i = 1; i < nthreads; i++) {
+	temp_nodes = 0;
+	for(int i = 0; i < nthreads; i++) {
 		temp_nodes += sub_temp_nodes[i];
-		sub_temp_nodes[i] = temp_nodes - sub_temp_nodes[i];
 	}
 	nodes.resizeExact(temp_nodes);
-	//make new nodes
-	for(int i = 1; i < nthreads; i++) {
-		threads[i] = new tthread::thread(&createNewNodesMaker, (void*)&params[i]);
+	temp_nodes = 0;
+	for(int i = 0; i < nthreads; i++) {
+		params[i].curr = nodes.begin() + temp_nodes;
+		temp_nodes += sub_temp_nodes[i];
 	}
-	createNewNodesMaker((void*)&params[0]);
+	//make new nodes
+	for(int i = 0; i < nthreads; i++) {
+		if(nthreads == 1) {
+			createNewNodesMaker((void*)&params[0]);
+		} else {
+		threads[i] = new tthread::thread(&createNewNodesMaker, (void*)&params[i]);
+		}
+	}
+
 	if(nthreads > 1) {
-		for(int i = 1; i < nthreads; i++) {
+		for(int i = 0; i < nthreads; i++) {
 			threads[i]->join();
 		}
 	}
@@ -1973,14 +1981,15 @@ void PathGraph<index_t>::printInfo()
 template <typename index_t>
 void PathGraph<index_t>::generateEdgesCounter(void* vp) {
 	GenEdgesParams* params = (GenEdgesParams*)vp;
-	index_t        st          = params->st;
-	index_t        en          = params->en;
-	index_t*                                 label_index = params->label_index;
+	typename RefGraph<index_t>::Edge*      st          = params->st;
+	typename RefGraph<index_t>::Edge*      en          = params->en;
+	index_t*       label_index = params->label_index;
 	EList<index_t>&                          from_index  = *(params->from_index);
-	RefGraph<index_t>& ref = *(params->ref);
+	EList<typename RefGraph<index_t>::Node>& ref_nodes = *(params->ref_nodes);
 	//first count edges, fill out label_index
-	for(typename RefGraph<index_t>::Edge* edge = ref.edges.begin() + st; edge != ref.edges.begin() + en; edge++) {
-		char curr_label = ref.nodes[edge->from].label;
+
+	for(typename RefGraph<index_t>::Edge* edge = st; edge != en; edge++) {
+		char curr_label = ref_nodes[edge->from].label;
 		int curr_label_index;
 		switch(curr_label) {
 			case 'A': curr_label_index = 0; break;
@@ -1998,15 +2007,17 @@ void PathGraph<index_t>::generateEdgesCounter(void* vp) {
 template <typename index_t>
 void PathGraph<index_t>::generateEdgesMaker(void* vp) {
 	GenEdgesParams* params = (GenEdgesParams*)vp;
-	index_t        st          = params->st;
-	index_t        en          = params->en;
+	typename RefGraph<index_t>::Edge*      st          = params->st;
+	typename RefGraph<index_t>::Edge*      en          = params->en;
 	index_t*                                 label_index = params->label_index;
 	EList<index_t>&                          from_index  = *(params->from_index);
-	RefGraph<index_t>& ref = *(params->ref);
-	PathGraph& graph = *(params->graph);
+	EList<typename RefGraph<index_t>::Node>& ref_nodes = *(params->ref_nodes);
+	EList<PathEdge>& edges= *(params->edges);
+	EList<PathNode>& nodes= *(params->nodes);
 
-	for(typename RefGraph<index_t>::Edge* edge = ref.edges.begin() + st; edge != ref.edges.begin() + en; edge++) {
-		char curr_label = ref.nodes[edge->from].label;
+
+	for(typename RefGraph<index_t>::Edge* edge = st; edge != en; edge++) {
+		char curr_label = ref_nodes[edge->from].label;
 		int curr_label_index;
 		switch(curr_label) {
 			case 'A': curr_label_index = 0; break;
@@ -2018,7 +2029,7 @@ void PathGraph<index_t>::generateEdgesMaker(void* vp) {
 			default: assert(false); throw 1;
 		}
 		for(index_t j = from_index[edge->to]; j < from_index[edge->to + 1]; j++) {
-			graph.edges[label_index[curr_label_index]++] = PathEdge(edge->from, graph.nodes[j].key.first, curr_label);
+			edges[label_index[curr_label_index]++] = PathEdge(edge->from, nodes[j].key.first, curr_label);
 		}
 	}
 }
@@ -2082,26 +2093,31 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	for(int i = 0; i < nthreads; i++) {
 		label_index[i] = new index_t[6]();
 	}
-	index_t st = 0;
-	index_t en = st + base.edges.size() / nthreads;
+	typename RefGraph<index_t>::Edge* st = base.edges.begin();
+	typename RefGraph<index_t>::Edge* en = st + base.edges.size() / nthreads;
 	for(int i = 0; i < nthreads; i++) {
 		params[i].from_index = &from_index;
 		params[i].label_index = label_index[i];
 		params[i].st = st;
 		params[i].en = en;
-		params[i].graph = this;
-		params[i].ref = &base;
-		if(i > 0) threads[i] = new tthread::thread(&generateEdgesCounter, (void*)&params[i]);
+		params[i].nodes = &nodes;
+		params[i].edges = &edges;
+		params[i].ref_nodes = &base.nodes;
+		if(nthreads == 1) {
+			generateEdgesCounter((void*)&params[0]);
+		} else {
+			threads[i] = new tthread::thread(&generateEdgesCounter, (void*)&params[i]);
+		}
 		st = en;
 		if(i + 2 == nthreads) {
-			en = base.edges.size();
+			en = base.edges.end();
 		} else {
 			en = st + base.edges.size() / nthreads;
 		}
 	}
-	generateEdgesCounter((void*)&params[0]);
+
 	if(nthreads > 1) {
-		for(int i = 1; i < nthreads; i++)
+		for(int i = 0; i < nthreads; i++)
 			threads[i]->join();
 	}
 	if(verbose) cerr << "COUNTED NEW EDGES: " << time(0) - indiv << endl;
@@ -2121,12 +2137,16 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	}
 	edges.resizeExact(tot);
 	//make new edges
-	for(int i = 1; i < nthreads; i++) {
-		threads[i] = new tthread::thread(&generateEdgesMaker, (void*)&params[i]);
+	for(int i = 0; i < nthreads; i++) {
+		if(nthreads == 1) {
+			generateEdgesMaker((void*)&params[0]);
+		} else {
+			threads[i] = new tthread::thread(&generateEdgesMaker, (void*)&params[i]);
+		}
 	}
-	generateEdgesMaker((void*)&params[0]);
+
 	if(nthreads > 1) {
-		for(int i = 1; i < nthreads; i++) {
+		for(int i = 0; i < nthreads; i++) {
 			threads[i]->join();
 		}
 	}
