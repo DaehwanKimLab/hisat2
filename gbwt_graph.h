@@ -1358,12 +1358,12 @@ private:
     static void createNewNodesMaker(void* vp);
     
     struct GenEdgesParams {
-    	typename RefGraph<index_t>::Edge*     st;
-    	typename RefGraph<index_t>::Edge*     en;
-		index_t*                              label_index;
-		EList<index_t>*                       from_index;
-		EList<PathNode>*                      nodes;
-		EList<PathEdge>*                      edges;
+    	typename RefGraph<index_t>::Edge*        st;
+    	typename RefGraph<index_t>::Edge*        en;
+		EList<index_t, 6>*                       label_index;
+		EList<index_t>*                          from_index;
+		EList<PathNode>*                         nodes;
+		EList<PathEdge>*                         edges;
 		EList<typename RefGraph<index_t>::Node>* ref_nodes;
     };
     static void generateEdgesCounter(void* vp);
@@ -1984,10 +1984,10 @@ void PathGraph<index_t>::printInfo()
 template <typename index_t>
 void PathGraph<index_t>::generateEdgesCounter(void* vp) {
 	GenEdgesParams* params = (GenEdgesParams*)vp;
-	typename RefGraph<index_t>::Edge*      st          = params->st;
-	typename RefGraph<index_t>::Edge*      en          = params->en;
+	typename RefGraph<index_t>::Edge*        st          = params->st;
+	typename RefGraph<index_t>::Edge*        en          = params->en;
 	EList<index_t>&                          from_index  = *(params->from_index);
-	EList<typename RefGraph<index_t>::Node>& ref_nodes = *(params->ref_nodes);
+	EList<typename RefGraph<index_t>::Node>& ref_nodes   = *(params->ref_nodes);
 	//first count edges, fill out label_index
 
 	index_t label_index[6] = {0};
@@ -2005,7 +2005,7 @@ void PathGraph<index_t>::generateEdgesCounter(void* vp) {
 		}
 		label_index[curr_label_index] += from_index[edge->to + 1] - from_index[edge->to];
 		for(int i = 0; i < 6; i++) {
-			params->label_index[i] = label_index[i];
+			params->label_index->get(i) = label_index[i];
 		}
 	}
 }
@@ -2013,13 +2013,13 @@ void PathGraph<index_t>::generateEdgesCounter(void* vp) {
 template <typename index_t>
 void PathGraph<index_t>::generateEdgesMaker(void* vp) {
 	GenEdgesParams* params = (GenEdgesParams*)vp;
-	typename RefGraph<index_t>::Edge*      st          = params->st;
-	typename RefGraph<index_t>::Edge*      en          = params->en;
-	index_t*                                 label_index = params->label_index;
+	typename RefGraph<index_t>::Edge*        st          = params->st;
+	typename RefGraph<index_t>::Edge*        en          = params->en;
+	EList<index_t, 6>&                       label_index = *(params->label_index);
 	EList<index_t>&                          from_index  = *(params->from_index);
-	EList<typename RefGraph<index_t>::Node>& ref_nodes = *(params->ref_nodes);
-	EList<PathEdge>& edges= *(params->edges);
-	EList<PathNode>& nodes= *(params->nodes);
+	EList<typename RefGraph<index_t>::Node>& ref_nodes   = *(params->ref_nodes);
+	EList<PathEdge>&                         edges       = *(params->edges);
+	EList<PathNode>&                         nodes       = *(params->nodes);
 
 
 	for(typename RefGraph<index_t>::Edge* edge = st; edge != en; edge++) {
@@ -2093,17 +2093,16 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	// fast because base.edges roughly sorted by to
 
 	//count number of edges
-	tthread::thread** threads = new tthread::thread*[nthreads];
-	GenEdgesParams* params = new GenEdgesParams[nthreads];
-	index_t** label_index = new index_t*[nthreads];
-	for(int i = 0; i < nthreads; i++) {
-		label_index[i] = new index_t[6]();
-	}
+	AutoArray<tthread::thread*> threads(nthreads);
+	EList<GenEdgesParams> params; params.resizeExact(nthreads);
+	ELList<index_t, 6> label_index; label_index.resize(nthreads);
 	typename RefGraph<index_t>::Edge* st = base.edges.begin();
 	typename RefGraph<index_t>::Edge* en = st + base.edges.size() / nthreads;
 	for(int i = 0; i < nthreads; i++) {
 		params[i].from_index = &from_index;
-		params[i].label_index = label_index[i];
+		label_index[i].resizeExact(6);
+		label_index[i].fillZero();
+		params[i].label_index = &label_index[i];
 		params[i].st = st;
 		params[i].en = en;
 		params[i].nodes = &nodes;
@@ -2156,8 +2155,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 			threads[i]->join();
 		}
 	}
-	delete[] threads;
-	delete[] params;
 
 	//might want to not do this in local index generation stage?
 	base.nodes.nullify();
@@ -2168,8 +2165,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	// could switch to doing each with its own core
 	// I think this would shorten the time that we are running with only a single core
-	index_t* index = label_index[nthreads - 1];
-	for(int i = 0; i < nthreads - 1; i++) delete[] label_index[i];
+	EList<index_t, 6>& index = label_index[nthreads - 1];
 
 	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin()           , edges.begin() + index[0],
 			&PathEdgeTo, nodes.size(), nthreads);
@@ -2182,7 +2178,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	sort(edges.begin() + index[3], edges.begin() + index[4]);
 	sort(edges.begin() + index[4], edges.begin() + index[5]);
-	delete[] index;
 
 	if(verbose) cerr << "SORTED NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
