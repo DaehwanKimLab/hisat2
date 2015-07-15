@@ -1617,7 +1617,7 @@ void PathGraph<index_t>::generationOne() {
 	generation++;
 	// first count where to start each from value
 	EList<index_t> from_index;
-	from_index.resizeExact(max_from + 2);
+	from_index.resizeNoCopyExact(max_from + 2);
 	from_index.fillZero();
 	//Build from_index
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
@@ -1631,7 +1631,7 @@ void PathGraph<index_t>::generationOne() {
 	}
 
 	// use past_nodes as from_table
-	past_nodes.resizeExact(nodes.size());
+	past_nodes.resizeNoCopyExact(nodes.size());
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		past_nodes[from_index[node->from]++] = *node;
 	}
@@ -1646,7 +1646,7 @@ void PathGraph<index_t>::generationOne() {
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		temp_nodes += from_index[node->to + 1] - from_index[node->to];
 	}
-	nodes.resizeExact(temp_nodes);
+	nodes.resizeNoCopyExact(temp_nodes);
 	nodes.clear();
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
@@ -1669,7 +1669,7 @@ void PathGraph<index_t>::earlyGeneration() {
 	//here past_nodes is already sorted by .from
 	// first count where to start each from value
 	EList<index_t> from_index;
-	from_index.resizeExact(max_from + 2);
+	from_index.resizeNoCopyExact(max_from + 2);
 	from_index.fillZero();
 
 	//Build from_index
@@ -1684,7 +1684,7 @@ void PathGraph<index_t>::earlyGeneration() {
 		temp_nodes += from_index[node->to + 1] - from_index[node->to];
 	}
 	// make new nodes
-	nodes.resizeExact(temp_nodes);
+	nodes.resizeNoCopyExact(temp_nodes);
 	nodes.clear();
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
@@ -1708,7 +1708,7 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	// first count where to start each from value
 	time_t start = time(0);
 	EList<index_t> from_index;
-	from_index.resizeExact(max_from + 2);
+	from_index.resizeNoCopyExact(max_from + 2);
 	from_index.fillZero();
 	if(verbose) cerr << "ALLOCATED FROM_INDEX: " << time(0) - start << endl;
 	start = time(0);
@@ -1728,7 +1728,7 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	if(verbose) cerr << "COUNT NEW NODES: " << time(0) - start << endl;
 	start = time(0);
 	// make new nodes
-	nodes.resizeExact(temp_nodes);
+	nodes.resizeNoCopyExact(temp_nodes);
 	nodes.clear();
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
 		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
@@ -1741,14 +1741,14 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	}
 	if(verbose) cerr << "MAKE NEW NODES: " << time(0) - start << endl;
 	start = time(0);
-	past_nodes.resizeExact(nodes.size());
+	past_nodes.resizeNoCopyExact(nodes.size());
 	if(verbose) cerr << "RESIZE NODES: " << time(0) - start << endl;
 	start = time(0);
 	//max_rank always corresponds to repeated Z's
 	// Z is mapped to 0x101
 	// therefore max rank = 0x101101101101101101101101 = (101) 8 times
 	index_t max_rank = 11983725;
-	bin_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, max_rank, nthreads);
+	bin_sort_copy_full_par<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, max_rank, nthreads);
 	if(verbose) cerr << "SORT NODES: " << time(0) - start << endl;
 	start = time(0);
 	nodes.swap(past_nodes);
@@ -1808,14 +1808,14 @@ void PathGraph<index_t>::lateGeneration() {
 
 	assert_neq(past_nodes.size(), ranks);
 
-	EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
+	EList<PathNode> from_table; from_table.resizeNoCopyExact(past_nodes.size());
 	if(verbose) cerr << "ALLOCATE FROM_TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
 	bin_sort_copy_full_par<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
 	if(verbose) cerr << "BUILD TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
 	//Build from_index
-	EList<index_t> from_index; from_index.resizeExact(max_from + 2); from_index.fillZero();
+	EList<index_t> from_index; from_index.resizeNoCopyExact(max_from + 2); from_index.fillZero();
 	for(index_t i = 0; i < past_nodes.size(); i++) {
 		from_index[from_table[i].from + 1] = i + 1;
 	}
@@ -1862,7 +1862,7 @@ void PathGraph<index_t>::lateGeneration() {
 	}
 	if(verbose) cerr << "COUNTED TEMP NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
-	nodes.resizeExact(temp_nodes);
+	nodes.resizeNoCopyExact(temp_nodes);
 	if(verbose) cerr << "RESIZED NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
 	temp_nodes = 0;

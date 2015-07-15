@@ -554,6 +554,20 @@ public:
 	 * If size is less than requested size, resize up to at least sz
 	 * and set cur_ to requested sz.
 	 */
+	void resizeNoCopyExact(size_t sz) {
+		if(sz > 0 && list_ == NULL) lazyInit();
+		if(sz <= cur_) {
+			cur_ = sz;
+			return;
+		}
+		if(sz_ < sz) expandNoCopyExact(sz);
+		cur_ = sz;
+	}
+
+	/**
+	 * If size is less than requested size, resize up to at least sz
+	 * and set cur_ to requested sz.
+	 */
 	void resize(size_t sz) {
 		if(sz > 0 && list_ == NULL) lazyInit();
 		if(sz <= cur_) {
