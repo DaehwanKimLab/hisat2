@@ -2428,8 +2428,10 @@ void PathGraph<index_t>::mergeUpdateRank()
     } else {
     	PathNode* block_start = nodes.begin();
     	PathNode* curr = nodes.begin();
+    	PathNode* node = nodes.begin();
     	ranks = 0;
-    	for(PathNode* node = nodes.begin() + 1; node != nodes.end(); node++) {
+    	do {
+    		node++;
     		if(node->key.first != block_start->key.first) {
     			if(node - block_start > 1) {
     				sort(block_start, node);
@@ -2468,38 +2470,7 @@ void PathGraph<index_t>::mergeUpdateRank()
     			}
     			block_start = node;
     		}
-    	}
-    	PathNode* node = nodes.end();
-    	sort(block_start, node);
-    	while(block_start != node) {
-    		//extend while share same key
-    		index_t shift = 1;
-    		while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
-    			shift++;
-    		}
-    		//check if all share .from
-    		bool merge = true;
-    		for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
-    			if(n->from != block_start->from) merge = false;
-    		}
-    		//if they share same from, then they are a mergable set
-    		//check if they are able to be merged into the previous node (second clause)
-    		//otherwise write single node to array
-
-    		//if not mergable, just write all to array
-    		if(!merge) {
-    			for(PathNode* n = block_start; n != (block_start + shift); n++) {
-    				n->key.first = ranks;
-    				*curr++ = *n;
-    			}
-    			ranks++;
-    		} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
-    			block_start->setSorted();
-    			block_start->key.first = ranks++;
-    			*curr++ = *block_start;
-    		}
-    		block_start += shift;
-    	}
+    	} while(node != nodes.end());
     	nodes.resizeExact(curr - nodes.begin());
     }
     // Only done on last iteration
