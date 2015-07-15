@@ -120,7 +120,7 @@ void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int n
 			params[i].hash = hash;
 			params[i].begin = index + st;
 			params[i].log_size = right_shift;
-			params[i].num = occupied / (nthreads + 1);
+			params[i].num = occupied / nthreads;
 			threads[i] = new tthread::thread(&bin_sort_worker<T, CMP, index_t>, (void*)&params[i]);
 			st += params[i].num;
 		}
@@ -172,11 +172,11 @@ void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, in
 			params[i].hash = hash;
 			params[i].begin = index + st;
 			params[i].log_size = right_shift;
-			params[i].num = occupied / (nthreads + 1);
+			params[i].num = occupied / nthreads;
 			threads[i] = new tthread::thread(&bin_sort_worker<T, CMP, index_t>, (void*)&params[i]);
 			st += params[i].num;
 		}
-		//do the first bin and any remaining bins using main thread
+		//do any remaining bins using main thread,
 		for(int bin = st; bin < occupied - 1; bin++) {
 			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
