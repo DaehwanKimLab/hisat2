@@ -1883,86 +1883,8 @@ void PathGraph<index_t>::lateGeneration() {
 	if(verbose) cerr << "MADE NEW NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
-	// Now make all nodes properly sorted
-	PathNode* block_start = nodes.begin();
-	PathNode* curr = nodes.begin();
-	ranks = 0;
-	for(PathNode* node = nodes.begin() + 1; node != nodes.end(); node++) {
-		if(node->key.first != block_start->key.first) {
-			if(node - block_start > 1) {
-				sort(block_start, node);
-				while(block_start != node) {
-					//extend while share same key
-					index_t shift = 1;
-					while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
-						shift++;
-					}
-					//check if all share .from
-					bool merge = true;
-					for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
-						if(n->from != block_start->from) merge = false;
-					}
-					//if they share same from, then they are a mergable set
-					//check if they are able to be merged into the previous node (second clause)
-					//otherwise write single node to array
-
-					//if not mergable, just write all to array
-					if(!merge) {
-						for(PathNode* n = block_start; n != (block_start + shift); n++) {
-							n->key.first = ranks;
-							*curr++ = *n;
-						}
-						ranks++;
-					} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
-						block_start->setSorted();
-						block_start->key.first = ranks++;
-						*curr++ = *block_start;
-					}
-					block_start += shift;
-				}
-			} else if(curr == nodes.begin() || (!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from)){
-				block_start->key.first = ranks++;
-				*curr++ = *block_start;
-			}
-			block_start = node;
-		}
-	}
-	PathNode* node = nodes.end();
-	sort(block_start, node);
-	while(block_start != node) {
-		//extend while share same key
-		index_t shift = 1;
-		while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
-			shift++;
-		}
-		//check if all share .from
-		bool merge = true;
-		for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
-			if(n->from != block_start->from) merge = false;
-		}
-		//if they share same from, then they are a mergable set
-		//check if they are able to be merged into the previous node (second clause)
-		//otherwise write single node to array
-
-		//if not mergable, just write all to array
-		if(!merge) {
-			for(PathNode* n = block_start; n != (block_start + shift); n++) {
-				n->key.first = ranks;
-				*curr++ = *n;
-			}
-			ranks++;
-		} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
-			block_start->setSorted();
-			block_start->key.first = ranks++;
-			*curr++ = *block_start;
-		}
-		block_start += shift;
-	}
-	nodes.resizeExact(curr - nodes.begin());
-	if(nodes.end() - block_start > 1) sort(block_start, nodes.end());
-	if(verbose) cerr << "SORTED ALL NODES: " << time(0) - indiv << endl;
-	indiv = time(0);
 	mergeUpdateRank();
+
 	if(verbose) cerr << "MERGEUPDATERANK: " << time(0) - indiv << endl;
 	if(verbose) cerr << "TOTAL TIME: " << time(0) - overall << endl;
 	printInfo();
@@ -2463,47 +2385,122 @@ void PathGraph<index_t>::mergeUpdateRank()
 {
     // Update ranks
     if(generation == 4) {
-    index_t rank = 0;
-    pair<index_t, index_t> key = nodes.front().key;
-    for(index_t i = 0; i < nodes.size(); i++) {
-        PathNode& node = nodes[i];
-        if(node.key != key) {
-            key = node.key;
-            rank++;
-        }
-        node.key = pair<index_t, index_t>(rank, 0);
-	}
-    ranks = rank + 1;
-    // Merge equivalent nodes
+		index_t rank = 0;
+		pair<index_t, index_t> key = nodes.front().key;
+		for(index_t i = 0; i < nodes.size(); i++) {
+			PathNode& node = nodes[i];
+			if(node.key != key) {
+				key = node.key;
+				rank++;
+			}
+			node.key = pair<index_t, index_t>(rank, 0);
+		}
+		ranks = rank + 1;
+		// Merge equivalent nodes
 
-    index_t curr = 0;
-    pair<index_t, index_t> range(0, 0); // Empty range
-    while(true) {
-        range = nextMaximalSet(range);
-        if(range.first >= range.second)
-            break;
-        nodes[curr] = nodes[range.first]; curr++;
-    }
-    nodes.resize(curr);
+		index_t curr = 0;
+		pair<index_t, index_t> range(0, 0); // Empty range
+		while(true) {
+			range = nextMaximalSet(range);
+			if(range.first >= range.second)
+				break;
+			nodes[curr] = nodes[range.first]; curr++;
+		}
+		nodes.resize(curr);
 
-    // Set nodes that become sorted as sorted
-    PathNode* candidate = &nodes.front();
-    key = candidate->key; ranks = 1;
-    for(index_t i = 1; i < nodes.size(); i++) {
-        if(nodes[i].key != key) {
-            if(candidate != NULL) {
-                candidate->setSorted();
-            }
-            candidate = &nodes[i];
-            key = candidate->key; ranks++;
-        } else {
-            candidate = NULL;
-        }
-    }
+		// Set nodes that become sorted as sorted
+		PathNode* candidate = &nodes.front();
+		key = candidate->key; ranks = 1;
+		for(index_t i = 1; i < nodes.size(); i++) {
+			if(nodes[i].key != key) {
+				if(candidate != NULL) {
+					candidate->setSorted();
+				}
+				candidate = &nodes[i];
+				key = candidate->key; ranks++;
+			} else {
+				candidate = NULL;
+			}
+		}
+		if(candidate != NULL) {
+			candidate->setSorted();
+		}
+    } else {
+    	PathNode* block_start = nodes.begin();
+    	PathNode* curr = nodes.begin();
+    	ranks = 0;
+    	for(PathNode* node = nodes.begin() + 1; node != nodes.end(); node++) {
+    		if(node->key.first != block_start->key.first) {
+    			if(node - block_start > 1) {
+    				sort(block_start, node);
+    				while(block_start != node) {
+    					//extend while share same key
+    					index_t shift = 1;
+    					while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
+    						shift++;
+    					}
+    					//check if all share .from
+    					bool merge = true;
+    					for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
+    						if(n->from != block_start->from) merge = false;
+    					}
+    					//if they share same from, then they are a mergable set
+    					//check if they are able to be merged into the previous node (second clause)
+    					//otherwise write single node to array
 
-    if(candidate != NULL) {
-        candidate->setSorted();
-    }
+    					//if not mergable, just write all to array
+    					if(!merge) {
+    						for(PathNode* n = block_start; n != (block_start + shift); n++) {
+    							n->key.first = ranks;
+    							*curr++ = *n;
+    						}
+    						ranks++;
+    					} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
+    						block_start->setSorted();
+    						block_start->key.first = ranks++;
+    						*curr++ = *block_start;
+    					}
+    					block_start += shift;
+    				}
+    			} else if(curr == nodes.begin() || (!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from)){
+    				block_start->key.first = ranks++;
+    				*curr++ = *block_start;
+    			}
+    			block_start = node;
+    		}
+    	}
+    	PathNode* node = nodes.end();
+    	sort(block_start, node);
+    	while(block_start != node) {
+    		//extend while share same key
+    		index_t shift = 1;
+    		while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
+    			shift++;
+    		}
+    		//check if all share .from
+    		bool merge = true;
+    		for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
+    			if(n->from != block_start->from) merge = false;
+    		}
+    		//if they share same from, then they are a mergable set
+    		//check if they are able to be merged into the previous node (second clause)
+    		//otherwise write single node to array
+
+    		//if not mergable, just write all to array
+    		if(!merge) {
+    			for(PathNode* n = block_start; n != (block_start + shift); n++) {
+    				n->key.first = ranks;
+    				*curr++ = *n;
+    			}
+    			ranks++;
+    		} else if(!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
+    			block_start->setSorted();
+    			block_start->key.first = ranks++;
+    			*curr++ = *block_start;
+    		}
+    		block_start += shift;
+    	}
+    	nodes.resizeExact(curr - nodes.begin());
     }
     // Only done on last iteration
     // Replace the ranks of a sorted graph so that rank(i) = i
