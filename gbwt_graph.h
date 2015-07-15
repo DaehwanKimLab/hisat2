@@ -1820,9 +1820,9 @@ void PathGraph<index_t>::lateGeneration() {
 
 	// Now query against hash-table
 	//count number of nodes
-	tthread::thread** threads = new tthread::thread*[nthreads];
-	CreateNewNodesParams* params = new CreateNewNodesParams[nthreads];
-	index_t* sub_temp_nodes = new index_t[nthreads]();
+	AutoArray<tthread::thread*> threads(nthreads);
+	EList<CreateNewNodesParams> params; params.resizeExact(nthreads);
+	EList<index_t> sub_temp_nodes; sub_temp_nodes.resizeExact(nthreads); sub_temp_nodes.fillZero();
 	PathNode* st = past_nodes.begin();
 	PathNode* en = st + past_nodes.size() / nthreads;
 	for(int i = 0; i < nthreads; i++) {
@@ -1882,8 +1882,6 @@ void PathGraph<index_t>::lateGeneration() {
 	}
 	if(verbose) cerr << "MADE NEW NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
-	delete[] threads;
-	delete[] params;
 
 	// Now make all nodes properly sorted
 	PathNode* block_start = nodes.begin();
