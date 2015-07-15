@@ -135,7 +135,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hi];
         index_t leftext = (index_t)INDEX_MAX, rightext = (index_t)INDEX_MAX;
         // daehwan - for debugging purposes
-#if 0
+#if 1
 #else
         genomeHit.extend(
                          *(this->_rds[rdi]),
@@ -181,7 +181,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hj];
         
         // daehwan - for debugging purposes
-#if 0
+#if 1
         if(genomeHit.len() < 100)
             continue;
 #endif
