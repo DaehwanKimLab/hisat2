@@ -1811,10 +1811,9 @@ void PathGraph<index_t>::lateGeneration() {
 	EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
 	if(verbose) cerr << "ALLOCATE FROM_TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
-	bin_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
+	bin_sort_copy_full_par<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
 	if(verbose) cerr << "BUILD TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
-
 	//Build from_index
 	EList<index_t> from_index; from_index.resizeExact(max_from + 2); from_index.fillZero();
 	for(index_t i = 0; i < past_nodes.size(); i++) {
@@ -2477,9 +2476,7 @@ void PathGraph<index_t>::mergeUpdateRank()
     	} while(node != nodes.end());
     	nodes.resizeExact(curr - nodes.begin());
     }
-    // Only done on last iteration
-    // Replace the ranks of a sorted graph so that rank(i) = i
-    // Merges may otherwise leave gaps in the ranks
+    // if all nodes have unique rank we are done!
     if(ranks == nodes.size()) sorted = true;
 }
 
