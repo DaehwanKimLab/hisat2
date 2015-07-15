@@ -1237,6 +1237,12 @@ public:
        	return a.key.first;
     }
 
+    struct PathNodeKeySecondCmp {
+    	bool operator() (const PathNode& a, const PathNode& b) const {
+    		return a.key.second < b.key.second;
+    	}
+    };
+
     struct PathNodeFromCmp {
         bool operator() (const PathNode& a, const PathNode& b) const {
             return a.from < b.from;
@@ -2383,21 +2389,8 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 template <typename index_t>
 void PathGraph<index_t>::mergeUpdateRank()
 {
-    // Update ranks
     if(generation == 4) {
-		index_t rank = 0;
-		pair<index_t, index_t> key = nodes.front().key;
-		for(index_t i = 0; i < nodes.size(); i++) {
-			PathNode& node = nodes[i];
-			if(node.key != key) {
-				key = node.key;
-				rank++;
-			}
-			node.key = pair<index_t, index_t>(rank, 0);
-		}
-		ranks = rank + 1;
 		// Merge equivalent nodes
-
 		index_t curr = 0;
 		pair<index_t, index_t> range(0, 0); // Empty range
 		while(true) {
@@ -2410,7 +2403,7 @@ void PathGraph<index_t>::mergeUpdateRank()
 
 		// Set nodes that become sorted as sorted
 		PathNode* candidate = &nodes.front();
-		key = candidate->key; ranks = 1;
+		pair<index_t, index_t> key = candidate->key; ranks = 1;
 		for(index_t i = 1; i < nodes.size(); i++) {
 			if(nodes[i].key != key) {
 				if(candidate != NULL) {
@@ -2425,6 +2418,17 @@ void PathGraph<index_t>::mergeUpdateRank()
 		if(candidate != NULL) {
 			candidate->setSorted();
 		}
+		ranks = 0;
+		key = nodes.front().key;
+		for(index_t i = 0; i < nodes.size(); i++) {
+			PathNode& node = nodes[i];
+			if(node.key != key) {
+				key = node.key;
+				ranks++;
+			}
+			node.key = pair<index_t, index_t>(ranks, 0);
+		}
+		ranks++;
     } else {
     	PathNode* block_start = nodes.begin();
     	PathNode* curr = nodes.begin();
@@ -2434,22 +2438,22 @@ void PathGraph<index_t>::mergeUpdateRank()
     		node++;
     		if(node->key.first != block_start->key.first) {
     			if(node - block_start > 1) {
-    				sort(block_start, node);
+    				sort(block_start, node, PathNodeKeySecondCmp());
     				while(block_start != node) {
-    					//extend while share same key
+    					//extend shift while share same key
     					index_t shift = 1;
     					while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
     						shift++;
     					}
     					//check if all share .from
-    					bool merge = true;
-    					for(PathNode* n = block_start; n != (block_start + shift) && merge; n++) {
-    						if(n->from != block_start->from) merge = false;
-    					}
     					//if they share same from, then they are a mergable set
-    					//check if they are able to be merged into the previous node (second clause)
-    					//otherwise write single node to array
-
+    					bool merge = true;
+    					for(PathNode* n = block_start; n != (block_start + shift); n++) {
+    						if(n->from != block_start->from) {
+    							merge = false;
+    							break;
+    						}
+    					}
     					//if not mergable, just write all to array
     					if(!merge) {
     						for(PathNode* n = block_start; n != (block_start + shift); n++) {
@@ -2476,12 +2480,7 @@ void PathGraph<index_t>::mergeUpdateRank()
     // Only done on last iteration
     // Replace the ranks of a sorted graph so that rank(i) = i
     // Merges may otherwise leave gaps in the ranks
-    if(ranks == nodes.size()) {
-        for(index_t i = 0; i < nodes.size(); i++) {
-            nodes[i].key.first = i;
-        }
-        sorted = true;
-    }
+    if(ranks == nodes.size()) sorted = true;
 }
 
 
