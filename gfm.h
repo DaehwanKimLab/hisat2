@@ -723,6 +723,33 @@ public:
         
         in7.close();
         in8.close();
+        
+        // Sort SNPs and Splice Sites based on positions
+        index_t nalts = alts.size();
+        for(index_t s = 0; s < nalts; s++) {
+            const ALT<index_t>& alt = alts[s];
+            if(!alt.splicesite()) continue;
+            alts.push_back(alt);
+            alts.back().left = alt.right;
+            alts.back().right = alt.left;
+            altnames.push_back("ssr");
+        }
+        if(alts.size() > 1 && alts.size() > nalts) {
+            assert_eq(alts.size(), altnames.size());
+            EList<pair<ALT<index_t>, index_t> > buf; buf.resize(alts.size());
+            EList<string> buf2; buf2.resize(alts.size());
+            for(size_t i = 0; i < alts.size(); i++) {
+                buf[i].first = alts[i];
+                buf[i].second = i;
+                buf2[i] = altnames[i];
+            }
+            buf.sort();
+            for(size_t i = 0; i < alts.size(); i++) {
+                alts[i] = buf[i].first;
+                altnames[i] = buf2[buf[i].second];
+            }
+        }
+        
         assert(repOk());
 	}
 	
