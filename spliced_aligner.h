@@ -182,7 +182,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
         
         // daehwan - for debugging purposes
 #if 1
-        if(genomeHit.len() < 100)
+        if(genomeHit.len() < this->_rds[rdi]->length())
             continue;
 #endif
         

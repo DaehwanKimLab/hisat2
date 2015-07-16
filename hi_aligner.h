@@ -2976,6 +2976,8 @@ index_t GenomeHit<index_t>::alignWithALTs2(
                                        alt_range.first);
                                 edits->push_back(e);
                             }
+                            rd_i++;
+                            rf_i++;
                             indel_end = false;
                         } else {
                             alt_compatible = false;
@@ -2995,8 +2997,7 @@ index_t GenomeHit<index_t>::alignWithALTs2(
                                     edits->push_back(e);
                                 }
                             }
-                            rf_i += (alt.len - 1);
-                            rd_i -= 1;
+                            rf_i += alt.len;
                             indel_end = true;
                         } else {
                             alt_compatible = false;
@@ -3022,9 +3023,11 @@ index_t GenomeHit<index_t>::alignWithALTs2(
                                     edits->push_back(e);
                                 }
                             }
-                            if(!same_seq) break;
-                            rd_i += (alt.len - 1);
-                            rf_i -= 1;
+                            if(!same_seq) {
+                                alt_compatible = false;
+                                break;
+                            }
+                            rd_i += alt.len;
                             indel_end = true;
                         } else {
                             alt_compatible = false;
@@ -3057,11 +3060,12 @@ index_t GenomeHit<index_t>::alignWithALTs2(
                                 edits->push_back(e);
                             }
                             indel_end = false;
+                            rd_i++;
+                            rf_i++;
                         } else {
                             alt_compatible = false;
                         }
                     }
-                    rd_i += 1;
                     break;
                 } else {
                     // Stop this alignment
@@ -3090,21 +3094,18 @@ index_t GenomeHit<index_t>::alignWithALTs2(
                 if(alt.type == ALT_SNP_SGL) {
                     next_joinedOff = alt.pos + 1;
                 } else if(alt.type == ALT_SNP_DEL) {
-                    next_joinedOff = alt.pos + 1;
+                    next_joinedOff = alt.pos + alt.len;
                 } else if(alt.type == ALT_SNP_INS) {
-                    next_joinedOff = alt.pos + 1;
+                    next_joinedOff = alt.pos;
                 } else if(alt.type == ALT_SPLICESITE) {
                     next_joinedOff = alt.right + 2;
                 } else {
                     assert(false);
                 }
-                index_t next_rfoff;
-                if(alt.snp()) {
-                    next_rfoff = rfoff + rf_i + 1;
-                } else {
-                    assert(alt.splicesite());
+                index_t next_rfoff = rfoff + rf_i;
+                if(alt.splicesite()) {
                     index_t intronLen = alt.right - alt.left + 1;
-                    next_rfoff = rfoff + rd_i + intronLen;
+                    next_rfoff += intronLen;
                 }
                 index_t orig2_nedits = edits->size();
                 index_t alignedLen = alignWithALTs2(
