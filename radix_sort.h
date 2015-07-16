@@ -85,12 +85,13 @@ void radix_sort_in_place(T* begin, T* end, index_t (*hash)(T&), index_t maxv, in
 
 	// {(maxv >> right_shift) + 1 <= BLOCKS},
 	int occupied = (maxv >> right_shift) + 1;
-
+	time_t start = time(0);
 	// count number in each bin
 	index_t count[BLOCKS] = {0};
 	for(T* curr = begin; curr != end; curr++) {
 		count[hash(*curr) >> right_shift]++;
 	}
+
 	// sum numbers to create an index
 	T* index[BLOCKS + 1];
 	T* place[BLOCKS];
@@ -99,6 +100,8 @@ void radix_sort_in_place(T* begin, T* end, index_t (*hash)(T&), index_t maxv, in
 		index[i] = place[i] = index[i - 1] + count[i - 1];
 	}
 	index[occupied] = end;
+	if(nthreads != 1) cerr << "COUNT NUMBER IN EACH BIN: " << time(0) - start << endl;
+	start = time(0);
 	//put objects in proper place
 	for(int bin = 0; bin < occupied; bin++) {
 		while(place[bin] != index[bin + 1]) {
@@ -113,6 +116,8 @@ void radix_sort_in_place(T* begin, T* end, index_t (*hash)(T&), index_t maxv, in
 			*place[bin]++ = curr;
 		}
 	}
+	if(nthreads != 1) cerr << "PLACE IN CORRECT BIN: " << time(0) - start << endl;
+	start = time(0);
 	//sort partitions
 	if(nthreads == 1) {
 		for(int bin = 0; bin < occupied; bin++) {
@@ -138,6 +143,7 @@ void radix_sort_in_place(T* begin, T* end, index_t (*hash)(T&), index_t maxv, in
 			threads[i]->join();
 		}
 	}
+	if(nthreads != 1) cerr << "FINISHED RECURSIVE SORTS: " << time(0) - start << endl;
 }
 
 template <typename T, typename index_t>
@@ -215,8 +221,10 @@ void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, 
 		}
 	}
 	if(nthreads > 1) {
-		for(int i = 0; i < nthreads; i++)
+		for(int i = 0; i < nthreads; i++) {
 			threads1[i]->join();
+			delete threads1[i];
+		}
 	}
 	if(nthreads != 1) cerr << "COUNT NUMBER IN EACH BIN: " << time(0) - start << endl;
 	start = time(0);
@@ -246,8 +254,11 @@ void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, 
 		}
 	}
 	if(nthreads > 1) {
-		for(int i = 0; i < nthreads; i++)
+		for(int i = 0; i < nthreads; i++) {
 			threads1[i]->join();
+			delete[] cparams[i].count;
+			delete threads1[i];
+		}
 	}
 	if(nthreads != 1) cerr << "FINISHED FIRST ROUND: " << time(0) - start << endl;
 	start = time(0);
@@ -276,6 +287,7 @@ void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, 
 		_radix_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
 		for(int i = 0; i < nthreads; i++) {
 			threads[i]->join();
+			delete threads[i];
 		}
 	}
 	if(nthreads != 1) cerr << "FINISHED RECURSIVE SORTS: " << time(0) - start << endl;
