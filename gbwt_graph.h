@@ -1808,7 +1808,7 @@ void PathGraph<index_t>::lateGeneration() {
 
 	assert_neq(past_nodes.size(), ranks);
 
-	EList<PathNode> from_table; from_table.resizeNoCopyExact(past_nodes.size());
+	EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
 	if(verbose) cerr << "ALLOCATE FROM_TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
 	bin_sort_copy_full_par<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
