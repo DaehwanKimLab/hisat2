@@ -402,6 +402,7 @@ template <typename index_t>
 struct SharedTempVars {
     SStringExpandable<char> raw_refbuf;
     SStringExpandable<char> raw_refbuf2;
+    EList<SStringExpandable<char> > raw_refbufs;
     EList<int64_t> temp_scores;
     EList<int64_t> temp_scores2;
     
@@ -648,8 +649,9 @@ struct GenomeHit {
                                  index_t                     rdoff,
                                  index_t                     rdlen,
                                  const BitPairReference&     ref,
-                                 SStringExpandable<char>&    raw_refbuf,
+                                 EList<SStringExpandable<char> >& raw_refbufs,
                                  ASSERT_ONLY(SStringExpandable<uint32_t> destU32,)
+                                 const char*                 rfseq,
                                  index_t                     tidx,
                                  index_t                     rfoff,
                                  index_t                     rflen,
@@ -1903,9 +1905,6 @@ bool GenomeHit<index_t>::adjustWithALT(
     assert_lt(this->_tidx, ref.numRefs());
     
     assert(_sharedVars != NULL);
-    SStringExpandable<char>& raw_refbuf = _sharedVars->raw_refbuf;
-    ASSERT_ONLY(SStringExpandable<uint32_t>& destU32 = _sharedVars->destU32);
-    
     EList<pair<index_t, int> >& offDiffs = _sharedVars->offDiffs;
     index_t width = 1 << (gfm.gh()._offRate + 1);
     findOffDiffs(gfm, altdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff + width, offDiffs);
@@ -1938,7 +1937,7 @@ bool GenomeHit<index_t>::adjustWithALT(
             this->_joinedOff = orig_joinedOff - offDiff.first;
             this->_toff = orig_toff - offDiff.first;
         }
-        index_t reflen = this->_len;
+        index_t reflen = this->_len + 10;
         index_t alignedLen = alignWithALTs(
                                            alts,
                                            this->_joinedOff,
@@ -1946,8 +1945,9 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            this->_rdoff,
                                            this->_len,
                                            ref,
-                                           raw_refbuf,
-                                           ASSERT_ONLY(destU32,)
+                                           _sharedVars->raw_refbufs,
+                                           ASSERT_ONLY(_sharedVars->destU32,)
+                                           NULL, /* reference sequence */
                                            this->_tidx,
                                            this->_toff,
                                            reflen,
@@ -2409,8 +2409,9 @@ index_t GenomeHit<index_t>::alignWithALTs(
                                           index_t                     rdoff,
                                           index_t                     rdlen,
                                           const BitPairReference&     ref,
-                                          SStringExpandable<char>&    raw_refbuf,
+                                          EList<SStringExpandable<char> >& raw_refbufs,
                                           ASSERT_ONLY(SStringExpandable<uint32_t> destU32,)
+                                          const char*                 rfseq,
                                           index_t                     tidx,
                                           index_t                     rfoff,
                                           index_t                     rflen,
@@ -2422,9 +2423,26 @@ index_t GenomeHit<index_t>::alignWithALTs(
 {
     assert_gt(rdlen, 0);
     assert_gt(rflen, 0);
-    // Find SNPs included in this region
-    pair<index_t, index_t> alt_range;
+    assert_geq(rflen, rdlen);
+    if(raw_refbufs.size() <= dep) raw_refbufs.expand();
+    if(rfseq == NULL) {
+        SStringExpandable<char>& raw_refbuf = raw_refbufs[dep];
+        raw_refbuf.resize(rflen + 16);
+        int off = ref.getStretch(
+                                 reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
+                                 tidx,
+                                 rfoff,
+                                 rflen
+                                 ASSERT_ONLY(, destU32));
+        assert_lt(off, 16);
+        rfseq = raw_refbuf.wbuf() + off;
+    }
+    
+    if(numNs != NULL) *numNs = 0;
     if(left) {
+#if 0
+        // Find SNPs included in this region
+        pair<index_t, index_t> alt_range;
         ALT<index_t> alt;
         alt.pos = joinedOff + 1;
         alt_range.first = alt_range.second = alts.bsearchLoBound(alt);
@@ -2438,20 +2456,7 @@ index_t GenomeHit<index_t>::alignWithALTs(
                 assert(false);
             }
         }
-    }
-    raw_refbuf.resize(rflen + 16);
-    int off = ref.getStretch(
-                             reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
-                             tidx,
-                             rfoff,
-                             rflen
-                             ASSERT_ONLY(, destU32));
-    assert_lt(off, 16);
-    char* rfseq = raw_refbuf.wbuf() + off;
-    
-    if(numNs != NULL) *numNs = 0;
-    if(left) {
-#if 0
+        
         assert_gt(rdoff, 0);
         int rf_i = rflen - 1, rd_i = rdoff - 1;
         bool indel_end = false;
@@ -2604,7 +2609,6 @@ index_t GenomeHit<index_t>::alignWithALTs(
             if(alt.splicesite()) {
                 if(alt.left > alt.right) continue;
             }
-            bool indel_end = false;
             bool alt_compatible = false;
             assert_leq(joinedOff, alt.pos);
             index_t rf_i, rd_i;
@@ -2612,7 +2616,6 @@ index_t GenomeHit<index_t>::alignWithALTs(
             assert_leq(rd_i, max_rd_i);
             int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[rdoff + rd_i];
-                
             if(alt.type == ALT_SNP_SGL) {
                 if(rd_bp == (int)alt.seq) {
                     if(edits != NULL) {
@@ -2627,7 +2630,6 @@ index_t GenomeHit<index_t>::alignWithALTs(
                     }
                     rd_i++;
                     rf_i++;
-                    indel_end = false;
                     alt_compatible = true;
                 }
             } else if(alt.type == ALT_SNP_DEL) {
@@ -2646,7 +2648,6 @@ index_t GenomeHit<index_t>::alignWithALTs(
                         }
                     }
                     rf_i += alt.len;
-                    indel_end = true;
                     alt_compatible = true;
                 }
             } else if(alt.type == ALT_SNP_INS) {
@@ -2672,7 +2673,6 @@ index_t GenomeHit<index_t>::alignWithALTs(
                     }
                     if(same_seq) {
                         rd_i += alt.len;
-                        indel_end = true;
                         alt_compatible = true;
                     }
                 }
@@ -2680,36 +2680,26 @@ index_t GenomeHit<index_t>::alignWithALTs(
                 if(rd_i > 0) {
                     assert_lt(rd_i, rflen);
                     index_t intronLen = alt.right - alt.left + 1;
-                    off = ref.getStretch(
-                                         reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
-                                         tidx,
-                                         rfoff + rd_i + intronLen,
-                                         rflen - rd_i
-                                         ASSERT_ONLY(, destU32));
-                    assert_lt(off, 16);
-                    rfseq = raw_refbuf.wbuf() + off - rf_i;
-                    if(rd_bp == (int)rfseq[rf_i]) {
-                        if(edits != NULL) {
-                            Edit e(rd_i,
-                                   0,
-                                   0,
-                                   EDIT_TYPE_SPL,
-                                   intronLen,
-                                   alt.fw ? EDIT_SPL_FW : EDIT_SPL_RC,
-                                   true,   /* known splice site? */
-                                   false); /* chrs? */
-                            edits->push_back(e);
-                        }
-                        rd_i++;
-                        rf_i++;
-                        indel_end = false;
-                        alt_compatible = true;
+                    if(edits != NULL) {
+                        Edit e(rd_i,
+                               0,
+                               0,
+                               EDIT_TYPE_SPL,
+                               intronLen,
+                               alt.fw ? EDIT_SPL_FW : EDIT_SPL_RC,
+                               true,   /* known splice site? */
+                               false); /* chrs? */
+                        edits->push_back(e);
                     }
+                    alt_compatible = true;
                 }
             }
             if(alt_compatible) {
                 if(rd_i == rdlen) return rd_i;
-                index_t next_joinedOff;
+                index_t next_joinedOff = 0;
+                index_t next_rfoff = rfoff + rf_i, next_rdoff = rdoff + rd_i;
+                const char* next_rfseq = rfseq + rf_i;
+                index_t next_rflen = rflen - rf_i, next_rdlen = rdlen - rd_i;
                 if(alt.type == ALT_SNP_SGL) {
                     next_joinedOff = alt.pos + 1;
                 } else if(alt.type == ALT_SNP_DEL) {
@@ -2717,28 +2707,31 @@ index_t GenomeHit<index_t>::alignWithALTs(
                 } else if(alt.type == ALT_SNP_INS) {
                     next_joinedOff = alt.pos;
                 } else if(alt.type == ALT_SPLICESITE) {
-                    next_joinedOff = alt.right + 2;
+                    next_joinedOff = alt.right + 1;
+                    index_t intronLen = alt.right - alt.left + 1;
+                    next_rfoff += intronLen;
+                    next_rfseq = NULL;
                 } else {
                     assert(false);
                 }
-                index_t next_rfoff = rfoff + rf_i;
-                if(alt.splicesite()) {
-                    index_t intronLen = alt.right - alt.left + 1;
-                    next_rfoff += intronLen;
+                if(next_rflen < next_rdlen) {
+                    next_rflen = next_rdlen + 10;
+                    next_rfseq = NULL;
                 }
                 index_t orig2_nedits = edits->size();
                 index_t alignedLen = alignWithALTs(
                                                    alts,
                                                    next_joinedOff,
                                                    rdseq,
-                                                   rdoff + rd_i,
-                                                   rdlen - rd_i,
+                                                   next_rdoff,
+                                                   next_rdlen,
                                                    ref,
-                                                   raw_refbuf,
+                                                   raw_refbufs,
                                                    ASSERT_ONLY(destU32,)
+                                                   next_rfseq,
                                                    tidx,
                                                    next_rfoff,
-                                                   rflen - rd_i,
+                                                   next_rflen,
                                                    left,
                                                    edits,
                                                    mm,
@@ -2755,17 +2748,7 @@ index_t GenomeHit<index_t>::alignWithALTs(
             // Restore to the earlier state
             assert_leq(orig_nedits, edits->size());
             if(orig_nedits < edits->size()) edits->resize(orig_nedits);
-            raw_refbuf.resize(rflen + 16);
-            int off = ref.getStretch(
-                                     reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
-                                     tidx,
-                                     rfoff,
-                                     rflen
-                                     ASSERT_ONLY(, destU32));
-            assert_lt(off, 16);
-            rfseq = raw_refbuf.wbuf() + off;
         }
-        // if(indel_end) return 0;
         return 0;
     }
 }
