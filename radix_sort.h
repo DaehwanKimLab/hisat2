@@ -1,6 +1,8 @@
 #ifndef RADIX_SORT_H_
 #define RADIX_SORT_H_
 
+#include <time.h>
+
 template <typename T, typename CMP, typename index_t>
 void bin_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
 	const int SHIFT = 7;
@@ -185,6 +187,7 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 	int right_shift = log_size - SHIFT;
 	int occupied = (maxv >> right_shift) + 1;
 	//count nodes
+	time_t start = time(0);
 	EList<CountParams<T, index_t> > cparams; cparams.resizeExact(nthreads);
 	AutoArray<tthread::thread*> threads1(nthreads);
 	T* st = begin;
@@ -212,6 +215,8 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 		for(int i = 0; i < nthreads; i++)
 			threads1[i]->join();
 	}
+	cerr << "COUNT NUMBER IN EACH BIN: " << time(0) - start << endl;
+	start = time(0);
 	//transform counts into index
 	index_t tot = cparams[0].count[0];
 	cparams[0].count[0] = 0;
@@ -229,7 +234,7 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 	for(int i = 0; i < occupied; i++) {
 		index[i] = o + cparams[0].count[i + 1];
 	}
-
+	//write T's to correct bin
 	for(int i = 0; i < nthreads; i++) {
 		if(nthreads == 1) {
 			write_worker<T, index_t>((void*)&cparams[i]);
@@ -241,6 +246,8 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 		for(int i = 0; i < nthreads; i++)
 			threads1[i]->join();
 	}
+	cerr << "FINISHED FIRST ROUND: " << time(0) - start << endl;
+	start = time(0);
 	//sort partitions
 	if(nthreads == 1) {
 		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
@@ -268,6 +275,7 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 			threads[i]->join();
 		}
 	}
+	cerr << "FINISHED RECURSIVE SORTS: " << time(0) - start << endl;
 }
 
 template <typename T, typename CMP, typename index_t>
