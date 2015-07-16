@@ -215,7 +215,7 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 		for(int i = 0; i < nthreads; i++)
 			threads1[i]->join();
 	}
-	cerr << "COUNT NUMBER IN EACH BIN: " << time(0) - start << endl;
+	if(nthreads != 1) cerr << "COUNT NUMBER IN EACH BIN: " << time(0) - start << endl;
 	start = time(0);
 	//transform counts into index
 	index_t tot = cparams[0].count[0];
@@ -246,7 +246,7 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 		for(int i = 0; i < nthreads; i++)
 			threads1[i]->join();
 	}
-	cerr << "FINISHED FIRST ROUND: " << time(0) - start << endl;
+	if(nthreads != 1) cerr << "FINISHED FIRST ROUND: " << time(0) - start << endl;
 	start = time(0);
 	//sort partitions
 	if(nthreads == 1) {
@@ -275,7 +275,7 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 			threads[i]->join();
 		}
 	}
-	cerr << "FINISHED RECURSIVE SORTS: " << time(0) - start << endl;
+	if(nthreads != 1) cerr << "FINISHED RECURSIVE SORTS: " << time(0) - start << endl;
 }
 
 template <typename T, typename CMP, typename index_t>
