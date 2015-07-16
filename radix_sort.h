@@ -3,17 +3,21 @@
 
 #include <time.h>
 
+// in place radix sort using a single thread, should not be called directly
+// used for leaves of both in and out of place radix sorts
 template <typename T, typename CMP, typename index_t>
-void bin_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
+static void _radix_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
 	const int SHIFT = 7;
 	const int BLOCKS = (1 << (SHIFT + 1));
 	const int BLOCKS_MASK = BLOCKS - 1;
 
-	if(end - begin < 2000 || !log_size) { //picked arbitrarily
+	// Use std::sort in base case.
+	// Notice that as long as hash is consistent with CMP
+	// guaranteed to be sorted by CMP.
+	if(end - begin < 2000 || !log_size) {
 		if(end > begin + 1) sort(begin, end, CMP());
 		return;
 	}
-
 	// compute maximum of log_size - 7 and 0
 	int right_shift = (log_size - SHIFT) * (log_size > SHIFT);
 	// count number in each bin
@@ -34,7 +38,7 @@ void bin_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
 		while(place[bin] != index[bin + 1]) {
 			T curr = *place[bin];
 			int x = (hash(curr) >> right_shift) & BLOCKS_MASK;
-			while(x != bin) { // switched inner loop here, removed branch statement
+			while(x != bin) {
 				T temp = *place[x];
 				*place[x]++ = curr;
 				curr = temp;
@@ -45,12 +49,12 @@ void bin_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
 	}
 	//sort partitions
 	for(int bin = 0; bin < BLOCKS; bin++) {
-		if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+		if(index[bin + 1] - index[bin] > 1) _radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 	}
 }
 
 template <typename T, typename index_t>
-struct Params {
+struct RecurseParams {
 	index_t     (*hash)(T&);
 	T**         begin;
 	int         log_size;
@@ -59,19 +63,19 @@ struct Params {
 
 //basically used to wrap together calls to bin_sort
 template <typename T, typename CMP, typename index_t>
-void bin_sort_worker(void* vp) {
-	Params<T, index_t>* params = (Params<T, index_t>*)vp;
+static void _radix_sort_worker(void* vp) {
+	RecurseParams<T, index_t>* params = (RecurseParams<T, index_t>*)vp;
 	index_t (*hash)(T&) = params->hash;
 	T**     begin       = params->begin;
 	int     log_size    = params->log_size;
 	int     num         = params->num;
 	for(int i = 0; i < num; i++) {
-		if(begin[i + 1] - begin[i] > 1) bin_sort<T, CMP, index_t>(begin[i], begin[i + 1], hash, log_size);
+		if(begin[i + 1] - begin[i] > 1) _radix_sort<T, CMP, index_t>(begin[i], begin[i + 1], hash, log_size);
 	}
 }
 
 template <typename T, typename CMP, typename index_t>
-void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
+void radix_sort_in_place(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
 	const int SHIFT = 7;
 	const int BLOCKS = (1 << (SHIFT + 1));
 
@@ -112,23 +116,23 @@ void bin_sort_no_copy(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int n
 	//sort partitions
 	if(nthreads == 1) {
 		for(int bin = 0; bin < occupied; bin++) {
-			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+			if(index[bin + 1] - index[bin] > 1) _radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
 	} else {
 		AutoArray<tthread::thread*> threads(nthreads);
-        EList<Params<T, index_t> > params; params.resizeExact(nthreads);
+        EList<RecurseParams<T, index_t> > params; params.resizeExact(nthreads);
 		int st = 0;
 		for(int i = 0; i < nthreads; i++) {
 			params[i].hash = hash;
 			params[i].begin = index + st;
 			params[i].log_size = right_shift;
 			params[i].num = occupied / nthreads;
-			threads[i] = new tthread::thread(&bin_sort_worker<T, CMP, index_t>, (void*)&params[i]);
+			threads[i] = new tthread::thread(&_radix_sort_worker<T, CMP, index_t>, (void*)&params[i]);
 			st += params[i].num;
 		}
 		//do any remaining bins using main thread
 		for(int bin = st; bin < occupied; bin++) {
-			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+			if(index[bin + 1] - index[bin] > 1) _radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
 		for(int i = 0; i < nthreads; i++) {
 			threads[i]->join();
@@ -148,7 +152,7 @@ struct CountParams {
 };
 
 template <typename T, typename index_t>
-void count_worker(void* vp) {
+static void _count_worker(void* vp) {
 	CountParams<T, index_t>* params = (CountParams<T, index_t>*)vp;
 	T* begin            = params->begin;
 	T* end              = params->end;
@@ -162,7 +166,7 @@ void count_worker(void* vp) {
 	}
 }
 template <typename T, typename index_t>
-void write_worker(void* vp) {
+static void _write_worker(void* vp) {
 	CountParams<T, index_t>* params = (CountParams<T, index_t>*)vp;
 	T* begin            = params->begin;
 	T* end              = params->end;
@@ -176,9 +180,8 @@ void write_worker(void* vp) {
 	}
 }
 
-
 template <typename T, typename CMP, typename index_t>
-void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
+void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
 	const int SHIFT = 7;
 	const int BLOCKS = (1 << (SHIFT + 1));
 
@@ -200,9 +203,9 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 		cparams[i].occupied = occupied;
 		cparams[i].right_shift= right_shift;
 		if(nthreads == 1) {
-			count_worker<T, index_t>((void*)&cparams[i]);
+			_count_worker<T, index_t>((void*)&cparams[i]);
 		} else {
-			threads1[i] = new tthread::thread(&count_worker<T, index_t>, (void*)&cparams[i]);
+			threads1[i] = new tthread::thread(&_count_worker<T, index_t>, (void*)&cparams[i]);
 		}
 		st = en;
 		if(i + 2 == nthreads) {
@@ -237,9 +240,9 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 	//write T's to correct bin
 	for(int i = 0; i < nthreads; i++) {
 		if(nthreads == 1) {
-			write_worker<T, index_t>((void*)&cparams[i]);
+			_write_worker<T, index_t>((void*)&cparams[i]);
 		} else {
-			threads1[i] = new tthread::thread(&write_worker<T, index_t>, (void*)&cparams[i]);
+			threads1[i] = new tthread::thread(&_write_worker<T, index_t>, (void*)&cparams[i]);
 		}
 	}
 	if(nthreads > 1) {
@@ -250,85 +253,32 @@ void bin_sort_copy_full_par(T* begin, T* end, T* o, index_t (*hash)(T&), index_t
 	start = time(0);
 	//sort partitions
 	if(nthreads == 1) {
-		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
+		_radix_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
 		for(int bin = 1; bin < occupied; bin++) {
-			if(index[bin] - index[bin - 1] > 1) bin_sort<T, CMP, index_t>(index[bin - 1], index[bin], hash, right_shift);
+			if(index[bin] - index[bin - 1] > 1) _radix_sort<T, CMP, index_t>(index[bin - 1], index[bin], hash, right_shift);
 		}
 	} else {
 		AutoArray<tthread::thread*> threads(nthreads);
-        EList<Params<T, index_t> > params; params.resizeExact(nthreads);
+        EList<RecurseParams<T, index_t> > params; params.resizeExact(nthreads);
 		int st = 0;
 		for(int i = 0; i < nthreads; i++) {
 			params[i].hash = hash;
 			params[i].begin = index + st;
 			params[i].log_size = right_shift;
 			params[i].num = occupied / nthreads;
-			threads[i] = new tthread::thread(&bin_sort_worker<T, CMP, index_t>, (void*)&params[i]);
+			threads[i] = new tthread::thread(&_radix_sort_worker<T, CMP, index_t>, (void*)&params[i]);
 			st += params[i].num;
 		}
 		//do any remaining bins using main thread,
 		for(int bin = st; bin < occupied - 1; bin++) {
-			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+			if(index[bin + 1] - index[bin] > 1) _radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
-		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
+		_radix_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
 		for(int i = 0; i < nthreads; i++) {
 			threads[i]->join();
 		}
 	}
 	if(nthreads != 1) cerr << "FINISHED RECURSIVE SORTS: " << time(0) - start << endl;
-}
-
-template <typename T, typename CMP, typename index_t>
-void bin_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
-	const int SHIFT = 7;
-	const int BLOCKS = (1 << (SHIFT + 1));
-
-	int log_size = sizeof(maxv) * 8;
-	while(!((1 << log_size) & maxv)) log_size--;
-	int right_shift = log_size - SHIFT;
-	int occupied = (maxv >> right_shift) + 1;
-	index_t count[BLOCKS] = {0};
-	// count number in each bin ~ 1/5 of time
-	for(T* curr = begin; curr != end; curr++) {
-		count[hash(*curr) >> right_shift]++;
-	}
-	// sum numbers to create an index ~ takes very little time
-	T* index[BLOCKS];
-	index[0] = o;
-	for(int i = 1; i < occupied; i++) {
-		index[i] = index[i - 1] + count[i - 1];
-	}
-	// hash objects ~ 4/5 of time
-	for(T* curr = begin; curr != end; curr++) {
-		*index[hash(*curr) >> right_shift]++ = *curr;
-	}
-	//sort partitions
-	if(nthreads == 1) {
-		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
-		for(int bin = 1; bin < occupied; bin++) {
-			if(index[bin] - index[bin - 1] > 1) bin_sort<T, CMP, index_t>(index[bin - 1], index[bin], hash, right_shift);
-		}
-	} else {
-		AutoArray<tthread::thread*> threads(nthreads);
-        EList<Params<T, index_t> > params; params.resizeExact(nthreads);
-		int st = 0;
-		for(int i = 0; i < nthreads; i++) {
-			params[i].hash = hash;
-			params[i].begin = index + st;
-			params[i].log_size = right_shift;
-			params[i].num = occupied / nthreads;
-			threads[i] = new tthread::thread(&bin_sort_worker<T, CMP, index_t>, (void*)&params[i]);
-			st += params[i].num;
-		}
-		//do any remaining bins using main thread,
-		for(int bin = st; bin < occupied - 1; bin++) {
-			if(index[bin + 1] - index[bin] > 1) bin_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
-		}
-		bin_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
-		for(int i = 0; i < nthreads; i++) {
-			threads[i]->join();
-		}
-	}
 }
 
 #endif //RADIX_SORT_H_

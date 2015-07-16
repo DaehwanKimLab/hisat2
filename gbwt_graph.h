@@ -138,11 +138,11 @@ private:
         std::sort(edges.begin(), edges.end(), EdgeFromCmp());
     }
     static void sortEdgesTo(EList<Edge>& edges) {
-    	bin_sort_no_copy<Edge, EdgeToCmp, index_t>(
+    	radix_sort_in_place<Edge, EdgeToCmp, index_t>(
     	    				edges.begin(), edges.end(), &EdgeTo, (index_t)-1);
     }
     void sortEdgesByTo() {
-    	bin_sort_no_copy<Edge, EdgeToCmp, index_t>(
+    	radix_sort_in_place<Edge, EdgeToCmp, index_t>(
     				edges.begin(), edges.end(), &EdgeTo, edges.size(), nthreads);
     }
 
@@ -1454,7 +1454,7 @@ private:
 
     // Can create an index by using key.second in PathNodes.
     void sortNodesByFrom() {
-    	bin_sort_no_copy<PathNode, PathNodeFromCmp, index_t>(
+    	radix_sort_in_place<PathNode, PathNodeFromCmp, index_t>(
     				nodes.begin(), nodes.end(), &PathNodeFrom, max_from, nthreads);
     }
     pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
@@ -1748,7 +1748,7 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	// Z is mapped to 0x101
 	// therefore max rank = 0x101101101101101101101101 = (101) 8 times
 	index_t max_rank = 11983725;
-	bin_sort_copy_full_par<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, max_rank, nthreads);
+	radix_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, max_rank, nthreads);
 	if(verbose) cerr << "SORT NODES: " << time(0) - start << endl;
 	start = time(0);
 	nodes.swap(past_nodes);
@@ -1811,7 +1811,7 @@ void PathGraph<index_t>::lateGeneration() {
 	EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
 	if(verbose) cerr << "ALLOCATE FROM_TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
-	bin_sort_copy_full_par<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
+	radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
 	if(verbose) cerr << "BUILD TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
 	//Build from_index
@@ -2094,13 +2094,13 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	// I think this would shorten the time that we are running with only a single core
 	EList<index_t, 6>& index = label_index[nthreads - 1];
 
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin()           , edges.begin() + index[0],
+	radix_sort_in_place<PathEdge, less<PathEdge>, index_t>(edges.begin()           , edges.begin() + index[0],
 			&PathEdgeTo, nodes.size(), nthreads);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[0], edges.begin() + index[1],
+	radix_sort_in_place<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[0], edges.begin() + index[1],
 			&PathEdgeTo, nodes.size(), nthreads);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[1], edges.begin() + index[2],
+	radix_sort_in_place<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[1], edges.begin() + index[2],
 			&PathEdgeTo, nodes.size(), nthreads);
-	bin_sort_no_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[2], edges.begin() + index[3],
+	radix_sort_in_place<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[2], edges.begin() + index[3],
 			&PathEdgeTo, nodes.size(), nthreads);
 
 	sort(edges.begin() + index[3], edges.begin() + index[4]);
@@ -2110,7 +2110,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	indiv = time(0);
 
 	//change comparison to only look at key.first?
-	bin_sort_no_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), &PathNodeKey, ranks, nthreads);
+	radix_sort_in_place<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), &PathNodeKey, ranks, nthreads);
 
 	if(verbose) cerr << "RE-SORTED NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
@@ -2215,7 +2215,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     // this should be a merge not a sort!!
     // edges with a given label are sorted by ranking
     // only 4 labels so should be pretty trivial to do a 4-way merge
-    bin_sort_no_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, nodes.size(), nthreads);
+    radix_sort_in_place<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, nodes.size(), nthreads);
     for(index_t i = 0; i < edges.size(); i++) {
         nodes[edges[i].ranking].key.second = i + 1;
     }
