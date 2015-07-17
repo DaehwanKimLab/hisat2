@@ -1534,8 +1534,8 @@ public: EList<pair<index_t, index_t> > ftab;
 #endif
 };
 
-//Creates an initial PathGRaph from the RefGraph
-//All nodes begin as unsorted nodes
+//creates prefix-sorted PathGraph Nodes given a reverse determinized RefGraph
+//outputs nodes sorted by their from attribute
 template <typename index_t>
 PathGraph<index_t>::PathGraph(RefGraph<index_t>& base, int nthreads_, bool verbose_) :
 nthreads(nthreads_), verbose(verbose_),
@@ -1555,12 +1555,13 @@ report_F_node_idx(0), report_F_location(0)
     while(!isSorted()) {
     	lateGeneration();
 	}
-    nodes.resizeNoCopy(past_nodes.size());
+    nodes.resizeNoCopyExact(past_nodes.size());
     radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), nodes.ptr(),
     		&PathNodeFrom, max_from, nthreads);
     past_nodes.nullify();
 }
 
+//make original unsorted PathNodes given a RefGraph
 template <typename index_t>
 void PathGraph<index_t>::makeFromRef(RefGraph<index_t>& base) {
 	// Create a path node per edge with a key set to from node's label
@@ -1654,7 +1655,7 @@ void PathGraph<index_t>::generationOne() {
 		}
 	}
 	printInfo();
-	past_nodes.xfer(nodes);
+	past_nodes.swap(nodes);
 }
 
 template <typename index_t>
@@ -1692,7 +1693,7 @@ void PathGraph<index_t>::earlyGeneration() {
 		}
 	}
 	printInfo();
-	past_nodes.xfer(nodes);
+	past_nodes.swap(nodes);
 }
 
 template <typename index_t>
@@ -1750,7 +1751,7 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	if(verbose) cerr << "MERGE, UPDATE RANK: " << time(0) - start << endl;
 	start = time(0);
 	printInfo();
-	past_nodes.xfer(nodes);
+	past_nodes.swap(nodes);
 }
 
 
@@ -1887,7 +1888,7 @@ void PathGraph<index_t>::lateGeneration() {
 	if(verbose) cerr << "MERGEUPDATERANK: " << time(0) - indiv << endl;
 	if(verbose) cerr << "TOTAL TIME: " << time(0) - overall << endl;
 	printInfo();
-	past_nodes.xfer(nodes);
+	past_nodes.swap(nodes);
 }
 
 
