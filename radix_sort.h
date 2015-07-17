@@ -188,9 +188,9 @@ static void _write_worker(void* vp) {
 
 template <typename T, typename CMP, typename index_t>
 void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
+	//set parameters
 	const int SHIFT = 7;
 	const int BLOCKS = (1 << (SHIFT + 1));
-
 	int log_size = sizeof(maxv) * 8;
 	while(!((1 << log_size) & maxv)) log_size--;
 	int right_shift = log_size - SHIFT;
@@ -241,33 +241,31 @@ void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, 
 			cparams[i].count[j] = tot - cparams[i].count[j];
 		}
 	}
-	T* index[BLOCKS];
-	for(int i = 0; i < occupied; i++) {
-		index[i] = o + cparams[0].count[i + 1];
+	T* index[BLOCKS + 1];
+	for(int i = 0; i < occupied + 1; i++) {
+		index[i] = o + cparams[0].count[i];
 	}
 	//write T's to correct bin
-	for(int i = 0; i < nthreads; i++) {
-		if(nthreads == 1) {
-			_write_worker<T, index_t>((void*)&cparams[i]);
-		} else {
+	if(nthreads == 1) {
+		_write_worker<T, index_t>((void*)&cparams[0]);
+	} else {
+		for(int i = 0; i < nthreads; i++)
 			threads1[i] = new tthread::thread(&_write_worker<T, index_t>, (void*)&cparams[i]);
-		}
-	}
-	if(nthreads > 1) {
 		for(int i = 0; i < nthreads; i++) {
 			threads1[i]->join();
-			delete[] cparams[i].count;
-			delete threads1[i];
 		}
+	}
+	for(int i = 0; i < nthreads; i++) {
+		delete[] cparams[i].count;
+		delete threads1[i];
 	}
 	if(nthreads != 1) cerr << "FINISHED FIRST ROUND: " << time(0) - start << endl;
 	start = time(0);
 	//sort partitions
 	if(nthreads == 1) {
-		_radix_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
-		for(int bin = 1; bin < occupied; bin++) {
-			if(index[bin] - index[bin - 1] > 1) _radix_sort<T, CMP, index_t>(index[bin - 1], index[bin], hash, right_shift);
-		}
+		for(int bin = 0; bin < occupied; bin++)
+			if(index[bin + 1] - index[bin] > 1)
+				_radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 	} else {
 		AutoArray<tthread::thread*> threads(nthreads);
         EList<RecurseParams<T, index_t> > params; params.resizeExact(nthreads);
@@ -280,11 +278,11 @@ void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, 
 			threads[i] = new tthread::thread(&_radix_sort_worker<T, CMP, index_t>, (void*)&params[i]);
 			st += params[i].num;
 		}
-		//do any remaining bins using main thread,
-		for(int bin = st; bin < occupied - 1; bin++) {
-			if(index[bin + 1] - index[bin] > 1) _radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+		//do any remaining bins using main thread
+		for(int bin = st; bin < occupied; bin++) {
+			if(index[bin + 1] - index[bin] > 1)
+				_radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
 		}
-		_radix_sort<T, CMP, index_t>(o, index[0], hash, right_shift);
 		for(int i = 0; i < nthreads; i++) {
 			threads[i]->join();
 			delete threads[i];
