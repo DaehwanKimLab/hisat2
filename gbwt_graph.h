@@ -101,6 +101,7 @@ public:
             return to < o.to;
         }
     };
+
     static index_t EdgeTo (Edge& a) {
     	return a.to;
     }
@@ -138,12 +139,7 @@ private:
         std::sort(edges.begin(), edges.end(), EdgeFromCmp());
     }
     static void sortEdgesTo(EList<Edge>& edges) {
-    	radix_sort_in_place<Edge, EdgeToCmp, index_t>(
-    	    				edges.begin(), edges.end(), &EdgeTo, (index_t)-1);
-    }
-    void sortEdgesByTo() {
-    	radix_sort_in_place<Edge, EdgeToCmp, index_t>(
-    				edges.begin(), edges.end(), &EdgeTo, edges.size(), nthreads);
+    	std::sort(edges.begin(), edges.end(), EdgeToCmp());
     }
 
     // Return edge ranges [begin, end)
@@ -1295,93 +1291,9 @@ public:
         }
     };
 
-    struct TempEdge {
-        index_t from; // from Node
-        index_t to;   // to Node
-
-    };
-
-    struct TempEdgeFromCmp {
-        bool operator() (const TempEdge& a, const TempEdge& b) const {
-            return a.from < b.from;
-        }
-    };
-
-    struct TempEdgeToCmp {
-        bool operator() (const TempEdge& a, const TempEdge& b) const {
-            return a.to < b.to;
-        };
-    };
-
-private:
-    struct ThreadParam {
-        PathGraph<index_t>*              previous;
-        EList<PathNode>*                 from_nodes;
-        EList<PathNode>*			     to_nodes;
-        EList<index_t>*                  from_cur;
-        EList<index_t>*                  to_cur;
-        index_t                          st;
-        index_t                          en;
-        int                              partitions;
-        int                              thread_id;
-     };
-    static void seperateNodes(void* vp);
-    static void seperateNodesCount(void* vp);
-    static index_t hash(index_t id, index_t div) {
-        uint64_t mult = 13;
-        return (mult * (uint64_t)id) % div;
-    }
-
-
-    struct ThreadParam2 {
-        index_t                         st;
-        index_t                         en;
-        EList<PathNode>*                from_nodes;
-        EList<PathNode>*     	         to_nodes;
-        EList<index_t>*                 from_size;
-        EList<index_t>*                 to_size;
-        EList<index_t>*                 from_off;
-        EList<index_t>*                 to_off;
-        int                             thread_id;
-        PathNode**                      new_nodes;
-        EList<index_t>*                 new_cur;
-        EList<index_t>*                 breakvalues;
-        ELList<index_t>*                breakpoints;
-        int                             nthreads;
-        int                             generation;
-    };
-    static void createCombined(void* vp);
-    
-    struct CreateNewNodesParams {
-    	PathNode*        st;
-    	PathNode*        en;
-    	PathNode*        curr;
-    	index_t*         sub_temp_nodes;
-    	EList<index_t>*  from_index;
-    	EList<PathNode>* from_table;
-    };
-    static void createNewNodesCounter(void* vp);
-    static void createNewNodesMaker(void* vp);
-    
-    struct GenEdgesParams {
-    	typename RefGraph<index_t>::Edge*        st;
-    	typename RefGraph<index_t>::Edge*        en;
-		EList<index_t, 6>*                       label_index;
-		EList<index_t>*                          from_index;
-		EList<PathNode>*                         nodes;
-		EList<PathEdge>*                         edges;
-		EList<typename RefGraph<index_t>::Node>* ref_nodes;
-    };
-    static void generateEdgesCounter(void* vp);
-    static void generateEdgesMaker(void* vp);
-
-
 public:
     // Create a new graph in which paths are represented using nodes
     PathGraph(RefGraph<index_t>& parent, int nthreads_ = 1, bool verbose_ = false);
-
-    // Construct a next 2^(j+1) path graph from a 2^j path graph
-    PathGraph(PathGraph<index_t>& previous);
 
     ~PathGraph() {}
 
@@ -1394,7 +1306,6 @@ public:
     
     bool isSorted() const { return sorted; }
 
-    //
     bool nextRow(int& gbwtChar, int& F, int& M, index_t& pos) {
         if(report_node_idx >= nodes.size()) return false;
         bool firstOutEdge = false;
@@ -1428,7 +1339,6 @@ public:
         return true;
     }
 
-    //
     index_t nextFLocation() {
         if(report_F_node_idx >= nodes.size()) return (index_t)INDEX_MAX;
         index_t ret = report_F_location;
@@ -1447,17 +1357,31 @@ private:
     void lateGeneration();
 
     void mergeUpdateRank();
-
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> range);
+    pair<index_t, index_t> getEdges(index_t node, bool by_from); // Create index first.
 
-    void sortByKey() { sort(nodes.begin(), nodes.end()); } // by key
+    struct CreateNewNodesParams {
+    	PathNode*        st;
+    	PathNode*        en;
+    	PathNode*        curr;
+    	index_t*         sub_temp_nodes;
+    	EList<index_t>*  from_index;
+    	EList<PathNode>* from_table;
+    };
+    static void createNewNodesCounter(void* vp);
+    static void createNewNodesMaker(void* vp);
 
-    // Can create an index by using key.second in PathNodes.
-    void sortNodesByFrom() {
-    	radix_sort_in_place<PathNode, PathNodeFromCmp, index_t>(
-    				nodes.begin(), nodes.end(), &PathNodeFrom, max_from, nthreads);
-    }
-    pair<index_t, index_t> getNodesFrom(index_t node);        // Use sortByFrom(true) first.
+    struct GenEdgesParams {
+    	typename RefGraph<index_t>::Edge*        st;
+    	typename RefGraph<index_t>::Edge*        en;
+		EList<index_t, 6>*                       label_index;
+		EList<index_t>*                          from_index;
+		EList<PathNode>*                         nodes;
+		EList<PathEdge>*                         edges;
+		EList<typename RefGraph<index_t>::Node>* ref_nodes;
+    };
+    static void generateEdgesCounter(void* vp);
+    static void generateEdgesMaker(void* vp);
 
 private:
     int             nthreads;
@@ -1482,9 +1406,6 @@ private:
     // For reporting location in F corresponding to 1 bit in M
     index_t                report_F_node_idx;
     index_t                report_F_location;
-
-    void      sortEdges(bool by_from, bool create_index);
-    pair<index_t, index_t> getEdges(index_t node, bool by_from); // Create index first.
 
     // following variables are for debugging purposes
 #ifndef NDEBUG
@@ -1769,7 +1690,6 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	printInfo();
 	past_nodes.swap(nodes);
 }
-
 
 template <typename index_t>
 void PathGraph<index_t>::createNewNodesCounter(void* vp) {
