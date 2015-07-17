@@ -3436,6 +3436,11 @@ public:
             // daehwan - for debugging purposes
             pseudogeneStop = false;
             
+            // daehwan - for debugging purposes
+#if 0
+            anchorStop = false;
+#endif
+            
             // Align this read beginning from previously stopped base
             // stops when it is uniquelly mapped with at least 28bp or
             // it may involve processed pseudogene
