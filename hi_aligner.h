@@ -662,7 +662,7 @@ struct GenomeHit {
                                  index_t*                    numNs = NULL)
     {
         int best_rdoff = (int)rdoff;
-        index_t numSnpsTried = 0;
+        index_t numALTsTried = 0;
         EList<Edit>& alt_edits = sharedVar.alt_edits;
         alt_edits = edits;
         alignWithALTs_recur(
@@ -685,7 +685,7 @@ struct GenomeHit {
                             mm,
                             numNs,
                             0,    /* dep */
-                            numSnpsTried);
+                            numALTsTried);
         index_t extlen = 0;
         if(left) {
             assert_geq(best_rdoff, -1);
@@ -1752,14 +1752,6 @@ bool GenomeHit<index_t>::extend(
             assert_geq(rl, reflen - _rdoff);
             rl -= (reflen - _rdoff);
             assert_eq(rl + reflen, _toff);
-            raw_refbuf.resize(reflen + 16);
-            int off = ref.getStretch(
-                                     reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
-                                     (size_t)_tidx,
-                                     (size_t)rl,
-                                     reflen
-                                     ASSERT_ONLY(, destU32));
-            assert_lt(off, 16);
             index_t numNs = 0;
             index_t num_prev_edits = _edits->size();
             index_t best_ext =  alignWithALTs(
@@ -2458,9 +2450,10 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 index_t                     mm,
                                                 index_t*                    numNs,
                                                 index_t                     dep,
-                                                index_t&                    numSnpsTried,
+                                                index_t&                    numALTsTried,
                                                 ALT_TYPE                    prev_alt_type)
 {
+    if(numALTsTried > 16) return 0;
     assert_gt(rdlen, 0);
     assert_gt(rflen, 0);
     assert_geq(rflen, rdlen);
@@ -2623,7 +2616,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 }
             }
             if(alt_compatible) {
-                numSnpsTried++;
+                numALTsTried++;
                 assert_leq(rd_i, (int)rdoff);
                 if(rd_i < 0) {
                     best_rdoff = rd_i;
@@ -2669,7 +2662,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          mm,
                                                          numNs,
                                                          dep + 1,
-                                                         numSnpsTried,
+                                                         numALTsTried,
                                                          alt.type);
                 if(alignedLen == next_rdlen) return rdlen;
             }
@@ -2800,7 +2793,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 }
             }
             if(alt_compatible) {
-                numSnpsTried++;
+                numALTsTried++;
                 if(rd_i == rdlen) {
                     best_rdoff = rdoff + rd_i;
                     edits = tmp_edits;
@@ -2849,7 +2842,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          mm,
                                                          numNs,
                                                          dep + 1,
-                                                         numSnpsTried,
+                                                         numALTsTried,
                                                          alt.type);
                 assert_leq(rdoff + rd_i + alignedLen, best_rdoff);
                 if(rdoff + rd_i + alignedLen == best_rdoff) {
