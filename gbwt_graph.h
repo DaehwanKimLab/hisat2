@@ -1546,15 +1546,31 @@ report_F_node_idx(0), report_F_location(0)
 #ifndef NDEBUG
     debug = base.nodes.size() <= 20;
 #endif
+    // Fill nodes with a PathNode for each edge in base.edges.
+    // Set max_from.
     makeFromRef(base);
+    // In the first generation the nodes enter, not quite sorted by from.
+    // We use a counting sort to sort the nodes, otherwise same as early generation.
     generationOne();
+    // In early generations no nodes become sorted.
+    // Therefore, we skip the pruning step and leave the
+    //   nodes sorted by from.
     while(generation < 3) {
         earlyGeneration();
     }
+    // On the first generation we perform a pruning step,
+    //   we are forced to sort the entire list of nodes by rank
+    //   in order to perform pruning step.
     firstPruneGeneration();
+    // In later generations, most nodes are already sorted, so we
+    //   perform a more expensive random access join with nodes in rank order
+    //   in return for avoiding having to sort by rank in order to prune nodes.
     while(!isSorted()) {
     	lateGeneration();
 	}
+    // In the generateEdges method it is convenient to begin with nodes sorted by from.
+    // We perform this action here, while we still have past_nodes allocated to avoid
+    //   an in-place sort.
     nodes.resizeNoCopyExact(past_nodes.size());
     radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), nodes.ptr(),
     		&PathNodeFrom, max_from, nthreads);
