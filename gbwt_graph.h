@@ -1546,25 +1546,18 @@ report_F_node_idx(0), report_F_location(0)
 #ifndef NDEBUG
     debug = base.nodes.size() <= 20;
 #endif
-
-    //fill nodes and set max_from
     makeFromRef(base);
-
     generationOne();
-
-    while(generation < 3) { // this needs to be changed to account for different size index_t's
-    	earlyGeneration();
+    while(generation < 3) {
+        earlyGeneration();
     }
-
     firstPruneGeneration();
-    if(isSorted()) return;
-    past_nodes.swap(nodes);
-
-    while(true) {
+    while(!isSorted()) {
     	lateGeneration();
-    	if(isSorted()) break;
-    	past_nodes.swap(nodes);
 	}
+    nodes.resizeNoCopy(past_nodes.size());
+    radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), nodes.ptr(),
+    		&PathNodeFrom, max_from, nthreads);
     past_nodes.nullify();
 }
 
@@ -1641,6 +1634,7 @@ void PathGraph<index_t>::generationOne() {
 		from_index[i] = from_index[i - 1];
 	}
 	from_index[0] = 0;
+
 	//Now query direct access table
 	temp_nodes = 0;
 	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
@@ -1660,7 +1654,7 @@ void PathGraph<index_t>::generationOne() {
 		}
 	}
 	printInfo();
-	past_nodes.swap(nodes);
+	past_nodes.xfer(nodes);
 }
 
 template <typename index_t>
@@ -1698,7 +1692,7 @@ void PathGraph<index_t>::earlyGeneration() {
 		}
 	}
 	printInfo();
-	past_nodes.swap(nodes);
+	past_nodes.xfer(nodes);
 }
 
 template <typename index_t>
@@ -1755,8 +1749,8 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	mergeUpdateRank();
 	if(verbose) cerr << "MERGE, UPDATE RANK: " << time(0) - start << endl;
 	start = time(0);
-
 	printInfo();
+	past_nodes.xfer(nodes);
 }
 
 
@@ -1893,6 +1887,7 @@ void PathGraph<index_t>::lateGeneration() {
 	if(verbose) cerr << "MERGEUPDATERANK: " << time(0) - indiv << endl;
 	if(verbose) cerr << "TOTAL TIME: " << time(0) - overall << endl;
 	printInfo();
+	past_nodes.xfer(nodes);
 }
 
 
@@ -1971,7 +1966,7 @@ template <typename index_t>
 bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 {
 	//entering we have:
-	// nodes - sorted by rank
+	// nodes - sorted by from
 	// edges - empty
 	// base.nodes - almost sorted by from/to
 	// base.edges - almost sorted by from/to
@@ -1990,13 +1985,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	time_t indiv = time(0);
 	time_t overall = time(0);
-
-	//sort nodes by .from using in-place radix sort
-	//could switch to out of place and get speed increase, if have space
-	sortNodesByFrom();
-
-	if(verbose) cerr << "Sort nodes by from: "  << time(0) - indiv << endl;
-	indiv = time(0);
 
 	//replace nodes.to with genomic position
 	//fast because both roughly ordered by from
