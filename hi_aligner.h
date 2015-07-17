@@ -402,12 +402,15 @@ template <typename index_t>
 struct SharedTempVars {
     SStringExpandable<char> raw_refbuf;
     SStringExpandable<char> raw_refbuf2;
-    EList<SStringExpandable<char> > raw_refbufs;
     EList<int64_t> temp_scores;
     EList<int64_t> temp_scores2;
     
     EList<pair<index_t, int> >  offDiffs;
     ELList<index_t> alt_combinations;
+    
+    // Align with alternatives
+    EList<SStringExpandable<char> > raw_refbufs;
+    EList<Edit>                     alt_edits;
     
     ASSERT_ONLY(SStringExpandable<uint32_t> destU32);
     
@@ -649,17 +652,59 @@ struct GenomeHit {
                                  index_t                     rdoff,
                                  index_t                     rdlen,
                                  const BitPairReference&     ref,
-                                 EList<SStringExpandable<char> >& raw_refbufs,
-                                 ASSERT_ONLY(SStringExpandable<uint32_t> destU32,)
-                                 const char*                 rfseq,
+                                 SharedTempVars<index_t>&    sharedVar,
                                  index_t                     tidx,
                                  index_t                     rfoff,
                                  index_t                     rflen,
                                  bool                        left,
                                  EList<Edit>*                edits = NULL,
                                  index_t                     mm = 0,
-                                 index_t*                    numNs = NULL,
-                                 index_t                     dep = 0);
+                                 index_t*                    numNs = NULL)
+    {
+        EList<SStringExpandable<char> >& raw_refbufs = sharedVar.raw_refbufs;
+        index_t extlen = alignWithALTs_recur(
+                                             alts,
+                                             joinedOff,
+                                             rdseq,
+                                             rdoff,
+                                             rdlen,
+                                             ref,
+                                             raw_refbufs,
+                                             ASSERT_ONLY(sharedVar.destU32,)
+                                             NULL, /* rfseq */
+                                             tidx,
+                                             rfoff,
+                                             rflen,
+                                             left,
+                                             edits,
+                                             mm,
+                                             numNs,
+                                             0);   /* dep */
+        
+        return extlen;
+    }
+    
+    /*
+     *
+     */
+    static index_t alignWithALTs_recur(
+                                       const EList<ALT<index_t> >& alts,
+                                       index_t                     joinedOff,
+                                       const BTDnaString&          rdseq,
+                                       index_t                     rdoff,
+                                       index_t                     rdlen,
+                                       const BitPairReference&     ref,
+                                       EList<SStringExpandable<char> >& raw_refbufs,
+                                       ASSERT_ONLY(SStringExpandable<uint32_t> destU32,)
+                                       const char*                 rfseq,
+                                       index_t                     tidx,
+                                       index_t                     rfoff,
+                                       index_t                     rflen,
+                                       bool                        left,
+                                       EList<Edit>*                edits,
+                                       index_t                     mm,
+                                       index_t*                    numNs,
+                                       index_t                     dep);
     
     /**
      * For alignment involving indel, move the indels
@@ -1705,9 +1750,7 @@ bool GenomeHit<index_t>::extend(
                                               this->_rdoff - 1,
                                               this->_rdoff,
                                               ref,
-                                              _sharedVars->raw_refbufs,
-                                              ASSERT_ONLY(_sharedVars->destU32,)
-                                              NULL, /* reference sequence */
+                                              *_sharedVars,
                                               _tidx,
                                               rl,
                                               reflen,
@@ -1917,9 +1960,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            this->_rdoff,
                                            this->_len,
                                            ref,
-                                           _sharedVars->raw_refbufs,
-                                           ASSERT_ONLY(_sharedVars->destU32,)
-                                           NULL, /* reference sequence */
+                                           *_sharedVars,
                                            this->_tidx,
                                            this->_toff,
                                            reflen,
@@ -2374,24 +2415,24 @@ index_t GenomeHit<index_t>::alignWithSNPs(
  *
  */
 template <typename index_t>
-index_t GenomeHit<index_t>::alignWithALTs(
-                                          const EList<ALT<index_t> >& alts,
-                                          index_t                     joinedOff,
-                                          const BTDnaString&          rdseq,
-                                          index_t                     rdoff,
-                                          index_t                     rdlen,
-                                          const BitPairReference&     ref,
-                                          EList<SStringExpandable<char> >& raw_refbufs,
-                                          ASSERT_ONLY(SStringExpandable<uint32_t> destU32,)
-                                          const char*                 rfseq,
-                                          index_t                     tidx,
-                                          index_t                     rfoff,
-                                          index_t                     rflen,
-                                          bool                        left,
-                                          EList<Edit>*                edits,
-                                          index_t                     mm,
-                                          index_t*                    numNs,
-                                          index_t                     dep)
+index_t GenomeHit<index_t>::alignWithALTs_recur(
+                                                const EList<ALT<index_t> >& alts,
+                                                index_t                     joinedOff,
+                                                const BTDnaString&          rdseq,
+                                                index_t                     rdoff,
+                                                index_t                     rdlen,
+                                                const BitPairReference&     ref,
+                                                EList<SStringExpandable<char> >& raw_refbufs,
+                                                ASSERT_ONLY(SStringExpandable<uint32_t> destU32,)
+                                                const char*                 rfseq,
+                                                index_t                     tidx,
+                                                index_t                     rfoff,
+                                                index_t                     rflen,
+                                                bool                        left,
+                                                EList<Edit>*                edits,
+                                                index_t                     mm,
+                                                index_t*                    numNs,
+                                                index_t                     dep)
 {
     assert_gt(rdlen, 0);
     assert_gt(rflen, 0);
@@ -2585,24 +2626,24 @@ index_t GenomeHit<index_t>::alignWithALTs(
                     next_rflen += add_len;
                     next_rfseq = NULL;
                 }
-                index_t alignedLen = alignWithALTs(
-                                                   alts,
-                                                   next_joinedOff,
-                                                   rdseq,
-                                                   next_rdoff,
-                                                   next_rdlen,
-                                                   ref,
-                                                   raw_refbufs,
-                                                   ASSERT_ONLY(destU32,)
-                                                   next_rfseq,
-                                                   tidx,
-                                                   next_rfoff,
-                                                   next_rflen,
-                                                   left,
-                                                   edits,
-                                                   mm,
-                                                   numNs,
-                                                   dep + 1);
+                index_t alignedLen = alignWithALTs_recur(
+                                                         alts,
+                                                         next_joinedOff,
+                                                         rdseq,
+                                                         next_rdoff,
+                                                         next_rdlen,
+                                                         ref,
+                                                         raw_refbufs,
+                                                         ASSERT_ONLY(destU32,)
+                                                         next_rfseq,
+                                                         tidx,
+                                                         next_rfoff,
+                                                         next_rflen,
+                                                         left,
+                                                         edits,
+                                                         mm,
+                                                         numNs,
+                                                         dep + 1);
                 if(alignedLen == next_rdlen) return rdlen;
             }
             // Restore to the earlier state
@@ -2762,24 +2803,24 @@ index_t GenomeHit<index_t>::alignWithALTs(
                     next_rfseq = NULL;
                 }
                 index_t orig2_nedits = edits->size();
-                index_t alignedLen = alignWithALTs(
-                                                   alts,
-                                                   next_joinedOff,
-                                                   rdseq,
-                                                   next_rdoff,
-                                                   next_rdlen,
-                                                   ref,
-                                                   raw_refbufs,
-                                                   ASSERT_ONLY(destU32,)
-                                                   next_rfseq,
-                                                   tidx,
-                                                   next_rfoff,
-                                                   next_rflen,
-                                                   left,
-                                                   edits,
-                                                   mm,
-                                                   numNs,
-                                                   dep + 1);
+                index_t alignedLen = alignWithALTs_recur(
+                                                         alts,
+                                                         next_joinedOff,
+                                                         rdseq,
+                                                         next_rdoff,
+                                                         next_rdlen,
+                                                         ref,
+                                                         raw_refbufs,
+                                                         ASSERT_ONLY(destU32,)
+                                                         next_rfseq,
+                                                         tidx,
+                                                         next_rfoff,
+                                                         next_rflen,
+                                                         left,
+                                                         edits,
+                                                         mm,
+                                                         numNs,
+                                                         dep + 1);
                 if(rd_i + alignedLen == rdlen) {
                     for(index_t ei = orig2_nedits; ei < edits->size(); ei++) {
                         Edit& e = (*edits)[ei];
