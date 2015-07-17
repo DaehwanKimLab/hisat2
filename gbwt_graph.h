@@ -1225,11 +1225,11 @@ public:
         };
     };
 
-    static index_t PathNodeFrom (PathNode& a) {
+    static inline index_t PathNodeFrom (PathNode& a) {
     	return a.from;
     }
 
-    static index_t PathNodeKey (PathNode& a) {
+    static inline index_t PathNodeKey (PathNode& a) {
        	return a.key.first;
     }
 
@@ -1275,7 +1275,7 @@ public:
 
     };
     
-    static index_t PathEdgeTo (PathEdge& a) {
+    static inline index_t PathEdgeTo (PathEdge& a) {
         return a.to;
     }
 
@@ -1586,9 +1586,7 @@ void PathGraph<index_t>::generationOne() {
 			nodes.back().from = node->from;
 			nodes.back().to = past_nodes[j].to;
 			assert_gt(generation, 0);
-			index_t bit_shift = 1 << (generation - 1);
-			bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
-			nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + past_nodes[j].key.first, 0);
+			nodes.back().key  = pair<index_t, index_t>((node->key.first << 3) + past_nodes[j].key.first, 0);
 		}
 	}
 	printInfo();
@@ -1913,11 +1911,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	// nodes.from -> base.edges.to
 	// nodes.from -> edges.from
 
-	//TODO:
-	// split work more evenly in sort new edges
-	// change sort edges by key to a merge operation
-	// implicit: update radix sort to increase parallelism
-
 	if(!sorted) return false;
 
 	time_t indiv = time(0);
@@ -2034,7 +2027,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	if(verbose) cerr << "SORTED NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
-	//change comparison to only look at key.first?
 	radix_sort_in_place<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), &PathNodeKey, ranks, nthreads);
 
 	if(verbose) cerr << "RE-SORTED NODES: " << time(0) - indiv << endl;
@@ -2137,9 +2129,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     }
 #endif
 
-    // this should be a merge not a sort!!
-    // edges with a given label are sorted by ranking
-    // only 4 labels so should be pretty trivial to do a 4-way merge
     radix_sort_in_place<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, nodes.size(), nthreads);
     for(index_t i = 0; i < edges.size(); i++) {
         nodes[edges[i].ranking].key.second = i + 1;
