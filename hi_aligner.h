@@ -2449,7 +2449,7 @@ index_t GenomeHit<index_t>::alignWithALTs(
                 assert(false);
             }
         }
-        assert_gt(rdoff, 0);
+        assert_geq(rdoff, 0);
         const index_t orig_nedits = edits->size();
         for(; alt_range.second > alt_range.first; alt_range.second--) {
             const ALT<index_t>& alt = alts[alt_range.second];
@@ -2469,7 +2469,7 @@ index_t GenomeHit<index_t>::alignWithALTs(
                 diff = joinedOff - alt.pos;
             } else {
                 assert(alt.splicesite());
-                diff = joinedOff - alt.left;
+                diff = joinedOff - (alt.left + 1);
             }
             if(rf_i < diff || rd_i < diff) continue;
             rf_i -= diff;
@@ -2538,12 +2538,19 @@ index_t GenomeHit<index_t>::alignWithALTs(
                     }
                 }
             } else if(alt.type == ALT_SPLICESITE) {
-                if(rd_i > 0) {
+                bool add_splicesite = true;
+                if(edits != NULL && edits->size() > 0) {
+                    const Edit& e = edits->front();
+                    if(e.type == EDIT_TYPE_SPL && rd_i + 1 == e.pos) {
+                        add_splicesite = false;
+                    }
+                }
+                if(add_splicesite) {
                     assert_lt(rd_i, rflen);
                     assert_gt(alt.left, alt.right);
                     index_t intronLen = alt.left - alt.right + 1;
                     if(edits != NULL) {
-                        Edit e(rd_i,
+                        Edit e(rd_i + 1,
                                0,
                                0,
                                EDIT_TYPE_SPL,
@@ -2557,7 +2564,7 @@ index_t GenomeHit<index_t>::alignWithALTs(
                 }
             }
             if(alt_compatible) {
-                assert_lt(rd_i, (int)rdoff);
+                assert_leq(rd_i, (int)rdoff);
                 if(rd_i < 0) return rdlen;
                 index_t next_joinedOff = alt.pos;
                 index_t next_rfoff = rfoff, next_rdoff = rd_i;
@@ -2567,7 +2574,6 @@ index_t GenomeHit<index_t>::alignWithALTs(
                     assert_gt(alt.left, alt.right);
                     next_joinedOff = alt.right;
                     index_t intronLen = alt.left - alt.right + 1;
-                    next_rfoff += (rflen - next_rflen);
                     assert_geq(next_rfoff, intronLen);
                     next_rfoff -= intronLen;
                     next_rfseq = NULL;
