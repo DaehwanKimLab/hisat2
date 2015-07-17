@@ -657,39 +657,44 @@ struct GenomeHit {
                                  index_t                     rfoff,
                                  index_t                     rflen,
                                  bool                        left,
-                                 EList<Edit>*                edits = NULL,
+                                 EList<Edit>&                edits,
                                  index_t                     mm = 0,
                                  index_t*                    numNs = NULL)
     {
-        index_t max_extlen = 0;
+        int best_rdoff = (int)rdoff;
         index_t numSnpsTried = 0;
         EList<Edit>& alt_edits = sharedVar.alt_edits;
-        if(edits == NULL) alt_edits.clear();
-        else              alt_edits = *edits;
-        index_t extlen = alignWithALTs_recur(
-                                             alts,
-                                             joinedOff,
-                                             rdseq,
-                                             rdoff,
-                                             rdlen,
-                                             ref,
-                                             sharedVar.raw_refbufs,
-                                             ASSERT_ONLY(sharedVar.destU32,)
-                                             alt_edits,
-                                             max_extlen,
-                                             NULL, /* rfseq */
-                                             tidx,
-                                             rfoff,
-                                             rflen,
-                                             left,
-                                             edits,
-                                             mm,
-                                             numNs,
-                                             0,    /* dep */
-                                             numSnpsTried);
-        
-        if(extlen > 0) {
-            if(edits != NULL) *edits = alt_edits;
+        alt_edits = edits;
+        alignWithALTs_recur(
+                            alts,
+                            joinedOff,
+                            rdseq,
+                            rdoff,
+                            rdlen,
+                            ref,
+                            sharedVar.raw_refbufs,
+                            ASSERT_ONLY(sharedVar.destU32,)
+                            alt_edits,
+                            best_rdoff,
+                            NULL, /* rfseq */
+                            tidx,
+                            rfoff,
+                            rflen,
+                            left,
+                            edits,
+                            mm,
+                            numNs,
+                            0,    /* dep */
+                            numSnpsTried);
+        index_t extlen = 0;
+        if(left) {
+            assert_geq(best_rdoff, -1);
+            assert_leq(best_rdoff, (int)rdoff);
+            extlen = rdoff - best_rdoff;
+        } else {
+            assert_leq(best_rdoff, (int)(rdoff + rdlen));
+            assert_geq(best_rdoff, (int)rdoff);
+            extlen = best_rdoff - rdoff;
         }
         return extlen;
     }
@@ -707,13 +712,13 @@ struct GenomeHit {
                                        EList<SStringExpandable<char> >& raw_refbufs,
                                        ASSERT_ONLY(SStringExpandable<uint32_t> destU32,)
                                        EList<Edit>&                tmp_edits,
-                                       index_t&                    max_extlen,
+                                       int&                        best_rdoff,
                                        const char*                 rfseq,
                                        index_t                     tidx,
                                        index_t                     rfoff,
                                        index_t                     rflen,
                                        bool                        left,
-                                       EList<Edit>*                edits,
+                                       EList<Edit>&                edits,
                                        index_t                     mm,
                                        index_t*                    numNs,
                                        index_t                     dep,
@@ -1769,7 +1774,7 @@ bool GenomeHit<index_t>::extend(
                                               rl,
                                               reflen,
                                               true, /* left? */
-                                              this->_edits,
+                                              *this->_edits,
                                               mm,
                                               &numNs);
             if(best_ext > 0) {
@@ -1979,8 +1984,12 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            this->_toff,
                                            reflen,
                                            false, /* left? */
-                                           this->_edits);
-         if(alignedLen == this->_len) found = true;
+                                           *this->_edits);
+        if(alignedLen == this->_len) {
+            found = true;
+        } else {
+            this->_edits->clear();
+        }
     }
 #ifndef NDEBUG
     if(found) {
@@ -2439,13 +2448,13 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 EList<SStringExpandable<char> >& raw_refbufs,
                                                 ASSERT_ONLY(SStringExpandable<uint32_t> destU32,)
                                                 EList<Edit>&                tmp_edits,
-                                                index_t&                    max_extlen,
+                                                int&                        best_rdoff,
                                                 const char*                 rfseq,
                                                 index_t                     tidx,
                                                 index_t                     rfoff,
                                                 index_t                     rflen,
                                                 bool                        left,
-                                                EList<Edit>*                edits,
+                                                EList<Edit>&                edits,
                                                 index_t                     mm,
                                                 index_t*                    numNs,
                                                 index_t                     dep,
@@ -2487,6 +2496,10 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 tmp_edits.push_back(e);
             }
             if(rf_bp == 4 && numNs != NULL) (*numNs)++;
+        }
+        if(min_rd_i < best_rdoff) {
+            best_rdoff = min_rd_i;
+            edits = tmp_edits;
         }
         if(min_rd_i < 0) return rdlen;
         // Find SNPs included in this region
@@ -2612,7 +2625,11 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             if(alt_compatible) {
                 numSnpsTried++;
                 assert_leq(rd_i, (int)rdoff);
-                if(rd_i < 0) return rdlen;
+                if(rd_i < 0) {
+                    best_rdoff = rd_i;
+                    edits = tmp_edits;
+                    return rdlen;
+                }
                 index_t next_joinedOff = alt.pos;
                 index_t next_rfoff = rfoff, next_rdoff = rd_i;
                 const char* next_rfseq = rfseq;
@@ -2642,7 +2659,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          raw_refbufs,
                                                          ASSERT_ONLY(destU32,)
                                                          tmp_edits,
-                                                         max_extlen,
+                                                         best_rdoff,
                                                          next_rfseq,
                                                          tidx,
                                                          next_rfoff,
@@ -2678,6 +2695,10 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 tmp_edits.push_back(e);
             }
             if(rf_bp == 4 && numNs != NULL) (*numNs)++;
+        }
+        if(max_rd_i + rdoff > best_rdoff) {
+            best_rdoff = max_rd_i + rdoff;
+            edits = tmp_edits;
         }
         if(max_rd_i == rdlen) return max_rd_i;
         // Find SNPs included in this region
@@ -2780,7 +2801,11 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             }
             if(alt_compatible) {
                 numSnpsTried++;
-                if(rd_i == rdlen) return rd_i;
+                if(rd_i == rdlen) {
+                    best_rdoff = rdoff + rd_i;
+                    edits = tmp_edits;
+                    return rd_i;
+                }
                 index_t next_joinedOff = 0;
                 index_t next_rfoff = rfoff + rf_i, next_rdoff = rdoff + rd_i;
                 const char* next_rfseq = rfseq + rf_i;
@@ -2814,7 +2839,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          raw_refbufs,
                                                          ASSERT_ONLY(destU32,)
                                                          tmp_edits,
-                                                         max_extlen,
+                                                         best_rdoff,
                                                          next_rfseq,
                                                          tidx,
                                                          next_rfoff,
@@ -2826,12 +2851,18 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          dep + 1,
                                                          numSnpsTried,
                                                          alt.type);
-                if(rd_i + alignedLen == rdlen) {
+                assert_leq(rdoff + rd_i + alignedLen, best_rdoff);
+                if(rdoff + rd_i + alignedLen == best_rdoff) {
                     for(index_t ei = orig2_nedits; ei < tmp_edits.size(); ei++) {
                         Edit& e = tmp_edits[ei];
                         e.pos += rd_i;
                     }
-                    return rd_i + alignedLen;
+                    if(orig2_nedits < tmp_edits.size()) {
+                        edits = tmp_edits;
+                    }
+                    if(rd_i + alignedLen == rdlen) {
+                        return rd_i + alignedLen;
+                    }
                 }
             }
             // Restore to the earlier state
