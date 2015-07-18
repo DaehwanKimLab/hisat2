@@ -405,10 +405,8 @@ struct SharedTempVars {
     EList<int64_t> temp_scores;
     EList<int64_t> temp_scores2;
     
-    EList<pair<index_t, int> >  offDiffs;
-    ELList<index_t> alt_combinations;
-    
     // Align with alternatives
+    EList<pair<index_t, int> >  offDiffs;
     EList<SStringExpandable<char> > raw_refbufs;
     EList<Edit>                     alt_edits;
     
@@ -628,27 +626,11 @@ struct GenomeHit {
     /*
      *
      */
-    static index_t alignWithSNPs(
-                                 const EList<ALT<index_t> >& alts,
-                                 const EList<index_t>&       tmp_alts,
-                                 index_t                     joinedOff,
-                                 const BTDnaString&          rdseq,
-                                 index_t                     rdoff,
-                                 index_t                     rdlen,
-                                 const char*                 rfseq,
-                                 index_t                     rflen,
-                                 bool                        left,
-                                 EList<Edit>*                edits = NULL,
-                                 index_t                     mm = 0,
-                                 index_t*                    numNs = NULL);
-    
-    /*
-     *
-     */
     static index_t alignWithALTs(
                                  const EList<ALT<index_t> >& alts,
                                  index_t                     joinedOff,
                                  const BTDnaString&          rdseq,
+                                 index_t                     base_rdoff,
                                  index_t                     rdoff,
                                  index_t                     rdlen,
                                  const BitPairReference&     ref,
@@ -662,6 +644,7 @@ struct GenomeHit {
                                  index_t*                    numNs = NULL)
     {
         int best_rdoff = (int)rdoff;
+        if(numNs != NULL) *numNs = 0;
         index_t numALTsTried = 0;
         EList<Edit>& alt_edits = sharedVar.alt_edits;
         alt_edits = edits;
@@ -669,6 +652,7 @@ struct GenomeHit {
                             alts,
                             joinedOff,
                             rdseq,
+                            rdoff - base_rdoff,
                             rdoff,
                             rdlen,
                             ref,
@@ -683,6 +667,7 @@ struct GenomeHit {
                             left,
                             edits,
                             mm,
+                            0, /* tmp_numNs */
                             numNs,
                             0,    /* dep */
                             numALTsTried);
@@ -706,6 +691,7 @@ struct GenomeHit {
                                        const EList<ALT<index_t> >& alts,
                                        index_t                     joinedOff,
                                        const BTDnaString&          rdseq,
+                                       index_t                     rdoff_add,
                                        index_t                     rdoff,
                                        index_t                     rdlen,
                                        const BitPairReference&     ref,
@@ -720,6 +706,7 @@ struct GenomeHit {
                                        bool                        left,
                                        EList<Edit>&                edits,
                                        index_t                     mm,
+                                       index_t                     tmp_numNs,
                                        index_t*                    numNs,
                                        index_t                     dep,
                                        index_t&                    numSnpsTried,
@@ -1727,8 +1714,6 @@ bool GenomeHit<index_t>::extend(
     index_t rdlen = (index_t)rd.length();
     bool doLeftAlign = false;
     assert(_sharedVars != NULL);
-    SStringExpandable<char>& raw_refbuf = _sharedVars->raw_refbuf;
-    ASSERT_ONLY(SStringExpandable<uint32_t>& destU32 = _sharedVars->destU32);
     
     // extend the alignment further in the left direction
     // with 'mm' mismatches allowed
@@ -1758,6 +1743,7 @@ bool GenomeHit<index_t>::extend(
                                               altdb.alts(),
                                               this->_joinedOff,
                                               seq,
+                                              this->_rdoff - 1,
                                               this->_rdoff - 1,
                                               this->_rdoff,
                                               ref,
@@ -1810,76 +1796,32 @@ bool GenomeHit<index_t>::extend(
         assert_eq(_rdoff + _len, right_rdoff + right_len);
         index_t rr = rdlen - (right_rdoff + right_len);
         if(rl + rr <= ref.approxLen(_tidx)) {
-            index_t reflen = rr;
-            ELList<index_t>& alt_cbns = _sharedVars->alt_combinations;
-            findALTCombinations(
-                                gfm,
-                                altdb,
-                                this->_joinedOff,
-                                reflen,
-                                false, /* left? */
-                                alt_cbns);
-            assert_geq(reflen, rr);
-            raw_refbuf.resize(rdlen + 16);
-            int off = ref.getStretch(
-                                     reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
-                                     (size_t)_tidx,
-                                     (size_t)rl,
-                                     reflen
-                                     ASSERT_ONLY(, destU32));
-            assert_lt(off, 16);
-            char *refbuf = raw_refbuf.wbuf() + off;
-            int best_ext = 0, best_cbn = 0;
-            for(index_t c = 0; c < alt_cbns.size(); c++) {
-                // daehwan - for debugging purposes
-                bool skip = false;
-                for(index_t c2 = 0; c2 < alt_cbns[c].size(); c2++) {
-                    const ALT<index_t>& alt = altdb.alts()[alt_cbns[c][c2]];
-                    if(alt.splicesite()) {
-                        skip = true;
-                        break;
-                    }
-                }
-                if(skip) continue;
-                
-                index_t temp_ext = alignWithSNPs(
-                                                 altdb.alts(),
-                                                 alt_cbns[c],
-                                                 this->_joinedOff,
-                                                 seq,
-                                                 this->_rdoff + this->_len,
-                                                 rdlen - (this->_rdoff + this->_len),
-                                                 refbuf,
-                                                 reflen,
-                                                 false, /* left? */
-                                                 NULL,
-                                                 mm);
-                
-                if(best_ext < temp_ext) {
-                    best_ext = temp_ext;
-                    best_cbn = c;
-                }
+            index_t reflen = rr + 10;
+            int ref_ext = (int)_len;
+            for(index_t ei = 0; ei < _edits->size(); ei++) {
+                const Edit& e = (*_edits)[ei];
+                if(e.type == EDIT_TYPE_REF_GAP)       ref_ext--;
+                else if(e.type == EDIT_TYPE_READ_GAP) ref_ext++;
+                else if(e.type == EDIT_TYPE_SPL)      ref_ext += e.splLen;
+                else if(e.type == EDIT_TYPE_MM && e.chr == 'N') ref_ext--;
             }
-            
+            index_t best_ext = alignWithALTs(
+                                             altdb.alts(),
+                                             this->_joinedOff + ref_ext,
+                                             seq,
+                                             this->_rdoff,
+                                             this->_rdoff + this->_len,
+                                             rdlen - (this->_rdoff + this->_len),
+                                             ref,
+                                             *_sharedVars,
+                                             _tidx,
+                                             rl, /* ? */
+                                             reflen, /* ? */
+                                             false, /* left? */
+                                             *this->_edits,
+                                             mm);
             if(best_ext > 0) {
                 rightext = best_ext;
-                index_t prev_num_edits = _edits->size();
-                ASSERT_ONLY(index_t temp_ext =) alignWithSNPs(
-                                                              altdb.alts(),
-                                                              alt_cbns[best_cbn],
-                                                              this->_joinedOff,
-                                                              seq,
-                                                              this->_rdoff + this->_len,
-                                                              rdlen - (this->_rdoff + this->_len),
-                                                              refbuf,
-                                                              reflen,
-                                                              false, /* left? */
-                                                              _edits,
-                                                              mm);
-                assert_eq(best_ext, temp_ext);
-                for(index_t i = prev_num_edits; i < _edits->size(); i++) {
-                    (*_edits)[i].pos += this->_len;
-                }
                 _len += best_ext;
             }
         }
@@ -1968,6 +1910,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            alts,
                                            this->_joinedOff,
                                            seq,
+                                           this->_rdoff,
                                            this->_rdoff,
                                            this->_len,
                                            ref,
@@ -2191,240 +2134,6 @@ void GenomeHit<index_t>::findALTCombinations(
     reflen += max_add;
 }
 
-/*
- *
- */
-template <typename index_t>
-index_t GenomeHit<index_t>::alignWithSNPs(
-                                          const EList<ALT<index_t> >& alts,
-                                          const EList<index_t>&       tmp_alts,
-                                          index_t                     joinedOff,
-                                          const BTDnaString&          rdseq,
-                                          index_t                     rdoff,
-                                          index_t                     rdlen,
-                                          const char*                 rfseq,
-                                          index_t                     rflen,
-                                          bool                        left,
-                                          EList<Edit>*                edits,
-                                          index_t                     mm,
-                                          index_t*                    numNs)
-{
-    if(numNs != NULL) *numNs = 0;
-    index_t alt_i = 0, tmp_mm = 0;
-    if(left) {
-        assert_gt(rdoff, 0);
-        int rf_i = rflen - 1, rd_i = rdoff - 1;
-        bool indel_end = false;
-        for(; rf_i >= 0 && rd_i >= 0; rf_i--, rd_i--) {
-            int rf_bp = rfseq[rf_i];
-            int rd_bp = rdseq[rd_i];
-            bool alt_found = false;
-            index_t altID = alts.size();
-            if(alt_i < tmp_alts.size()) {
-                // Find a relevent ALT
-                altID = tmp_alts[alt_i];
-                assert_lt(altID, alts.size());
-                const ALT<index_t>& alt = alts[altID];
-                if(alt.type == ALT_SNP_DEL) {
-                    alt_found = (alt.pos + (rflen - rf_i) + alt.len - 1 == joinedOff);
-                } else if(alt.type == ALT_SNP_INS) {
-                    alt_found = (alt.pos + (rflen - rf_i) - 1 == joinedOff);
-                } else {
-                    alt_found = (alt.pos + (rflen - rf_i) == joinedOff);
-                }
-            }
-            
-            if(alt_found) {
-                assert_lt(altID, alts.size());
-                const ALT<index_t>& alt = alts[altID];
-                if(alt.type == ALT_SNP_SGL) {
-                    if(rd_bp == (int)alt.seq) {
-                        if(edits != NULL) {
-                            Edit e(
-                                   rd_i,
-                                   "ACGTN"[rf_bp],
-                                   "ACGTN"[rd_bp],
-                                   EDIT_TYPE_MM,
-                                   true, /* chars? */
-                                   altID);
-                            edits->insert(e, 0);
-                        }
-                        indel_end = false;
-                    } else break;
-                } else if(alt.type == ALT_SNP_DEL) {
-                    if(rf_i > (int)alt.len) {
-                        if(edits != NULL) {
-                            for(index_t i = 0; i < alt.len; i++) {
-                                rf_bp = rfseq[rf_i - i];
-                                Edit e(
-                                       rd_i + 1,
-                                       "ACGTN"[rf_bp],
-                                       '-',
-                                       EDIT_TYPE_READ_GAP,
-                                       true, /* chars? */
-                                       altID);
-                                edits->insert(e, 0);
-                            }
-                        }
-                        rf_i -= (int)(alt.len - 1);
-                        rd_i += 1;
-                        indel_end = true;
-                    } else break;
-                } else if(alt.type == ALT_SNP_INS) {
-                    if(rd_i > (int)alt.len) {
-                        bool same_seq = true;
-                        for(index_t i = 0; i < alt.len; i++) {
-                            rd_bp = rdseq[rd_i - i];
-                            int snp_bp = (alt.seq >> (i << 1)) & 0x3;
-                            if(rd_bp != snp_bp) {
-                                same_seq = false;
-                                break;
-                            }
-                            if(edits != NULL) {
-                                Edit e(
-                                       rd_i - i,
-                                       '-',
-                                       "ACGTN"[rd_bp],
-                                       EDIT_TYPE_REF_GAP,
-                                       true, /* chars? */
-                                       altID);
-                                edits->insert(e, 0);
-                            }
-                        }
-                        if(!same_seq) break;
-                        rd_i -= (int)(alt.len - 1);
-                        rf_i += 1;
-                        indel_end = true;
-                    } else break;
-                }
-                alt_i++;
-            } else {
-                // Stop this alignment
-                if(rf_bp != rd_bp) {
-                    tmp_mm++;
-                    if(tmp_mm > mm || !alts.empty()) break;
-                    if(edits != NULL) {
-                        Edit e(
-                               rd_i,
-                               "ACGTN"[rf_bp],
-                               "ACGTN"[rd_bp],
-                               EDIT_TYPE_MM);
-                        edits->insert(e, 0);
-                    }
-                }
-                if(rf_bp == 4 && numNs != NULL) (*numNs)++;
-                indel_end = false;
-            }
-        }
-        assert_lt(rd_i, (int)rdoff);
-        if(indel_end) return 0;
-        return rdoff - rd_i - 1;
-    } else {
-        index_t rf_i = 0, rd_i = 0;
-        bool indel_end = false;
-        for(; rf_i < rflen && rd_i < rdlen; rf_i++, rd_i++) {
-            int rf_bp = rfseq[rf_i];
-            int rd_bp = rdseq[rdoff + rd_i];
-            bool alt_found = false;
-            index_t altID = alts.size();
-            if(alt_i < tmp_alts.size()) {
-                // Find a relevent SNP
-                altID = tmp_alts[alt_i];
-                assert_lt(altID, alts.size());
-                const ALT<index_t>& alt = alts[altID];
-                alt_found = (alt.pos == rf_i + joinedOff);
-            }
-            
-            if(alt_found) {
-                assert_lt(altID, alts.size());
-                const ALT<index_t>& alt = alts[altID];
-                assert_eq(alt.pos, rf_i + joinedOff);
-                if(alt.type == ALT_SNP_SGL) {
-                    if(rd_bp == (int)alt.seq) {
-                        if(edits != NULL) {
-                            Edit e(
-                                   rd_i,
-                                   "ACGTN"[rf_bp],
-                                   "ACGTN"[rd_bp],
-                                   EDIT_TYPE_MM,
-                                   true, /* chars? */
-                                   altID);
-                            edits->push_back(e);
-                        }
-                        indel_end = false;
-                    } else {
-                        break;
-                    }
-                } else if(alt.type == ALT_SNP_DEL) {
-                    if(rf_i + alt.len <= rflen && rd_i > 0) {
-                        if(edits != NULL) {
-                            for(index_t i = 0; i < alt.len; i++) {
-                                rf_bp = rfseq[rf_i + i];
-                                Edit e(
-                                       rd_i,
-                                       "ACGTN"[rf_bp],
-                                       '-',
-                                       EDIT_TYPE_READ_GAP,
-                                       true, /* chars? */
-                                       altID);
-                                edits->push_back(e);
-                            }
-                        }
-                        rf_i += (alt.len - 1);
-                        rd_i -= 1;
-                        indel_end = true;
-                    } else break;
-                } else if(alt.type == ALT_SNP_INS) {
-                    if(rd_i + alt.len <= rdlen && rf_i > 0) {
-                        bool same_seq = true;
-                        for(index_t i = 0; i < alt.len; i++) {
-                            rd_bp = rdseq[rdoff + rd_i + i];
-                            int snp_bp = (alt.seq >> ((alt.len - i - 1) << 1)) & 0x3;
-                            if(rd_bp != snp_bp) {
-                                same_seq = false;
-                                break;
-                            }
-                            if(edits != NULL) {
-                                Edit e(
-                                       rd_i + i,
-                                       '-',
-                                       "ACGTN"[rd_bp],
-                                       EDIT_TYPE_REF_GAP,
-                                       true, /* chars? */
-                                       altID);
-                                edits->push_back(e);
-                            }
-                        }
-                        if(!same_seq) break;
-                        rd_i += (alt.len - 1);
-                        rf_i -= 1;
-                        indel_end = true;
-                    } else break;
-                }
-                alt_i++;
-            } else {
-                // Stop this alignment
-                if(rf_bp != rd_bp) {
-                    tmp_mm++;
-                    if(tmp_mm > mm) break;
-                    if(edits != NULL) {
-                        Edit e(
-                               rd_i,
-                               "ACGTN"[rf_bp],
-                               "ACGTN"[rd_bp],
-                               EDIT_TYPE_MM);
-                        edits->push_back(e);
-                    }
-                }
-                if(rf_bp == 4 && numNs != NULL) (*numNs)++;
-                indel_end = false;
-            }
-        }
-        if(indel_end) return 0;
-        return rd_i;
-    }
-}
-
 
 /*
  *
@@ -2434,6 +2143,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 const EList<ALT<index_t> >& alts,
                                                 index_t                     joinedOff,
                                                 const BTDnaString&          rdseq,
+                                                index_t                     rdoff_add,
                                                 index_t                     rdoff,
                                                 index_t                     rdlen,
                                                 const BitPairReference&     ref,
@@ -2448,6 +2158,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 bool                        left,
                                                 EList<Edit>&                edits,
                                                 index_t                     mm,
+                                                index_t                     tmp_numNs,
                                                 index_t*                    numNs,
                                                 index_t                     dep,
                                                 index_t&                    numALTsTried,
@@ -2471,30 +2182,45 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         rfseq = raw_refbuf.wbuf() + off;
     }
     
-    if(numNs != NULL) *numNs = 0;
     if(left) {
         index_t tmp_mm = 0;
         int min_rd_i = (int)rdoff;
-        for(int rf_i = (int)rflen - 1; rf_i >= 0 && min_rd_i >= 0; rf_i--, min_rd_i--) {
+        int mm_min_rd_i = (int)rdoff;
+        index_t mm_tmp_numNs = 0;
+        for(int rf_i = (int)rflen - 1; rf_i >= 0 && mm_min_rd_i >= 0; rf_i--, mm_min_rd_i--) {
             int rf_bp = rfseq[rf_i];
-            int rd_bp = rdseq[min_rd_i];
+            int rd_bp = rdseq[mm_min_rd_i];
             if(rf_bp != rd_bp) {
+                if(tmp_mm == 0) {
+                    min_rd_i = mm_min_rd_i;
+                }
+                if(tmp_mm >= mm) break;
                 tmp_mm++;
-                if(tmp_mm > mm) break;
                 Edit e(
-                       min_rd_i,
+                       mm_min_rd_i,
                        "ACGTN"[rf_bp],
                        "ACGTN"[rd_bp],
                        EDIT_TYPE_MM);
-                tmp_edits.push_back(e);
+                tmp_edits.insert(e, 0);
             }
-            if(rf_bp == 4 && numNs != NULL) (*numNs)++;
+            if(rf_bp == 4) {
+                if(tmp_mm == 0) tmp_numNs++;
+                mm_tmp_numNs++;
+            }
         }
-        if(min_rd_i < best_rdoff) {
-            best_rdoff = min_rd_i;
+        if(tmp_mm == 0) {
+            min_rd_i = mm_min_rd_i;
+        }
+        if(mm_min_rd_i < best_rdoff) {
+            best_rdoff = mm_min_rd_i;
             edits = tmp_edits;
+            if(numNs != NULL) *numNs = mm_tmp_numNs;
         }
-        if(min_rd_i < 0) return rdlen;
+        if(mm_min_rd_i < 0) return rdlen;
+        if(tmp_mm > 0) {
+            tmp_edits.erase(0, tmp_mm);
+            tmp_mm = 0;
+        }
         // Find SNPs included in this region
         pair<index_t, index_t> alt_range;
         ALT<index_t> alt;
@@ -2646,6 +2372,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          alts,
                                                          next_joinedOff,
                                                          rdseq,
+                                                         rdoff_add,
                                                          next_rdoff,
                                                          next_rdlen,
                                                          ref,
@@ -2660,6 +2387,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          left,
                                                          edits,
                                                          mm,
+                                                         tmp_numNs,
                                                          numNs,
                                                          dep + 1,
                                                          numALTsTried,
@@ -2674,26 +2402,42 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
     } else {
         index_t tmp_mm = 0;
         index_t max_rd_i = 0;
-        for(index_t rf_i = 0; rf_i < rflen && max_rd_i < rdlen; rf_i++, max_rd_i++) {
+        index_t mm_max_rd_i = 0;
+        index_t mm_tmp_numNs = 0;
+        for(index_t rf_i = 0; rf_i < rflen && mm_max_rd_i < rdlen; rf_i++, mm_max_rd_i++) {
             int rf_bp = rfseq[rf_i];
-            int rd_bp = rdseq[rdoff + max_rd_i];
+            int rd_bp = rdseq[rdoff + mm_max_rd_i];
             if(rf_bp != rd_bp) {
+                if(tmp_mm == 0) {
+                    max_rd_i = mm_max_rd_i;
+                }
+                if(tmp_mm >= mm) break;
                 tmp_mm++;
-                if(tmp_mm > mm) break;
                 Edit e(
-                       max_rd_i,
+                       mm_max_rd_i + rdoff_add,
                        "ACGTN"[rf_bp],
                        "ACGTN"[rd_bp],
                        EDIT_TYPE_MM);
                 tmp_edits.push_back(e);
             }
-            if(rf_bp == 4 && numNs != NULL) (*numNs)++;
+            if(rf_bp == 4) {
+                if(tmp_mm == 0) tmp_numNs++;
+                mm_tmp_numNs++;
+            }
         }
-        if(max_rd_i + rdoff > best_rdoff) {
-            best_rdoff = max_rd_i + rdoff;
+        if(tmp_mm == 0) {
+            max_rd_i = mm_max_rd_i;
+        }
+        if(mm_max_rd_i + rdoff > best_rdoff) {
+            best_rdoff = mm_max_rd_i + rdoff;
             edits = tmp_edits;
+            if(numNs != NULL) *numNs = mm_tmp_numNs;
         }
-        if(max_rd_i == rdlen) return max_rd_i;
+        if(mm_max_rd_i == rdlen) return mm_max_rd_i;
+        if(tmp_mm > 0) {
+            tmp_edits.resize(tmp_edits.size() - tmp_mm);
+            tmp_mm = 0;
+        }
         // Find SNPs included in this region
         pair<index_t, index_t> alt_range;
         {
@@ -2725,7 +2469,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             if(alt.type == ALT_SNP_SGL) {
                 if(rd_bp == (int)alt.seq) {
                     Edit e(
-                           rd_i,
+                           rd_i + rdoff_add,
                            "ACGTN"[rf_bp],
                            "ACGTN"[rd_bp],
                            EDIT_TYPE_MM,
@@ -2741,7 +2485,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     for(index_t i = 0; i < alt.len; i++) {
                         rf_bp = rfseq[rf_i + i];
                         Edit e(
-                               rd_i,
+                               rd_i + rdoff_add,
                                "ACGTN"[rf_bp],
                                '-',
                                EDIT_TYPE_READ_GAP,
@@ -2763,7 +2507,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                             break;
                         }
                         Edit e(
-                               rd_i + i,
+                               rd_i + i + rdoff_add,
                                '-',
                                "ACGTN"[rd_bp],
                                EDIT_TYPE_REF_GAP,
@@ -2780,7 +2524,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 if(rd_i > 0) {
                     assert_lt(rd_i, rflen);
                     index_t intronLen = alt.right - alt.left + 1;
-                    Edit e(rd_i,
+                    Edit e(rd_i + rdoff_add,
                            0,
                            0,
                            EDIT_TYPE_SPL,
@@ -2826,6 +2570,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          alts,
                                                          next_joinedOff,
                                                          rdseq,
+                                                         rdoff_add + rd_i,
                                                          next_rdoff,
                                                          next_rdlen,
                                                          ref,
@@ -2840,22 +2585,14 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          left,
                                                          edits,
                                                          mm,
+                                                         tmp_numNs,
                                                          numNs,
                                                          dep + 1,
                                                          numALTsTried,
                                                          alt.type);
                 assert_leq(rdoff + rd_i + alignedLen, best_rdoff);
-                if(rdoff + rd_i + alignedLen == best_rdoff) {
-                    for(index_t ei = orig2_nedits; ei < tmp_edits.size(); ei++) {
-                        Edit& e = tmp_edits[ei];
-                        e.pos += rd_i;
-                    }
-                    if(orig2_nedits < tmp_edits.size()) {
-                        edits = tmp_edits;
-                    }
-                    if(rd_i + alignedLen == rdlen) {
-                        return rd_i + alignedLen;
-                    }
+                if(rd_i + alignedLen == rdlen) {
+                    return rd_i + alignedLen;
                 }
             }
             // Restore to the earlier state
