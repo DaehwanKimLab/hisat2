@@ -1781,6 +1781,7 @@ bool GenomeHit<index_t>::extend(
                                               mm,
                                               &numNs);
             if(best_ext > 0) {
+                leftext = best_ext;
                 assert_leq(num_prev_edits, _edits->size());
                 index_t added_edits = _edits->size() - num_prev_edits;
                 int ref_ext = (int)best_ext;
