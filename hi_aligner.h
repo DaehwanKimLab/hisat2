@@ -648,6 +648,7 @@ struct GenomeHit {
         index_t numALTsTried = 0;
         EList<Edit>& alt_edits = sharedVar.alt_edits;
         alt_edits = edits;
+        index_t nedits = edits.size();
         alignWithALTs_recur(
                             alts,
                             joinedOff,
@@ -680,6 +681,30 @@ struct GenomeHit {
             assert_leq(best_rdoff, (int)(rdoff + rdlen));
             assert_geq(best_rdoff, (int)rdoff);
             extlen = best_rdoff - rdoff;
+        }
+        if(extlen > 0 && edits.size() > 0) {
+            const Edit& f = edits.front();
+            if(f.pos + extlen == base_rdoff + 1) {
+                if(f.type == EDIT_TYPE_READ_GAP ||
+                   f.type == EDIT_TYPE_REF_GAP ||
+                   f.type == EDIT_TYPE_SPL) {
+                    extlen = 0;
+                }
+            }
+            const Edit& b = edits.back();
+            if(extlen > 0 && b.pos == extlen - 1) {
+                if(b.type == EDIT_TYPE_READ_GAP ||
+                   b.type == EDIT_TYPE_REF_GAP) {
+                    extlen = 0;
+                }
+            }
+            if(extlen == 0 && edits.size() > nedits) {
+                if(left) {
+                    edits.erase(0, edits.size() - nedits);
+                } else {
+                    edits.resize(nedits);
+                }
+            }
         }
         return extlen;
     }
@@ -2565,7 +2590,6 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     next_rflen = next_rdlen + 10;
                     next_rfseq = NULL;
                 }
-                index_t orig2_nedits = tmp_edits.size();
                 index_t alignedLen = alignWithALTs_recur(
                                                          alts,
                                                          next_joinedOff,
@@ -5017,10 +5041,10 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
                 if(rangeTemp.first + 1 < rangeTemp.second) {
                     assert_eq(node_rangeTemp.first + 1, node_rangeTemp.second);
-                    _tmp_node_iedge_count.clear();
-                    _tmp_node_iedge_count.expand();
-                    _tmp_node_iedge_count.back().first = 0;
-                    _tmp_node_iedge_count.back().second = rangeTemp.second - rangeTemp.first - 1;
+                    _tmp_local_node_iedge_count.clear();
+                    _tmp_local_node_iedge_count.expand();
+                    _tmp_local_node_iedge_count.back().first = 0;
+                    _tmp_local_node_iedge_count.back().second = rangeTemp.second - rangeTemp.first - 1;
                 }
             }
         }

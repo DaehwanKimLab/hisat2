@@ -175,13 +175,6 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
         // given a candidate partial alignment, extend it bidirectionally
         him.anchoratts++;
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hj];
-        
-        // daehwan - for debugging purposes
-#if 1
-        if(genomeHit.len() < this->_rds[rdi]->length())
-            continue;
-#endif
-        
         hybridSearch_recur(
                            sc,
                            gfm,
