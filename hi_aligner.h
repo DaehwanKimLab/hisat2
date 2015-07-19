@@ -792,7 +792,8 @@ struct GenomeHit {
             const Edit& edit = (*_edits)[i];
             if(edit.type == EDIT_TYPE_SPL ||
                edit.type == EDIT_TYPE_READ_GAP ||
-               edit.type == EDIT_TYPE_REF_GAP) {
+               edit.type == EDIT_TYPE_REF_GAP ||
+               (edit.type == EDIT_TYPE_MM && edit.snpID != (index_t)INDEX_MAX)) {
                 len = edit.pos;
                 break;
             }
@@ -835,13 +836,19 @@ struct GenomeHit {
             const Edit& edit = (*_edits)[i];
             if(edit.type == EDIT_TYPE_SPL ||
                edit.type == EDIT_TYPE_READ_GAP ||
-               edit.type == EDIT_TYPE_REF_GAP) {
+               edit.type == EDIT_TYPE_REF_GAP ||
+               (edit.type == EDIT_TYPE_MM && edit.snpID != (index_t)INDEX_MAX)) {
                 rdoff = _rdoff + edit.pos;
                 assert_lt(edit.pos, _len);
                 len = _len - edit.pos;
                 if(edit.type == EDIT_TYPE_REF_GAP) {
                     assert_lt(edit.pos + 1, _len);
                     assert_gt(len, 1);
+                    rdoff++;
+                    len--;
+                } else if(edit.type == EDIT_TYPE_MM) {
+                    assert_leq(edit.pos + 1, _len);
+                    assert_geq(len, 1);
                     rdoff++;
                     len--;
                 }
@@ -860,7 +867,7 @@ struct GenomeHit {
                 }
             }
         }
-        assert_gt(len, 0);
+        assert_geq(len, 0);
     }
     
     /**
@@ -1526,7 +1533,8 @@ bool GenomeHit<index_t>::combineWith(
         const Edit& edit = (*_edits)[i];
         if(edit.type == EDIT_TYPE_SPL ||
            edit.type == EDIT_TYPE_READ_GAP ||
-           edit.type == EDIT_TYPE_REF_GAP) {
+           edit.type == EDIT_TYPE_REF_GAP ||
+           (edit.type == EDIT_TYPE_MM && edit.snpID != (index_t)INDEX_MAX)) {
             _edits->resize(i+1);
             clear = false;
             break;
@@ -1659,7 +1667,8 @@ bool GenomeHit<index_t>::combineWith(
         const Edit& edit = (*otherHit._edits)[i];
         if(edit.type == EDIT_TYPE_SPL ||
            edit.type == EDIT_TYPE_READ_GAP ||
-           edit.type == EDIT_TYPE_REF_GAP) {
+           edit.type == EDIT_TYPE_REF_GAP ||
+           (edit.type == EDIT_TYPE_MM && edit.snpID != (index_t)INDEX_MAX)) {
             fsi = i;
             break;
         }
@@ -1747,7 +1756,6 @@ bool GenomeHit<index_t>::extend(
         assert_gt(_rdoff, 0);
         index_t left_rdoff, left_len, left_toff;
         this->getLeft(left_rdoff, left_len, left_toff);
-        assert_gt(left_len, 0);
         assert_eq(left_rdoff, _rdoff);
         assert_eq(left_toff, _toff);
         if(_rdoff > _toff) return false;
@@ -1817,7 +1825,6 @@ bool GenomeHit<index_t>::extend(
     if(max_rightext > 0 && _rdoff + _len < rdlen) {
         index_t right_rdoff, right_len, right_toff;
         this->getRight(right_rdoff, right_len, right_toff);
-        assert_gt(right_len, 0);
         index_t rl = right_toff + right_len;
         assert_eq(_rdoff + _len, right_rdoff + right_len);
         index_t rr = rdlen - (right_rdoff + right_len);
