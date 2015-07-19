@@ -35,6 +35,7 @@ enum ALT_TYPE {
     ALT_SNP_DEL,     // small deletion wrt reference genome
     ALT_SNP_ALT,     // alternative sequence (to be implemented ...)
     ALT_SPLICESITE,
+    ALT_NONE,
 };
 
 template <typename index_t>
