@@ -1361,15 +1361,15 @@ private:
     pair<index_t, index_t> getEdges(index_t node, bool by_from); // Create index first.
 
     struct CreateNewNodesParams {
-    	PathNode*        st;
-    	PathNode*        en;
-    	PathNode*        curr;
-    	index_t*         sub_temp_nodes;
-    	EList<index_t>*  from_index;
-    	EList<PathNode>* from_table;
+    	PathNode*           st;
+    	PathNode*           en;
+    	PathNode*           curr;
+    	index_t*            sub_temp_nodes;
+    	PathGraph<index_t>* graph;
     };
     static void createNewNodesCounter(void* vp);
     static void createNewNodesMaker(void* vp);
+    void createNewNodes();
 
     struct GenEdgesParams {
     	typename RefGraph<index_t>::Edge*        st;
@@ -1561,35 +1561,18 @@ void PathGraph<index_t>::generationOne() {
 		tot += from_index[i];
 		from_index[i] = tot - from_index[i];
 	}
-
 	// use past_nodes as from_table
 	past_nodes.resizeNoCopyExact(nodes.size());
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		past_nodes[from_index[node->from]++] = *node;
 	}
-
 	//reset index
 	for(index_t i = from_index.size() - 1; i > 0; i--) {
 		from_index[i] = from_index[i - 1];
 	}
 	from_index[0] = 0;
-
 	//Now query direct access table
-	temp_nodes = 0;
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		temp_nodes += from_index[node->to + 1] - from_index[node->to];
-	}
-	nodes.resizeNoCopyExact(temp_nodes);
-	nodes.clear();
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-			nodes.expand();
-			nodes.back().from = node->from;
-			nodes.back().to = past_nodes[j].to;
-			assert_gt(generation, 0);
-			nodes.back().key  = pair<index_t, index_t>((node->key.first << 3) + past_nodes[j].key.first, 0);
-		}
-	}
+	createNewNodes();
 	printInfo();
 	past_nodes.swap(nodes);
 }
@@ -1597,33 +1580,12 @@ void PathGraph<index_t>::generationOne() {
 template <typename index_t>
 void PathGraph<index_t>::earlyGeneration() {
 	generation++;
-	//here past_nodes is already sorted by .from
-	// first count where to start each from value
 	//Build from_index
 	for(index_t i = 0; i < past_nodes.size(); i++) {
 		from_index[past_nodes[i].from + 1] = i + 1;
 	}
-
 	// Now query against hash-table
-	//count number of nodes
-	temp_nodes = 0;
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		temp_nodes += from_index[node->to + 1] - from_index[node->to];
-	}
-	// make new nodes
-	nodes.resizeNoCopyExact(temp_nodes);
-	nodes.clear();
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-			nodes.expand();
-			nodes.back().from = node->from;
-			nodes.back().to = past_nodes[j].to;
-			assert_gt(generation, 0);
-			index_t bit_shift = 1 << (generation - 1);
-			bit_shift = (bit_shift << 1) + bit_shift; // Multiply by 3
-			nodes.back().key  = pair<index_t, index_t>((node->key.first << bit_shift) + past_nodes[j].key.first, 0);
-		}
-	}
+	createNewNodes();
 	printInfo();
 	past_nodes.swap(nodes);
 }
@@ -1640,29 +1602,8 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	}
 	if(verbose) cerr << "BUILT FROM_INDEX: " << time(0) - start << endl;
 	start = time(0);
-
 	// Now query against hash-table
-	//count number of nodes
-	temp_nodes = 0;
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		temp_nodes += from_index[node->to + 1] - from_index[node->to];
-	}
-	if(verbose) cerr << "COUNT NEW NODES: " << time(0) - start << endl;
-	start = time(0);
-	// make new nodes
-	nodes.resizeNoCopyExact(temp_nodes);
-	nodes.clear();
-	for(PathNode* node = past_nodes.begin(); node != past_nodes.end(); node++) {
-		for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-			nodes.expand();
-			nodes.back().from = node->from;
-			nodes.back().to = past_nodes[j].to;
-			assert_gt(generation, 0);
-			nodes.back().key  = pair<index_t, index_t>(node->key.first, past_nodes[j].key.first);
-		}
-	}
-	if(verbose) cerr << "MAKE NEW NODES: " << time(0) - start << endl;
-	start = time(0);
+	createNewNodes();
 	past_nodes.resizeNoCopyExact(nodes.size());
 	if(verbose) cerr << "RESIZE NODES: " << time(0) - start << endl;
 	start = time(0);
@@ -1682,57 +1623,17 @@ void PathGraph<index_t>::firstPruneGeneration() {
 }
 
 template <typename index_t>
-void PathGraph<index_t>::createNewNodesCounter(void* vp) {
-	CreateNewNodesParams* params = (CreateNewNodesParams*)vp;
-	PathNode*        st             = params->st;
-	PathNode*        en             = params->en;
-	EList<index_t>&  from_index     = *(params->from_index);
-
-	index_t count = 0;
-	for(PathNode* node = st; node != en; node++) {
-		if(node->isSorted()) {
-			count++;
-		} else {
-			count += from_index[node->to + 1] - from_index[node->to];
-		}
-	}
-	*(params->sub_temp_nodes) = count;
-}
-template <typename index_t>
-void PathGraph<index_t>::createNewNodesMaker(void* vp) {
-	CreateNewNodesParams* params = (CreateNewNodesParams*)vp;
-	PathNode*        st         = params->st;
-	PathNode*        en         = params->en;
-	PathNode*        curr       = params->curr;
-	EList<index_t>&  from_index = *(params->from_index);
-	EList<PathNode>& from_table = *(params->from_table);
-
-	for(PathNode* node = st; node != en; node++) {
-		if(node->isSorted()) {
-			*curr++ = *node;
-		} else {
-			for(index_t j = from_index[node->to]; j < from_index[node->to + 1]; j++) {
-				curr->from = node->from;
-				curr->to = from_table[j].to;
-				(curr++)->key  = pair<index_t, index_t>(node->key.first, from_table[j].key.first);
-			}
-		}
-	}
-}
-
-template <typename index_t>
 void PathGraph<index_t>::lateGeneration() {
 	generation++;
 	time_t overall = time(0);
 	time_t indiv = time(0);
 	assert_gt(nthreads, 0);
-
 	assert_neq(past_nodes.size(), ranks);
-
 	from_table.resizeNoCopy(past_nodes.size());
 
 	if(verbose) cerr << "ALLOCATE FROM_TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
+
 	radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
 
 	if(verbose) cerr << "BUILD TABLE: " << time(0) - indiv << endl;
@@ -1744,22 +1645,98 @@ void PathGraph<index_t>::lateGeneration() {
 	}
 
 	if(verbose) cerr << "BUILD INDEX: " << time(0) - indiv << endl;
+
+	createNewNodes();
+
 	indiv = time(0);
 
+	mergeUpdateRank();
 
-	// Now query against hash-table
-	//count number of nodes
+	if(verbose) cerr << "MERGEUPDATERANK: " << time(0) - indiv << endl;
+	if(verbose) cerr << "TOTAL TIME: " << time(0) - overall << endl;
+
+	printInfo();
+	past_nodes.swap(nodes);
+}
+
+//-----------------------------------------------------------------------------------------------
+
+template <typename index_t>
+void PathGraph<index_t>::createNewNodesCounter(void* vp) {
+	CreateNewNodesParams* params = (CreateNewNodesParams*)vp;
+	PathNode*           st       = params->st;
+	PathNode*           en       = params->en;
+	PathGraph<index_t>& graph    = *(params->graph);
+
+	index_t count = 0;
+	if(graph.generation > 4) {
+		for(PathNode* node = st; node != en; node++) {
+			if(node->isSorted()) {
+				count++;
+			} else {
+				count += graph.from_index[node->to + 1] - graph.from_index[node->to];
+			}
+		}
+	} else {
+		for(PathNode* node = st; node != en; node++) {
+			count += graph.from_index[node->to + 1] - graph.from_index[node->to];
+		}
+	}
+	*(params->sub_temp_nodes) = count;
+}
+template <typename index_t>
+void PathGraph<index_t>::createNewNodesMaker(void* vp) {
+	CreateNewNodesParams* params = (CreateNewNodesParams*)vp;
+	PathNode*           st       = params->st;
+	PathNode*           en       = params->en;
+	PathNode*           curr     = params->curr;
+	PathGraph<index_t>& graph    = *(params->graph);
+	if(graph.generation > 4) {
+		for(PathNode* node = st; node != en; node++) {
+			if(node->isSorted()) {
+				*curr++ = *node;
+			} else {
+				for(index_t j = graph.from_index[node->to]; j < graph.from_index[node->to + 1]; j++) {
+					curr->from = node->from;
+					curr->to = graph.from_table[j].to;
+					(curr++)->key  = pair<index_t, index_t>(node->key.first, graph.from_table[j].key.first);
+				}
+			}
+		}
+	} else if(graph.generation == 4) {
+		for(PathNode* node = st; node != en; node++) {
+			for(index_t j = graph.from_index[node->to]; j < graph.from_index[node->to + 1]; j++) {
+				curr->from = node->from;
+				curr->to = graph.past_nodes[j].to;
+				(curr++)->key  = pair<index_t, index_t>(node->key.first, graph.past_nodes[j].key.first);
+			}
+		}
+	} else {
+		for(PathNode* node = st; node != en; node++) {
+			for(index_t j = graph.from_index[node->to]; j < graph.from_index[node->to + 1]; j++) {
+				curr->from = node->from;
+				curr->to = graph.past_nodes[j].to;
+				index_t bit_shift = 1 << (graph.generation - 1);
+				bit_shift = (bit_shift << 1) + bit_shift;
+				(curr++)->key  = pair<index_t, index_t>((node->key.first << bit_shift) + graph.past_nodes[j].key.first, 0);
+			}
+		}
+	}
+}
+
+template <typename index_t>
+void PathGraph<index_t>::createNewNodes() {
+	time_t indiv = time(0);
 	AutoArray<tthread::thread*> threads(nthreads);
 	EList<CreateNewNodesParams> params; params.resizeExact(nthreads);
 	EList<index_t> sub_temp_nodes; sub_temp_nodes.resizeExact(nthreads); sub_temp_nodes.fillZero();
 	PathNode* st = past_nodes.begin();
 	PathNode* en = st + past_nodes.size() / nthreads;
 	for(int i = 0; i < nthreads; i++) {
-		params[i].from_index = &from_index;
 		params[i].sub_temp_nodes = &sub_temp_nodes[i];
 		params[i].st = st;
 		params[i].en = en;
-		params[i].from_table = &from_table;
+		params[i].graph = this;
 		if(nthreads == 1) {
 			createNewNodesCounter((void*)&params[0]);
 		} else {
@@ -1811,15 +1788,7 @@ void PathGraph<index_t>::lateGeneration() {
 	}
 	if(verbose) cerr << "MADE NEW NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
-
-	mergeUpdateRank();
-
-	if(verbose) cerr << "MERGEUPDATERANK: " << time(0) - indiv << endl;
-	if(verbose) cerr << "TOTAL TIME: " << time(0) - overall << endl;
-	printInfo();
-	past_nodes.swap(nodes);
 }
-
 
 template <typename index_t>
 void PathGraph<index_t>::printInfo()
@@ -2006,22 +1975,29 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	// I think this would shorten the time that we are running with only a single core
 	EList<index_t, 6>& index = label_index[nthreads - 1];
 
-	radix_sort_in_place<PathEdge, less<PathEdge>, index_t>(edges.begin()           , edges.begin() + index[0],
-			&PathEdgeTo, nodes.size(), nthreads);
-	radix_sort_in_place<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[0], edges.begin() + index[1],
-			&PathEdgeTo, nodes.size(), nthreads);
-	radix_sort_in_place<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[1], edges.begin() + index[2],
-			&PathEdgeTo, nodes.size(), nthreads);
-	radix_sort_in_place<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[2], edges.begin() + index[3],
-			&PathEdgeTo, nodes.size(), nthreads);
+	EList<PathEdge> temp_edges; temp_edges.resizeExact(edges.size());
 
-	sort(edges.begin() + index[3], edges.begin() + index[4]);
-	sort(edges.begin() + index[4], edges.begin() + index[5]);
+	radix_sort_copy<PathEdge, less<PathEdge>, index_t>(edges.begin()           , edges.begin() + index[0], temp_edges.ptr(),
+			&PathEdgeTo, nodes.size(), nthreads);
+	radix_sort_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[0], edges.begin() + index[1], temp_edges.ptr() + index[0],
+			&PathEdgeTo, nodes.size(), nthreads);
+	radix_sort_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[1], edges.begin() + index[2], temp_edges.ptr() + index[1],
+			&PathEdgeTo, nodes.size(), nthreads);
+	radix_sort_copy<PathEdge, less<PathEdge>, index_t>(edges.begin() + index[2], edges.begin() + index[3], temp_edges.ptr() + index[2],
+			&PathEdgeTo, nodes.size(), nthreads);
+	for(index_t i = index[3]; i < edges.size(); i++) {
+		temp_edges[i] = edges[i];
+	}
+	sort(temp_edges.begin() + index[3], temp_edges.begin() + index[4]);
+	sort(temp_edges.begin() + index[4], temp_edges.begin() + index[5]);
+	edges.xfer(temp_edges);
 
 	if(verbose) cerr << "SORTED NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
-	radix_sort_in_place<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), &PathNodeKey, ranks, nthreads);
+	EList<PathNode> past_nodes; past_nodes.resizeExact(nodes.size());
+	radix_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(),  &PathNodeKey, ranks, nthreads);
+	nodes.xfer(past_nodes);
 
 	if(verbose) cerr << "RE-SORTED NODES: " << time(0) - indiv << endl;
 	indiv = time(0);
@@ -2122,8 +2098,9 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
 #endif
-
-    radix_sort_in_place<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), &PathEdgeTo, nodes.size(), nthreads);
+    temp_edges.resizeExact(edges.size());
+    radix_sort_copy<PathEdge, PathEdgeToCmp, index_t>(edges.begin(), edges.end(), temp_edges.ptr(), &PathEdgeTo, nodes.size(), nthreads);
+    edges.xfer(temp_edges);
     for(index_t i = 0; i < edges.size(); i++) {
         nodes[edges[i].ranking].key.second = i + 1;
     }
