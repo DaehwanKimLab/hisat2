@@ -1790,6 +1790,145 @@ void PathGraph<index_t>::createNewNodes() {
 	indiv = time(0);
 }
 
+//------------------------------------------------------------------------------------
+
+template <typename index_t>
+void PathGraph<index_t>::mergeUpdateRank()
+{
+    if(generation == 4) {
+		// Merge equivalent nodes
+		index_t curr = 0;
+		pair<index_t, index_t> range(0, 0); // Empty range
+		while(true) {
+			range = nextMaximalSet(range);
+			if(range.first >= range.second)
+				break;
+			nodes[curr] = nodes[range.first]; curr++;
+		}
+		nodes.resize(curr);
+
+		// Set nodes that become sorted as sorted
+		PathNode* candidate = &nodes.front();
+		pair<index_t, index_t> key = candidate->key; ranks = 1;
+		for(index_t i = 1; i < nodes.size(); i++) {
+			if(nodes[i].key != key) {
+				if(candidate != NULL) {
+					candidate->setSorted();
+				}
+				candidate = &nodes[i];
+				key = candidate->key; ranks++;
+			} else {
+				candidate = NULL;
+			}
+		}
+		if(candidate != NULL) {
+			candidate->setSorted();
+		}
+		ranks = 0;
+		key = nodes.front().key;
+		for(index_t i = 0; i < nodes.size(); i++) {
+			PathNode& node = nodes[i];
+			if(node.key != key) {
+				key = node.key;
+				ranks++;
+			}
+			node.key = pair<index_t, index_t>(ranks, 0);
+		}
+		ranks++;
+    } else {
+    	PathNode* block_start = nodes.begin();
+    	PathNode* curr = nodes.begin();
+    	PathNode* node = nodes.begin();
+    	ranks = 0;
+    	do {
+    		node++;
+    		if(node->key.first != block_start->key.first) {
+    			if(node - block_start == 1) {
+    				block_start->key.first = ranks++;
+    				*curr++ = *block_start;
+    			} else {
+    				sort(block_start, node, PathNodeKeySecondCmp());
+    				while(block_start != node) {
+    					//extend shift while share same key
+    					index_t shift = 1;
+    					while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
+    						shift++;
+    					}
+    					//check if all share .from
+    					//if they share same from, then they are a mergable set
+    					bool merge = true;
+    					for(PathNode* n = block_start; n != (block_start + shift); n++) {
+    						if(n->from != block_start->from) {
+    							merge = false;
+    							break;
+    						}
+    					}
+    					//if not mergable, just write all to array
+    					if(!merge) {
+    						for(PathNode* n = block_start; n != (block_start + shift); n++) {
+    							n->key.first = ranks;
+    							*curr++ = *n;
+    						}
+    						ranks++;
+    					} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from) {
+    						block_start->setSorted();
+    						block_start->key.first = ranks++;
+    						*curr++ = *block_start;
+    					}
+    					block_start += shift;
+    				}
+    				// if we are at the last node or the last node is mergable into the previous node, we are done
+    				if(node == nodes.end()
+    						|| (node + 1 == nodes.end() && (curr - 1)->isSorted() && node->from == (curr - 1)->from))
+    					break;
+    				// check if we can safely merge the node immediately following the unsorted cluster into the previous node
+    				// must be that:
+    				// 1) node is not itself part of an unsorted cluster
+    				// 2) the previous node is sorted
+    				// 3) the nodes share the same from attribute
+    				if(node->key.first != (node + 1)->key.first
+    				    	&& (curr - 1)->isSorted() && node->from == (curr - 1)->from)
+    					node++;
+    			}
+    			block_start = node;
+    		}
+    	} while(node != nodes.end());
+    	nodes.resizeExact(curr - nodes.begin());
+    }
+    // if all nodes have unique rank we are done!
+    if(ranks == nodes.size()) sorted = true;
+}
+
+
+// Returns the next maximal mergeable set of PathNodes.
+// A set of PathNodes sharing adjacent keys is mergeable, if each of the
+// PathNodes begins in the same GraphNode, and no other PathNode shares
+// the key. If the maximal set is empty, returns the next PathNode.
+template <typename index_t>
+pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t> range) {
+    if(range.second >= nodes.size()) {
+        return pair<index_t, index_t>(0, 0);
+    }
+    range.first = range.second;
+    range.second = range.first + 1;
+    if(range.first > 0 && nodes[range.first - 1].key == nodes[range.first].key) {
+        return range;
+    }
+
+    for(index_t i = range.second; i < nodes.size(); i++) {
+        if(nodes[i - 1].key != nodes[i].key) {
+            range.second = i;
+        }
+        if(nodes[i].from != nodes[range.first].from) {
+            return range;
+        }
+    }
+    range.second = nodes.size();
+    return range;
+}
+
+//-----------------------------------------------------------------------------------------
+
 template <typename index_t>
 void PathGraph<index_t>::printInfo()
 {
@@ -1800,7 +1939,7 @@ void PathGraph<index_t>::printInfo()
     }
 }
 
-//--------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------
 
 template <typename index_t>
 void PathGraph<index_t>::generateEdgesCounter(void* vp) {
@@ -2269,141 +2408,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 }
 
 //--------------------------------------------------------------------------
-
-template <typename index_t>
-void PathGraph<index_t>::mergeUpdateRank()
-{
-    if(generation == 4) {
-		// Merge equivalent nodes
-		index_t curr = 0;
-		pair<index_t, index_t> range(0, 0); // Empty range
-		while(true) {
-			range = nextMaximalSet(range);
-			if(range.first >= range.second)
-				break;
-			nodes[curr] = nodes[range.first]; curr++;
-		}
-		nodes.resize(curr);
-
-		// Set nodes that become sorted as sorted
-		PathNode* candidate = &nodes.front();
-		pair<index_t, index_t> key = candidate->key; ranks = 1;
-		for(index_t i = 1; i < nodes.size(); i++) {
-			if(nodes[i].key != key) {
-				if(candidate != NULL) {
-					candidate->setSorted();
-				}
-				candidate = &nodes[i];
-				key = candidate->key; ranks++;
-			} else {
-				candidate = NULL;
-			}
-		}
-		if(candidate != NULL) {
-			candidate->setSorted();
-		}
-		ranks = 0;
-		key = nodes.front().key;
-		for(index_t i = 0; i < nodes.size(); i++) {
-			PathNode& node = nodes[i];
-			if(node.key != key) {
-				key = node.key;
-				ranks++;
-			}
-			node.key = pair<index_t, index_t>(ranks, 0);
-		}
-		ranks++;
-    } else {
-    	PathNode* block_start = nodes.begin();
-    	PathNode* curr = nodes.begin();
-    	PathNode* node = nodes.begin();
-    	ranks = 0;
-    	do {
-    		node++;
-    		if(node->key.first != block_start->key.first) {
-    			if(node - block_start == 1) {
-    				block_start->key.first = ranks++;
-    				*curr++ = *block_start;
-    			} else {
-    				sort(block_start, node, PathNodeKeySecondCmp());
-    				while(block_start != node) {
-    					//extend shift while share same key
-    					index_t shift = 1;
-    					while(block_start + shift != node && block_start->key == (block_start + shift)->key) {
-    						shift++;
-    					}
-    					//check if all share .from
-    					//if they share same from, then they are a mergable set
-    					bool merge = true;
-    					for(PathNode* n = block_start; n != (block_start + shift); n++) {
-    						if(n->from != block_start->from) {
-    							merge = false;
-    							break;
-    						}
-    					}
-    					//if not mergable, just write all to array
-    					if(!merge) {
-    						for(PathNode* n = block_start; n != (block_start + shift); n++) {
-    							n->key.first = ranks;
-    							*curr++ = *n;
-    						}
-    						ranks++;
-    					} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from) {
-    						block_start->setSorted();
-    						block_start->key.first = ranks++;
-    						*curr++ = *block_start;
-    					}
-    					block_start += shift;
-    				}
-    				// if we are at the last node or the last node is mergable into the previous node, we are done
-    				if(node == nodes.end()
-    						|| (node + 1 == nodes.end() && (curr - 1)->isSorted() && node->from == (curr - 1)->from))
-    					break;
-    				// check if we can safely merge the node immediately following the unsorted cluster into the previous node
-    				// must be that:
-    				// 1) node is not itself part of an unsorted cluster
-    				// 2) the previous node is sorted
-    				// 3) the nodes share the same from attribute
-    				if(node->key.first != (node + 1)->key.first
-    				    	&& (curr - 1)->isSorted() && node->from == (curr - 1)->from)
-    					node++;
-    			}
-    			block_start = node;
-    		}
-    	} while(node != nodes.end());
-    	nodes.resizeExact(curr - nodes.begin());
-    }
-    // if all nodes have unique rank we are done!
-    if(ranks == nodes.size()) sorted = true;
-}
-
-
-// Returns the next maximal mergeable set of PathNodes.
-// A set of PathNodes sharing adjacent keys is mergeable, if each of the
-// PathNodes begins in the same GraphNode, and no other PathNode shares
-// the key. If the maximal set is empty, returns the next PathNode.
-template <typename index_t>
-pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t> range) {
-    if(range.second >= nodes.size()) {
-        return pair<index_t, index_t>(0, 0);
-    }
-    range.first = range.second;
-    range.second = range.first + 1;
-    if(range.first > 0 && nodes[range.first - 1].key == nodes[range.first].key) {
-        return range;
-    }
-
-    for(index_t i = range.second; i < nodes.size(); i++) {
-        if(nodes[i - 1].key != nodes[i].key) {
-            range.second = i;
-        }
-        if(nodes[i].from != nodes[range.first].from) {
-            return range;
-        }
-    }
-    range.second = nodes.size();
-    return range;
-}
 
 template <typename index_t>
 pair<index_t, index_t> PathGraph<index_t>::getEdges(index_t node, bool by_from) {
