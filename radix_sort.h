@@ -11,13 +11,6 @@ static void _radix_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
 	const int BLOCKS = (1 << (SHIFT + 1));
 	const int BLOCKS_MASK = BLOCKS - 1;
 
-	// Use std::sort in base case.
-	// Notice that as long as hash is consistent with CMP
-	// guaranteed to be sorted by CMP.
-	if(end - begin < 2000 || !log_size) {
-		if(end > begin + 1) sort(begin, end, CMP());
-		return;
-	}
 	// compute maximum of log_size - 7 and 0
 	int right_shift = (log_size - SHIFT) * (log_size > SHIFT);
 	// count number in each bin
@@ -49,7 +42,11 @@ static void _radix_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
 	}
 	//sort partitions
 	for(int bin = 0; bin < BLOCKS; bin++) {
-		if(index[bin + 1] - index[bin] > 1) _radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+		if(index[bin + 1] - index[bin] > 64 && right_shift) {
+			_radix_sort<T, CMP, index_t>(index[bin], index[bin + 1], hash, right_shift);
+		} else if (index[bin + 1] - index[bin] > 1) {
+			sort(index[bin], index[bin + 1], CMP());
+		}
 	}
 }
 
