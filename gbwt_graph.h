@@ -1386,7 +1386,8 @@ private:
 private:
     int             nthreads;
     bool            verbose;
-
+    EList<index_t>  from_index;
+    EList<PathNode> from_table;
     EList<PathNode> past_nodes;
     EList<PathNode> nodes;
     EList<PathEdge> edges;
@@ -1496,6 +1497,7 @@ report_F_node_idx(0), report_F_location(0)
     radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), nodes.ptr(),
     		&PathNodeFrom, max_from, nthreads);
     past_nodes.nullify();
+    from_table.nullify();
 }
 
 //make original unsorted PathNodes given a RefGraph
@@ -1547,7 +1549,6 @@ template <typename index_t>
 void PathGraph<index_t>::generationOne() {
 	generation++;
 	// first count where to start each from value
-	EList<index_t> from_index;
 	from_index.resizeNoCopyExact(max_from + 2);
 	from_index.fillZero();
 	//Build from_index
@@ -1598,10 +1599,6 @@ void PathGraph<index_t>::earlyGeneration() {
 	generation++;
 	//here past_nodes is already sorted by .from
 	// first count where to start each from value
-	EList<index_t> from_index;
-	from_index.resizeNoCopyExact(max_from + 2);
-	from_index.fillZero();
-
 	//Build from_index
 	for(index_t i = 0; i < past_nodes.size(); i++) {
 		from_index[past_nodes[i].from + 1] = i + 1;
@@ -1637,11 +1634,6 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	//here past_nodes is already sorted by .from
 	// first count where to start each from value
 	time_t start = time(0);
-	EList<index_t> from_index;
-	from_index.resizeNoCopyExact(max_from + 2);
-	from_index.fillZero();
-	if(verbose) cerr << "ALLOCATED FROM_INDEX: " << time(0) - start << endl;
-	start = time(0);
 	//Build from_index
 	for(index_t i = 0; i < past_nodes.size(); i++) {
 		from_index[past_nodes[i].from + 1] = i + 1;
@@ -1737,17 +1729,20 @@ void PathGraph<index_t>::lateGeneration() {
 
 	assert_neq(past_nodes.size(), ranks);
 
-	EList<PathNode> from_table; from_table.resizeExact(past_nodes.size());
+	from_table.resizeNoCopy(past_nodes.size());
+
 	if(verbose) cerr << "ALLOCATE FROM_TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
 	radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
+
 	if(verbose) cerr << "BUILD TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
+
 	//Build from_index
-	EList<index_t> from_index; from_index.resizeNoCopyExact(max_from + 2); from_index.fillZero();
-	for(index_t i = 0; i < past_nodes.size(); i++) {
+	for(index_t i = 0; i < from_table.size(); i++) {
 		from_index[from_table[i].from + 1] = i + 1;
 	}
+
 	if(verbose) cerr << "BUILD INDEX: " << time(0) - indiv << endl;
 	indiv = time(0);
 
@@ -1926,7 +1921,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	indiv = time(0);
 
 	// build an index for nodes
-	EList<index_t> from_index; from_index.resizeExact(max_from + 2); from_index.fillZero();
 	for(index_t i = 0; i < nodes.size(); i++) {
 		from_index[nodes[i].from + 1] = i + 1;
 	}
