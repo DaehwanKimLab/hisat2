@@ -2344,7 +2344,10 @@ void PathGraph<index_t>::mergeUpdateRank()
     	do {
     		node++;
     		if(node->key.first != block_start->key.first) {
-    			if(node - block_start > 1) {
+    			if(node - block_start == 1) {
+    				block_start->key.first = ranks++;
+    				*curr++ = *block_start;
+    			} else {
     				sort(block_start, node, PathNodeKeySecondCmp());
     				while(block_start != node) {
     					//extend shift while share same key
@@ -2368,16 +2371,25 @@ void PathGraph<index_t>::mergeUpdateRank()
     							*curr++ = *n;
     						}
     						ranks++;
-    					} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from){
+    					} else if(curr == nodes.begin() || !(curr - 1)->isSorted() || (curr - 1)->from != block_start->from) {
     						block_start->setSorted();
     						block_start->key.first = ranks++;
     						*curr++ = *block_start;
     					}
     					block_start += shift;
     				}
-    			} else if(curr == nodes.begin() || (!(curr - 1)->isSorted() || (curr - 1)->from != block_start->from)){
-    				block_start->key.first = ranks++;
-    				*curr++ = *block_start;
+    				// if we are at the last node or the last node is mergable into the previous node, we are done
+    				if(node == nodes.end()
+    						|| (node + 1 == nodes.end() && (curr - 1)->isSorted() && node->from == (curr - 1)->from))
+    					break;
+    				// check if we can safely merge the node immediately following the unsorted cluster into the previous node
+    				// must be that:
+    				// 1) node is not itself part of an unsorted cluster
+    				// 2) the previous node is sorted
+    				// 3) the nodes share the same from attribute
+    				if(node->key.first != (node + 1)->key.first
+    				    	&& (curr - 1)->isSorted() && node->from == (curr - 1)->from)
+    					node++;
     			}
     			block_start = node;
     		}
