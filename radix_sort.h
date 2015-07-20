@@ -7,7 +7,7 @@
 // used for leaves of both in and out of place radix sorts
 template <typename T, typename CMP, typename index_t>
 static void _radix_sort(T* begin, T* end, index_t (*hash)(T&), int log_size) {
-	const int SHIFT = 7;
+	const int SHIFT = 8;
 	const int BLOCKS = (1 << (SHIFT + 1));
 	const int BLOCKS_MASK = BLOCKS - 1;
 
@@ -73,7 +73,7 @@ static void _radix_sort_worker(void* vp) {
 
 template <typename T, typename CMP, typename index_t>
 void radix_sort_in_place(T* begin, T* end, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
-	const int SHIFT = 7;
+	const int SHIFT = 8;
 	const int BLOCKS = (1 << (SHIFT + 1));
 
 	int log_size = sizeof(maxv) * 8;
@@ -186,7 +186,7 @@ static void _write_worker(void* vp) {
 template <typename T, typename CMP, typename index_t>
 void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, int nthreads = 1) {
 	//set parameters
-	const int SHIFT = 7;
+	const int SHIFT = 8;
 	const int BLOCKS = (1 << (SHIFT + 1));
 	int log_size = sizeof(maxv) * 8;
 	while(!((1 << log_size) & maxv)) log_size--;
