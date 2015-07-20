@@ -134,9 +134,6 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
     for(index_t hi = 0; hi < this->_genomeHits.size(); hi++) {
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hi];
         index_t leftext = (index_t)INDEX_MAX, rightext = (index_t)INDEX_MAX;
-        // daehwan - for debugging purposes
-#if 0
-#else
         genomeHit.extend(
                          *(this->_rds[rdi]),
                          gfm,
@@ -154,7 +151,6 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                          this->_maxIntronLen,
                          leftext,
                          rightext);
-#endif
     }
     
     // for the candidate alignments, examine the longest (best) one first
@@ -179,13 +175,6 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
         // given a candidate partial alignment, extend it bidirectionally
         him.anchoratts++;
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hj];
-        
-        // daehwan - for debugging purposes
-#if 0
-        if(genomeHit.len() < 100)
-            continue;
-#endif
-        
         hybridSearch_recur(
                            sc,
                            gfm,

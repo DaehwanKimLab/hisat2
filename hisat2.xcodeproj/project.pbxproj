@@ -383,6 +383,20 @@
 			passBuildSettingsInEnvironment = 1;
 			productName = "sawhi-align-debug";
 		};
+		E8562A641B53FBDE003062A4 /* hisat2-align-s */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "USE_SRA=0 hisat2-align-s";
+			buildConfigurationList = E8562A651B53FBDE003062A4 /* Build configuration list for PBXLegacyTarget "hisat2-align-s" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			dependencies = (
+			);
+			name = "hisat2-align-s";
+			passBuildSettingsInEnvironment = 1;
+			productName = "sawhi-align-debug";
+		};
 		E861E5A61B1F35DC00362002 /* hisat2-build-s */ = {
 			isa = PBXLegacyTarget;
 			buildArgumentsString = "hisat2-build-s";
@@ -423,6 +437,7 @@
 				E8000AE31AE9324600E1F351 /* hisat2-build-s-debug */,
 				E854525E1B1A2E350049F2AC /* hisat2-inspect-s-debug */,
 				E85452621B1A2E400049F2AC /* hisat2-align-s-debug */,
+				E8562A641B53FBDE003062A4 /* hisat2-align-s */,
 			);
 		};
 /* End PBXProject section */
@@ -531,6 +546,35 @@
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "hisat2-align-s-debug";
+			};
+			name = Release;
+		};
+		E8562A661B53FBDE003062A4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat2-align-s";
+			};
+			name = Debug;
+		};
+		E8562A671B53FBDE003062A4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
+				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "hisat2-align-s";
 			};
 			name = Release;
 		};
@@ -666,6 +710,15 @@
 			buildConfigurations = (
 				E85452641B1A2E400049F2AC /* Debug */,
 				E85452651B1A2E400049F2AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E8562A651B53FBDE003062A4 /* Build configuration list for PBXLegacyTarget "hisat2-align-s" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E8562A661B53FBDE003062A4 /* Debug */,
+				E8562A671B53FBDE003062A4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
