@@ -67,7 +67,8 @@ static void _radix_sort_worker(void* vp) {
 	int     log_size    = params->log_size;
 	int     num         = params->num;
 	for(int i = 0; i < num; i++) {
-		if(begin[i + 1] - begin[i] > 1) _radix_sort<T, CMP, index_t>(begin[i], begin[i + 1], hash, log_size);
+		if(begin[i + 1] - begin[i] > 1)
+			_radix_sort<T, CMP, index_t>(begin[i], begin[i + 1], hash, log_size);
 	}
 }
 
@@ -271,7 +272,12 @@ void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, 
 			params[i].hash = hash;
 			params[i].begin = index + st;
 			params[i].log_size = right_shift;
-			params[i].num = occupied / nthreads;
+			params[i].num = 0;
+			int remaining_elements = index[occupied] - index[st];
+			while(params[i].num + st < occupied
+						&& index[params[i].num + st] - index[st] < remaining_elements / (nthreads - i))
+				params[i].num++;
+			cerr << params[i].num << " " << index[params[i].num + st] - index[st] << endl;
 			threads[i] = new tthread::thread(&_radix_sort_worker<T, CMP, index_t>, (void*)&params[i]);
 			st += params[i].num;
 		}

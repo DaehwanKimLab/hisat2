@@ -1548,7 +1548,6 @@ void PathGraph<index_t>::makeFromRef(RefGraph<index_t>& base) {
 template <typename index_t>
 void PathGraph<index_t>::generationOne() {
 	generation++;
-	// first count where to start each from value
 	from_index.resizeNoCopyExact(max_from + 2);
 	from_index.fillZero();
 	//Build from_index
@@ -1611,7 +1610,8 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	// Z is mapped to 0x101
 	// therefore max rank = 0x101101101101101101101101 = (101) 8 times
 	index_t max_rank = 11983725;
-	radix_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(), &PathNodeKey, max_rank, nthreads);
+	radix_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(),
+			&PathNodeKey, max_rank, nthreads);
 	if(verbose) cerr << "SORT NODES: " << time(0) - start << endl;
 	start = time(0);
 	nodes.swap(past_nodes);
@@ -1634,7 +1634,8 @@ void PathGraph<index_t>::lateGeneration() {
 	if(verbose) cerr << "ALLOCATE FROM_TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
 
-	radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(), &PathNodeFrom, max_from, nthreads);
+	radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), from_table.ptr(),
+			&PathNodeFrom, max_from, nthreads);
 
 	if(verbose) cerr << "BUILD TABLE: " << time(0) - indiv << endl;
 	indiv = time(0);
