@@ -1395,8 +1395,6 @@ private:
     index_t         max_label;  // Node label of initial nodes.
     index_t         max_from; //number of nodes in RefGraph
     index_t         temp_nodes; // Total number of nodes created before sorting.
-
-
     index_t         generation; // Sorted by paths of length 2^generation.
     bool            sorted;
     
@@ -1547,13 +1545,19 @@ void PathGraph<index_t>::makeFromRef(RefGraph<index_t>& base) {
 
 template <typename index_t>
 void PathGraph<index_t>::generationOne() {
+	//nodes enter almost sorted by from
+	//this is only generation method that whose
+	// incoming nodes are in the nodes EList
 	generation++;
+	//Sort nodes by from using counting sort
+	//Copy into past_nodes in the process
 	from_index.resizeNoCopyExact(max_from + 2);
 	from_index.fillZero();
-	//Build from_index
+	//first count number with each from value
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
 		from_index[node->from]++;
 	}
+	//convert into an index
 	index_t tot = from_index[0];
 	from_index[0] = 0;
 	for(index_t i = 1; i < from_index.size(); i++) {
@@ -1570,7 +1574,7 @@ void PathGraph<index_t>::generationOne() {
 		from_index[i] = from_index[i - 1];
 	}
 	from_index[0] = 0;
-	//Now query direct access table
+	//Now query direct-access table
 	createNewNodes();
 	printInfo();
 	past_nodes.swap(nodes);
@@ -1578,12 +1582,12 @@ void PathGraph<index_t>::generationOne() {
 
 template <typename index_t>
 void PathGraph<index_t>::earlyGeneration() {
+	//past_nodes enter sorted by from
+	//do not yet need to perform pruning step
 	generation++;
-	//Build from_index
 	for(index_t i = 0; i < past_nodes.size(); i++) {
 		from_index[past_nodes[i].from + 1] = i + 1;
 	}
-	// Now query against hash-table
 	createNewNodes();
 	printInfo();
 	past_nodes.swap(nodes);
@@ -1591,6 +1595,9 @@ void PathGraph<index_t>::earlyGeneration() {
 
 template <typename index_t>
 void PathGraph<index_t>::firstPruneGeneration() {
+	//past_nodes enter sorted by from
+	//first generation where we need to perform pruning step
+	// results in us needing to sort entirety of nodes after they are made
 	generation++;
 	//here past_nodes is already sorted by .from
 	// first count where to start each from value
@@ -1601,29 +1608,41 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	}
 	if(verbose) cerr << "BUILT FROM_INDEX: " << time(0) - start << endl;
 	start = time(0);
-	// Now query against hash-table
+	// Now query against direct-access table
 	createNewNodes();
 	past_nodes.resizeNoCopyExact(nodes.size());
+
 	if(verbose) cerr << "RESIZE NODES: " << time(0) - start << endl;
 	start = time(0);
+
 	//max_rank always corresponds to repeated Z's
 	// Z is mapped to 0x101
 	// therefore max rank = 0x101101101101101101101101 = (101) 8 times
 	index_t max_rank = 11983725;
 	radix_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(),
 			&PathNodeKey, max_rank, nthreads);
+
 	if(verbose) cerr << "SORT NODES: " << time(0) - start << endl;
 	start = time(0);
+
 	nodes.swap(past_nodes);
 	mergeUpdateRank();
+
 	if(verbose) cerr << "MERGE, UPDATE RANK: " << time(0) - start << endl;
 	start = time(0);
+
 	printInfo();
 	past_nodes.swap(nodes);
 }
 
 template <typename index_t>
 void PathGraph<index_t>::lateGeneration() {
+	//past_nodes enter sorted by rank
+	//build direct-access table sorted by from,
+	//but query with original nodes sorted by rank
+	//since nodes we query with are sorted by rank,
+	// the nodes produced are automatically sorted by key.first
+	// therefore we only need to sort clusters with same key.first
 	generation++;
 	time_t overall = time(0);
 	time_t indiv = time(0);
@@ -1894,7 +1913,7 @@ void PathGraph<index_t>::mergeUpdateRank()
     			block_start = node;
     		}
     	} while(node != nodes.end());
-    	nodes.resizeExact(curr - nodes.begin());
+    	nodes.resizeExact((index_t)(curr - nodes.begin()));
     }
     // if all nodes have unique rank we are done!
     if(ranks == nodes.size()) sorted = true;
@@ -2103,16 +2122,12 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 			threads[i]->join();
 		}
 	}
-
-	//might want to not do this in local index generation stage?
 	base.nodes.nullify();
 	base.edges.nullify();
 
 	if(verbose) cerr << "MADE NEW EDGES: " << time(0) - indiv << endl;
 	indiv = time(0);
 
-	// could switch to doing each with its own core
-	// I think this would shorten the time that we are running with only a single core
 	EList<index_t, 6>& index = label_index[nthreads - 1];
 
 	EList<PathEdge> temp_edges; temp_edges.resizeExact(edges.size());
