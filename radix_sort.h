@@ -273,7 +273,7 @@ void radix_sort_copy(T* begin, T* end, T* o, index_t (*hash)(T&), index_t maxv, 
 			params[i].begin = index + st;
 			params[i].log_size = right_shift;
 			params[i].num = 0;
-			int remaining_elements = (index_t)(index[occupied] - index[st]);
+			index_t remaining_elements = (index_t)(index[occupied] - index[st]);
 			while(params[i].num + st < occupied
 						&& (index_t)(index[params[i].num + st] - index[st]) < remaining_elements / (nthreads - i))
 				params[i].num++;
