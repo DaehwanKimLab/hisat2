@@ -1375,7 +1375,6 @@ private:
     	typename RefGraph<index_t>::Edge*        st;
     	typename RefGraph<index_t>::Edge*        en;
 		EList<index_t, 6>*                       label_index;
-		EList<index_t>*                          from_index;
 		EList<PathNode>*                         nodes;
 		EList<PathEdge>*                         edges;
 		EList<typename RefGraph<index_t>::Node>* ref_nodes;
@@ -1386,7 +1385,6 @@ private:
 private:
     int             nthreads;
     bool            verbose;
-    EList<index_t>  from_index;
     EList<PathNode> from_table;
     EList<PathNode> past_nodes;
     EList<PathNode> nodes;
@@ -1551,29 +1549,27 @@ void PathGraph<index_t>::generationOne() {
 	generation++;
 	//Sort nodes by from using counting sort
 	//Copy into past_nodes in the process
-	from_index.resizeNoCopyExact(max_from + 2);
-	from_index.fillZero();
 	//first count number with each from value
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
-		from_index[node->from]++;
+		nodes[node->from].key.second++;
 	}
 	//convert into an index
-	index_t tot = from_index[0];
-	from_index[0] = 0;
-	for(index_t i = 1; i < from_index.size(); i++) {
-		tot += from_index[i];
-		from_index[i] = tot - from_index[i];
+	index_t tot = nodes[0].key.second;
+	nodes[0].key.second = 0;
+	for(index_t i = 1; i < max_from + 2; i++) {
+		tot += nodes[i].key.second;
+		nodes[i].key.second = tot - nodes[i].key.second;
 	}
 	// use past_nodes as from_table
-	past_nodes.resizeNoCopyExact(nodes.size());
+	past_nodes.resizeExact(nodes.size());
 	for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
-		past_nodes[from_index[node->from]++] = *node;
+		past_nodes[nodes[node->from].key.second++] = *node;
 	}
 	//reset index
-	for(index_t i = from_index.size() - 1; i > 0; i--) {
-		from_index[i] = from_index[i - 1];
+	for(index_t i = max_from + 1; i > 0; i--) {
+		past_nodes[i].key.second = nodes[i - 1].key.second;
 	}
-	from_index[0] = 0;
+	past_nodes[0].key.second = 0;
 	//Now query direct-access table
 	createNewNodes();
 	printInfo();
@@ -1586,7 +1582,7 @@ void PathGraph<index_t>::earlyGeneration() {
 	//do not yet need to perform pruning step
 	generation++;
 	for(index_t i = 0; i < past_nodes.size(); i++) {
-		from_index[past_nodes[i].from + 1] = i + 1;
+		past_nodes[past_nodes[i].from + 1].key.second = i + 1;
 	}
 	createNewNodes();
 	printInfo();
@@ -1604,7 +1600,7 @@ void PathGraph<index_t>::firstPruneGeneration() {
 	time_t start = time(0);
 	//Build from_index
 	for(index_t i = 0; i < past_nodes.size(); i++) {
-		from_index[past_nodes[i].from + 1] = i + 1;
+		past_nodes[past_nodes[i].from + 1].key.second = i + 1;
 	}
 	if(verbose) cerr << "BUILT FROM_INDEX: " << time(0) - start << endl;
 	start = time(0);
@@ -1661,7 +1657,7 @@ void PathGraph<index_t>::lateGeneration() {
 
 	//Build from_index
 	for(index_t i = 0; i < from_table.size(); i++) {
-		from_index[from_table[i].from + 1] = i + 1;
+		from_table[from_table[i].from + 1].key.second = i + 1;
 	}
 
 	if(verbose) cerr << "BUILD INDEX: " << time(0) - indiv << endl;
@@ -1694,12 +1690,12 @@ void PathGraph<index_t>::createNewNodesCounter(void* vp) {
 			if(node->isSorted()) {
 				count++;
 			} else {
-				count += graph.from_index[node->to + 1] - graph.from_index[node->to];
+				count += graph.from_table[node->to + 1].key.second - graph.from_table[node->to].key.second;
 			}
 		}
 	} else {
 		for(PathNode* node = st; node != en; node++) {
-			count += graph.from_index[node->to + 1] - graph.from_index[node->to];
+			count += graph.past_nodes[node->to + 1].key.second - graph.past_nodes[node->to].key.second;
 		}
 	}
 	*(params->sub_temp_nodes) = count;
@@ -1716,7 +1712,7 @@ void PathGraph<index_t>::createNewNodesMaker(void* vp) {
 			if(node->isSorted()) {
 				*curr++ = *node;
 			} else {
-				for(index_t j = graph.from_index[node->to]; j < graph.from_index[node->to + 1]; j++) {
+				for(index_t j = graph.from_table[node->to].key.second; j < graph.from_table[node->to + 1].key.second; j++) {
 					curr->from = node->from;
 					curr->to = graph.from_table[j].to;
 					(curr++)->key  = pair<index_t, index_t>(node->key.first, graph.from_table[j].key.first);
@@ -1725,7 +1721,7 @@ void PathGraph<index_t>::createNewNodesMaker(void* vp) {
 		}
 	} else if(graph.generation == 4) {
 		for(PathNode* node = st; node != en; node++) {
-			for(index_t j = graph.from_index[node->to]; j < graph.from_index[node->to + 1]; j++) {
+			for(index_t j = graph.past_nodes[node->to].key.second; j < graph.past_nodes[node->to + 1].key.second; j++) {
 				curr->from = node->from;
 				curr->to = graph.past_nodes[j].to;
 				(curr++)->key  = pair<index_t, index_t>(node->key.first, graph.past_nodes[j].key.first);
@@ -1733,7 +1729,7 @@ void PathGraph<index_t>::createNewNodesMaker(void* vp) {
 		}
 	} else {
 		for(PathNode* node = st; node != en; node++) {
-			for(index_t j = graph.from_index[node->to]; j < graph.from_index[node->to + 1]; j++) {
+			for(index_t j = graph.past_nodes[node->to].key.second; j < graph.past_nodes[node->to + 1].key.second; j++) {
 				curr->from = node->from;
 				curr->to = graph.past_nodes[j].to;
 				index_t bit_shift = 1 << (graph.generation - 1);
@@ -1966,8 +1962,8 @@ void PathGraph<index_t>::generateEdgesCounter(void* vp) {
 	GenEdgesParams* params = (GenEdgesParams*)vp;
 	typename RefGraph<index_t>::Edge*        st          = params->st;
 	typename RefGraph<index_t>::Edge*        en          = params->en;
-	EList<index_t>&                          from_index  = *(params->from_index);
 	EList<typename RefGraph<index_t>::Node>& ref_nodes   = *(params->ref_nodes);
+	EList<PathNode>&                         nodes       = *(params->nodes);
 	//first count edges, fill out label_index
 
 	index_t label_index[6] = {0};
@@ -1983,7 +1979,7 @@ void PathGraph<index_t>::generateEdgesCounter(void* vp) {
 			case 'Z': curr_label_index = 5; break;
 			default: assert(false); throw 1;
 		}
-		label_index[curr_label_index] += from_index[edge->to + 1] - from_index[edge->to];
+		label_index[curr_label_index] += nodes[edge->to + 1].key.second - nodes[edge->to].key.second;
 		for(int i = 0; i < 6; i++) {
 			params->label_index->get(i) = label_index[i];
 		}
@@ -1996,7 +1992,6 @@ void PathGraph<index_t>::generateEdgesMaker(void* vp) {
 	typename RefGraph<index_t>::Edge*        st          = params->st;
 	typename RefGraph<index_t>::Edge*        en          = params->en;
 	EList<index_t, 6>&                       label_index = *(params->label_index);
-	EList<index_t>&                          from_index  = *(params->from_index);
 	EList<typename RefGraph<index_t>::Node>& ref_nodes   = *(params->ref_nodes);
 	EList<PathEdge>&                         edges       = *(params->edges);
 	EList<PathNode>&                         nodes       = *(params->nodes);
@@ -2014,7 +2009,7 @@ void PathGraph<index_t>::generateEdgesMaker(void* vp) {
 			case 'Z': curr_label_index = 5; break;
 			default: assert(false); throw 1;
 		}
-		for(index_t j = from_index[edge->to]; j < from_index[edge->to + 1]; j++) {
+		for(index_t j = nodes[edge->to].key.second; j < nodes[edge->to + 1].key.second; j++) {
 			edges[label_index[curr_label_index]++] = PathEdge(edge->from, nodes[j].key.first, curr_label);
 		}
 	}
@@ -2050,7 +2045,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
 	// build an index for nodes
 	for(index_t i = 0; i < nodes.size(); i++) {
-		from_index[nodes[i].from + 1] = i + 1;
+		nodes[nodes[i].from + 1].key.second = i + 1;
 	}
 
 	if(verbose) cerr << "BUILD FROM_INDEX "  << time(0) - indiv << endl;
@@ -2066,7 +2061,6 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 	typename RefGraph<index_t>::Edge* st = base.edges.begin();
 	typename RefGraph<index_t>::Edge* en = st + base.edges.size() / nthreads;
 	for(int i = 0; i < nthreads; i++) {
-		params[i].from_index = &from_index;
 		label_index[i].resizeExact(6);
 		label_index[i].fillZero();
 		params[i].label_index = &label_index[i];
