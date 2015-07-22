@@ -1551,7 +1551,7 @@ public:
                     buildToDisk(bsa, s, out1, out2);
                 } else {                    
                     RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, outfile, _nthreads, verbose);
-                    PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, _nthreads, verbose);
+                    PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, outfile, _nthreads, verbose);
 
                     if(verbose) { cerr << "Generating edges... " << endl; }
                     if(!pg->generateEdges(*graph)) { return; }

@@ -128,8 +128,46 @@ public:
 
     bool repOk() { return true; }
 
-    void write(const std::string& base_name) {}
-    void printInfo() {}
+    void write(const string& fname, bool bigEndian) {
+        ofstream rg_file(fname.c_str(), ios::binary);
+        if(!rg_file.good()) {
+            cerr << "Could not open file for writing a reference graph: \"" << fname << "\"" << endl;
+            throw 1;
+        }
+        writeIndex<index_t>(rg_file, nodes.size(), bigEndian);
+        for(index_t i = 0; i < nodes.size(); i++) {
+            nodes[i].write(rg_file, bigEndian);
+        }
+        writeIndex<index_t>(rg_file, edges.size(), bigEndian);
+        for(index_t i = 0; i < edges.size(); i++) {
+            edges[i].write(rg_file, bigEndian);
+        }
+        rg_file.close();
+    }
+    
+    void nullify() {
+        nodes.nullify();
+        edges.nullify();
+    }
+    
+    void read(const string& fname, bool bigEndian) {
+        ifstream rg_file(fname.c_str(), ios::binary);
+        if(!rg_file.good()) {
+            cerr << "Could not open file for reading a reference graph: \"" << fname << "\"" << endl;
+            throw 1;
+        }
+        index_t num_nodes = readIndex<index_t>(rg_file, bigEndian);
+        nodes.resizeNoCopyExact(num_nodes);
+        for(index_t i = 0; i < num_nodes; i++) {
+            nodes[i].read(rg_file, bigEndian);
+        }
+        index_t num_edges = readIndex<index_t>(rg_file, bigEndian);
+        edges.resizeNoCopyExact(num_edges);
+        for(index_t i = 0; i < num_edges; i++) {
+            edges[i].read(rg_file, bigEndian);
+        }
+        rg_file.close();
+    }
 
 private:
     static bool isReverseDeterministic(EList<Node>& nodes, EList<Edge>& edges);
@@ -465,7 +503,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         for(index_t i = 0; i < threadParams.size(); i++) {
             if(threadParams[i].multipleHeadNodes) multipleHeadNodes = true;
             std::ostringstream number; number << i;
-            string rg_fname = out_fname + "." + number.str() + ".rf";
+            const string rg_fname = out_fname + "." + number.str() + ".rf";
             ifstream rg_in_file(rg_fname.c_str(), ios::binary);
             if(!rg_in_file.good()) {
                 cerr << "Could not open file for reading a reference graph: \"" << rg_fname << "\"" << endl;
@@ -1293,7 +1331,7 @@ public:
 
 public:
     // Create a new graph in which paths are represented using nodes
-    PathGraph(RefGraph<index_t>& parent, int nthreads_ = 1, bool verbose_ = false);
+    PathGraph(RefGraph<index_t>& parent, const string& base_fname, int nthreads_ = 1, bool verbose_ = false);
 
     ~PathGraph() {}
 
@@ -1320,7 +1358,6 @@ public:
         assert_lt(report_edge_range.first, edges.size());
         const PathEdge& edge = edges[report_edge_range.first];
         gbwtChar = edge.label;
-        if(gbwtChar == 'Y') gbwtChar = 'Z';
         assert_lt(report_node_idx, nodes.size());
         F = (firstOutEdge ? 1 : 0);
 
@@ -1390,7 +1427,6 @@ private:
     EList<PathNode> nodes;
     EList<PathEdge> edges;
     index_t         ranks;
-    index_t         max_label;  // Node label of initial nodes.
     index_t         max_from; //number of nodes in RefGraph
     index_t         temp_nodes; // Total number of nodes created before sorting.
     index_t         generation; // Sorted by paths of length 2^generation.
@@ -1455,9 +1491,9 @@ public: EList<pair<index_t, index_t> > ftab;
 //creates prefix-sorted PathGraph Nodes given a reverse determinized RefGraph
 //outputs nodes sorted by their from attribute
 template <typename index_t>
-PathGraph<index_t>::PathGraph(RefGraph<index_t>& base, int nthreads_, bool verbose_) :
+PathGraph<index_t>::PathGraph(RefGraph<index_t>& base, const string& base_fname, int nthreads_, bool verbose_) :
 nthreads(nthreads_), verbose(verbose_),
-ranks(0), max_label('Z'), temp_nodes(0), generation(0), sorted(false),
+ranks(0), temp_nodes(0), generation(0), sorted(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
 report_F_node_idx(0), report_F_location(0)
 {
@@ -1467,6 +1503,16 @@ report_F_node_idx(0), report_F_location(0)
     // Fill nodes with a PathNode for each edge in base.edges.
     // Set max_from.
     makeFromRef(base);
+    
+    // Write RefGraph into a file
+    const bool file_rf = base.nodes.size() > (1 << 18);
+    const bool bigEndian = false;
+    const string rf_fname = base_fname + ".rf";
+    if(file_rf) {
+        base.write(rf_fname, bigEndian);
+        base.nullify();
+    }
+    
     // In the first generation the nodes enter, not quite sorted by from.
     // We use a counting sort to sort the nodes, otherwise same as early generation.
     generationOne();
@@ -1494,6 +1540,11 @@ report_F_node_idx(0), report_F_location(0)
             &PathNodeFrom, max_from, nthreads);
     past_nodes.nullify();
     from_table.nullify();
+    
+    if(file_rf) {
+        base.read(rf_fname, bigEndian);
+        std::remove(rf_fname.c_str());
+    }
 }
 
 //make original unsorted PathNodes given a RefGraph
@@ -1613,7 +1664,7 @@ void PathGraph<index_t>::firstPruneGeneration() {
 
     //max_rank always corresponds to repeated Z's
     // Z is mapped to 0x101
-    // therefore max rank = 0x101101101101101101101101 = (101) 8 times
+    // therefore max rank = 101101101101101101101101 = (101) 8 times
     index_t max_rank = 11983725;
     radix_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(),
             &PathNodeKey, max_rank, nthreads);
@@ -2086,6 +2137,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         for(int i = 0; i < nthreads; i++)
             threads[i]->join();
     }
+    
     if(verbose) cerr << "COUNTED NEW EDGES: " << time(0) - indiv << endl;
     indiv = time(0);
     //update all label indexes
@@ -2116,8 +2168,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
             threads[i]->join();
         }
     }
-    base.nodes.nullify();
-    base.edges.nullify();
+    base.nullify();
 
     if(verbose) cerr << "MADE NEW EDGES: " << time(0) - indiv << endl;
     indiv = time(0);

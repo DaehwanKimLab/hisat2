@@ -1835,6 +1835,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                                               false);   /* verbose? */
             tParam.pg = new PathGraph<index_t>(
                                                *tParam.rg,
+                                               tParam.file,
                                                1,         /* num threads */
                                                false);    /* verbose? */
 
