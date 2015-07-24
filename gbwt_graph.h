@@ -1735,7 +1735,7 @@ void PathGraph<index_t>::createNewNodesCounter(void* vp) {
     PathNode*           en       = params->en;
     PathGraph<index_t>& graph    = *(params->graph);
 
-    index_t count = 0;
+    size_t count = 0;
     if(graph.generation > 4) {
         for(PathNode* node = st; node != en; node++) {
             if(node->isSorted()) {
@@ -1750,6 +1750,12 @@ void PathGraph<index_t>::createNewNodesCounter(void* vp) {
         }
     }
     *(params->sub_temp_nodes) = count;
+
+    //check for overflow
+    if(count > (index_t)-1) {
+        cerr << "exceeded integer bounds, remove adjacent SNPs or switch to 64-bit version" << endl;
+        throw 1;
+    }
 }
 template <typename index_t>
 void PathGraph<index_t>::createNewNodesMaker(void* vp) {
@@ -1826,7 +1832,13 @@ void PathGraph<index_t>::createNewNodes() {
     //update all label indexes
     temp_nodes = 0;
     for(int i = 0; i < nthreads; i++) {
-        temp_nodes += sub_temp_nodes[i];
+        // done to check if we exceed index_t range
+        size_t val = (size_t)temp_nodes + (size_t)sub_temp_nodes[i];
+        if(val > (index_t)-1) {
+            cerr << "exceeded integer bounds, remove adjacent SNPs or switch to 64-bit version" << endl;
+            throw 1;
+        }
+        temp_nodes = val;
     }
     if(verbose) cerr << "COUNTED TEMP NODES: " << time(0) - indiv << endl;
     indiv = time(0);
