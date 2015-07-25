@@ -1505,7 +1505,7 @@ report_F_node_idx(0), report_F_location(0)
     makeFromRef(base);
     
     // Write RefGraph into a file
-    const bool file_rf = base.nodes.size() > (1 << 18);
+    const bool file_rf = base.nodes.size() > (1 << 22);
     const bool bigEndian = false;
     const string rf_fname = base_fname + ".rf";
     if(file_rf) {
