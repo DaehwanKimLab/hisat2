@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <errno.h>
+#include <set>
 #include <stdexcept>
 #include <sys/stat.h>
 #ifdef BOWTIE_MM
@@ -1310,7 +1311,7 @@ public:
                         cerr << "Error: could not open "<< ssfile.c_str() << endl;
                         throw 1;
                     }
-
+                    set<uint64_t> ss_seq;
                     while(!ss_file.eof()) {
                         // 22	16062315	16062810	+
                         string chr;
@@ -1368,6 +1369,22 @@ public:
                         } else {
                             if(right >= jlen) continue;
                         }
+                        
+                        // Avoid splice sites in repetitive sequences
+                        // Otherwise, it will likely explode due to an exponential number of combinations
+                        index_t seqlen = 16; assert_leq(seqlen, 16);
+                        if(left >= seqlen && right + 1 + seqlen <= s.length()) {
+                            uint64_t seq = 0;
+                            for(index_t si = left - seqlen; si < left; si++) {
+                                seq = seq << 2 | s[si];
+                            }
+                            for(index_t si = right + 1; si < right + 1 + seqlen; si++) {
+                                seq = seq << 2 | s[si];
+                            }
+                            if(ss_seq.find(seq) != ss_seq.end()) continue;
+                            ss_seq.insert(seq);
+                        }
+                        
                         _alts.expand();
                         ALT<index_t>& alt = _alts.back();
                         alt.type = ALT_SPLICESITE;
