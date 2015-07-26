@@ -1024,9 +1024,9 @@ bool RefGraph<index_t>::isReverseDeterministic(EList<Node>& nodes, EList<Edge>& 
     // Sort edges by "to" nodes
     sortEdgesTo(edges);
 
-    index_t curr_to = edges.front().to;
+    index_t curr_to = (index_t)INDEX_MAX;
     EList<bool> seen; seen.resize(5); seen.fillZero();
-    for(index_t i = 1; i < edges.size(); i++) {
+    for(index_t i = 0; i < edges.size(); i++) {
         index_t from = edges[i].from;
         assert_lt(from, nodes.size());
         char nt = nodes[from].label;
