@@ -1566,7 +1566,7 @@ public:
                     assert_eq(bsa.size(), s.length()+1);
                     VMSG_NL("Converting suffix-array elements to index image");
                     buildToDisk(bsa, s, out1, out2);
-                } else {                    
+                } else {
                     RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, outfile, _nthreads, verbose);
                     PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, outfile, _nthreads, verbose);
 
@@ -2015,8 +2015,8 @@ public:
             _zGbwtBpOffs[i] = sideCharOff & 3;
             assert_lt(_zGbwtBpOffs[i], 4);
             _zGbwtByteOffs[i] += sideByteOff;
-            assert(repOk(gh)); // Ebwt should be fully initialized now
         }
+        assert(repOk(gh)); // Ebwt should be fully initialized now
 	}
 
 	/**

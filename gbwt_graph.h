@@ -1921,7 +1921,7 @@ void PathGraph<index_t>::mergeUpdateRank()
         ranks = 0;
         do {
             node++;
-            if(node->key.first != block_start->key.first) {
+            if(node == nodes.end() || node->key.first != block_start->key.first) {
                 if(node - block_start == 1) {
                     block_start->key.first = ranks++;
                     *curr++ = *block_start;
@@ -1957,17 +1957,23 @@ void PathGraph<index_t>::mergeUpdateRank()
                         block_start += shift;
                     }
                     // if we are at the last node or the last node is mergable into the previous node, we are done
-                    if(node == nodes.end()
-                            || (node + 1 == nodes.end() && (curr - 1)->isSorted() && node->from == (curr - 1)->from))
-                        break;
+                    if(node == nodes.end()) break;
+                    if(node + 1 == nodes.end()) {
+                        assert(curr >= nodes.begin() + 1);
+                        if((curr - 1)->isSorted() && node->from == (curr - 1)->from)
+                            break;
+                    }
                     // check if we can safely merge the node immediately following the unsorted cluster into the previous node
                     // must be that:
                     // 1) node is not itself part of an unsorted cluster
                     // 2) the previous node is sorted
                     // 3) the nodes share the same from attribute
-                    if(node->key.first != (node + 1)->key.first
-                            && (curr - 1)->isSorted() && node->from == (curr - 1)->from)
-                        node++;
+                    assert(node + 1 < nodes.end());
+                    if(node->key.first != (node + 1)->key.first) {
+                        assert(curr >= nodes.begin() + 1);
+                        if((curr - 1)->isSorted() && node->from == (curr - 1)->from)
+                            node++;
+                    }
                 }
                 block_start = node;
             }
@@ -2025,11 +2031,10 @@ void PathGraph<index_t>::generateEdgesCounter(void* vp) {
     GenEdgesParams* params = (GenEdgesParams*)vp;
     typename RefGraph<index_t>::Edge*        st          = params->st;
     typename RefGraph<index_t>::Edge*        en          = params->en;
+    EList<index_t, 6>&                       label_index = *(params->label_index);
     EList<typename RefGraph<index_t>::Node>& ref_nodes   = *(params->ref_nodes);
     EList<PathNode>&                         nodes       = *(params->nodes);
     //first count edges, fill out label_index
-
-    index_t label_index[6] = {0};
     for(typename RefGraph<index_t>::Edge* edge = st; edge != en; edge++) {
         char curr_label = ref_nodes[edge->from].label;
         int curr_label_index;
@@ -2042,10 +2047,9 @@ void PathGraph<index_t>::generateEdgesCounter(void* vp) {
             case 'Z': curr_label_index = 5; break;
             default: assert(false); throw 1;
         }
+        assert_lt(edge->to + 1, nodes.size());
+        assert_lt(nodes[edge->to].key.second, nodes[edge->to + 1].key.second);
         label_index[curr_label_index] += nodes[edge->to + 1].key.second - nodes[edge->to].key.second;
-        for(int i = 0; i < 6; i++) {
-            params->label_index->get(i) = label_index[i];
-        }
     }
 }
 
@@ -2058,8 +2062,6 @@ void PathGraph<index_t>::generateEdgesMaker(void* vp) {
     EList<typename RefGraph<index_t>::Node>& ref_nodes   = *(params->ref_nodes);
     EList<PathEdge>&                         edges       = *(params->edges);
     EList<PathNode>&                         nodes       = *(params->nodes);
-
-
     for(typename RefGraph<index_t>::Edge* edge = st; edge != en; edge++) {
         char curr_label = ref_nodes[edge->from].label;
         int curr_label_index;

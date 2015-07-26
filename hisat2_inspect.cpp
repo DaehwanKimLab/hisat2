@@ -447,8 +447,8 @@ static void print_splicesites(
     const EList<ALT<index_t> >& alts = altdb.alts();
     for(size_t i = 0; i < alts.size(); i++) {
         const ALT<index_t>& alt = alts[i];
-        if(!alt.splicesite())
-            continue;
+        if(!alt.splicesite()) continue;
+        if(alt.left >= alt.right) continue;
         index_t tidx = 0, toff = 0, tlen = 0;
         bool straddled2 = false;
         gfm.joinedToTextOff(
