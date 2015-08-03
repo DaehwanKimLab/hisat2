@@ -2191,7 +2191,7 @@ HGFM<index_t, local_index_t>::HGFM(
                             tParam.alts.back().pos -= curr_sztot;
                         }
                     } else if(alt.splicesite()) {
-                        if(curr_sztot + local_sztot <= alt.right) continue;
+                        if(curr_sztot + local_sztot <= alt.right + 1) continue;
                         if(curr_sztot <= alt.left) {
                             tParam.alts.push_back(alt);
                             tParam.alts.back().left -= curr_sztot;
