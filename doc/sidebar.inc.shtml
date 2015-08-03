@@ -23,7 +23,7 @@
    <table width="100%">
 	 <tbody><tr><td>
 	 <!-- 
-     Questions and comments about HISAT can be posted on the 
+     Questions and comments about HISAT2 can be posted on the 
      <a href="https://groups.google.com/forum/#!forum/hisat-tools-users"><b>HISAT Tools Users Google Group</b></a>. 
      Please use <a href="mailto:hisat@gmail.com">hisat@gmail.com</a> for 
      private communications only. Please do not email technical questions to HISAT contributors directly.</td></tr>
@@ -36,15 +36,15 @@
 <a href="./downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
-   <table width="100%"><tbody><tr><td>version 0.1.6-beta</td> <td align="right">4/17/2015</td></tr>
+   <table width="100%"><tbody><tr><td>version 2.0.0-beta</td> <td align="right">8/XX/2015</td></tr>
 	 <tr>
-		 <td><a href="./downloads/hisat-0.1.6-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
+		 <td><a href="./downloads/hisat2-0.0.0-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
 	 </tr>
 	 <tr>
-		 <td><a href="./downloads/hisat-0.1.6-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
+		 <td><a href="./downloads/hisat2-0.0.0-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
 	 </tr>
 	 <tr>
-		 <td><a href="./downloads/hisat-0.1.6-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
+		 <td><a href="./downloads/hisat2-2.0.0-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
 	 </tr>
 
 
@@ -55,7 +55,7 @@
 <h2>Indexes</h2>
   <div class="box">
     <table width="100%">
-      <!-- hg19 -->
+      <!--
       <tr>
         <td>
           <a href="ftp://ftp.ccb.jhu.edu/pub/data/hisat_indexes/hg19_hisat.tar.gz"><i>H. sapiens</i>, UCSC hg19</a>
@@ -64,8 +64,6 @@
           <b>7.0 GB</b>
         </td>
       </tr>
-
-      <!-- mm10 -->
       <tr>
         <td>
           <a href="ftp://ftp.ccb.jhu.edu/pub/data/hisat_indexes/mm10_hisat.tar.gz"><i>M. musculus</i>, UCSC mm10</a>
@@ -74,16 +72,14 @@
           <b>6.4 GB</b>
         </td>
       </tr>
+      -->
     </table>
-
-    <p style="font-size: x-small; line-height: 130%">
-      The current version of HISAT does not use some of the files in the index, so the actual memory requirement is much lower than the index size.
-      For example, the memory footprint of HISAT for the human genome is about 4.3GB. </p>
   </div>
 
 <h2>Related Tools</h2>
 <div class="box">
  <ul>
+   <li><a href="http://www.ccb.jhu.edu/software/hiast">HISAT</a>: Fast and sensitive spliced alignment</li>
    <li><a href="http://bowtie-bio.sourceforge.net/bowtie2">Bowtie2</a>: Ultrafast read alignment</li>
    <li><a href="http://www.ccb.jhu.edu/software/tophat">TopHat2</a>: Spliced read mapper for RNA-Seq</li>
    <li><a href="http://cufflinks.cbcb.umd.edu">Cufflinks</a>: Isoform assembly and quantitation for RNA-Seq</li>
@@ -94,7 +90,7 @@
 <h2>Publications</h2>
 <div class="box">
  <ul>
-   <li><p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html"><b>HISAT: a fast spliced aligner with low memory requirements</b></a>. <i><a href="http://www.nature.com/nmeth">Nature Methods</a></i> 2015</p><br></li>
+   <li><p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html"><b>HISAT: a fast spliced aligner with low memory requirements</b></a>. <i><a href="http://www.nature.com/nmeth">Nature Methods</a></i> 2015</p></li>
  </ul>
 </div>
 
@@ -103,8 +99,9 @@
  <ul>
    <li><a href="http://www.ccb.jhu.edu/people/infphilo">Daehwan Kim</a></li>
    <li><a href="http://www.cs.jhu.edu/~langmea">Ben Langmead</a></li>
+   <li><a href="">Joe Paggi</a></li>
    <li>Geo Pertea</li>
-   <li><a href="http://www.ccb.jhu.edu/people/salzberg">Steven Salzberg</a></li>
+   <li><a href="http://salzberg-lab.org/about-me/">Steven Salzberg</a></li>
  </ul>
 </div>
 
