@@ -1,18 +1,13 @@
-<!--#set var="Title" value="HISAT" -->
+<!--#set var="Title" value="HISAT2" -->
 <!--#set var="NoCrumbs" value="1" -->
-<!--#set var="SubTitle" value="Hierarchical Indexing for Spliced Alignment of Transcripts"-->
-<!--#set var="ExtraCSS" value="/software/hisat/add.css"-->
+<!--#set var="SubTitle" value="graph-based alignment of next generation sequencing reads to a population of human genomes"-->
+<!--#set var="ExtraCSS" value="/software/hisat2/add.css"-->
 <!--#include virtual="/iheader_r.shtml"-->
 <div id="mainContent">
   <div id="subheader">
     <table width="100%"><tbody><tr>
     <td>
-    <strong>HISAT</strong> is a fast and sensitive spliced alignment program for mapping RNA-seq reads.
-    In addition to one global FM index that represents a whole genome, HISAT uses a large set of small FM indexes that collectively cover the whole genome
-    (each index represents a genomic region of ~64,000 bp and ~48,000 indexes are needed to cover the human genome).
-    These small indexes (called local indexes) combined with several alignment strategies enable effective alignment of RNA-seq reads, in particular, reads spanning multiple exons.
-    The memory footprint of HISAT is relatively low (~4.3GB for the human genome).
-    We have developed HISAT based on the <a href = "http://bowtie-bio.sourceforge.net/bowtie2"><strong>Bowtie2</strong></a> implementation to handle most of the operations on the FM index.
+    <strong>HISAT2</strong> is a graph-based alignment program for next generation sequencing reads to a population of human genomes.
 	  <br>
 	  </td><td valign="middle" align="right">
     <a href="http://opensource.org"><img alt="Open Source Software" src="images/osi-certified.gif" border="0"></a>
@@ -24,64 +19,13 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
-	  <h2>HISAT 0.1.6-beta release 4/17/2015</h2>
+	  <h2>HISAT2 2.0.0-beta release 8/XX/2015</h2>
 	  <ul>
-	    <li> Added NH tags in SAM output for specifying number of alignments. </li>
-	    <li> Fixed a bug that -s/--summary option in hisat-inspect didn't work. </li>
-	    <li> Rewritten extract_splice_sites.py to better handle various GTF files with thanks to George Young. </li>
-	    <li> Improved alignment accuracy by preventing reads from being mapped to pseudogenes when known or novel splice sites are provided (--known-splicesite-infile/--novel-splicesite-infile). </li>
-	    <li> Disallow reads to have short anchors with mismatches. </li>
-	  </ul>
-	  <br>
-	  <h2>HISAT source is available in a <a href="https://github.com/infphilo/hisat">public GitHub repository</a> (3/30/2015).</h2>
-	  <h2><a href = "http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html">The HISAT paper</a> is out in Nature Methods 3/9/2015</h2>
-	  <h2>HISAT 0.1.5-beta release 2/25/2015</h2>
-	  <ul>
-	    <li> HISAT is now able to work directly with SRA data: both downloaded on demand over internet and prefetched to local disks.
-	    <ul>
-	      <li> Uses new NGS API (<a href="https://github.com/ncbi/ngs">https://github.com/ncbi/ngs</a>) created and published by SRA Toolkit Team at NCBI.</li>
-	      <li>
-		For example, you can run HISAT with SRA data (SRR353653) as follows. <br/>
-		<i>hisat -x /path/to/index --sra-acc SRR353653</i>
-	      </li>
-	      <li> This eliminates the need to download SRA reads manually and to convert them into fasta/fastq format without affecting the run time. </li>
-	      <li> Is compatible with environment created by SRA Toolkit installation and utilizes any existing rights to dbGaP protected data as well as cached file downloads. </li>
-	    </ul>
+	    <li>
 	    </li>
-	    <li> --pen-intronlen option is handled correctly. </li>
-	    <li> Two new options, --min-intronlen and --max-intronlen, are introduced, enabling users to specify minimum and maximum intron lengths. </li>
 	  </ul>
 	  <br>
-	  <h2>HISAT 0.1.4-beta release 1/30/2015</h2>
-	  <ul>
-	    <li> Alignment score for second-best alignment (XS:i) is no longer reported because it is in conflict with XS:A tag.  XS:A tag is required for transcript assemblers such as Cufflinks and StringTie. </li>
-	    <li> Improved alignment accuracy involving multiple introns. </li>
-	  </ul>
-	  <br>
-	  <h2>HISAT 0.1.3-beta release 1/27/2015</h2>
-	  <ul>
-	    <li> Fixed an occasional runtime error. </li>
-	    <li> Fixed a python script, extract_splice_sites.py, to handle gene annotation files (GTF files) correctly. </li>
-	  </ul>
-	  <br>
-	  <h2>A preprint version of <a href = "http://biorxiv.org/content/early/2014/12/15/012591">HISAT manuscript</a> is available 12/12/2014</h2>
-	  <br>
-	  <h2>HISAT 0.1.2-beta release 11/03/2014</h2>
-	  <ul>
-	    <li> This version includes improvements in alignment sensitivity and splice site discovery. </li>
-	</ul>
-	  <br>
-	<h2>HISAT 0.1.1-beta release 7/29/2014</h2>
-	  <ul>
-	    <li> This version supports genomes of any size, larger than 4 billion base pairs (see <a href = "manual.shtml">the manual</a>). </li>
-	</ul>
-	  <br>
-	<h2>HISAT 0.1.0-beta release 7/10/2014</h2>
-	  <ul>
-	    <li> First release of HISAT.
-	    </li>
-	</ul>
-	  <br>
+	  <h2>HISAT2 source is available in a <a href="https://github.com/infphilo/hisat2">public GitHub repository</a> (5/30/2015).</h2>
 	</div>
   </div>
 </div>

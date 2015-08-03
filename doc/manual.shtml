@@ -1,6 +1,6 @@
-<!--#set var="Title" value="HISAT" -->
+<!--#set var="Title" value="HISAT2" -->
 <!--#set var="NoCrumbs" value="1" -->
-<!--#set var="SubTitle" value="Hierarchical Indexing for Spliced Alignment of Transcripts"-->
+<!--#set var="SubTitle" value="graph-based alignment of next generation sequencing reads to a population of human genomes"-->
 <!--#set var="ExtraCSS" value="/software/hisat/add.css"-->
 <!--#include virtual="/iheader_r.shtml"-->
 <div id="mainContent">
