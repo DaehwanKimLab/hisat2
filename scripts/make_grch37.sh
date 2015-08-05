@@ -72,7 +72,7 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 	fi
 fi
 
-rm genome.fa
+rm -f genome.fa
 for c in $CHRS_TO_INDEX ; do
         F=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.dna.chromosome.${c}.fa
 	if [ ! -f $F ] ; then

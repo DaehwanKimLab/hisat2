@@ -86,7 +86,7 @@ if [ ! -x "$HISAT2_SNP_SCRIPT" ] ; then
 	fi
 fi
 
-rm genome.fa
+rm -f genome.fa
 for c in $CHRS_TO_INDEX ; do
         F=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.dna.chromosome.${c}.fa
 	if [ ! -f $F ] ; then
