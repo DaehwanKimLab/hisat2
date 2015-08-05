@@ -1,0 +1,11 @@
+# Set up an environment for evaluating HISAT2 with competitors such as HISAT, Bowtie2, Bowtie, STAR, GSNAP, etc.,
+
+# Requirements
+sqlite3
+
+
+1)
+./get_data.py
+
+2) 
+./get_aligners.py

@@ -334,7 +334,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-build-s-debug";
@@ -348,7 +348,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat-bp-bin-debug";
@@ -362,7 +362,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-inspect-s-debug";
@@ -376,7 +376,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-align-s-debug";
@@ -390,7 +390,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-align-s";
@@ -404,7 +404,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-build-s";
