@@ -43,31 +43,30 @@ def simulate_reads():
         os.mkdir("reads")
     os.chdir("reads")
 
-    rna, mismatch, snp = True, True, True
+    _rna, _mismatch, _snp = True, True, True
     datasets = [
-        ["genome", 1000000, "RNA", not mismatch, not snp],
-        ["genome", 20000000, "RNA", not mismatch, not snp],
+        ["22", 1000000, _rna, not _mismatch, not _snp],
+        ["22_20-21M", 1000000, _rna, not _mismatch, not _snp],
+        # ["genome", 20000000, _rna, not _mismatch, not _snp],
         ]
 
-    for reference, numreads, rna, mismatch, snp in datasets:
-        if mismatch:
-            dirname = "%dM_%s_reads" % (numreads / 1000000, molecule_type)
+    for genome, numreads, rna, mismatch, snp in datasets:
+        if rna:
+            molecule = "RNA"
         else:
-            dirname = "%dM_%s_mismatch_reads" % (numreads / 1000000, molecule_type)
+            molecule = "DNA"
+        if mismatch:
+            dirname = "%dM_%s_reads_%s" % (numreads / 1000000, molecule, genome)
+        else:
+            dirname = "%dM_%s_mismatch_reads_%s" % (numreads / 1000000, molecule, genome)
         if os.path.exists(dirname):
             continue
         os.mkdir(dirname)
         os.chdir(dirname)
-
-        if reference == "genome":
-            genome_fname = "../../data/genome.fa"
-        elif reference == "":
-            genome_fname = ""
-        else:
-            assert False
+        genome_fname = "../../data/%s.fa" % (genome)
 
         if rna:
-            gtf_fname = "../../data/genes.gtf"
+            gtf_fname = "../../data/genes_%s.gtf" % (genome)
         else:
             gtf_fname = "/dev/null"
 

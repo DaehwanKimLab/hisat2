@@ -27,53 +27,58 @@ def get_data():
         os.mkdir("indexes")
     os.chdir("indexes")
     aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP"]
-    for aligner in aligners:
-        files = []
-        if aligner == "HISAT2":
-            for i in range(8):
-                files.append("genome.%d.ht2" % (i+1))
-                files.append("genome_snp.%d.ht2" % (i+1))
-                files.append("genome_ss.%d.ht2" % (i+1))
-                files.append("genome_snp_ss.%d.ht2" % (i+1))
-        elif aligner == "HISAT":
-            for i in range(6):
-                files.append("genome.%d.bt2" % (i+1))
-                if not i in [2,3]:
-                    files.append("genome.rev.%d.bt2" % (i+1))
-        elif aligner == "Bowtie":
-            for i in range(4):
-                files.append("genome.%d.ebwt" % (i+1))
-            files.append("genome.rev.1.ebwt")
-            files.append("genome.rev.2.ebwt")
-        elif aligner == "STAR":
-            files = [
-                "Genome", 
-                "SA",
-                "SAindex",
-                "chrLength.txt",
-                "chrName.txt",
-                "chrNameLength.txt",
-                "chrStart.txt",
-                "genomeParameters.txt"
-                ]
-        elif aligner == "GSNAP":
-            files = [
-                "genome",
-                "splicesites.iit"
-                ]
-        else:
-            assert False
+    for genome in ["genome", "22", "22_20-21M"]:
+        for aligner in aligners:
+            files = []
+            if aligner == "HISAT2":
+                for i in range(8):
+                    files.append("%s.%d.ht2" % (genome, i+1))
+                    files.append("%s_snp.%d.ht2" % (genome, i+1))
+                    files.append("%s_ss.%d.ht2" % (genome, i+1))
+                    files.append("%s_snp_ss.%d.ht2" % (genome, i+1))
+            elif aligner == "HISAT":
+                for i in range(6):
+                    files.append("%s.%d.bt2" % (genome, i+1))
+                    if not i in [2,3]:
+                        files.append("%s.rev.%d.bt2" % (genome, i+1))
+            elif aligner == "Bowtie":
+                for i in range(4):
+                    files.append("%s.%d.ebwt" % (genome, i+1))
+                files.append("%s.rev.1.ebwt" % (genome))
+                files.append("%s.rev.2.ebwt" % (genome))
+            elif aligner == "STAR":
+                files = [
+                    "Genome", 
+                    "SA",
+                    "SAindex",
+                    "chrLength.txt",
+                    "chrName.txt",
+                    "chrNameLength.txt",
+                    "chrStart.txt",
+                    "genomeParameters.txt"
+                    ]
+            elif aligner == "GSNAP":
+                files = [
+                    genome,
+                    "splicesites.iit"
+                    ]
+            else:
+                assert False
 
-        if not os.path.exists(aligner):
-            os.mkdir(aligner)
-        os.chdir(aligner)
-        for file in files:
-            if os.path.exists(file):
-                continue            
-            wget_cmd = "wget %s/indexes/%s/%s" % (data_root, aligner, file)
-            print >> sys.stderr, wget_cmd
-            os.system(wget_cmd)
-        os.chdir("..")
+            if genome == "genome":
+                aligner_dir = aligner
+            else:
+                aligner_dir = aligner + "_" + genome
+            if not os.path.exists(aligner_dir):
+                os.mkdir(aligner_dir)
+            os.chdir(aligner_dir)
+            for file in files:
+                if os.path.exists(file):
+                    continue            
+                wget_cmd = "wget %s/indexes/%s/%s" % (data_root, aligner_dir, file)
+                print >> sys.stderr, wget_cmd
+                os.system(wget_cmd)
+            os.chdir("..")
     os.chdir("..")
             
     

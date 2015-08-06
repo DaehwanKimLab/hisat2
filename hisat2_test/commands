@@ -4,7 +4,7 @@ samtools faidx 22.fa 22:20000001-21000000 > 22_20_21M.fa
 
 awk '{if($4 >= 20000000 && $4 < 21000000) print $1"\t"$2"\t"$3":20000001-21000000\t"$4-20000000"\t"$5}' 22.snp > 22_20_21M.snp
 awk '{if($2 >= 20000000 && $3 < 21000000) print "22:20000001-21000000\t"$2-20000000"\t"$3-20000000"\t"$4}' 22.ss > 22_20-21M.ss
-awk 'BEGIN{OFS="\t"} {if($4 >= 20000000 && $5 < 21000000) {$1="22:20000001-21000000"; $4=$4-20000000; $5=$5-20000000; print}}' genes_22.gtf > 22_20-21M.gtf
+awk 'BEGIN{FS="\t"; OFS="\t"} {if($4 >= 20000000 && $5 < 21000000) {$1="22:20000001-21000000"; $4=$4-20000000; $5=$5-20000000; print}}' genes_22.gtf > genes_22_20-21M.gtf
 
 time ../hisat2 -f -x 22 22.ref.big_testset.fa,22.alt.big_testset.fa > tmp
 time bowtie2 -f -x 22 22.ref.big_testset.fa,22.alt.big_testset.fa > tmp
