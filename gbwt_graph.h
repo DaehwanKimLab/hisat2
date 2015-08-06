@@ -458,6 +458,9 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
 #endif
         }
 
+        if(nthreads > tmp_szs.size()) {
+            nthreads = tmp_szs.size();
+        }
         assert_gt(nthreads, 0);
         AutoArray<tthread::thread*> threads(nthreads);
         EList<ThreadParam> threadParams;

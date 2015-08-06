@@ -4,31 +4,34 @@ import sys, os
 use_message = '''
 '''
 
-# Assume Mac Platform
-def get_data():
+def build_indexes(genome):
     # Build indexes
     if not os.path.exists("indexes"):
         os.mkdir("indexes")
     os.chdir("indexes")
-    aligners = ["HISAT", "Bowtie", "STAR", "GSNAP"]
+    aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP"]
     for aligner in aligners:
-        if os.path.exists(aligner):
+        if genome == "genome":
+            dir = aligner
+        else:
+            dir = aligner + "_" + genome
+        if os.path.exists(dir):
             continue
-        os.mkdir(aligner)
-        os.chdir(aligner)
+        os.mkdir(dir)
+        os.chdir(dir)
         if aligner == "HISAT2":
-            cmd = "../../aligners/bin/hisat2-build ../../data/genome.fa genome"
-            cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/genome.fa --snp ../../data/genome.snp genome_snp"
-            cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/genome.fa --ss ../../data/genome.ss genome_ss"
-            cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/genome.fa --snp ../../data/genome.snp --ss ../../data/genome.ss genome_snp_ss"
+            cmd = "../../aligners/bin/hisat2-build ../../data/%s.fa %s" % (genome, genome)
+            cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp %s_snp" % (genome, genome, genome)
+            cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --ss ../../data/%s.ss %s_ss" % (genome, genome, genome)
+            cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --ss ../../data/%s.ss %s_snp_ss" % (genome, genome, genome, genome)
         elif aligner == "HISAT":
-            cmd = "../../aligners/bin/hisat-build ../../data/genome.fa genome"
+            cmd = "../../aligners/bin/hisat-build ../../data/%s.fa %s" % (genome, genome)
         elif aligner == "Bowtie":
-            cmd = "../../aligners/bin/bowtie-build ../../data/genome.fa genome"
+            cmd = "../../aligners/bin/bowtie-build ../../data/%s.fa %s" % (genome, genome)
         elif aligner == "STAR":
-            cmd = "../../aligners/bin/STAR --runMode genomeGenerate --genomeDir . --genomeFastaFiles ../../data/genome.fa"
+            cmd = "../../aligners/bin/STAR --runMode genomeGenerate --genomeDir . --genomeFastaFiles ../../data/%s.fa" % (genome)
         elif aligner == "GSNAP":
-            cmd = "../../aligners/bin/gmap_build.pl -D . -d genome ../../data/genome.fa"
+            cmd = "../../aligners/bin/gmap_build -B ../../aligners/bin -D . -d %s ../../data/%s.fa" % (genome, genome)
         else:
             assert False
         print >> sys.stderr, cmd
@@ -39,4 +42,6 @@ def get_data():
             
     
 if __name__ == "__main__":
-    get_data()
+    build_indexes("genome")
+    build_indexes("22")
+    build_indexes("22_20-21M")

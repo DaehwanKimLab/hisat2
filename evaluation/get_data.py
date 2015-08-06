@@ -11,7 +11,9 @@ def get_data():
     if not os.path.exists("data"):
         os.mkdir("data")
     os.chdir("data")
-    files = ["genome.fa", "genome.fa.fai", "genes.gtf", "snpCommon.txt", "genome.snp", "genome.ss"]
+    files = ["genome.fa", "genome.fa.fai", "genes.gtf", "snpCommon.txt", "genome.snp", "genome.ss", \
+                 "22.fa", "22.fa.fai", "genes_22.gtf", "22.snp", "22.ss", \
+                 "22_20-21M.fa", "22_20-21M.fa.fai", "genes_22_20-21M.gtf", "22_20-21M.snp", "22_20-21M.ss"]
     for file in files:
         if os.path.exists(file):
             continue
@@ -24,8 +26,7 @@ def get_data():
     if not os.path.exists("indexes"):
         os.mkdir("indexes")
     os.chdir("indexes")
-    # aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP"]
-    aligners = ["HISAT2"]
+    aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP"]
     for aligner in aligners:
         files = []
         if aligner == "HISAT2":
@@ -41,14 +42,18 @@ def get_data():
                     files.append("genome.rev.%d.bt2" % (i+1))
         elif aligner == "Bowtie":
             for i in range(4):
-                files.append("genome.$d.bt" % (i+1))
-            files.append("genome.rev.1.bt")
-            files.append("genome.rev.1.bt")
+                files.append("genome.%d.ebwt" % (i+1))
+            files.append("genome.rev.1.ebwt")
+            files.append("genome.rev.2.ebwt")
         elif aligner == "STAR":
             files = [
-                "Genome", "SA",
+                "Genome", 
+                "SA",
                 "SAindex",
-                "chr*.txt",
+                "chrLength.txt",
+                "chrName.txt",
+                "chrNameLength.txt",
+                "chrStart.txt",
                 "genomeParameters.txt"
                 ]
         elif aligner == "GSNAP":

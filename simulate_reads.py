@@ -97,7 +97,7 @@ def read_genome(genome_file):
 
 """
 """
-def read_transcript(gtf_file, frag_len):
+def read_transcript(genome_seq, gtf_file, frag_len):
     genes = defaultdict(list)
     transcripts = {}
 
@@ -113,6 +113,9 @@ def read_transcript(gtf_file, frag_len):
                 strand, frame, values = line.split('\t')
         except ValueError:
             continue
+        if not chrom in genome_seq:
+            continue
+        
         # Zero-based offset
         left, right = int(left) - 1, int(right) - 1
         if feature != 'exon' or left >= right:
@@ -592,15 +595,6 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch
         else:
             assert False
 
-    # daehwan - for debugging purposes
-    if pos == 4828604 and False:
-        print >> sys.stderr, "".join(ann_ref_seq)
-        print >> sys.stderr, "".join(ann_ref_rel)
-        print >> sys.stderr, "".join(ann_read_rel)
-        print >> sys.stderr, "".join(ann_Zs_seq)
-        print >> sys.stderr, "".join(ann_read_seq)
-        print >> sys.stderr, MD, XM, NM, Zs
-
     tMD, tXM, tNM = "", 0, 0
     match_len = 0
     i = 0
@@ -662,7 +656,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         frag_len = read_len
 
     genome_seq = read_genome(genome_file)
-    genes, transcripts = read_transcript(gtf_file, frag_len)
+    genes, transcripts = read_transcript(genome_seq, gtf_file, frag_len)
     snps = read_snp(snp_file)
 
     if sanity_check:
