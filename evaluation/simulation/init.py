@@ -88,7 +88,7 @@ def to_junction_str(junction):
 def to_junction(junction_str):
     fields = junction_str.split("-")
     if len(fields) > 3:
-        chr, left, right = "".join(fields[:-3]), fields[-2], fields[-1]        
+        chr, left, right = "-".join(fields[:-2]), fields[-2], fields[-1]        
     else:
         assert len(fields) == 3
         chr, left, right = fields

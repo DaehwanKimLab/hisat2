@@ -436,7 +436,13 @@ def to_junction_str(junction):
 
 
 def to_junction(junction_str):
-    chr, left, right = junction_str.split("-")
+    fields = junction_str.split("-")
+    if len(fields) > 3:
+        chr, left, right = "-".join(fields[:-2]), fields[-2], fields[-1]
+    else:
+        assert len(fields) == 3
+        chr, left, right = fields
+
     return [chr, int(left), int(right)]
 
 
@@ -562,11 +568,8 @@ def is_small_anchor_junction_read(cigars):
     return True
 
 
-def is_canonical_junction(chr_dic, junction, test_small):
+def is_canonical_junction(chr_dic, junction):
     chr, left, right = junction
-    if test_small:
-        left -= 19999999
-        right -= 19999999
     donor = chr_dic[chr][left:left+2]
     acceptor = chr_dic[chr][right-3:right-1]
     rev_donor = reverse_complement(acceptor)
@@ -857,7 +860,7 @@ def find_in_gtf_junctions(chr_dic, gtf_junctions, junction, relax_dist = 5):
 
             if abs(left - left2) <= relax_dist and left - left2 == right - right2:
                 test_small = ":" in chr
-                if is_canonical_junction(chr_dic, gtf_junctions[i], test_small):
+                if is_canonical_junction(chr_dic, gtf_junctions[i]):
                     if left == left2:
                         return i
                     else:
@@ -868,7 +871,7 @@ def find_in_gtf_junctions(chr_dic, gtf_junctions, junction, relax_dist = 5):
 
     return -1
 
-def compare_single_sam(reference_sam, query_sam, mapped_fname, test_small, chr_dic, gtf_junctions, gtf_junctions_set):
+def compare_single_sam(reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic = {}, {}
     mapped_file = open(mapped_fname, "w")
@@ -880,10 +883,6 @@ def compare_single_sam(reference_sam, query_sam, mapped_fname, test_small, chr_d
 
         read_name, chr, pos, cigar, NM = line[:-1].split()
         pos = int(pos)
-        if test_small:
-            chr = chr.split(":")[0]
-            chr = chr.split("_")[0]
-            pos += 19999999
                 
         if read_name.find("seq.") == 0:
             read_name = read_name[4:]
@@ -963,7 +962,7 @@ def compare_single_sam(reference_sam, query_sam, mapped_fname, test_small, chr_d
                     # daehwan - for debugging purposes
                     """
                     if len(junction_read_dic[junction_str]) <= 2:
-                        canonical = is_canonical_junction(chr_dic, to_junction(junction_str), test_small)
+                        canonical = is_canonical_junction(chr_dic, to_junction(junction_str))
                         if not canonical:
                             print >> sys.stdout, read_name, junction_str, len(junction_read_dic[junction_str]), can_junctions
                             for line in junction_read_dic[junction_str]:
@@ -1051,7 +1050,7 @@ def compare_single_sam(reference_sam, query_sam, mapped_fname, test_small, chr_d
     for junction_str in temp_junctions:
         if junction_str in temp_gtf_junctions:
             continue
-        if is_canonical_junction(chr_dic, to_junction(junction_str), test_small):
+        if is_canonical_junction(chr_dic, to_junction(junction_str)):
             false_can_junctions += 1
         else:
             false_noncan_junctions += 1
@@ -1060,7 +1059,7 @@ def compare_single_sam(reference_sam, query_sam, mapped_fname, test_small, chr_d
     return mapped, unique_mapped, unmapped, aligned, multi_aligned, len(temp_junctions), len(temp_gtf_junctions), mapping_point
 
 
-def compare_paired_sam(reference_sam, query_sam, mapped_fname, test_small, chr_dic, gtf_junctions, gtf_junctions_set):
+def compare_paired_sam(reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic, junction_pair_dic = {}, {}, {}
     mapped_file = open(mapped_fname, "w")
@@ -1070,13 +1069,6 @@ def compare_paired_sam(reference_sam, query_sam, mapped_fname, test_small, chr_d
             continue
         read_name, chr, pos, cigar, chr2, pos2, cigar2, NM, NM2 = line[:-1].split()
         pos, pos2 = int(pos), int(pos2)
-        if test_small:
-            chr = chr.split(":")[0]
-            chr = chr.split("_")[0]
-            pos += 19999999
-            chr2 = chr2.split(":")[0]
-            chr2 = chr2.split("_")[0]
-            pos2 += 19999999
 
         if read_name.find("seq.") == 0:
             read_name = read_name[4:]
@@ -1272,7 +1264,7 @@ def compare_paired_sam(reference_sam, query_sam, mapped_fname, test_small, chr_d
     for junction_str in temp_junctions:
         if junction_str in temp_gtf_junctions:
             continue
-        if is_canonical_junction(chr_dic, to_junction(junction_str), test_small):
+        if is_canonical_junction(chr_dic, to_junction(junction_str)):
             false_can_junctions += 1
         else:
             false_noncan_junctions += 1
@@ -1366,19 +1358,6 @@ def create_sql_db(sql_db):
     sql_execute(sql_db, sql_create_table)
 
 
-def get_svn_revision():
-    svn_revision_cmd = ["svn", "info", "../../codes/hisat"]
-    svn_process = subprocess.Popen(svn_revision_cmd, stdout=subprocess.PIPE)
-    lines = svn_process.communicate()[0][:-1].split('\n')
-    for line in lines:
-        fields = line.split()
-        if len(fields) != 2:
-            continue
-        if fields[0] == "Revision:":
-            return int(fields[1])
-    return 0
-
-
 def write_analysis_data(sql_db, genome_name, database_name):
     if not os.path.exists(sql_db):
         return
@@ -1426,8 +1405,6 @@ def calculate_read_cost():
     if not os.path.exists(sql_db_name):
         create_sql_db(sql_db_name)
 
-    svn_revision = get_svn_revision()
-
     num_cpus = multiprocessing.cpu_count()
     if num_cpus > 8:
         num_threads = min(8, num_cpus)
@@ -1436,57 +1413,66 @@ def calculate_read_cost():
         num_threads = min(3, num_cpus)
         desktop = True
 
-    data_base = "sim_2M"
-    if not os.path.exists(data_base + "_1.fq"):
-        data_base = "sim_20M"
-
-    test_small = False
+    data_base = "sim"
     test_large_index = False
     verbose = False
     just_runtime = False
     sql_write = True
-    aligners = ["hisat", "hisath", "hisatx2", "tophat2", "star", "starx2", "olego", "gsnap", "bowtie", "bowtie2"]
+    aligners = [
+        ["hisat2", "", "", ""],
+        ["hisat2", "", "snp", ""],
+        ["hisat2", "", "snp_ss", ""],
+        ["hisat", "x1", "", ""],
+        ["hisat", "", "", ""],
+        ["hisat", "x2", "", ""],
+        ["tophat2", "", "", ""],
+        ["star", "", "", ""],
+        ["star", "x2", "", ""],
+        ["gsnap", "", "", ""],
+        ["bowtie", "", "", ""],
+        ["bowtie2", "", "", ""]
+        ]
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
-    test_small = True
-    # test_large_index = True
-    # aligners = ["hisat_1024", "hisat_1072"]
-    aligners = ["hisat", "star"]
+    aligners = [
+        ["hisat2", "x1", "", ""],
+        ["hisat2", "", "", ""],
+        ["hisat2", "", "snp", ""],
+        ["hisat2", "", "snp_ss", ""],
+        ]
     readtypes = ["all"]
     verbose = True
     debug = False
     # sql_write = False
     # just_runtime = True
 
-    if test_small:
-        genome = "22_20-30M"
+    cwd = os.getcwd()
+    if len(cwd.split("reads_")) > 1:
+        genome = cwd.split("reads_")[1]
     else:
         genome = "genome"
+
+    test_small = (genome != "genome")
 
     if just_runtime:
         verbose = True
 
-    chr_dic = read_genome(genome + ".fa")
-    if test_small:
-        chr_keys = chr_dic.keys()
-        assert len(chr_keys) == 1
-        chr_key = chr_keys[0].split(":")[0]
-        chr_dic[chr_key] = chr_dic[chr_keys[0]]
+    chr_dic = read_genome("../../data/" + genome + ".fa")
 
     align_stat = []
     # for paired in [False, True]:
-    for paired in [True]:
+    for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
                 type_sam_fname = base_fname + "_" + readtype + ".sam"
-                type_read1_fname = base_fname +  "_1_" + readtype + ".fq"
-                type_read2_fname = base_fname +  "_2_" + readtype + ".fq"
+                type_read1_fname = base_fname +  "_1_" + readtype + ".fa"
+                type_read2_fname = base_fname +  "_2_" + readtype + ".fa"
                 type_junction_fname = base_fname + "_" + readtype + ".junc"
             else:
                 base_fname = data_base + "_single"
                 type_sam_fname = base_fname + "_" + readtype + ".sam"
-                type_read1_fname = base_fname + "_" + readtype + ".fq"
+                type_read1_fname = base_fname + "_" + readtype + ".fa"
                 type_read2_fname = ""
                 type_junction_fname = base_fname + "_" + readtype + ".junc"
 
@@ -1510,63 +1496,53 @@ def calculate_read_cost():
                 
             type_junction_file.close()
 
+            aligner_bin_base = "../../../aligners/bin"
             def get_aligner_version(aligner):
                 version = ""
-                if aligner[:5] == "hisat" or \
+                if aligner == "hisat2" or \
+                        aligner == "hisat" or \
                         aligner == "bowtie" or \
                         aligner == "bowtie2":
-                    if aligner[:5] == "hisat":
-                        cmd = ["../../../codes/hisat/hisat"]
-                    else:
-                        cmd = [aligner]
+                    cmd = ["%s/%s" % (aligner_bin_base, aligner)]
                     cmd += ["--version"]                    
                     cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
                     version = cmd_process.communicate()[0][:-1].split("\n")[0]
                     version = version.split()[-1]
-                    if aligner[:5] == "hisat":
-                        version += (" svn%d" % svn_revision)
+                    # if aligner[:5] == "hisat":
+                    #    version += (" svn%d" % svn_revision)
                 elif aligner == "tophat2":
-                    if desktop:
-                        cmd = ["tophat"]
-                    else:
-                        cmd = ["/home/infphilo/work/tophat/tophat_trunk_2011/src/tophat"]
+                    cmd = ["%s/tophat" % (aligner_bin_base)]
                     cmd += ["--version"]
                     cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
                     version = cmd_process.communicate()[0][:-1].split()[-1]
                 elif aligner in ["star", "starx2"]:
-                    version = "2.3.0.1"
-                elif aligner == "olego":
-                    cmd = ["olego"]
-                    cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
-                    version = cmd_process.communicate()[1][:-1].split("\n")[1]
-                    version = version.split()[-1]
+                    version = "2.4.2a"
                 elif aligner == "gsnap":
-                    cmd = ["gsnap"]
+                    cmd = ["%s/gsnap" % (aligner_bin_base)]
                     cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                     version = cmd_process.communicate()[1][:-1].split("\n")[0]
                     version = version.split()[2]
                     
                 return version
 
-            def get_aligner_cmd(aligner, read1_fname, read2_fname, out_fname, cmd_idx = 0):
+            index_base = "../../../indexes"
+            index_add = ""
+            if genome != "genome":
+                index_add = "_" + genome
+            def get_aligner_cmd(aligner, type, index_type, version, read1_fname, read2_fname, out_fname, cmd_idx = 0):
                 cmd = []
-                if aligner == "hisat" or \
-                        aligner[:6] == "hisat_" or \
-                        aligner == "hisath":
-                    if aligner == "hisat" or aligner == "hisath":
-                        aligner_dir = "hisat"
-                    else:
-                        aligner_dir = aligner
+                if aligner == "hisat2":
                     if test_large_index:
-                        cmd = ["../../../codes/%s/hisat-align-l" % aligner_dir]
+                        cmd = ["%s/hisat2-align-l" % (aligner_bin_base)]
                     else:
-                        cmd = ["../../../codes/%s/hisat-align-s" % aligner_dir]
+                        cmd = ["%s/hisat2-align-s" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
+                    cmd += ["-f"]
                     # cmd += ["-k", "5"]
                     # cmd += ["--score-min", "C,-18"]
-                    if aligner[:6] == "hisat_":
-                        version = int(aligner[6:])
+                    if version != "":
+                        version = int(version)
                     else:
                         version = sys.maxint
                     # cmd += ["--pen-cansplice", "0"]
@@ -1575,91 +1551,103 @@ def calculate_read_cost():
                     # cmd += ["--metrics", "1",
                     #         "--metrics-file", "metrics.out"]
 
-                    if aligner != "hisath":
+                    if type in ["x1", "x2"]:
                         cmd += ["--no-temp-splicesite"]
 
                     """
                     cmd += ["--rdg", "100,100",
                             "--rfg", "100,100"]
                     """
+
+                    if type == "x2":
+                        if cmd_idx == 0:
+                            cmd += ["--novel-splicesite-outfile"]
+                        else:
+                            cmd += ["--novel-splicesite-infile"]
+                        cmd += ["splicesites.txt"]
                     
                     # "--novel-splicesite-infile",
                     # "../splicesites.txt",
                     # "--rna-strandness",
                     # "FR",
-                    cmd += ["../" + genome + "_hisat"]
+                    index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
+                    if index_type:
+                        index_cmd += ("_" + index_type)
+                    cmd += [index_cmd]
                     if paired:
                         cmd += ["-1", read1_fname,
                                 "-2", read2_fname]
                     else:
-                        cmd += [read1_fname]
-                elif aligner == "hisatx2":
+                        cmd += [read1_fname]                        
+                elif aligner == "hisat":
                     if test_large_index:
-                        cmd = ["../../../codes/hisat/hisat-align-l"]
+                        cmd = ["%s/hisat-align-l" % (aligner_bin_base)]
                     else:
-                        cmd = ["../../../codes/hisat/hisat-align-s"]
+                        cmd = ["%s/hisat-align-s" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
+                    cmd += ["-f"]
                     # cmd += ["-k", "5"]
                     # cmd += ["--score-min", "C,-18"]
-                    # cmd += ["--pen-cansplice", "C,0",
-                    #        "--pen-noncansplice", "C,3"]
-                    # cmd += ["--pen-intronlen", "G,-8,1"]
-                    cmd += ["--no-temp-splicesite"]
-                    if cmd_idx == 0:
-                        cmd += ["--novel-splicesite-outfile"]
+                    if version != "":
+                        version = int(version)
                     else:
-                        cmd += ["--novel-splicesite-infile"]
-                    cmd += ["splicesites.txt"]
-                    cmd += ["../" + genome + "_hisat"]
+                        version = sys.maxint
+                    # cmd += ["--pen-cansplice", "0"]
+                    # cmd += ["--pen-noncansplice", "12"]
+                    # cmd += ["--pen-intronlen", "G,-8,1"]
+                    # cmd += ["--metrics", "1",
+                    #         "--metrics-file", "metrics.out"]
+
+                    if type in ["x1", "x2"]:
+                        cmd += ["--no-temp-splicesite"]
+
+                    """
+                    cmd += ["--rdg", "100,100",
+                            "--rfg", "100,100"]
+                    """
+
+                    if type == "x2":
+                        if cmd_idx == 0:
+                            cmd += ["--novel-splicesite-outfile"]
+                        else:
+                            cmd += ["--novel-splicesite-infile"]
+                        cmd += ["splicesites.txt"]
+                    
+                    # "--novel-splicesite-infile",
+                    # "../splicesites.txt",
+                    # "--rna-strandness",
+                    # "FR",
+                    cmd += ["%s/HISAT%s/" % (index_base, index_add) + genome]
                     if paired:
                         cmd += ["-1", read1_fname,
                                 "-2", read2_fname]
                     else:
-                        cmd += [read1_fname]
+                        cmd += [read1_fname]                        
                 elif aligner == "tophat2":
-                    if desktop:
-                        cmd = ["tophat"]
-                    else:
-                        cmd = ["/home/infphilo/work/tophat/tophat_trunk_2011/src/tophat"]
+                    cmd = ["%s/tophat" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
                     cmd += ["--read-edit-dist", "3"]
                     cmd += ["--no-sort-bam"]
                     cmd += ["--read-realign-edit-dist", "0"]
                     cmd += ["--keep-tmp",
-                            "../" + genome + "_hisat",
+                            "%s/HISAT%s/" % (index_base, index_add) + genome,
                             read1_fname]
                     if paired:
                         cmd += [read2_fname]
                 elif aligner == "star":
-                    cmd = ["STAR"]
+                    cmd = ["%s/STAR" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["--runThreadN", str(num_threads)]
-                    cmd += ["--genomeDir", "."]
+                    cmd += ["--genomeDir", "%s/STAR%s" % (index_base, index_add)]
                     if desktop:
                         cmd += ["--genomeLoad", "NoSharedMemory"]
                     else:
                         cmd += ["--genomeLoad", "LoadAndKeep"]
-                    cmd += ["--readFilesIn",
-                            read1_fname]
-                    if paired:
-                        cmd += [read2_fname]
-                    if paired:
-                        cmd += ["--outFilterMismatchNmax", "6"]
-                    else:
-                        cmd += ["--outFilterMismatchNmax", "3"]
-                elif aligner == "starx2":
-                    cmd = ["STAR"]
-                    if num_threads > 1:
-                        cmd += ["--runThreadN", str(num_threads)]
-                    cmd += ["--genomeDir", "."]
-                    if desktop:
-                        cmd += ["--genomeLoad", "NoSharedMemory"]
-                    else:
-                        cmd += ["--genomeLoad", "LoadAndKeep"]
-                    if cmd_idx == 1:
-                        cmd += ["--alignSJDBoverhangMin", "1"]
+                    if type == "x2":
+                        if cmd_idx == 1:
+                            cmd += ["--alignSJDBoverhangMin", "1"]
                     cmd += ["--readFilesIn",
                             read1_fname]
                     if paired:
@@ -1669,56 +1657,41 @@ def calculate_read_cost():
                     else:
                         cmd += ["--outFilterMismatchNmax", "3"]
                 elif aligner == "bowtie":
-                    cmd = ["bowtie"]
+                    cmd = ["%s/bowtie" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
-                    cmd += ["--sam",
+                    cmd += ["-f", 
+                            "--sam",
                             "-k", "10"]
                     cmd += ["-n", "3"]
                     if paired:
                         cmd += ["-X", "500"]
-                    cmd += ["../" + genome]
+                    cmd += ["%s/Bowtie%s/" % (index_base, index_add) + genome]
                     if paired:
                         cmd += ["-1", read1_fname,
                                 "-2", read2_fname]
                     else:
                         cmd += [read1_fname]
                 elif aligner == "bowtie2":
-                    cmd = ["bowtie2"]
+                    cmd = ["%s/bowtie2" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
-                    cmd += ["-k", "10"]
+                    cmd += ["-f", "-k", "10"]
                     cmd += ["--score-min", "C,-18"]
-                    cmd += ["../" + genome]
+                    cmd += ["-x %s/HISAT%s/" % (index_base, index_add) + genome]
                     if paired:
                         cmd += ["-1", read1_fname,
                                 "-2", read2_fname]
                     else:
                         cmd += [read1_fname]
-                elif aligner == "olego":
-                    cmd = ["olego"]
-                    cmd += ["--num-reads-batch", "1024"]
-                    if num_threads > 1:
-                        cmd += ["-t", str(num_threads)]
-                    cmd += ["-M", "3"]
-                    cmd += ["-o"]
-                    if not paired:
-                        cmd += [out_fname]
-                    else:
-                        cmd += [out_fname + str(cmd_idx + 1)]
-                    cmd += [genome + ".fa"]
-                    if not paired or cmd_idx == 0:
-                        cmd += [read1_fname]
-                    else:
-                        cmd += [read2_fname]
                 elif aligner == "gsnap":
-                    cmd = ["gsnap",
+                    cmd = ["%s/gsnap" % (aligner_bin_base),
                            "-A",
                            "sam"]
                     if num_threads > 1:
                         cmd += ["-t", str(num_threads)]
                     cmd += ["--max-mismatches=3",
-                            "-D", ".",
+                            "-D", "%s/GSNAP%s" % (index_base, index_add),
                             "-N", "1",
                             "-d", genome,
                             read1_fname]
@@ -1730,81 +1703,62 @@ def calculate_read_cost():
                 return cmd
 
             if test_small:
-                init_time = {"hisat" : 0.2, "hisat" : 0.1, "bowtie" : 0.1, "bowtie2" : 0.2, "olego" : 0.0, "gsnap" : 0.0}
+                init_time = {"hisat2" : 0.2, "hisat" : 0.1, "bowtie" : 0.1, "bowtie2" : 0.2, "gsnap" : 0.0}
                 if desktop:
                     init_time["star"] = 1.7
                 else:
                     init_time["star"] = 0.0
             else:
                 if desktop:
-                    init_time = {"hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "olego" : 2.0, "gsnap" : 12}
+                    init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 12}
                 else:
-                    init_time = {"hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "olego" : 4.4, "gsnap" : 0.1}
+                    init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1}
                     
             init_time["tophat2"] = 0.0
-            init_time["hisath"] = init_time["hisatx2"] = init_time["hisat"]
-            init_time["starx2"] = init_time["star"]
-
-            for aligner in aligners:
-                canon_aligner = aligner
-                if aligner[:6] == "hisat_":
-                    canon_aligner = "hisat"
+            for aligner, type, index_type, version in aligners:
+                aligner_name = aligner + type + version
+                if aligner == "hisat2" and index_type != "":
+                    aligner_name += ("_" + index_type)
+                two_step = (aligner == "tophat2" or type == "x2" or (aligner in ["hisat2", "hisat"] and type == ""))
                 if readtype != "M":
-                    if canon_aligner in ["bowtie", "bowtie2"]:
+                    if aligner in ["bowtie", "bowtie2"]:
                         continue
-
                 if readtype != "all":
-                    if canon_aligner in ["hisath", "hisatx2", "starx2", "tophat2"]:
+                    if two_step:
                         continue
 
-                print >> sys.stderr, "\t%s\t%s" % (aligner, str(datetime.now()))
+                print >> sys.stderr, "\t%s\t%s" % (aligner_name, str(datetime.now()))
                 if paired:
-                    aligner_dir = aligner + "_paired"
+                    aligner_dir = aligner_name + "_paired"
                 else:
-                    aligner_dir = aligner + "_single"
-                if test_small:
-                    aligner_dir += "_small"
+                    aligner_dir = aligner_name + "_single"
                 if not os.path.exists(aligner_dir):
                     os.mkdir(aligner_dir)
-                    os.chdir(aligner_dir)
-                    if canon_aligner in ["star", "starx2", "olego", "gsnap"]:
-                        if canon_aligner in ["star", "starx2"]:
-                            db_name = "STAR"
-                        elif canon_aligner == "olego":
-                            db_name = "OLego"
-                        elif canon_aligner == "gsnap":
-                            db_name = "GSNAP"
-                        else:
-                            assert False
+                os.chdir(aligner_dir)
 
-                        if test_small:
-                            db_name += "_small"
 
-                        os.system("ln -s ../%s/* ." % db_name)
-                else:
-                    os.chdir(aligner_dir)
 
                 out_fname = base_fname + "_" + readtype + ".sam"
                 out_fname2 = out_fname + "2"
                 duration = -1.0
                 if not os.path.exists(out_fname):
-                    if not os.path.exists("../one.fq") or not os.path.exists("../two.fq"):
-                        os.system("head -400 ../%s_1.fq > ../one.fq" % (data_base))
-                        os.system("head -400 ../%s_2.fq > ../two.fq" % (data_base))
+                    if not os.path.exists("../one.fa") or not os.path.exists("../two.fa"):
+                        os.system("head -400 ../%s_1.fa > ../one.fa" % (data_base))
+                        os.system("head -400 ../%s_2.fa > ../two.fa" % (data_base))
 
                     if just_runtime:
                         out_fname = "/dev/null"
                         out_fname2 = "/dev/null"
 
-                    if canon_aligner not in ["hisath", "hisatx2", "starx2", "tophat2"]:
+                    if not two_step:
                         align_stat.append([readtype, aligner])
 
                     # dummy commands for caching
-                    if canon_aligner not in ["tophat2"]:
-                        dummy_cmd = get_aligner_cmd(aligner, "../one.fq", "../two.fq", "/dev/null")
+                    if aligner != "tophat2":
+                        dummy_cmd = get_aligner_cmd(aligner, type, index_type, version, "../one.fa", "../two.fa", "/dev/null")
                         if verbose:
                             print >> sys.stderr, "\t", datetime.now(), " ".join(dummy_cmd)
-                        if canon_aligner in ["hisat", "hisath", "hisatx2", "bowtie", "bowtie2", "gsnap"]:
+                        if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap"]:
                             proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
                         else:
                             proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1813,32 +1767,32 @@ def calculate_read_cost():
                             print >> sys.stderr, "\t", datetime.now(), "finished"
 
                     # align all reads
-                    aligner_cmd = get_aligner_cmd(aligner, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
+                    aligner_cmd = get_aligner_cmd(aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
-                    if canon_aligner in ["hisat", "hisath", "hisatx2", "bowtie", "bowtie2", "gsnap"]:
+                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap"]:
                         proc = subprocess.Popen(aligner_cmd, stdout=open(out_fname, "w"), stderr=subprocess.PIPE)
                     else:
                         proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     proc.communicate()
                     finish_time = datetime.now()
                     duration = finish_time - start_time
-                    assert canon_aligner in init_time
-                    duration = duration.total_seconds() - init_time[canon_aligner]
+                    assert aligner in init_time
+                    duration = duration.total_seconds() - init_time[aligner]
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:
                         print >> sys.stderr, "\t", finish_time, "finished:", duration
 
-                    if debug and canon_aligner == "hisat":
+                    if debug and aligner == "hisat2":
                         os.system("cat metrics.out")
                         print >> sys.stderr, "\ttime: %.4f" % (duration)
 
-                    if canon_aligner in ["star"]:
+                    if aligner == "star" and type == "":
                         os.system("mv Aligned.out.sam %s" % out_fname)
-                    elif canon_aligner == "hisatx2":
-                        aligner_cmd = get_aligner_cmd(aligner, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
+                    elif aligner in ["hisat2", "hisat"] and type == "x2":
+                        aligner_cmd = get_aligner_cmd(aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
                         start_time = datetime.now()
                         if verbose:
                             print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
@@ -1846,13 +1800,13 @@ def calculate_read_cost():
                         proc.communicate()
                         finish_time = datetime.now()
                         duration += (finish_time - start_time).total_seconds()
-                        assert canon_aligner in init_time
-                        duration -= init_time[canon_aligner]
+                        assert aligner in init_time
+                        duration -= init_time[aligner]
                         if duration < 0.1:
                             duration = 0.1
                         if verbose:
                             print >> sys.stderr, "\t", finish_time, "finished:", duration
-                    elif canon_aligner == "starx2":
+                    elif aligner == "star" and type == "x2":
                         assert os.path.exists("SJ.out.tab")
                         os.system("awk 'BEGIN {OFS=\"\t\"; strChar[0]=\".\"; strChar[1]=\"+\"; strChar[2]=\"-\";} {if($5>0){print $1,$2,$3,strChar[$4]}}' SJ.out.tab > SJ.out.tab.Pass1.sjdb")
                         for file in os.listdir("."):
@@ -1869,7 +1823,7 @@ def calculate_read_cost():
                         proc.communicate()
                         if verbose:
                             print >> sys.stderr, "\t", datetime.now(), "finished"
-                        aligner_cmd = get_aligner_cmd(aligner, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
+                        aligner_cmd = get_aligner_cmd(aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
                         start_time = datetime.now()
                         if verbose:
                             print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
@@ -1877,31 +1831,17 @@ def calculate_read_cost():
                         proc.communicate()
                         finish_time = datetime.now()
                         duration += (finish_time - start_time).total_seconds()
-                        assert canon_aligner in init_time
-                        duration -= init_time[canon_aligner]
+                        assert aligner in init_time
+                        duration -= init_time[aligner]
                         if duration < 0.1:
                             duration = 0.1
                         if verbose:
                             print >> sys.stderr, "\t", finish_time, "finished:", duration
                         os.system("mv Aligned.out.sam %s" % out_fname)
-                    elif canon_aligner == "olego" and paired:
-                        aligner_cmd = get_aligner_cmd(aligner, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
-                        if verbose:
-                            print >> sys.stderr, "\t", " ".join(aligner_cmd)
-                        start_time = datetime.now()
-                        proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        proc.communicate()
-                        os.system("mergePEsam.pl %s %s %s; rm %s %s" % (out_fname + "1", out_fname + "2", out_fname, out_fname + "1", out_fname + "2"))
-                        finish_time = datetime.now()
-                        duration += (finish_time - start_time).total_seconds()
-                        assert canon_aligner in init_time
-                        duration -= init_time[canon_aligner]
-                        if duration < 0.1:
-                            duration = 0.1
-                    elif canon_aligner == "tophat2":
+                    elif aligner == "tophat2":
                         os.system("samtools sort -n tophat_out/accepted_hits.bam accepted_hits; samtools view -h accepted_hits.bam > %s" % out_fname)
 
-                    if canon_aligner in ["gsnap", "olego", "tophat2"]:
+                    if aligner in ["gsnap", "tophat2"]:
                         os.system("tar cvzf %s.tar.gz %s &> /dev/null" % (out_fname, out_fname))
 
                 if just_runtime:
@@ -1910,13 +1850,12 @@ def calculate_read_cost():
 
                 if not os.path.exists(out_fname2):
                     if paired:
-                        extract_pair(out_fname, out_fname2, chr_dic, canon_aligner)
+                        extract_pair(out_fname, out_fname2, chr_dic, aligner)
                     else:
-                        extract_single(out_fname, out_fname2, chr_dic, canon_aligner)
+                        extract_single(out_fname, out_fname2, chr_dic, aligner)
 
                 for readtype2 in readtypes:
-                    if canon_aligner not in ["hisath", "hisatx2", "starx2", "tophat2"] and \
-                           readtype != readtype2:
+                    if not two_step and readtype != readtype2:
                         continue
 
                     type_sam_fname2 = base_fname + "_" + readtype2 + ".sam"
@@ -1924,22 +1863,20 @@ def calculate_read_cost():
                         continue
                     
                     if paired:
-                        type_read_fname2 = base_fname + "_1_" + readtype2 + ".fq"
+                        type_read_fname2 = base_fname + "_1_" + readtype2 + ".fa"
                     else:
-                        type_read_fname2 = base_fname + "_" + readtype2 + ".fq"
+                        type_read_fname2 = base_fname + "_" + readtype2 + ".fa"
                     mapped_id_fname = base_fname + "_" + readtype2 + ".read_id"
                     if paired:
-                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_paired_sam(out_fname2, "../" + type_sam_fname2, mapped_id_fname, test_small, chr_dic, junctions, junctions_set)
+                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_paired_sam(out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set)
                     else:
-                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_single_sam(out_fname2, "../" + type_sam_fname2, mapped_id_fname, test_small, chr_dic, junctions, junctions_set)
+                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_single_sam(out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set)
                     proc = subprocess.Popen(["wc", "-l", "../" + type_read_fname2], stdout=subprocess.PIPE)
                     out = proc.communicate()[0]
-                    numreads = int(out.split()[0]) / 4
-
-                    # daehwan - for debugging purposes
-                    # assert mapped + unmapped == numreads
+                    numreads = int(out.split()[0]) / 2
+                    assert mapped + unmapped == numreads
                     
-                    if canon_aligner in ["hisath", "hisatx2", "starx2", "tophat2"]:
+                    if two_step:
                         print >> sys.stderr, "\t\t%s" % readtype2
                     print >> sys.stderr, "\t\taligned: %d, multi aligned: %d" % (aligned, multi_aligned)
                     print >> sys.stderr, "\t\tcorrectly mapped: %d (%.2f%%) mapping_point: %.2f" % (mapped, float(mapped) * 100.0 / numreads, mapping_point * 100.0 / numreads)
@@ -1957,26 +1894,14 @@ def calculate_read_cost():
                             else:
                                 end_type = "single"
                             sql_insert = "INSERT INTO \"ReadCosts\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %f, %f, %d, %d, %d, '%s', datetime('now'), '%s');" % \
-                                (genome, data_base, end_type, readtype2, aligner, get_aligner_version(canon_aligner), numreads, mapped, unique_mapped, unmapped, mapping_point, duration, len(junctions), temp_junctions, temp_gtf_junctions, platform.node(), " ".join(aligner_cmd))
+                                (genome, data_base, end_type, readtype2, aligner_name, get_aligner_version(aligner), numreads, mapped, unique_mapped, unmapped, mapping_point, duration, len(junctions), temp_junctions, temp_gtf_junctions, platform.node(), " ".join(aligner_cmd))
                             sql_execute("../" + sql_db_name, sql_insert)     
 
-                        if canon_aligner in ["hisath", "hisatx2", "starx2", "tophat2"]:
+                        if aligner == "tophat2" or type in ["h", "x2"]:
                             align_stat.append([readtype2, aligner, numreads, duration, mapped, unique_mapped, unmapped, mapping_point, len(junctions), temp_junctions, temp_gtf_junctions])
                         else:
                             align_stat[-1].extend([numreads, duration, mapped, unique_mapped, unmapped, mapping_point, len(junctions), temp_junctions, temp_gtf_junctions])
 
-                    """
-                    if paired:
-                        mapped1_fname = base_fname + "_1_" + readtype + ".mapped.fq"
-                        unmapped1_fname = base_fname + "_1_" + readtype + ".unmapped.fq"
-                        mapped2_fname = base_fname + "_2_" + readtype + ".mapped.fq"
-                        unmapped2_fname = base_fname + "_2_" + readtype + ".unmapped.fq"
-                        extract_mapped_unmapped("../" + type_read1_fname, mapped_id_fname, mapped1_fname, unmapped1_fname, "../" + type_read2_fname, mapped2_fname, unmapped2_fname)
-                    else:
-                        mapped_fname = base_fname + "_" + readtype + ".mapped.fq"
-                        unmapped_fname = base_fname + "_" + readtype + ".unmapped.fq"
-                        extract_mapped_unmapped("../" + type_read1_fname, mapped_id_fname, mapped_fname, unmapped_fname)
-                    """
                     os.system("touch %s.done" % type_sam_fname2)                    
 
                 os.chdir("..")
