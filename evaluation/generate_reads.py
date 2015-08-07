@@ -45,12 +45,14 @@ def simulate_reads():
 
     _rna, _mismatch, _snp = True, True, True
     datasets = [
-        ["22", 1000000, _rna, not _mismatch, not _snp],
-        ["22_20-21M", 1000000, _rna, not _mismatch, not _snp],
-        # ["genome", 20000000, _rna, not _mismatch, not _snp],
+        ["22", 1000000, _rna, not _snp, not _mismatch],
+        ["22", 1000000, _rna, _snp, not _mismatch],
+        ["22_20-21M", 1000000, _rna, not _snp, not _mismatch],
+        ["genome", 20000000, _rna, not _snp, not _mismatch],
+        ["genome", 20000000, _rna, _snp, not _mismatch],
         ]
 
-    for genome, numreads, rna, mismatch, snp in datasets:
+    for genome, numreads, rna, snp, mismatch in datasets:
         if rna:
             molecule = "RNA"
         else:
@@ -58,6 +60,8 @@ def simulate_reads():
         dirname = "%dM_%s" % (numreads / 1000000, molecule)
         if mismatch:
             dirname += "_mismatch"
+        if snp:
+            dirname += "_snp"
         dirname += "_reads"
         dirname += ("_" + genome)
         if os.path.exists(dirname):
@@ -67,7 +71,10 @@ def simulate_reads():
         genome_fname = "../../data/%s.fa" % (genome)
 
         if rna:
-            gtf_fname = "../../data/genes_%s.gtf" % (genome)
+            if genome == "genome":
+                gtf_fname = "../../data/genes.gtf"
+            else:
+                gtf_fname = "../../data/genes_%s.gtf" % (genome)
         else:
             gtf_fname = "/dev/null"
 

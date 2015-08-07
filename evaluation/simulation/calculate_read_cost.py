@@ -1435,9 +1435,11 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
+        ["hisat", "", "", ""],
         ["hisat2", "x1", "", ""],
         ["hisat2", "", "", ""],
         ["hisat2", "", "snp", ""],
+        ["hisat2", "", "ss", ""],
         ["hisat2", "", "snp_ss", ""],
         ]
     readtypes = ["all"]
@@ -1736,8 +1738,6 @@ def calculate_read_cost():
                     os.mkdir(aligner_dir)
                 os.chdir(aligner_dir)
 
-
-
                 out_fname = base_fname + "_" + readtype + ".sam"
                 out_fname2 = out_fname + "2"
                 duration = -1.0
@@ -1897,7 +1897,7 @@ def calculate_read_cost():
                                 (genome, data_base, end_type, readtype2, aligner_name, get_aligner_version(aligner), numreads, mapped, unique_mapped, unmapped, mapping_point, duration, len(junctions), temp_junctions, temp_gtf_junctions, platform.node(), " ".join(aligner_cmd))
                             sql_execute("../" + sql_db_name, sql_insert)     
 
-                        if aligner == "tophat2" or type in ["h", "x2"]:
+                        if two_step:
                             align_stat.append([readtype2, aligner, numreads, duration, mapped, unique_mapped, unmapped, mapping_point, len(junctions), temp_junctions, temp_gtf_junctions])
                         else:
                             align_stat[-1].extend([numreads, duration, mapped, unique_mapped, unmapped, mapping_point, len(junctions), temp_junctions, temp_gtf_junctions])
