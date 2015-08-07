@@ -2,99 +2,121 @@
 
 import sys, os
 import string, re
-from hisat_env import *
-from analyze_common import *
+
 use_message = '''
 '''
 
+def extract_pair():
+    read_dic = {}
+    pair_reported = set()
 
-def init_reads(read_prefix, num_reads):
-    full_workdir = os.getcwd()
-    workdir = full_workdir.split("/")[-1]
-
-    files = [
-        "sim.indels",
-        "sim.mismatches",
-        "sim.sam",
-        "sim.simexpr",
-        "sim.transfrags.gtf",
-        "sim_1.fq",
-        "sim_2.fq"
-        ]
-
-    for file in files:
-        if os.path.exists("reads/" + file):
-            continue        
-        scp_cmd = "scp %s/simulation/%s/reads/%s reads" % (hisat_data_location, workdir, file)
-        print >> sys.stderr, scp_cmd
-        os.system(scp_cmd)
-
-    os.chdir("reads")
-    if not os.path.exists(read_prefix + "_1.fq") or not os.path.exists(read_prefix + "_2.fq"):
-        head_cmd = "head -%d sim_1.fq > %s_1.fq" % (num_reads * 4, read_prefix)
-        print >> sys.stderr, head_cmd
-        os.system(head_cmd)
-        head_cmd = "head -%d sim_2.fq > %s_2.fq" % (num_reads * 4, read_prefix)
-        print >> sys.stderr, head_cmd
-        os.system(head_cmd)
-
-        shuffle_reads_cmd = "../../shuffle_reads.py %s_1.fq %s_2.fq" % (read_prefix, read_prefix)
-        shuffle_reads_cmd += "; mv %s_1.fq.shuffle %s_1.fq" % (read_prefix, read_prefix)
-        shuffle_reads_cmd += "; mv %s_2.fq.shuffle %s_2.fq" % (read_prefix, read_prefix)
-        print >> sys.stderr, shuffle_reads_cmd
-        os.system(shuffle_reads_cmd)
-
-    if not os.path.exists(read_prefix + ".sam"):
-        awk_cmd = "awk '{if($1 <= %d) print}' sim.sam > %s.sam" % (num_reads, read_prefix)
-        print >> sys.stderr, awk_cmd
-        os.system(awk_cmd)
-
-    if not os.path.exists(read_prefix + "_paired.sam"):
-        extract_pair_cmd = "../../extract_paired.py %s.sam > %s_paired.sam" % (read_prefix, read_prefix)
-        print >> sys.stderr, extract_pair_cmd
-        os.system(extract_pair_cmd)
-
-    if not os.path.exists(read_prefix + "_1.sam"):
-        sam_cmd = "awk '{if ($12 ~ /^XS/) {TI = $19; NM = $18} else {TI = $18; NM = $17} if ($2 %% 128 >= 64) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' %s.sam > %s_1.sam" % (read_prefix, read_prefix)
-        print >> sys.stderr, sam_cmd
-        os.system(sam_cmd)
-    if not os.path.exists(read_prefix + "_2.sam"):
-        sam_cmd = "awk '{if ($12 ~ /^XS/) {TI = $19; NM = $18} else {TI = $18; NM = $17} if ($2 %% 128 >= 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' %s.sam > %s_2.sam" % (read_prefix, read_prefix)
-        print >> sys.stderr, sam_cmd
-        os.system(sam_cmd)
-    os.chdir("..")
-    
-    ln_cmd = "ln -s reads/%s_* ." % (read_prefix)
-    print >> sys.stderr, ln_cmd
-    os.system(ln_cmd)
-    ln_cmd = "ln -s %s_1.fq 1.fq; ln -s %s_2.fq 2.fq" % (read_prefix, read_prefix)
-    print >> sys.stderr, ln_cmd
-    os.system(ln_cmd)
-    
-
-def init_indexes():
-    aligners = ["STAR", "GSNAP", "OLego"]
-    for aligner in aligners:
-        if os.path.exists(aligner):
+    out_file = open("sim_paired.sam", "w")
+    hits_file = open("sim.sam")
+    for line in hits_file:
+        if line[0] == '@':
             continue
-        ln_cmd = "ln -s ../../%s ." % (aligner)
-        print >> sys.stderr, ln_cmd
-        os.system(ln_cmd)
 
-    ln_cmd = "ln -s ../genome* ../genes.gtf ."
-    print >> sys.stderr, ln_cmd
-    os.system(ln_cmd)
-    
+        cols = line[:-1].split()
+        read_id, flag, chr1, pos1, mapQ, cigar1, chr2, pos2 = cols[:8]
+        if len(read_id) >= 3 and read_id[-2] == "/":
+            read_id = read_id[:-2]
 
-def link_python_codes():
-    python_codes = ["calculate_read_cost.py"]
-    for python_code in python_codes:
-        ln_cmd = "ln -s ../%s ." % (python_code)
-        print >> sys.stderr, ln_cmd
-        os.system(ln_cmd)
+        if read_id.find("seq.") == 0:
+            read_id = read_id[4:]
+
+        flag = int(flag)
+        pos1, pos2 = int(pos1), int(pos2)
+
+        if flag & 0x4 != 0:
+            continue
+
+        TI, NM1 = "", ""
+        for i in range(11, len(cols)):
+            col = cols[i]
+            if col[:2] == "TI":
+                TI = col[5:]
+            # "nM" from STAR
+            elif col[:2] == "NM" or col[:2] == "nM":
+                NM1 = col
+        assert NM1 != ""
+        
+        if chr2 == '*':
+            continue
+
+        if chr2 == '=':
+            chr2 = chr1
+
+        me = "%s\t%s\t%d" % (read_id, chr1, pos1)
+        partner = "%s\t%s\t%d" % (read_id, chr2, pos2)
+        if partner in read_dic:
+            maps = read_dic[partner]
+            for map in maps:
+                if map[0] == me:
+                    cigar2, NM2 = map[1:3]
+                    if int(pos2) > int(pos1):
+                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s\t%s\t%s\t%s" % \
+                                (read_id, chr1, pos1, cigar1, chr2, pos2, cigar2, TI, NM1, NM2)
+                    else:
+                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s\t%s\t%s\t%s" % \
+                                (read_id, chr2, pos2, cigar2, chr1, pos1, cigar1, TI, NM2, NM1)
+
+                    if p_str not in pair_reported:
+                        pair_reported.add(p_str)
+                        print >> out_file, p_str
+
+        if not me in read_dic:
+            read_dic[me] = []
+
+        read_dic[me].append([partner, cigar1, NM1])
+
+        
+    hits_file.close()
+    out_file.close()
 
 
-def classify_reads(read_prefix):    
+def init_reads(read_dir):
+    sam_cmd = "awk '{TI = $NF; NM = $13; if ($2 < 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' sim.sam > sim_1.sam"
+    os.system(sam_cmd)
+    sam_cmd = "awk '{TI = $NF; NM = $13; if ($2 >= 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' sim.sam > sim_2.sam"
+    os.system(sam_cmd)
+    extract_pair()
+
+
+def to_junction_str(junction):
+    return "%s-%d-%d" % (junction[0], junction[1], junction[2])
+
+def to_junction(junction_str):
+    fields = junction_str.split("-")
+    if len(fields) > 3:
+        chr, left, right = "".join(fields[:-3]), fields[-2], fields[-1]        
+    else:
+        assert len(fields) == 3
+        chr, left, right = fields
+
+    return [chr, int(left), int(right)]
+
+def junction_cmp(a, b):
+    if a[0] != b[0]:
+        if a[0] < b[0]:
+            return -1
+        else:
+            return 1
+
+    if a[1] != b[1]:
+        if a[1] < b[1]:
+            return -1
+        else:
+            return 1
+
+    if a[2] != b[2]:
+        if a[2] < b[2]:
+            return -1
+        else:
+            return 1
+
+    return 0
+
+def classify_reads():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
     readtype_order = {}
     for i in range(len(readtypes)):
@@ -104,18 +126,17 @@ def classify_reads(read_prefix):
 
 
     for paired in [False, True]:
-    # for paired in [False]:
         for readtype in readtypes:
             if paired:
-                base_fname = read_prefix + "_paired"
+                base_fname = "sim_paired"
                 type_sam_fname = base_fname + "_" + readtype + ".sam"
-                type_read1_fname = base_fname +  "_1_" + readtype + ".fq"
-                type_read2_fname = base_fname +  "_2_" + readtype + ".fq"
+                type_read1_fname = base_fname +  "_1_" + readtype + ".fa"
+                type_read2_fname = base_fname +  "_2_" + readtype + ".fa"
                 type_junction_fname = base_fname + "_" + readtype + ".junc"
             else:
-                base_fname = read_prefix + "_single"
+                base_fname = "sim_single"
                 type_sam_fname = base_fname + "_" + readtype + ".sam"
-                type_read1_fname = base_fname + "_" + readtype + ".fq"
+                type_read1_fname = base_fname + "_" + readtype + ".fa"
                 type_read2_fname = ""
                 type_junction_fname = base_fname + "_" + readtype + ".junc"
                 
@@ -127,9 +148,9 @@ def classify_reads(read_prefix):
             junctions = []
             type_sam_file = open(type_sam_fname, "w")
             if paired:
-                sam_file = open(read_prefix + "_paired.sam")
+                sam_file = open("sim_paired.sam")
             else:
-                sam_file = open(read_prefix + "_1.sam")
+                sam_file = open("sim_1.sam")
 
             cigar_re = re.compile('\d+\w')
             def get_read_type(cigar):
@@ -261,7 +282,7 @@ def classify_reads(read_prefix):
 
                 write = False
                 for line in read_file:
-                    if line[0] == "@":
+                    if line[0] == ">":
                         read_id = int(line[1:-1])
                         write = read_id in read_ids
 
@@ -272,7 +293,36 @@ def classify_reads(read_prefix):
                 type_read_file.close()
 
             if paired:
-                write_reads(read_prefix + "_1.fq", type_read1_fname)
-                write_reads(read_prefix + "_2.fq", type_read2_fname)
+                write_reads("sim_1.fa", type_read1_fname)
+                write_reads("sim_2.fa", type_read2_fname)
             else:
-                write_reads(read_prefix + "_1.fq", type_read1_fname)
+                write_reads("sim_1.fa", type_read1_fname)
+
+
+def init():
+    read_dirs = os.listdir("../reads")
+    for read_dir in read_dirs:
+        if os.path.exists(read_dir):
+            continue
+        if not os.path.exists("../reads/" + read_dir + "/sim.sam") or \
+                not os.path.exists("../reads/" + read_dir + "/sim_1.fa") or \
+                not os.path.exists("../reads/" + read_dir + "/sim_2.fa"):
+            continue
+
+        print >> sys.stderr, "Processing", read_dir, "..."
+
+        os.mkdir(read_dir)
+        os.chdir(read_dir)
+        os.system("ln -s ../../reads/%s/* ." % (read_dir))
+        os.system("ln -s sim_1.fa 1.fa")
+        os.system("ln -s sim_2.fa 2.fa")
+
+        init_reads(read_dir)
+        classify_reads()
+        os.system("ln -s ../calculate_read_cost.py .")
+
+        os.chdir("..")
+
+    
+if __name__ == "__main__":
+    init()

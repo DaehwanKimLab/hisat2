@@ -55,10 +55,11 @@ def simulate_reads():
             molecule = "RNA"
         else:
             molecule = "DNA"
+        dirname = "%dM_%s" % (numreads / 1000000, molecule)
         if mismatch:
-            dirname = "%dM_%s_reads_%s" % (numreads / 1000000, molecule, genome)
-        else:
-            dirname = "%dM_%s_mismatch_reads_%s" % (numreads / 1000000, molecule, genome)
+            dirname += "_mismatch"
+        dirname += "_reads"
+        dirname += ("_" + genome)
         if os.path.exists(dirname):
             continue
         os.mkdir(dirname)
