@@ -2018,11 +2018,11 @@ public:
         }
         assert(repOk(gh)); // Ebwt should be fully initialized now
 	}
-
+    
 	/**
 	 * Given basename of an Ebwt index, read and return its flag.
 	 */
-	static int32_t readFlags(const string& instr);
+	static int32_t readVersionFlags(const string& instr, index_t& major, index_t& minor, string& extra_version);
 
 	/**
 	 * Pretty-print the Ebwt to the given output stream.
@@ -5564,7 +5564,7 @@ void readGFMRefnames(const string& instr, EList<string>& refnames) {
  * Read just enough of the Ebwt's header to get its flags
  */
 template <typename index_t>
-int32_t GFM<index_t>::readFlags(const string& instr) {
+int32_t GFM<index_t>::readVersionFlags(const string& instr, index_t& major, index_t& minor, string& extra_version) {
     ifstream in;
     // Initialize our primary and secondary input-stream fields
     in.open((instr + ".1." + gfm_ext).c_str(), ios_base::in | ios::binary);
@@ -5580,7 +5580,14 @@ int32_t GFM<index_t>::readFlags(const string& instr) {
         assert_eq(1, endianSwapU32(one));
         switchEndian = true;
     }
-    readU32(in, switchEndian);
+    index_t version = readU32(in, switchEndian);
+    major = (version >> 16) & 0xff;
+    minor = (version >> 8) & 0xff;
+    if((version & 0xff) == 1) {
+        extra_version = "alpha";
+    } else if((version & 0xff) == 2) {
+        extra_version = "beta";
+    }
     readIndex<index_t>(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
@@ -5593,11 +5600,6 @@ int32_t GFM<index_t>::readFlags(const string& instr) {
     return flags;
 }
 
-/**
- * Read just enough of the Ebwt's header to determine whether it's
- * entirely reversed.
- */
-bool readEntireReverse(const string& instr);
 
 /**
  * Write an extended Burrows-Wheeler transform to a pair of output

@@ -485,7 +485,9 @@ static void print_index_summary(
 	const string& fname,
 	ostream& fout)
 {
-	int32_t flags = GFM<index_t>::readFlags(fname);
+    index_t major, minor;
+    string extra_version;
+	int32_t flags = GFM<index_t>::readVersionFlags(fname, major, minor, extra_version);
 	bool entireReverse = false;    
     ALTDB<index_t> altdb;
 	GFM<index_t> gfm(
@@ -508,6 +510,11 @@ static void print_index_summary(
                      false);               // sanity check?
 	EList<string> p_refnames;
 	readEbwtRefnames<index_t>(fname, p_refnames);
+    cout << "Index version" << "\t2." << major << '.' << minor;
+    if(extra_version != "") {
+        cout << "-" << extra_version;
+    }
+    cout << endl;
 	cout << "Flags" << '\t' << (-flags) << endl;
 	cout << "2.0-compatible" << '\t' << (entireReverse ? "1" : "0") << endl;
 	cout << "SA-Sample" << "\t1 in " << (1 << gfm.gh().offRate()) << endl;

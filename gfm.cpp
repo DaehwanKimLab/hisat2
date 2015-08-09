@@ -35,20 +35,6 @@ const std::string gfm_ext("ht2");
 string gLastIOErrMsg;
 
 /**
- * Read just enough of the Ebwt's header to determine whether it's
- * entirely reversed.
- */
-bool
-readEntireReverse(const string& instr) {
-    int32_t flags = GFM<>::readFlags(instr);
-    if(flags < 0 && (((-flags) & GFM_ENTIRE_REV) != 0)) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-/**
  * Try to find the Bowtie index specified by the user.  First try the
  * exact path given by the user.  Then try the user-provided string
  * appended onto the path of the "indexes" subdirectory below this
