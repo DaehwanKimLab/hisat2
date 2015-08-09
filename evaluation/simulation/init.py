@@ -6,7 +6,7 @@ import string, re
 use_message = '''
 '''
 
-def extract_pair():
+def extract_pair(RNA):
     read_dic = {}
     pair_reported = set()
 
@@ -34,7 +34,7 @@ def extract_pair():
         for i in range(11, len(cols)):
             col = cols[i]
             if col[:2] == "TI":
-                TI = col[5:]
+                TI = "\t" + col[5:]
             # "nM" from STAR
             elif col[:2] == "NM" or col[:2] == "nM":
                 NM1 = col
@@ -54,10 +54,10 @@ def extract_pair():
                 if map[0] == me:
                     cigar2, NM2 = map[1:3]
                     if int(pos2) > int(pos1):
-                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s\t%s\t%s\t%s" % \
+                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s%s\t%s\t%s" % \
                                 (read_id, chr1, pos1, cigar1, chr2, pos2, cigar2, TI, NM1, NM2)
                     else:
-                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s\t%s\t%s\t%s" % \
+                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s%s\t%s\t%s" % \
                                 (read_id, chr2, pos2, cigar2, chr1, pos1, cigar1, TI, NM2, NM1)
 
                     if p_str not in pair_reported:
@@ -74,12 +74,18 @@ def extract_pair():
     out_file.close()
 
 
-def init_reads(read_dir):
-    sam_cmd = "awk '{TI = $NF; NM = $13; if ($2 < 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' sim.sam > sim_1.sam"
+def init_reads(read_dir, RNA):
+    if RNA:
+        sam_cmd = "awk '{TI = $NF; NM = $13; if ($2 < 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' sim.sam > sim_1.sam"
+    else:
+        sam_cmd = "awk '{NM = $13; if ($2 < 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"NM}' sim.sam > sim_1.sam"
     os.system(sam_cmd)
-    sam_cmd = "awk '{TI = $NF; NM = $13; if ($2 >= 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' sim.sam > sim_2.sam"
+    if RNA:
+        sam_cmd = "awk '{TI = $NF; NM = $13; if ($2 >= 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' sim.sam > sim_2.sam"
+    else:
+        sam_cmd = "awk '{NM = $13; if ($2 >= 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"NM}' sim.sam > sim_2.sam"
     os.system(sam_cmd)
-    extract_pair()
+    extract_pair(RNA)
 
 
 def to_junction_str(junction):
@@ -116,14 +122,17 @@ def junction_cmp(a, b):
 
     return 0
 
-def classify_reads():
-    readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
+def classify_reads(RNA):
+    if RNA:
+        readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
+    else:
+        readtypes = ["all" ,"M"]
+        
     readtype_order = {}
     for i in range(len(readtypes)):
         readtype = readtypes[i]
         assert readtype not in readtype_order
         readtype_order[readtype] = i
-
 
     for paired in [False, True]:
         for readtype in readtypes:
@@ -232,12 +241,17 @@ def classify_reads():
 
                 return junctions
 
-
             for line in sam_file:
                 if paired:
-                    read_id, chr, pos, cigar, chr2, pos2, cigar2, trans_id, NM, NM2 = line[:-1].split()
+                    if RNA:
+                        read_id, chr, pos, cigar, chr2, pos2, cigar2, trans_id, NM, NM2 = line[:-1].split()
+                    else:
+                        read_id, chr, pos, cigar, chr2, pos2, cigar2, NM, NM2 = line[:-1].split()
                 else:
-                    read_id, chr, pos, cigar, trans_id, NM = line[:-1].split()
+                    if RNA:
+                        read_id, chr, pos, cigar, trans_id, NM = line[:-1].split()
+                    else:
+                        read_id, chr, pos, cigar, NM = line[:-1].split()
 
                 read_id = int(read_id)
                 readtype2 = get_read_type(cigar)
@@ -300,25 +314,27 @@ def classify_reads():
 
 
 def init():
-    read_dirs = os.listdir("../reads")
+    read_dir_base = "../reads/simulation/"
+    read_dirs = os.listdir(read_dir_base)
     for read_dir in read_dirs:
         if os.path.exists(read_dir):
             continue
-        if not os.path.exists("../reads/" + read_dir + "/sim.sam") or \
-                not os.path.exists("../reads/" + read_dir + "/sim_1.fa") or \
-                not os.path.exists("../reads/" + read_dir + "/sim_2.fa"):
+        if not os.path.exists(read_dir_base + read_dir + "/sim.sam") or \
+                not os.path.exists(read_dir_base + read_dir + "/sim_1.fa") or \
+                not os.path.exists(read_dir_base + read_dir + "/sim_2.fa"):
             continue
 
         print >> sys.stderr, "Processing", read_dir, "..."
 
         os.mkdir(read_dir)
         os.chdir(read_dir)
-        os.system("ln -s ../../reads/%s/* ." % (read_dir))
+        os.system("ln -s ../%s%s/* ." % (read_dir_base, read_dir))
         os.system("ln -s sim_1.fa 1.fa")
         os.system("ln -s sim_2.fa 2.fa")
 
-        init_reads(read_dir)
-        classify_reads()
+        RNA = (read_dir.find("RNA") != -1)
+        init_reads(read_dir, RNA)
+        classify_reads(RNA)            
         os.system("ln -s ../calculate_read_cost.py .")
 
         os.chdir("..")

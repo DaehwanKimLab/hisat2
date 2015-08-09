@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
-import sys, os
-import random
-use_message = '''
-'''
+import sys, os, random
+from argparse import ArgumentParser, FileType
 
 def shuffle_reads(read_fname, random_list):
     reads = []
@@ -42,16 +40,22 @@ def simulate_reads():
     if not os.path.exists("reads"):
         os.mkdir("reads")
     os.chdir("reads")
+    if not os.path.exists("simulation"):
+        os.mkdir("simulation")
+    os.chdir("simulation")
 
     _rna, _mismatch, _snp = True, True, True
+    _dna = not _rna
     datasets = [
+        ["22", 1000000, _dna, not _snp, not _mismatch],
         ["22", 1000000, _rna, not _snp, not _mismatch],
         ["22", 1000000, _rna, _snp, not _mismatch],
-        ["22_20-21M", 1000000, _rna, not _snp, not _mismatch],
-        ["genome", 20000000, _rna, not _snp, not _mismatch],
-        ["genome", 20000000, _rna, _snp, not _mismatch],
+        # ["22_20-21M", 1000000, _rna, not _snp, not _mismatch],
+        # ["genome", 20000000, _rna, not _snp, not _mismatch],
+        # ["genome", 20000000, _rna, _snp, not _mismatch],
         ]
 
+    data_dir_base = "../../../data"
     for genome, numreads, rna, snp, mismatch in datasets:
         if rna:
             molecule = "RNA"
@@ -68,26 +72,30 @@ def simulate_reads():
             continue
         os.mkdir(dirname)
         os.chdir(dirname)
-        genome_fname = "../../data/%s.fa" % (genome)
+        genome_fname = data_dir_base + "/%s.fa" % (genome)
 
         if rna:
             if genome == "genome":
-                gtf_fname = "../../data/genes.gtf"
+                gtf_fname = data_dir_base + "/genes.gtf"
             else:
-                gtf_fname = "../../data/genes_%s.gtf" % (genome)
+                gtf_fname = data_dir_base + "/genes_%s.gtf" % (genome)
         else:
             gtf_fname = "/dev/null"
 
         if snp:
-            snp_fname = "../../data/genome.snp"
+            snp_fname = data_dir_base + "/%s.snp" % (genome)
         else:
             snp_fname = "/dev/null"
-            
-        cmd = "../../aligners/bin/simulate_reads.py --sanity-check --num-fragment %d %s %s %s sim" % \
-            (numreads, genome_fname, gtf_fname, snp_fname)
+
+        cmd_add = ""
+        if not rna:
+            cmd_add += "--dna"
+        cmd = "../../../aligners/bin/simulate_reads.py --sanity-check %s --num-fragment %d %s %s %s sim" % \
+            (cmd_add, numreads, genome_fname, gtf_fname, snp_fname)
         print >> sys.stderr, cmd
         os.system(cmd)
 
+        random.seed(0)
         print >> sys.stderr, "shuffle reads sim_1.fa and sim_2.fa"
         shuffle_pairs("sim_1.fa", "sim_2.fa")
         shuffle_reads_cmd = " mv sim_1.fa.shuffle sim_1.fa"
@@ -100,5 +108,7 @@ def simulate_reads():
             
     
 if __name__ == "__main__":
-    random.seed(0)
+    parser = ArgumentParser(
+        description='Generate reads using simulate_reads.py in HISAT2')
+    args = parser.parse_args()
     simulate_reads()

@@ -206,7 +206,8 @@ def sanity_check_input(genome_seq, genes, transcripts, snps, frag_len):
                 num_canon_ss += 1
             num_ss += 1
 
-    print >> sys.stderr, "GT/AG splice sites: {}/{} ({:.2%})".format(num_canon_ss, num_ss, (float(num_canon_ss) / num_ss))
+    if num_ss > 0:
+        print >> sys.stderr, "GT/AG splice sites: {}/{} ({:.2%})".format(num_canon_ss, num_ss, (float(num_canon_ss) / num_ss))
 
     num_alt_single, num_single = 0, 0
     for chr, chr_snps in snps.items():
@@ -232,7 +233,7 @@ def sanity_check_input(genome_seq, genes, transcripts, snps, frag_len):
 
 """
 """
-def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
+def generate_rna_expr_profile(expr_profile_type, num_transcripts = 10000):
     # Modelling and simulating generic RNA-Seq experiments with the flux simulator
     # http://nar.oxfordjournals.org/content/suppl/2012/06/29/gks666.DC1/nar-02667-n-2011-File002.pdf
     def calc_expr(x, a):
@@ -249,6 +250,18 @@ def generate_expr_profile(expr_profile_type, num_transcripts = 10000):
         else:
             assert False
 
+    expr_sum = sum(expr_profile)
+    expr_profile = [expr_profile[i] / expr_sum for i in range(len(expr_profile))]
+    assert abs(sum(expr_profile) - 1.0) < 0.001
+    return expr_profile
+
+
+"""
+"""
+def generate_dna_expr_profile(genome_seq):
+    expr_profile = []
+    for chr_id, chr_seq in genome_seq.items():
+        expr_profile.append(len(chr_seq))
     expr_sum = sum(expr_profile)
     expr_profile = [expr_profile[i] / expr_sum for i in range(len(expr_profile))]
     assert abs(sum(expr_profile) - 1.0) < 0.001
@@ -656,51 +669,73 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         frag_len = read_len
 
     genome_seq = read_genome(genome_file)
-    genes, transcripts = read_transcript(genome_seq, gtf_file, frag_len)
+    if rna:
+        genes, transcripts = read_transcript(genome_seq, gtf_file, frag_len)
+    else:
+        genes, transcripts = {}, {}
     snps = read_snp(snp_file)
 
     if sanity_check:
         sanity_check_input(genome_seq, genes, transcripts, snps, frag_len)
 
-    num_transcripts = min(len(transcripts), 10000)
-    expr_profile = generate_expr_profile(expr_profile_type, num_transcripts)
-    expr_profile = [int(expr_profile[i] * num_frag) for i in range(len(expr_profile))]
+    if rna:
+        num_transcripts = min(len(transcripts), 10000)
+        expr_profile = generate_rna_expr_profile(expr_profile_type, num_transcripts)
+    else:
+        expr_profile = generate_dna_expr_profile(genome_seq)
 
+    expr_profile = [int(expr_profile[i] * num_frag) for i in range(len(expr_profile))]
     assert num_frag >= sum(expr_profile)
     expr_profile[0] += (num_frag - sum(expr_profile))
     assert num_frag == sum(expr_profile)
 
-    transcript_ids = transcripts.keys()
-    random.shuffle(transcript_ids)
+    if rna:
+        transcript_ids = transcripts.keys()
+        random.shuffle(transcript_ids)
+        assert len(transcript_ids) >= len(expr_profile)
+    else:
+        chr_ids = genome_seq.keys()
+        random.shuffle(chr_ids)
 
     sam_file = open(base_fname + ".sam", "w")
     read_file = open(base_fname + "_1.fa", "w")
     if paired_end:
         read2_file = open(base_fname + "_2.fa", "w")
 
-    assert len(transcript_ids) >= len(expr_profile)
     cur_read_id = 1
     for t in range(len(expr_profile)):
-        transcript_id = transcript_ids[t]
-        chr, strand, transcript_len, exons = transcripts[transcript_id]
-        t_num_frags = expr_profile[t]
+        if rna:
+            transcript_id = transcript_ids[t]
+            chr, strand, transcript_len, exons = transcripts[transcript_id]
+            # daehwan - for debugging purposes
+            # if transcript_id != "ENST00000398359":
+            #    continue
+            print >> sys.stderr, transcript_id, t_num_frags
+        else:
+            chr = chr_ids[t]
 
-        # daehwan - for debugging purposes
-        # if transcript_id != "ENST00000398359":
-        #    continue
-        print >> sys.stderr, transcript_id, t_num_frags
-        
-        t_seq = ""
+        t_num_frags = expr_profile[t]
         assert chr in genome_seq
         chr_seq = genome_seq[chr]
-        for e in exons:
-            assert e[0] < e[1]
-            t_seq += chr_seq[e[0]:e[1]+1]
+        chr_len = len(chr_seq)
+        if rna:
+            t_seq = ""
+            for e in exons:
+                assert e[0] < e[1]
+                t_seq += chr_seq[e[0]:e[1]+1]
+            assert len(t_seq) == transcript_len
+        else:
+            t_seq = chr_seq
+            exons = [[0, chr_len - 1]]
 
-        assert len(t_seq) == transcript_len
         for f in range(t_num_frags):
-            frag_pos = random.randint(0, transcript_len - frag_len)
-            assert frag_pos + frag_len <= transcript_len
+            if rna:
+                frag_pos = random.randint(0, transcript_len - frag_len)
+            else:
+                while True:
+                    frag_pos = random.randint(0, chr_len - frag_len)
+                    if 'N' not in chr_seq[frag_pos:frag_pos + frag_len]:
+                        break
 
             if chr in snps:
                 chr_snps = snps[chr]
@@ -737,19 +772,25 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             if Zs2 != "":
                 Zs2 = ("\tZs:Z:{}".format(Zs2))
 
+            if rna:
+                XS = "\tXS:A:%s".format(strand)
+                TI = "\tTI:Z:%s".format(transcript_id)
+            else:
+                XS, TI = "", ""                
+
             print >> read_file, ">{}".format(cur_read_id)
             if swapped:
                 print >> read_file, reverse_complement(read_seq)
             else:
                 print >> read_file, read_seq
-            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tXS:A:{}\tTI:Z:{}".format(cur_read_id, flag, chr, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, strand, transcript_id)
+            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, chr, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI)
             if paired_end:
                 print >> read2_file, ">{}".format(cur_read_id)
                 if swapped:
                     print >> read2_file, read2_seq
                 else:
                     print >> read2_file, reverse_complement(read2_seq)
-                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}\tXS:A:{}\tTI:Z:{}".format(cur_read_id, flag2, chr, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, strand, transcript_id)
+                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, chr, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI)
 
             cur_read_id += 1
             
@@ -845,6 +886,8 @@ if __name__ == '__main__':
     if not args.genome_file or not args.gtf_file or not args.snp_file:
         parser.print_help()
         exit(1)
+    if not args.rna:
+        args.expr_profile = "constant"
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
                        args.rna, args.paired_end, args.read_len, args.frag_len, \
                        args.num_frag, args.expr_profile, args.error_rate, args.max_mismatch, \
