@@ -758,19 +758,20 @@ public:
         // range prior to the dollar.
         if(tmp_zOffs.size() > 0) {
             tmp_gbwt_to_node.clear();
-            index_t num_iedges = 0, n = 0, e = 0;
+            index_t n = 0, e = 0;
             for(index_t r = 0; r < (bot - top); r++) {
-                tmp_gbwt_to_node.expand();
-                tmp_gbwt_to_node.back() = n;
+                tmp_gbwt_to_node.push_back(n);
                 if(e < node_iedge_count.size()) {
                     assert_leq(n, node_iedge_count[e].first);
                     if(n == node_iedge_count[e].first) {
-                        num_iedges += node_iedge_count[e].second;
+                        for(index_t a = 0; a < node_iedge_count[e].second; a++) {
+                            tmp_gbwt_to_node.push_back(n);
+                            r++;
+                        }
                         e++;
                     }
                 }
-                num_iedges += 1;
-                if(r + 1 >= num_iedges) n++;
+                n++;
             }
             assert_eq(bot - top, tmp_gbwt_to_node.size());
             for(index_t i = 0; i < tmp_zOffs.size(); i++) {

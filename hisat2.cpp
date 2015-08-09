@@ -250,6 +250,9 @@ static bool no_spliced_alignment;
 static int rna_strandness; //
 static bool splicesite_db_only; //
 
+static bool anchorStop;
+static bool pseudogeneStop;
+
 #ifdef USE_SRA
 static EList<string> sra_accs;
 #endif
@@ -462,6 +465,9 @@ static void resetOptions() {
     no_spliced_alignment = false;
     rna_strandness = RNA_STRANDNESS_UNKNOWN;
     splicesite_db_only = false;
+    
+    anchorStop = true;
+    pseudogeneStop = true;
     
 #ifdef USE_SRA
     sra_accs.clear();
@@ -1531,6 +1537,10 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_SPLICESITE_DB_ONLY: {
             splicesite_db_only = true;
+            break;
+        }
+        case ARG_NO_ANCHORSTOP: {
+            anchorStop = false;
             break;
         }
 #ifdef USE_SRA
@@ -2925,6 +2935,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     
     SplicedAligner<index_t, local_index_t> splicedAligner(
                                                           gfm,
+                                                          anchorStop,
                                                           minIntronLen,
                                                           maxIntronLen,
                                                           secondary,

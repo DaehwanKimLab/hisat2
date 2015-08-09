@@ -51,7 +51,7 @@ def simulate_reads():
         ["22", 1000000, _dna, _snp, not _mismatch],
         ["22", 1000000, _rna, not _snp, not _mismatch],
         ["22", 1000000, _rna, _snp, not _mismatch],
-        # ["22_20-21M", 1000000, _rna, not _snp, not _mismatch],
+        ["22_20-21M", 1000000, _rna, not _snp, not _mismatch],
         # ["genome", 20000000, _rna, not _snp, not _mismatch],
         # ["genome", 20000000, _rna, _snp, not _mismatch],
         ]

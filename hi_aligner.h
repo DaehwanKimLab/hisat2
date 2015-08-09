@@ -3036,12 +3036,14 @@ public:
 	 */
 	HI_Aligner(
                const GFM<index_t>& gfm,
+               bool anchorStop = true,
                size_t minIntronLen = 20,
                size_t maxIntronLen = 500000,
                bool secondary = false,
                bool local = false,
                uint64_t threads_rids_mindist = 0,
                bool no_spliced_alignment = false) :
+    _anchorStop(anchorStop),
     _minIntronLen(minIntronLen),
     _maxIntronLen(maxIntronLen),
     _secondary(secondary),
@@ -3221,7 +3223,7 @@ public:
             index_t fwi = (fw ? 0 : 1);
             ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
             assert(!hit.done());
-            bool pseudogeneStop = true, anchorStop = true;
+            bool pseudogeneStop = true, anchorStop = _anchorStop;
             if(!_secondary) {
                 index_t numSearched = hit.numActualPartialSearch();
                 int64_t bestScore = 0;
@@ -3739,6 +3741,7 @@ protected:
     TAlScore _minsc[2];
     TAlScore _maxpen[2];
     
+    bool     _anchorStop;
     size_t   _minIntronLen;
     size_t   _maxIntronLen;
     

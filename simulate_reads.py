@@ -304,7 +304,7 @@ def getSNPs(chr_snps, left, right):
 
 """
 """
-def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err_rand_src, max_mismatch):
+def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err_rand_src, max_mismatch):
     # Find the genomic position for frag_pos and exon number
     tmp_frag_pos, tmp_read_len = frag_pos, read_len
     pos, cigars, cigar_descs = exons[0][0], [], []
@@ -345,7 +345,11 @@ def getSamAlignment(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err
         e_pos = 0
 
         # Retreive SNPs
-        snps = getSNPs(chr_snps, e_left, e[1])
+        if rna:
+            snps = getSNPs(chr_snps, e_left, e[1])
+        else:
+            snps = getSNPs(chr_snps, frag_pos, frag_pos + read_len)
+            
         # Simulate mismatches due to sequencing errors
         mms = []
         for i in range(e_left, min(e[1], e_left + tmp_read_len - 1)):
@@ -704,6 +708,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
 
     cur_read_id = 1
     for t in range(len(expr_profile)):
+        t_num_frags = expr_profile[t]
         if rna:
             transcript_id = transcript_ids[t]
             chr, strand, transcript_len, exons = transcripts[transcript_id]
@@ -713,8 +718,8 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             print >> sys.stderr, transcript_id, t_num_frags
         else:
             chr = chr_ids[t]
+            print >> sys.stderr, chr, t_num_frags
 
-        t_num_frags = expr_profile[t]
         assert chr in genome_seq
         chr_seq = genome_seq[chr]
         chr_len = len(chr_seq)
@@ -745,8 +750,8 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             # SAM specification (v1.4)
             # http://samtools.sourceforge.net/
             flag, flag2 = 99, 163  # 83, 147
-            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSamAlignment(exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, err_rand_src, max_mismatch)
-            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, err_rand_src, max_mismatch)
+            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, err_rand_src, max_mismatch)
+            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, err_rand_src, max_mismatch)
             swapped = False
             if paired_end:
                 if random.randint(0, 1) == 1:

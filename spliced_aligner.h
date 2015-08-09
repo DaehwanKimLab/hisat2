@@ -35,6 +35,7 @@ public:
 	 */
 	SplicedAligner(
                    const GFM<index_t>& gfm,
+                   bool anchorStop,
                    size_t minIntronLen,
                    size_t maxIntronLen,
                    bool secondary = false,
@@ -42,6 +43,7 @@ public:
                    uint64_t threads_rids_mindist = 0,
                    bool no_spliced_alignment = false) :
     HI_Aligner<index_t, local_index_t>(gfm,
+                                       anchorStop,
                                        minIntronLen,
                                        maxIntronLen,
                                        secondary,
