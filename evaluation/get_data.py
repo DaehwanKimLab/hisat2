@@ -45,7 +45,40 @@ def get_data(small = False):
             print >> sys.stderr, cmd
             os.system(cmd)
     os.chdir("..")
-            
+
+    # Download simulated and real reads
+    if not os.path.exists("reads"):
+        os.mkdir("reads")
+    os.chdir("reads")
+    for type in ["simulation", "real"]:
+        if not os.path.exists(type):
+            os.mkdir(type)
+        os.chdir(type)
+        if type == "simulation":
+            files = ["1M_DNA_reads_22",
+                     "1M_DNA_snp_reads_22",
+                     "1M_RNA_reads_22",
+                     "1M_RNA_snp_reads_22",
+                     "1M_RNA_reads_22_20-21M",
+                     "20M_DNA_reads_genome",
+                     "20M_DNA_snp_reads_genome",
+                     "20M_RNA_reads_genome",
+                     "20M_RNA_snp_reads_genome"]
+        else:
+            files = ["5M_RNA_wgEncodeCshlLongRnaSeq",
+                     "108M_RNA_wgEncodeCshlLongRnaSeq",
+                     "62M_RNA_SRR353653"]
+        for file in files:
+            if os.path.exists(file):
+                continue
+            cmd = "wget %s/reads/%s/%s.tar.gz; tar xvzf %s.tar.gz; rm %s.tar.gz" % \
+                (data_root, type, file, file, file)
+            print >> sys.stderr, cmd
+            os.system(cmd)
+        os.chdir("..")
+    
+    os.chdir("..")
+    
     
 if __name__ == "__main__":
     parser = ArgumentParser(

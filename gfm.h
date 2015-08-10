@@ -3165,7 +3165,15 @@ public:
         
         index_t node_bot = node_top + 1;
         if(node_bot + 1 > M_occ) {
+            SideLocus<index_t> l2;
+#if 0
+            l2.initFromRow_bit(top + 1, gh(), gfm());
+            bot = select_F(l2, 1);
+            ASSERT_ONLY(index_t bot2 = select_F(l, node_bot + 1 - M_occ));
+            assert_eq(bot, bot2);
+#else
             bot = select_F(l, node_bot + 1 - M_occ);
+#endif
         } else {
             bot = F_loc;
         }
@@ -3232,7 +3240,14 @@ public:
         
         index_t node_bot = node_top + 1;
         if(node_bot + 1 > M_occ) {
+#if 0
+            l2.initFromRow_bit(top + 1, gh(), gfm());
+            bot = select_F(l2, 1);
+            ASSERT_ONLY(index_t bot2 = select_F(l, node_bot + 1 - M_occ));
+            assert_eq(bot, bot2);
+#else
             bot = select_F(l, node_bot + 1 - M_occ);
+#endif
         } else {
             bot = F_loc;
         }

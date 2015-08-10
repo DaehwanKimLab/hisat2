@@ -598,10 +598,10 @@ static struct option long_options[] = {
 	{(char*)"fast",             no_argument,       0,        ARG_PRESET_FAST},
 	{(char*)"sensitive",        no_argument,       0,        ARG_PRESET_SENSITIVE},
 	{(char*)"very-sensitive",   no_argument,       0,        ARG_PRESET_VERY_SENSITIVE},
-	{(char*)"very-fast-local",      no_argument,   0,        ARG_PRESET_VERY_FAST_LOCAL},
-	{(char*)"fast-local",           no_argument,   0,        ARG_PRESET_FAST_LOCAL},
-	{(char*)"sensitive-local",      no_argument,   0,        ARG_PRESET_SENSITIVE_LOCAL},
-	{(char*)"very-sensitive-local", no_argument,   0,        ARG_PRESET_VERY_SENSITIVE_LOCAL},
+	// {(char*)"very-fast-local",      no_argument,   0,        ARG_PRESET_VERY_FAST_LOCAL},
+	// {(char*)"fast-local",           no_argument,   0,        ARG_PRESET_FAST_LOCAL},
+	// {(char*)"sensitive-local",      no_argument,   0,        ARG_PRESET_SENSITIVE_LOCAL},
+	// {(char*)"very-sensitive-local", no_argument,   0,        ARG_PRESET_VERY_SENSITIVE_LOCAL},
 	{(char*)"no-score-priority",no_argument,       0,        ARG_NO_SCORE_PRIORITY},
 	{(char*)"seedlen",          required_argument, 0,        'L'},
 	{(char*)"seedmms",          required_argument, 0,        'N'},
@@ -647,7 +647,7 @@ static struct option long_options[] = {
 	{(char*)"tri",              no_argument,       0,        ARG_TRI},
 	{(char*)"nondeterministic", no_argument,       0,        ARG_NON_DETERMINISTIC},
 	{(char*)"non-deterministic", no_argument,      0,        ARG_NON_DETERMINISTIC},
-	{(char*)"local-seed-cache-sz", required_argument, 0,     ARG_LOCAL_SEED_CACHE_SZ},
+	// {(char*)"local-seed-cache-sz", required_argument, 0,     ARG_LOCAL_SEED_CACHE_SZ},
 	{(char*)"seed-cache-sz",       required_argument, 0,     ARG_CURRENT_SEED_CACHE_SZ},
 	{(char*)"no-unal",          no_argument,       0,        ARG_SAM_NO_UNAL},
 	{(char*)"test-25",          no_argument,       0,        ARG_TEST_25},
@@ -670,6 +670,7 @@ static struct option long_options[] = {
     {(char*)"no-spliced-alignment",   no_argument, 0,        ARG_NO_SPLICED_ALIGNMENT},
     {(char*)"rna-strandness",   required_argument, 0,        ARG_RNA_STRANDNESS},
     {(char*)"splicesite-db-only",   no_argument, 0,        ARG_SPLICESITE_DB_ONLY},
+    {(char*)"no-anchorstop",   no_argument, 0,        ARG_NO_ANCHORSTOP},
 #ifdef USE_SRA
     {(char*)"sra-acc",   required_argument, 0,        ARG_SRA_ACC},
 #endif
@@ -777,12 +778,14 @@ static void printUsage(ostream& out) {
 		<< "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
 		<< "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
 		<< endl
+#if 0
 		<< "  For --local:" << endl
 		<< "   --very-fast-local      -D 5 -R 1 -N 0 -L 25 -i S,1,2.00" << endl
 		<< "   --fast-local           -D 10 -R 2 -N 0 -L 22 -i S,1,1.75" << endl
 		<< "   --sensitive-local      -D 15 -R 2 -N 0 -L 20 -i S,1,0.75 (default)" << endl
 		<< "   --very-sensitive-local -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
 		<< endl
+#endif
 	    << " Alignment:" << endl
 		<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl

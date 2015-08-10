@@ -871,7 +871,7 @@ def find_in_gtf_junctions(chr_dic, gtf_junctions, junction, relax_dist = 5):
 
     return -1
 
-def compare_single_sam(reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set):
+def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic = {}, {}
     mapped_file = open(mapped_fname, "w")
@@ -999,8 +999,11 @@ def compare_single_sam(reference_sam, query_sam, mapped_fname, chr_dic, gtf_junc
     for line in file:
         if line[0] == '@':
             continue
-        
-        read_name, chr, pos, cigar, trans_id, NM = line[:-1].split()
+
+        if RNA:
+            read_name, chr, pos, cigar, trans_id, NM = line[:-1].split()
+        else:
+            read_name, chr, pos, cigar, NM = line[:-1].split()
         pos = int(pos)
         pos2 = get_right(pos, cigar)
         if read_name not in db_dic:
@@ -1059,7 +1062,7 @@ def compare_single_sam(reference_sam, query_sam, mapped_fname, chr_dic, gtf_junc
     return mapped, unique_mapped, unmapped, aligned, multi_aligned, len(temp_junctions), len(temp_gtf_junctions), mapping_point
 
 
-def compare_paired_sam(reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set):
+def compare_paired_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic, junction_pair_dic = {}, {}, {}
     mapped_file = open(mapped_fname, "w")
@@ -1208,8 +1211,11 @@ def compare_paired_sam(reference_sam, query_sam, mapped_fname, chr_dic, gtf_junc
     for line in file:
         if line[0] == '@':
             continue
-        
-        read_name, chr, pos, cigar, chr2, pos2, cigar2, trans_id, NM, NM2 = line[:-1].split()
+
+        if RNA:
+            read_name, chr, pos, cigar, chr2, pos2, cigar2, trans_id, NM, NM2 = line[:-1].split()
+        else:
+            read_name, chr, pos, cigar, chr2, pos2, cigar2, NM, NM2 = line[:-1].split()
         pos, pos2 = int(pos), int(pos2)
         pos_right, pos2_right = get_right(pos, cigar), get_right(pos2, cigar2)
 
@@ -1436,7 +1442,7 @@ def calculate_read_cost():
      
     aligners = [
         ["hisat", "", "", ""],
-        ["hisat2", "x1", "", ""],
+        # ["hisat2", "x1", "", ""],
         ["hisat2", "", "", ""],
         ["hisat2", "", "snp", ""],
         ["hisat2", "", "ss", ""],
@@ -1453,6 +1459,7 @@ def calculate_read_cost():
         genome = cwd.split("reads_")[1]
     else:
         genome = "genome"
+    RNA = (cwd.find("RNA") != -1)
 
     test_small = (genome != "genome")
 
@@ -1531,7 +1538,7 @@ def calculate_read_cost():
             index_add = ""
             if genome != "genome":
                 index_add = "_" + genome
-            def get_aligner_cmd(aligner, type, index_type, version, read1_fname, read2_fname, out_fname, cmd_idx = 0):
+            def get_aligner_cmd(RNA, aligner, type, index_type, version, read1_fname, read2_fname, out_fname, cmd_idx = 0):
                 cmd = []
                 if aligner == "hisat2":
                     if test_large_index:
@@ -1553,12 +1560,14 @@ def calculate_read_cost():
                     # cmd += ["--metrics", "1",
                     #         "--metrics-file", "metrics.out"]
 
-                    if type in ["x1", "x2"]:
+                    if type in ["x1", "x2"] or not RNA:
                         cmd += ["--no-temp-splicesite"]
 
+                    # daehwan - for debugging purposes
                     """
-                    cmd += ["--rdg", "100,100",
-                            "--rfg", "100,100"]
+                    if index_type == "ss":
+                        cmd += ["--no-anchorstop"]
+                        cmd += ["-k", "100"]
                     """
 
                     if type == "x2":
@@ -1601,7 +1610,7 @@ def calculate_read_cost():
                     # cmd += ["--metrics", "1",
                     #         "--metrics-file", "metrics.out"]
 
-                    if type in ["x1", "x2"]:
+                    if type in ["x1", "x2"] or not RNA:
                         cmd += ["--no-temp-splicesite"]
 
                     """
@@ -1755,7 +1764,7 @@ def calculate_read_cost():
 
                     # dummy commands for caching
                     if aligner != "tophat2":
-                        dummy_cmd = get_aligner_cmd(aligner, type, index_type, version, "../one.fa", "../two.fa", "/dev/null")
+                        dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../one.fa", "../two.fa", "/dev/null")
                         if verbose:
                             print >> sys.stderr, "\t", datetime.now(), " ".join(dummy_cmd)
                         if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap"]:
@@ -1767,7 +1776,7 @@ def calculate_read_cost():
                             print >> sys.stderr, "\t", datetime.now(), "finished"
 
                     # align all reads
-                    aligner_cmd = get_aligner_cmd(aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
+                    aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
@@ -1792,7 +1801,7 @@ def calculate_read_cost():
                     if aligner == "star" and type == "":
                         os.system("mv Aligned.out.sam %s" % out_fname)
                     elif aligner in ["hisat2", "hisat"] and type == "x2":
-                        aligner_cmd = get_aligner_cmd(aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
+                        aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
                         start_time = datetime.now()
                         if verbose:
                             print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
@@ -1823,7 +1832,7 @@ def calculate_read_cost():
                         proc.communicate()
                         if verbose:
                             print >> sys.stderr, "\t", datetime.now(), "finished"
-                        aligner_cmd = get_aligner_cmd(aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
+                        aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
                         start_time = datetime.now()
                         if verbose:
                             print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
@@ -1868,9 +1877,9 @@ def calculate_read_cost():
                         type_read_fname2 = base_fname + "_" + readtype2 + ".fa"
                     mapped_id_fname = base_fname + "_" + readtype2 + ".read_id"
                     if paired:
-                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_paired_sam(out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set)
+                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_paired_sam(RNA, out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set)
                     else:
-                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_single_sam(out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set)
+                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_single_sam(RNA, out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set)
                     proc = subprocess.Popen(["wc", "-l", "../" + type_read_fname2], stdout=subprocess.PIPE)
                     out = proc.communicate()[0]
                     numreads = int(out.split()[0]) / 2

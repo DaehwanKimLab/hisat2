@@ -262,7 +262,7 @@ def generate_dna_expr_profile(genome_seq):
     expr_profile = []
     for chr_id, chr_seq in genome_seq.items():
         expr_profile.append(len(chr_seq))
-    expr_sum = sum(expr_profile)
+    expr_sum = float(sum(expr_profile))
     expr_profile = [expr_profile[i] / expr_sum for i in range(len(expr_profile))]
     assert abs(sum(expr_profile) - 1.0) < 0.001
     return expr_profile
@@ -699,7 +699,6 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         assert len(transcript_ids) >= len(expr_profile)
     else:
         chr_ids = genome_seq.keys()
-        random.shuffle(chr_ids)
 
     sam_file = open(base_fname + ".sam", "w")
     read_file = open(base_fname + "_1.fa", "w")
