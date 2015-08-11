@@ -7,9 +7,6 @@ import platform
 from datetime import datetime, date, time
 import copy
 
-use_message = '''
-'''
-
 """
 """
 def reverse_complement(seq):
