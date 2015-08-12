@@ -65,9 +65,9 @@ def get_data(small = False):
                      "20M_RNA_reads_genome",
                      "20M_RNA_snp_reads_genome"]
         else:
-            files = ["5M_RNA_wgEncodeCshlLongRnaSeq",
-                     "108M_RNA_wgEncodeCshlLongRnaSeq",
-                     "62M_RNA_SRR353653"]
+            files = ["108M_RNA_wgEncodeCshlLongRnaSeq",
+                     "62M_RNA_SRR353653",
+                     "80M_DNA_SRR345300"]
         for file in files:
             if os.path.exists(file):
                 continue

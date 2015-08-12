@@ -40,6 +40,16 @@ enum ALT_TYPE {
 
 template <typename index_t>
 struct ALT {
+    ALT() {
+        reset();
+    }
+    
+    void reset() {
+        type = ALT_NONE;
+        pos = len = 0;
+        seq = 0;
+    }
+    
     union {
         index_t pos;
         index_t left;
