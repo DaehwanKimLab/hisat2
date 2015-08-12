@@ -1907,7 +1907,7 @@ bool GenomeHit<index_t>::adjustWithALT(
     
     assert(_sharedVars != NULL);
     EList<pair<index_t, int> >& offDiffs = _sharedVars->offDiffs;
-    index_t width = 1 << (gfm.gh()._offRate + 1);
+    index_t width = 1 << (gfm.gh()._offRate + 2);
     findOffDiffs(gfm, altdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff + width, offDiffs);
     
     const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
@@ -2002,9 +2002,9 @@ void GenomeHit<index_t>::findOffDiffs(
     }
     if(alt_range.first >= alt_range.second) return;
     
-    for(; alt_range.first < alt_range.second; alt_range.first++) {
+    for(; alt_range.second > alt_range.first; alt_range.second--) {
         assert_lt(alt_range.first, alts.size());
-        const ALT<index_t>& alt = alts[alt_range.first];
+        const ALT<index_t>& alt = alts[alt_range.second - 1];
         if(!alt.gap()) continue;
         if(alt.splicesite()) {
             if(alt.left > alt.right) continue;
