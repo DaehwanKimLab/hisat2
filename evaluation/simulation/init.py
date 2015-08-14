@@ -319,6 +319,11 @@ def init():
     for read_dir in read_dirs:
         if os.path.exists(read_dir):
             continue
+
+        # daehwan - for debugging purposes
+        if "20M" in read_dir:
+            continue
+        
         if not os.path.exists(read_dir_base + read_dir + "/sim.sam") or \
                 not os.path.exists(read_dir_base + read_dir + "/sim_1.fa") or \
                 not os.path.exists(read_dir_base + read_dir + "/sim_2.fa"):

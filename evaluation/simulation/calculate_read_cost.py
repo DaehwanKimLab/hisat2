@@ -1426,13 +1426,14 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
-        ["hisat", "", "", ""],
-        ["hisat2", "", "", ""],
+        # ["hisat", "", "", ""],
+        # ["hisat2", "", "", ""],
         ["hisat2", "", "snp", ""],
+        # ["hisat2", "x1", "ss", ""],
         # ["hisat2", "", "snp_ss", ""],
         ["star", "", "", ""],
-        ["bowtie", "", "", ""],
-        ["bowtie2", "", "", ""],
+        # ["bowtie", "", "", ""],
+        # ["bowtie2", "", "", ""],
         ["gsnap", "", "", ""],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "ss", ""],
@@ -1459,8 +1460,8 @@ def calculate_read_cost():
     chr_dic = read_genome("../../data/" + genome + ".fa")
 
     align_stat = []
-    for paired in [False, True]:
-    # for paired in [False]:
+    # for paired in [False, True]:
+    for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
@@ -1553,7 +1554,7 @@ def calculate_read_cost():
                     if not RNA:
                         cmd += ["--no-spliced-alignment"]
 
-                    if type in ["x1", "x2"] or not RNA:
+                    if type in ["x1", "x2"]:
                         cmd += ["--no-temp-splicesite"]
 
                     # daehwan - for debugging purposes
@@ -1599,7 +1600,7 @@ def calculate_read_cost():
                     if not RNA:
                         cmd += ["--no-spliced-alignment"]
 
-                    if type in ["x1", "x2"] or not RNA:
+                    if type in ["x1", "x2"]:
                         cmd += ["--no-temp-splicesite"]
 
                     """

@@ -52,7 +52,9 @@ def simulate_reads():
         ["22", 1000000, _dna, _snp, not _mismatch],
         ["22", 1000000, _dna, _snp, _mismatch],
         ["22", 1000000, _rna, not _snp, not _mismatch],
+        ["22", 1000000, _rna, not _snp, _mismatch],
         ["22", 1000000, _rna, _snp, not _mismatch],
+        ["22", 1000000, _rna, _snp, _mismatch],
         ["22_20-21M", 1000000, _rna, not _snp, not _mismatch],
         ["genome", 20000000, _dna, not _snp, not _mismatch],
         ["genome", 20000000, _dna, _snp, not _mismatch],
@@ -94,7 +96,9 @@ def simulate_reads():
 
         cmd_add = ""
         if not rna:
-            cmd_add += "--dna"
+            cmd_add += "--dna "
+        if mismatch:
+            cmd_add += "--error-rate 0.5 "
         cmd = "../../../aligners/bin/simulate_reads.py --sanity-check %s --num-fragment %d %s %s %s sim" % \
             (cmd_add, numreads, genome_fname, gtf_fname, snp_fname)
         print >> sys.stderr, cmd
