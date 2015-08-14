@@ -48,7 +48,9 @@ def simulate_reads():
     _dna = not _rna
     datasets = [
         ["22", 1000000, _dna, not _snp, not _mismatch],
+        ["22", 1000000, _dna, not _snp, _mismatch],
         ["22", 1000000, _dna, _snp, not _mismatch],
+        ["22", 1000000, _dna, _snp, _mismatch],
         ["22", 1000000, _rna, not _snp, not _mismatch],
         ["22", 1000000, _rna, _snp, not _mismatch],
         ["22_20-21M", 1000000, _rna, not _snp, not _mismatch],

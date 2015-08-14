@@ -630,12 +630,6 @@ def extract_single(infilename, outfilename, chr_dic, aligner):
         assert NM != ""
         NM = int(NM[5:])
 
-        # daehwan - for debugging purposes
-        if aligner in ["star", "starx2", "hisat", "hisath", "hisatx2"] and False:
-            mapQ = int(mapQ)
-            if mapQ != 255:
-                continue
-
         read_pos, right_pos = 0, pos - 1
         cigars = cigar_re.findall(cigar_str)
         cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
@@ -682,7 +676,7 @@ def extract_single(infilename, outfilename, chr_dic, aligner):
 
         p_str = "%s\t%s\t%d\t%s\tNM:i:%d" % \
             (read_id, chr, pos, cigar_str, NM)
-
+        
         print >> outfile, p_str
 
     outfile.close()
@@ -711,12 +705,6 @@ def extract_pair(infilename, outfilename, chr_dic, aligner):
         if aligner == "gsnap":
             chr1 = chr1.replace("_", ":")
             chr2 = chr2.replace("_", ":")
-
-        # daehwan - for debugging purposes
-        if aligner in ["star", "starx2", "hisat", "hisath", "hisatx2"]:
-            mapQ = int(mapQ)
-            if mapQ != 255:
-                continue
 
         flag = int(flag)
         canonical_pos1, canonical_pos2 = int(pos1), int(pos2)
@@ -1441,7 +1429,7 @@ def calculate_read_cost():
         ["hisat", "", "", ""],
         ["hisat2", "", "", ""],
         ["hisat2", "", "snp", ""],
-        ["hisat2", "", "snp_ss", ""],
+        # ["hisat2", "", "snp_ss", ""],
         ["star", "", "", ""],
         ["bowtie", "", "", ""],
         ["bowtie2", "", "", ""],
@@ -1471,8 +1459,8 @@ def calculate_read_cost():
     chr_dic = read_genome("../../data/" + genome + ".fa")
 
     align_stat = []
-    # for paired in [False, True]:
-    for paired in [False]:
+    for paired in [False, True]:
+    # for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"

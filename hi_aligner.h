@@ -3984,7 +3984,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                           uniqueStop,
                                           _minK_local);
             assert_leq(top, bot);
-            assert_eq(nelt, (index_t)(bot - top));
+            assert_eq(nelt, (index_t)(node_bot - node_top));
             assert_leq(hitlen, hitoff + 1);
             if(nelt > 0 && nelt <= 5 && hitlen > max_hitlen) {
                 coords.clear();
@@ -4029,7 +4029,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             }
             
             assert_leq(hitlen, hitoff + 1);
-            hitoff -= (hitlen - 1);
+            if(hitlen > 0) hitoff -= (hitlen - 1);
             if(hitoff > 0) hitoff -= 1;
         } // while(hitoff >= _minK_local - 1)
     } // while(!success && count++ < 2)
