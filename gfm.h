@@ -640,6 +640,7 @@ public:
         bool loadSASamp, // = true,
         bool loadFtab, // = true,
         bool loadRstarts, // = true,
+        bool loadSpliceSites, // = true,
         bool verbose, // = false,
         bool startVerbose, // = false,
         bool passMemExc, // = false,
@@ -700,6 +701,13 @@ public:
             while(!in7.eof()) {
                 alts.expand();
                 alts.back().read(in7, this->toBe());
+                if(!loadSpliceSites) {
+                    if(alts.back().splicesite()) {
+                        alts.pop_back();
+                        assert_gt(numAlts, 0);
+                        numAlts--;
+                    }
+                }
                 if(alts.size() == numAlts) break;
             }
         }

@@ -298,7 +298,7 @@ static void resetOptions() {
 	nthreads				= 1;     // number of pthreads operating concurrently
 	outType					= OUTPUT_SAM;  // style of output
 	noRefNames				= false; // true -> print reference indexes; not names
-	khits					= 5;     // number of hits per read; >1 is much slower
+	khits					= 10;    // number of hits per read; >1 is much slower
 	mhits					= 0;     // stop after finding this many alignments+1
 	partitionSz				= 0;     // output a partitioning key in first field
 	useSpinlock				= true;  // false -> don't use of spinlocks even if they're #defines
@@ -3521,6 +3521,7 @@ static void driver(
                                      true,        // load SA sample?
                                      true,        // load ftab?
                                      true,        // load rstarts?
+                                     !no_spliced_alignment, // load splice sites?
                                      gVerbose, // whether to be talkative
                                      startVerbose, // talkative during initialization
                                      false /*passMemExc*/,

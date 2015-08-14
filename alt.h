@@ -71,7 +71,12 @@ struct ALT {
     
     bool operator< (const ALT& o) const {
         if(pos != o.pos) return pos < o.pos;
-        if(type != o.type) return type < o.type;
+        if(type != o.type) {
+            if(type == ALT_NONE || o.type == ALT_NONE) {
+                return type == ALT_NONE;
+            }
+            return type < o.type;
+        }
         if(len != o.len) return len < o.len;
         if(seq != o.seq) return seq < o.seq;
         return false;

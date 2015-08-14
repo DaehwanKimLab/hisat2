@@ -78,6 +78,7 @@ public:
                  loadSASamp,
                  loadFtab,
                  loadRstarts,
+                 true, // load Splice Sites
                  verbose,
                  startVerbose,
                  passMemExc,
@@ -1565,6 +1566,7 @@ public:
          bool loadSASamp, // = true,
          bool loadFtab, // = true,
          bool loadRstarts, // = true,
+         bool loadSpliceSites, // = true,
          bool verbose, // = false,
          bool startVerbose, // = false,
          bool passMemExc, // = false,
@@ -1583,6 +1585,7 @@ public:
                  loadSASamp,
                  loadFtab,
                  loadRstarts,
+                 loadSpliceSites,
                  verbose,
                  startVerbose,
                  passMemExc,
@@ -1593,30 +1596,7 @@ public:
     {
         _in5Str = in + ".5." + gfm_ext;
         _in6Str = in + ".6." + gfm_ext;
-        
-        if(!skipLoading && false) {
-            readIntoMemory(
-                           fw ? -1 : needEntireReverse, // need REF_READ_REVERSE
-                           loadSASamp,  // load the SA sample portion?
-                           loadFtab,    // load the ftab & eftab?
-                           loadRstarts, // load the rstarts array?
-                           true,        // stop after loading the header portion?
-                           &(this->_gh),
-                           mmSweep,     // mmSweep
-                           loadNames,   // loadNames
-                           startVerbose); // startVerbose
-            // If the offRate has been overridden, reflect that in the
-            // _eh._offRate field
-            if(offRatePlus > 0 && this->_overrideOffRate == -1) {
-                this->_overrideOffRate = this->_gh._offRate + offRatePlus;
-            }
-            if(this->_overrideOffRate > this->_gh._offRate) {
-                this->_gh.setOffRate(this->_overrideOffRate);
-                assert_eq(this->_overrideOffRate, this->_gh._offRate);
-            }
-            assert(this->repOk());
-        }
-	}
+    }
 	
 	/// Construct an Ebwt from the given header parameters and string
 	/// vector, optionally using a blockwise suffix sorter with the

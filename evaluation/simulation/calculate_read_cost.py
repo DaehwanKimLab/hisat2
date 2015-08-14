@@ -1439,11 +1439,16 @@ def calculate_read_cost():
      
     aligners = [
         ["hisat", "", "", ""],
-        # ["hisat2", "x1", "", ""],
         ["hisat2", "", "", ""],
         ["hisat2", "", "snp", ""],
-        ["hisat2", "", "ss", ""],
         ["hisat2", "", "snp_ss", ""],
+        ["star", "", "", ""],
+        ["bowtie", "", "", ""],
+        ["bowtie2", "", "", ""],
+        ["gsnap", "", "", ""],
+        # ["hisat2", "", "snp", ""],
+        # ["hisat2", "", "ss", ""],
+        # ["hisat2", "", "snp_ss", ""],
         ]
     readtypes = ["all"]
     verbose = True
@@ -1557,15 +1562,16 @@ def calculate_read_cost():
                     # cmd += ["--metrics", "1",
                     #         "--metrics-file", "metrics.out"]
 
+                    if not RNA:
+                        cmd += ["--no-spliced-alignment"]
+
                     if type in ["x1", "x2"] or not RNA:
                         cmd += ["--no-temp-splicesite"]
 
                     # daehwan - for debugging purposes
-                    """
-                    if index_type == "ss":
-                        cmd += ["--no-anchorstop"]
-                        cmd += ["-k", "100"]
-                    """
+                    if index_type in ["snp", "ss"]:
+                        # cmd += ["--no-anchorstop"]
+                        None
 
                     if type == "x2":
                         if cmd_idx == 0:
@@ -1601,11 +1607,9 @@ def calculate_read_cost():
                         version = int(version)
                     else:
                         version = sys.maxint
-                    # cmd += ["--pen-cansplice", "0"]
-                    # cmd += ["--pen-noncansplice", "12"]
-                    # cmd += ["--pen-intronlen", "G,-8,1"]
-                    # cmd += ["--metrics", "1",
-                    #         "--metrics-file", "metrics.out"]
+
+                    if not RNA:
+                        cmd += ["--no-spliced-alignment"]
 
                     if type in ["x1", "x2"] or not RNA:
                         cmd += ["--no-temp-splicesite"]
@@ -1728,12 +1732,14 @@ def calculate_read_cost():
                 if aligner == "hisat2" and index_type != "":
                     aligner_name += ("_" + index_type)
                 two_step = (aligner == "tophat2" or type == "x2" or (aligner in ["hisat2", "hisat"] and type == ""))
-                if readtype != "M":
+                if RNA and readtype != "M":
                     if aligner in ["bowtie", "bowtie2"]:
                         continue
                 if readtype != "all":
                     if two_step:
                         continue
+                if not RNA and readtype != "all":
+                    continue
 
                 print >> sys.stderr, "\t%s\t%s" % (aligner_name, str(datetime.now()))
                 if paired:

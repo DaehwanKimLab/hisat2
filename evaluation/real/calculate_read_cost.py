@@ -1124,15 +1124,14 @@ def calculate_read_cost():
 
     # sql_write = False
     aligners = [
-        # ["star", "", "", ""],
-        # ["star", "x2", "", ""],
-        # ["gsnap", "", "", ""],
-        ["tophat2", "", "", ""],
-        # ["hisat", "", "", ""],
-        # ["hisat2", "", "", ""],
+        ["hisat2", "", "", ""],
+        ["hisat2", "", "snp", ""],
+        ["hisat", "", "", ""],
+        ["star", "", "", ""],
+        ["bowtie", "", "", ""],
+        ["bowtie2", "", "", ""],
         # ["hisat2", "x1", "", ""],
         # ["hisat2", "x2", "", ""],
-        # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "ss", ""],
         # ["hisat2", "", "snp_ss", ""],
         ]
@@ -1214,6 +1213,9 @@ def calculate_read_cost():
                 # cmd += ["--metrics", "1",
                 #         "--metrics-file", "metrics.out"]
 
+                if not RNA:
+                    cmd += ["--no-spliced-alignment"]
+
                 if type in ["x1", "x2"] or not RNA:
                     cmd += ["--no-temp-splicesite"]
 
@@ -1254,11 +1256,9 @@ def calculate_read_cost():
                     version = int(version)
                 else:
                     version = sys.maxint
-                # cmd += ["--pen-cansplice", "0"]
-                # cmd += ["--pen-noncansplice", "12"]
-                # cmd += ["--pen-intronlen", "G,-8,1"]
-                # cmd += ["--metrics", "1",
-                #         "--metrics-file", "metrics.out"]
+
+                if not RNA:
+                    cmd += ["--no-spliced-alignment"]
 
                 if type in ["x1", "x2"] or not RNA:
                     cmd += ["--no-temp-splicesite"]

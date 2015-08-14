@@ -1916,7 +1916,8 @@ bool GenomeHit<index_t>::adjustWithALT(
     index_t orig_joinedOff = this->_joinedOff;
     index_t orig_toff = this->_toff;
     bool found = false;
-    for(index_t o = 0; o < min<index_t>(4, offDiffs.size()) && !found; o++) {
+    if(offDiffs.size() > 4) offDiffs.resize(4);
+    for(index_t o = 0; o < offDiffs.size() && !found; o++) {
         const pair<index_t, int>& offDiff = offDiffs[o];
 #ifndef NDEBUG
         if(o == 0) {
@@ -3276,12 +3277,7 @@ public:
             
             // daehwan - for debugging purposes
             pseudogeneStop = false;
-            
-            // daehwan - for debugging purposes
-#if 0
-            anchorStop = false;
-#endif
-            
+           
             // Align this read beginning from previously stopped base
             // stops when it is uniquelly mapped with at least 28bp or
             // it may involve processed pseudogene

@@ -777,8 +777,8 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                 Zs2 = ("\tZs:Z:{}".format(Zs2))
 
             if rna:
-                XS = "\tXS:A:%s".format(strand)
-                TI = "\tTI:Z:%s".format(transcript_id)
+                XS = "\tXS:A:{}".format(strand)
+                TI = "\tTI:Z:{}".format(transcript_id)
             else:
                 XS, TI = "", ""                
 
