@@ -353,6 +353,7 @@ static void print_snps(
                      false,                // load SA sample?
                      false,                // load ftab?
                      false,                // load rstarts?
+                     true,                // load splice sites?
                      verbose,              // be talkative?
                      verbose,              // be talkative at startup?
                      false,                // pass up memory exceptions?
@@ -431,6 +432,7 @@ static void print_splicesites(
                      false,                // load SA sample?
                      false,                // load ftab?
                      false,                // load rstarts?
+                     true,                // load splice sites?
                      verbose,              // be talkative?
                      verbose,              // be talkative at startup?
                      false,                // pass up memory exceptions?
@@ -504,6 +506,7 @@ static void print_index_summary(
                      false,                // load SA sample?
                      false,                // load ftab?
                      false,                // load rstarts?
+                     true,                // load splice sites?
                      verbose,              // be talkative?
                      verbose,              // be talkative at startup?
                      false,                // pass up memory exceptions?
@@ -578,6 +581,7 @@ static void driver(
                                        true,                 // load SA sample?
                                        true,                 // load ftab?
                                        true,                 // load rstarts?
+                                       true,                 // load splice sites?
                                        false,                // be talkative?
                                        false,                // be talkative at startup?
                                        false,                // pass up memory exceptions?

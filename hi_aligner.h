@@ -1992,13 +1992,12 @@ void GenomeHit<index_t>::findOffDiffs(
         ALT<index_t> alt;
         alt.pos = start;
         alt_range.first = alt_range.second = altdb.alts().bsearchLoBound(alt);
-        index_t add = 0;
         for(alt_range.second = alt_range.first; alt_range.second < alts.size(); alt_range.second++) {
             const ALT<index_t>& alt = alts[alt_range.second];
             if(alt.splicesite()) {
                 if(alt.left > alt.right) continue;
             }
-            if(alt.pos >= end + (alt.splicesite() ? add : 0)) break;
+            if(alt.pos >= end) break;
         }
     }
     if(alt_range.first >= alt_range.second) return;
