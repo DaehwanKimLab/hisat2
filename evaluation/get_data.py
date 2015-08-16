@@ -56,9 +56,13 @@ def get_data(small = False):
         os.chdir(type)
         if type == "simulation":
             files = ["1M_DNA_reads_22",
+                     "1M_DNA_mismatch_reads_22",
                      "1M_DNA_snp_reads_22",
+                     "1M_DNA_mismatch_snp_reads_22",
                      "1M_RNA_reads_22",
+                     "1M_RNA_mismatch_reads_22",
                      "1M_RNA_snp_reads_22",
+                     "1M_RNA_mismatch_snp_reads_22",
                      "1M_RNA_reads_22_20-21M",
                      "20M_DNA_reads_genome",
                      "20M_DNA_snp_reads_genome",

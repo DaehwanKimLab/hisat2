@@ -1427,14 +1427,15 @@ def calculate_read_cost():
      
     aligners = [
         # ["hisat", "", "", ""],
-        # ["hisat2", "", "", ""],
-        ["hisat2", "", "snp", ""],
+        ["hisat2", "", "", ""],
+        # ["hisat2", "x2", "", ""],
+        ["hisat2", "", "ss", ""],
         # ["hisat2", "x1", "ss", ""],
         # ["hisat2", "", "snp_ss", ""],
-        ["star", "", "", ""],
+        # ["star", "", "", ""],
         # ["bowtie", "", "", ""],
         # ["bowtie2", "", "", ""],
-        ["gsnap", "", "", ""],
+        # ["gsnap", "", "", ""],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "ss", ""],
         # ["hisat2", "", "snp_ss", ""],
@@ -1532,10 +1533,7 @@ def calculate_read_cost():
             def get_aligner_cmd(RNA, aligner, type, index_type, version, read1_fname, read2_fname, out_fname, cmd_idx = 0):
                 cmd = []
                 if aligner == "hisat2":
-                    if test_large_index:
-                        cmd = ["%s/hisat2-align-l" % (aligner_bin_base)]
-                    else:
-                        cmd = ["%s/hisat2-align-s" % (aligner_bin_base)]
+                    cmd = ["%s/hisat2" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
                     cmd += ["-f"]
@@ -1559,7 +1557,7 @@ def calculate_read_cost():
 
                     # daehwan - for debugging purposes
                     if index_type in ["snp", "ss"]:
-                        # cmd += ["--no-anchorstop"]
+                        cmd += ["--no-anchorstop"]
                         None
 
                     if type == "x2":
@@ -1583,10 +1581,7 @@ def calculate_read_cost():
                     else:
                         cmd += [read1_fname]                        
                 elif aligner == "hisat":
-                    if test_large_index:
-                        cmd = ["%s/hisat-align-l" % (aligner_bin_base)]
-                    else:
-                        cmd = ["%s/hisat-align-s" % (aligner_bin_base)]
+                    cmd = ["%s/hisat" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
                     cmd += ["-f"]
