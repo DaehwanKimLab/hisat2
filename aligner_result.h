@@ -279,11 +279,12 @@ public:
     TAlScore splicescore()     const { return splicescore_; }
     bool     nearSpliceSites() const { return nearSpliceSites_; }
     
-    TAlScore hisat_score() const
+    TAlScore hisat2_score() const
     {
         TAlScore r = (score_ << 10) - (splicescore_ / 100);
         if(nearSpliceSites_) {
-            r += 1;
+            // daehwan - for debugging purposes
+            // r += 1;
         }
         return r;
     }

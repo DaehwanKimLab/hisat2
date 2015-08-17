@@ -3397,19 +3397,7 @@ static void multiseedSearch(
 	multiseed_metricsOfb   = metricsOfb;
 	multiseed_refs = refs;
 	AutoArray<tthread::thread*> threads(nthreads);
-	AutoArray<int> tids(nthreads);
-	{
-		// Load the other half of the index into memory
-		assert(!gfm.isInMemory());
-		Timer _t(cerr, "Time loading forward index: ", timing);
-		gfm.loadIntoMemory(
-                           -1, // not the reverse index
-                           true,         // load SA samp? (yes, need forward index's SA samp)
-                           true,         // load ftab (in forward index)
-                           true,         // load rstarts (in forward index)
-                           !noRefNames,  // load names?
-                           startVerbose);
-	}
+	AutoArray<int> tids(nthreads);	
 	// Start the metrics thread
 	{
 		Timer _t(cerr, "Multiseed full-index search: ", timing);
@@ -3546,6 +3534,18 @@ static void driver(
 		gfm.checkOrigs(os, false);
 		gfm.evictFromMemory();
 	}
+    {
+        // Load the other half of the index into memory
+        assert(!gfm.isInMemory());
+        Timer _t(cerr, "Time loading forward index: ", timing);
+        gfm.loadIntoMemory(
+                           -1, // not the reverse index
+                           true,         // load SA samp? (yes, need forward index's SA samp)
+                           true,         // load ftab (in forward index)
+                           true,         // load rstarts (in forward index)
+                           !noRefNames,  // load names?
+                           startVerbose);
+    }
 	OutputQueue oq(
 		*fout,                   // out file buffer
 		reorder && nthreads > 1, // whether to reorder when there's >1 thread
@@ -3666,22 +3666,21 @@ static void driver(
                                 nthreads > 1, // thread-safe
                                 write, // write?
                                 read);  // read?
-        if(ssdb != NULL) {
-            if(knownSpliceSiteInfile != "") {
-                ifstream ssdb_file(knownSpliceSiteInfile.c_str(), ios::in);
-                if(ssdb_file.is_open()) {
-                    ssdb->read(ssdb_file,
-                               true); // known splice sites
-                    ssdb_file.close();
-                }
+        ssdb->read(gfm, altdb->alts());
+        if(knownSpliceSiteInfile != "") {
+            ifstream ssdb_file(knownSpliceSiteInfile.c_str(), ios::in);
+            if(ssdb_file.is_open()) {
+                ssdb->read(ssdb_file,
+                           true); // known splice sites
+                ssdb_file.close();
             }
-            if(novelSpliceSiteInfile != "") {
-                ifstream ssdb_file(novelSpliceSiteInfile.c_str(), ios::in);
-                if(ssdb_file.is_open()) {
-                    ssdb->read(ssdb_file,
-                               false); // novel splice sites
-                    ssdb_file.close();
-                }
+        }
+        if(novelSpliceSiteInfile != "") {
+            ifstream ssdb_file(novelSpliceSiteInfile.c_str(), ios::in);
+            if(ssdb_file.is_open()) {
+                ssdb->read(ssdb_file,
+                           false); // novel splice sites
+                ssdb_file.close();
             }
         }
 		switch(outType) {

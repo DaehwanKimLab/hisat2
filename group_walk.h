@@ -1507,7 +1507,9 @@ public:
 		while(sa.offs[elt] == (index_t)OFF_MASK) {
 			// Get the GWState that contains our element of interest
 			size_t range = hit_.fmap[elt].first;
-			st_.ensure(4);
+            assert_lt(range, st_.size());
+			st_.ensure(st_[range].node_bot - st_[range].node_top);
+            // st_.ensure(4);
 			GWState<index_t, T>& st = st_[range];
 			assert(!st.doneResolving(sa));
 			// Returns a pair of numbers, the first being the number of

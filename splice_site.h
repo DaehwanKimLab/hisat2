@@ -31,6 +31,8 @@
 #include "read.h"
 #include "reference.h"
 #include "hier_idx_common.h"
+#include "gfm.h"
+#include "alt.h"
 
 using namespace std;
 
@@ -391,6 +393,7 @@ public:
     bool hasSpliceSites(uint32_t ref, uint32_t left1, uint32_t right1, uint32_t left2, uint32_t right2, bool includeNovel = false) const;
     
     void print(ofstream& out);
+    void read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> >& alts);
     void read(ifstream& in, bool known = false);
     
 private:

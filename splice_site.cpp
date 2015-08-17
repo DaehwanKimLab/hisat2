@@ -607,6 +607,64 @@ void SpliceSiteDB::print_impl(
     if(ss != NULL) ss_list.push_back(*ss);
 }
 
+void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> >& alts)
+{
+    _empty = false;
+    assert_eq(_numRefs, _refnames.size());
+    for(size_t i = 0; i < alts.size(); i++) {
+        const ALT<TIndexOffU>& alt = alts[i];
+        if(!alt.splicesite()) continue;
+        if(alt.left > alt.right) continue;
+        TIndexOffU ref = 0, left = 0, tlen = 0;
+        char fw = alt.fw;
+        bool straddled2 = false;
+        gfm.joinedToTextOff(
+                            1,
+                            alt.left,
+                            ref,
+                            left,
+                            tlen,
+                            true,         // reject straddlers?
+                            straddled2);  // straddled?
+        assert_lt(ref, _spliceSites.size());
+        TIndexOffU right = left + (alt.right - alt.left);
+        left -= 1; right += 1;
+        _spliceSites[ref].expand();
+        _spliceSites[ref].back().init(ref,
+                                      left,
+                                      right,
+                                      fw == '+' || fw == '.',
+                                      fw != '.',
+                                      true,   // from file?
+                                      true); // known splice site?
+        assert_gt(_spliceSites[ref].size(), 0);
+        bool added = false;
+        assert_lt(ref, _fwIndex.size());
+        assert(_fwIndex[ref] != NULL);
+        Node *cur = _fwIndex[ref]->add(pool(ref), _spliceSites[ref].back(), &added);
+        if(!added) {
+            _spliceSites[ref].pop_back();
+            continue;
+        }
+        assert(added);
+        assert(cur != NULL);
+        cur->payload = _spliceSites[ref].size() - 1;
+        
+        added = false;
+        SpliceSitePos rssp(ref,
+                           right,
+                           left,
+                           fw == '+' || fw == '.',
+                           fw != '.');
+        assert_lt(ref, _bwIndex.size());
+        assert(_bwIndex[ref] != NULL);
+        cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
+        assert(added);
+        assert(cur != NULL);
+        cur->payload = _spliceSites[ref].size() - 1;
+    }
+}
+
 void SpliceSiteDB::read(ifstream& in, bool known)
 {
     _empty = false;
@@ -636,10 +694,13 @@ void SpliceSiteDB::read(ifstream& in, bool known)
         assert_lt(ref, _fwIndex.size());
         assert(_fwIndex[ref] != NULL);
         Node *cur = _fwIndex[ref]->add(pool(ref), _spliceSites[ref].back(), &added);
-        assert(added);
+        if(!added) {
+            _spliceSites[ref].pop_back();
+            continue;
+        }
+        
         assert(cur != NULL);
         cur->payload = _spliceSites[ref].size() - 1;
-        
         added = false;
         SpliceSitePos rssp(ref,
                            right,

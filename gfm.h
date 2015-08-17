@@ -1389,7 +1389,15 @@ public:
                             for(index_t si = right + 1; si < right + 1 + seqlen; si++) {
                                 seq = seq << 2 | s[si];
                             }
+                            // daehwan - for debugging purposes
+#if 0
+                            if(_alts.size() > 0) {
+                                if(_alts.back().left == left &&
+                                   _alts.back().right == right) continue;
+                            }
+#else
                             if(ss_seq.find(seq) != ss_seq.end()) continue;
+#endif
                             ss_seq.insert(seq);
                         }
                         

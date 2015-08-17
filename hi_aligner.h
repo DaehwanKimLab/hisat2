@@ -406,9 +406,11 @@ struct SharedTempVars {
     EList<int64_t> temp_scores2;
     
     // Align with alternatives
-    EList<pair<index_t, int> >  offDiffs;
+    EList<pair<index_t, int> >      ssOffs;
+    EList<pair<index_t, int> >      offDiffs;
     EList<SStringExpandable<char> > raw_refbufs;
     EList<Edit>                     alt_edits;
+    ELList<Edit, 128, 4>            candidate_edits;
     
     ASSERT_ONLY(SStringExpandable<uint32_t> destU32);
     
@@ -597,11 +599,15 @@ struct GenomeHit {
      *
      */
     static bool adjustWithALT(
+                              index_t                     rdoff,
+                              index_t                     len,
+                              const Coord&                coord,
+                              SharedTempVars<index_t>&    sharedVars,
                               EList<GenomeHit<index_t> >& genomeHits,
-                              const Read&             rd,
-                              const GFM<index_t>&     gfm,
-                              const ALTDB<index_t>&   altdb,
-                              const BitPairReference& ref);
+                              const Read&                 rd,
+                              const GFM<index_t>&         gfm,
+                              const ALTDB<index_t>&       altdb,
+                              const BitPairReference&     ref);
     
     /**
      * Adjust alignment with respect to SNPs, usually updating Edits
@@ -612,6 +618,16 @@ struct GenomeHit {
                        const GFM<index_t>&     gfm,
                        const ALTDB<index_t>&   altdb,
                        const BitPairReference& ref);
+    
+    /*
+     *
+     */
+    static void findSSOffs(
+                           const GFM<index_t>&         gfm,
+                           const ALTDB<index_t>&       altdb,
+                           index_t                     start,
+                           index_t                     end,
+                           EList<pair<index_t, int> >& ssOffs);
     
     /*
      * Find offset differences due to deletions
@@ -651,6 +667,7 @@ struct GenomeHit {
                                  index_t                     rflen,
                                  bool                        left,
                                  EList<Edit>&                edits,
+                                 ELList<Edit, 128, 4>*       candidate_edits = NULL,
                                  index_t                     mm = 0,
                                  index_t*                    numNs = NULL)
     {
@@ -660,6 +677,7 @@ struct GenomeHit {
         EList<Edit>& alt_edits = sharedVar.alt_edits;
         alt_edits = edits;
         index_t nedits = edits.size();
+        if(candidate_edits != NULL) candidate_edits->clear();
         alignWithALTs_recur(
                             alts,
                             joinedOff,
@@ -679,6 +697,7 @@ struct GenomeHit {
                             left,
                             edits,
                             mm,
+                            candidate_edits,
                             0, /* tmp_numNs */
                             numNs,
                             0,    /* dep */
@@ -742,6 +761,7 @@ struct GenomeHit {
                                        bool                        left,
                                        EList<Edit>&                edits,
                                        index_t                     mm,
+                                       ELList<Edit, 128, 4>*       candidate_edits,
                                        index_t                     tmp_numNs,
                                        index_t*                    numNs,
                                        index_t                     dep,
@@ -1797,6 +1817,7 @@ bool GenomeHit<index_t>::extend(
                                               reflen,
                                               true, /* left? */
                                               *this->_edits,
+                                              NULL,
                                               mm,
                                               &numNs);
             if(best_ext > 0) {
@@ -1863,6 +1884,7 @@ bool GenomeHit<index_t>::extend(
                                              reflen, /* ? */
                                              false, /* left? */
                                              *this->_edits,
+                                             NULL,
                                              mm);
             if(best_ext > 0) {
                 rightext = best_ext;
@@ -1908,78 +1930,74 @@ bool GenomeHit<index_t>::extend(
  */
 template <typename index_t>
 bool GenomeHit<index_t>::adjustWithALT(
+                                       index_t                     rdoff,
+                                       index_t                     len,
+                                       const Coord&                coord,
+                                       SharedTempVars<index_t>&    sharedVars,
                                        EList<GenomeHit<index_t> >& genomeHits,
-                                       const Read&             rd,
-                                       const GFM<index_t>&     gfm,
-                                       const ALTDB<index_t>&   altdb,
-                                       const BitPairReference& ref)
+                                       const Read&                 rd,
+                                       const GFM<index_t>&         gfm,
+                                       const ALTDB<index_t>&       altdb,
+                                       const BitPairReference&     ref)
 {
-    if(gfm.gh().linearFM()) return true;
-    GenomeHit<index_t>& genomeHit = genomeHits.back();
-    assert_lt(genomeHit._tidx, ref.numRefs());
-    
-    assert(genomeHit._sharedVars != NULL);
-    EList<pair<index_t, int> >& offDiffs = genomeHit._sharedVars->offDiffs;
+    if(gfm.gh().linearFM()) {
+        genomeHits.expand();
+        genomeHits.back().init(
+                               coord.orient(),
+                               rdoff,
+                               len,
+                               0, // trim5
+                               0, // trim3
+                               coord.ref(),
+                               coord.off(),
+                               coord.joinedOff(),
+                               sharedVars);
+        return true;
+    }
     index_t width = 1 << (gfm.gh()._offRate + 2);
-    genomeHit.findOffDiffs(gfm, altdb, (genomeHit._joinedOff >= width ? genomeHit._joinedOff - width : 0), genomeHit._joinedOff + width, offDiffs);
-    
-    const BTDnaString& seq = genomeHit._fw ? rd.patFw : rd.patRc;
-    const EList<ALT<index_t> >& alts = altdb.alts();
-    
-    index_t orig_joinedOff = genomeHit._joinedOff;
-    index_t orig_toff = genomeHit._toff;
+    EList<pair<index_t, int> >& ssOffs = sharedVars.ssOffs;
+    findSSOffs(gfm, altdb, (coord.joinedOff() >= width ? coord.joinedOff() - width : 0), coord.joinedOff() + width, ssOffs);
+    assert_gt(ssOffs.size(), 0);
     bool found = false;
-    // daehwan - for debugging purposes
-    // if(offDiffs.size() > 16) offDiffs.resize(16);
-    if(offDiffs.size() > 4) offDiffs.resize(4);
-    for(index_t o = 0; o < offDiffs.size() && !found; o++) {
-        const pair<index_t, int>& offDiff = offDiffs[o];
-#ifndef NDEBUG
-        if(o == 0) {
-            assert_eq(offDiff.first, 0);
-            assert_eq(offDiff.second, 0);
-        } else {
-            assert_leq(offDiffs[o-1].first, offDiff.first);
-            if(offDiffs[o-1].first == offDiff.first) {
-                assert_lt(offDiffs[o-1].second, offDiff.second);
+    for(index_t s = 0; s < ssOffs.size(); s++) {
+        index_t off = coord.off();
+        index_t joinedOff = coord.joinedOff();
+        pair<index_t, int>& ssOff = ssOffs[s];
+        if(ssOff.first > 0) {
+            assert_neq(ssOff.second, 0);
+            if(ssOff.second > 0) {
+                off += ssOff.first;
+                joinedOff += ssOff.first;
+            } else {
+                off -= ssOff.first;
+                joinedOff -= ssOff.first;
             }
         }
-#endif
-        if(offDiff.second >= 0) {
-            genomeHit._joinedOff = orig_joinedOff + offDiff.first;
-            genomeHit._toff = orig_toff + offDiff.first;
-        } else {
-            if(orig_toff < offDiff.first) continue;
-            assert_geq(orig_joinedOff, offDiff.first);
-            genomeHit._joinedOff = orig_joinedOff - offDiff.first;
-            genomeHit._toff = orig_toff - offDiff.first;
+        ELList<Edit, 128, 4>& candidate_edits = sharedVars.candidate_edits;
+        candidate_edits.clear();
+        genomeHits.expand();
+        genomeHits.back().init(
+                               coord.orient(),
+                               rdoff,
+                               len,
+                               0, // trim5
+                               0, // trim3
+                               coord.ref(),
+                               off,
+                               joinedOff,
+                               sharedVars);
+        GenomeHit<index_t>& genomeHit = genomeHits.back();
+        if(!genomeHit.adjustWithALT(rd, gfm, altdb, ref)) {
+            genomeHits.pop_back();
+            continue;
         }
-        index_t reflen = genomeHit._len + 10;
-        index_t alignedLen = genomeHit.alignWithALTs(
-                                                     alts,
-                                                     genomeHit._joinedOff,
-                                                     seq,
-                                                     genomeHit._rdoff,
-                                                     genomeHit._rdoff,
-                                                     genomeHit._len,
-                                                     ref,
-                                                     *genomeHit._sharedVars,
-                                                     genomeHit._tidx,
-                                                     genomeHit._toff,
-                                                     reflen,
-                                                     false, /* left? */
-                                                     *genomeHit._edits);
-        if(alignedLen == genomeHit._len) {
-            found = true;
-        } else {
-            genomeHit._edits->clear();
+        found = true;
+        for(index_t e = 0; e < candidate_edits.size(); e++) {
+            genomeHits.expand();
+            genomeHits.back() = genomeHits[genomeHits.size() - 2];
+            *(genomeHits.back()._edits) = candidate_edits[e];
         }
     }
-#ifndef NDEBUG
-    if(found) {
-        assert(genomeHit.repOk(rd, ref));
-    }
-#endif
     return found;
 }
 
@@ -2009,8 +2027,8 @@ bool GenomeHit<index_t>::adjustWithALT(
     index_t orig_toff = this->_toff;
     bool found = false;
     // daehwan - for debugging purposes
-    // if(offDiffs.size() > 16) offDiffs.resize(16);
-    if(offDiffs.size() > 4) offDiffs.resize(4);
+    if(offDiffs.size() > 16) offDiffs.resize(16);
+    // if(offDiffs.size() > 4) offDiffs.resize(4);
     for(index_t o = 0; o < offDiffs.size() && !found; o++) {
         const pair<index_t, int>& offDiff = offDiffs[o];
 #ifndef NDEBUG
@@ -2047,7 +2065,8 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            this->_toff,
                                            reflen,
                                            false, /* left? */
-                                           *this->_edits);
+                                           *this->_edits,
+                                           &_sharedVars->candidate_edits);
         if(alignedLen == this->_len) {
             found = true;
         } else {
@@ -2060,6 +2079,64 @@ bool GenomeHit<index_t>::adjustWithALT(
     }
 #endif
     return found;
+}
+
+/*
+ * Find offset differences due to deletions
+ */
+template <typename index_t>
+void GenomeHit<index_t>::findSSOffs(
+                                    const GFM<index_t>&         gfm,
+                                    const ALTDB<index_t>&       altdb,
+                                    index_t                     start,
+                                    index_t                     end,
+                                    EList<pair<index_t, int> >& ssOffs)
+{
+    ssOffs.clear();
+    ssOffs.expand();
+    ssOffs.back().first = ssOffs.back().second = 0;
+    if(gfm.gh().linearFM()) return;
+    const EList<ALT<index_t> >& alts = altdb.alts();
+    
+    // Find splice sites included in this region
+    ALT<index_t> alt_search;
+    alt_search.left = start;
+    for(index_t i = alts.bsearchLoBound(alt_search); i < alts.size(); i++) {
+        const ALT<index_t>& alt = alts[i];
+        if(!alt.splicesite()) continue;
+        if(alt.left > alt.right) continue;
+        if(alt.left >= end) break;
+        
+        //
+        ssOffs.expand();
+        ssOffs.back().first = alt.right - alt.left + 1;
+        ssOffs.back().second = 1;
+        
+        const index_t relax = 5;
+        if(alt.right > relax) alt_search.left = alt.right - relax;
+        else                  alt_search.left = 0;
+        for(index_t j = alts.bsearchLoBound(alt_search); j < alts.size(); j++) {
+            const ALT<index_t>& alt2 = alts[j];
+            if(!alt2.splicesite()) continue;
+            if(alt2.left < alt2.right) continue;
+            if(alt2.left + alt2.right == alt.left + alt.right) continue;
+            if(alt2.left > alt.right + relax) break;
+            ssOffs.expand();
+            if(alt2.right < alt.left) {
+                ssOffs.back().first = alt.left - alt2.right;
+                ssOffs.back().second = -1;
+            } else {
+                ssOffs.back().first = alt2.right - alt.left;
+                ssOffs.back().second = 1;
+            }
+        }
+    }
+
+    if(ssOffs.size() > 1) {
+        ssOffs.sort();
+        index_t new_size = unique(ssOffs.begin(), ssOffs.end()) - ssOffs.begin();
+        ssOffs.resize(new_size);
+    }
 }
 
 
@@ -2083,9 +2160,9 @@ void GenomeHit<index_t>::findOffDiffs(
     
     // Find SNPs included in this region
     {
-        ALT<index_t> alt;
-        alt.pos = start;
-        alt_range.first = alt_range.second = altdb.alts().bsearchLoBound(alt);
+        ALT<index_t> alt_search;
+        alt_search.pos = start;
+        alt_range.first = alt_range.second = alts.bsearchLoBound(alt_search);
         for(alt_range.second = alt_range.first; alt_range.second < alts.size(); alt_range.second++) {
             const ALT<index_t>& alt = alts[alt_range.second];
             if(alt.splicesite()) {
@@ -2097,28 +2174,25 @@ void GenomeHit<index_t>::findOffDiffs(
     if(alt_range.first >= alt_range.second) return;
     
     for(; alt_range.second > alt_range.first; alt_range.second--) {
-        assert_lt(alt_range.first, alts.size());
+        assert_leq(alt_range.second, alts.size());
         const ALT<index_t>& alt = alts[alt_range.second - 1];
         if(!alt.gap()) continue;
         if(alt.splicesite()) {
             if(alt.left > alt.right) continue;
-            // daehwan - for debugging purposes
-#if 0
             offDiffs.expand();
             offDiffs.back().first = alt.right - alt.left + 1;
             offDiffs.back().second = 1;
             continue;
-#endif
         }
         index_t numOffs = offDiffs.size();
+        if(numOffs > 8) continue;
         for(index_t i = 0; i < numOffs; i++) {
+            if(offDiffs[i].first > 10) continue;
             int off = offDiffs[i].first * offDiffs[i].second;
             if(alt.type == ALT_SNP_DEL) {
                 off += alt.len;
             } else if(alt.type == ALT_SNP_INS) {
                 off -= alt.len;
-            } else if(alt.type == ALT_SPLICESITE) {
-                off += (alt.right - alt.left + 1);
             } else {
                 assert(false);
             }
@@ -2131,9 +2205,11 @@ void GenomeHit<index_t>::findOffDiffs(
         }
     }
 
-    offDiffs.sort();
-    index_t new_size = unique(offDiffs.begin(), offDiffs.end()) - offDiffs.begin();
-    offDiffs.resize(new_size);
+    if(offDiffs.size() > 1) {
+        offDiffs.sort();
+        index_t new_size = unique(offDiffs.begin(), offDiffs.end()) - offDiffs.begin();
+        offDiffs.resize(new_size);
+    }
 }
 
 
@@ -2292,6 +2368,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 bool                        left,
                                                 EList<Edit>&                edits,
                                                 index_t                     mm,
+                                                ELList<Edit, 128, 4>*       candidate_edits,
                                                 index_t                     tmp_numNs,
                                                 index_t*                    numNs,
                                                 index_t                     dep,
@@ -2521,6 +2598,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          left,
                                                          edits,
                                                          mm,
+                                                         candidate_edits,
                                                          tmp_numNs,
                                                          numNs,
                                                          dep + 1,
@@ -2566,6 +2644,12 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             best_rdoff = mm_max_rd_i + rdoff;
             edits = tmp_edits;
             if(numNs != NULL) *numNs = mm_tmp_numNs;
+            if(candidate_edits != NULL) candidate_edits->clear();
+        } else if(mm_max_rd_i + rdoff == best_rdoff) {
+            if(candidate_edits != NULL) {
+                candidate_edits->expand();
+                candidate_edits->back() = tmp_edits;
+            }
         }
         if(mm_max_rd_i == rdlen) return mm_max_rd_i;
         if(tmp_mm > 0) {
@@ -2718,14 +2802,27 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          left,
                                                          edits,
                                                          mm,
+                                                         candidate_edits,
                                                          tmp_numNs,
                                                          numNs,
                                                          dep + 1,
                                                          numALTsTried,
                                                          alt.type);
                 assert_leq(rdoff + rd_i + alignedLen, best_rdoff);
-                if(rd_i + alignedLen == rdlen) {
-                    return rd_i + alignedLen;
+                bool search_further = false;
+                if(alt.splicesite()) {
+                    for(index_t sf = alt_range.first + 1; sf < alt_range.second; sf++) {
+                        const ALT<index_t>& alt2 = alts[sf];
+                        if(alt2.splicesite() && alt2.left < alt2.right) {
+                            search_further = true;
+                            break;
+                        }
+                    }
+                }
+                if(!search_further) {
+                    if(rd_i + alignedLen == rdlen) {
+                        return rd_i + alignedLen;
+                    }
                 }
             }
             // Restore to the earlier state
@@ -3747,25 +3844,16 @@ public:
                     }
                 }
                 if(!overlapped) {
-                    genomeHits.expand();
-                    genomeHits.back().init(
-                                           coord.orient(),
-                                           rdoff,
-                                           straddled ? 1 : len,
-                                           0, // trim5
-                                           0, // trim3
-                                           coord.ref(),
-                                           coord.off(),
-                                           coord.joinedOff(),
-                                           _sharedVars);
-#if 1
-                    bool success = GenomeHit<index_t>::adjustWithALT(genomeHits, *_rds[rdi], gfm, altdb, ref);
-#else
-                    bool success = genomeHits.back().adjustWithALT(*_rds[rdi], gfm, altdb, ref);
-#endif
-                    if(!success) {
-                        genomeHits.pop_back();
-                    }
+                    GenomeHit<index_t>::adjustWithALT(
+                                                      rdoff,
+                                                      straddled ? 1 : len,
+                                                      coord,
+                                                      _sharedVars,
+                                                      genomeHits,
+                                                      *_rds[rdi],
+                                                      gfm,
+                                                      altdb,
+                                                      ref);
                 }
                 if(partialHit._hit_type == CANDIDATE_HIT && genomeHits.size() >= maxGenomeHitSize) break;
             }
