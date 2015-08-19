@@ -738,6 +738,7 @@ public:
         for(index_t s = 0; s < nalts; s++) {
             const ALT<index_t>& alt = alts[s];
             if(alt.snp()) altdb->setSNPs(true);
+            if(alt.exon()) altdb->setExons(true);
             if(!alt.splicesite()) continue;
             altdb->setSpliceSites(true);
             alts.push_back(alt);
@@ -818,6 +819,7 @@ public:
         int nthreads,
         const string& snpfile,
         const string& ssfile,
+        const string& exonfile,
         const string& svfile,
 		const string& outfile,   // base filename for GFM files
 		bool fw,
@@ -876,6 +878,7 @@ public:
 							 s,
                              snpfile,
                              ssfile,
+                             exonfile,
                              svfile,
 							 is,
 							 szs,
@@ -1105,6 +1108,7 @@ public:
 	void initFromVector(TStr& s,
                         const string& snpfile,
                         const string& ssfile,
+                        const string& exonfile,
                         const string& svfile,
 						EList<FileBuf*>& is,
 	                    EList<RefRecord>& szs,
@@ -1429,6 +1433,81 @@ public:
                     }
                 }
                 
+                if(exonfile != "") {
+                    ifstream exon_file(exonfile.c_str(), ios::in);
+                    if(!exon_file.is_open()) {
+                        cerr << "Error: could not open "<< ssfile.c_str() << endl;
+                        throw 1;
+                    }
+                    while(!exon_file.eof()) {
+                        // 22	16062156	16062315	+
+                        string chr;
+                        exon_file >> chr;
+                        if(chr.empty() || chr[0] == '#') {
+                            string line;
+                            getline(exon_file, line);
+                            continue;
+                        }
+                        index_t left, right;
+                        char strand;
+                        exon_file >> left >> right >> strand;
+                        // Convert exonic position to intronic position
+                        left += 1; right -= 1;
+                        if(left >= right) continue;
+                        index_t chr_idx = 0;
+                        for(; chr_idx < _refnames.size(); chr_idx++) {
+                            if(chr == _refnames[chr_idx])
+                                break;
+                        }
+                        if(chr_idx >= _refnames.size()) continue;
+                        assert_eq(chr_szs.size(), _refnames.size());
+                        assert_lt(chr_idx, chr_szs.size());
+                        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+                        const index_t sofar_len = tmp_pair.first;
+                        const index_t szs_idx = tmp_pair.second;
+                        bool inside_Ns = false;
+                        index_t add_pos = 0;
+                        assert(szs[szs_idx].first);
+                        for(index_t i = szs_idx; i < szs.size(); i++) {
+                            if(i != szs_idx && szs[i].first) break;
+                            if(left < szs[i].off) {
+                                inside_Ns = true;
+                                break;
+                            } else {
+                                left -= szs[i].off;
+                                right -= szs[i].off;
+                                if(left < szs[i].len) {
+                                    if(right >= szs[i].len) {
+                                        inside_Ns = true;
+                                    }
+                                    break;
+                                } else {
+                                    left -= szs[i].len;
+                                    right -= szs[i].len;
+                                    add_pos += szs[i].len;
+                                }
+                            }
+                        }
+                        if(inside_Ns) continue;
+                        left = sofar_len + add_pos + left;
+                        right = sofar_len + add_pos + right;
+                        if(chr_idx + 1 < chr_szs.size()) {
+                            if(right >= chr_szs[chr_idx + 1].first) continue;
+                        } else {
+                            if(right >= jlen) continue;
+                        }
+                        
+                        _alts.expand();
+                        ALT<index_t>& alt = _alts.back();
+                        alt.type = ALT_EXON;
+                        alt.left = left;
+                        alt.right = right;
+                        alt.fw = (strand == '+' ? true : false);
+                        _altnames.push_back("exon");
+                    }
+                    exon_file.close();
+                }
+                
                 // Todo - implement structural variations
                 if(svfile != "") {
                     cerr << "Warning: SV option is not implemented "<< svfile.c_str() << endl;
@@ -1459,6 +1538,8 @@ public:
                             assert(_altnames[i] != "");
                         } else if(alt.splicesite()) {
                             assert(_altnames[i] == "ss");
+                        } else if(alt.exon()) {
+                            assert(_altnames[i] == "exon");
                         } else {
                             assert(false);
                         }

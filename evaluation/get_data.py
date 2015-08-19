@@ -51,6 +51,8 @@ def get_data(small = False):
         os.mkdir("reads")
     os.chdir("reads")
     for type in ["simulation", "real"]:
+        if small and type == "real":
+            continue
         if not os.path.exists(type):
             os.mkdir(type)
         os.chdir(type)
@@ -74,6 +76,8 @@ def get_data(small = False):
                      "62M_RNA_SRR353653",
                      "80M_DNA_SRR345300"]
         for file in files:
+            if small and file.find("20M") != -1:
+                continue
             if os.path.exists(file):
                 continue
             cmd = "wget %s/reads/%s/%s.tar.gz; tar xvzf %s.tar.gz; rm %s.tar.gz" % \

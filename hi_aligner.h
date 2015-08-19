@@ -2510,7 +2510,8 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 if(alt.left < alt.right) continue;
                 if(alt.left + rdlen - 1 < joinedOff) break;
             } else {
-                assert(false);
+                assert(alt.exon());
+                continue;
             }
         }
         assert_geq(rdoff, 0);
@@ -2521,6 +2522,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             if(alt.splicesite()) {
                 if(alt.left < alt.right) continue;
             }
+            if(alt.exon()) continue;
             bool alt_compatible = false;
             int rf_i = (int)rflen - 1, rd_i = (int)rdoff;
             int diff = 0;
@@ -4638,6 +4640,9 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                                                   left2,
                                                   right2,
                                                   true); // include novel splice sites
+            if(!nearSpliceSites && altdb.hasExons()) {
+                nearSpliceSites = ssdb.insideExon(hit.ref(), hit.refoff(), hit.refoff() + hit.len() - 1);
+            }
         }
     }
     AlnScore asc(

@@ -1615,6 +1615,7 @@ public:
          int nthreads,
          const string& snpfile,
          const string& ssfile,
+         const string& exonfile,
          const string& svfile,
          const string& outfile,   // base filename for GFM files
          bool fw,
@@ -1861,6 +1862,7 @@ HGFM<index_t, local_index_t>::HGFM(
                                    int nthreads,
                                    const string& snpfile,
                                    const string& ssfile,
+                                   const string& exonfile,
                                    const string& svfile,
                                    const string& outfile,   // base filename for EBWT files
                                    bool fw,
@@ -1887,6 +1889,7 @@ HGFM<index_t, local_index_t>::HGFM(
                  nthreads,
                  snpfile,
                  ssfile,
+                 exonfile,
                  svfile,
                  outfile,
                  fw,

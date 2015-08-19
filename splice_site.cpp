@@ -401,13 +401,12 @@ void SpliceSiteDB::getSpliceSites_recur(
         uint32_t ref = node->key.ref();
         assert_lt(ref, _spliceSites.size());
         assert_lt(node->payload, _spliceSites[ref].size());
-#ifndef NDEBUG
         const SpliceSite& ss = _spliceSites[ref][node->payload];
         assert_eq(ss.ref(), node->key.ref());
         assert(ss.left() == node->key.left() ||
                ss.right() == node->key.left());
-#endif
-        spliceSites.push_back(_spliceSites[ref][node->payload]);
+        if(!ss.exon())
+            spliceSites.push_back(_spliceSites[ref][node->payload]);
     }
     
     if(node->key.left() <= right && node->right != NULL) {
@@ -463,7 +462,7 @@ bool SpliceSiteDB::hasSpliceSites_recur(
         assert_lt(ref, _spliceSites.size());
         assert_lt(node->payload, _spliceSites[ref].size());
         const SpliceSite& ss = _spliceSites[ref][node->payload];
-        if(ss._fromfile && (includeNovel || ss._known))
+        if(includeNovel || ss._known)
             return true;
     }
     
@@ -482,6 +481,61 @@ bool SpliceSiteDB::hasSpliceSites_recur(
                                 left,
                                 right,
                                 includeNovel))
+            return true;
+    }
+    
+    return false;
+}
+
+bool SpliceSiteDB::insideExon(
+                              uint32_t ref,
+                              uint32_t left,
+                              uint32_t right) const
+{
+    if(!_read) return false;
+    
+    assert_lt(ref, _numRefs);
+    assert_lt(ref, _mutex.size());
+    ThreadSafe t(const_cast<MUTEX_T*>(&_mutex[ref]), _threadSafe && _write);
+    
+    assert_lt(left, right);
+    assert_lt(ref, _fwIndex.size());
+    assert(_fwIndex[ref] != NULL);
+    const Node *cur = _fwIndex[ref]->root();
+    if(cur != NULL) {
+        return insideExon_recur(cur, left, right);
+    }
+    return false;
+}
+
+bool SpliceSiteDB::insideExon_recur(
+                                    const RedBlackNode<SpliceSitePos, uint32_t> *node,
+                                    uint32_t left,
+                                    uint32_t right) const
+{
+    assert(node != NULL);
+    if(node->key.left() <= left && node->key.right() >= right) {
+        uint32_t ref = node->key.ref();
+        assert_lt(ref, _spliceSites.size());
+        assert_lt(node->payload, _spliceSites[ref].size());
+        const SpliceSite& ss = _spliceSites[ref][node->payload];
+        if(ss.exon())
+            return true;
+    }
+    
+    if(node->key.left() >= left && node->left != NULL) {
+        if(insideExon_recur(
+                            node->left,
+                            left,
+                            right))
+            return true;
+    }
+    
+    if(node->key.left() <= right && node->right != NULL) {
+        if(insideExon_recur(
+                            node->right,
+                            left,
+                            right))
             return true;
     }
     
@@ -613,7 +667,7 @@ void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> 
     assert_eq(_numRefs, _refnames.size());
     for(size_t i = 0; i < alts.size(); i++) {
         const ALT<TIndexOffU>& alt = alts[i];
-        if(!alt.splicesite()) continue;
+        if(!alt.splicesite() && !alt.exon()) continue;
         if(alt.left > alt.right) continue;
         TIndexOffU ref = 0, left = 0, tlen = 0;
         char fw = alt.fw;
@@ -635,8 +689,9 @@ void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> 
                                       right,
                                       fw == '+' || fw == '.',
                                       fw != '.',
+                                      alt.exon(),
                                       true,   // from file?
-                                      true); // known splice site?
+                                      true);  // known splice site?
         assert_gt(_spliceSites[ref].size(), 0);
         bool added = false;
         assert_lt(ref, _fwIndex.size());
@@ -686,6 +741,7 @@ void SpliceSiteDB::read(ifstream& in, bool known)
                                       right,
                                       fw == '+' || fw == '.',
                                       fw != '.',
+                                      false,  // exon?
                                       true,   // from file?
                                       known); // known splice site?
         assert_gt(_spliceSites[ref].size(), 0);

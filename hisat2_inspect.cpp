@@ -39,6 +39,7 @@ static int names_only   = 0;  // just print the sequence names in the index
 static int snp_only     = 0;
 static int splicesite_only = 0;
 static int splicesite_all_only = 0;
+static int exon_only = 0;
 static int summarize_only = 0; // just print summary of index and quit
 static int across       = 60; // number of characters across in FASTA output
 static bool refFromGFM  = false; // true -> when printing reference, decode it from Gbwt instead of reading it from BitPairReference
@@ -51,7 +52,8 @@ enum {
 	ARG_USAGE,
     ARG_SNP,
     ARG_SPLICESITE,
-    ARG_SPLICESITE_ALL
+    ARG_SPLICESITE_ALL,
+    ARG_EXON,
 };
 
 static struct option long_options[] = {
@@ -62,6 +64,7 @@ static struct option long_options[] = {
     {(char*)"snp",      no_argument,        0, ARG_SNP},
     {(char*)"ss",       no_argument,        0, ARG_SPLICESITE},
     {(char*)"ss-all",   no_argument,        0, ARG_SPLICESITE_ALL},
+    {(char*)"exon",     no_argument,        0, ARG_EXON},
 	{(char*)"summary",  no_argument,        0, 's'},
 	{(char*)"help",     no_argument,        0, 'h'},
 	{(char*)"across",   required_argument,  0, 'a'},
@@ -155,6 +158,7 @@ static void parseOptions(int argc, char **argv) {
             case ARG_SNP: snp_only = true; break;
             case ARG_SPLICESITE: splicesite_only = true; break;
             case ARG_SPLICESITE_ALL: splicesite_all_only = true; break;
+            case ARG_EXON: exon_only = true; break;
 			case 's': summarize_only = true; break;
 			case 'a': across = parseInt(-1, "-a/--across arg must be at least 1"); break;
 			case -1: break; /* Done with options. */
@@ -489,6 +493,75 @@ static void print_splicesites(
  * Print a short summary of what's in the index and its flags.
  */
 template <typename index_t>
+static void print_exons(
+                        const string& fname,
+                        ostream& fout)
+{
+    ALTDB<index_t> altdb;
+    GFM<index_t> gfm(
+                     fname,
+                     &altdb,
+                     -1,                   // don't require entire reverse
+                     true,                 // index is for the forward direction
+                     -1,                   // offrate (-1 = index default)
+                     0,                    // offrate-plus (0 = index default)
+                     false,                // use memory-mapped IO
+                     false,                // use shared memory
+                     false,                // sweep memory-mapped memory
+                     true,                 // load names?
+                     false,                // load SA sample?
+                     false,                // load ftab?
+                     false,                // load rstarts?
+                     true,                // load splice sites?
+                     verbose,              // be talkative?
+                     verbose,              // be talkative at startup?
+                     false,                // pass up memory exceptions?
+                     false);               // sanity check?
+    gfm.loadIntoMemory(
+                       -1,     // need entire reverse
+                       true,   // load SA sample
+                       true,   // load ftab
+                       true,   // load rstarts
+                       true,   // load names
+                       verbose);  // verbose
+    EList<string> p_refnames;
+    readEbwtRefnames<index_t>(fname, p_refnames);
+    const EList<ALT<index_t> >& alts = altdb.alts();
+    for(size_t i = 0; i < alts.size(); i++) {
+        const ALT<index_t>& alt = alts[i];
+        if(!alt.exon()) continue;
+        index_t tidx = 0, toff = 0, tlen = 0;
+        bool straddled2 = false;
+        gfm.joinedToTextOff(
+                            1,
+                            alt.left,
+                            tidx,
+                            toff,
+                            tlen,
+                            true,        // reject straddlers?
+                            straddled2); // straddled?
+        index_t tidx2 = 0, toff2 = 0, tlen2 = 0;
+        gfm.joinedToTextOff(
+                            1,
+                            alt.right,
+                            tidx2,
+                            toff2,
+                            tlen2,
+                            true,        // reject straddlers?
+                            straddled2); // straddled?
+        assert_eq(tidx, tidx2);
+        assert_lt(tidx, p_refnames.size());
+        cout << p_refnames[tidx] << "\t"
+        << toff - 1 << "\t"
+        << toff2 + 1 << "\t"
+        << (alt.fw > 0 ? "+" : "-") << endl;
+    }
+}
+
+/**
+ * Print a short summary of what's in the index and its flags.
+ */
+template <typename index_t>
 static void print_index_summary(
 	const string& fname,
 	ostream& fout)
@@ -535,18 +608,23 @@ static void print_index_summary(
 		     << '\t' << gfm.plen()[i]
 		     << endl;
 	}
-    index_t numSnps = 0, numSpliceSites = 0;
+    index_t numSnps = 0, numSpliceSites = 0, numExons = 0;
     const EList<ALT<index_t> >& alts = altdb.alts();
     for(size_t i = 0; i < alts.size(); i++) {
         const ALT<index_t>& alt = alts[i];
         if(alt.snp()) {
             numSnps++;
         } else if(alt.splicesite()) {
-            numSpliceSites++;
+            if(alt.left < alt.right) {
+                numSpliceSites++;
+            }
+        } else if(alt.exon()) {
+            numExons++;
         }
     }
     cout << "Num. SNPs: " << numSnps << endl;
     cout << "Num. Splice Sites: " << numSpliceSites << endl;
+    cout << "Num. Exons: " << numExons << endl;
 }
 
 extern void initializeCntLut();
@@ -570,6 +648,8 @@ static void driver(
         print_snps<TIndexOffU>(adjustedEbwtFileBase, cout);
     } else if(splicesite_only || splicesite_all_only) {
         print_splicesites<TIndexOffU>(adjustedEbwtFileBase, cout);
+    } else if(exon_only) {
+        print_exons<TIndexOffU>(adjustedEbwtFileBase, cout);
     } else {
         // Initialize Ebwt object
         ALTDB<TIndexOffU> altdb;

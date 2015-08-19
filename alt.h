@@ -30,12 +30,13 @@
 using namespace std;
 
 enum ALT_TYPE {
-    ALT_SNP_SGL = 0, // single nucleotide substitution
+    ALT_NONE = 0,
+    ALT_SNP_SGL,     // single nucleotide substitution
     ALT_SNP_INS,     // small insertion wrt reference genome
     ALT_SNP_DEL,     // small deletion wrt reference genome
     ALT_SNP_ALT,     // alternative sequence (to be implemented ...)
     ALT_SPLICESITE,
-    ALT_NONE,
+    ALT_EXON
 };
 
 template <typename index_t>
@@ -76,6 +77,7 @@ public:
     bool snp() const { return type == ALT_SNP_SGL || type == ALT_SNP_DEL || type == ALT_SNP_INS; }
     bool splicesite() const { return type == ALT_SPLICESITE; }
     bool gap() const { return type == ALT_SNP_DEL || type == ALT_SNP_INS || type == ALT_SPLICESITE; }
+    bool exon() const { return type == ALT_EXON; }
     
     bool operator< (const ALT& o) const {
         if(pos != o.pos) return pos < o.pos;
@@ -173,16 +175,20 @@ template <typename index_t>
 class ALTDB {
 public:
     ALTDB() :
-    _snp(false), _ss(false)
+    _snp(false),
+    _ss(false),
+    _exon(false)
     {}
     
     virtual ~ALTDB() {}
     
     bool hasSNPs() const { return _snp; }
     bool hasSpliceSites() const { return _ss; }
+    bool hasExons() const { return _exon; }
     
     void setSNPs(bool snp) { _snp = snp; }
     void setSpliceSites(bool ss) { _ss = ss; }
+    void setExons(bool exon) { _exon = exon; }
     
     EList<ALT<index_t> >& alts()     { return _alts; }
     EList<string>&        altnames() { return _altnames; }
@@ -193,6 +199,7 @@ public:
 private:
     bool _snp;
     bool _ss;
+    bool _exon;
     
     EList<ALT<index_t> > _alts;
     EList<string>        _altnames;
