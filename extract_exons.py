@@ -26,7 +26,7 @@ from collections import defaultdict as dd, Counter
 from argparse import ArgumentParser, FileType
 
 
-def extract_splice_sites(gtf_file, verbose=False):
+def extract_exons(gtf_file, verbose = False):
     genes = dd(list)
     trans = {}
 
@@ -76,17 +76,39 @@ def extract_splice_sites(gtf_file, verbose=False):
             trans[tran] = [chrom, strand, tmp_exons]
 
     # Calculate and print the unique junctions
-    junctions = set()
-    for chrom, strand, exons in trans.values():
-        for i in range(1, len(exons)):
-            junctions.add((chrom, exons[i-1][1], exons[i][0], strand))
-    junctions = sorted(junctions)
-    for chrom, left, right, strand in junctions:
+    tmp_exons = set()
+    for chrom, strand, texons in trans.values():
+        for i in range(len(texons)):
+            tmp_exons.add((chrom, texons[i][0], texons[i][1], strand))
+    tmp_exons = sorted(tmp_exons)
+    if len(tmp_exons) <= 0:
+        return
+
+    exons = [tmp_exons[0]]
+    for exon in tmp_exons[1:]:
+        prev_exon = exons[-1]
+        if exon[0] != prev_exon[0]:
+            exons.append(exon)
+            continue
+        assert prev_exon[1] <= exon[1]
+        if prev_exon[2] < exon[1]:
+            exons.append(exon)
+            continue
+
+        if prev_exon[2] < exon[2]:
+            strand = prev_exon[3]
+            if strand not in "+-":
+                strand = exon[3]
+            prev_exon = (prev_exon[0], prev_exon[1], exon[2], strand)
+            
+    for chrom, left, right, strand in exons:
         # Zero-based offset
         print('{}\t{}\t{}\t{}'.format(chrom, left-1, right-1, strand))
         
     # Print some stats if asked
     if verbose:
+        None
+        """
         exon_lengths, intron_lengths, trans_lengths = \
             Counter(), Counter(), Counter()
         for chrom, strand, exons in trans.values():
@@ -117,11 +139,12 @@ def extract_splice_sites(gtf_file, verbose=False):
         print('average number of exons per transcript: {:d}'.format(
                 sum(exon_lengths.values())/len(trans)),
               file=stderr)
+        """
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Extract splice junctions from a GTF file')
+        description='Extract exons from a GTF file')
     parser.add_argument('gtf_file',
         nargs='?',
         type=FileType('r'),
@@ -135,4 +158,4 @@ if __name__ == '__main__':
     if not args.gtf_file:
         parser.print_help()
         exit(1)
-    extract_splice_sites(args.gtf_file, args.verbose)
+    extract_exons(args.gtf_file, args.verbose)

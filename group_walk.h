@@ -1050,7 +1050,7 @@ public:
 		ASSERT_ONLY(index_t origBot = bot);
 		assert_geq(step, 0);
 		assert_eq(step, lastStep_);
-		assert_geq(st.capacity(), st.size() + 4);
+		// assert_geq(st.capacity(), st.size() + 4);
 		assert(tloc.valid()); assert(tloc.repOk(gfm.gh()));
 		assert_eq(node_bot-node_top, (index_t)(map_.size()-mapi_));
 		pair<int, int> ret = make_pair(0, 0);

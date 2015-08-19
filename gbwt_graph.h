@@ -645,6 +645,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 edges.back().from = nodes.size() - 1;
                 edges.back().to = alt.pos + 1;
             } else if(alt.type == ALT_SPLICESITE) {
+                if(alt.excluded) continue;
                 assert_lt(alt.left, alt.right);
                 edges.expand();
                 edges.back().from = alt.left;
@@ -851,6 +852,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 edges.back().from = nodes.size() - 1;
                 edges.back().to = alt.pos - curr_pos + 1;
             } else if(alt.type == ALT_SPLICESITE) {
+                if(alt.excluded) continue;
                 assert_lt(alt.left, alt.right);
                 edges.expand();
                 edges.back().from = alt.left - curr_pos;

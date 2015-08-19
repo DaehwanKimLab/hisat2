@@ -690,7 +690,9 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
 
     expr_profile = [int(expr_profile[i] * num_frag) for i in range(len(expr_profile))]
     assert num_frag >= sum(expr_profile)
-    expr_profile[0] += (num_frag - sum(expr_profile))
+    while sum(expr_profile) < num_frag:
+        for i in range(min(num_frag - sum(expr_profile), len(expr_profile))):
+            expr_profile[i] += 1
     assert num_frag == sum(expr_profile)
 
     if rna:

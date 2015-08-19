@@ -44,26 +44,30 @@ def simulate_reads():
         os.mkdir("simulation")
     os.chdir("simulation")
 
-    _rna, _mismatch, _snp = True, True, True
+    _rna, _mismatch, _snp, _constant = True, True, True, False
     _dna = not _rna
     datasets = [
-        ["22", 1000000, _dna, not _snp, not _mismatch],
-        ["22", 1000000, _dna, not _snp, _mismatch],
-        ["22", 1000000, _dna, _snp, not _mismatch],
-        ["22", 1000000, _dna, _snp, _mismatch],
-        ["22", 1000000, _rna, not _snp, not _mismatch],
-        ["22", 1000000, _rna, not _snp, _mismatch],
-        ["22", 1000000, _rna, _snp, not _mismatch],
-        ["22", 1000000, _rna, _snp, _mismatch],
-        ["22_20-21M", 1000000, _rna, not _snp, not _mismatch],
-        ["genome", 20000000, _dna, not _snp, not _mismatch],
-        ["genome", 20000000, _dna, _snp, not _mismatch],
-        ["genome", 20000000, _rna, not _snp, not _mismatch],
-        ["genome", 20000000, _rna, _snp, not _mismatch],
+        ["22", 1000000, _dna, not _snp, not _mismatch, _constant],
+        ["22", 1000000, _dna, not _snp, _mismatch, _constant],
+        ["22", 1000000, _dna, _snp, not _mismatch, _constant],
+        ["22", 1000000, _dna, _snp, _mismatch, _constant],
+        ["22", 1000000, _rna, not _snp, not _mismatch, not _constant],
+        ["22", 1000000, _rna, not _snp, not _mismatch, _constant],
+        ["22", 1000000, _rna, not _snp, _mismatch, not _constant],
+        ["22", 1000000, _rna, not _snp, _mismatch, _constant],
+        ["22", 1000000, _rna, _snp, not _mismatch, not _constant],
+        ["22", 1000000, _rna, _snp, not _mismatch, _constant],
+        ["22", 1000000, _rna, _snp, _mismatch, not _constant],
+        ["22", 1000000, _rna, _snp, _mismatch, _constant],
+        ["22_20-21M", 1000000, _rna, not _snp, not _mismatch, not _constant],
+        ["genome", 20000000, _dna, not _snp, not _mismatch, _constant],
+        ["genome", 20000000, _dna, _snp, not _mismatch, _constant],
+        ["genome", 20000000, _rna, not _snp, not _mismatch, not _constant],
+        ["genome", 20000000, _rna, _snp, not _mismatch, not _constant],
         ]
 
     data_dir_base = "../../../data"
-    for genome, numreads, rna, snp, mismatch in datasets:
+    for genome, numreads, rna, snp, mismatch, constant in datasets:
         if rna:
             molecule = "RNA"
         else:
@@ -73,6 +77,8 @@ def simulate_reads():
             dirname += "_mismatch"
         if snp:
             dirname += "_snp"
+        if rna and constant:
+            dirname += "_constant"
         dirname += "_reads"
         dirname += ("_" + genome)
         if os.path.exists(dirname):
@@ -99,6 +105,8 @@ def simulate_reads():
             cmd_add += "--dna "
         if mismatch:
             cmd_add += "--error-rate 0.5 "
+        if rna and constant:
+            cmd_add += "--expr-profile constant "
         cmd = "../../../aligners/bin/simulate_reads.py --sanity-check %s --num-fragment %d %s %s %s sim" % \
             (cmd_add, numreads, genome_fname, gtf_fname, snp_fname)
         print >> sys.stderr, cmd

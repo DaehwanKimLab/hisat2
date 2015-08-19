@@ -38,6 +38,7 @@ int verbose             = 0;  // be talkative
 static int names_only   = 0;  // just print the sequence names in the index
 static int snp_only     = 0;
 static int splicesite_only = 0;
+static int splicesite_all_only = 0;
 static int summarize_only = 0; // just print summary of index and quit
 static int across       = 60; // number of characters across in FASTA output
 static bool refFromGFM  = false; // true -> when printing reference, decode it from Gbwt instead of reading it from BitPairReference
@@ -49,7 +50,8 @@ enum {
     ARG_WRAPPER,
 	ARG_USAGE,
     ARG_SNP,
-    ARG_SPLICESITE
+    ARG_SPLICESITE,
+    ARG_SPLICESITE_ALL
 };
 
 static struct option long_options[] = {
@@ -59,6 +61,7 @@ static struct option long_options[] = {
 	{(char*)"names",    no_argument,        0, 'n'},
     {(char*)"snp",      no_argument,        0, ARG_SNP},
     {(char*)"ss",       no_argument,        0, ARG_SPLICESITE},
+    {(char*)"ss-all",   no_argument,        0, ARG_SPLICESITE_ALL},
 	{(char*)"summary",  no_argument,        0, 's'},
 	{(char*)"help",     no_argument,        0, 'h'},
 	{(char*)"across",   required_argument,  0, 'a'},
@@ -89,6 +92,7 @@ static void printUsage(ostream& out) {
 	<< "  -n/--names         Print reference sequence names only" << endl
     << "  --snp              Print SNPs" << endl
     << "  --ss               Print splice sites" << endl
+    << "  --ss-all           Print splice sites including those not in the global index" << endl
 	<< "  -s/--summary       Print summary incl. ref names, lengths, index properties" << endl
 	<< "  -e/--bt2-ref      Reconstruct reference from ." << gfm_ext << " (slow, preserves colors)" << endl
 	<< "  -v/--verbose       Verbose output (for debugging)" << endl
@@ -150,6 +154,7 @@ static void parseOptions(int argc, char **argv) {
 			case 'n': names_only = true; break;
             case ARG_SNP: snp_only = true; break;
             case ARG_SPLICESITE: splicesite_only = true; break;
+            case ARG_SPLICESITE_ALL: splicesite_all_only = true; break;
 			case 's': summarize_only = true; break;
 			case 'a': across = parseInt(-1, "-a/--across arg must be at least 1"); break;
 			case -1: break; /* Done with options. */
@@ -451,6 +456,7 @@ static void print_splicesites(
         const ALT<index_t>& alt = alts[i];
         if(!alt.splicesite()) continue;
         if(alt.left >= alt.right) continue;
+        if(!splicesite_all_only && alt.excluded) continue;
         index_t tidx = 0, toff = 0, tlen = 0;
         bool straddled2 = false;
         gfm.joinedToTextOff(
@@ -562,7 +568,7 @@ static void driver(
 		print_index_summary<TIndexOffU>(adjustedEbwtFileBase, cout);
     } else if(snp_only) {
         print_snps<TIndexOffU>(adjustedEbwtFileBase, cout);
-    } else if(splicesite_only) {
+    } else if(splicesite_only || splicesite_all_only) {
         print_splicesites<TIndexOffU>(adjustedEbwtFileBase, cout);
     } else {
         // Initialize Ebwt object

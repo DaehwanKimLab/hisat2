@@ -283,8 +283,7 @@ public:
     {
         TAlScore r = (score_ << 10) - (splicescore_ / 100);
         if(nearSpliceSites_) {
-            // daehwan - for debugging purposes
-            // r += 1;
+            r += 1;
         }
         return r;
     }

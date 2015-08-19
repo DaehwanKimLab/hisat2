@@ -394,7 +394,10 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     const GenomeHit<index_t>& canHit = local_genomeHits[i];
                     if(!this->_secondary && canHit.score() < best_score) continue;
                     // if(min(min_left_anchor, min_right_anchor) <= this->_minK_local) {
-                    if(this->_anchors_added[i] < this->_anchors_added.back()) continue;
+                    
+                    // daehwan - for debugging purposes
+                    // if(this->_anchors_added[i] < this->_anchors_added.back()) continue;
+                    
                     //}
                     if(!this->redundant(sink, rdi, canHit)) {
                         this->reportHit(sc, gfm, altdb, ref, ssdb, sink, rdi, canHit);

@@ -737,7 +737,9 @@ public:
         index_t nalts = alts.size();
         for(index_t s = 0; s < nalts; s++) {
             const ALT<index_t>& alt = alts[s];
+            if(alt.snp()) altdb->setSNPs(true);
             if(!alt.splicesite()) continue;
+            altdb->setSpliceSites(true);
             alts.push_back(alt);
             alts.back().left = alt.right;
             alts.back().right = alt.left;
@@ -1319,7 +1321,7 @@ public:
                         cerr << "Error: could not open "<< ssfile.c_str() << endl;
                         throw 1;
                     }
-                    set<uint64_t> ss_seq;
+                    map<uint64_t, uint64_t> ss_seq;
                     while(!ss_file.eof()) {
                         // 22	16062315	16062810	+
                         string chr;
@@ -1389,16 +1391,12 @@ public:
                             for(index_t si = right + 1; si < right + 1 + seqlen; si++) {
                                 seq = seq << 2 | s[si];
                             }
-                            // daehwan - for debugging purposes
-#if 0
                             if(_alts.size() > 0) {
                                 if(_alts.back().left == left &&
                                    _alts.back().right == right) continue;
                             }
-#else
-                            if(ss_seq.find(seq) != ss_seq.end()) continue;
-#endif
-                            ss_seq.insert(seq);
+                            if(ss_seq.find(seq) == ss_seq.end()) ss_seq[seq] = 1;
+                            else                                 ss_seq[seq]++;
                         }
                         
                         _alts.expand();
@@ -1406,11 +1404,29 @@ public:
                         alt.type = ALT_SPLICESITE;
                         alt.left = left;
                         alt.right = right;
-                        alt.fw = (strand == '+' ? 1 : 0);
+                        alt.fw = (strand == '+' ? true : false);
+                        alt.excluded = false;
                         _altnames.push_back("ss");
                     }
                     ss_file.close();
                     assert_eq(_alts.size(), _altnames.size());
+                    
+                    for(size_t i = 0; i < _alts.size(); i++) {
+                        ALT<index_t>& alt = _alts[i];
+                        if(!alt.splicesite()) continue;
+                        index_t seqlen = 16; assert_leq(seqlen, 16);
+                        if(alt.left >= seqlen && alt.right + 1 + seqlen <= s.length()) {
+                            uint64_t seq = 0;
+                            for(index_t si = alt.left - seqlen; si < alt.left; si++) {
+                                seq = seq << 2 | s[si];
+                            }
+                            for(index_t si = alt.right + 1; si < alt.right + 1 + seqlen; si++) {
+                                seq = seq << 2 | s[si];
+                            }
+                            assert(ss_seq.find(seq) != ss_seq.end());
+                            alt.excluded = ss_seq[seq] > 1;
+                        }
+                    }
                 }
                 
                 // Todo - implement structural variations

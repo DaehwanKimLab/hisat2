@@ -60,6 +60,7 @@ def get_data(small = False):
                      "1M_DNA_snp_reads_22",
                      "1M_DNA_mismatch_snp_reads_22",
                      "1M_RNA_reads_22",
+                     "1M_RNA_constant_reads_22",
                      "1M_RNA_mismatch_reads_22",
                      "1M_RNA_snp_reads_22",
                      "1M_RNA_mismatch_snp_reads_22",

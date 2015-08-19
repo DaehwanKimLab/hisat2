@@ -50,19 +50,27 @@ struct ALT {
         seq = 0;
     }
     
+    ALT_TYPE type;
+    
     union {
         index_t pos;
         index_t left;
     };
-    ALT_TYPE type;
+    
     union {
         index_t len;
         index_t right;
     };
+    
     union {
         uint64_t seq;  // used to store 32 bp, but it can be used to store a pointer to EList<uint64_t>
-        uint64_t fw;
+        struct {
+            bool fw;
+            bool excluded;
+        };
     };
+        
+public:
     // in order to support a sequence longer than 32 bp
     
     bool snp() const { return type == ALT_SNP_SGL || type == ALT_SNP_DEL || type == ALT_SNP_INS; }
@@ -164,13 +172,17 @@ struct ALT {
 template <typename index_t>
 class ALTDB {
 public:
-    ALTDB() {
-        
-    }
+    ALTDB() :
+    _snp(false), _ss(false)
+    {}
     
-    virtual ~ALTDB() {
-        
-    }
+    virtual ~ALTDB() {}
+    
+    bool hasSNPs() const { return _snp; }
+    bool hasSpliceSites() const { return _ss; }
+    
+    void setSNPs(bool snp) { _snp = snp; }
+    void setSpliceSites(bool ss) { _ss = ss; }
     
     EList<ALT<index_t> >& alts()     { return _alts; }
     EList<string>&        altnames() { return _altnames; }
@@ -179,6 +191,9 @@ public:
     const EList<string>&        altnames() const { return _altnames; }
 
 private:
+    bool _snp;
+    bool _ss;
+    
     EList<ALT<index_t> > _alts;
     EList<string>        _altnames;
 };

@@ -3659,7 +3659,7 @@ static void driver(
         
         init_junction_prob();
         bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;
-        bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite;
+        bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite || altdb->hasSpliceSites();
         ssdb = new SpliceSiteDB(
                                 *(refs.get()),
                                 refnames,

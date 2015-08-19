@@ -1559,7 +1559,6 @@ def calculate_read_cost():
                     # daehwan - for debugging purposes
                     if index_type in ["snp", "ss"]:
                         cmd += ["--no-anchorstop"]
-                        # cmd += ["-k", "100"]
                         None
 
                     if type == "x2":
@@ -1577,7 +1576,7 @@ def calculate_read_cost():
                     if index_type:
                         index_cmd += ("_" + index_type)
                         # daehwan - for debugging purposes
-                        index_cmd += "_nr"
+                        # index_cmd += "_nr"
                     cmd += [index_cmd]
                     if paired:
                         cmd += ["-1", read1_fname,
