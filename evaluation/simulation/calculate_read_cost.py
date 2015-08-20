@@ -1426,14 +1426,17 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
-        # ["hisat", "", "", ""],
+        # ["hisat", "", "", ""],        
         ["hisat2", "", "", ""],
         # ["hisat2", "x2", "", ""],
         ["hisat2", "x1", "ss", ""],
         ["hisat2", "", "ss", ""],
         # ["hisat2", "x1", "ss", ""],
-        # ["hisat2", "", "snp_ss", ""],
-        # ["star", "", "", ""],
+        ["hisat2", "x1", "snp_ss", ""],
+        ["tophat2", "gtfonly", "", ""],
+        ["tophat2", "gtf", "", ""],
+        ["star", "", "", ""],
+        ["star", "gtf", "", ""],
         # ["bowtie", "", "", ""],
         # ["bowtie2", "", "", ""],
         # ["gsnap", "", "", ""],
@@ -1558,7 +1561,7 @@ def calculate_read_cost():
 
                     # daehwan - for debugging purposes
                     if index_type in ["snp", "ss"]:
-                        cmd += ["--no-anchorstop"]
+                        # cmd += ["--no-anchorstop"]
                         None
 
                     if type == "x2":
@@ -1627,6 +1630,13 @@ def calculate_read_cost():
                     cmd = ["%s/tophat" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
+                    if type.find("gtf") != -1:
+                        gtf = "genes"
+                        if genome != "genome":
+                            gtf = gtf + "_" + genome
+                        cmd += ["--transcriptome-index=%s/HISAT%s/" % (index_base, index_add) + gtf]
+                    if type == "gtfonly":
+                        cmd += ["--transcriptome-only"]
                     cmd += ["--read-edit-dist", "3"]
                     cmd += ["--no-sort-bam"]
                     cmd += ["--read-realign-edit-dist", "0"]
@@ -1639,7 +1649,11 @@ def calculate_read_cost():
                     cmd = ["%s/STAR" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["--runThreadN", str(num_threads)]
-                    cmd += ["--genomeDir", "%s/STAR%s" % (index_base, index_add)]
+                    cmd += ["--genomeDir"]
+                    if type == "gtf":
+                        cmd += ["%s/STAR%s/gtf" % (index_base, index_add)]
+                    else:
+                        cmd += ["%s/STAR%s" % (index_base, index_add)]
                     if desktop:
                         cmd += ["--genomeLoad", "NoSharedMemory"]
                     else:
@@ -1788,7 +1802,7 @@ def calculate_read_cost():
                         os.system("cat metrics.out")
                         print >> sys.stderr, "\ttime: %.4f" % (duration)
 
-                    if aligner == "star" and type == "":
+                    if aligner == "star" and type in ["", "gtf"]:
                         os.system("mv Aligned.out.sam %s" % out_fname)
                     elif aligner in ["hisat2", "hisat"] and type == "x2":
                         aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)

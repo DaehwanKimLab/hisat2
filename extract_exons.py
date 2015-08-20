@@ -99,7 +99,7 @@ def extract_exons(gtf_file, verbose = False):
             strand = prev_exon[3]
             if strand not in "+-":
                 strand = exon[3]
-            prev_exon = (prev_exon[0], prev_exon[1], exon[2], strand)
+            exons[-1] = (prev_exon[0], prev_exon[1], exon[2], strand)
             
     for chrom, left, right, strand in exons:
         # Zero-based offset

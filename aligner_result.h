@@ -63,11 +63,12 @@ public:
 	/**
 	 * Gapped scores are invalid until proven valid.
 	 */
-	inline AlnScore(TAlScore score, TAlScore ns, TAlScore gaps, TAlScore splicescore = 0, bool nearSpliceSites = false) {
+	inline AlnScore(TAlScore score, TAlScore ns, TAlScore gaps, TAlScore splicescore = 0, bool knownTranscripts = false, bool nearSpliceSites = false) {
 		score_ = score;
 		ns_ = ns;
 		gaps_ = gaps;
         splicescore_ = splicescore;
+        knownTranscripts_ = knownTranscripts;
         nearSpliceSites_ = nearSpliceSites;
 		assert(valid());
 	}
@@ -78,6 +79,7 @@ public:
 	void reset() {
 		score_ = ns_ = gaps_ = 0;
         splicescore_ = 0;
+        knownTranscripts_ = false;
         nearSpliceSites_ = false;
 	}
 
@@ -146,6 +148,7 @@ public:
 		ns_    = o.ns_;
 		score_ = o.score_;
         splicescore_ = o.splicescore_;
+        knownTranscripts_ = o.knownTranscripts_;
         nearSpliceSites_ = o.nearSpliceSites_;
 		assert_lt(ns_, 0x7fffffff);
 		return *this;
@@ -272,19 +275,19 @@ public:
 		return s;
 	}
 
-	TAlScore score()           const { return  score_; }
-	TAlScore penalty()         const { return -score_; }
-	TAlScore gaps()            const { return  gaps_;  }
-	TAlScore ns()              const { return  ns_;    }
-    TAlScore splicescore()     const { return splicescore_; }
-    bool     nearSpliceSites() const { return nearSpliceSites_; }
+	TAlScore score()            const { return  score_; }
+	TAlScore penalty()          const { return -score_; }
+	TAlScore gaps()             const { return  gaps_;  }
+	TAlScore ns()               const { return  ns_;    }
+    TAlScore splicescore()      const { return splicescore_; }
+    bool     knownTranscripts() const { return knownTranscripts_; }
+    bool     nearSpliceSites()  const { return nearSpliceSites_; }
     
     TAlScore hisat2_score() const
     {
         TAlScore r = (score_ << 10) - (splicescore_ / 100);
-        if(nearSpliceSites_) {
-            r += 1;
-        }
+        if(knownTranscripts_) r += 2;
+        else if(nearSpliceSites_) r += 1;
         return r;
     }
 
@@ -302,6 +305,9 @@ public:
     
     // splice scores
     TAlScore splicescore_;
+    
+    // mapped to known transcripts?
+    bool knownTranscripts_;
     
     // continuous alignment near (known) splice sites?
     bool nearSpliceSites_;

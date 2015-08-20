@@ -968,14 +968,19 @@ struct GenomeHit {
     
     /**
      * Is it spliced alignment?
+     * Return: first is spliced-alignment, second is spliced-alignment to known transcripts
      */
-    bool spliced() const {
+    pair<bool, bool> spliced() const {
+        pair<bool, bool> result(false, true);
         for(index_t i = 0; i < _edits->size(); i++) {
-            if((*_edits)[i].type == EDIT_TYPE_SPL) {
-                return true;
+            const Edit& e = (*_edits)[i];
+            if(e.type == EDIT_TYPE_SPL) {
+                result.first = true;
+                result.second &= e.knownSpl;
             }
         }
-        return false;
+        result.second &= result.first;
+        return result;
     }
     
     /**
@@ -4626,22 +4631,23 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     }
     // in case of multiple exonic alignments, choose the ones near (known) splice sites
     // this helps eliminate cases of reads being mapped to pseudogenes
-    bool nearSpliceSites = hit.spliced();
+    pair<bool, bool> spliced = hit.spliced();
     if(!this->_no_spliced_alignment) {
-        if(!hit.spliced()) {
+        if(!spliced.first) {
+            assert(!spliced.second);
             const index_t max_exon_size = 10000;
             index_t left1 = 0, right1 = hit.refoff();
             if(right1 > max_exon_size) left1 = right1 - max_exon_size;
             index_t left2 = hit.refoff() + hit.len() - 1, right2 = left2 + max_exon_size;
-            nearSpliceSites = ssdb.hasSpliceSites(
-                                                  hit.ref(),
-                                                  left1,
-                                                  right1,
-                                                  left2,
-                                                  right2,
-                                                  true); // include novel splice sites
-            if(!nearSpliceSites && altdb.hasExons()) {
-                nearSpliceSites = ssdb.insideExon(hit.ref(), hit.refoff(), hit.refoff() + hit.len() - 1);
+            spliced.first = ssdb.hasSpliceSites(
+                                                hit.ref(),
+                                                left1,
+                                                right1,
+                                                left2,
+                                                right2,
+                                                true); // include novel splice sites
+            if(altdb.hasExons()) {
+                spliced.second = ssdb.insideExon(hit.ref(), hit.refoff(), hit.refoff() + hit.len() - 1);
             }
         }
     }
@@ -4650,7 +4656,14 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                  hit.ns(),     // # Ns
                  hit.ngaps(),  // # gaps
                  hit.splicescore(), // splice score
-                 nearSpliceSites);
+                 // daehwan - for debugging purposes
+#if 1
+                 spliced.second,             // mapped to known transcripts?
+                 spliced.first);             // spliced alignment or near splice sites (novel)?
+#else
+    false,             // mapped to known transcripts?
+    spliced.first | spliced.second);
+#endif
     bool softTrim = hit.trim5() > 0 || hit.trim3() > 0;
     AlnRes rs;
     rs.init(

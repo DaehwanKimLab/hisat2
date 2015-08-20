@@ -370,6 +370,149 @@ public:
 
 std::ostream& operator<<(std::ostream& out, const SpliceSite& c);
 
+/**
+ *
+ */
+class Exon {
+public:
+    
+    Exon() { reset(); }
+    
+    Exon(const Exon& c) { init(c); }
+    
+    Exon(uint32_t ref, uint32_t left, uint32_t right, bool fw)
+    {
+        init(ref, left, right, fw);
+    }
+    
+    /**
+     * Copy given fields into this Coord.
+     */
+    void init(uint32_t ref, uint32_t left, uint32_t right, bool fw) {
+        _ref = ref;
+        _left = left;
+        _right = right;
+        _fw = fw;
+    }
+    
+    /**
+     * Copy contents of given Coord into this one.
+     */
+    void init(const Exon& c) {
+        _ref = c._ref;
+        _left = c._left;
+        _right = c._right;
+        _fw = c._fw;
+    }
+    
+    /**
+     * Return true iff this Coord is identical to the given Coord.
+     */
+    bool operator==(const Exon& o) const {
+        assert(inited());
+        assert(o.inited());
+        return _ref == o._ref &&
+        _left == o._left &&
+        _right == o._right &&
+        _fw == o._fw;
+    }
+    
+    /**
+     * Return true iff this Coord is less than the given Coord.  One Coord is
+     * less than another if (a) its reference id is less, (b) its orientation is
+     * less, or (c) its offset is less.
+     */
+    bool operator<(const Exon& o) const {
+        if(_ref < o._ref) return true;
+        if(_ref > o._ref) return false;
+        if(_left < o._left) return true;
+        if(_left > o._left) return false;
+        if(_right < o._right) return true;
+        if(_right > o._right) return false;
+        if(_fw != o._fw) return _fw;
+        return false;
+    }
+    
+    /**
+     * Return the opposite result from operator<.
+     */
+    bool operator>=(const Exon& o) const {
+        return !((*this) < o);
+    }
+    
+    /**
+     * Return true iff this Coord is greater than the given Coord.  One Coord
+     * is greater than another if (a) its reference id is greater, (b) its
+     * orientation is greater, or (c) its offset is greater.
+     */
+    bool operator>(const Exon& o) const {
+        if(_ref > o._ref) return true;
+        if(_ref < o._ref) return false;
+        if(_left > o._left) return true;
+        if(_left < o._left) return false;
+        if(_right > o._right) return true;
+        if(_right < o._right) return false;
+        if(_fw != o._fw) return !_fw;
+        return false;
+    }
+    
+    /**
+     * Return the opposite result from operator>.
+     */
+    bool operator<=(const Exon& o) const {
+        return !((*this) > o);
+    }
+    
+    /**
+     * Reset this coord to uninitialized state.
+     */
+    void reset() {
+        _ref = std::numeric_limits<uint32_t>::max();
+        _left = std::numeric_limits<uint32_t>::max();
+        _right = std::numeric_limits<uint32_t>::max();
+        _fw = true;
+    }
+    
+    /**
+     * Return true iff this Coord is initialized (i.e. ref and off have both
+     * been set since the last call to reset()).
+     */
+    bool inited() const {
+        if(_ref != std::numeric_limits<uint32_t>::max() &&
+           _left != std::numeric_limits<uint32_t>::max() &&
+           _right != std::numeric_limits<uint32_t>::max())
+        {
+            return true;
+        }
+        return false;
+    }
+    
+#ifndef NDEBUG
+    /**
+     * Check that coord is internally consistent.
+     */
+    bool repOk() const {
+        if(_ref == std::numeric_limits<uint32_t>::max() ||
+           _left == std::numeric_limits<uint32_t>::max() ||
+           _right == std::numeric_limits<uint32_t>::max()) {
+            return false;
+        }
+        return true;
+    }
+#endif
+    
+    uint32_t ref()          const { return _ref; }
+    uint32_t left()         const { return _left; }
+    uint32_t right()        const { return _right; }
+    bool     fw()           const { return _fw; }
+    
+protected:
+    uint32_t  _ref;             // which reference?
+    uint32_t  _left;            // 0-based offset of the right most base of the left flanking exon
+    uint32_t  _right;           // 0-based offset of the left most base of the right flanking exon
+    bool      _fw;              // true -> Watson strand
+};
+
 class AlnRes;
 
 class SpliceSiteDB {
@@ -423,12 +566,7 @@ private:
                               const RedBlackNode<SpliceSitePos, uint32_t> *node,
                               uint32_t left,
                               uint32_t right,
-                              bool includeNovel) const;
-    
-    bool insideExon_recur(
-                          const RedBlackNode<SpliceSitePos, uint32_t> *node,
-                          uint32_t left,
-                          uint32_t right) const;
+                              bool includeNovel) const;    
     
     const RedBlackNode<SpliceSitePos, uint32_t>* getSpliceSite_temp(const SpliceSitePos& ssp) const;
     
@@ -469,6 +607,8 @@ private:
     BTDnaString                         acceptorstr;
     
     bool                                _empty;
+    
+    EList<Exon>                         _exons;
 };
 
 #endif /*ifndef SPLICE_SITE_H_*/

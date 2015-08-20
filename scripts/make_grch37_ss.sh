@@ -84,6 +84,16 @@ if [ ! -x "$HISAT2_SS_SCRIPT" ] ; then
 	fi
 fi
 
+HISAT2_EXON_SCRIPT=./extract_exonss.py
+if [ ! -x "$HISAT2_EXON_SCRIPT" ] ; then
+	if ! which extract_snps.py ; then
+		echo "Could not find extract_exons.py in current directory or in PATH"
+		exit 1
+	else
+		HISAT2_SS_SCRIPT=`which extract_exons.py`
+	fi
+fi
+
 rm -f genome.fa
 for c in $CHRS_TO_INDEX ; do
         F=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.dna.chromosome.${c}.fa
@@ -99,9 +109,10 @@ if [ ! -f $GTF_FILE ] ; then
        get ${ENSEMBL_GRCh37_GTF_BASE}/${GTF_FILE}.gz || (echo "Error getting ${GTF_FILE}" && exit 1)
        gunzip ${GTF_FILE}.gz || (echo "Error unzipping ${GTF_FILE}" && exit 1)
        ${HISAT2_SS_SCRIPT} ${GTF_FILE} > genome.ss
+       ${HISAT2_EXON_SCRIPT} ${GTF_FILE} > genome.exon
 fi
 
-CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --ss genome.ss genome_ss"
+CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --ss genome.ss --exon genome.exon genome_ss"
 echo Running $CMD
 if $CMD ; then
 	echo "genome index built; you may remove fasta files"

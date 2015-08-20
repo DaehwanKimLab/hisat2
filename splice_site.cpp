@@ -401,12 +401,11 @@ void SpliceSiteDB::getSpliceSites_recur(
         uint32_t ref = node->key.ref();
         assert_lt(ref, _spliceSites.size());
         assert_lt(node->payload, _spliceSites[ref].size());
-        const SpliceSite& ss = _spliceSites[ref][node->payload];
+        ASSERT_ONLY(const SpliceSite& ss = _spliceSites[ref][node->payload]);
         assert_eq(ss.ref(), node->key.ref());
         assert(ss.left() == node->key.left() ||
                ss.right() == node->key.left());
-        if(!ss.exon())
-            spliceSites.push_back(_spliceSites[ref][node->payload]);
+         spliceSites.push_back(_spliceSites[ref][node->payload]);
     }
     
     if(node->key.left() <= right && node->right != NULL) {
@@ -492,53 +491,18 @@ bool SpliceSiteDB::insideExon(
                               uint32_t left,
                               uint32_t right) const
 {
-    if(!_read) return false;
-    
+    if(_exons.empty()) return false;
     assert_lt(ref, _numRefs);
-    assert_lt(ref, _mutex.size());
-    ThreadSafe t(const_cast<MUTEX_T*>(&_mutex[ref]), _threadSafe && _write);
-    
     assert_lt(left, right);
-    assert_lt(ref, _fwIndex.size());
-    assert(_fwIndex[ref] != NULL);
-    const Node *cur = _fwIndex[ref]->root();
-    if(cur != NULL) {
-        return insideExon_recur(cur, left, right);
-    }
-    return false;
-}
-
-bool SpliceSiteDB::insideExon_recur(
-                                    const RedBlackNode<SpliceSitePos, uint32_t> *node,
-                                    uint32_t left,
-                                    uint32_t right) const
-{
-    assert(node != NULL);
-    if(node->key.left() <= left && node->key.right() >= right) {
-        uint32_t ref = node->key.ref();
-        assert_lt(ref, _spliceSites.size());
-        assert_lt(node->payload, _spliceSites[ref].size());
-        const SpliceSite& ss = _spliceSites[ref][node->payload];
-        if(ss.exon())
+    
+    Exon e(ref, left + 1, 0, true);
+    size_t i = _exons.bsearchLoBound(e);
+    for(; i > 0; i--) {
+        const Exon& e = _exons[i-1];
+        if(e.right() < left) break;
+        if(e.left() <= left && right <= e.right())
             return true;
     }
-    
-    if(node->key.left() >= left && node->left != NULL) {
-        if(insideExon_recur(
-                            node->left,
-                            left,
-                            right))
-            return true;
-    }
-    
-    if(node->key.left() <= right && node->right != NULL) {
-        if(insideExon_recur(
-                            node->right,
-                            left,
-                            right))
-            return true;
-    }
-    
     return false;
 }
 
@@ -663,6 +627,7 @@ void SpliceSiteDB::print_impl(
 
 void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> >& alts)
 {
+    EList<Exon> exons;
     _empty = false;
     assert_eq(_numRefs, _refnames.size());
     for(size_t i = 0; i < alts.size(); i++) {
@@ -682,41 +647,57 @@ void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> 
                             straddled2);  // straddled?
         assert_lt(ref, _spliceSites.size());
         TIndexOffU right = left + (alt.right - alt.left);
-        left -= 1; right += 1;
-        _spliceSites[ref].expand();
-        _spliceSites[ref].back().init(ref,
-                                      left,
-                                      right,
-                                      fw == '+' || fw == '.',
-                                      fw != '.',
-                                      alt.exon(),
-                                      true,   // from file?
-                                      true);  // known splice site?
-        assert_gt(_spliceSites[ref].size(), 0);
-        bool added = false;
-        assert_lt(ref, _fwIndex.size());
-        assert(_fwIndex[ref] != NULL);
-        Node *cur = _fwIndex[ref]->add(pool(ref), _spliceSites[ref].back(), &added);
-        if(!added) {
-            _spliceSites[ref].pop_back();
-            continue;
+        if(alt.splicesite()) {
+            left -= 1; right += 1;
+            _spliceSites[ref].expand();
+            _spliceSites[ref].back().init(ref,
+                                          left,
+                                          right,
+                                          fw == '+' || fw == '.',
+                                          fw != '.',
+                                          alt.exon(),
+                                          true,   // from file?
+                                          true);  // known splice site?
+            assert_gt(_spliceSites[ref].size(), 0);
+            bool added = false;
+            assert_lt(ref, _fwIndex.size());
+            assert(_fwIndex[ref] != NULL);
+            Node *cur = _fwIndex[ref]->add(pool(ref), _spliceSites[ref].back(), &added);
+            if(!added) {
+                _spliceSites[ref].pop_back();
+                continue;
+            }
+            assert(added);
+            assert(cur != NULL);
+            cur->payload = _spliceSites[ref].size() - 1;
+            
+            added = false;
+            SpliceSitePos rssp(ref,
+                               right,
+                               left,
+                               fw == '+' || fw == '.',
+                               fw != '.');
+            assert_lt(ref, _bwIndex.size());
+            assert(_bwIndex[ref] != NULL);
+            cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
+            assert(added);
+            assert(cur != NULL);
+            cur->payload = _spliceSites[ref].size() - 1;
+        } else {
+            assert(alt.exon());
+            // Given some relaxation
+            if(left >= 10) left -= 10;
+            else           left = 0;
+            if(right + 10 < tlen) right += 10;
+            else                  right = tlen - 1;
+            exons.expand();
+            exons.back().init(ref, left, right, fw == '+' || fw == '.');
         }
-        assert(added);
-        assert(cur != NULL);
-        cur->payload = _spliceSites[ref].size() - 1;
-        
-        added = false;
-        SpliceSitePos rssp(ref,
-                           right,
-                           left,
-                           fw == '+' || fw == '.',
-                           fw != '.');
-        assert_lt(ref, _bwIndex.size());
-        assert(_bwIndex[ref] != NULL);
-        cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
-        assert(added);
-        assert(cur != NULL);
-        cur->payload = _spliceSites[ref].size() - 1;
+    }
+    if(exons.size() > 0) {
+        _exons.resizeExact(exons.size()); _exons.clear();
+        _exons.push_back_array(exons.begin(), exons.size());
+        _exons.sort();
     }
 }
 
