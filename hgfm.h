@@ -638,7 +638,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
             } else {
                 range = this->mapGLF1(range.first, tloc, nt);
             }
-            if(range.first == INDEX_MAX || range.first >= range.second) {
+            if(range.first == (index_t)INDEX_MAX || range.first >= range.second) {
                 break;
             }
             if(range.first + 1 == range.second) {
