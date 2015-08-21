@@ -1426,7 +1426,7 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
-        # ["hisat", "", "", ""],        
+        ["hisat", "", "", ""],        
         ["hisat2", "", "", ""],
         # ["hisat2", "x2", "", ""],
         ["hisat2", "x1", "ss", ""],
@@ -1631,10 +1631,7 @@ def calculate_read_cost():
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
                     if type.find("gtf") != -1:
-                        gtf = "genes"
-                        if genome != "genome":
-                            gtf = gtf + "_" + genome
-                        cmd += ["--transcriptome-index=%s/HISAT%s/" % (index_base, index_add) + gtf]
+                        cmd += ["--transcriptome-index=%s/HISAT%s/gtf/%s" % (index_base, index_add, genome)]
                     if type == "gtfonly":
                         cmd += ["--transcriptome-only"]
                     cmd += ["--read-edit-dist", "3"]

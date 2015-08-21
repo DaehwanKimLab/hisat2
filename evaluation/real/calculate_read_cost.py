@@ -1144,7 +1144,7 @@ def calculate_read_cost():
     RNA = (cwd.find("RNA") != -1)
 
     chr_dic = read_genome("../../../data/" + genome + ".fa")
-    trans_dic, trans_ids = extract_transcripts("../../../data/genes.gtf", verbose = False)
+    trans_dic, trans_ids = extract_transcripts("../../../data/genome.gtf", verbose = False)
     junctions_dic = extract_junctions(trans_dic)
     gene = "no"
     gtf_junctions = []
