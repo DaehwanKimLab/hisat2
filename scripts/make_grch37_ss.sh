@@ -84,9 +84,9 @@ if [ ! -x "$HISAT2_SS_SCRIPT" ] ; then
 	fi
 fi
 
-HISAT2_EXON_SCRIPT=./extract_exonss.py
+HISAT2_EXON_SCRIPT=./extract_exons.py
 if [ ! -x "$HISAT2_EXON_SCRIPT" ] ; then
-	if ! which extract_snps.py ; then
+	if ! which extract_exons.py ; then
 		echo "Could not find extract_exons.py in current directory or in PATH"
 		exit 1
 	else
