@@ -10,9 +10,9 @@ def get_data(small = False):
     if not os.path.exists("data"):
         os.mkdir("data")
     os.chdir("data")
-    genome_files = ["genome.fa", "genome.fa.fai", "genes.gtf", "snpCommon.txt", "genome.snp", "genome.ss"]
-    small_genome_files = ["22.fa", "22.fa.fai", "genes_22.gtf", "22.snp", "22.ss", \
-                              "22_20-21M.fa", "22_20-21M.fa.fai", "genes_22_20-21M.gtf", "22_20-21M.snp", "22_20-21M.ss"]
+    genome_files = ["genome.fa", "genome.fa.fai", "genome.gtf", "snpCommon.txt", "genome.snp", "genome.ss", "genome.exon"]
+    small_genome_files = ["22.fa", "22.fa.fai", "22.gtf", "22.snp", "22.ss", "22.exon", \
+                              "22_20-21M.fa", "22_20-21M.fa.fai", "22_20-21M.gtf", "22_20-21M.snp", "22_20-21M.ss", "22_20-21M.exon"]
     files = []
     if not small:
         files += genome_files
