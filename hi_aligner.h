@@ -441,6 +441,7 @@ struct GenomeHit {
     _joinedOff((index_t)INDEX_MAX),
     _edits(NULL),
     _score(MIN_I64),
+    _localscore(MIN_I64),
     _hitcount(1),
     _edits_node(NULL),
     _sharedVars(NULL)
@@ -464,6 +465,7 @@ struct GenomeHit {
              *(otherHit._sharedVars),
              otherHit._edits,
              otherHit._score,
+             otherHit._localscore,
              otherHit._splicescore);
     }
     
@@ -480,6 +482,7 @@ struct GenomeHit {
              *(otherHit._sharedVars),
              otherHit._edits,
              otherHit._score,
+             otherHit._localscore,
              otherHit._splicescore);
         
         return *this;
@@ -508,6 +511,7 @@ struct GenomeHit {
               SharedTempVars<index_t>&  sharedVars,
               EList<Edit>*              edits = NULL,
               int64_t                   score = 0,
+              int64_t                   localscore = 0,
               double                    splicescore = 0.0)
 	{
 		_fw = fw;
@@ -519,6 +523,7 @@ struct GenomeHit {
         _toff = toff;
         _joinedOff = joinedOff;
 		_score = score;
+        _localscore = localscore;
         _splicescore = splicescore;
         
         assert(_sharedVars == NULL || _sharedVars == &sharedVars);
@@ -795,7 +800,8 @@ struct GenomeHit {
         return Coord(_tidx, _toff, _fw);
     }
     
-    int64_t score() const { return _score; }
+    int64_t score()       const { return _score; }
+    int64_t localscore()  const { return _localscore; }
     double  splicescore() const { return _splicescore; }
     
     const EList<Edit>& edits() const { return *_edits; }
@@ -1060,29 +1066,6 @@ struct GenomeHit {
     int ngaps() const {
         return 0;
     }
-
-#if 0
-	/**
-	 * Return the number of Ns involved in the alignment.
-	 */
-	int refns() const {
-		int ns = 0;
-		if(_e1.inited() && _e1.chr == 'N') {
-			ns++;
-			if(_e2.inited() && _e2.chr == 'N') {
-				ns++;
-			}
-		}
-		return ns;
-	}
-
-	/**
-	 * Higher score = higher priority.
-	 */
-	bool operator<(const GenomeHit& o) const {
-		return _len > o._len;
-	}
-#endif
 	
 #ifndef NDEBUG
 	/**
@@ -1116,6 +1099,7 @@ public:
     index_t         _joinedOff;
 	EList<Edit>*    _edits;
     int64_t         _score;
+    int64_t         _localscore;
     double          _splicescore;
     
     index_t         _hitcount;  // for selection purposes

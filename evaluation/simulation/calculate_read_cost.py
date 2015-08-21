@@ -1764,7 +1764,7 @@ def calculate_read_cost():
                         out_fname2 = "/dev/null"
 
                     if not two_step:
-                        align_stat.append([readtype, aligner])
+                        align_stat.append([readtype, aligner_name])
 
                     # dummy commands for caching
                     if aligner != "tophat2":
@@ -1911,7 +1911,7 @@ def calculate_read_cost():
                             sql_execute("../" + sql_db_name, sql_insert)     
 
                         if two_step:
-                            align_stat.append([readtype2, aligner, numreads, duration, mapped, unique_mapped, unmapped, mapping_point, len(junctions), temp_junctions, temp_gtf_junctions])
+                            align_stat.append([readtype2, aligner_name, numreads, duration, mapped, unique_mapped, unmapped, mapping_point, len(junctions), temp_junctions, temp_gtf_junctions])
                         else:
                             align_stat[-1].extend([numreads, duration, mapped, unique_mapped, unmapped, mapping_point, len(junctions), temp_junctions, temp_gtf_junctions])
 
