@@ -63,13 +63,14 @@ public:
 	/**
 	 * Gapped scores are invalid until proven valid.
 	 */
-	inline AlnScore(TAlScore score, TAlScore ns, TAlScore gaps, TAlScore splicescore = 0, bool knownTranscripts = false, bool nearSpliceSites = false) {
+	inline AlnScore(TAlScore score, TAlScore ns, TAlScore gaps, TAlScore splicescore = 0, bool knownTranscripts = false, bool nearSpliceSites = false, bool trimed = false) {
 		score_ = score;
 		ns_ = ns;
 		gaps_ = gaps;
         splicescore_ = splicescore;
         knownTranscripts_ = knownTranscripts;
         nearSpliceSites_ = nearSpliceSites;
+        trimed_ = trimed;
 		assert(valid());
 	}
 	
@@ -81,6 +82,7 @@ public:
         splicescore_ = 0;
         knownTranscripts_ = false;
         nearSpliceSites_ = false;
+        trimed_ = false;
 	}
 
 	/**
@@ -150,6 +152,7 @@ public:
         splicescore_ = o.splicescore_;
         knownTranscripts_ = o.knownTranscripts_;
         nearSpliceSites_ = o.nearSpliceSites_;
+        trimed_ = o.trimed_;
 		assert_lt(ns_, 0x7fffffff);
 		return *this;
 	}
@@ -282,12 +285,14 @@ public:
     TAlScore splicescore()      const { return splicescore_; }
     bool     knownTranscripts() const { return knownTranscripts_; }
     bool     nearSpliceSites()  const { return nearSpliceSites_; }
+    bool     trimed()           const { return trimed_; }
     
     TAlScore hisat2_score() const
     {
         TAlScore r = (score_ << 10) - (splicescore_ / 100);
         if(knownTranscripts_) r += 2;
         else if(nearSpliceSites_) r += 1;
+        if(trimed_) r -= 1;
         return r;
     }
 
@@ -311,6 +316,8 @@ public:
     
     // continuous alignment near (known) splice sites?
     bool nearSpliceSites_;
+    
+    bool trimed_;
 };
 
 enum {

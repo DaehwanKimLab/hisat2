@@ -784,8 +784,44 @@ struct GenomeHit {
     index_t trim5() const { return _trim5; }
     index_t trim3() const { return _trim3; }
     
-    void trim5(index_t trim5) { _trim5 = trim5; }
-    void trim3(index_t trim3) { _trim3 = trim3; }
+    void trim5(index_t                 trim5,
+               const Read&             rd,
+               SpliceSiteDB&           ssdb,
+               const Scoring&          sc,
+               index_t                 minK_local,
+               index_t                 minIntronLen,
+               index_t                 maxIntronLen,
+               const BitPairReference& ref)
+    {
+        assert_eq(_rdoff, trim5);
+        assert_eq(_trim5, 0);
+        _trim5 = trim5;
+        calculateScore(rd,
+                       ssdb,
+                       sc,
+                       minK_local,
+                       minIntronLen,
+                       maxIntronLen,
+                       ref);
+    }
+    void trim3(index_t                 trim3,
+               const Read&             rd,
+               SpliceSiteDB&           ssdb,
+               const Scoring&          sc,
+               index_t                 minK_local,
+               index_t                 minIntronLen,
+               index_t                 maxIntronLen,
+               const BitPairReference& ref)
+    {
+        _trim3 = trim3;
+        calculateScore(rd,
+                       ssdb,
+                       sc,
+                       minK_local,
+                       minIntronLen,
+                       maxIntronLen,
+                       ref);
+    }
     
     index_t ref()    const { return _tidx; }
     index_t refoff() const { return _toff; }
@@ -1261,14 +1297,14 @@ bool GenomeHit<index_t>::combineWith(
             _edits->back().pos += addoff;
         }
         _len += otherHit._len;
-        _score = calculateScore(
-                                rd,
-                                ssdb,
-                                sc,
-                                minK_local,
-                                minIntronLen,
-                                maxIntronLen,
-                                ref);
+        calculateScore(
+                       rd,
+                       ssdb,
+                       sc,
+                       minK_local,
+                       minIntronLen,
+                       maxIntronLen,
+                       ref);
         assert(repOk(rd, ref));
         return true;
     }
@@ -1708,14 +1744,14 @@ bool GenomeHit<index_t>::combineWith(
     // update alignment score, trims
     assert_leq(this->_rdoff + this->_len, otherHit._rdoff + otherHit._len);
     _len = otherHit._rdoff + otherHit._len - this->_rdoff;
-    _score = calculateScore(
-                            rd,
-                            ssdb,
-                            sc,
-                            minK_local,
-                            minIntronLen,
-                            maxIntronLen,
-                            ref);
+    calculateScore(
+                   rd,
+                   ssdb,
+                   sc,
+                   minK_local,
+                   minIntronLen,
+                   maxIntronLen,
+                   ref);
     assert_eq(_trim3, 0);
     _trim3 += otherHit._trim3;
 #ifndef NDEBUG
@@ -1901,14 +1937,14 @@ bool GenomeHit<index_t>::extend(
     
     if(doLeftAlign) leftAlign(rd);
     assert_leq(_rdoff + _len, rdlen);
-    _score = calculateScore(
-                            rd,
-                            ssdb,
-                            sc,
-                            minK_local,
-                            minIntronLen,
-                            maxIntronLen,
-                            ref);
+    calculateScore(
+                   rd,
+                   ssdb,
+                   sc,
+                   minK_local,
+                   minIntronLen,
+                   maxIntronLen,
+                   ref);
     assert(repOk(rd, ref));
     return leftext > 0 || rightext > 0;
 }
@@ -3072,6 +3108,7 @@ int64_t GenomeHit<index_t>::calculateScore(
 {
     int64_t score = 0;
     double splicescore = 0;
+    int64_t localscore = 0;
     index_t numsplices = 0;
     index_t mm = 0;
     const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
@@ -3210,6 +3247,15 @@ int64_t GenomeHit<index_t>::calculateScore(
 #endif
     }
     
+    // Penalty for soft-clipping
+    for(index_t i = 0; i < _trim5; i++) {
+        score -= ((int)qual[i] - 33 <= 20 ? 1 : 2);
+    }
+    
+    for(index_t i = 0; i < _trim3; i++) {
+        score -= ((int)qual[qual.length() - i - 1] - 33 <= 20 ? 1 : 2);
+    }
+    
     if(conflict_splicesites) {
         score -= sc.conflictSpl();
     }
@@ -3218,6 +3264,7 @@ int64_t GenomeHit<index_t>::calculateScore(
     score += (_len - mm) * sc.match();
     _score = score;
     _splicescore = splicescore;
+    _localscore = localscore;
     
     return score;
 }
@@ -4636,18 +4683,13 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
         }
     }
     AlnScore asc(
-                 hit.score(),  // numeric score
-                 hit.ns(),     // # Ns
-                 hit.ngaps(),  // # gaps
+                 hit.score(),       // numeric score
+                 hit.ns(),          // # Ns
+                 hit.ngaps(),       // # gaps
                  hit.splicescore(), // splice score
-                 // daehwan - for debugging purposes
-#if 1
-                 spliced.second,             // mapped to known transcripts?
-                 spliced.first);             // spliced alignment or near splice sites (novel)?
-#else
-    false,             // mapped to known transcripts?
-    spliced.first | spliced.second);
-#endif
+                 spliced.second,    // mapped to known transcripts?
+                 spliced.first,     // spliced alignment or near splice sites (novel)?
+                 (hit.trim5() + hit.trim3()) > 0);  // triemd?
     bool softTrim = hit.trim5() > 0 || hit.trim3() > 0;
     AlnRes rs;
     rs.init(

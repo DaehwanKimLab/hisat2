@@ -412,6 +412,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             return maxsc;
         }
     } else if(hitoff > 0 && (hitoff + hitlen == rdlen || hitoff + hitoff < rdlen - hitlen)) {
+        // Decide which side to extend first (left or right)
         if(!ssdb.empty()) {
             // extend the partial alignment in the left direction
             index_t fragoff = 0, fraglen = 0, left = 0;
@@ -485,14 +486,14 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             }
         }
         
-        // choose a local index based on the genomic location of the partial alignment
+        // Choose a local index based on the genomic location of the partial alignment
         const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
         const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(hit.ref(), hit.refoff());
         assert_leq(lGFM->_localOffset, hit.refoff());
         bool success = false, first = true;
         index_t count = 0;
-        // consider at most two local indexes
-        index_t max_count = 2;
+        // Use at most two local indexes
+        const index_t max_count = 2;
         int64_t prev_score = hit.score();
         local_genomeHits.clear();
         while(!success && count++ < max_count && use_localindex) {
@@ -523,7 +524,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 him.localindexatts++;
                 this->_local_node_iedge_count.clear();
                 nelt = this->localGFMSearch(
-                                            *lGFM,     // BWT index
+                                            *lGFM,    // BWT index
                                             rd,       // read to align
                                             sc,       // scoring scheme
                                             sink.reportingParams(),
@@ -636,7 +637,6 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     }
                 }
             }
-            // int64_t minsc = (rdi == 0 ? sink.bestUnp1() : sink.bestUnp2());
             if(maxsc >= prev_score - sc.mmpMax) success = true;
             if(!success &&
                (him.localindexatts >= this->max_localindexatts || count == max_count || hGFM->prevLocalGFM(lGFM) == NULL)) {
@@ -774,31 +774,41 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 }
             }
             GenomeHit<index_t> tempHit = hit;
-            // daehwan - for debugging purposes
-            if(tempHit.rdoff() <= 5 && false) {
+            if(tempHit.rdoff() <= 5) {
                 index_t trim5 = tempHit.rdoff();
-                tempHit.trim5(trim5);
-                assert_leq(tempHit.len() + tempHit.trim5() + tempHit.trim3(), rdlen);
-                int64_t tmp_maxsc = hybridSearch_recur(
-                                                       sc,
-                                                       gfm,
-                                                       altdb,
-                                                       ref,
-                                                       swa,
-                                                       ssdb,
-                                                       rdi,
-                                                       tempHit,
-                                                       0,
-                                                       tempHit.len() + tempHit.trim5() + tempHit.trim3(),
-                                                       wlm,
-                                                       prm,
-                                                       swm,
-                                                       him,
-                                                       rnd,
-                                                       sink,
-                                                       dep + 1);
-                maxsc = max<int64_t>(maxsc, tmp_maxsc);
-                return maxsc;
+                GenomeHit<index_t> trimedHit = tempHit;
+                trimedHit.trim5(trim5,
+                                rd,
+                                ssdb,
+                                sc,
+                                this->_minK_local,
+                                this->_minIntronLen,
+                                this->_maxIntronLen,
+                                ref);
+                assert_leq(trimedHit.len() + trimedHit.trim5() + trimedHit.trim3(), rdlen);
+                int64_t tmp_score = trimedHit.score();
+                if(tmp_score > max<int64_t>(maxsc, this->_minsc[rdi])) {
+                    int64_t tmp_maxsc = hybridSearch_recur(
+                                                           sc,
+                                                           gfm,
+                                                           altdb,
+                                                           ref,
+                                                           swa,
+                                                           ssdb,
+                                                           rdi,
+                                                           trimedHit,
+                                                           0,
+                                                           trimedHit.len() + trimedHit.trim5() + trimedHit.trim3(),
+                                                           wlm,
+                                                           prm,
+                                                           swm,
+                                                           him,
+                                                           rnd,
+                                                           sink,
+                                                           dep + 1);
+                    maxsc = max<int64_t>(maxsc, tmp_maxsc);
+                    // return maxsc;
+                }
             }
             // extend the partial alignment directly comparing with the corresponding genomic sequence
             // with mismatches or a gap allowed
@@ -947,12 +957,13 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             }
         }
         
-        // choose a local index based on the genomic location of the partial alignment
+        // Choose a local index based on the genomic location of the partial alignment
         const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
         const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(hit.ref(), hit.refoff());
         bool success = false, first = true;
         index_t count = 0;
-        index_t max_count = 2;
+        // Use at most two local indexes
+        const index_t max_count = 2;
         int64_t prev_score = hit.score();
         local_genomeHits.clear();
         while(!success && count++ < max_count && use_localindex) {
@@ -1237,32 +1248,42 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             }
             GenomeHit<index_t> tempHit = hit;
             assert(tempHit.trim5() == 0 || hitoff == 0);
-            // daehwan - for debugging purposes
-            if(rdlen - hitoff - tempHit.len() - tempHit.trim5() <= 5 && false) {
+            if(rdlen - hitoff - tempHit.len() - tempHit.trim5() <= 5) {
                 index_t trim3 = rdlen - hitoff - tempHit.len() - tempHit.trim5();
-                tempHit.trim3(trim3);
-                assert_leq(tempHit.trim5(), tempHit.rdoff());
-                assert_leq(tempHit.len() + tempHit.trim5() + tempHit.trim3(), rdlen);
-                int64_t tmp_maxsc = hybridSearch_recur(
-                                                       sc,
-                                                       gfm,
-                                                       altdb,
-                                                       ref,
-                                                       swa,
-                                                       ssdb,
-                                                       rdi,
-                                                       tempHit,
-                                                       tempHit.rdoff() - tempHit.trim5(),
-                                                       tempHit.len() + tempHit.trim5() + tempHit.trim3(),
-                                                       wlm,
-                                                       prm,
-                                                       swm,
-                                                       him,
-                                                       rnd,
-                                                       sink,
-                                                       dep + 1);
-                maxsc = max<int64_t>(maxsc, tmp_maxsc);
-                return maxsc;
+                GenomeHit<index_t> trimedHit = tempHit;
+                trimedHit.trim3(trim3,
+                                rd,
+                                ssdb,
+                                sc,
+                                this->_minK_local,
+                                this->_minIntronLen,
+                                this->_maxIntronLen,
+                                ref);
+                assert_leq(trimedHit.trim5(), trimedHit.rdoff());
+                assert_leq(trimedHit.len() + trimedHit.trim5() + trimedHit.trim3(), rdlen);
+                int64_t tmp_score = trimedHit.score();
+                if(tmp_score > max<int64_t>(maxsc, this->_minsc[rdi])) {
+                    int64_t tmp_maxsc = hybridSearch_recur(
+                                                           sc,
+                                                           gfm,
+                                                           altdb,
+                                                           ref,
+                                                           swa,
+                                                           ssdb,
+                                                           rdi,
+                                                           trimedHit,
+                                                           trimedHit.rdoff() - trimedHit.trim5(),
+                                                           trimedHit.len() + trimedHit.trim5() + trimedHit.trim3(),
+                                                           wlm,
+                                                           prm,
+                                                           swm,
+                                                           him,
+                                                           rnd,
+                                                           sink,
+                                                           dep + 1);
+                    maxsc = max<int64_t>(maxsc, tmp_maxsc);
+                    // return maxsc;
+                }
             }
             // extend the partial alignment directly comparing with the corresponding genomic sequence
             // with mismatches or a gap allowed
