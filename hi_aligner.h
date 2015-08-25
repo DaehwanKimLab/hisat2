@@ -2187,7 +2187,7 @@ void GenomeHit<index_t>::findSSOffs(
     ssOffs.clear();
     ssOffs.expand();
     ssOffs.back().first = ssOffs.back().second = 0;
-    if(gfm.gh().linearFM()) return;
+    if(gfm.gh().linearFM() || !altdb.hasSpliceSites()) return;
     const EList<ALT<index_t> >& alts = altdb.alts();
     
     // Find splice sites included in this region
@@ -2195,8 +2195,8 @@ void GenomeHit<index_t>::findSSOffs(
     alt_search.left = start;
     for(index_t i = alts.bsearchLoBound(alt_search); i < alts.size(); i++) {
         const ALT<index_t>& alt = alts[i];
-        if(!alt.splicesite()) continue;
         if(alt.left >= end) break;
+        if(!alt.splicesite()) continue;
         //
         if(alt.left < alt.right) {
             ssOffs.expand();
@@ -2523,20 +2523,22 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         }
         // Find SNPs included in this region
         pair<index_t, index_t> alt_range;
-        ALT<index_t> alt;
-        alt.pos = joinedOff;
-        alt_range.first = alt_range.second = alts.bsearchLoBound(alt);
-        if(alt_range.first >= alts.size()) return 0;
-        for(; alt_range.first > 0; alt_range.first--) {
-            const ALT<index_t>& alt = alts[alt_range.first];
-            if(alt.snp()) {
-                if(alt.pos + rdlen - 1 < joinedOff) break;
-            } else if(alt.splicesite()) {
-                if(alt.left < alt.right) continue;
-                if(alt.left + rdlen - 1 < joinedOff) break;
-            } else {
-                assert(alt.exon());
-                continue;
+        {
+            ALT<index_t> cmp_alt;
+            cmp_alt.pos = joinedOff;
+            alt_range.first = alt_range.second = alts.bsearchLoBound(cmp_alt);
+            if(alt_range.first >= alts.size()) return 0;
+            for(; alt_range.first > 0; alt_range.first--) {
+                const ALT<index_t>& alt = alts[alt_range.first];
+                if(alt.snp()) {
+                    if(alt.pos + rdlen - 1 < joinedOff) break;
+                } else if(alt.splicesite()) {
+                    if(alt.left < alt.right) continue;
+                    if(alt.left + rdlen - 1 < joinedOff) break;
+                } else {
+                    assert(alt.exon());
+                    continue;
+                }
             }
         }
         assert_geq(rdoff, 0);
@@ -2745,16 +2747,16 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         // Find SNPs included in this region
         pair<index_t, index_t> alt_range;
         {
-            ALT<index_t> alt;
-            alt.pos = joinedOff;
-            alt_range.first = alt_range.second = alts.bsearchLoBound(alt);
+            ALT<index_t> cmp_alt;
+            cmp_alt.pos = joinedOff;
+            alt_range.first = alt_range.second = alts.bsearchLoBound(cmp_alt);
             if(alt_range.first >= alts.size()) return 0;
             for(; alt_range.second < alts.size(); alt_range.second++) {
                 const ALT<index_t>& alt = alts[alt_range.second];
                 if(alt.splicesite()) {
                     if(alt.left > alt.right) continue;
                 }
-                if(alt.pos > joinedOff + max_rd_i) break;
+                if(alt.left > joinedOff + max_rd_i) break;
             }
         }
         if(mm_max_rd_i == rdlen) {

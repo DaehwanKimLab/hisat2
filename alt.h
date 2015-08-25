@@ -164,6 +164,7 @@ public:
     bool read(ifstream& f_in, bool bigEndian) {
         pos = readIndex<index_t>(f_in, bigEndian);
         type = (ALT_TYPE)readU32(f_in, bigEndian);
+        assert_neq(type, ALT_SNP_ALT);
         len = readIndex<index_t>(f_in, bigEndian);
         seq = readIndex<uint64_t>(f_in, bigEndian);
         return true;
