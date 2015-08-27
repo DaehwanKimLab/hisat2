@@ -39,6 +39,9 @@
 // When mismatch penalty type is constant, use this constant
 #define DEFAULT_MM_PENALTY_MAX 6
 #define DEFAULT_MM_PENALTY_MIN 2
+// When softclip penalty type is constant, use this constant
+#define DEFAULT_SC_PENALTY_MAX 2
+#define DEFAULT_SC_PENALTY_MIN 1
 
 // Default type of penalty to assess against mismatches
 #define DEFAULT_N_PENALTY_TYPE COST_MODEL_CONSTANT
@@ -138,6 +141,8 @@ public:
 		int   mmcType,      // how to penalize mismatches
 	    int   mmpMax_,      // maximum mismatch penalty
 	    int   mmpMin_,      // minimum mismatch penalty
+        int   scpMax_,      // maximum softclip penalty
+        int   scpMin_,      // minimum softclip penalty
 		const SimpleFunc& scoreMin_,   // minimum score for valid alignment; const coeff
 		const SimpleFunc& nCeil_,      // max # ref Ns allowed in alignment; const coeff
 	    int   nType,        // how to penalize Ns in the read
@@ -158,6 +163,8 @@ public:
 		mmcostType   = mmcType;
 		mmpMax       = mmpMax_;
 		mmpMin       = mmpMin_;
+        scpMax       = scpMax_;
+        scpMin       = scpMin_;
 		scoreMin     = scoreMin_;
 		nCeil        = nCeil_;
 		npenType     = nType;
@@ -294,6 +301,18 @@ public:
 		assert_geq(q, 0);
 		return q < 255 ? mmpens[q] : mmpens[255];
 	}
+    
+    /**
+     * Return the marginal penalty incurred by a mismatch at a read
+     * position with quality 'q'.
+     */
+    inline int sc(int q) const {
+        assert_geq(q, 0);
+        if(q <= 33) return scpMin;
+        q -= 33;
+        if(q > 40) q = 40;
+        return (int)((q / 40.0f) * (scpMax - scpMin) + scpMin);
+    }
 
 	/**
 	 * Return the marginal penalty incurred by a mismatch at a read
@@ -471,6 +490,8 @@ public:
 	int     mmcostType;   // based on qual? rounded? just a constant?
 	int     mmpMax;       // maximum mismatch penalty
 	int     mmpMin;       // minimum mismatch penalty
+    int     scpMax;       // maximum softclip penalty
+    int     scpMin;       // minimum softclip penalty
 	SimpleFunc scoreMin;  // minimum score for valid alignment, constant coeff
 	SimpleFunc nCeil;     // max # Ns involved in alignment, constant coeff
 	int     npenType;     // N: based on qual? rounded? just a constant?
@@ -497,8 +518,10 @@ public:
 		return Scoring(
 			1,                       // reward for a match
 			COST_MODEL_CONSTANT,     // how to penalize mismatches
-			3,                       // max mismatch pelanty
-			3,                       // min mismatch pelanty
+			3,                       // max mismatch penalty
+			3,                       // min mismatch penalty
+            2,                       // max softclip penalty
+            2,                       // min softclip penalty
 			scoreMin,                // score min: 37 + 0.3x
 			nCeil,                   // n ceiling: 2 + 0.1x
 			COST_MODEL_CONSTANT,     // how to penalize Ns in the read

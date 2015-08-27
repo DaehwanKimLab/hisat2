@@ -774,7 +774,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 }
             }
             GenomeHit<index_t> tempHit = hit;
-            if(tempHit.rdoff() <= 5) {
+            index_t trimMax = (tempHit.score() - max<int64_t>(maxsc, this->_minsc[rdi])) / sc.sc(0);
+            if(tempHit.rdoff() < trimMax) {
                 index_t trim5 = tempHit.rdoff();
                 GenomeHit<index_t> trimedHit = tempHit;
                 trimedHit.trim5(trim5,
@@ -1248,7 +1249,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             }
             GenomeHit<index_t> tempHit = hit;
             assert(tempHit.trim5() == 0 || hitoff == 0);
-            if(rdlen - hitoff - tempHit.len() - tempHit.trim5() <= 5) {
+            index_t trimLen = rdlen - hitoff - tempHit.len() - tempHit.trim5();
+            index_t trimMax = (tempHit.score() - max<int64_t>(maxsc, this->_minsc[rdi])) / sc.sc(0);
+            if(trimLen < trimMax) {
                 index_t trim3 = rdlen - hitoff - tempHit.len() - tempHit.trim5();
                 GenomeHit<index_t> trimedHit = tempHit;
                 trimedHit.trim3(trim3,

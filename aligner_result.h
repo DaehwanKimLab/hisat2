@@ -63,14 +63,23 @@ public:
 	/**
 	 * Gapped scores are invalid until proven valid.
 	 */
-	inline AlnScore(TAlScore score, TAlScore ns, TAlScore gaps, TAlScore splicescore = 0, bool knownTranscripts = false, bool nearSpliceSites = false, bool trimed = false) {
+	inline AlnScore(
+                    TAlScore score,
+                    TAlScore ns,
+                    TAlScore gaps,
+                    TAlScore splicescore = 0,
+                    bool knownTranscripts = false,
+                    bool nearSpliceSites = false,
+                    int leftTrim = 0,
+                    int rightTrim = 0) {
 		score_ = score;
 		ns_ = ns;
 		gaps_ = gaps;
         splicescore_ = splicescore;
         knownTranscripts_ = knownTranscripts;
         nearSpliceSites_ = nearSpliceSites;
-        trimed_ = trimed;
+        leftTrim_ = leftTrim;
+        rightTrim_ = rightTrim;
 		assert(valid());
 	}
 	
@@ -82,7 +91,8 @@ public:
         splicescore_ = 0;
         knownTranscripts_ = false;
         nearSpliceSites_ = false;
-        trimed_ = false;
+        leftTrim_ = 0;
+        rightTrim_ = 0;
 	}
 
 	/**
@@ -152,7 +162,8 @@ public:
         splicescore_ = o.splicescore_;
         knownTranscripts_ = o.knownTranscripts_;
         nearSpliceSites_ = o.nearSpliceSites_;
-        trimed_ = o.trimed_;
+        leftTrim_ = o.leftTrim_;
+        rightTrim_ = o.rightTrim_;
 		assert_lt(ns_, 0x7fffffff);
 		return *this;
 	}
@@ -285,15 +296,30 @@ public:
     TAlScore splicescore()      const { return splicescore_; }
     bool     knownTranscripts() const { return knownTranscripts_; }
     bool     nearSpliceSites()  const { return nearSpliceSites_; }
-    bool     trimed()           const { return trimed_; }
+    bool     trimed()           const { return leftTrim_ > 0 || rightTrim_ > 0; }
     
     TAlScore hisat2_score() const
     {
-        TAlScore r = (score_ << 10) - (splicescore_ / 100);
-        if(knownTranscripts_) r += 2;
-        else if(nearSpliceSites_) r += 1;
-        if(trimed_) r -= 1;
-        return r;
+        // TAlScore 32 bits used for score_
+        TAlScore score = score_;
+        if(score > MAX_I32) score = MAX_I32;
+        else if(score < MIN_I32) score = MIN_I32;
+        
+        // Next 8 bits for alignments against transcripts
+        TAlScore transcript_score = 0;
+        if(knownTranscripts_) transcript_score = 2;
+        else if(nearSpliceSites_) transcript_score = 1;
+        
+        // Next 8 bits for splice site score
+        TAlScore splicescore = splicescore_ / 100;
+        if(splicescore > MAX_U8) splicescore = 0;
+        else                     splicescore = MAX_U8 - splicescore;
+        
+        // Remaining 16 bits (rightmost 16 bits) for sum of left and right trim lengths
+        TAlScore trim = leftTrim_ + rightTrim_;
+        if(trim > MAX_U16) trim = 0;
+        else               trim = MAX_U16 - trim;
+        return (score << 32) | (transcript_score << 24) | (splicescore << 16) | trim;
     }
 
 	// Score accumulated so far (penalties are subtracted starting at 0)
@@ -317,7 +343,8 @@ public:
     // continuous alignment near (known) splice sites?
     bool nearSpliceSites_;
     
-    bool trimed_;
+    int leftTrim_;
+    int rightTrim_;
 };
 
 enum {

@@ -3251,11 +3251,11 @@ int64_t GenomeHit<index_t>::calculateScore(
     
     // Penalty for soft-clipping
     for(index_t i = 0; i < _trim5; i++) {
-        score -= ((int)qual[i] - 33 <= 20 ? 1 : 2);
+        score -= sc.sc(qual[i]);
     }
     
     for(index_t i = 0; i < _trim3; i++) {
-        score -= ((int)qual[qual.length() - i - 1] - 33 <= 20 ? 1 : 2);
+        score -= sc.sc(qual[i]);
     }
     
     if(conflict_splicesites) {
@@ -4691,7 +4691,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                  hit.splicescore(), // splice score
                  spliced.second,    // mapped to known transcripts?
                  spliced.first,     // spliced alignment or near splice sites (novel)?
-                 (hit.trim5() + hit.trim3()) > 0);  // triemd?
+                 hit.trim5(),       // left trim length
+                 hit.trim3());      // right trim length
     bool softTrim = hit.trim5() > 0 || hit.trim3() > 0;
     AlnRes rs;
     rs.init(

@@ -254,6 +254,8 @@ void SeedAlignmentPolicy::parseString(
 	int&        penMmcType,
 	int&        penMmcMax,
 	int&        penMmcMin,
+    int&        penScMax,
+    int&        penScMin,
 	int&        penNType,
 	int&        penN,
 	int&        penRdExConst,
@@ -279,6 +281,9 @@ void SeedAlignmentPolicy::parseString(
 	penMmcMin         = DEFAULT_MM_PENALTY_MIN;
 	penNType          = DEFAULT_N_PENALTY_TYPE;
 	penN              = DEFAULT_N_PENALTY;
+    
+    penScMax          = DEFAULT_SC_PENALTY_MAX;
+    penScMax          = DEFAULT_SC_PENALTY_MIN;
 	
 	const double DMAX = std::numeric_limits<double>::max();
     /*
@@ -427,6 +432,17 @@ void SeedAlignmentPolicy::parseString(
 				assert(false); throw 1;
 			}
 		}
+        else if(tag == "SCP") {
+            if(ctoks.size() > 3) {
+                cerr << "Error parsing alignment policy setting "
+                << "'" << tag.c_str() << "'"
+                << "; SCP must have at most 3 tokens" << endl
+                << "Policy: '" << s.c_str() << "'" << endl;
+                assert(false); throw 1;
+            }
+            penScMin = stoi(ctoks[1].c_str());
+            penScMax = stoi(ctoks[2].c_str());
+        }
 		// Scoring for mismatches where read char=N
 		// NP={Cxx|Q|RQ}
 		//        Cxx = constant, where constant is integer xx
@@ -649,6 +665,8 @@ int main() {
 	int bonusMatch;
 	int penMmcType;
 	int penMmc;
+    int penScMax;
+    int penScMin;
 	int penNType;
 	int penN;
 	int penRdExConst;
@@ -678,6 +696,8 @@ int main() {
 			bonusMatch,
 			penMmcType,
 			penMmc,
+            penScMax,
+            penScMin,
 			penNType,
 			penN,
 			penRdExConst,
@@ -732,6 +752,7 @@ int main() {
 			bonusMatch,
 			penMmcType,
 			penMmc,
+            
 			penNType,
 			penN,
 			penRdExConst,

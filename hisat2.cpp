@@ -180,6 +180,8 @@ static int   bonusMatch;      // constant reward if bonusMatchType=constant
 static int   penMmcType;      // how to penalize mismatches
 static int   penMmcMax;       // max mm penalty
 static int   penMmcMin;       // min mm penalty
+static int   penScMax;       // max sc penalty
+static int   penScMin;       // min sc penalty
 static int   penNType;        // how to penalize Ns in the read
 static int   penN;            // constant if N pelanty is a constant
 static bool  penNCatPair;     // concatenate mates before N filtering?
@@ -392,6 +394,8 @@ static void resetOptions() {
 	penMmcType      = DEFAULT_MM_PENALTY_TYPE;
 	penMmcMax       = DEFAULT_MM_PENALTY_MAX;
 	penMmcMin       = DEFAULT_MM_PENALTY_MIN;
+    penScMax        = DEFAULT_SC_PENALTY_MAX;
+    penScMin        = DEFAULT_SC_PENALTY_MIN;
 	penNType        = DEFAULT_N_PENALTY_TYPE;
 	penN            = DEFAULT_N_PENALTY;
 	penNCatPair     = DEFAULT_N_CAT_PAIR; // concatenate mates before N filtering?
@@ -465,7 +469,6 @@ static void resetOptions() {
     no_spliced_alignment = false;
     rna_strandness = RNA_STRANDNESS_UNKNOWN;
     splicesite_db_only = false;
-    
     anchorStop = true;
     pseudogeneStop = true;
     
@@ -586,6 +589,7 @@ static struct option long_options[] = {
 	{(char*)"multiseed",        required_argument, 0,        ARG_MULTISEED_IVAL},
 	{(char*)"ma",               required_argument, 0,        ARG_SCORE_MA},
 	{(char*)"mp",               required_argument, 0,        ARG_SCORE_MMP},
+    {(char*)"sp",               required_argument, 0,        ARG_SCORE_SCP},
 	{(char*)"np",               required_argument, 0,        ARG_SCORE_NP},
 	{(char*)"rdg",              required_argument, 0,        ARG_SCORE_RDG},
 	{(char*)"rfg",              required_argument, 0,        ARG_SCORE_RFG},
@@ -1434,7 +1438,7 @@ static void parseOption(int next_option, const char *arg) {
 			tokenize(arg, ",", args);
 			if(args.size() > 2 || args.size() == 0) {
 				cerr << "Error: expected 1 or 2 comma-separated "
-					 << "arguments to --mmp option, got " << args.size() << endl;
+					 << "arguments to --mp option, got " << args.size() << endl;
 				throw 1;
 			}
 			if(args.size() >= 1) {
@@ -1447,6 +1451,24 @@ static void parseOption(int next_option, const char *arg) {
 			}
 			break;
 		}
+        case ARG_SCORE_SCP: {
+            EList<string> args;
+            tokenize(arg, ",", args);
+            if(args.size() > 2 || args.size() == 0) {
+                cerr << "Error: expected 1 or 2 comma-separated "
+                << "arguments to --sp option, got " << args.size() << endl;
+                throw 1;
+            }
+            if(args.size() >= 1) {
+                polstr += ";SCP=Q,";
+                polstr += args[0];
+                if(args.size() >= 2) {
+                    polstr += ",";
+                    polstr += args[1];
+                }
+            }
+            break;
+        }
 		case ARG_SCORE_NP:  polstr += ";NP=C";   polstr += arg; break;
 		case ARG_SCORE_RDG: polstr += ";RDG=";   polstr += arg; break;
 		case ARG_SCORE_RFG: polstr += ";RFG=";   polstr += arg; break;
@@ -1619,6 +1641,8 @@ static void parseOptions(int argc, const char **argv) {
 		penMmcType,
 		penMmcMax,
 		penMmcMin,
+        penScMax,
+        penScMin,
 		penNType,
 		penN,
 		penRdGapConst,
@@ -3562,8 +3586,10 @@ static void driver(
 		Scoring sc(
 			bonusMatch,     // constant reward for match
 			penMmcType,     // how to penalize mismatches
-			penMmcMax,      // max mm pelanty
-			penMmcMin,      // min mm pelanty
+			penMmcMax,      // max mm penalty
+			penMmcMin,      // min mm penalty
+            penScMax,       // max sc penalty
+            penScMin,       // min sc penalty
 			scoreMin,       // min score as function of read len
 			nCeil,          // max # Ns as function of read len
 			penNType,       // how to penalize Ns in the read

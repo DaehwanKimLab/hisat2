@@ -81,7 +81,8 @@ enum {
 	ARG_MULTISEED_IVAL,         // --multiseed
 	ARG_SCORE_MIN,              // --score-min
 	ARG_SCORE_MA,               // --ma
-	ARG_SCORE_MMP,              // --mm
+	ARG_SCORE_MMP,              // --mp
+    ARG_SCORE_SCP,              // --sp
 	ARG_SCORE_NP,               // --nm
 	ARG_SCORE_RDG,              // --rdg
 	ARG_SCORE_RFG,              // --rfg

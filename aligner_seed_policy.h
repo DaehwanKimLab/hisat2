@@ -211,6 +211,8 @@ public:
 		int&        penMmcType,
 		int&        penMmcMax,
 		int&        penMmcMin,
+        int&        penScMax,
+        int&        penScMin,
 		int&        penNType,
 		int&        penN,
 		int&        penRdExConst,
