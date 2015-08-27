@@ -3156,7 +3156,7 @@ int64_t GenomeHit<index_t>::calculateScore(
                 uint32_t intronLen_thresh = (edit.splDir != EDIT_SPL_UNKNOWN ? MaxIntronLen(shorter_anchor_len) : MaxIntronLen_noncan(shorter_anchor_len));
                 if(intronLen_thresh < maxIntronLen) {
                     if(edit.splLen > intronLen_thresh) {
-                        return -1000.0;
+                        score += MIN_I32;
                     }
                     
                     if(edit.splDir != EDIT_SPL_UNKNOWN) {
@@ -3168,23 +3168,23 @@ int64_t GenomeHit<index_t>::calculateScore(
                         else if(edit.splLen >> 14) probscore_thresh = 0.94f;
                         else if(edit.splLen >> 13) probscore_thresh = 0.91f;
                         else if(edit.splLen >> 12) probscore_thresh = 0.88f;
-                        if(probscore < probscore_thresh) return -1000.0;
+                        if(probscore < probscore_thresh) score += MIN_I32;
                     }
                     if(shorter_anchor_len == left_anchor_len) {
-                        if(_trim5 > 0) return -1000.0;
+                        if(_trim5 > 0) score += MIN_I32;
                         for(int j = (int)i - 1; j >= 0; j--) {
                             if((*_edits)[j].type == EDIT_TYPE_MM ||
                                (*_edits)[j].type == EDIT_TYPE_READ_GAP ||
                                (*_edits)[j].type == EDIT_TYPE_REF_GAP)
-                                return -1000.0;
+                                score += MIN_I32;
                         }
                     } else {
-                        if(_trim3 > 0) return -1000.0;
+                        if(_trim3 > 0) score += MIN_I32;
                         for(index_t j = i + 1; j < _edits->size(); j++) {
                             if((*_edits)[j].type == EDIT_TYPE_MM ||
                                (*_edits)[j].type == EDIT_TYPE_READ_GAP ||
                                (*_edits)[j].type == EDIT_TYPE_REF_GAP)
-                                return -1000.0;
+                                score += MIN_I32;
                         }
                     }
                 }

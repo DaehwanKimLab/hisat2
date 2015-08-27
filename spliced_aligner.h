@@ -721,7 +721,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                           true, // reject straddled?
                                           straddled);
                     assert_leq(coords.size(), nelt);
-                    coords.sort();
+                    if(coords.size() > 1) coords.sort();
                     for(int ri = coords.size() - 1; ri >= 0; ri--) {
                         const Coord& coord = coords[ri];
                         GenomeHit<index_t> tempHit;
@@ -1055,7 +1055,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                             true, // reject straddled?
                                             straddled);
                 assert_leq(coords.size(), nelt);
-                coords.sort();
+                if(coords.size() > 1) coords.sort();
                 for(index_t ri = 0; ri < coords.size(); ri++) {
                     const Coord& coord = coords[ri];
                     GenomeHit<index_t> tempHit;
