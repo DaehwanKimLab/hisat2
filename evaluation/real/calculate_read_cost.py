@@ -210,185 +210,6 @@ def extract_transcripts(gtf_filename, verbose = True, full_loading = False):
 
 """
 """
-def chr_to_num(chr):
-    if chr == "X":
-        chr = 30
-    elif chr == "Y":
-        chr = 31
-    else:
-        chr = int(chr)
-        
-    return chr
-
-
-"""
-"""
-def extract_transcripts2(gtf_filename):
-    trans = {}
-
-    gtf_file = open(gtf_filename)
-    for line in gtf_file:
-        chr, protein, type, left, right, comma1, strand, comma2, values = line[:-1].split('\t')
-        values = values.strip().split(';')
-        left, right = int(left), int(right)
-
-        if chr[0] not in "123456789XY":
-            continue
-
-        if left > right:
-            left, right = right, left
-
-        for value in values[:-1]:
-            name, value = value.strip().split()
-            value = value[1:-1]
-            if name == 'transcript_id':
-                if value not in trans:
-                    trans[value] = [value, protein, chr, strand, left, right]
-                else:
-                    prev_left = trans[value][-2]
-                    prev_right = trans[value][-1]
-
-                    if protein != trans[value][1]:
-                        print >> sys.stderr, line[:-1]
-                        print >> sys.stderr, trans[value]
-                        sys.exit(1)
-
-                    if left < prev_left:
-                        trans[value][-2] = left
-                        
-                    if right > prev_right:
-                        trans[value][-1] = right
-
-    gtf_file.close()
-
-    trans_list = []
-    for trans_id, values in trans.items():
-        trans_list.append(values)
-
-    def my_cmp(a, b):
-        a_chr, a_left, a_right = chr_to_num(a[2]), a[-2], a[-1]
-        b_chr, b_left, b_right = chr_to_num(b[2]), b[-2], b[-1]
- 
-        if a_chr < b_chr:
-            return -1
-        elif a_chr > b_chr:
-            return 1
-
-        if a_left < b_left:
-            return -1
-        elif a_left > b_left:
-            return 1
-
-        if a_right < b_right:
-            return -1
-        elif a_right > b_right:
-            return 1
-
-        return 0
-
-    trans_list = sorted(trans_list, my_cmp)
-    return trans_list
-
-
-
-"""
-"""
-def extract_gene_and_transcript_ids(gtf_filename, types = ["protein_coding"], full_loading = False):
-    trans_to_gene = {}
-
-    gtf_file = open(gtf_filename)
-    for line in gtf_file:
-        chr, protein, type, left, right, comma1, strand, comma2, values = line[:-1].split('\t')
-        values = values.strip().split(';')
-        left, right = int(left), int(right)
-
-        if protein not in types and not full_loading:
-            continue
-
-        if type != "exon":
-            continue
-
-        if chr[0] not in "123456789XY":
-            continue
-
-        if left > right:
-            left, right = right, left
-
-        for value in values[:-1]:
-            name, value = value.strip().split()
-            value = value[1:-1]
-            if name == 'transcript_id':
-                if value not in trans_to_gene:
-                    trans_to_gene[value] = []
-
-                if gene_id not in trans_to_gene[value]:
-                    trans_to_gene[value].append(gene_id)
-
-            elif name == 'gene_id':
-                gene_id = value
-
-
-    gtf_file.close()
-
-    return trans_to_gene
-
-
-"""
-"""
-def binary_search_transcripts(trans_list, chr, pos):
-    chr = chr_to_num(chr)
-    
-    begin, end = 0, len(trans_list)
-    while begin < end:
-        mid = (begin + end) / 2
-        
-        def compare(tran, chr, pos):
-            cmp_chr, cmp_left, cmp_right = chr_to_num(tran[2]), tran[-2], tran[-1]
-
-            if chr != cmp_chr:
-                if chr < cmp_chr:
-                    return -1 
-                else:
-                    return 1
-
-            if pos < cmp_left:
-                return -1
-
-            if pos > cmp_right:
-                return 1
-
-            return 0
-
-        result = compare(trans_list[mid], chr, pos)
-        if result < 0:
-            end = mid
-        elif result > 0:
-            begin = mid + 1
-        else:
-            index = mid - 1
-            while index >= 0:
-                if compare(trans_list[index], chr, pos) == 0:
-                    index -= 1
-                else:
-                    break
-                
-            index += 1
-
-            trans = []
-            while True:
-                if compare(trans_list[index], chr, pos) == 0:
-                    trans.append(trans_list[index])
-                    index += 1
-                else:
-                    break
-
-            return trans
-
-    return []
-
-
-"""
-"""
 def extract_junctions(trans_dic):
     junctions_dic = {}
     for tran_id, values in trans_dic.items():
@@ -404,27 +225,6 @@ def extract_junctions(trans_dic):
             
 
     return junctions_dic
-
-
-"""
-"""
-def extract_spliced_seqs(chr_dic, junctions_dic, output_filename, kmer = 25):
-    output_file = open(output_filename, "w")
-    for junction, tran_ids in junctions_dic.items():
-        chr, left, right = junction.split("-")
-        left, right = int(left), int(right)
-
-        if chr not in chr_dic:
-            continue
-        
-        spliced_seq = chr_dic[chr][left-kmer:left] + chr_dic[chr][right-1:right-1+kmer]
-        
-        print >> output_file, ">%s-%d-%d|%s" % (chr, left, right, ";".join(tran_ids))
-        print >> output_file, spliced_seq
-
-    output_file.close()
-
-
 
 
 cigar_re = re.compile('\d+\w')
@@ -542,28 +342,6 @@ def get_cigar_chars_MN(cigars):
 
     return cigar_chars
 
-def is_small_anchor_junction_read(cigars):
-    cigar_list = []
-    for cigar in cigar_re.findall(cigars):
-        cigar_op = cigar[-1]
-        cigar_len = int(cigar[:-1])
-        cigar_list.append([cigar_op, cigar_len])
-
-    if len(cigar_list) < 3:
-        return False
-
-    if cigar_list[0][0] != 'M' or cigar_list[-1][0] != 'M':
-        return False
-
-    if cigar_list[0][1] > 10 and cigar_list[-1][1] > 10:
-        return False
-
-    if cigar_list[1][0] != 'N' or cigar_list[-2][0] != 'N':
-        return False
-
-    return True
-
-
 def is_non_canonical_junction_read(chr_dic, chr, left, cigars, canonical_junctions = [["GT", "AG"], ["GC", "AG"], ["AT", "AC"]]):
     pos = left
     for cigar in cigar_re.findall(cigars):
@@ -589,23 +367,6 @@ def is_non_canonical_junction_read(chr_dic, chr, left, cigars, canonical_junctio
 
             pos = right
             
-    return False
-
-
-def is_small_exon_junction_read(cigars, min_exon_len = 23):
-    cigars = cigar_re.findall(cigars)
-    for i in range(1, len(cigars) - 1):
-        cigar = cigars[i]
-        cigar_op = cigar[-1]
-        cigar_len = int(cigar[:-1])
-
-        prev_op = cigars[i-1][-1]
-        next_op = cigars[i+1][-1]
-        
-        if prev_op == 'N' and cigar_op == 'M' and next_op == 'N':
-            if cigar_len <= min_exon_len:
-                return True
-
     return False
 
 def is_canonical_junction(chr_dic, junction):
@@ -698,6 +459,7 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
     temp_read_file, temp_pair_file = open(temp_read_filename, "w"), open(temp_pair_filename, "w")
 
     unmapped_read_1_fq, unmapped_read_2_fq = open(unmapped_read_1_fq_name, "w"), open(unmapped_read_2_fq_name, "w")
+    hisat2 = read_filename.find("hisat2") != -1 or pair_filename.find("hisat2") != -1    
 
     read_dic = {}
     prev_read_id = ""
@@ -734,7 +496,15 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
 
         if read_id != prev_read_id:
             read_dic = {}
-            
+
+        HISAT2_XM, HISAT2_NM = 0, 0
+        if hisat2:
+            for field in fields[11:]:
+                if field[:5] == "XM:i:":
+                    HISAT2_XM = int(field[5:])
+                elif field[:5] == "NM:i:":
+                    HISAT2_NM = int(field[5:])
+
         prev_read_id = read_id
         
         XM, gap = 0, 0
@@ -761,6 +531,9 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                     for j in range(length):
                         if ref_seq[j] != "N" and read_seq[read_pos+j] != ref_seq[j]:
                             XM += 1
+                            if hisat2 and cigar_op == "S":
+                                HISAT2_XM += 1
+                                HISAT2_NM += 1
                 else:
                     XM += length
 
@@ -777,6 +550,8 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                 junction_read = True
                 
         NM = XM + gap
+        if hisat2:
+            XM, NM = HISAT2_XM, HISAT2_NM
         if NM < 10:
             print >> temp_read_file, "%s\t%d\t%s\t%s\t%s\tXM:i:%d\tNM:i:%d" % \
                   (read_id, flag, chr, pos, cigar_str, XM, NM)
@@ -1122,20 +897,22 @@ def calculate_read_cost():
     if os.path.getsize("1.fq") > (2 * 1024 * 1024 * 1024):
         is_large_file = True
 
-    # sql_write = False
     aligners = [
         ["hisat2", "", "", ""],
         ["hisat2", "", "snp", ""],
-        ["hisat", "", "", ""],
+        ["hisat2", "", "ss", ""],
+        ["hisat2", "", "snp_ss", ""],
+        # ["hisat", "", "", ""],
         ["star", "", "", ""],
-        ["bowtie", "", "", ""],
-        ["bowtie2", "", "", ""],
+        # ["bowtie", "", "", ""],
+        # ["bowtie2", "", "", ""],
         # ["hisat2", "x1", "", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "", "ss", ""],
         # ["hisat2", "", "snp_ss", ""],
         ]
-    
+
+    # sql_write = False
     verbose = True
     debug = False
 
@@ -1201,8 +978,10 @@ def calculate_read_cost():
                 cmd = ["%s/hisat2" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
+                    
                 # cmd += ["-k", "5"]
                 # cmd += ["--score-min", "C,-18"]
+                    
                 if version != "":
                     version = int(version)
                 else:
