@@ -35,21 +35,21 @@ public:
 	 */
 	SplicedAligner(
                    const GFM<index_t>& gfm,
+                   const TranscriptomePolicy& tpol,
                    bool anchorStop,
                    size_t minIntronLen,
                    size_t maxIntronLen,
                    bool secondary = false,
                    bool local = false,
-                   uint64_t threads_rids_mindist = 0,
-                   bool no_spliced_alignment = false) :
+                   uint64_t threads_rids_mindist = 0) :
     HI_Aligner<index_t, local_index_t>(gfm,
+                                       tpol,
                                        anchorStop,
                                        minIntronLen,
                                        maxIntronLen,
                                        secondary,
                                        local,
-                                       threads_rids_mindist,
-                                       no_spliced_alignment)
+                                       threads_rids_mindist)
     {
     }
     
@@ -288,7 +288,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 if(fraglen >= minMatchLen &&
                    left >= minMatchLen &&
                    hit.trim5() == 0 &&
-                   !this->_no_spliced_alignment) {
+                   !this->_tpol.no_spliced_alignment()) {
                     spliceSites.clear();
                     ssdb.getLeftSpliceSites(hit.ref(), left + minMatchLen, minMatchLen, spliceSites);
                     for(size_t si = 0; si < spliceSites.size(); si++) {
@@ -307,7 +307,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      frag2off + 1,
                                      (index_t)INDEX_MAX,
                                      this->_sharedVars);
-                        if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
+                        if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                         int64_t minsc = max<int64_t>(this->_minsc[rdi], best_score);
                         bool combined = tempHit.combineWith(hit, rd, gfm, ref, altdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
@@ -340,7 +340,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     // make use of a list of known or novel splice sites to further align the read
                     if(fraglen >= minMatchLen &&
                        local_genomeHits[i].trim3() == 0 &&
-                       !this->_no_spliced_alignment) {
+                       !this->_tpol.no_spliced_alignment()) {
                         spliceSites.clear();
                         assert_gt(fraglen, 0);
                         ssdb.getRightSpliceSites(local_genomeHits[i].ref(), right + fraglen - minMatchLen, minMatchLen, spliceSites);
@@ -360,7 +360,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                          frag2off,
                                          (index_t)INDEX_MAX,
                                          this->_sharedVars);
-                            if(!canHit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
+                            if(!canHit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                             GenomeHit<index_t> combinedHit = canHit;
                             int64_t minsc = max<int64_t>(this->_minsc[rdi], best_score);
                             bool combined = combinedHit.combineWith(tempHit, rd, gfm, ref, altdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
@@ -419,7 +419,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             hit.getLeft(fragoff, fraglen, left);
             const index_t minMatchLen = this->_minK_local;
             // make use of a list of known or novel splice sites to further align the read
-            if(fraglen >= minMatchLen && left >= minMatchLen && !this->_no_spliced_alignment) {
+            if(fraglen >= minMatchLen && left >= minMatchLen && !this->_tpol.no_spliced_alignment()) {
                 spliceSites.clear();
                 ssdb.getLeftSpliceSites(hit.ref(), left + minMatchLen, minMatchLen + min<index_t>(minMatchLen, fragoff), spliceSites);
                 for(size_t si = 0; si < spliceSites.size(); si++) {
@@ -438,7 +438,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  frag2off + 1 - fragoff,
                                  (index_t)INDEX_MAX,
                                  this->_sharedVars);
-                    if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
+                    if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                     int64_t minsc = this->_minsc[rdi];
                     bool combined = tempHit.combineWith(hit, rd, gfm, ref, altdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
                     if(!this->_secondary) {
@@ -591,7 +591,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  this->_sharedVars);
                     if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref)) continue;
                     // check if the partial alignment is compatible with the new alignment using the local index
-                    if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) {
+                    if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) {
                         if(count == 1) continue;
                         else break;
                     }
@@ -735,7 +735,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      coord.joinedOff(),
                                      this->_sharedVars);
                         if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref)) continue;
-                        if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
+                        if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                         if(uniqueStop) {
                             assert_eq(coords.size(), 1);
                             index_t leftext = (index_t)INDEX_MAX, rightext = (index_t)0;
@@ -888,7 +888,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             hit.getRight(fragoff, fraglen, right);
             const index_t minMatchLen = this->_minK_local;
             // make use of a list of known or novel splice sites to further align the read
-            if(fraglen >= minMatchLen && !this->_no_spliced_alignment) {
+            if(fraglen >= minMatchLen && !this->_tpol.no_spliced_alignment()) {
                 spliceSites.clear();
                 assert_gt(fraglen, 0);
                 assert_leq(fragoff + fraglen, rdlen);
@@ -909,7 +909,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  frag2off,
                                  (index_t)INDEX_MAX,
                                  this->_sharedVars);
-                    if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
+                    if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                     GenomeHit<index_t> combinedHit = hit;
                     int64_t minsc = this->_minsc[rdi];
                     bool combined = combinedHit.combineWith(tempHit, rd, gfm, ref, altdb, ssdb, swa, swm, sc, minsc, rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, 1, 1, &ss);
@@ -1070,7 +1070,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  this->_sharedVars);
                     if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref)) continue;
                     // check if the partial alignment is compatible with the new alignment using the local index
-                    if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) {
+                    if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) {
                         if(count == 1) continue;
                         else break;
                     }
@@ -1212,7 +1212,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      coord.joinedOff(),
                                      this->_sharedVars);
                         if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref)) continue;
-                        if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_no_spliced_alignment)) continue;
+                        if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                         index_t leftext = (index_t)0, rightext = (index_t)INDEX_MAX;
                         tempHit.extend(rd, gfm, ref, altdb, ssdb, swa, swm, prm, sc, this->_minsc[rdi], rnd, this->_minK_local, this->_minIntronLen, this->_maxIntronLen, leftext, rightext);
                         GenomeHit<index_t> combinedHit = hit;

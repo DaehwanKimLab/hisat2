@@ -49,6 +49,7 @@
 #include "aligner_cache.h"
 #include "util.h"
 #include "pe.h"
+#include "tp.h"
 #include "simple_func.h"
 #include "presets.h"
 #include "opts.h"
@@ -254,6 +255,8 @@ static bool splicesite_db_only; //
 
 static bool anchorStop;
 static bool pseudogeneStop;
+static bool tranMapOnly; // transcriptome mapping only
+static bool tranAssm;    // alignments selected for downstream transcript assembly such as StringTie and Cufflinks
 
 #ifdef USE_SRA
 static EList<string> sra_accs;
@@ -471,6 +474,8 @@ static void resetOptions() {
     splicesite_db_only = false;
     anchorStop = true;
     pseudogeneStop = true;
+    tranMapOnly = false;
+    tranAssm = false;
     
 #ifdef USE_SRA
     sra_accs.clear();
@@ -675,6 +680,10 @@ static struct option long_options[] = {
     {(char*)"rna-strandness",   required_argument, 0,        ARG_RNA_STRANDNESS},
     {(char*)"splicesite-db-only",   no_argument, 0,        ARG_SPLICESITE_DB_ONLY},
     {(char*)"no-anchorstop",   no_argument, 0,        ARG_NO_ANCHORSTOP},
+    {(char*)"--transcriptome-mapping-only",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
+    {(char*)"--tmo",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
+    {(char*)"--downstream-transcriptome-assembly",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
+    {(char*)"--dta",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
 #ifdef USE_SRA
     {(char*)"sra-acc",   required_argument, 0,        ARG_SRA_ACC},
 #endif
@@ -814,6 +823,8 @@ static void printUsage(ostream& out) {
         << "  --no-temp-splicesite               disable the use of splice sites found" << endl
         << "  --no-spliced-alignment             disable spliced alignment" << endl
         << "  --rna-strandness <string>          Specify strand-specific information (unstranded)" << endl
+        << "  --tmo/--transcriptome-mapping-only Reports alignments within known transcriptome" << endl
+        << "  --dta/--downstream-transcriptome_assembly Reports alignments within known transcriptome" << endl
         << endl
 		<< " Scoring:" << endl
 		<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
@@ -1554,7 +1565,6 @@ static void parseOption(int next_option, const char *arg) {
             else if(strandness == "FR") rna_strandness = RNA_STRANDNESS_FR;
             else if(strandness == "RF") rna_strandness = RNA_STRANDNESS_RF;
             else {
-                // daehwan - throw exception with details
                 cerr << "Error: should be one of F, R, FR, or RF " << endl;
 				throw 1;
             }
@@ -1566,6 +1576,14 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_NO_ANCHORSTOP: {
             anchorStop = false;
+            break;
+        }
+        case ARG_TRANSCRIPTOME_MAPPING_ONLY: {
+            tranMapOnly = true;
+            break;
+        }
+        case ARG_TRANSCRIPTOME_ASSEMBLY: {
+            tranAssm = true;
             break;
         }
 #ifdef USE_SRA
@@ -1771,7 +1789,6 @@ static PairedPatternSource*              multiseed_patsrc;
 static HGFM<index_t>*                    multiseed_gfm;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
-static AlignmentCache<index_t>*          multiseed_ca; // seed cache
 static AlnSink<index_t>*                 multiseed_msink;
 static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
@@ -2913,7 +2930,6 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	const HGFM<index_t>&             gfm      = *multiseed_gfm;
 	const Scoring&                   sc       = *multiseed_sc;
 	const BitPairReference&          ref      = *multiseed_refs;
-	AlignmentCache<index_t>&         scShared = *multiseed_ca;
 	AlnSink<index_t>&                msink    = *multiseed_msink;
 	OutFileBuf*                      metricsOfb = multiseed_metricsOfb;
     
@@ -2926,21 +2942,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	auto_ptr<PatternSourcePerThreadFactory> patsrcFact(createPatsrcFactory(patsrc, tid));
 	auto_ptr<PatternSourcePerThread> ps(patsrcFact->create());
 	
-	// Thread-local cache for seed alignments
-	PtrWrap<AlignmentCache<index_t> > scLocal;
-	if(!msNoCache) {
-		scLocal.init(new AlignmentCache<index_t>(seedCacheLocalMB * 1024 * 1024, false));
-	}
-	AlignmentCache<index_t> scCurrent(seedCacheCurrentMB * 1024 * 1024, false);
-	// Thread-local cache for current seed alignments
-	
-	// Interfaces for alignment and seed caches
-	AlignmentCacheIface<index_t> ca(
-                                    &scCurrent,
-                                    scLocal.get(),
-                                    msNoCache ? NULL : &scShared);
-	
-	// Instantiate an object for holding reporting-related parameters.
+    // Instantiate an object for holding reporting-related parameters.
     ReportingParams rp(
                        (allHits ? std::numeric_limits<THitInt>::max() : khits), // -k
                        mhits,             // -m/-M
@@ -2960,15 +2962,19 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                    (size_t)tid,   // thread id
                                    secondary);    // secondary alignments
     
+    TranscriptomePolicy tpol(no_spliced_alignment,
+                             tranMapOnly,
+                             tranAssm);
+    
     SplicedAligner<index_t, local_index_t> splicedAligner(
                                                           gfm,
+                                                          tpol,
                                                           anchorStop,
                                                           minIntronLen,
                                                           maxIntronLen,
                                                           secondary,
                                                           localAlign,
-                                                          thread_rids_mindist,
-                                                          no_spliced_alignment);
+                                                          thread_rids_mindist);
 	SwAligner sw;
 	OuterLoopMetrics olm;
 	SeedSearchMetrics sdm;
@@ -3114,9 +3120,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 			while(retry) {
 				retry = false;
 				assert_eq(ps->bufa().color, false);
-				ca.nextRead(); // clear the cache
 				olm.reads++;
-				assert(!ca.aligning());
 				bool pair = paired;
 				const size_t rdlen1 = ps->bufa().length();
 				const size_t rdlen2 = pair ? ps->bufb().length() : 0;

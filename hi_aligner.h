@@ -41,6 +41,7 @@
 #include "aligner_driver.h"
 #include "aligner_sw_driver.h"
 #include "group_walk.h"
+#include "tp.h"
 
 // Maximum insertion length
 static const uint32_t maxInsLen = 3;
@@ -3350,13 +3351,14 @@ public:
 	 */
 	HI_Aligner(
                const GFM<index_t>& gfm,
+               const TranscriptomePolicy& tpol,
                bool anchorStop = true,
                size_t minIntronLen = 20,
                size_t maxIntronLen = 500000,
                bool secondary = false,
                bool local = false,
-               uint64_t threads_rids_mindist = 0,
-               bool no_spliced_alignment = false) :
+               uint64_t threads_rids_mindist = 0) :
+    _tpol(tpol),
     _anchorStop(anchorStop),
     _minIntronLen(minIntronLen),
     _maxIntronLen(maxIntronLen),
@@ -3364,8 +3366,7 @@ public:
     _local(local),
     _gwstate(GW_CAT),
     _gwstate_local(GW_CAT),
-    _thread_rids_mindist(threads_rids_mindist),
-    _no_spliced_alignment(no_spliced_alignment)
+    _thread_rids_mindist(threads_rids_mindist)
     {
         index_t genomeLen = gfm.gh().len();
         _minK = 0;
@@ -4045,6 +4046,8 @@ protected:
     TAlScore _minsc[2];
     TAlScore _maxpen[2];
     
+    TranscriptomePolicy _tpol;
+    
     bool     _anchorStop;
     size_t   _minIntronLen;
     size_t   _maxIntronLen;
@@ -4091,9 +4094,8 @@ protected:
     
     //
     EList<GenomeHit<index_t> >     _hits_searched[2];
-    
+
     uint64_t   _thread_rids_mindist;
-    bool _no_spliced_alignment;
     
     //
     EList<pair<index_t, index_t> > _node_iedge_count;
@@ -4665,7 +4667,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     // in case of multiple exonic alignments, choose the ones near (known) splice sites
     // this helps eliminate cases of reads being mapped to pseudogenes
     pair<bool, bool> spliced = hit.spliced();
-    if(!this->_no_spliced_alignment) {
+    if(!this->_tpol.no_spliced_alignment()) {
         if(!spliced.first) {
             assert(!spliced.second);
             const index_t max_exon_size = 10000;
