@@ -5,7 +5,7 @@ A few notes:
 
 1) HISAT2's index (HGFM) size for the human reference genome and 12.3 million common SNPs is 6.2GB. The SNPs consist of 11 million single nucleotide polymorphisms, 728,000 deletions, and 555,000 insertions. Insertions and deletions used in this index are small (usually <20bp). We plan to incorporate structural variations (SV) into this index.
 
-2) HISAT2 also allows for mapping directly against transcriptome, similar to that of TopHat2.
+2) HISAT2 also allows for mapping reads directly against transcriptome, similar to that of TopHat2.
 
 3) The memory footprint of HISAT2 is relatively low, 6.7GB.
 
