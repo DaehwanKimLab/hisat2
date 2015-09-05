@@ -1,11 +1,8 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the GRCh37 release 75 version of H. spiens (human) from
-# Ensembl.
-#
-# Note that Ensembl's GRCh37 build has three categories of compressed fasta
-# files:
+# Downloads sequence for the HG19 version of H. spiens (human) from
+# UCSC.
 #
 # The base files, named ??.fa.gz
 #
@@ -15,11 +12,8 @@
 # variable below.
 #
 
-CHRS_TO_INDEX="$BASE_CHRS"
-
-ENSEMBL_RELEASE=75
-ENSEMBL_GRCh37_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
-UCSC_HG19=http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips/chromFa.tar.gz
+UCSC_HG19_BASE=http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips
+F=chromFa.tar.gz
 
 get() {
 	file=$1
@@ -47,9 +41,8 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 fi
 
 rm -f genome.fa
-get ${ENSEMBL_GRCh37_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
-gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
-awk '{if($1 ~ /^>/) {print $1} else {print}}' $F >> genome.fa
+get ${UCSC_HG19_BASE}/$F || (echo "Error getting $F" && exit 1)
+tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
 rm $F
 
 CMD="${HISAT2_BUILD_EXE} genome.fa genome"

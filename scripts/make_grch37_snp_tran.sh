@@ -49,6 +49,10 @@ ENSEMBL_GRCh37_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/h
 ENSEMBL_GRCh37_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
 GTF_FILE=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.gtf
 
+DBSNP_RELEASE=142
+SNP_FILE=snp${DBSNP_RELEASE}Common.txt
+UCSC_COMMON_SNP=http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/${SNP_FILE}
+
 get() {
 	file=$1
 	if ! wget --version >/dev/null 2>/dev/null ; then
@@ -74,9 +78,19 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 	fi
 fi
 
+HISAT2_SNP_SCRIPT=./extract_snps.py
+if [ ! -x "$HISAT2_SNP_SCRIPT" ] ; then
+	if ! which extract_snps.py ; then
+		echo "Could not find extract_snps.py in current directory or in PATH"
+		exit 1
+	else
+		HISAT2_SNP_SCRIPT=`which extract_snps.py`
+	fi
+fi
+
 HISAT2_SS_SCRIPT=./extract_splice_sites.py
 if [ ! -x "$HISAT2_SS_SCRIPT" ] ; then
-	if ! which extract_snps.py ; then
+	if ! which extract_splice_sites.py ; then
 		echo "Could not find extract_splice_sites.py in current directory or in PATH"
 		exit 1
 	else
@@ -105,6 +119,14 @@ for c in $CHRS_TO_INDEX ; do
 	fi
 done
 
+if [ ! -f $SNP_FILE ] ; then
+       get ${UCSC_COMMON_SNP}.gz || (echo "Error getting ${UCSC_COMMON_SNP}" && exit 1)
+       gunzip ${SNP_FILE}.gz || (echo "Error unzipping ${SNP_FILE}" && exit 1)
+       awk 'BEGIN{OFS="\t"} {if($2 ~ /^chr/) {$2 = substr($2, 4)}; if($2 == "M") {$2 = "MT"} print}' ${SNP_FILE} > ${SNP_FILE}.tmp
+       mv ${SNP_FILE}.tmp ${SNP_FILE}
+       ${HISAT2_SNP_SCRIPT} genome.fa ${SNP_FILE} > genome.snp
+fi
+
 if [ ! -f $GTF_FILE ] ; then
        get ${ENSEMBL_GRCh37_GTF_BASE}/${GTF_FILE}.gz || (echo "Error getting ${GTF_FILE}" && exit 1)
        gunzip ${GTF_FILE}.gz || (echo "Error unzipping ${GTF_FILE}" && exit 1)
@@ -112,7 +134,7 @@ if [ ! -f $GTF_FILE ] ; then
        ${HISAT2_EXON_SCRIPT} ${GTF_FILE} > genome.exon
 fi
 
-CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --ss genome.ss --exon genome.exon genome_ss"
+CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --snp genome.snp --ss genome.ss --exon genome.exon genome_snp_tran"
 echo Running $CMD
 if $CMD ; then
 	echo "genome index built; you may remove fasta files"
