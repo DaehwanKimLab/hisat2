@@ -245,32 +245,33 @@ static int parseFuncType(const std::string& otype) {
  *  Seed 1-: TACGATAGCA
  */
 void SeedAlignmentPolicy::parseString(
-	const       std::string& s,
-	bool        local,
-	bool        noisyHpolymer,
-	bool        ignoreQuals,
-	int&        bonusMatchType,
-	int&        bonusMatch,
-	int&        penMmcType,
-	int&        penMmcMax,
-	int&        penMmcMin,
-    int&        penScMax,
-    int&        penScMin,
-	int&        penNType,
-	int&        penN,
-	int&        penRdExConst,
-	int&        penRfExConst,
-	int&        penRdExLinear,
-	int&        penRfExLinear,
-	SimpleFunc& costMin,
-	SimpleFunc& nCeil,
-	bool&       nCatPair,
-	int&        multiseedMms,
-	int&        multiseedLen,
-	SimpleFunc& multiseedIval,
-	size_t&     failStreak,
-	size_t&     seedRounds,
-    SimpleFunc* penIntronLen)
+                                      const       std::string& s,
+                                      bool        local,
+                                      bool        noisyHpolymer,
+                                      bool        ignoreQuals,
+                                      int&        bonusMatchType,
+                                      int&        bonusMatch,
+                                      int&        penMmcType,
+                                      int&        penMmcMax,
+                                      int&        penMmcMin,
+                                      int&        penScMax,
+                                      int&        penScMin,
+                                      int&        penNType,
+                                      int&        penN,
+                                      int&        penRdExConst,
+                                      int&        penRfExConst,
+                                      int&        penRdExLinear,
+                                      int&        penRfExLinear,
+                                      SimpleFunc& costMin,
+                                      SimpleFunc& nCeil,
+                                      bool&       nCatPair,
+                                      int&        multiseedMms,
+                                      int&        multiseedLen,
+                                      SimpleFunc& multiseedIval,
+                                      size_t&     failStreak,
+                                      size_t&     seedRounds,
+                                      SimpleFunc* penCanIntronLen,
+                                      SimpleFunc* penNoncanIntronLen)
 {
 
 	bonusMatchType    = local ? DEFAULT_MATCH_BONUS_TYPE_LOCAL : DEFAULT_MATCH_BONUS_TYPE;
@@ -646,10 +647,14 @@ void SeedAlignmentPolicy::parseString(
 		else if(tag == "IVAL") {
 			PARSE_FUNC(multiseedIval);
 		}
-        else if(tag == "INTRONLEN") {
-            assert(penIntronLen != NULL);
-			PARSE_FUNC((*penIntronLen));
+        else if(tag == "CANINTRONLEN") {
+            assert(penCanIntronLen != NULL);
+			PARSE_FUNC((*penCanIntronLen));
 		}
+        else if(tag == "NONCANINTRONLEN") {
+            assert(penNoncanIntronLen != NULL);
+            PARSE_FUNC((*penNoncanIntronLen));
+        }
 		else {
 			// Unknown tag
 			cerr << "Unexpected alignment policy setting "

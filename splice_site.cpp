@@ -265,8 +265,8 @@ bool SpliceSiteDB::addSpliceSite(
                 } else {
                     leftAnchorLen = edits[eidx].pos;
                 }
-                bool fw = (edits[eidx].splDir == EDIT_SPL_FW || edits[eidx].splDir == EDIT_SPL_UNKNOWN);
-                bool canonical = (edits[eidx].splDir != EDIT_SPL_UNKNOWN);
+                bool fw = (edits[eidx].splDir == EDIT_SPL_FW || edits[eidx].splDir == EDIT_SPL_SEMI_FW || edits[eidx].splDir == EDIT_SPL_UNKNOWN);
+                bool canonical = (edits[eidx].splDir == EDIT_SPL_FW || edits[eidx].splDir == EDIT_SPL_RC);
                 ssp.init(coord.ref(), refoff - 1, refoff + edits[eidx].splLen, fw, canonical);
                 refoff += edits[eidx].splLen;
                 last_eidx = eidx;

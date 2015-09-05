@@ -1236,9 +1236,17 @@ public:
                     whichsense = ed.splDir;
                 } else if(ed.splDir != EDIT_SPL_UNKNOWN) {
                     assert_neq(whichsense, EDIT_SPL_UNKNOWN);
-                    if(whichsense != ed.splDir) {
-                        whichsense = EDIT_SPL_UNKNOWN;
-                        break;
+                    if(whichsense == EDIT_SPL_FW || whichsense == EDIT_SPL_SEMI_FW) {
+                        if(ed.splDir != EDIT_SPL_FW && ed.splDir != EDIT_SPL_SEMI_FW) {
+                            whichsense = EDIT_SPL_UNKNOWN;
+                            break;
+                        }
+                    }
+                    if(whichsense == EDIT_SPL_RC || whichsense == EDIT_SPL_SEMI_RC) {
+                        if(ed.splDir != EDIT_SPL_RC && ed.splDir != EDIT_SPL_SEMI_RC) {
+                            whichsense = EDIT_SPL_UNKNOWN;
+                            break;
+                        }
                     }
                 }
             }

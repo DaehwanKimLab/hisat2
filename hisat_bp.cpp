@@ -845,7 +845,7 @@ static void printUsage(ostream& out) {
 	if(wrapper.empty()) {
 		cerr << endl
 		     << "*** Warning ***" << endl
-			 << "'hisat2-align' was run directly.  It is recommended that you run the wrapper script 'hisat' instead." << endl
+			 << "'hisat2-align' was run directly.  It is recommended that you run the wrapper script 'hisat2' instead." << endl
 			 << endl;
 	}
 }
@@ -1437,13 +1437,13 @@ static void parseOption(int next_option, const char *arg) {
 		case ARG_VERSION: showVersion = 1; break;
         case ARG_NO_TEMPSPLICESITE: useTempSpliceSite = false; break;
         case ARG_PEN_CANSPLICE: {
-	  penCanSplice = parseInt(0, "-k arg must be at least 0", arg);
-	  break;
-	}
+            penCanSplice = parseInt(0, "-k arg must be at least 0", arg);
+            break;
+        }
         case ARG_PEN_NONCANSPLICE: {
-	  penNoncanSplice = parseInt(0, "-k arg must be at least 0", arg);
-	  break;
-	}
+            penNoncanSplice = parseInt(0, "-k arg must be at least 0", arg);
+            break;
+        }
         case ARG_PEN_INTRONLEN: {
 			polstr += ";";
 			EList<string> args;

@@ -906,10 +906,10 @@ const
             if(whichsense != EDIT_SPL_UNKNOWN) {
                 WRITE_SEP();
                 o.append("XS:A:");
-                if(whichsense == EDIT_SPL_FW) {
+                if(whichsense == EDIT_SPL_FW || whichsense == EDIT_SPL_SEMI_FW) {
                     o.append('+');
                 } else {
-                    assert_eq(whichsense, EDIT_SPL_RC);
+                    assert(whichsense == EDIT_SPL_RC || whichsense == EDIT_SPL_SEMI_RC);
                     o.append('-');
                 }
             }

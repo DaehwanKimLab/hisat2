@@ -1431,7 +1431,7 @@ def calculate_read_cost():
         # ["hisat2", "x2", "", ""],
         ["hisat2", "x1", "ss", ""],
         # ["hisat2", "", "ss", ""],
-        ["hisat2", "x1", "snp_ss", ""],
+        # ["hisat2", "x1", "snp_ss", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
         # ["star", "", "", ""],
@@ -1558,10 +1558,12 @@ def calculate_read_cost():
                     if type in ["x1", "x2"]:
                         cmd += ["--no-temp-splicesite"]
 
+                    # cmd += ["--no-anchorstop"]
+                    # cmd += ["--sp", "1000,1000"]
+
                     # daehwan - for debugging purposes
-                    if index_type in ["snp", "ss"]:
-                        # cmd += ["--no-anchorstop"]
-                        None
+                    cmd += ["--dta"]
+                    # cmd += ["--dta-cufflinks"]
 
                     if type == "x2":
                         if cmd_idx == 0:
@@ -1577,8 +1579,6 @@ def calculate_read_cost():
                     index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
                     if index_type:
                         index_cmd += ("_" + index_type)
-                        # daehwan - for debugging purposes
-                        # index_cmd += "_nr"
                     cmd += [index_cmd]
                     if paired:
                         cmd += ["-1", read1_fname,

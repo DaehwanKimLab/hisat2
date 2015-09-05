@@ -898,12 +898,13 @@ def calculate_read_cost():
         is_large_file = True
 
     aligners = [
-        ["hisat2", "", "", ""],
-        ["hisat2", "", "snp", ""],
-        ["hisat2", "", "ss", ""],
-        ["hisat2", "", "snp_ss", ""],
+        # ["hisat2", "", "", ""],
+        # ["hisat2", "", "snp", ""],
+        # ["hisat2", "", "ss", ""],
+        # ["hisat2", "", "snp_ss", ""],
         # ["hisat", "", "", ""],
-        ["star", "", "", ""],
+        # ["star", "", "", ""],
+        ["tophat2", "", "", ""],
         # ["bowtie", "", "", ""],
         # ["bowtie2", "", "", ""],
         # ["hisat2", "x1", "", ""],

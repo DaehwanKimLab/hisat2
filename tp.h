@@ -40,12 +40,14 @@ public:
 	TranscriptomePolicy(
                         bool no_spliced_alignment = false,
                         bool transcriptome_mapping_only = false,
-                        bool transcriptome_assembly = false)
+                        bool transcriptome_assembly = false,
+                        bool xs_only = false)
 	{
 		init(
              no_spliced_alignment,
              transcriptome_mapping_only,
-             transcriptome_assembly);
+             transcriptome_assembly,
+             xs_only);
 	}
 
 	/** 
@@ -59,21 +61,25 @@ public:
 	void init(
               bool no_spliced_alignment = false,
               bool transcriptome_mapping_only = false,
-              bool transcriptome_assembly = false)
+              bool transcriptome_assembly = false,
+              bool xs_only = false)
 	{
         no_spliced_alignment_ = no_spliced_alignment;
         transcriptome_mapping_only_ = transcriptome_mapping_only;
         transcriptome_assembly_ = transcriptome_assembly;
+        xs_only_ = xs_only;
 	}
     
     bool no_spliced_alignment() const { return no_spliced_alignment_; }
     bool transcriptome_mapping_only() const { return transcriptome_mapping_only_; }
     bool transcriptome_assembly() const { return transcriptome_assembly_; }
+    bool xs_only() const { return xs_only_; }
 
 private:
     bool no_spliced_alignment_;
     bool transcriptome_mapping_only_;
     bool transcriptome_assembly_;
+    bool xs_only_;
 };
 
 #endif /*ndef TP_H_*/

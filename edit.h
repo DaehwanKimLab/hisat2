@@ -43,7 +43,9 @@ enum {
 enum {
     EDIT_SPL_UNKNOWN = 1,
     EDIT_SPL_FW,
-    EDIT_SPL_RC
+    EDIT_SPL_RC,
+    EDIT_SPL_SEMI_FW,
+    EDIT_SPL_SEMI_RC,
 };
 
 /**

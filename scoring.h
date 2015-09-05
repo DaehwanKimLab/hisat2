@@ -23,6 +23,7 @@
 #include <limits>
 #include "qual.h"
 #include "simple_func.h"
+#include "limit.h"
 
 // Default type of bonus to added for matches
 #define DEFAULT_MATCH_BONUS_TYPE COST_MODEL_CONSTANT
@@ -136,27 +137,28 @@ class Scoring {
 
 public:
 
-	Scoring(
-		int   mat,          // reward for a match
-		int   mmcType,      // how to penalize mismatches
-	    int   mmpMax_,      // maximum mismatch penalty
-	    int   mmpMin_,      // minimum mismatch penalty
-        int   scpMax_,      // maximum softclip penalty
-        int   scpMin_,      // minimum softclip penalty
-		const SimpleFunc& scoreMin_,   // minimum score for valid alignment; const coeff
-		const SimpleFunc& nCeil_,      // max # ref Ns allowed in alignment; const coeff
-	    int   nType,        // how to penalize Ns in the read
-	    int   n,            // constant if N pelanty is a constant
-		bool  ncat,         // whether to concatenate mates before N filtering
-	    int   rdGpConst,    // constant coeff for cost of gap in the read
-	    int   rfGpConst,    // constant coeff for cost of gap in the ref
-	    int   rdGpLinear,   // coeff of linear term for cost of gap in read
-	    int   rfGpLinear,   // coeff of linear term for cost of gap in ref
-		int   gapbar_,      // # rows at top/bot can only be entered diagonally
-        int   cp_ = 0,      // canonical splicing penalty
-        int   ncp_ = 12,    // non-canonical splicing penalty
-        int   csp_ = 24,    // conflicting splice site penalty
-        const SimpleFunc* ip_ = NULL)      // penalty as to intron length
+    Scoring(
+            int   mat,          // reward for a match
+            int   mmcType,      // how to penalize mismatches
+            int   mmpMax_,      // maximum mismatch penalty
+            int   mmpMin_,      // minimum mismatch penalty
+            int   scpMax_,      // maximum softclip penalty
+            int   scpMin_,      // minimum softclip penalty
+            const SimpleFunc& scoreMin_,   // minimum score for valid alignment; const coeff
+            const SimpleFunc& nCeil_,      // max # ref Ns allowed in alignment; const coeff
+            int   nType,        // how to penalize Ns in the read
+            int   n,            // constant if N pelanty is a constant
+            bool  ncat,         // whether to concatenate mates before N filtering
+            int   rdGpConst,    // constant coeff for cost of gap in the read
+            int   rfGpConst,    // constant coeff for cost of gap in the ref
+            int   rdGpLinear,   // coeff of linear term for cost of gap in read
+            int   rfGpLinear,   // coeff of linear term for cost of gap in ref
+            int   gapbar_,      // # rows at top/bot can only be entered diagonally
+            int   cp_ = 0,      // canonical splicing penalty
+            int   ncp_ = 12,    // non-canonical splicing penalty
+            int   csp_ = 24,    // conflicting splice site penalty
+            const SimpleFunc* icp_ = NULL,      // penalty as to intron length
+            const SimpleFunc* incp_ = NULL)     // penalty as to intron length
 	{
 		matchType    = COST_MODEL_CONSTANT;
 		matchConst   = mat;
@@ -183,7 +185,8 @@ public:
         cp = cp_;
         ncp = ncp_;
         csp = csp_;
-        if(ip_ != NULL) ip = *ip_;
+        if(icp_ != NULL) icp = *icp_;
+        if(incp_ != NULL) incp = *incp_;
 		assert(repOk());
 	}
 	
@@ -467,18 +470,18 @@ public:
 	}
     
     // avg. known score: -22.96, avg. random score: -33.70
-    inline int canSpl(int intronlen = 0, int minanchor = 100, float probscore = 0.0f) const {
-        int penintron = (intronlen > 0 ? ip.f<int>((double)intronlen) : 0);
+    inline int64_t canSpl(int intronlen = 0, int minanchor = 100, float probscore = 0.0f) const {
+        int penintron = (intronlen > 0 ? icp.f<int>((double)intronlen) : 0);
         if(penintron < 0) penintron = 0;
         if(minanchor < 10 && probscore < -24.0f + (10 - minanchor)) {
-            return 10000;
+            return MAX_I32;
         }
         return penintron + cp;
     }
     
-    inline int noncanSpl(int intronlen = 0, int minanchor = 100, float probscore = 0.0f) const {
-        if(minanchor < 14) return 10000;
-        int penintron = (intronlen > 0 ? ip.f<int>((double)intronlen) : 0);
+    inline int64_t noncanSpl(int intronlen = 0, int minanchor = 100, float probscore = 0.0f) const {
+        if(minanchor < 14) return MAX_I32;
+        int penintron = (intronlen > 0 ? incp.f<int>((double)intronlen) : 0);
         if(penintron < 0) penintron = 0;
         return penintron + ncp;
     }
@@ -506,10 +509,11 @@ public:
 	float   matchBonuses[256]; // map from qualities to match bonus
 	int     mmpens[256];       // map from qualities to mm penalty
 	int     npens[256];        // map from N qualities to penalty
-    int     cp;           // canonical splicing penalty
-    int     ncp;          // non-canonical splicing penalty
-    int     csp;          // conflicting splice site penalty
-    SimpleFunc     ip;           // intron length penalty
+    int64_t cp;           // canonical splicing penalty
+    int64_t ncp;          // non-canonical splicing penalty
+    int64_t csp;          // conflicting splice site penalty
+    SimpleFunc     icp;          // intron length penalty
+    SimpleFunc     incp;         // intron length penalty
 
 	static Scoring base1() {
 		const double DMAX = std::numeric_limits<double>::max();

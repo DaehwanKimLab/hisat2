@@ -703,6 +703,12 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         chr_ids = genome_seq.keys()
 
     sam_file = open(base_fname + ".sam", "w")
+
+    # Write SAM header
+    print >> sam_file, "@HD\tVN:1.0\tSO:unsorted"
+    for chr in genome_seq.keys():
+        print >> sam_file, "@SQ\tSN:%s\tLN:%d" % (chr, len(genome_seq[chr]))
+    
     read_file = open(base_fname + "_1.fa", "w")
     if paired_end:
         read2_file = open(base_fname + "_2.fa", "w")

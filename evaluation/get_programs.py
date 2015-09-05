@@ -11,9 +11,9 @@ def get_aligners():
     os.chdir("aligners")
     if not os.path.exists("bin"):
         os.mkdir("bin")
-    aligners = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP"]
-    for aligner in aligners:
-        if aligner == "HISAT":
+    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "StringTie", "Cufflinks"]
+    for program in programs:
+        if program == "HISAT":
             dir = "hisat-0.1.6-beta"
             if os.path.exists(dir):
                 continue
@@ -23,7 +23,7 @@ def get_aligners():
             installs = bins + " hisat hisat-build hisat-inspect"
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
-        elif aligner == "Bowtie2":
+        elif program == "Bowtie2":
             dir = "bowtie2-2.2.5"
             if os.path.exists(dir):
                 continue
@@ -33,7 +33,7 @@ def get_aligners():
             installs = bins + " bowtie2 bowtie2-build bowtie2-inspect"
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
-        elif aligner == "Bowtie":
+        elif program == "Bowtie":
             dir = "bowtie-1.1.2"
             if os.path.exists(dir):
                 continue
@@ -43,7 +43,7 @@ def get_aligners():
             installs = bins + " bowtie bowtie-build bowtie-inspect"
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
-        elif aligner == "TopHat2":
+        elif program == "TopHat2":
             if mac:
                 dir = "tophat-2.1.0.OSX_x86_64"
             else:
@@ -55,7 +55,7 @@ def get_aligners():
             installs = "gtf_juncs juncs_db prep_reads segment_juncs tophat tophat_reports sra_to_solid samtools_0.1.18 map2gtf fix_map_ordering bam_merge long_spanning_reads sam_juncs gtf_to_fasta bam2fastx"
             cmd = "wget %s/%s; tar xvzf %s; cd %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, installs)
-        elif aligner == "STAR":
+        elif program == "STAR":
             dir = "STAR_2.4.2a"
             if os.path.exists("STAR-" + dir):
                 continue
@@ -69,7 +69,7 @@ def get_aligners():
             else:
                 cmd = "wget %s/%s; tar xvzf %s; cd STAR-%s/source; make; cp STAR ../../bin; cd ../.." % \
                     (url, fname, fname, dir)
-        elif aligner == "GSNAP":
+        elif program == "GSNAP":
             dir = "gmap-2015-07-23"
             dir2 = "gmap-gsnap-2015-07-23"
             if os.path.exists(dir):
@@ -79,6 +79,14 @@ def get_aligners():
             installs = "gmap gmapl get-genome gmapindex iit_store iit_get iit_dump gsnap gsnapl uniqscan uniqscanl snpindex cmetindex atoiindex sam_sort ../util/*"
             cmd = "wget %s/%s; tar xvzf %s; cd %s; ./configure; make; cd src; cp %s ../../bin; cd ../.." % \
                 (url, fname, fname, dir, installs)
+        elif program == "StringTie":
+            dir = "stringtie-1.0.4"
+            url = "http://ccb.jhu.edu/software/stringtie/dl"
+            bins =  "stringtie"
+            cmd = "wget %s/%s.tar.gz; tar xvzf %s.tar.gz; cd %s; make release; cp %s ../bin; cd .." % \
+                (url, dir, dir, dir, bins)
+        elif program == "Cufflinks":
+            cmd = ""
         else:
             assert False
         print >> sys.stderr, cmd

@@ -242,7 +242,8 @@ static bool useTempSpliceSite;
 static int penCanSplice;
 static int penNoncanSplice;
 static int penConflictSplice;
-static SimpleFunc penIntronLen;
+static SimpleFunc penCanIntronLen;
+static SimpleFunc penNoncanIntronLen;
 static size_t minIntronLen;
 static size_t maxIntronLen;
 static string knownSpliceSiteInfile;  //
@@ -257,6 +258,7 @@ static bool anchorStop;
 static bool pseudogeneStop;
 static bool tranMapOnly; // transcriptome mapping only
 static bool tranAssm;    // alignments selected for downstream transcript assembly such as StringTie and Cufflinks
+static string tranAssm_program;
 
 #ifdef USE_SRA
 static EList<string> sra_accs;
@@ -462,7 +464,8 @@ static void resetOptions() {
     penCanSplice = 0;
     penNoncanSplice = 12;
     penConflictSplice = 1000000;
-    penIntronLen.init(SIMPLE_FUNC_LOG, -8, 1);
+    penCanIntronLen.init(SIMPLE_FUNC_LOG, -8, 1);
+    penNoncanIntronLen.init(SIMPLE_FUNC_LOG, -8, 1);
     minIntronLen = 20;
     maxIntronLen = 500000;
     knownSpliceSiteInfile = "";
@@ -476,6 +479,7 @@ static void resetOptions() {
     pseudogeneStop = true;
     tranMapOnly = false;
     tranAssm = false;
+    tranAssm_program = "";
     
 #ifdef USE_SRA
     sra_accs.clear();
@@ -669,7 +673,9 @@ static struct option long_options[] = {
     {(char*)"pen-cansplice",  required_argument, 0,        ARG_PEN_CANSPLICE},
     {(char*)"pen-noncansplice",  required_argument, 0,     ARG_PEN_NONCANSPLICE},
     {(char*)"pen-conflictsplice",  required_argument, 0,     ARG_PEN_CONFLICTSPLICE},
-    {(char*)"pen-intronlen",  required_argument, 0,     ARG_PEN_INTRONLEN},
+    {(char*)"pen-intronlen",  required_argument, 0,     ARG_PEN_CANINTRONLEN},
+    {(char*)"pen-canintronlen",  required_argument, 0,     ARG_PEN_CANINTRONLEN},
+    {(char*)"pen-noncanintronlen",  required_argument, 0,     ARG_PEN_NONCANINTRONLEN},
     {(char*)"min-intronlen",  required_argument, 0,     ARG_MIN_INTRONLEN},
     {(char*)"max-intronlen",  required_argument, 0,     ARG_MAX_INTRONLEN},
     {(char*)"known-splicesite-infile",       required_argument, 0,        ARG_KNOWN_SPLICESITE_INFILE},
@@ -680,10 +686,11 @@ static struct option long_options[] = {
     {(char*)"rna-strandness",   required_argument, 0,        ARG_RNA_STRANDNESS},
     {(char*)"splicesite-db-only",   no_argument, 0,        ARG_SPLICESITE_DB_ONLY},
     {(char*)"no-anchorstop",   no_argument, 0,        ARG_NO_ANCHORSTOP},
-    {(char*)"--transcriptome-mapping-only",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
-    {(char*)"--tmo",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
-    {(char*)"--downstream-transcriptome-assembly",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
-    {(char*)"--dta",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
+    {(char*)"transcriptome-mapping-only",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
+    {(char*)"tmo",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
+    {(char*)"downstream-transcriptome-assembly",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
+    {(char*)"dta",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
+    {(char*)"dta-cufflinks",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS},
 #ifdef USE_SRA
     {(char*)"sra-acc",   required_argument, 0,        ARG_SRA_ACC},
 #endif
@@ -905,7 +912,7 @@ static void printUsage(ostream& out) {
 	if(wrapper.empty()) {
 		cerr << endl
 		     << "*** Warning ***" << endl
-			 << "'hisat2-align' was run directly.  It is recommended that you run the wrapper script 'hisat' instead." << endl
+			 << "'hisat2-align' was run directly.  It is recommended that you run the wrapper script 'hisat2' instead." << endl
 			 << endl;
 	}
 }
@@ -1526,7 +1533,7 @@ static void parseOption(int next_option, const char *arg) {
             penConflictSplice = parseInt(0, "--pen-conflictsplice arg must be at least 0", arg);
             break;
         }
-        case ARG_PEN_INTRONLEN: {
+        case ARG_PEN_CANINTRONLEN: {
 			polstr += ";";
 			EList<string> args;
 			tokenize(arg, ",", args);
@@ -1536,7 +1543,7 @@ static void parseOption(int next_option, const char *arg) {
                 << args.size() << endl;
 				throw 1;
 			}
-			polstr += ("INTRONLEN=" + args[0]);
+			polstr += ("CANINTRONLEN=" + args[0]);
 			if(args.size() > 1) {
 				polstr += ("," + args[1]);
 			}
@@ -1545,6 +1552,25 @@ static void parseOption(int next_option, const char *arg) {
 			}
 			break;
 		}
+        case ARG_PEN_NONCANINTRONLEN: {
+            polstr += ";";
+            EList<string> args;
+            tokenize(arg, ",", args);
+            if(args.size() > 3 && args.size() == 0) {
+                cerr << "Error: expected 3 or fewer comma-separated "
+                << "arguments to --n-ceil option, got "
+                << args.size() << endl;
+                throw 1;
+            }
+            polstr += ("NONCANINTRONLEN=" + args[0]);
+            if(args.size() > 1) {
+                polstr += ("," + args[1]);
+            }
+            if(args.size() > 2) {
+                polstr += ("," + args[2]);
+            }
+            break;
+        }
         case ARG_MIN_INTRONLEN: {
             minIntronLen = parseInt(20, "--min-intronlen arg must be at least 20", arg);
             break;
@@ -1584,6 +1610,11 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_TRANSCRIPTOME_ASSEMBLY: {
             tranAssm = true;
+            break;
+        }
+        case ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS: {
+            tranAssm = true;
+            tranAssm_program = "cufflinks";
             break;
         }
 #ifdef USE_SRA
@@ -1650,32 +1681,33 @@ static void parseOptions(int argc, const char **argv) {
 	}
 	size_t failStreakTmp = 0;
 	SeedAlignmentPolicy::parseString(
-		polstr,
-		localAlign,
-		noisyHpolymer,
-		ignoreQuals,
-		bonusMatchType,
-		bonusMatch,
-		penMmcType,
-		penMmcMax,
-		penMmcMin,
-        penScMax,
-        penScMin,
-		penNType,
-		penN,
-		penRdGapConst,
-		penRfGapConst,
-		penRdGapLinear,
-		penRfGapLinear,
-		scoreMin,
-		nCeil,
-		penNCatPair,
-		multiseedMms,
-		multiseedLen,
-		msIval,
-		failStreakTmp,
-		nSeedRounds,
-        &penIntronLen);
+                                     polstr,
+                                     localAlign,
+                                     noisyHpolymer,
+                                     ignoreQuals,
+                                     bonusMatchType,
+                                     bonusMatch,
+                                     penMmcType,
+                                     penMmcMax,
+                                     penMmcMin,
+                                     penScMax,
+                                     penScMin,
+                                     penNType,
+                                     penN,
+                                     penRdGapConst,
+                                     penRfGapConst,
+                                     penRdGapLinear,
+                                     penRfGapLinear,
+                                     scoreMin,
+                                     nCeil,
+                                     penNCatPair,
+                                     multiseedMms,
+                                     multiseedLen,
+                                     msIval,
+                                     failStreakTmp,
+                                     nSeedRounds,
+                                     &penCanIntronLen,
+                                     &penNoncanIntronLen);
 	if(failStreakTmp > 0) {
 		maxEeStreak = failStreakTmp;
 		maxUgStreak = failStreakTmp;
@@ -1793,6 +1825,7 @@ static AlnSink<index_t>*                 multiseed_msink;
 static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
 static ALTDB<index_t>*                   altdb;
+static TranscriptomePolicy*              multiseed_tpol;
 
 /**
  * Metrics for measuring the work done by the outer read alignment
@@ -2929,7 +2962,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	PairedPatternSource&             patsrc   = *multiseed_patsrc;
 	const HGFM<index_t>&             gfm      = *multiseed_gfm;
 	const Scoring&                   sc       = *multiseed_sc;
-	const BitPairReference&          ref      = *multiseed_refs;
+    const BitPairReference&          ref      = *multiseed_refs;
 	AlnSink<index_t>&                msink    = *multiseed_msink;
 	OutFileBuf*                      metricsOfb = multiseed_metricsOfb;
     
@@ -2962,13 +2995,9 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                    (size_t)tid,   // thread id
                                    secondary);    // secondary alignments
     
-    TranscriptomePolicy tpol(no_spliced_alignment,
-                             tranMapOnly,
-                             tranAssm);
-    
     SplicedAligner<index_t, local_index_t> splicedAligner(
                                                           gfm,
-                                                          tpol,
+                                                          *multiseed_tpol,
                                                           anchorStop,
                                                           minIntronLen,
                                                           maxIntronLen,
@@ -3412,6 +3441,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
  */
 static void multiseedSearch(
 	Scoring& sc,
+    TranscriptomePolicy& tpol,
 	PairedPatternSource& patsrc,  // pattern source
 	AlnSink<index_t>& msink,      // hit sink
 	HGFM<index_t>& gfm,           // index of original text
@@ -3422,6 +3452,7 @@ static void multiseedSearch(
 	multiseed_msink        = &msink;
 	multiseed_gfm          = &gfm;
 	multiseed_sc           = &sc;
+    multiseed_tpol         = &tpol;
 	multiseed_metricsOfb   = metricsOfb;
 	multiseed_refs = refs;
 	AutoArray<tthread::thread*> threads(nthreads);
@@ -3587,27 +3618,32 @@ static void driver(
 			cerr << "Warning: Match bonus always = 0 in --end-to-end mode; ignoring user setting" << endl;
 			bonusMatch = 0;
 		}
+        if(tranAssm) {
+            penNoncanIntronLen.init(SIMPLE_FUNC_LOG, -8, 2);
+        }
 		Scoring sc(
-			bonusMatch,     // constant reward for match
-			penMmcType,     // how to penalize mismatches
-			penMmcMax,      // max mm penalty
-			penMmcMin,      // min mm penalty
-            penScMax,       // max sc penalty
-            penScMin,       // min sc penalty
-			scoreMin,       // min score as function of read len
-			nCeil,          // max # Ns as function of read len
-			penNType,       // how to penalize Ns in the read
-			penN,           // constant if N pelanty is a constant
-			penNCatPair,    // whether to concat mates before N filtering
-			penRdGapConst,  // constant coeff for read gap cost
-			penRfGapConst,  // constant coeff for ref gap cost
-			penRdGapLinear, // linear coeff for read gap cost
-			penRfGapLinear, // linear coeff for ref gap cost
-			gGapBarrier,    // # rows at top/bot only entered diagonally
-            penCanSplice,   // canonical splicing penalty
-            penNoncanSplice,// non-canonical splicing penalty
-            penConflictSplice, // conflicting splice site penalty
-            &penIntronLen);  // penalty as to intron length
+                   bonusMatch,     // constant reward for match
+                   penMmcType,     // how to penalize mismatches
+                   penMmcMax,      // max mm penalty
+                   penMmcMin,      // min mm penalty
+                   penScMax,       // max sc penalty
+                   penScMin,       // min sc penalty
+                   scoreMin,       // min score as function of read len
+                   nCeil,          // max # Ns as function of read len
+                   penNType,       // how to penalize Ns in the read
+                   penN,           // constant if N pelanty is a constant
+                   penNCatPair,    // whether to concat mates before N filtering
+                   penRdGapConst,  // constant coeff for read gap cost
+                   penRfGapConst,  // constant coeff for ref gap cost
+                   penRdGapLinear, // linear coeff for read gap cost
+                   penRfGapLinear, // linear coeff for ref gap cost
+                   gGapBarrier,    // # rows at top/bot only entered diagonally
+                   penCanSplice,   // canonical splicing penalty
+                   penNoncanSplice,// non-canonical splicing penalty
+                   penConflictSplice, // conflicting splice site penalty
+                   &penCanIntronLen,      // penalty as to intron length
+                   &penNoncanIntronLen);  // penalty as to intron length
+        
 		EList<size_t> reflens;
 		for(size_t i = 0; i < gfm.nPat(); i++) {
 			reflens.push_back(gfm.plen()[i]);
@@ -3687,6 +3723,12 @@ static void driver(
         delete _tRef;
         if(!refs->loaded()) throw 1;
         
+        bool xsOnly = (tranAssm_program == "cufflinks");
+        TranscriptomePolicy tpol(no_spliced_alignment,
+                                 tranMapOnly,
+                                 tranAssm,
+                                 xsOnly);
+        
         init_junction_prob();
         bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;
         bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite || altdb->hasSpliceSites();
@@ -3747,6 +3789,7 @@ static void driver(
 		assert(mssink != NULL);
 		multiseedSearch(
 			sc,      // scoring scheme
+            tpol,
 			*patsrc, // pattern source
 			*mssink, // hit sink
 			gfm,     // BWT
