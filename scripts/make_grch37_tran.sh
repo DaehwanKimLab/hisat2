@@ -15,35 +15,6 @@
 # variable below.
 #
 
-BASE_CHRS="\
-1 \
-2 \
-3 \
-4 \
-5 \
-6 \
-7 \
-8 \
-9 \
-10 \
-11 \
-12 \
-13 \
-14 \
-15 \
-16 \
-17 \
-18 \
-19 \
-20 \
-21 \
-22 \
-X \
-Y \
-MT"
-
-CHRS_TO_INDEX="$BASE_CHRS"
-
 ENSEMBL_RELEASE=75
 ENSEMBL_GRCh37_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
 ENSEMBL_GRCh37_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
@@ -95,15 +66,13 @@ if [ ! -x "$HISAT2_EXON_SCRIPT" ] ; then
 fi
 
 rm -f genome.fa
-for c in $CHRS_TO_INDEX ; do
-        F=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.dna.chromosome.${c}.fa
-	if [ ! -f $F ] ; then
-		get ${ENSEMBL_GRCh37_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
-		gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
-		awk '{if($1 ~ /^>/) {print $1} else {print}}' $F >> genome.fa
-		rm $F
-	fi
-done
+F=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.dna.primary_assembly.fa
+if [ ! -f $F ] ; then
+	get ${ENSEMBL_GRCh37_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
+	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
+	awk '{if($1 ~ /^>/) {print $1} else {print}}' $F > genome.fa
+	rm $F
+fi
 
 if [ ! -f $GTF_FILE ] ; then
        get ${ENSEMBL_GRCh37_GTF_BASE}/${GTF_FILE}.gz || (echo "Error getting ${GTF_FILE}" && exit 1)
