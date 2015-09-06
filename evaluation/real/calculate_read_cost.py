@@ -881,7 +881,7 @@ def calculate_read_cost():
     aligners = [
         ["hisat2", "", "", ""],
         ["hisat2", "", "snp", ""],
-        ["hisat2", "", "snp_ss", ""],
+        ["hisat2", "", "snp_tran", ""],
         ["hisat", "x1", "", ""],
         ["hisat", "", "", ""],
         ["hisat", "x2", "", ""],
@@ -898,19 +898,19 @@ def calculate_read_cost():
         is_large_file = True
 
     aligners = [
-        # ["hisat2", "", "", ""],
-        # ["hisat2", "", "snp", ""],
-        # ["hisat2", "", "ss", ""],
-        # ["hisat2", "", "snp_ss", ""],
+        ["hisat2", "", "", ""],
+        ["hisat2", "", "snp", ""],
+        ["hisat2", "", "tran", ""],
+        ["hisat2", "", "snp_tran", ""],
         # ["hisat", "", "", ""],
         # ["star", "", "", ""],
-        ["tophat2", "", "", ""],
+        # ["tophat2", "", "", ""],
         # ["bowtie", "", "", ""],
         # ["bowtie2", "", "", ""],
         # ["hisat2", "x1", "", ""],
         # ["hisat2", "x2", "", ""],
-        # ["hisat2", "", "ss", ""],
-        # ["hisat2", "", "snp_ss", ""],
+        # ["hisat2", "", "tran", ""],
+        # ["hisat2", "", "snp_tran", ""],
         ]
 
     # sql_write = False
@@ -1001,7 +1001,7 @@ def calculate_read_cost():
 
                 # daehwan - for debugging purposes
                 """
-                if index_type == "ss":
+                if index_type == "tran":
                     cmd += ["--no-anchorstop"]
                     cmd += ["-k", "100"]
                 """

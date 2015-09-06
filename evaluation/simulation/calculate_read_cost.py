@@ -1412,7 +1412,7 @@ def calculate_read_cost():
     aligners = [
         ["hisat2", "", "", ""],
         ["hisat2", "", "snp", ""],
-        ["hisat2", "", "snp_ss", ""],
+        ["hisat2", "", "snp_tran", ""],
         ["hisat", "x1", "", ""],
         ["hisat", "", "", ""],
         ["hisat", "x2", "", ""],
@@ -1429,9 +1429,9 @@ def calculate_read_cost():
         ["hisat", "", "", ""],        
         ["hisat2", "", "", ""],
         # ["hisat2", "x2", "", ""],
-        ["hisat2", "x1", "ss", ""],
-        # ["hisat2", "", "ss", ""],
-        # ["hisat2", "x1", "snp_ss", ""],
+        ["hisat2", "x1", "tran", ""],
+        # ["hisat2", "", "tran", ""],
+        # ["hisat2", "x1", "snp_tran", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
         # ["star", "", "", ""],
@@ -1440,8 +1440,8 @@ def calculate_read_cost():
         # ["bowtie2", "", "", ""],
         # ["gsnap", "", "", ""],
         # ["hisat2", "", "snp", ""],
-        # ["hisat2", "", "ss", ""],
-        # ["hisat2", "", "snp_ss", ""],
+        # ["hisat2", "", "tran", ""],
+        # ["hisat2", "", "snp_tran", ""],
         ]
     readtypes = ["all"]
     verbose = True
