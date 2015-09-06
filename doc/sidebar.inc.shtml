@@ -21,14 +21,14 @@
 <div class="box">
  <ul>
    <table width="100%">
-	 <tbody><tr><td>
-	 <!-- 
-     Questions and comments about HISAT2 can be posted on the 
-     <a href="https://groups.google.com/forum/#!forum/hisat-tools-users"><b>HISAT Tools Users Google Group</b></a>. 
-     Please use <a href="mailto:hisat@gmail.com">hisat@gmail.com</a> for 
-     private communications only. Please do not email technical questions to HISAT contributors directly.</td></tr>
-     -->
-     Please email <a href="mailto:infphilo@gmail.com">Daehwan Kim</a> for questions.
+     <tbody><tr><td>
+	   <!-- 
+		Questions and comments about HISAT2 can be posted on the 
+		<a href="https://groups.google.com/forum/#!forum/hisat-tools-users"><b>HISAT Tools Users Google Group</b></a>. 
+		Please use <a href="mailto:hisat@gmail.com">hisat@gmail.com</a> for 
+		private communications only. Please do not email technical questions to HISAT contributors directly.</td></tr>
+	     -->
+	   Please email <a href="mailto:infphilo@gmail.com">Daehwan Kim</a> for questions.
    </tbody></table>
  </ul>
 </div>
@@ -36,18 +36,16 @@
 <a href="./downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
-   <table width="100%"><tbody><tr><td>version 2.0.0-beta</td> <td align="right">8/XX/2015</td></tr>
-	 <tr>
-		 <td><a href="./downloads/hisat2-0.0.0-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
-	 </tr>
-	 <tr>
-		 <td><a href="./downloads/hisat2-0.0.0-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
-	 </tr>
-	 <tr>
-		 <td><a href="./downloads/hisat2-2.0.0-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
-	 </tr>
-
-
+   <table width="100%"><tbody><tr><td>version 2.0.0-beta</td> <td align="right">9/XX/2015</td></tr>
+       <tr>
+	 <td><a href="./downloads/hisat2-0.0.0-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
+       </tr>
+       <tr>
+	 <td><a href="./downloads/hisat2-0.0.0-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
+       </tr>
+       <tr>
+	 <td><a href="./downloads/hisat2-2.0.0-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
+       </tr>
    </tbody></table>
  </ul>
 </div>
@@ -55,15 +53,67 @@
 <h2>Indexes</h2>
   <div class="box">
     <table width="100%">
-      <!--
       <tr>
         <td>
-          <a href="ftp://ftp.ccb.jhu.edu/pub/data/hisat_indexes/hg19_hisat.tar.gz"><i>H. sapiens</i>, UCSC hg19</a>
+          <a href="./data/grch37.tar.gz"><i>H. sapiens</i>, Ensembl GRCh37</a>
         </td>
         <td align="right">
-          <b>7.0 GB</b>
+          <b>3.7 GB</b>
         </td>
       </tr>
+      <tr>
+        <td colspan="2" style="font-size: x-small">
+	  index base: <i>genome</i>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <a href="./data/grch37_snp.tar.gz"><i>H. sapiens</i>, Ensembl GRCh37</a>
+        </td>
+        <td align="right">
+          <b>4.5 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="font-size: x-small">
+	  index base: <i>genome_snp</i> with common SNPs
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <a href="./data/grch37_tran.tar.gz"><i>H. sapiens</i>, Ensembl GRCh37</a>
+        </td>
+        <td align="right">
+          <b>4.0 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="font-size: x-small">
+	  index base: <i>genome_tran</i> with transcripts
+        </td>
+      </tr>
+            <tr>
+        <td>
+          <a href="./data/grch37_snp_tran.tar.gz"><i>H. sapiens</i>, Ensembl GRCh37</a>
+        </td>
+        <td align="right">
+          <b>4.5 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="font-size: x-small">
+	  index base: <i>genome_snp_tran</i> with common SNPs and transcripts
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <a href="./data/hg19.tar.gz"><i>H. sapiens</i>, UCSC hg19</a>
+        </td>
+        <td align="right">
+          <b>3.8 GB</b>
+        </td>
+      </tr>
+      <!--
       <tr>
         <td>
           <a href="ftp://ftp.ccb.jhu.edu/pub/data/hisat_indexes/mm10_hisat.tar.gz"><i>M. musculus</i>, UCSC mm10</a>

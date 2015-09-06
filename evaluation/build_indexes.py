@@ -23,8 +23,8 @@ def build_indexes():
             if aligner == "HISAT2":
                 cmd = "../../aligners/bin/hisat2-build ../../data/%s.fa %s" % (genome, genome)
                 cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp %s_snp" % (genome, genome, genome)
-                cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --ss ../../data/%s.ss --exon ../../data/%s.exon %s_ss" % (genome, genome, genome, genome)
-                cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --ss ../../data/%s.ss --exon ../../data/%s.exon %s_snp_ss" % (genome, genome, genome, genome, genome)
+                cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --ss ../../data/%s.ss --exon ../../data/%s.exon %s_tran" % (genome, genome, genome, genome)
+                cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --ss ../../data/%s.ss --exon ../../data/%s.exon %s_snp_tran" % (genome, genome, genome, genome, genome)
             elif aligner == "HISAT":
                 cmd = "../../aligners/bin/hisat-build ../../data/%s.fa %s" % (genome, genome)
                 cmd = cmd + "; ../../aligners/bin/tophat -G ../../data/%s.gtf --transcriptome-index=gtf %s; rm -rf tophat_out" % (genome, genome)
