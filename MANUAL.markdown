@@ -306,8 +306,8 @@ considered valid, and `x` is the read length.
 </td><td>
 
 The basename of the index for the reference genome.  The basename is the name of
-any of the index files up to but not including the final `.1.bt2` / `.rev.1.bt2`
-/ etc.  `hisat2` looks for the specified index first in the current directory,
+any of the index files up to but not including the final `.1.ht2` / etc.
+`hisat2` looks for the specified index first in the current directory,
 then in the directory specified in the `HISAT2_INDEXES` environment variable.
 
 </td></tr><tr><td>
@@ -1585,9 +1585,21 @@ alignment:
     </td>
     <td>
 
-    Alignment score.  Can be negative.  Can be greater than 0 in [`--local`]
-    mode (but not in [`--end-to-end`] mode).  Only present if SAM record is for
+    Alignment score.  Can be negative.  Only present if SAM record is for
     an aligned read.
+
+    </td></tr>
+    <tr><td id="hisat2-build-opt-fields-xs">
+
+        ZS:i:<N>
+
+    </td>
+    <td>
+    Alignment score for the best-scoring alignment found other than the
+    alignment reported.  Can be negative.  Only present if the SAM record is
+    for an aligned read and more than one alignment was found for the read.
+    Note that, when the read is part of a concordantly-aligned pair, this score
+    could be greater than [`AS:i`].
 
     </td></tr>
     <tr><td id="hisat2-build-opt-fields-ys">
@@ -1712,6 +1724,18 @@ alignment:
     </td><td>
 
     The number of mapped locations for the read or the pair.
+    
+    </td></tr>
+    <tr><td id="hisat2-opt-fields-Zs">
+
+        Zs:Z:<S>
+
+    </td><td>
+
+    When the alignment of a read involves SNPs that are in the index, this option is reported to indicate where exactly the read involves SNPs.
+    This optional field is similar to the above MD:Z field.
+    For example, `Zs:Z:1|S|rs3747203,97|S|rs16990981` indicates the second base of the read corresponds to a known SNP (ID: rs3747203).
+    97 bases after the second base, the read in the alignment involves another known SNP (ID: rs16990981).
     </td></tr>
     
     </table>
@@ -1727,7 +1751,7 @@ The `hisat2-build` indexer
 `hisat2-build` builds a HISAT2 index from a set of DNA sequences.
 `hisat2-build` outputs a set of 6 files with suffixes `.1.ht2`, `.2.ht2`,
 `.3.ht2`, `.4.ht2`, `.5.ht2`, `.6.ht2`, `.7.ht2`, and `.8.ht2`.  In the case of a large 
-index these suffixes will have a `bt2l` termination.  These files together
+index these suffixes will have a `ht2l` termination.  These files together
 constitute the index: they are all that is needed to align reads to that
 reference.  The original sequence FASTA files are no longer used by HISAT2
 once the index is built.
@@ -1768,6 +1792,10 @@ Usage:
 
     hisat2-build [options]* <reference_in> <ht2_base>
 
+### Notes
+    If you use --snp, --ss, and/or --exon, hisat2-build will need about 200GB RAM for the human genome size as index building involves a graph construction. 
+    Otherwise, you will be able to build an index on your desktop with 8GB RAM.
+    
 ### Main arguments
 
 <table><tr><td>
@@ -1784,14 +1812,13 @@ or, if [`-c`](#hisat2-build-options-c) is specified, this might be
 
 </td></tr><tr><td>
 
-    <bt2_base>
+    <ht2_base>
 
 </td><td>
 
 The basename of the index files to write.  By default, `hisat2-build` writes
-files named `NAME.1.bt2`, `NAME.2.bt2`, `NAME.3.bt2`, `NAME.4.bt2`,
-`NAME.5.bt2`, `NAME.6.bt2`, `NAME.rev.1.bt2`, `NAME.rev.2.bt2`, 
-`NAME.rev.5.bt2`, and `NAME.rev.6.bt2` where `NAME` is `<bt2_base>`.
+files named `NAME.1.ht2`, `NAME.2.ht2`, `NAME.3.ht2`, `NAME.4.ht2`,
+`NAME.5.ht2`, `NAME.6.ht2`, `NAME.7.ht2`, and `NAME.8.ht2` where `NAME` is `<ht2_base>`.
 
 </td></tr></table>
 
@@ -1841,19 +1868,6 @@ values for the [`--bmax`], [`--dcv`] and [`--packed`] parameters according to
 available memory.  Instead, user may specify values for those parameters.  If
 memory is exhausted during indexing, an error message will be printed; it is up
 to the user to try new parameters.
-
-</td></tr><tr><td id="hisat2-build-options-p">
-
-[`--packed`]: #hisat2-build-options-p
-[`-p`/`--packed`]: #hisat2-build-options-p
-
-    -p/--packed
-
-</td><td>
-
-Use a packed (2-bits-per-nucleotide) representation for DNA strings. This saves
-memory but makes indexing 2-3 times slower.  Default: off. This is configured
-automatically by default; use [`-a`/`--noauto`] to configure manually.
 
 </td></tr><tr><td id="hisat2-build-options-bmax">
 
@@ -1914,7 +1928,7 @@ repetitive reference).  Default: off.
 
 </td><td>
 
-Do not build the `NAME.3.bt2` and `NAME.4.bt2` portions of the index, which
+Do not build the `NAME.3.ht2` and `NAME.4.ht2` portions of the index, which
 contain a bitpacked version of the reference sequences and are used for
 paired-end alignment.
 
@@ -1924,7 +1938,7 @@ paired-end alignment.
 
 </td><td>
 
-Build only the `NAME.3.bt2` and `NAME.4.bt2` portions of the index, which
+Build only the `NAME.3.ht2` and `NAME.4.ht2` portions of the index, which
 contain a bitpacked version of the reference sequences and are used for
 paired-end alignment.
 
@@ -1975,6 +1989,52 @@ this occupies about 16KB per local index).
 
 The local ftab is the lookup table in a local index.
 The default setting is 6 (ftab is 8KB per local index).
+
+</td></tr><tr><td>
+
+    -p <int>
+
+</td><td>
+
+Launch `NTHREADS` parallel build threads (default: 1).
+
+</td></tr><tr><td>
+
+    --snp <path>
+
+</td><td>
+
+Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).
+   
+   SNP ID `<tab>` chromosome name `<tab>` snp type (single, deletion, or insertion) `<tab>` zero-offset based genomic position of a SNP `<tab>` alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)
+
+Use `extract_snps.py` (in the HISAT2 package) to extract SNPs from a dbSNP file (e.g. snpCommon.txt).
+
+</td></tr><tr><td>
+
+    --ss <path>
+
+</td><td>
+
+Note this option should be used with the followig --exon option.
+Provide a list of splice sites (in the HISAT2's own format) as follows (four columns).
+   
+   chromosome name `<tab>` zero-offset based genomic position of the flanking base on the left side of an intron `<tab>` zero-offset based genomic position of the flanking base on the right `<tab>` strand
+
+Use `extract_splice_sites.py` (in the HISAT2 package) to extract splice sites from a GTF file.
+
+</td></tr><tr><td>
+
+    --exon <path>
+
+</td><td>
+
+Note this option should be used with the above --ss option.
+Provide a list of exons (in the HISAT2's own format) as follows (three columns).
+   
+   chromosome name `<tab>` zero-offset based left genomic position of an exon `<tab>` zero-offset based right genomic position of an exon
+
+Use `extract_exons.py` (in the HISAT2 package) to extract exons from a GTF file.
 
 </td></tr><tr><td>
 
@@ -2042,12 +2102,12 @@ Usage:
 
 <table><tr><td>
 
-    <bt2_base>
+    <ht2_base>
 
 </td><td>
 
 The basename of the index to be inspected.  The basename is name of any of the
-index files but with the `.X.bt2` suffix omitted.
+index files but with the `.X.ht2` suffix omitted.
 `hisat2-inspect` first looks in the current directory for the index files, then
 in the directory specified in the `HISAT2_INDEXES` environment variable.
 
@@ -2094,6 +2154,46 @@ names and lengths of the input sequences.  The summary has this format:
     Sequence-N	<name>	<len>
 
 Fields are separated by tabs.  Colorspace is always set to 0 for HISAT2.
+
+</td></tr><tr><td id="hisat2-inspect-options-snp">
+
+[`--snp`]: #hisat2-inspect-options-snp
+
+    --snp
+
+</td><td>
+
+Print SNPs, and quit.
+
+</td></tr><tr><td id="hisat2-inspect-options-ss">
+
+[`--ss`]: #hisat2-inspect-options-ss
+
+    --ss
+
+</td><td>
+
+Print splice sites, and quit.
+
+</td></tr><tr><td id="hisat2-inspect-options-ss-all">
+
+[`--ss-all`]: #hisat2-inspect-options-ss-all
+
+    --ss-all
+
+</td><td>
+
+Print splice sites including those not in the global index, and quit.
+
+</td></tr><tr><td id="hisat2-inspect-options-exon">
+
+[`--exon`]: #hisat2-inspect-options-exon
+
+    --exon
+
+</td><td>
+
+Print exons, and quit.
 
 </td></tr><tr><td>
 
@@ -2142,11 +2242,11 @@ Indexing a reference genome
 To create an index for the genomic region (1 million bps from the human chromosome 22 between 20,000,000 and 20,999,999)
 included with HISAT2, create a new temporary directory (it doesn't matter where), change into that directory, and run:
 
-    $HISAT2_HOME/hisat2-build $HISAT2_HOME/example/reference/22_20-21M.fa 22_20-21M
+    $HISAT2_HOME/hisat2-build $HISAT2_HOME/example/reference/22_20-21M.fa --snp $HISAT2_HOME/example/reference/22_20-21M.snp 22_20-21M_snp
 
 The command should print many lines of output then quit. When the command
 completes, the current directory will contain ten new files that all start with
-`22_20-21M` and end with `.1.ht2`, `.2.ht2`, `.3.ht2`, `.4.ht2`, `.5.ht2`, `.6.ht2`,
+`22_20-21M_snp` and end with `.1.ht2`, `.2.ht2`, `.3.ht2`, `.4.ht2`, `.5.ht2`, `.6.ht2`,
 `.7.ht2`, and `.8.ht2`.  These files constitute the index - you're done!
 
 You can use `hisat2-build` to create an index for a set of FASTA files obtained

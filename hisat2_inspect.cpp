@@ -92,12 +92,13 @@ static void printUsage(ostream& out) {
         << "                     'small' one is present." << endl;
 	}
 	out << "  -a/--across <int>  Number of characters across in FASTA output (default: 60)" << endl
+    << "  -s/--summary       Print summary incl. ref names, lengths, index properties" << endl
 	<< "  -n/--names         Print reference sequence names only" << endl
     << "  --snp              Print SNPs" << endl
     << "  --ss               Print splice sites" << endl
     << "  --ss-all           Print splice sites including those not in the global index" << endl
-	<< "  -s/--summary       Print summary incl. ref names, lengths, index properties" << endl
-	<< "  -e/--bt2-ref      Reconstruct reference from ." << gfm_ext << " (slow, preserves colors)" << endl
+    << "  --exon             Print exons" << endl
+	<< "  -e/--bt2-ref       Reconstruct reference from ." << gfm_ext << " (slow, preserves colors)" << endl
 	<< "  -v/--verbose       Verbose output (for debugging)" << endl
 	<< "  -h/--help          print detailed description of tool and its options" << endl
 	<< "  --help             print this usage message" << endl

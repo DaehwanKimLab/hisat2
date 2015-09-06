@@ -171,9 +171,9 @@ static void printUsage(ostream& out) {
 	    << "    -t/--ftabchars <int>    # of chars consumed in initial lookup (default: 10)" << endl
         << "    --localoffrate <int>    SA (local) is sampled every 2^offRate BWT chars (default: 3)" << endl
         << "    --localftabchars <int>  # of chars consumed in initial lookup in a local index (default: 6)" << endl
-        << "    --snp <filename>        SNP file name" << endl
-        << "    --ss <filename>         Splice site file name" << endl
-        << "    --exon <filename>       Exon file name" << endl
+        << "    --snp <path>            SNP file name" << endl
+        << "    --ss <path>             Splice site file name" << endl
+        << "    --exon <path>           Exon file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
 	    << "    -q/--quiet              verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl

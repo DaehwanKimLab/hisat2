@@ -26,6 +26,7 @@
 </ul></li>
 <li><a href="#the-hisat2-build-indexer">The <code>hisat2-build</code> indexer</a><ul>
 <li><a href="#command-line-1">Command Line</a><ul>
+<li><a href="#notes">Notes</a></li>
 <li><a href="#main-arguments-1">Main arguments</a></li>
 <li><a href="#options-1">Options</a></li>
 </ul></li>
@@ -145,7 +146,7 @@ possible in terms of alignment score.
 <pre><code>-x &lt;hisat2-idx&gt;</code></pre>
 </td><td>
 
-<p>The basename of the index for the reference genome. The basename is the name of any of the index files up to but not including the final <code>.1.bt2</code> / <code>.rev.1.bt2</code> / etc. <code>hisat2</code> looks for the specified index first in the current directory, then in the directory specified in the <code>HISAT2_INDEXES</code> environment variable.</p>
+<p>The basename of the index for the reference genome. The basename is the name of any of the index files up to but not including the final <code>.1.ht2</code> / etc. <code>hisat2</code> looks for the specified index first in the current directory, then in the directory specified in the <code>HISAT2_INDEXES</code> environment variable.</p>
 </td></tr><tr><td>
 
 <pre><code>-1 &lt;m1&gt;</code></pre>
@@ -828,7 +829,14 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 </td>
 <td>
 
-<p>Alignment score. Can be negative. Can be greater than 0 in [<code>--local</code>] mode (but not in [<code>--end-to-end</code>] mode). Only present if SAM record is for an aligned read.</p>
+<p>Alignment score. Can be negative. Only present if SAM record is for an aligned read.</p>
+</td></tr>
+<tr><td id="hisat2-build-opt-fields-xs">
+
+<pre><code>ZS:i:&lt;N&gt;</code></pre>
+</td>
+<td>
+<p>Alignment score for the best-scoring alignment found other than the alignment reported. Can be negative. Only present if the SAM record is for an aligned read and more than one alignment was found for the read. Note that, when the read is part of a concordantly-aligned pair, this score could be greater than [<code>AS:i</code>].</p>
 </td></tr>
 <tr><td id="hisat2-build-opt-fields-ys">
 
@@ -911,21 +919,31 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 <pre><code>NH:i:&lt;N&gt;</code></pre>
 </td><td>
 
-The number of mapped locations for the read or the pair.
+<p>The number of mapped locations for the read or the pair.</p>
+</td></tr>
+<tr><td id="hisat2-opt-fields-Zs">
+
+<pre><code>Zs:Z:&lt;S&gt;</code></pre>
+</td><td>
+
+When the alignment of a read involves SNPs that are in the index, this option is reported to indicate where exactly the read involves SNPs. This optional field is similar to the above MD:Z field. For example, <code>Zs:Z:1|S|rs3747203,97|S|rs16990981</code> indicates the second base of the read corresponds to a known SNP (ID: rs3747203). 97 bases after the second base, the read in the alignment involves another known SNP (ID: rs16990981).
 </td></tr>
 
 </table>
 </li>
 </ol>
 <h1 id="the-hisat2-build-indexer">The <code>hisat2-build</code> indexer</h1>
-<p><code>hisat2-build</code> builds a HISAT2 index from a set of DNA sequences. <code>hisat2-build</code> outputs a set of 6 files with suffixes <code>.1.ht2</code>, <code>.2.ht2</code>, <code>.3.ht2</code>, <code>.4.ht2</code>, <code>.5.ht2</code>, <code>.6.ht2</code>, <code>.7.ht2</code>, and <code>.8.ht2</code>. In the case of a large index these suffixes will have a <code>bt2l</code> termination. These files together constitute the index: they are all that is needed to align reads to that reference. The original sequence FASTA files are no longer used by HISAT2 once the index is built.</p>
-<p>Use of Karkkainen's <a href="http://portal.acm.org/citation.cfm?id=1314852">blockwise algorithm</a> allows <code>hisat2-build</code> to trade off between running time and memory usage. <code>hisat2-build</code> has three options governing how it makes this trade: <a href="#hisat2-build-options-p"><code>-p</code>/<code>--packed</code></a>, <a href="#hisat2-build-options-bmax"><code>--bmax</code></a>/<a href="#hisat2-build-options-bmaxdivn"><code>--bmaxdivn</code></a>, and <a href="#hisat2-build-options-dcv"><code>--dcv</code></a>. By default, <code>hisat2-build</code> will automatically search for the settings that yield the best running time without exhausting memory. This behavior can be disabled using the <a href="#hisat2-build-options-a"><code>-a</code>/<code>--noauto</code></a> option.</p>
+<p><code>hisat2-build</code> builds a HISAT2 index from a set of DNA sequences. <code>hisat2-build</code> outputs a set of 6 files with suffixes <code>.1.ht2</code>, <code>.2.ht2</code>, <code>.3.ht2</code>, <code>.4.ht2</code>, <code>.5.ht2</code>, <code>.6.ht2</code>, <code>.7.ht2</code>, and <code>.8.ht2</code>. In the case of a large index these suffixes will have a <code>ht2l</code> termination. These files together constitute the index: they are all that is needed to align reads to that reference. The original sequence FASTA files are no longer used by HISAT2 once the index is built.</p>
+<p>Use of Karkkainen's <a href="http://portal.acm.org/citation.cfm?id=1314852">blockwise algorithm</a> allows <code>hisat2-build</code> to trade off between running time and memory usage. <code>hisat2-build</code> has three options governing how it makes this trade: [<code>-p</code>/<code>--packed</code>], <a href="#hisat2-build-options-bmax"><code>--bmax</code></a>/<a href="#hisat2-build-options-bmaxdivn"><code>--bmaxdivn</code></a>, and <a href="#hisat2-build-options-dcv"><code>--dcv</code></a>. By default, <code>hisat2-build</code> will automatically search for the settings that yield the best running time without exhausting memory. This behavior can be disabled using the <a href="#hisat2-build-options-a"><code>-a</code>/<code>--noauto</code></a> option.</p>
 <p>The indexer provides options pertaining to the &quot;shape&quot; of the index, e.g. <a href="#hisat2-build-options-o"><code>--offrate</code></a> governs the fraction of <a href="http://en.wikipedia.org/wiki/Burrows-Wheeler_transform">Burrows-Wheeler</a> rows that are &quot;marked&quot; (i.e., the density of the suffix-array sample; see the original <a href="http://en.wikipedia.org/wiki/FM-index">FM Index</a> paper for details). All of these options are potentially profitable trade-offs depending on the application. They have been set to defaults that are reasonable for most cases according to our experiments. See <a href="#performance-tuning">Performance tuning</a> for details.</p>
 <p><code>hisat2-build</code> can generate either <a href="#small-and-large-indexes">small or large indexes</a>. The wrapper will decide which based on the length of the input genome. If the reference does not exceed 4 billion characters but a large index is preferred, the user can specify <a href="#hisat2-build-options-large-index"><code>--large-index</code></a> to force <code>hisat2-build</code> to build a large index instead.</p>
 <p>The HISAT2 index is based on the <a href="http://en.wikipedia.org/wiki/FM-index">FM Index</a> of Ferragina and Manzini, which in turn is based on the <a href="http://en.wikipedia.org/wiki/Burrows-Wheeler_transform">Burrows-Wheeler</a> transform. The algorithm used to build the index is based on the <a href="http://portal.acm.org/citation.cfm?id=1314852">blockwise algorithm</a> of Karkkainen.</p>
 <h2 id="command-line-1">Command Line</h2>
 <p>Usage:</p>
 <pre><code>hisat2-build [options]* &lt;reference_in&gt; &lt;ht2_base&gt;</code></pre>
+<h3 id="notes">Notes</h3>
+<pre><code>If you use --snp, --ss, and/or --exon, hisat2-build will need about 200GB RAM for the human genome size as index building involves a graph construction. 
+Otherwise, you will be able to build an index on your desktop with 8GB RAM.</code></pre>
 <h3 id="main-arguments-1">Main arguments</h3>
 <table><tr><td>
 
@@ -935,10 +953,10 @@ The number of mapped locations for the read or the pair.
 <p>A comma-separated list of FASTA files containing the reference sequences to be aligned to, or, if <a href="#hisat2-build-options-c"><code>-c</code></a> is specified, the sequences themselves. E.g., <code>&lt;reference_in&gt;</code> might be <code>chr1.fa,chr2.fa,chrX.fa,chrY.fa</code>, or, if <a href="#hisat2-build-options-c"><code>-c</code></a> is specified, this might be <code>GGTCATCCT,ACGGGTCGT,CCGTTCTATGCGGCTTA</code>.</p>
 </td></tr><tr><td>
 
-<pre><code>&lt;bt2_base&gt;</code></pre>
+<pre><code>&lt;ht2_base&gt;</code></pre>
 </td><td>
 
-<p>The basename of the index files to write. By default, <code>hisat2-build</code> writes files named <code>NAME.1.bt2</code>, <code>NAME.2.bt2</code>, <code>NAME.3.bt2</code>, <code>NAME.4.bt2</code>, <code>NAME.5.bt2</code>, <code>NAME.6.bt2</code>, <code>NAME.rev.1.bt2</code>, <code>NAME.rev.2.bt2</code>, <code>NAME.rev.5.bt2</code>, and <code>NAME.rev.6.bt2</code> where <code>NAME</code> is <code>&lt;bt2_base&gt;</code>.</p>
+<p>The basename of the index files to write. By default, <code>hisat2-build</code> writes files named <code>NAME.1.ht2</code>, <code>NAME.2.ht2</code>, <code>NAME.3.ht2</code>, <code>NAME.4.ht2</code>, <code>NAME.5.ht2</code>, <code>NAME.6.ht2</code>, <code>NAME.7.ht2</code>, and <code>NAME.8.ht2</code> where <code>NAME</code> is <code>&lt;ht2_base&gt;</code>.</p>
 </td></tr></table>
 
 <h3 id="options-1">Options</h3>
@@ -969,13 +987,7 @@ The number of mapped locations for the read or the pair.
 <pre><code>-a/--noauto</code></pre>
 </td><td>
 
-<p>Disable the default behavior whereby <code>hisat2-build</code> automatically selects values for the <a href="#hisat2-build-options-bmax"><code>--bmax</code></a>, <a href="#hisat2-build-options-dcv"><code>--dcv</code></a> and <a href="#hisat2-build-options-p"><code>--packed</code></a> parameters according to available memory. Instead, user may specify values for those parameters. If memory is exhausted during indexing, an error message will be printed; it is up to the user to try new parameters.</p>
-</td></tr><tr><td id="hisat2-build-options-p">
-
-<pre><code>-p/--packed</code></pre>
-</td><td>
-
-<p>Use a packed (2-bits-per-nucleotide) representation for DNA strings. This saves memory but makes indexing 2-3 times slower. Default: off. This is configured automatically by default; use <a href="#hisat2-build-options-a"><code>-a</code>/<code>--noauto</code></a> to configure manually.</p>
+<p>Disable the default behavior whereby <code>hisat2-build</code> automatically selects values for the <a href="#hisat2-build-options-bmax"><code>--bmax</code></a>, <a href="#hisat2-build-options-dcv"><code>--dcv</code></a> and [<code>--packed</code>] parameters according to available memory. Instead, user may specify values for those parameters. If memory is exhausted during indexing, an error message will be printed; it is up to the user to try new parameters.</p>
 </td></tr><tr><td id="hisat2-build-options-bmax">
 
 <pre><code>--bmax &lt;int&gt;</code></pre>
@@ -1005,13 +1017,13 @@ The number of mapped locations for the read or the pair.
 <pre><code>-r/--noref</code></pre>
 </td><td>
 
-<p>Do not build the <code>NAME.3.bt2</code> and <code>NAME.4.bt2</code> portions of the index, which contain a bitpacked version of the reference sequences and are used for paired-end alignment.</p>
+<p>Do not build the <code>NAME.3.ht2</code> and <code>NAME.4.ht2</code> portions of the index, which contain a bitpacked version of the reference sequences and are used for paired-end alignment.</p>
 </td></tr><tr><td>
 
 <pre><code>-3/--justref</code></pre>
 </td><td>
 
-<p>Build only the <code>NAME.3.bt2</code> and <code>NAME.4.bt2</code> portions of the index, which contain a bitpacked version of the reference sequences and are used for paired-end alignment.</p>
+<p>Build only the <code>NAME.3.ht2</code> and <code>NAME.4.ht2</code> portions of the index, which contain a bitpacked version of the reference sequences and are used for paired-end alignment.</p>
 </td></tr><tr><td id="hisat2-build-options-o">
 
 <pre><code>-o/--offrate &lt;int&gt;</code></pre>
@@ -1036,6 +1048,36 @@ The number of mapped locations for the read or the pair.
 </td><td>
 
 <p>The local ftab is the lookup table in a local index. The default setting is 6 (ftab is 8KB per local index).</p>
+</td></tr><tr><td>
+
+<pre><code>-p &lt;int&gt;</code></pre>
+</td><td>
+
+<p>Launch <code>NTHREADS</code> parallel build threads (default: 1).</p>
+</td></tr><tr><td>
+
+<pre><code>--snp &lt;path&gt;</code></pre>
+</td><td>
+
+<p>Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).</p>
+<p>SNP ID <code>&lt;tab&gt;</code> chromosome name <code>&lt;tab&gt;</code> snp type (single, deletion, or insertion) <code>&lt;tab&gt;</code> zero-offset based genomic position of a SNP <code>&lt;tab&gt;</code> alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)</p>
+<p>Use <code>extract_snps.py</code> (in the HISAT2 package) to extract SNPs from a dbSNP file (e.g. snpCommon.txt).</p>
+</td></tr><tr><td>
+
+<pre><code>--ss &lt;path&gt;</code></pre>
+</td><td>
+
+<p>Note this option should be used with the followig --exon option. Provide a list of splice sites (in the HISAT2's own format) as follows (four columns).</p>
+<p>chromosome name <code>&lt;tab&gt;</code> zero-offset based genomic position of the flanking base on the left side of an intron <code>&lt;tab&gt;</code> zero-offset based genomic position of the flanking base on the right <code>&lt;tab&gt;</code> strand</p>
+<p>Use <code>extract_splice_sites.py</code> (in the HISAT2 package) to extract splice sites from a GTF file.</p>
+</td></tr><tr><td>
+
+<pre><code>--exon &lt;path&gt;</code></pre>
+</td><td>
+
+<p>Note this option should be used with the above --ss option. Provide a list of exons (in the HISAT2's own format) as follows (three columns).</p>
+<p>chromosome name <code>&lt;tab&gt;</code> zero-offset based left genomic position of an exon <code>&lt;tab&gt;</code> zero-offset based right genomic position of an exon</p>
+<p>Use <code>extract_exons.py</code> (in the HISAT2 package) to extract exons from a GTF file.</p>
 </td></tr><tr><td>
 
 <pre><code>--seed &lt;int&gt;</code></pre>
@@ -1076,10 +1118,10 @@ The number of mapped locations for the read or the pair.
 <h3 id="main-arguments-2">Main arguments</h3>
 <table><tr><td>
 
-<pre><code>&lt;bt2_base&gt;</code></pre>
+<pre><code>&lt;ht2_base&gt;</code></pre>
 </td><td>
 
-<p>The basename of the index to be inspected. The basename is name of any of the index files but with the <code>.X.bt2</code> suffix omitted. <code>hisat2-inspect</code> first looks in the current directory for the index files, then in the directory specified in the <code>HISAT2_INDEXES</code> environment variable.</p>
+<p>The basename of the index to be inspected. The basename is name of any of the index files but with the <code>.X.ht2</code> suffix omitted. <code>hisat2-inspect</code> first looks in the current directory for the index files, then in the directory specified in the <code>HISAT2_INDEXES</code> environment variable.</p>
 </td></tr></table>
 
 <h3 id="options-2">Options</h3>
@@ -1109,6 +1151,30 @@ Sequence-2  &lt;name&gt;  &lt;len&gt;
 ...
 Sequence-N  &lt;name&gt;  &lt;len&gt;</code></pre>
 <p>Fields are separated by tabs. Colorspace is always set to 0 for HISAT2.</p>
+</td></tr><tr><td id="hisat2-inspect-options-snp">
+
+<pre><code>--snp</code></pre>
+</td><td>
+
+<p>Print SNPs, and quit.</p>
+</td></tr><tr><td id="hisat2-inspect-options-ss">
+
+<pre><code>--ss</code></pre>
+</td><td>
+
+<p>Print splice sites, and quit.</p>
+</td></tr><tr><td id="hisat2-inspect-options-ss-all">
+
+<pre><code>--ss-all</code></pre>
+</td><td>
+
+<p>Print splice sites including those not in the global index, and quit.</p>
+</td></tr><tr><td id="hisat2-inspect-options-exon">
+
+<pre><code>--exon</code></pre>
+</td><td>
+
+<p>Print exons, and quit.</p>
 </td></tr><tr><td>
 
 <pre><code>-v/--verbose</code></pre>
@@ -1134,8 +1200,8 @@ Sequence-N  &lt;name&gt;  &lt;len&gt;</code></pre>
 <p>First follow the manual instructions to <a href="#obtaining-hisat2">obtain HISAT2</a>. Set the <code>HISAT2_HOME</code> environment variable to point to the new HISAT2 directory containing the <code>hisat2</code>, <code>hisat2-build</code> and <code>hisat2-inspect</code> binaries. This is important, as the <code>HISAT2_HOME</code> variable is used in the commands below to refer to that directory.</p>
 <h2 id="indexing-a-reference-genome">Indexing a reference genome</h2>
 <p>To create an index for the genomic region (1 million bps from the human chromosome 22 between 20,000,000 and 20,999,999) included with HISAT2, create a new temporary directory (it doesn't matter where), change into that directory, and run:</p>
-<pre><code>$HISAT2_HOME/hisat2-build $HISAT2_HOME/example/reference/22_20-21M.fa 22_20-21M</code></pre>
-<p>The command should print many lines of output then quit. When the command completes, the current directory will contain ten new files that all start with <code>22_20-21M</code> and end with <code>.1.ht2</code>, <code>.2.ht2</code>, <code>.3.ht2</code>, <code>.4.ht2</code>, <code>.5.ht2</code>, <code>.6.ht2</code>, <code>.7.ht2</code>, and <code>.8.ht2</code>. These files constitute the index - you're done!</p>
+<pre><code>$HISAT2_HOME/hisat2-build $HISAT2_HOME/example/reference/22_20-21M.fa --snp $HISAT2_HOME/example/reference/22_20-21M.snp 22_20-21M_snp</code></pre>
+<p>The command should print many lines of output then quit. When the command completes, the current directory will contain ten new files that all start with <code>22_20-21M_snp</code> and end with <code>.1.ht2</code>, <code>.2.ht2</code>, <code>.3.ht2</code>, <code>.4.ht2</code>, <code>.5.ht2</code>, <code>.6.ht2</code>, <code>.7.ht2</code>, and <code>.8.ht2</code>. These files constitute the index - you're done!</p>
 <p>You can use <code>hisat2-build</code> to create an index for a set of FASTA files obtained from any source, including sites such as <a href="http://genome.ucsc.edu/cgi-bin/hgGateway">UCSC</a>, <a href="http://www.ncbi.nlm.nih.gov/sites/genome">NCBI</a>, and <a href="http://www.ensembl.org/">Ensembl</a>. When indexing multiple FASTA files, specify all the files using commas to separate file names. For more details on how to create an index with <code>hisat2-build</code>, see the <a href="#the-hisat2-build-indexer">manual section on index building</a>. You may also want to bypass this process by obtaining a pre-built index.</p>
 <h2 id="aligning-example-reads">Aligning example reads</h2>
 <p>Stay in the directory created in the previous step, which now contains the <code>22_20-21M</code> index files. Next, run:</p>
