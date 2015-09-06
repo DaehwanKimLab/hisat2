@@ -44,7 +44,7 @@ def simulate_reads():
         os.mkdir("simulation")
     os.chdir("simulation")
 
-    _rna, _mismatch, _snp, _constant = True, True, True, False
+    _rna, _mismatch, _snp, _constant = True, True, True, True
     _dna = not _rna
     datasets = [
         ["22", 1000000, _dna, not _snp, not _mismatch, _constant],
@@ -60,6 +60,7 @@ def simulate_reads():
         ["22", 1000000, _rna, _snp, _mismatch, not _constant],
         ["22", 1000000, _rna, _snp, _mismatch, _constant],
         ["22_20-21M", 1000000, _rna, not _snp, not _mismatch, not _constant],
+        ["22_20-21M", 1000000, _rna, _snp, not _mismatch, _constant],
         ["genome", 20000000, _dna, not _snp, not _mismatch, _constant],
         ["genome", 20000000, _dna, _snp, not _mismatch, _constant],
         ["genome", 20000000, _rna, not _snp, not _mismatch, not _constant],
@@ -88,10 +89,7 @@ def simulate_reads():
         genome_fname = data_dir_base + "/%s.fa" % (genome)
 
         if rna:
-            if genome == "genome":
-                gtf_fname = data_dir_base + "/genes.gtf"
-            else:
-                gtf_fname = data_dir_base + "/genes_%s.gtf" % (genome)
+            gtf_fname = data_dir_base + "/%s.gtf" % (genome)
         else:
             gtf_fname = "/dev/null"
 

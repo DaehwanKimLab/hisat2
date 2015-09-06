@@ -908,7 +908,7 @@ def calculate_read_cost():
         # ["bowtie", "", "", ""],
         # ["bowtie2", "", "", ""],
         # ["hisat2", "x1", "", ""],
-        # ["hisat2", "x2", "", ""],
+        ["hisat2", "x2", "", ""],
         # ["hisat2", "", "tran", ""],
         # ["hisat2", "", "snp_tran", ""],
         ]
