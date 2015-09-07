@@ -1562,7 +1562,7 @@ def calculate_read_cost():
                     # cmd += ["--sp", "1000,1000"]
 
                     # daehwan - for debugging purposes
-                    cmd += ["--dta"]
+                    # cmd += ["--dta"]
                     # cmd += ["--dta-cufflinks"]
 
                     if type == "x2":
@@ -1902,7 +1902,7 @@ def calculate_read_cost():
                                 end_type = "paired"
                             else:
                                 end_type = "single"
-                            sql_insert = "INSERT INTO \"ReadCosts\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %f, %f, %d, %d, %d, '%s', datetime('now'), '%s');" % \
+                            sql_insert = "INSERT INTO \"ReadCosts\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %f, %f, %d, %d, %d, '%s', datetime('now', 'localtime'), '%s');" % \
                                 (genome, data_base, end_type, readtype2, aligner_name, get_aligner_version(aligner), numreads, mapped, unique_mapped, unmapped, mapping_point, duration, len(junctions), temp_junctions, temp_gtf_junctions, platform.node(), " ".join(aligner_cmd))
                             sql_execute("../" + sql_db_name, sql_insert)     
 

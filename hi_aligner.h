@@ -48,13 +48,8 @@ static const uint32_t maxInsLen = 3;
 // Maximum deletion length
 static const uint32_t maxDelLen = 3;
 
-// Minimum anchor length required for canonical splice sites
-static const uint32_t minAnchorLen = 7;
-// Minimum anchor length required for non-canonical splice sites
-static const uint32_t minAnchorLen_noncan = 14;
-
 // Allow longer introns for long anchored reads involving canonical splice sites
-inline uint32_t MaxIntronLen(uint32_t anchor) {
+inline uint32_t MaxIntronLen(uint32_t anchor, uint32_t minAnchorLen) {
     uint32_t intronLen = 0;
     if(anchor >= minAnchorLen) {
         assert_geq(anchor, 2);
@@ -76,7 +71,7 @@ inline float intronLen_prob(uint32_t anchor, uint32_t intronLen, uint32_t maxInt
 }
 
 // Allow longer introns for long anchored reads involving non-canonical splice sites
-inline uint32_t MaxIntronLen_noncan(uint32_t anchor) {
+inline uint32_t MaxIntronLen_noncan(uint32_t anchor, uint32_t minAnchorLen_noncan) {
     uint32_t intronLen = 0;
     if(anchor >= minAnchorLen_noncan) {
         assert_geq(anchor, 5);
@@ -569,12 +564,12 @@ struct GenomeHit {
                      SwMetrics&                 swm,
                      const Scoring&             sc,
                      TAlScore                   minsc,
-                     RandomSource&              rnd,           // pseudo-random source
+                     RandomSource&              rnd,                  // pseudo-random source
                      index_t                    minK_local,
                      index_t                    minIntronLen,
                      index_t                    maxIntronLen,
-                     index_t                    can_mal = minAnchorLen,           // minimum anchor length for canonical splice site
-                     index_t                    noncan_mal = minAnchorLen_noncan,       // minimum anchor length for non-canonical splice site
+                     index_t                    minAnchorLen,         // minimum anchor length for canonical splice site
+                     index_t                    minAnchorLen_noncan,  // minimum anchor length for non-canonical splice site
                      const SpliceSite*          spliceSite = NULL,    // penalty for splice site
                      bool                       no_spliced_alignment = false);
     
@@ -596,6 +591,8 @@ struct GenomeHit {
                 index_t                 minK_local,
                 index_t                 minIntronLen,
                 index_t                 maxIntronLen,
+                index_t                 minAnchorLen,
+                index_t                 minAnchorLen_noncan,
                 index_t&                leftext,
                 index_t&                rightext,
                 index_t                 mm = 0);
@@ -792,6 +789,8 @@ struct GenomeHit {
                index_t                 minK_local,
                index_t                 minIntronLen,
                index_t                 maxIntronLen,
+               index_t                 minAnchorLen,
+               index_t                 minAnchorLen_noncan,
                const BitPairReference& ref)
     {
         assert_eq(_rdoff, trim5);
@@ -803,6 +802,8 @@ struct GenomeHit {
                        minK_local,
                        minIntronLen,
                        maxIntronLen,
+                       minAnchorLen,
+                       minAnchorLen_noncan,
                        ref);
     }
     void trim3(index_t                 trim3,
@@ -812,6 +813,8 @@ struct GenomeHit {
                index_t                 minK_local,
                index_t                 minIntronLen,
                index_t                 maxIntronLen,
+               index_t                 minAnchorLen,
+               index_t                 minAnchorLen_noncan,
                const BitPairReference& ref)
     {
         _trim3 = trim3;
@@ -821,6 +824,8 @@ struct GenomeHit {
                        minK_local,
                        minIntronLen,
                        maxIntronLen,
+                       minAnchorLen,
+                       minAnchorLen_noncan,
                        ref);
     }
     
@@ -1158,6 +1163,8 @@ private:
                            index_t          minK_local,
                            index_t          minIntronLen,
                            index_t          maxIntronLen,
+                           index_t          minAnchorLen,
+                           index_t          minAnchorLen_noncan,
                            const            BitPairReference& ref);
     
 public:
@@ -1251,13 +1258,13 @@ bool GenomeHit<index_t>::combineWith(
                                      SwMetrics&                 swm,
                                      const Scoring&             sc,
                                      TAlScore                   minsc,
-                                     RandomSource&              rnd,           // pseudo-random source
+                                     RandomSource&              rnd,                    // pseudo-random source
                                      index_t                    minK_local,
                                      index_t                    minIntronLen,
                                      index_t                    maxIntronLen,
-                                     index_t                    can_mal,       // minimum anchor length for canonical splice site
-                                     index_t                    noncan_mal,    // minimum anchor length for non-canonical splice site
-                                     const SpliceSite*          spliceSite,    // penalty for splice site
+                                     index_t                    minAnchorLen,           // minimum anchor length for canonical splice site
+                                     index_t                    minAnchorLen_noncan,    // minimum anchor length for non-canonical splice site
+                                     const SpliceSite*          spliceSite,             // penalty for splice site
                                      bool                       no_spliced_alignment)
 {
     if(this == &otherHit) return false;
@@ -1341,6 +1348,8 @@ bool GenomeHit<index_t>::combineWith(
                        minK_local,
                        minIntronLen,
                        maxIntronLen,
+                       minAnchorLen,
+                       minAnchorLen_noncan,
                        ref);
         assert(repOk(rd, ref));
         return true;
@@ -1611,13 +1620,13 @@ bool GenomeHit<index_t>::combineWith(
             uint32_t shorter_anchor_len = min<uint32_t>(maxscorei + 1, len - maxscorei - 1);
             assert_leq(this_toff, other_toff);
             if(maxspldir == EDIT_SPL_SEMI_FW || maxspldir == EDIT_SPL_SEMI_RC || maxspldir == EDIT_SPL_UNKNOWN) {
-                if(shorter_anchor_len < noncan_mal) {
+                if(shorter_anchor_len < minAnchorLen_noncan) {
                     float intronLenProb = intronLen_prob_noncan(shorter_anchor_len, other_toff - this_toff, maxIntronLen);
                     if(intronLenProb > 0.01f)
                         return false;
                 }
             } else {
-                if(shorter_anchor_len < can_mal) {
+                if(shorter_anchor_len < minAnchorLen) {
                     float intronLenProb = intronLen_prob(shorter_anchor_len, other_toff - this_toff, maxIntronLen);
                     if(intronLenProb > 0.01f)
                         return false;
@@ -1795,6 +1804,8 @@ bool GenomeHit<index_t>::combineWith(
                    minK_local,
                    minIntronLen,
                    maxIntronLen,
+                   minAnchorLen,
+                   minAnchorLen_noncan,
                    ref);
     assert_eq(_trim3, 0);
     _trim3 += otherHit._trim3;
@@ -1837,6 +1848,8 @@ bool GenomeHit<index_t>::extend(
                                 index_t                 minK_local,
                                 index_t                 minIntronLen,
                                 index_t                 maxIntronLen,
+                                index_t                 minAnchorLen,
+                                index_t                 minAnchorLen_noncan,
                                 index_t&                leftext,
                                 index_t&                rightext,
                                 index_t                 mm)
@@ -1988,6 +2001,8 @@ bool GenomeHit<index_t>::extend(
                    minK_local,
                    minIntronLen,
                    maxIntronLen,
+                   minAnchorLen,
+                   minAnchorLen_noncan,
                    ref);
     assert(repOk(rd, ref));
     return leftext > 0 || rightext > 0;
@@ -3150,6 +3165,8 @@ int64_t GenomeHit<index_t>::calculateScore(
                                            index_t                 minK_local,
                                            index_t                 minIntronLen,
                                            index_t                 maxIntronLen,
+                                           index_t                 minAnchorLen,
+                                           index_t                 minAnchorLen_noncan,
                                            const BitPairReference& ref)
 {
     int64_t score = 0;
@@ -3197,7 +3214,9 @@ int64_t GenomeHit<index_t>::calculateScore(
                 int shorter_anchor_len = min<int>(left_anchor_len, right_anchor_len);
                 if(shorter_anchor_len <= 0) shorter_anchor_len = 1;
                 assert_gt(shorter_anchor_len, 0);
-                uint32_t intronLen_thresh = ((edit.splDir == EDIT_SPL_FW || edit.splDir == EDIT_SPL_RC) ? MaxIntronLen(shorter_anchor_len) : MaxIntronLen_noncan(shorter_anchor_len));
+                uint32_t intronLen_thresh = ((edit.splDir == EDIT_SPL_FW || edit.splDir == EDIT_SPL_RC) ?
+                                             MaxIntronLen(shorter_anchor_len, minAnchorLen) :
+                                             MaxIntronLen_noncan(shorter_anchor_len, minAnchorLen_noncan));
                 if(intronLen_thresh < maxIntronLen) {
                     if(edit.splLen > intronLen_thresh) {
                         score += MIN_I32;
@@ -3412,6 +3431,8 @@ public:
     _anchorStop(anchorStop),
     _minIntronLen(minIntronLen),
     _maxIntronLen(maxIntronLen),
+    _minAnchorLen(7),
+    _minAnchorLen_noncan(14),
     _secondary(secondary),
     _local(local),
     _gwstate(GW_CAT),
@@ -3425,6 +3446,11 @@ public:
             _minK++;
         }
         _minK_local = 8;
+        
+        if(_tpol.transcriptome_assembly()) {
+            _minAnchorLen = 15;
+            _minAnchorLen_noncan = 20;
+        }
     }
     
     HI_Aligner() {
@@ -4102,6 +4128,11 @@ protected:
     size_t   _minIntronLen;
     size_t   _maxIntronLen;
     
+    // Minimum anchor length required for canonical splice sites
+    uint32_t _minAnchorLen;
+    // Minimum anchor length required for non-canonical splice sites
+    uint32_t _minAnchorLen_noncan;
+    
     bool     _secondary;  // allow secondary alignments
     bool     _local;      // perform local alignments
     
@@ -4421,6 +4452,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                          _minK_local,
                          _minIntronLen,
                          _maxIntronLen,
+                         _minAnchorLen,
+                         _minAnchorLen_noncan,
                          leftext,
                          rightext);
         hybridSearch_recur(

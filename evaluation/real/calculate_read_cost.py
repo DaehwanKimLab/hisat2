@@ -908,7 +908,7 @@ def calculate_read_cost():
         # ["bowtie", "", "", ""],
         # ["bowtie2", "", "", ""],
         # ["hisat2", "x1", "", ""],
-        ["hisat2", "x2", "", ""],
+        # ["hisat2", "x2", "", ""],
         # ["hisat2", "", "tran", ""],
         # ["hisat2", "", "snp_tran", ""],
         ]
@@ -1000,6 +1000,7 @@ def calculate_read_cost():
                     cmd += ["--no-temp-splicesite"]
 
                 # daehwan - for debugging purposes
+                # cmd += ["--dta"]
                 """
                 if index_type == "tran":
                     cmd += ["--no-anchorstop"]
@@ -1307,7 +1308,7 @@ def calculate_read_cost():
                         output += "%s\t%s\tpaired\t%d\t%d\t%d\t%d\t%d\t%d\t%f\n" % (aligner_name, gene, i, mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration)
 
                         if sql_write and os.path.exists("../" + sql_db_name):
-                            sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now'), '%s');" % \
+                            sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \
                                     (workdir, genome, "paired", aligner_name, get_aligner_version(aligner), "no", i, mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, platform.node(), " ".join(aligner_cmd))
                             sql_execute("../" + sql_db_name, sql_insert)     
                     
@@ -1326,7 +1327,7 @@ def calculate_read_cost():
                         output += "%s\t%s\tsingle\t%d\t%d\t%d\t%d\t%d\t%d\t%f\n" % (aligner_name, gene, i, mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration)
 
                         if sql_write and os.path.exists("../" + sql_db_name):
-                            sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now'), '%s');" % \
+                            sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \
                                     (workdir, genome, "single", aligner_name, get_aligner_version(aligner), "no", i, mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, platform.node(), " ".join(aligner_cmd))
                             sql_execute("../" + sql_db_name, sql_insert)                    
                         
