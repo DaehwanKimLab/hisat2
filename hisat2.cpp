@@ -821,7 +821,8 @@ static void printUsage(ostream& out) {
         << "  --pen-cansplice <int>              penalty for a canonical splice site (0)" << endl
         << "  --pen-noncansplice <int>           penalty for a non-canonical splice site (12)" << endl
         // << "  --pen-conflictsplice <int>         penalty for conflicting splice sites (1000000)" << endl
-        << "  --pen-intronlen <func>             penalty for long introns (G,-8,1)" << endl
+        << "  --pen-canintronlen <func>          penalty for long introns (G,-8,1) with canonical splice sites" << endl
+        << "  --pen-noncanintronlen <func>       penalty for long introns (G,-8,1) with noncanonical splice sites" << endl
         << "  --min-intronlen <int>              minimum intron length (20)" << endl
         << "  --max-intronlen <int>              maximum intron length (500000)" << endl
         << "  --known-splicesite-infile <path>   provide a list of known splice sites" << endl
@@ -830,12 +831,14 @@ static void printUsage(ostream& out) {
         << "  --no-temp-splicesite               disable the use of splice sites found" << endl
         << "  --no-spliced-alignment             disable spliced alignment" << endl
         << "  --rna-strandness <string>          Specify strand-specific information (unstranded)" << endl
-        << "  --tmo/--transcriptome-mapping-only Reports alignments within known transcriptome" << endl
-        << "  --dta/--downstream-transcriptome_assembly Reports alignments within known transcriptome" << endl
+        << "  --tmo                              Reports only those alignments within known transcriptome" << endl
+        << "  --dta                              Reports alignments tailored for transcript assemblers" << endl
+        << "  --dta-cufflinks                    Reports alignments tailored specifically for cufflinks" << endl
         << endl
 		<< " Scoring:" << endl
 		<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
-		<< "  --mp <int>         max penalty for mismatch; lower qual = lower penalty (6)" << endl
+		<< "  --mp <int>,<int>   max and min penalties for mismatch; lower qual = lower penalty <2,6>" << endl
+        << "  --sp <int>,<int>   max and min penalties for soft-clipping; lower qual = lower penalty <1,2>" << endl
 		<< "  --np <int>         penalty for non-A/C/G/Ts in read/ref (1)" << endl
 		<< "  --rdg <int>,<int>  read gap open, extend penalties (5,3)" << endl
 		<< "  --rfg <int>,<int>  reference gap open, extend penalties (5,3)" << endl

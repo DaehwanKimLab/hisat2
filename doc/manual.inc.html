@@ -54,20 +54,13 @@
 <h1 id="introduction">Introduction</h1>
 <h2 id="what-is-hisat2">What is HISAT2?</h2>
 <p>HISAT2 is a fast and sensitive alignment program for mapping next-generation sequencing reads (whole-genome, transcriptome, and exome sequencing data) against the general human population (as well as against a single reference genome). Based on <a href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=6698337&amp;tag=1">GCSA</a> (an extension of <a href="http://en.wikipedia.org/wiki/Burrows-Wheeler_transform">BWT</a> for a graph), we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that represents general population, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover human population). These small indexes (called local indexes) combined with several alignment strategies enable effective alignment of sequencing reads. This new indexing scheme is called Hierarchical Graph FM index (HGFM). We have developed HISAT 2 based on the <a href="http://ccb.jhu.edu/software/hisat">HISAT</a> and <a href="http://bowtie-bio.sf.net/bowtie2">Bowtie2</a> implementations. HISAT2 outputs alignments in <a href="http://samtools.sourceforge.net/SAM1.pdf">SAM</a> format, enabling interoperation with a large number of other tools (e.g. <a href="http://samtools.sourceforge.net">SAMtools</a>, <a href="http://www.broadinstitute.org/gsa/wiki/index.php/The_Genome_Analysis_Toolkit">GATK</a>) that use SAM. HISAT2 is distributed under the <a href="http://www.gnu.org/licenses/gpl-3.0.html">GPLv3 license</a>, and it runs on the command line under Linux, Mac OS X and Windows.</p>
-<p>A few notes:</p>
-<ol style="list-style-type: decimal">
-<li><p>HISAT2's index (HGFM) size for the human reference genome and 12.3 million common SNPs is 6.2GB. The SNPs consist of 11 million single nucleotide polymorphisms, 728,000 deletions, and 555,000 insertions. Insertions and deletions used in this index are small (usually &lt;20bp). We plan to incorporate structural variations (SV) into this index.</p></li>
-<li><p>The memory footprint of HISAT2 is relatively low, 6.7GB.</p></li>
-<li><p>The runtime of HISAT2 is estimated to be slightly slower than <a href="http://ccb.jhu.edu/software/hisat">HISAT</a> (30–100% slower for some data sets).</p></li>
-<li><p>HISAT2 provides greater accuracy for alignment of reads containing SNPs.</p></li>
-</ol>
 <h1 id="obtaining-hisat2">Obtaining HISAT2</h1>
 <p>Download HISAT2 sources and binaries from the Releases sections on the right side. Binaries are available for Intel architectures (<code>x86_64</code>) running Linux, and Mac OS X.</p>
 <h2 id="building-from-source">Building from source</h2>
 <p>Building HISAT2 from source requires a GNU-like environment with GCC, GNU Make and other basics. It should be possible to build HISAT2 on most vanilla Linux installations or on a Mac installation with <a href="http://developer.apple.com/xcode/">Xcode</a> installed. HISAT2 can also be built on Windows using <a href="http://www.cygwin.com/">Cygwin</a> or <a href="http://www.mingw.org/">MinGW</a> (MinGW recommended). For a MinGW build the choice of what compiler is to be used is important since this will determine if a 32 or 64 bit code can be successfully compiled using it. If there is a need to generate both 32 and 64 bit on the same machine then a multilib MinGW has to be properly installed. <a href="http://www.mingw.org/wiki/msys">MSYS</a>, the <a href="http://cygwin.com/packages/mingw-zlib/">zlib</a> library, and depending on architecture <a href="http://sourceware.org/pthreads-win32/">pthreads</a> library are also required. We are recommending a 64 bit build since it has some clear advantages in real life research problems. In order to simplify the MinGW setup it might be worth investigating popular MinGW personal builds since these are coming already prepared with most of the toolchains needed.</p>
 <p>First, download the <a href="http://ccb.jhu.edu/software/hisat2/downloads/hisat2-2.0.0-beta-source.zip">source package</a> from the Releases secion on the right side. Unzip the file, change to the unzipped directory, and build the HISAT2 tools by running GNU <code>make</code> (usually with the command <code>make</code>, but sometimes with <code>gmake</code>) with no arguments. If building with MinGW, run <code>make</code> from the MSYS environment.</p>
 <p>HISAT2 is using the multithreading software model in order to speed up execution times on SMP architectures where this is possible. On POSIX platforms (like linux, Mac OS, etc) it needs the pthread library. Although it is possible to use pthread library on non-POSIX platform like Windows, due to performance reasons HISAT2 will try to use Windows native multithreading if possible.</p>
-<p>For the support of SRA data access in HISAT2, please download and install the <a href="https://github.com/ncbi/ngs/wiki/Downloads">NCBI-NGS</a> toolkit. When running <code>make</code>, specify additional variables as follow. <code>make USE_SRA=1 NCBI_NGS_DIR=/path/to/NCBI-NGS-directory NCBI_VDB_DIR=/path/to/NCBI-NGS-directory</code>, where <code>NCBI_NGS_DIR</code> and <code>NCBI_VDB_DIR</code> will be used in Makefile for -I and -L compilation options. For example, <span class="math">(<em>N</em><em>C</em><em>B</em><em>I</em><sub><em>N</em></sub><em>G</em><em>S</em><sub><em>D</em></sub><em>I</em><em>R</em>)/<em>i</em><em>n</em><em>c</em><em>l</em><em>u</em><em>d</em><em>e</em><em>a</em><em>n</em><em>d</em></span>(NCBI_NGS_DIR)/lib64 will be used.</p>
+<p>For the support of SRA data access in HISAT2, please download and install the <a href="https://github.com/ncbi/ngs/wiki/Downloads">NCBI-NGS</a> toolkit. When running <code>make</code>, specify additional variables as follow. <code>make USE_SRA=1 NCBI_NGS_DIR=/path/to/NCBI-NGS-directory NCBI_VDB_DIR=/path/to/NCBI-NGS-directory</code>, where <code>NCBI_NGS_DIR</code> and <code>NCBI_VDB_DIR</code> will be used in Makefile for -I and -L compilation options. For example, $(NCBI_NGS_DIR)/include and $(NCBI_NGS_DIR)/lib64 will be used.</p>
 <h1 id="running-hisat2">Running HISAT2</h1>
 <h2 id="adding-to-path">Adding to PATH</h2>
 <p>By adding your new HISAT2 directory to your <a href="http://en.wikipedia.org/wiki/PATH_(variable)">PATH environment variable</a>, you ensure that whenever you run <code>hisat2</code>, <code>hisat2-build</code> or <code>hisat2-inspect</code> from the command line, you will get the version you just installed without having to specify the entire path. This is recommended for most users. To do this, follow your operating system's instructions for adding the directory to your <a href="http://en.wikipedia.org/wiki/PATH_(variable)">PATH</a>.</p>
@@ -354,6 +347,13 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 
 <p>Sets the maximum (<code>MX</code>) and minimum (<code>MN</code>) mismatch penalties, both integers. A number less than or equal to <code>MX</code> and greater than or equal to <code>MN</code> is subtracted from the alignment score for each position where a read character aligns to a reference character, the characters do not match, and neither is an <code>N</code>. If <a href="#hisat2-options-ignore-quals"><code>--ignore-quals</code></a> is specified, the number subtracted quals <code>MX</code>. Otherwise, the number subtracted is <code>MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )</code> where Q is the Phred quality value. Default: <code>MX</code> = 6, <code>MN</code> = 2.</p>
 </td></tr>
+<tr><td id="hisat2-options-sp">
+
+<pre><code>--sp MX,MN</code></pre>
+</td><td>
+
+<p>Sets the maximum (<code>MX</code>) and minimum (<code>MN</code>) penalties for soft-clipping per base, both integers. A number less than or equal to <code>MX</code> and greater than or equal to <code>MN</code> is subtracted from the alignment score for each position. The number subtracted is <code>MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )</code> where Q is the Phred quality value. Default: <code>MX</code> = 2, <code>MN</code> = 1.</p>
+</td></tr>
 <tr><td id="hisat2-options-np">
 
 <pre><code>--np &lt;int&gt;</code></pre>
@@ -402,15 +402,20 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 
 <p>Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 3.</p>
 </td></tr>
-<tr><td id="hisat2-options-pen-intronlen">
+<tr><td id="hisat2-options-pen-canintronlen">
 
-<pre><code>--pen-intronlen &lt;func&gt;</code></pre>
+<pre><code>--pen-canintronlen &lt;func&gt;</code></pre>
 </td><td>
 
-<p>Sets the penalty for long introns so that alignments with shorter introns are preferred to those with longer ones. Default: G,-8,1</p>
+<p>Sets the penalty for long introns with canonical splice sites so that alignments with shorter introns are preferred to those with longer ones. Default: G,-8,1</p>
 </td></tr>
+<tr><td id="hisat2-options-pen-noncanintronlen">
 
+<pre><code>--pen-noncanintronlen &lt;func&gt;</code></pre>
+</td><td>
 
+<p>Sets the penalty for long introns with noncanonical splice sites so that alignments with shorter introns are preferred to those with longer ones. Default: G,-8,1</p>
+</td></tr>
 <tr><td id="hisat2-options-min-intronlen">
 
 <pre><code>--min-intronlen &lt;int&gt;</code></pre>
@@ -470,12 +475,32 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 
 
 <tr><td id="hisat2-options-rna-strandness">
-
 <pre><code>--rna-strandness &lt;string&gt;</code></pre>
 </td><td>
 
 <p>Specify strand-specific information: the default is unstranded.<br />For single-end reads, use F or R. 'F' means a read corresponds to a transcript. 'R' means a read corresponds to the reverse complemented counterpart of a transcript. For paired-end reads, use either FR or RF.<br />With this option being used, every read alignment will have an XS attribute tag: '+' means a read belongs to a transcript on '+' strand of genome. '-' means a read belongs to a transcript on '-' strand of genome.</p>
-<p>(TopHat has a similar option, --library-type option, where fr-firststrand corresponds to R and RF; fr-secondstrand corresponds to F and FR.)</p>
+(TopHat has a similar option, --library-type option, where fr-firststrand corresponds to R and RF; fr-secondstrand corresponds to F and FR.)
+</td></tr>
+
+<tr><td id="hisat2-options-tmo">
+<pre><code>--tmo/--transcriptome-mapping-only</code></pre>
+</td><td>
+
+<p>Report only those alignments within known transcripts.</p>
+</td></tr>
+
+<tr><td id="hisat2-options-dta">
+<pre><code>--dta/--downstream-transcriptome-assembly</code></pre>
+</td><td>
+
+<p>Report alignments tailored for transcript assemblers including StringTie. With this option, HISAT2 requires longer anchor lengths for de-novo discovery of splice sites. This leads to less alignments with short-anchors, which helps transcript assemblers improve significantly in computationa and memory usage.</p>
+</td></tr>
+
+<tr><td id="hisat2-options-dta-cufflinks">
+<pre><code>--dta-cufflinks</code></pre>
+</td><td>
+
+<p>Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta), HISAT2 supports only three splice site signals (GT/AG, GC/AG, and AT/AC). HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.</p>
 </td></tr>
 
 </table>
@@ -926,7 +951,7 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 <pre><code>Zs:Z:&lt;S&gt;</code></pre>
 </td><td>
 
-When the alignment of a read involves SNPs that are in the index, this option is reported to indicate where exactly the read involves SNPs. This optional field is similar to the above MD:Z field. For example, <code>Zs:Z:1|S|rs3747203,97|S|rs16990981</code> indicates the second base of the read corresponds to a known SNP (ID: rs3747203). 97 bases after the second base, the read in the alignment involves another known SNP (ID: rs16990981).
+When the alignment of a read involves SNPs that are in the index, this option is used to indicate where exactly the read involves the SNPs. This optional field is similar to the above MD:Z field. For example, <code>Zs:Z:1|S|rs3747203,97|S|rs16990981</code> indicates the second base of the read corresponds to a known SNP (ID: rs3747203). 97 bases after the third base (the base after the second one), the read at 100th base involves another known SNP (ID: rs16990981). 'S' indicates a single nucleotide polymorphism. 'D' and 'I' indicates a deletion and an insertion, respectively.
 </td></tr>
 
 </table>

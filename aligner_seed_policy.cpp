@@ -441,10 +441,18 @@ void SeedAlignmentPolicy::parseString(
                 << "Policy: '" << s.c_str() << "'" << endl;
                 assert(false); throw 1;
             }
-            istringstream tmpMin(ctoks[1]);
-            tmpMin >> penScMin;
             istringstream tmpMax(ctoks[1]);
             tmpMax >> penScMax;
+            istringstream tmpMin(ctoks[1]);
+            tmpMin >> penScMin;
+            if(penScMin > penScMax) {
+                cerr << "max (" << penScMax << ") should be >= min (" << penScMin << ")" << endl;
+                assert(false); throw 1;
+            }
+            if(penScMin < 1) {
+                cerr << "min (" << penScMin << ") should be greater than 0" << endl;
+                assert(false); throw 1;
+            }
         }
 		// Scoring for mismatches where read char=N
 		// NP={Cxx|Q|RQ}

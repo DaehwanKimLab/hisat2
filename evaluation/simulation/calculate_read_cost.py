@@ -64,365 +64,63 @@ def read_genome(genome_filename):
 
 """
 """
-def extract_transcripts(gtf_filename, verbose = True, full_loading = False):
-    genes = {}
-    trans = {}
-    tran_ids = []
-
-    gtf_file = open(gtf_filename)
-    for line in gtf_file:
-        chr, protein, type, left, right, comma1, strand, comma2, values = line[:-1].split('\t')
-        values = values.strip().split(';')
-
-        if protein != "protein_coding" and not full_loading:
-            continue
-
-        left, right = int(left), int(right)
-
-        if type != "exon" and not full_loading:
-            continue
-
-        if int(left) >= int(right):
-            # print >> sys.stderr, "error", left, "vs.", right
-            # print >> sys.stderr, line[:-1]
-            continue
-
-        gene_id = ""
-        for value in values[:-1]:
-            name, value = value.strip().split()
-            value = value[1:-1]
-            if name == 'transcript_id':
-                if value not in trans:
-                    trans[value] = [chr, strand, [left], [right]]
-                    tran_ids.append(value)
-
-                    if gene_id == "" and not full_loading:
-                        print >> sys.stderr, "shouldn't happen", gene_id, value
-                        print >> sys.stderr, line[:-1]
-                        
-                    genes[gene_id].append(value)
-                else:
-                    prev_left = trans[value][2][-1]
-                    prev_right = trans[value][3][-1]
-                    if left <= prev_left or right <= prev_right:
-                        # print trans[value]
-                        # print left, right
-                        # print >> sys.stderr, "daehwan - error"
-                        continue
-
-                    if left - prev_right <= 5:
-                        trans[value][3][-1] = right
-                    else:
-                        trans[value][2].append(left)
-                        trans[value][3].append(right)
-                    
-            elif name == 'gene_id':
-                gene_id = value
-                if value not in genes:
-                    genes[gene_id] = []
-
-    gtf_file.close()
-
-    transcript_lengths, transcript_counts, transcript_length_sum = [0 for i in range(100000)], 0, 0
-    exon_lengths, exon_counts, exon_length_sum = [0 for i in range(100000)], 0, 0
-    intron_lengths, intron_counts, intron_length_sum = [0 for i in range(10000000)], 0, 0
-    
-    for tran_id in tran_ids:
-        chr, strand, exon_starts, exon_ends = trans[tran_id]
-        if len(exon_starts) != len(exon_ends):
-            print >> sys.stderr, "error!"
-            sys.exit(1)
-
-        # daehwan - for debugging purposes
-        output = tran_id
-
-        transcript_length = 0
-        for i in range(len(exon_starts)):
-            exon_start, exon_end = exon_starts[i], exon_ends[i]
-            exon_length = exon_end - exon_start + 1
-            if exon_length >= len(exon_lengths):
-                print >> sys.stderr, "exon length is too big: %d : %d-%d" % (exon_length, exon_start, exon_end)
-                sys.exit(1)
-
-            # daehwan - for debugging purposes
-            output += ("\t%d-%d" % (exon_start, exon_end))
-
-            exon_lengths[exon_length] += 1
-            exon_counts += 1
-            exon_length_sum += exon_length
-
-            transcript_length += exon_length
-
-            if i == 0:
-                continue
-
-            intron_length = exon_start - exon_ends[i-1]
-            if intron_length >= len(intron_lengths):
-                print >> sys.stderr, "intron length is too big %d : %d-%d" % (intron_length, exon_ends[i-1], exon_start)
-                sys.exit(1)
-                
-            intron_lengths[intron_length] += 1
-            intron_counts += 1
-            intron_length_sum += intron_length
-    
-        transcript_counts += 1
-        transcript_length_sum += transcript_length
-
-    # daehwan - for debugging purposes
-    """
-    print "length\tcdf"
-    sum = 0
-    for i in range(len(intron_lengths)):
-        sum += intron_lengths[i]
-        print "%d\t%f" % (i, float(sum) / intron_counts) 
-    sys.exit(1)
-    """
-
-
-    gene_counts, gene_multi_isoforms_counts = 0, 0
-    for g_id, t_ids in genes.items():
-        gene_counts += 1
-        if len(t_ids) > 1:
-            gene_multi_isoforms_counts += 1
-
-    transcript_avg_length = float(transcript_length_sum) / transcript_counts
-    exon_avg_length = float(exon_length_sum) / exon_counts
-    intron_avg_length = float(intron_length_sum) / intron_counts
-
-    if verbose:
-        print >> sys.stderr, "gene counts: %d, gene counts (multiple isoforms): %d (%.2f)" % (gene_counts, gene_multi_isoforms_counts, float(gene_multi_isoforms_counts) / gene_counts)
-        print >> sys.stderr, "transcript counts: %d, transcript avg. length: %.2f" % (transcript_counts, transcript_avg_length)
-        print >> sys.stderr, "exon counts: %d, exon avg. length: %.2f" % (exon_counts, exon_avg_length)
-        print >> sys.stderr, "intron counts: %d, intron avg. length: %.2f" % (intron_counts, intron_avg_length)
-        print >> sys.stderr, "average number of exons per transcript: %.2f" % (float(exon_counts) / transcript_counts)
-        
-        for i in range(20):
-            sum = 0
-            for j in range(i * 10 + 1, (i+1) * 10 + 1):
-                sum += exon_lengths[j]
-                
-            print >> sys.stderr, "[%d, %d] : %.2f" % (i * 10 + 1, (i+1) * 10, float(sum) * 100 / exon_counts)
-            
-    return trans, tran_ids
-
-
-"""
-"""
-def chr_to_num(chr):
-    if chr == "X":
-        chr = 30
-    elif chr == "Y":
-        chr = 31
-    else:
-        chr = int(chr)
-        
-    return chr
-
-
-"""
-"""
-def extract_transcripts2(gtf_filename):
+def extract_splice_sites(gtf_fname):
     trans = {}
 
-    gtf_file = open(gtf_filename)
+    gtf_file = open(gtf_fname)
+    # Parse valid exon lines from the GTF file into a dict by transcript_id
     for line in gtf_file:
-        chr, protein, type, left, right, comma1, strand, comma2, values = line[:-1].split('\t')
-        values = values.strip().split(';')
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if '#' in line:
+            line = line.split('#')[0].strip()
+
+        try:
+            chrom, source, feature, left, right, score, \
+                strand, frame, values = line.split('\t')
+        except ValueError:
+            continue
         left, right = int(left), int(right)
 
-        if chr[0] not in "123456789XY":
+        if feature != 'exon' or left >= right:
             continue
 
-        if left > right:
-            left, right = right, left
+        values_dict = {}
+        for attr in values.split(';')[:-1]:
+            attr, _, val = attr.strip().partition(' ')
+            values_dict[attr] = val.strip('"')
 
-        for value in values[:-1]:
-            name, value = value.strip().split()
-            value = value[1:-1]
-            if name == 'transcript_id':
-                if value not in trans:
-                    trans[value] = [value, protein, chr, strand, left, right]
-                else:
-                    prev_left = trans[value][-2]
-                    prev_right = trans[value][-1]
-
-                    if protein != trans[value][1]:
-                        print >> sys.stderr, line[:-1]
-                        print >> sys.stderr, trans[value]
-                        sys.exit(1)
-
-                    if left < prev_left:
-                        trans[value][-2] = left
-                        
-                    if right > prev_right:
-                        trans[value][-1] = right
-
-    gtf_file.close()
-
-    trans_list = []
-    for trans_id, values in trans.items():
-        trans_list.append(values)
-
-    def my_cmp(a, b):
-        a_chr, a_left, a_right = chr_to_num(a[2]), a[-2], a[-1]
-        b_chr, b_left, b_right = chr_to_num(b[2]), b[-2], b[-1]
- 
-        if a_chr < b_chr:
-            return -1
-        elif a_chr > b_chr:
-            return 1
-
-        if a_left < b_left:
-            return -1
-        elif a_left > b_left:
-            return 1
-
-        if a_right < b_right:
-            return -1
-        elif a_right > b_right:
-            return 1
-
-        return 0
-
-    trans_list = sorted(trans_list, my_cmp)
-    return trans_list
-
-
-
-"""
-"""
-def extract_gene_and_transcript_ids(gtf_filename, types = ["protein_coding"], full_loading = False):
-    trans_to_gene = {}
-
-    gtf_file = open(gtf_filename)
-    for line in gtf_file:
-        chr, protein, type, left, right, comma1, strand, comma2, values = line[:-1].split('\t')
-        values = values.strip().split(';')
-        left, right = int(left), int(right)
-
-        if protein not in types and not full_loading:
+        if 'gene_id' not in values_dict or \
+                'transcript_id' not in values_dict:
             continue
 
-        if type != "exon":
-            continue
-
-        if chr[0] not in "123456789XY":
-            continue
-
-        if left > right:
-            left, right = right, left
-
-        for value in values[:-1]:
-            name, value = value.strip().split()
-            value = value[1:-1]
-            if name == 'transcript_id':
-                if value not in trans_to_gene:
-                    trans_to_gene[value] = []
-
-                if gene_id not in trans_to_gene[value]:
-                    trans_to_gene[value].append(gene_id)
-
-            elif name == 'gene_id':
-                gene_id = value
-
-
-    gtf_file.close()
-
-    return trans_to_gene
-
-
-"""
-"""
-def binary_search_transcripts(trans_list, chr, pos):
-    chr = chr_to_num(chr)
-    
-    begin, end = 0, len(trans_list)
-    while begin < end:
-        mid = (begin + end) / 2
-        
-        def compare(tran, chr, pos):
-            cmp_chr, cmp_left, cmp_right = chr_to_num(tran[2]), tran[-2], tran[-1]
-
-            if chr != cmp_chr:
-                if chr < cmp_chr:
-                    return -1 
-                else:
-                    return 1
-
-            if pos < cmp_left:
-                return -1
-
-            if pos > cmp_right:
-                return 1
-
-            return 0
-
-        result = compare(trans_list[mid], chr, pos)
-        if result < 0:
-            end = mid
-        elif result > 0:
-            begin = mid + 1
+        transcript_id = values_dict['transcript_id']
+        if transcript_id not in trans:
+            trans[transcript_id] = [chrom, strand, [[left, right]]]
         else:
-            index = mid - 1
-            while index >= 0:
-                if compare(trans_list[index], chr, pos) == 0:
-                    index -= 1
+            trans[transcript_id][2].append([left, right])
+
+    gtf_file.close()
+    
+    # Sort exons and merge where separating introns are <=5 bps
+    for tran, [chrom, strand, exons] in trans.items():
+            exons.sort()
+            tmp_exons = [exons[0]]
+            for i in range(1, len(exons)):
+                if exons[i][0] - tmp_exons[-1][1] <= 5:
+                    tmp_exons[-1][1] = exons[i][1]
                 else:
-                    break
-                
-            index += 1
+                    tmp_exons.append(exons[i])
+            trans[tran] = [chrom, strand, tmp_exons]
 
-            trans = []
-            while True:
-                if compare(trans_list[index], chr, pos) == 0:
-                    trans.append(trans_list[index])
-                    index += 1
-                else:
-                    break
+    # Calculate and print the unique junctions
+    junctions = set()
+    for chrom, strand, exons in trans.values():
+        for i in range(1, len(exons)):
+            junctions.add(to_junction_str([chrom, exons[i-1][1], exons[i][0]]))
 
-            return trans
-
-    return []
-
-
-"""
-"""
-def extract_junctions(trans_dic):
-    junctions_dic = {}
-    for tran_id, values in trans_dic.items():
-        chr, strand, exon_starts, exon_ends = values
-        for i in range(1, len(exon_starts)):
-            left, right = exon_ends[i-1], exon_starts[i]
-            junction = "%s-%d-%d" % (chr, left, right)
-
-            if junction not in junctions_dic:
-                junctions_dic[junction] = []
-
-            junctions_dic[junction].append(tran_id)
-            
-
-    return junctions_dic
-
-
-"""
-"""
-def extract_spliced_seqs(chr_dic, junctions_dic, output_filename, kmer = 25):
-    output_file = open(output_filename, "w")
-    for junction, tran_ids in junctions_dic.items():
-        chr, left, right = junction.split("-")
-        left, right = int(left), int(right)
-
-        if chr not in chr_dic:
-            continue
-        
-        spliced_seq = chr_dic[chr][left-kmer:left] + chr_dic[chr][right-1:right-1+kmer]
-        
-        print >> output_file, ">%s-%d-%d|%s" % (chr, left, right, ";".join(tran_ids))
-        print >> output_file, spliced_seq
-
-    output_file.close()
-
-
+    return junctions
 
 
 cigar_re = re.compile('\d+\w')
@@ -815,6 +513,7 @@ def is_junction_pair(junctions_dic, chr, pos, cigar_str, mate_chr, mate_pos, mat
     junctions += mate_junctions
     return junctions
 
+
 def find_in_gtf_junctions(chr_dic, gtf_junctions, junction, relax_dist = 5):
     def find_in_gtf_junctions(gtf_junctions, junction):
         l, u = 0, len(gtf_junctions)
@@ -856,7 +555,7 @@ def find_in_gtf_junctions(chr_dic, gtf_junctions, junction, relax_dist = 5):
 
     return -1
 
-def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set):
+def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set, ex_gtf_junctions):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic = {}, {}
     mapped_file = open(mapped_fname, "w")
@@ -942,7 +641,7 @@ def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf
                 temp_junctions.add(found_junction_str)
             else:
                 if junction_str not in temp_junctions:
-                    # None
+                    None
                     # assert junction_str in junction_read_dic
                     # daehwan - for debugging purposes
                     """
@@ -953,7 +652,6 @@ def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf
                             for line in junction_read_dic[junction_str]:
                                 print >> sys.stdout, "\t", line
                     """
-
                 temp_junctions.add(junction_str)
 
 
@@ -984,7 +682,6 @@ def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf
     for line in file:
         if line[0] == '@':
             continue
-
         if RNA:
             read_name, chr, pos, cigar, trans_id, NM = line[:-1].split()
         else:
@@ -1038,6 +735,8 @@ def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf
     for junction_str in temp_junctions:
         if junction_str in temp_gtf_junctions:
             continue
+        if junction_str in ex_gtf_junctions:
+            continue
         if is_canonical_junction(chr_dic, to_junction(junction_str)):
             false_can_junctions += 1
         else:
@@ -1047,7 +746,7 @@ def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf
     return mapped, unique_mapped, unmapped, aligned, multi_aligned, len(temp_junctions), len(temp_gtf_junctions), mapping_point
 
 
-def compare_paired_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set):
+def compare_paired_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set, ex_gtf_junctions):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic, junction_pair_dic = {}, {}, {}
     mapped_file = open(mapped_fname, "w")
@@ -1426,12 +1125,12 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
-        ["hisat", "", "", ""],        
+        # ["hisat", "", "", ""],        
         ["hisat2", "", "", ""],
         # ["hisat2", "x2", "", ""],
-        ["hisat2", "x1", "tran", ""],
+        # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "tran", ""],
-        # ["hisat2", "x1", "snp_tran", ""],
+        ["hisat2", "x1", "snp_tran", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
         # ["star", "", "", ""],
@@ -1462,10 +1161,10 @@ def calculate_read_cost():
         verbose = True
 
     chr_dic = read_genome("../../data/" + genome + ".fa")
-
+    gtf_junctions = extract_splice_sites("../../data/genome.gtf")
     align_stat = []
     # for paired in [False, True]:
-    for paired in [False]:
+    for paired in [False, True]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
@@ -1877,9 +1576,9 @@ def calculate_read_cost():
                         type_read_fname2 = base_fname + "_" + readtype2 + ".fa"
                     mapped_id_fname = base_fname + "_" + readtype2 + ".read_id"
                     if paired:
-                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_paired_sam(RNA, out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set)
+                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_paired_sam(RNA, out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set, gtf_junctions)
                     else:
-                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_single_sam(RNA, out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set)
+                        mapped, unique_mapped, unmapped, aligned, multi_aligned, temp_junctions, temp_gtf_junctions, mapping_point = compare_single_sam(RNA, out_fname2, "../" + type_sam_fname2, mapped_id_fname, chr_dic, junctions, junctions_set, gtf_junctions)
                     proc = subprocess.Popen(["wc", "-l", "../" + type_read_fname2], stdout=subprocess.PIPE)
                     out = proc.communicate()[0]
                     numreads = int(out.split()[0]) / 2

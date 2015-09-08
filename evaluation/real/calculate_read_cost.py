@@ -64,167 +64,63 @@ def read_genome(genome_filename):
 
 """
 """
-def extract_transcripts(gtf_filename, verbose = True, full_loading = False):
-    genes = {}
+def extract_splice_sites(gtf_fname):
     trans = {}
-    tran_ids = []
 
-    gtf_file = open(gtf_filename)
+    gtf_file = open(gtf_fname)
+    # Parse valid exon lines from the GTF file into a dict by transcript_id
     for line in gtf_file:
-        if line == "" or line[0] == '#':
+        line = line.strip()
+        if not line or line.startswith('#'):
             continue
-        chr, protein, type, left, right, comma1, strand, comma2, values = line[:-1].split('\t')
-        values = values.strip().split(';')
+        if '#' in line:
+            line = line.split('#')[0].strip()
 
-        if protein != "protein_coding" and not full_loading:
+        try:
+            chrom, source, feature, left, right, score, \
+                strand, frame, values = line.split('\t')
+        except ValueError:
             continue
-
         left, right = int(left), int(right)
 
-        if type != "exon" and not full_loading:
+        if feature != 'exon' or left >= right:
             continue
 
-        if int(left) >= int(right):
-            # print >> sys.stderr, "error", left, "vs.", right
-            # print >> sys.stderr, line[:-1]
+        values_dict = {}
+        for attr in values.split(';')[:-1]:
+            attr, _, val = attr.strip().partition(' ')
+            values_dict[attr] = val.strip('"')
+
+        if 'gene_id' not in values_dict or \
+                'transcript_id' not in values_dict:
             continue
 
-        gene_id = ""
-        for value in values[:-1]:
-            name, value = value.strip().split()
-            value = value[1:-1]
-            if name == 'transcript_id':
-                if value not in trans:
-                    trans[value] = [chr, strand, [left], [right]]
-                    tran_ids.append(value)
-
-                    if gene_id == "" and not full_loading:
-                        print >> sys.stderr, "shouldn't happen", gene_id, value
-                        print >> sys.stderr, line[:-1]
-                        
-                    genes[gene_id].append(value)
-                else:
-                    prev_left = trans[value][2][-1]
-                    prev_right = trans[value][3][-1]
-                    if left <= prev_left or right <= prev_right:
-                        # print trans[value]
-                        # print left, right
-                        # print >> sys.stderr, "daehwan - error"
-                        continue
-
-                    if left - prev_right <= 5:
-                        trans[value][3][-1] = right
-                    else:
-                        trans[value][2].append(left)
-                        trans[value][3].append(right)
-                    
-            elif name == 'gene_id':
-                gene_id = value
-                if value not in genes:
-                    genes[gene_id] = []
+        transcript_id = values_dict['transcript_id']
+        if transcript_id not in trans:
+            trans[transcript_id] = [chrom, strand, [[left, right]]]
+        else:
+            trans[transcript_id][2].append([left, right])
 
     gtf_file.close()
-
-    transcript_lengths, transcript_counts, transcript_length_sum = [0 for i in range(100000)], 0, 0
-    exon_lengths, exon_counts, exon_length_sum = [0 for i in range(100000)], 0, 0
-    intron_lengths, intron_counts, intron_length_sum = [0 for i in range(10000000)], 0, 0
     
-    for tran_id in tran_ids:
-        chr, strand, exon_starts, exon_ends = trans[tran_id]
-        if len(exon_starts) != len(exon_ends):
-            print >> sys.stderr, "error!"
-            sys.exit(1)
+    # Sort exons and merge where separating introns are <=5 bps
+    for tran, [chrom, strand, exons] in trans.items():
+            exons.sort()
+            tmp_exons = [exons[0]]
+            for i in range(1, len(exons)):
+                if exons[i][0] - tmp_exons[-1][1] <= 5:
+                    tmp_exons[-1][1] = exons[i][1]
+                else:
+                    tmp_exons.append(exons[i])
+            trans[tran] = [chrom, strand, tmp_exons]
 
-        # daehwan - for debugging purposes
-        output = tran_id
+    # Calculate and print the unique junctions
+    junctions = set()
+    for chrom, strand, exons in trans.values():
+        for i in range(1, len(exons)):
+            junctions.add(to_junction_str([chrom, exons[i-1][1], exons[i][0]]))
 
-        transcript_length = 0
-        for i in range(len(exon_starts)):
-            exon_start, exon_end = exon_starts[i], exon_ends[i]
-            exon_length = exon_end - exon_start + 1
-            if exon_length >= len(exon_lengths):
-                print >> sys.stderr, "exon length is too big: %d : %d-%d" % (exon_length, exon_start, exon_end)
-                sys.exit(1)
-
-            # daehwan - for debugging purposes
-            output += ("\t%d-%d" % (exon_start, exon_end))
-
-            exon_lengths[exon_length] += 1
-            exon_counts += 1
-            exon_length_sum += exon_length
-
-            transcript_length += exon_length
-
-            if i == 0:
-                continue
-
-            intron_length = exon_start - exon_ends[i-1]
-            if intron_length >= len(intron_lengths):
-                print >> sys.stderr, "intron length is too big %d : %d-%d" % (intron_length, exon_ends[i-1], exon_start)
-                sys.exit(1)
-                
-            intron_lengths[intron_length] += 1
-            intron_counts += 1
-            intron_length_sum += intron_length
-    
-        transcript_counts += 1
-        transcript_length_sum += transcript_length
-
-    # daehwan - for debugging purposes
-    """
-    print "length\tcdf"
-    sum = 0
-    for i in range(len(intron_lengths)):
-        sum += intron_lengths[i]
-        print "%d\t%f" % (i, float(sum) / intron_counts) 
-    sys.exit(1)
-    """
-
-
-    gene_counts, gene_multi_isoforms_counts = 0, 0
-    for g_id, t_ids in genes.items():
-        gene_counts += 1
-        if len(t_ids) > 1:
-            gene_multi_isoforms_counts += 1
-
-    transcript_avg_length = float(transcript_length_sum) / transcript_counts
-    exon_avg_length = float(exon_length_sum) / exon_counts
-    intron_avg_length = float(intron_length_sum) / intron_counts
-
-    if verbose:
-        print >> sys.stderr, "gene counts: %d, gene counts (multiple isoforms): %d (%.2f)" % (gene_counts, gene_multi_isoforms_counts, float(gene_multi_isoforms_counts) / gene_counts)
-        print >> sys.stderr, "transcript counts: %d, transcript avg. length: %.2f" % (transcript_counts, transcript_avg_length)
-        print >> sys.stderr, "exon counts: %d, exon avg. length: %.2f" % (exon_counts, exon_avg_length)
-        print >> sys.stderr, "intron counts: %d, intron avg. length: %.2f" % (intron_counts, intron_avg_length)
-        print >> sys.stderr, "average number of exons per transcript: %.2f" % (float(exon_counts) / transcript_counts)
-        
-        for i in range(20):
-            sum = 0
-            for j in range(i * 10 + 1, (i+1) * 10 + 1):
-                sum += exon_lengths[j]
-                
-            print >> sys.stderr, "[%d, %d] : %.2f" % (i * 10 + 1, (i+1) * 10, float(sum) * 100 / exon_counts)
-            
-    return trans, tran_ids
-
-
-"""
-"""
-def extract_junctions(trans_dic):
-    junctions_dic = {}
-    for tran_id, values in trans_dic.items():
-        chr, strand, exon_starts, exon_ends = values
-        for i in range(1, len(exon_starts)):
-            left, right = exon_ends[i-1], exon_starts[i]
-            junction = "%s-%d-%d" % (chr, left, right)
-
-            if junction not in junctions_dic:
-                junctions_dic[junction] = []
-
-            junctions_dic[junction].append(tran_id)
-            
-
-    return junctions_dic
+    return junctions
 
 
 cigar_re = re.compile('\d+\w')
@@ -898,9 +794,10 @@ def calculate_read_cost():
         is_large_file = True
 
     aligners = [
+        ["hisat", "", "", ""],
         ["hisat2", "", "", ""],
-        ["hisat2", "", "snp", ""],
-        ["hisat2", "", "tran", ""],
+        # ["hisat2", "", "snp", ""],
+        # ["hisat2", "", "tran", ""],
         ["hisat2", "", "snp_tran", ""],
         # ["hisat", "", "", ""],
         # ["star", "", "", ""],
@@ -922,20 +819,18 @@ def calculate_read_cost():
     RNA = (cwd.find("RNA") != -1)
 
     chr_dic = read_genome("../../../data/" + genome + ".fa")
-    trans_dic, trans_ids = extract_transcripts("../../../data/genome.gtf", verbose = False)
-    junctions_dic = extract_junctions(trans_dic)
+    gtf_junction_strs = extract_splice_sites("../../../data/genome.gtf")
     gene = "no"
     gtf_junctions = []
-    for junction_str in junctions_dic.keys():
+    for junction_str in gtf_junction_strs:
         junction = to_junction(junction_str)
         gtf_junctions.append(junction)
-
     gtf_junctions = sorted(gtf_junctions, cmp=junction_cmp)            
 
     print >> sys.stderr, "aligner\tuse_annotation\tend_type\tedit_distance\tmapped_reads\tjunction_reads\tgtf_junction_reads\tjunctions\tgtf_junctions\truntime"
     
     # for paired in [False, True]:
-    for paired in [False]:
+    for paired in [False, True]:
         type_read1_fname = "1.fq"
         if paired:
             type_read2_fname = "2.fq"

@@ -24,16 +24,6 @@ HISAT2 outputs alignments in [SAM] format, enabling interoperation with a large 
 HISAT2 is distributed under the [GPLv3 license], and it runs on the command line under
 Linux, Mac OS X and Windows.
 
-A few notes:
-
-1) HISAT2's index (HGFM) size for the human reference genome and 12.3 million common SNPs is 6.2GB. The SNPs consist of 11 million single nucleotide polymorphisms, 728,000 deletions, and 555,000 insertions. Insertions and deletions used in this index are small (usually <20bp). We plan to incorporate structural variations (SV) into this index.
-
-2) The memory footprint of HISAT2 is relatively low, 6.7GB.
-
-3) The runtime of HISAT2 is estimated to be slightly slower than [HISAT] (30–100% slower for some data sets).
-
-4) HISAT2 provides greater accuracy for alignment of reads containing SNPs.
-
 [HISAT2]:          http://ccb.jhu.edu/software/hisat2
 [HISAT]:          http://ccb.jhu.edu/software/hisat
 [Bowtie2]:         http://bowtie-bio.sf.net/bowtie2
@@ -676,6 +666,21 @@ Otherwise, the number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
 where Q is the Phred quality value.  Default: `MX` = 6, `MN` = 2.
 
 </td></tr>
+<tr><td id="hisat2-options-sp">
+
+[`--sp`]: #hisat2-options-sp
+
+    --sp MX,MN
+
+</td><td>
+
+Sets the maximum (`MX`) and minimum (`MN`) penalties for soft-clipping per base, 
+both integers. A number less than or equal to `MX` and greater than or equal to `MN` is
+subtracted from the alignment score for each position.
+The number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
+where Q is the Phred quality value.  Default: `MX` = 2, `MN` = 1.
+
+</td></tr>
 <tr><td id="hisat2-options-np">
 
 [`--np`]: #hisat2-options-np
@@ -757,20 +762,31 @@ Sets the penalty for each pair of canonical splice sites (e.g. GT/AG). Default: 
 Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 3.
 
 </td></tr>
-<tr><td id="hisat2-options-pen-intronlen">
+<tr><td id="hisat2-options-pen-canintronlen">
 
-[`--pen-intronlen`]: #hisat2-options-pen-intronlen
+[`--pen-canintronlen`]: #hisat2-options-pen-canintronlen
 
-    --pen-intronlen <func>
+    --pen-canintronlen <func>
 
 </td><td>
 
-Sets the penalty for long introns so that alignments with shorter introns are preferred
+Sets the penalty for long introns with canonical splice sites so that alignments with shorter introns are preferred
 to those with longer ones.  Default: G,-8,1
 
 </td></tr>
+<tr><td id="hisat2-options-pen-noncanintronlen">
+
+[`--pen-noncanintronlen`]: #hisat2-options-pen-noncanintronlen
+
+    --pen-noncanintronlen <func>
+
+</td><td>
+
+Sets the penalty for long introns with noncanonical splice sites so that alignments with shorter introns are preferred
+to those with longer ones.  Default: G,-8,1
 
 
+</td></tr>
 <tr><td id="hisat2-options-min-intronlen">
 
 [`--min-intronlen`]: #hisat2-options-min-intronlen
@@ -865,7 +881,6 @@ Disable spliced alignment.
 
 
 <tr><td id="hisat2-options-rna-strandness">
-
 [`--rna-strandness`]: #hisat2-options-rna-strandness
 
     --rna-strandness <string>
@@ -882,6 +897,42 @@ With this option being used, every read alignment will have an XS attribute tag:
  '-' means a read belongs to a transcript on '-' strand of genome.
 
 (TopHat has a similar option, --library-type option, where fr-firststrand corresponds to R and RF; fr-secondstrand corresponds to F and FR.)
+</td></tr>
+
+<tr><td id="hisat2-options-tmo">
+[`--tmo/--transcriptome-mapping-only`]: #hisat2-options-tmo
+
+    --tmo/--transcriptome-mapping-only
+
+</td><td>
+
+Report only those alignments within known transcripts.
+
+</td></tr>
+
+<tr><td id="hisat2-options-dta">
+[`--dta/--downstream-transcriptome-assembly`]: #hisat2-options-dta
+
+    --dta/--downstream-transcriptome-assembly
+
+</td><td>
+
+Report alignments tailored for transcript assemblers including StringTie.
+With this option, HISAT2 requires longer anchor lengths for de-novo discovery of splice sites.
+This leads to less alignments with short-anchors, 
+which helps transcript assemblers improve significantly in computationa and memory usage.
+
+</td></tr>
+
+<tr><td id="hisat2-options-dta-cufflinks">
+[`--dta-cufflinks`]: #hisat2-options-dta-cufflinks
+
+    --dta-cufflinks
+
+</td><td>
+
+Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta),
+HISAT2 supports only three splice site signals (GT/AG, GC/AG, and AT/AC).  HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
 
 </td></tr>
 
@@ -1732,10 +1783,11 @@ alignment:
 
     </td><td>
 
-    When the alignment of a read involves SNPs that are in the index, this option is reported to indicate where exactly the read involves SNPs.
+    When the alignment of a read involves SNPs that are in the index, this option is used to indicate where exactly the read involves the SNPs.
     This optional field is similar to the above MD:Z field.
     For example, `Zs:Z:1|S|rs3747203,97|S|rs16990981` indicates the second base of the read corresponds to a known SNP (ID: rs3747203).
-    97 bases after the second base, the read in the alignment involves another known SNP (ID: rs16990981).
+    97 bases after the third base (the base after the second one), the read at 100th base involves another known SNP (ID: rs16990981).
+    'S' indicates a single nucleotide polymorphism.  'D' and 'I' indicates a deletion and an insertion, respectively.
     </td></tr>
     
     </table>

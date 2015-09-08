@@ -50,6 +50,9 @@
 	      HISAT2 provides options for transcript assemblers (e.g., StringTie and Cufflinks) to work better with the alignment form HISAT2 (see --dts and --dts-cufflinks).
 	    </li>
 	    <li>
+	      Some slides about HISAT2 are <a href="data/HISAT2-first_release-Sept_8_2015.pdf">here</a> and we are preparing detailed documention.
+	    </li>
+	    <li>
 	      We plan to incorporate structural variations (SV) into this index (e.g., long insertions/deletions, inversions, and translocations).
 	    </li>
 	  </ul>
