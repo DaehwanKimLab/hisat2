@@ -1273,7 +1273,7 @@ public:
                             }
                             uint64_t bp = asc2dna[(int)snp_ch];
                             assert_lt(bp, 4);
-                            if(bp == s[pos]) {
+                            if((int)bp == s[pos]) {
                                 cerr << "Error: single type (" << "ACGTN"[(int)s[pos]]
                                 << ") should have a different base than " << "ACGTN"[(int)s[pos]]
                                 << " (" << snp_id << ")" << endl;
@@ -4038,9 +4038,9 @@ void GFM<index_t>::buildToDisk(
 		for(int bpi = 0; bpi < 4; bpi++, si++)
 #endif
 		{
-			int gbwtChar; // one of A, C, G, T, and Z
-            int F, M;     // either 0 or 1
-            index_t pos;  // pos on joined string
+			int gbwtChar = 0; // one of A, C, G, T, and Z
+            int F= 0, M = 0;     // either 0 or 1
+            index_t pos = 0;  // pos on joined string
             bool count = true;
 			if(si < gbwtLen) {
 				gbwt.nextRow(gbwtChar, F, M, pos);
@@ -4230,7 +4230,7 @@ void GFM<index_t>::buildToDisk(
         SideLocus<index_t> tloc, bloc;
         SideLocus<index_t>::initFromTopBot(range.first, range.second, gh, gfm(), tloc, bloc);
         index_t j = 0;
-        for(; j < gh._ftabChars; j++) {
+        for(; j < (index_t)gh._ftabChars; j++) {
             int nt = q & 0x3; q >>= 2;
             if(bloc.valid()) {
                 range = mapGLF(tloc, bloc, nt);
@@ -4248,7 +4248,7 @@ void GFM<index_t>::buildToDisk(
             }
         }
         
-        if(range.first >= range.second || j < gh._ftabChars) {
+        if(range.first >= range.second || j < (index_t)gh._ftabChars) {
             if(i == 0) {
                 tFtab[i].first = tFtab[i].second = 0;
             } else {

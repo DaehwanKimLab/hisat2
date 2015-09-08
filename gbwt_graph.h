@@ -461,7 +461,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
 #endif
         }
 
-        if(nthreads > tmp_szs.size()) {
+        if((size_t)nthreads > tmp_szs.size()) {
             nthreads = tmp_szs.size();
         }
         assert_gt(nthreads, 0);
@@ -534,12 +534,12 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             }
             while(!rg_in_file.eof()) {
                 index_t tmp_num_nodes = readIndex<index_t>(rg_in_file, bigEndian);
-                for(index_t i = 0; i < tmp_num_nodes; i++) {
+                for(index_t j = 0; j < tmp_num_nodes; j++) {
                     nodes.expand();
                     nodes.back().read(rg_in_file, bigEndian);
                 }
                 index_t tmp_num_edges = readIndex<index_t>(rg_in_file, bigEndian);
-                for(index_t i = 0; i < tmp_num_edges; i++) {
+                for(index_t j = 0; j < tmp_num_edges; j++) {
                     edges.expand();
                     edges.back().read(rg_in_file, bigEndian);
                     edges.back().from += curr_num_nodes;

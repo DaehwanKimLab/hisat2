@@ -446,9 +446,9 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 #else
 		for(int bpi = 0; bpi < 4; bpi++, si++) {
 #endif
-			int gbwtChar;
-            int F, M;
-            full_index_t pos;
+			int gbwtChar = 0;
+            int F = 0, M = 0;
+            full_index_t pos = 0;
             bool count = true;
 			if(si < gbwtLen) {
                 gbwt.nextRow(gbwtChar, F, M, pos);
@@ -2125,7 +2125,7 @@ HGFM<index_t, local_index_t>::HGFM(
         assert_lt(tidx, _localGFMs.size());
         while(local_offset < refLen) {
             index_t t = 0;
-            while(local_offset < refLen && t < this->_nthreads) {
+            while(local_offset < refLen && t < (index_t)this->_nthreads) {
                 assert_lt(t, tParams.size());
                 ThreadParam& tParam = tParams[t];
                 
