@@ -13,7 +13,7 @@ A few notes:
 
 5) HISAT2 provides greater accuracy for alignment of reads containing SNPs.
 
-6) We plan to release a beta version of HISAT2 in September this year.
+6) We released a first (beta) version of HISAT2 in September 8, 2015.
 
 
 References:
