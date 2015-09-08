@@ -44,7 +44,7 @@
 	      </ol>
 	    </li>
 	    <li>
-	      When reads contain SNPs, the SNP information is provided as an optional field in the SAM output of HISAT2 (e.g., <strong>Zs:Z:1|S|rs3747203,97|S|rs16990981</strong> - see <a href="manual.shtml">the manual</a> for details).  This feature enables fast and sensitive genotyping in downstream analyses.
+	      When reads contain SNPs, the SNP information is provided as an optional field in the SAM output of HISAT2 (e.g., <strong>Zs:Z:1|S|rs3747203,97|S|rs16990981</strong> - see <a href="manual.shtml">the manual</a> for details).  This feature enables fast and sensitive genotyping in downstream analyses. Note that there is no penalty in alignment for mismatches and indels due to SNPs.
 	    </li>
 	    <li>
 	      HISAT2 provides options for transcript assemblers (e.g., StringTie and Cufflinks) to work better with the alignment form HISAT2 (see --dts and --dts-cufflinks).
