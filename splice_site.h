@@ -31,6 +31,8 @@
 #include "read.h"
 #include "reference.h"
 #include "hier_idx_common.h"
+#include "gfm.h"
+#include "alt.h"
 
 using namespace std;
 
@@ -78,17 +80,21 @@ public:
     
 	SpliceSitePos(const SpliceSitePos& c) { init(c); }
 	
-	SpliceSitePos(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical) { init(ref, left, right, fw, canonical); }
+	SpliceSitePos(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical, bool exon = false)
+    {
+        init(ref, left, right, fw, canonical);
+    }
     
 	/**
 	 * Copy given fields into this Coord.
 	 */
-    void init(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical) {
+    void init(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical, bool exon = false) {
 		_ref = ref;
 		_left = left;
         _right = right;
 		_fw = fw;
         _canonical = canonical;
+        _exon = exon;
 	}
     
 	/**
@@ -100,6 +106,7 @@ public:
 		_right = c._right;
         _fw = c._fw;
         _canonical = c._canonical;
+        _exon = c._exon;
 	}
 	
 	/**
@@ -112,7 +119,9 @@ public:
         _left == o._left &&
         _right == o._right &&
         _fw == o._fw &&
-        _canonical == o._canonical;
+        _canonical == o._canonical &&
+        _exon == o._exon;
+        
 	}
     
 	/**
@@ -129,6 +138,7 @@ public:
 		if(_right > o._right) return false;
         if(_fw != o._fw) return _fw;
         if(_canonical != o._canonical) return _canonical;
+        if(_exon != o._exon) return _exon;
 		return false;
 	}
 	
@@ -153,6 +163,7 @@ public:
 		if(_right < o._right) return false;
         if(_fw != o._fw) return !_fw;
         if(_canonical != o._canonical) return !_canonical;
+        if(_exon != o._exon) return !_exon;
 		return false;
 	}
 	
@@ -172,6 +183,7 @@ public:
         _right = std::numeric_limits<uint32_t>::max();
         _fw = true;
         _canonical = true;
+        _exon = false;
 	}
 	
 	/**
@@ -219,6 +231,7 @@ public:
 	bool     fw()           const { return _fw; }
     bool     canonical()    const { return _canonical; }
     uint32_t intron_len()   const { return _right - _left - 1; }
+    bool     exon() const { return _exon; }
     
 protected:
     
@@ -227,6 +240,7 @@ protected:
     uint32_t  _right;           // 0-based offset of the left most base of the right flanking exon
 	bool      _fw;              // true -> Watson strand
     bool      _canonical;
+    bool      _exon;
 };
 
 /**
@@ -245,10 +259,11 @@ public:
                uint32_t right,
                bool fw,
                bool canonical,
+               bool exon = false,
                bool fromFile = false,
                bool known = false)
     {
-        init(ref, left, right, fw, canonical, fromFile, known);
+        init(ref, left, right, fw, canonical, exon, fromFile, known);
     }
 
 	/**
@@ -259,10 +274,11 @@ public:
               uint32_t right,
               bool fw,
               bool canonical,
+              bool exon = false,
               bool fromFile = false,
               bool known = false)
     {
-        SpliceSitePos::init(ref, left, right, fw, canonical);
+        SpliceSitePos::init(ref, left, right, fw, canonical, exon);
     
         // _donordint = 0;
         // _acceptordint = 0;
@@ -274,6 +290,7 @@ public:
         _editdist = 0;
         // _probscore = 0.0f;
         _readid = 0;
+        _exon = exon;
         _fromfile = fromFile;
         _known = known;
 	}
@@ -353,6 +370,149 @@ public:
 
 std::ostream& operator<<(std::ostream& out, const SpliceSite& c);
 
+/**
+ *
+ */
+class Exon {
+public:
+    
+    Exon() { reset(); }
+    
+    Exon(const Exon& c) { init(c); }
+    
+    Exon(uint32_t ref, uint32_t left, uint32_t right, bool fw)
+    {
+        init(ref, left, right, fw);
+    }
+    
+    /**
+     * Copy given fields into this Coord.
+     */
+    void init(uint32_t ref, uint32_t left, uint32_t right, bool fw) {
+        _ref = ref;
+        _left = left;
+        _right = right;
+        _fw = fw;
+    }
+    
+    /**
+     * Copy contents of given Coord into this one.
+     */
+    void init(const Exon& c) {
+        _ref = c._ref;
+        _left = c._left;
+        _right = c._right;
+        _fw = c._fw;
+    }
+    
+    /**
+     * Return true iff this Coord is identical to the given Coord.
+     */
+    bool operator==(const Exon& o) const {
+        assert(inited());
+        assert(o.inited());
+        return _ref == o._ref &&
+        _left == o._left &&
+        _right == o._right &&
+        _fw == o._fw;
+    }
+    
+    /**
+     * Return true iff this Coord is less than the given Coord.  One Coord is
+     * less than another if (a) its reference id is less, (b) its orientation is
+     * less, or (c) its offset is less.
+     */
+    bool operator<(const Exon& o) const {
+        if(_ref < o._ref) return true;
+        if(_ref > o._ref) return false;
+        if(_left < o._left) return true;
+        if(_left > o._left) return false;
+        if(_right < o._right) return true;
+        if(_right > o._right) return false;
+        if(_fw != o._fw) return _fw;
+        return false;
+    }
+    
+    /**
+     * Return the opposite result from operator<.
+     */
+    bool operator>=(const Exon& o) const {
+        return !((*this) < o);
+    }
+    
+    /**
+     * Return true iff this Coord is greater than the given Coord.  One Coord
+     * is greater than another if (a) its reference id is greater, (b) its
+     * orientation is greater, or (c) its offset is greater.
+     */
+    bool operator>(const Exon& o) const {
+        if(_ref > o._ref) return true;
+        if(_ref < o._ref) return false;
+        if(_left > o._left) return true;
+        if(_left < o._left) return false;
+        if(_right > o._right) return true;
+        if(_right < o._right) return false;
+        if(_fw != o._fw) return !_fw;
+        return false;
+    }
+    
+    /**
+     * Return the opposite result from operator>.
+     */
+    bool operator<=(const Exon& o) const {
+        return !((*this) > o);
+    }
+    
+    /**
+     * Reset this coord to uninitialized state.
+     */
+    void reset() {
+        _ref = std::numeric_limits<uint32_t>::max();
+        _left = std::numeric_limits<uint32_t>::max();
+        _right = std::numeric_limits<uint32_t>::max();
+        _fw = true;
+    }
+    
+    /**
+     * Return true iff this Coord is initialized (i.e. ref and off have both
+     * been set since the last call to reset()).
+     */
+    bool inited() const {
+        if(_ref != std::numeric_limits<uint32_t>::max() &&
+           _left != std::numeric_limits<uint32_t>::max() &&
+           _right != std::numeric_limits<uint32_t>::max())
+        {
+            return true;
+        }
+        return false;
+    }
+    
+#ifndef NDEBUG
+    /**
+     * Check that coord is internally consistent.
+     */
+    bool repOk() const {
+        if(_ref == std::numeric_limits<uint32_t>::max() ||
+           _left == std::numeric_limits<uint32_t>::max() ||
+           _right == std::numeric_limits<uint32_t>::max()) {
+            return false;
+        }
+        return true;
+    }
+#endif
+    
+    uint32_t ref()          const { return _ref; }
+    uint32_t left()         const { return _left; }
+    uint32_t right()        const { return _right; }
+    bool     fw()           const { return _fw; }
+    
+protected:
+    uint32_t  _ref;             // which reference?
+    uint32_t  _left;            // 0-based offset of the right most base of the left flanking exon
+    uint32_t  _right;           // 0-based offset of the left most base of the right flanking exon
+    bool      _fw;              // true -> Watson strand
+};
+
 class AlnRes;
 
 class SpliceSiteDB {
@@ -389,8 +549,10 @@ public:
     void getLeftSpliceSites(uint32_t ref, uint32_t left, uint32_t range, EList<SpliceSite>& spliceSites) const;
     void getRightSpliceSites(uint32_t ref, uint32_t right, uint32_t range, EList<SpliceSite>& spliceSites) const;
     bool hasSpliceSites(uint32_t ref, uint32_t left1, uint32_t right1, uint32_t left2, uint32_t right2, bool includeNovel = false) const;
+    bool insideExon(uint32_t ref, uint32_t left, uint32_t right) const;
     
     void print(ofstream& out);
+    void read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> >& alts);
     void read(ifstream& in, bool known = false);
     
 private:
@@ -404,7 +566,7 @@ private:
                               const RedBlackNode<SpliceSitePos, uint32_t> *node,
                               uint32_t left,
                               uint32_t right,
-                              bool includeNovel) const;
+                              bool includeNovel) const;    
     
     const RedBlackNode<SpliceSitePos, uint32_t>* getSpliceSite_temp(const SpliceSitePos& ssp) const;
     
@@ -445,6 +607,8 @@ private:
     BTDnaString                         acceptorstr;
     
     bool                                _empty;
+    
+    EList<Exon>                         _exons;
 };
 
 #endif /*ifndef SPLICE_SITE_H_*/

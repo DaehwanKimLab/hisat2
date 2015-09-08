@@ -81,7 +81,8 @@ enum {
 	ARG_MULTISEED_IVAL,         // --multiseed
 	ARG_SCORE_MIN,              // --score-min
 	ARG_SCORE_MA,               // --ma
-	ARG_SCORE_MMP,              // --mm
+	ARG_SCORE_MMP,              // --mp
+    ARG_SCORE_SCP,              // --sp
 	ARG_SCORE_NP,               // --nm
 	ARG_SCORE_RDG,              // --rdg
 	ARG_SCORE_RFG,              // --rfg
@@ -154,7 +155,8 @@ enum {
     ARG_PEN_CANSPLICE,
     ARG_PEN_NONCANSPLICE,
     ARG_PEN_CONFLICTSPLICE,
-    ARG_PEN_INTRONLEN,
+    ARG_PEN_CANINTRONLEN,
+    ARG_PEN_NONCANINTRONLEN,
     ARG_MIN_INTRONLEN,
     ARG_MAX_INTRONLEN,
     ARG_KNOWN_SPLICESITE_INFILE,
@@ -164,6 +166,10 @@ enum {
     ARG_NO_SPLICED_ALIGNMENT,
     ARG_RNA_STRANDNESS,
     ARG_SPLICESITE_DB_ONLY,
+    ARG_NO_ANCHORSTOP,
+    ARG_TRANSCRIPTOME_MAPPING_ONLY,
+    ARG_TRANSCRIPTOME_ASSEMBLY,
+    ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS
 #ifdef USE_SRA
     ARG_SRA_ACC,
 #endif

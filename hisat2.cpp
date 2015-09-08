@@ -49,6 +49,7 @@
 #include "aligner_cache.h"
 #include "util.h"
 #include "pe.h"
+#include "tp.h"
 #include "simple_func.h"
 #include "presets.h"
 #include "opts.h"
@@ -180,6 +181,8 @@ static int   bonusMatch;      // constant reward if bonusMatchType=constant
 static int   penMmcType;      // how to penalize mismatches
 static int   penMmcMax;       // max mm penalty
 static int   penMmcMin;       // min mm penalty
+static int   penScMax;       // max sc penalty
+static int   penScMin;       // min sc penalty
 static int   penNType;        // how to penalize Ns in the read
 static int   penN;            // constant if N pelanty is a constant
 static bool  penNCatPair;     // concatenate mates before N filtering?
@@ -239,7 +242,8 @@ static bool useTempSpliceSite;
 static int penCanSplice;
 static int penNoncanSplice;
 static int penConflictSplice;
-static SimpleFunc penIntronLen;
+static SimpleFunc penCanIntronLen;
+static SimpleFunc penNoncanIntronLen;
 static size_t minIntronLen;
 static size_t maxIntronLen;
 static string knownSpliceSiteInfile;  //
@@ -249,6 +253,12 @@ static bool secondary;
 static bool no_spliced_alignment;
 static int rna_strandness; //
 static bool splicesite_db_only; //
+
+static bool anchorStop;
+static bool pseudogeneStop;
+static bool tranMapOnly; // transcriptome mapping only
+static bool tranAssm;    // alignments selected for downstream transcript assembly such as StringTie and Cufflinks
+static string tranAssm_program;
 
 #ifdef USE_SRA
 static EList<string> sra_accs;
@@ -295,7 +305,7 @@ static void resetOptions() {
 	nthreads				= 1;     // number of pthreads operating concurrently
 	outType					= OUTPUT_SAM;  // style of output
 	noRefNames				= false; // true -> print reference indexes; not names
-	khits					= 5;     // number of hits per read; >1 is much slower
+	khits					= 10;    // number of hits per read; >1 is much slower
 	mhits					= 0;     // stop after finding this many alignments+1
 	partitionSz				= 0;     // output a partitioning key in first field
 	useSpinlock				= true;  // false -> don't use of spinlocks even if they're #defines
@@ -389,6 +399,8 @@ static void resetOptions() {
 	penMmcType      = DEFAULT_MM_PENALTY_TYPE;
 	penMmcMax       = DEFAULT_MM_PENALTY_MAX;
 	penMmcMin       = DEFAULT_MM_PENALTY_MIN;
+    penScMax        = DEFAULT_SC_PENALTY_MAX;
+    penScMin        = DEFAULT_SC_PENALTY_MIN;
 	penNType        = DEFAULT_N_PENALTY_TYPE;
 	penN            = DEFAULT_N_PENALTY;
 	penNCatPair     = DEFAULT_N_CAT_PAIR; // concatenate mates before N filtering?
@@ -452,7 +464,8 @@ static void resetOptions() {
     penCanSplice = 0;
     penNoncanSplice = 12;
     penConflictSplice = 1000000;
-    penIntronLen.init(SIMPLE_FUNC_LOG, -8, 1);
+    penCanIntronLen.init(SIMPLE_FUNC_LOG, -8, 1);
+    penNoncanIntronLen.init(SIMPLE_FUNC_LOG, -8, 1);
     minIntronLen = 20;
     maxIntronLen = 500000;
     knownSpliceSiteInfile = "";
@@ -462,6 +475,11 @@ static void resetOptions() {
     no_spliced_alignment = false;
     rna_strandness = RNA_STRANDNESS_UNKNOWN;
     splicesite_db_only = false;
+    anchorStop = true;
+    pseudogeneStop = true;
+    tranMapOnly = false;
+    tranAssm = false;
+    tranAssm_program = "";
     
 #ifdef USE_SRA
     sra_accs.clear();
@@ -580,6 +598,7 @@ static struct option long_options[] = {
 	{(char*)"multiseed",        required_argument, 0,        ARG_MULTISEED_IVAL},
 	{(char*)"ma",               required_argument, 0,        ARG_SCORE_MA},
 	{(char*)"mp",               required_argument, 0,        ARG_SCORE_MMP},
+    {(char*)"sp",               required_argument, 0,        ARG_SCORE_SCP},
 	{(char*)"np",               required_argument, 0,        ARG_SCORE_NP},
 	{(char*)"rdg",              required_argument, 0,        ARG_SCORE_RDG},
 	{(char*)"rfg",              required_argument, 0,        ARG_SCORE_RFG},
@@ -592,10 +611,10 @@ static struct option long_options[] = {
 	{(char*)"fast",             no_argument,       0,        ARG_PRESET_FAST},
 	{(char*)"sensitive",        no_argument,       0,        ARG_PRESET_SENSITIVE},
 	{(char*)"very-sensitive",   no_argument,       0,        ARG_PRESET_VERY_SENSITIVE},
-	{(char*)"very-fast-local",      no_argument,   0,        ARG_PRESET_VERY_FAST_LOCAL},
-	{(char*)"fast-local",           no_argument,   0,        ARG_PRESET_FAST_LOCAL},
-	{(char*)"sensitive-local",      no_argument,   0,        ARG_PRESET_SENSITIVE_LOCAL},
-	{(char*)"very-sensitive-local", no_argument,   0,        ARG_PRESET_VERY_SENSITIVE_LOCAL},
+	// {(char*)"very-fast-local",      no_argument,   0,        ARG_PRESET_VERY_FAST_LOCAL},
+	// {(char*)"fast-local",           no_argument,   0,        ARG_PRESET_FAST_LOCAL},
+	// {(char*)"sensitive-local",      no_argument,   0,        ARG_PRESET_SENSITIVE_LOCAL},
+	// {(char*)"very-sensitive-local", no_argument,   0,        ARG_PRESET_VERY_SENSITIVE_LOCAL},
 	{(char*)"no-score-priority",no_argument,       0,        ARG_NO_SCORE_PRIORITY},
 	{(char*)"seedlen",          required_argument, 0,        'L'},
 	{(char*)"seedmms",          required_argument, 0,        'N'},
@@ -641,7 +660,7 @@ static struct option long_options[] = {
 	{(char*)"tri",              no_argument,       0,        ARG_TRI},
 	{(char*)"nondeterministic", no_argument,       0,        ARG_NON_DETERMINISTIC},
 	{(char*)"non-deterministic", no_argument,      0,        ARG_NON_DETERMINISTIC},
-	{(char*)"local-seed-cache-sz", required_argument, 0,     ARG_LOCAL_SEED_CACHE_SZ},
+	// {(char*)"local-seed-cache-sz", required_argument, 0,     ARG_LOCAL_SEED_CACHE_SZ},
 	{(char*)"seed-cache-sz",       required_argument, 0,     ARG_CURRENT_SEED_CACHE_SZ},
 	{(char*)"no-unal",          no_argument,       0,        ARG_SAM_NO_UNAL},
 	{(char*)"test-25",          no_argument,       0,        ARG_TEST_25},
@@ -654,7 +673,9 @@ static struct option long_options[] = {
     {(char*)"pen-cansplice",  required_argument, 0,        ARG_PEN_CANSPLICE},
     {(char*)"pen-noncansplice",  required_argument, 0,     ARG_PEN_NONCANSPLICE},
     {(char*)"pen-conflictsplice",  required_argument, 0,     ARG_PEN_CONFLICTSPLICE},
-    {(char*)"pen-intronlen",  required_argument, 0,     ARG_PEN_INTRONLEN},
+    {(char*)"pen-intronlen",  required_argument, 0,     ARG_PEN_CANINTRONLEN},
+    {(char*)"pen-canintronlen",  required_argument, 0,     ARG_PEN_CANINTRONLEN},
+    {(char*)"pen-noncanintronlen",  required_argument, 0,     ARG_PEN_NONCANINTRONLEN},
     {(char*)"min-intronlen",  required_argument, 0,     ARG_MIN_INTRONLEN},
     {(char*)"max-intronlen",  required_argument, 0,     ARG_MAX_INTRONLEN},
     {(char*)"known-splicesite-infile",       required_argument, 0,        ARG_KNOWN_SPLICESITE_INFILE},
@@ -664,6 +685,12 @@ static struct option long_options[] = {
     {(char*)"no-spliced-alignment",   no_argument, 0,        ARG_NO_SPLICED_ALIGNMENT},
     {(char*)"rna-strandness",   required_argument, 0,        ARG_RNA_STRANDNESS},
     {(char*)"splicesite-db-only",   no_argument, 0,        ARG_SPLICESITE_DB_ONLY},
+    {(char*)"no-anchorstop",   no_argument, 0,        ARG_NO_ANCHORSTOP},
+    {(char*)"transcriptome-mapping-only",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
+    {(char*)"tmo",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
+    {(char*)"downstream-transcriptome-assembly",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
+    {(char*)"dta",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
+    {(char*)"dta-cufflinks",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS},
 #ifdef USE_SRA
     {(char*)"sra-acc",   required_argument, 0,        ARG_SRA_ACC},
 #endif
@@ -771,12 +798,14 @@ static void printUsage(ostream& out) {
 		<< "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
 		<< "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
 		<< endl
+#if 0
 		<< "  For --local:" << endl
 		<< "   --very-fast-local      -D 5 -R 1 -N 0 -L 25 -i S,1,2.00" << endl
 		<< "   --fast-local           -D 10 -R 2 -N 0 -L 22 -i S,1,1.75" << endl
 		<< "   --sensitive-local      -D 15 -R 2 -N 0 -L 20 -i S,1,0.75 (default)" << endl
 		<< "   --very-sensitive-local -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
 		<< endl
+#endif
 	    << " Alignment:" << endl
 		<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
@@ -792,7 +821,8 @@ static void printUsage(ostream& out) {
         << "  --pen-cansplice <int>              penalty for a canonical splice site (0)" << endl
         << "  --pen-noncansplice <int>           penalty for a non-canonical splice site (12)" << endl
         // << "  --pen-conflictsplice <int>         penalty for conflicting splice sites (1000000)" << endl
-        << "  --pen-intronlen <func>             penalty for long introns (G,-8,1)" << endl
+        << "  --pen-canintronlen <func>          penalty for long introns (G,-8,1) with canonical splice sites" << endl
+        << "  --pen-noncanintronlen <func>       penalty for long introns (G,-8,1) with noncanonical splice sites" << endl
         << "  --min-intronlen <int>              minimum intron length (20)" << endl
         << "  --max-intronlen <int>              maximum intron length (500000)" << endl
         << "  --known-splicesite-infile <path>   provide a list of known splice sites" << endl
@@ -801,10 +831,14 @@ static void printUsage(ostream& out) {
         << "  --no-temp-splicesite               disable the use of splice sites found" << endl
         << "  --no-spliced-alignment             disable spliced alignment" << endl
         << "  --rna-strandness <string>          Specify strand-specific information (unstranded)" << endl
+        << "  --tmo                              Reports only those alignments within known transcriptome" << endl
+        << "  --dta                              Reports alignments tailored for transcript assemblers" << endl
+        << "  --dta-cufflinks                    Reports alignments tailored specifically for cufflinks" << endl
         << endl
 		<< " Scoring:" << endl
 		<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
-		<< "  --mp <int>         max penalty for mismatch; lower qual = lower penalty (6)" << endl
+		<< "  --mp <int>,<int>   max and min penalties for mismatch; lower qual = lower penalty <2,6>" << endl
+        << "  --sp <int>,<int>   max and min penalties for soft-clipping; lower qual = lower penalty <1,2>" << endl
 		<< "  --np <int>         penalty for non-A/C/G/Ts in read/ref (1)" << endl
 		<< "  --rdg <int>,<int>  read gap open, extend penalties (5,3)" << endl
 		<< "  --rfg <int>,<int>  reference gap open, extend penalties (5,3)" << endl
@@ -881,7 +915,7 @@ static void printUsage(ostream& out) {
 	if(wrapper.empty()) {
 		cerr << endl
 		     << "*** Warning ***" << endl
-			 << "'hisat2-align' was run directly.  It is recommended that you run the wrapper script 'hisat' instead." << endl
+			 << "'hisat2-align' was run directly.  It is recommended that you run the wrapper script 'hisat2' instead." << endl
 			 << endl;
 	}
 }
@@ -1425,7 +1459,7 @@ static void parseOption(int next_option, const char *arg) {
 			tokenize(arg, ",", args);
 			if(args.size() > 2 || args.size() == 0) {
 				cerr << "Error: expected 1 or 2 comma-separated "
-					 << "arguments to --mmp option, got " << args.size() << endl;
+					 << "arguments to --mp option, got " << args.size() << endl;
 				throw 1;
 			}
 			if(args.size() >= 1) {
@@ -1438,6 +1472,24 @@ static void parseOption(int next_option, const char *arg) {
 			}
 			break;
 		}
+        case ARG_SCORE_SCP: {
+            EList<string> args;
+            tokenize(arg, ",", args);
+            if(args.size() > 2 || args.size() == 0) {
+                cerr << "Error: expected 1 or 2 comma-separated "
+                << "arguments to --sp option, got " << args.size() << endl;
+                throw 1;
+            }
+            if(args.size() >= 1) {
+                polstr += ";SCP=Q,";
+                polstr += args[0];
+                if(args.size() >= 2) {
+                    polstr += ",";
+                    polstr += args[1];
+                }
+            }
+            break;
+        }
 		case ARG_SCORE_NP:  polstr += ";NP=C";   polstr += arg; break;
 		case ARG_SCORE_RDG: polstr += ";RDG=";   polstr += arg; break;
 		case ARG_SCORE_RFG: polstr += ";RFG=";   polstr += arg; break;
@@ -1484,7 +1536,7 @@ static void parseOption(int next_option, const char *arg) {
             penConflictSplice = parseInt(0, "--pen-conflictsplice arg must be at least 0", arg);
             break;
         }
-        case ARG_PEN_INTRONLEN: {
+        case ARG_PEN_CANINTRONLEN: {
 			polstr += ";";
 			EList<string> args;
 			tokenize(arg, ",", args);
@@ -1494,7 +1546,7 @@ static void parseOption(int next_option, const char *arg) {
                 << args.size() << endl;
 				throw 1;
 			}
-			polstr += ("INTRONLEN=" + args[0]);
+			polstr += ("CANINTRONLEN=" + args[0]);
 			if(args.size() > 1) {
 				polstr += ("," + args[1]);
 			}
@@ -1503,6 +1555,25 @@ static void parseOption(int next_option, const char *arg) {
 			}
 			break;
 		}
+        case ARG_PEN_NONCANINTRONLEN: {
+            polstr += ";";
+            EList<string> args;
+            tokenize(arg, ",", args);
+            if(args.size() > 3 && args.size() == 0) {
+                cerr << "Error: expected 3 or fewer comma-separated "
+                << "arguments to --n-ceil option, got "
+                << args.size() << endl;
+                throw 1;
+            }
+            polstr += ("NONCANINTRONLEN=" + args[0]);
+            if(args.size() > 1) {
+                polstr += ("," + args[1]);
+            }
+            if(args.size() > 2) {
+                polstr += ("," + args[2]);
+            }
+            break;
+        }
         case ARG_MIN_INTRONLEN: {
             minIntronLen = parseInt(20, "--min-intronlen arg must be at least 20", arg);
             break;
@@ -1523,7 +1594,6 @@ static void parseOption(int next_option, const char *arg) {
             else if(strandness == "FR") rna_strandness = RNA_STRANDNESS_FR;
             else if(strandness == "RF") rna_strandness = RNA_STRANDNESS_RF;
             else {
-                // daehwan - throw exception with details
                 cerr << "Error: should be one of F, R, FR, or RF " << endl;
 				throw 1;
             }
@@ -1531,6 +1601,23 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_SPLICESITE_DB_ONLY: {
             splicesite_db_only = true;
+            break;
+        }
+        case ARG_NO_ANCHORSTOP: {
+            anchorStop = false;
+            break;
+        }
+        case ARG_TRANSCRIPTOME_MAPPING_ONLY: {
+            tranMapOnly = true;
+            break;
+        }
+        case ARG_TRANSCRIPTOME_ASSEMBLY: {
+            tranAssm = true;
+            break;
+        }
+        case ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS: {
+            tranAssm = true;
+            tranAssm_program = "cufflinks";
             break;
         }
 #ifdef USE_SRA
@@ -1597,30 +1684,33 @@ static void parseOptions(int argc, const char **argv) {
 	}
 	size_t failStreakTmp = 0;
 	SeedAlignmentPolicy::parseString(
-		polstr,
-		localAlign,
-		noisyHpolymer,
-		ignoreQuals,
-		bonusMatchType,
-		bonusMatch,
-		penMmcType,
-		penMmcMax,
-		penMmcMin,
-		penNType,
-		penN,
-		penRdGapConst,
-		penRfGapConst,
-		penRdGapLinear,
-		penRfGapLinear,
-		scoreMin,
-		nCeil,
-		penNCatPair,
-		multiseedMms,
-		multiseedLen,
-		msIval,
-		failStreakTmp,
-		nSeedRounds,
-        &penIntronLen);
+                                     polstr,
+                                     localAlign,
+                                     noisyHpolymer,
+                                     ignoreQuals,
+                                     bonusMatchType,
+                                     bonusMatch,
+                                     penMmcType,
+                                     penMmcMax,
+                                     penMmcMin,
+                                     penScMax,
+                                     penScMin,
+                                     penNType,
+                                     penN,
+                                     penRdGapConst,
+                                     penRfGapConst,
+                                     penRdGapLinear,
+                                     penRfGapLinear,
+                                     scoreMin,
+                                     nCeil,
+                                     penNCatPair,
+                                     multiseedMms,
+                                     multiseedLen,
+                                     msIval,
+                                     failStreakTmp,
+                                     nSeedRounds,
+                                     &penCanIntronLen,
+                                     &penNoncanIntronLen);
 	if(failStreakTmp > 0) {
 		maxEeStreak = failStreakTmp;
 		maxUgStreak = failStreakTmp;
@@ -1734,11 +1824,11 @@ static PairedPatternSource*              multiseed_patsrc;
 static HGFM<index_t>*                    multiseed_gfm;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
-static AlignmentCache<index_t>*          multiseed_ca; // seed cache
 static AlnSink<index_t>*                 multiseed_msink;
 static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
 static ALTDB<index_t>*                   altdb;
+static TranscriptomePolicy*              multiseed_tpol;
 
 /**
  * Metrics for measuring the work done by the outer read alignment
@@ -2875,8 +2965,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	PairedPatternSource&             patsrc   = *multiseed_patsrc;
 	const HGFM<index_t>&             gfm      = *multiseed_gfm;
 	const Scoring&                   sc       = *multiseed_sc;
-	const BitPairReference&          ref      = *multiseed_refs;
-	AlignmentCache<index_t>&         scShared = *multiseed_ca;
+    const BitPairReference&          ref      = *multiseed_refs;
 	AlnSink<index_t>&                msink    = *multiseed_msink;
 	OutFileBuf*                      metricsOfb = multiseed_metricsOfb;
     
@@ -2889,21 +2978,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	auto_ptr<PatternSourcePerThreadFactory> patsrcFact(createPatsrcFactory(patsrc, tid));
 	auto_ptr<PatternSourcePerThread> ps(patsrcFact->create());
 	
-	// Thread-local cache for seed alignments
-	PtrWrap<AlignmentCache<index_t> > scLocal;
-	if(!msNoCache) {
-		scLocal.init(new AlignmentCache<index_t>(seedCacheLocalMB * 1024 * 1024, false));
-	}
-	AlignmentCache<index_t> scCurrent(seedCacheCurrentMB * 1024 * 1024, false);
-	// Thread-local cache for current seed alignments
-	
-	// Interfaces for alignment and seed caches
-	AlignmentCacheIface<index_t> ca(
-                                    &scCurrent,
-                                    scLocal.get(),
-                                    msNoCache ? NULL : &scShared);
-	
-	// Instantiate an object for holding reporting-related parameters.
+    // Instantiate an object for holding reporting-related parameters.
     ReportingParams rp(
                        (allHits ? std::numeric_limits<THitInt>::max() : khits), // -k
                        mhits,             // -m/-M
@@ -2925,12 +3000,13 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     
     SplicedAligner<index_t, local_index_t> splicedAligner(
                                                           gfm,
+                                                          *multiseed_tpol,
+                                                          anchorStop,
                                                           minIntronLen,
                                                           maxIntronLen,
                                                           secondary,
                                                           localAlign,
-                                                          thread_rids_mindist,
-                                                          no_spliced_alignment);
+                                                          thread_rids_mindist);
 	SwAligner sw;
 	OuterLoopMetrics olm;
 	SeedSearchMetrics sdm;
@@ -3076,9 +3152,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 			while(retry) {
 				retry = false;
 				assert_eq(ps->bufa().color, false);
-				ca.nextRead(); // clear the cache
 				olm.reads++;
-				assert(!ca.aligning());
 				bool pair = paired;
 				const size_t rdlen1 = ps->bufa().length();
 				const size_t rdlen2 = pair ? ps->bufb().length() : 0;
@@ -3370,6 +3444,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
  */
 static void multiseedSearch(
 	Scoring& sc,
+    TranscriptomePolicy& tpol,
 	PairedPatternSource& patsrc,  // pattern source
 	AlnSink<index_t>& msink,      // hit sink
 	HGFM<index_t>& gfm,           // index of original text
@@ -3380,22 +3455,11 @@ static void multiseedSearch(
 	multiseed_msink        = &msink;
 	multiseed_gfm          = &gfm;
 	multiseed_sc           = &sc;
+    multiseed_tpol         = &tpol;
 	multiseed_metricsOfb   = metricsOfb;
 	multiseed_refs = refs;
 	AutoArray<tthread::thread*> threads(nthreads);
-	AutoArray<int> tids(nthreads);
-	{
-		// Load the other half of the index into memory
-		assert(!gfm.isInMemory());
-		Timer _t(cerr, "Time loading forward index: ", timing);
-		gfm.loadIntoMemory(
-                           -1, // not the reverse index
-                           true,         // load SA samp? (yes, need forward index's SA samp)
-                           true,         // load ftab (in forward index)
-                           true,         // load rstarts (in forward index)
-                           !noRefNames,  // load names?
-                           startVerbose);
-	}
+	AutoArray<int> tids(nthreads);	
 	// Start the metrics thread
 	{
 		Timer _t(cerr, "Multiseed full-index search: ", timing);
@@ -3507,6 +3571,7 @@ static void driver(
                                      true,        // load SA sample?
                                      true,        // load ftab?
                                      true,        // load rstarts?
+                                     !no_spliced_alignment, // load splice sites?
                                      gVerbose, // whether to be talkative
                                      startVerbose, // talkative during initialization
                                      false /*passMemExc*/,
@@ -3531,6 +3596,18 @@ static void driver(
 		gfm.checkOrigs(os, false);
 		gfm.evictFromMemory();
 	}
+    {
+        // Load the other half of the index into memory
+        assert(!gfm.isInMemory());
+        Timer _t(cerr, "Time loading forward index: ", timing);
+        gfm.loadIntoMemory(
+                           -1, // not the reverse index
+                           true,         // load SA samp? (yes, need forward index's SA samp)
+                           true,         // load ftab (in forward index)
+                           true,         // load rstarts (in forward index)
+                           !noRefNames,  // load names?
+                           startVerbose);
+    }
 	OutputQueue oq(
 		*fout,                   // out file buffer
 		reorder && nthreads > 1, // whether to reorder when there's >1 thread
@@ -3544,25 +3621,32 @@ static void driver(
 			cerr << "Warning: Match bonus always = 0 in --end-to-end mode; ignoring user setting" << endl;
 			bonusMatch = 0;
 		}
+        if(tranAssm) {
+            penNoncanIntronLen.init(SIMPLE_FUNC_LOG, -8, 2);
+        }
 		Scoring sc(
-			bonusMatch,     // constant reward for match
-			penMmcType,     // how to penalize mismatches
-			penMmcMax,      // max mm pelanty
-			penMmcMin,      // min mm pelanty
-			scoreMin,       // min score as function of read len
-			nCeil,          // max # Ns as function of read len
-			penNType,       // how to penalize Ns in the read
-			penN,           // constant if N pelanty is a constant
-			penNCatPair,    // whether to concat mates before N filtering
-			penRdGapConst,  // constant coeff for read gap cost
-			penRfGapConst,  // constant coeff for ref gap cost
-			penRdGapLinear, // linear coeff for read gap cost
-			penRfGapLinear, // linear coeff for ref gap cost
-			gGapBarrier,    // # rows at top/bot only entered diagonally
-            penCanSplice,   // canonical splicing penalty
-            penNoncanSplice,// non-canonical splicing penalty
-            penConflictSplice, // conflicting splice site penalty
-            &penIntronLen);  // penalty as to intron length
+                   bonusMatch,     // constant reward for match
+                   penMmcType,     // how to penalize mismatches
+                   penMmcMax,      // max mm penalty
+                   penMmcMin,      // min mm penalty
+                   penScMax,       // max sc penalty
+                   penScMin,       // min sc penalty
+                   scoreMin,       // min score as function of read len
+                   nCeil,          // max # Ns as function of read len
+                   penNType,       // how to penalize Ns in the read
+                   penN,           // constant if N pelanty is a constant
+                   penNCatPair,    // whether to concat mates before N filtering
+                   penRdGapConst,  // constant coeff for read gap cost
+                   penRfGapConst,  // constant coeff for ref gap cost
+                   penRdGapLinear, // linear coeff for read gap cost
+                   penRfGapLinear, // linear coeff for ref gap cost
+                   gGapBarrier,    // # rows at top/bot only entered diagonally
+                   penCanSplice,   // canonical splicing penalty
+                   penNoncanSplice,// non-canonical splicing penalty
+                   penConflictSplice, // conflicting splice site penalty
+                   &penCanIntronLen,      // penalty as to intron length
+                   &penNoncanIntronLen);  // penalty as to intron length
+        
 		EList<size_t> reflens;
 		for(size_t i = 0; i < gfm.nPat(); i++) {
 			reflens.push_back(gfm.plen()[i]);
@@ -3642,31 +3726,36 @@ static void driver(
         delete _tRef;
         if(!refs->loaded()) throw 1;
         
+        bool xsOnly = (tranAssm_program == "cufflinks");
+        TranscriptomePolicy tpol(no_spliced_alignment,
+                                 tranMapOnly,
+                                 tranAssm,
+                                 xsOnly);
+        
         init_junction_prob();
         bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;
-        bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite;
+        bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite || altdb->hasSpliceSites();
         ssdb = new SpliceSiteDB(
                                 *(refs.get()),
                                 refnames,
                                 nthreads > 1, // thread-safe
                                 write, // write?
                                 read);  // read?
-        if(ssdb != NULL) {
-            if(knownSpliceSiteInfile != "") {
-                ifstream ssdb_file(knownSpliceSiteInfile.c_str(), ios::in);
-                if(ssdb_file.is_open()) {
-                    ssdb->read(ssdb_file,
-                               true); // known splice sites
-                    ssdb_file.close();
-                }
+        ssdb->read(gfm, altdb->alts());
+        if(knownSpliceSiteInfile != "") {
+            ifstream ssdb_file(knownSpliceSiteInfile.c_str(), ios::in);
+            if(ssdb_file.is_open()) {
+                ssdb->read(ssdb_file,
+                           true); // known splice sites
+                ssdb_file.close();
             }
-            if(novelSpliceSiteInfile != "") {
-                ifstream ssdb_file(novelSpliceSiteInfile.c_str(), ios::in);
-                if(ssdb_file.is_open()) {
-                    ssdb->read(ssdb_file,
-                               false); // novel splice sites
-                    ssdb_file.close();
-                }
+        }
+        if(novelSpliceSiteInfile != "") {
+            ifstream ssdb_file(novelSpliceSiteInfile.c_str(), ios::in);
+            if(ssdb_file.is_open()) {
+                ssdb->read(ssdb_file,
+                           false); // novel splice sites
+                ssdb_file.close();
             }
         }
 		switch(outType) {
@@ -3703,6 +3792,7 @@ static void driver(
 		assert(mssink != NULL);
 		multiseedSearch(
 			sc,      // scoring scheme
+            tpol,
 			*patsrc, // pattern source
 			*mssink, // hit sink
 			gfm,     // BWT

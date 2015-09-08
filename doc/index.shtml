@@ -1,31 +1,63 @@
 <!--#set var="Title" value="HISAT2" -->
 <!--#set var="NoCrumbs" value="1" -->
-<!--#set var="SubTitle" value="graph-based alignment of next generation sequencing reads to a population of human genomes"-->
+<!--#set var="SubTitle" value="graph-based alignment of next generation sequencing reads to a population of genomes"-->
 <!--#set var="ExtraCSS" value="/software/hisat2/add.css"-->
 <!--#include virtual="/iheader_r.shtml"-->
 <div id="mainContent">
   <div id="subheader">
     <table width="100%"><tbody><tr>
-    <td>
-    <strong>HISAT2</strong> is a graph-based alignment program for next generation sequencing reads to a population of human genomes.
-	  <br>
-	  </td><td valign="middle" align="right">
-    <a href="http://opensource.org"><img alt="Open Source Software" src="images/osi-certified.gif" border="0"></a>
-    </td></tr>
+	  <td>
+<strong>HISAT2</strong> is a fast and sensitive alignment program for mapping next-generation sequencing reads (both DNA and RNA) against the general human population (as well as against a single reference genome). Based on an extension of BWT for a graph <a href="http://dl.acm.org/citation.cfm?id=2674828">[Sir&eacute;n et al. 2014]</a>, we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that the represents general population, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover the human population). These small indexes (called local indexes), combined with several alignment strategies, enable rapid and accurate alignment of sequencing reads. This new indexing scheme is called a Hierarchical Graph FM index (HGFM).
+	    <br>
+	  </td>
+	  <td valign="middle" align="right">
+	    <a href="http://opensource.org"><img alt="Open Source Software" src="images/osi-certified.gif" border="0"></a>
+	</td></tr>
     </tbody></table>
   </div>
   <div id="main">
-	<div id="rightside">
+    <div id="rightside">
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
-	  <h2>HISAT2 2.0.0-beta release 8/XX/2015</h2>
+	  <h2>HISAT2 2.0.0-beta release 9/XX/2015 - first release of HISAT2</h2>
+	  We extended the BWT/FM index to incorporate genomic differences among individuals into the reference genome, while keeping memory requirements low enough to fit the entire index onto a desktop computer. Using this novel Hierarchical Graph FM index (HGFM) approach, we built a new alignment system, HISAT2, with an index that incorporates ~12.3M common SNPs from the dbSNP database. HISAT2 provides greater alignment accuracy for reads containing SNPs. </li>
 	  <ul>
 	    <li>
+	      HISAT2's index size for the human reference genome and 12.3 million common SNPs is 6.2GB (the memory footprint of HISAT2 is 6.7GB). The SNPs consist of 11 million single nucleotide polymorphisms, 728,000 deletions, and 555,000 insertions. The insertions and deletions used in this index are small (usually <20bp).
+           </li>
+	    <li>
+	      HISAT2 comes with several index types:
+	      <ol>
+		<li> Hierarchical FM index (HFM) for a reference genome (index base: <i>genome</i>) </li>
+		<li> Hierarchical Graph FM index (HGFM) for a reference genome plus SNPs (index base: <i>genome_snp</i>)</li>
+		<li> Hierarchical Graph FM index (HGFM) for a reference genome plus transcripts (index base: <i>genome_tran</i>)</li>
+		<li> Hierarchical Graph FM index (HGFM) for a reference genome plus SNPs and transcripts (index base: <i>genome_snp_tran</i>)</li>
+	      </ol>
+	    </li>	    
+	    <li>
+	      HISAT2 is a successor to both <a href="http://ccb.jhu.edu/software/hisat">HISAT</a> and <a href="http://ccb.jhu.edu/software/tophat">TopHat2</a>.  We recommend that HISAT and TopHat2 users switch to HISAT2.
+	      <ol>
+		<li> HISAT2 can be considered an enhanced version of HISAT with many improvements and bug fixes. The alignment speed and memory requirements of HISAT2 are virtually the same as those of HISAT when using the HFM index (<i>genome</i>). </li>
+		<li> When using graph-based indexes (HGFM), the runtime of HISAT2 is slightly slower than HISAT (30~80% additional CPU time).
+		<li> HISAT2 allows for mapping reads directly against transcripts, similar to that of TopHat2 (use <i>genome_tran</i> or <i>genome_snp_tran</i>). </li>
+	      </ol>
+	    </li>
+	    <li>
+	      When reads contain SNPs, the SNP information is provided as an optional field in the SAM output of HISAT2 (e.g., <strong>Zs:Z:1|S|rs3747203,97|S|rs16990981</strong> - see <a href="manual.shtml">the manual</a> for details).  This feature enables fast and sensitive genotyping in downstream analyses.
+	    </li>
+	    <li>
+	      HISAT2 provides options for transcript assemblers (e.g., StringTie and Cufflinks) to work better with the alignment form HISAT2 (see --dts and --dts-cufflinks).
+	    </li>
+	    <li>
+	      Some slides about HISAT2 are <a href="data/HISAT2-first_release-Sept_8_2015.pdf">here</a> and we are preparing detailed documention.
+	    </li>
+	    <li>
+	      We plan to incorporate structural variations (SV) into this index (e.g., long insertions/deletions, inversions, and translocations).
 	    </li>
 	  </ul>
 	  <br>
-	  <h2>HISAT2 source is available in a <a href="https://github.com/infphilo/hisat2">public GitHub repository</a> (5/30/2015).</h2>
+	  <h2>The HISAT2 source code is available in a <a href="https://github.com/infphilo/hisat2">public GitHub repository</a> (5/30/2015).</h2>
 	</div>
   </div>
 </div>

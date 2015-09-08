@@ -32,7 +32,6 @@ def extract_splice_sites(gtf_file, verbose=False):
 
     # Parse valid exon lines from the GTF file into a dict by transcript_id
     for line in gtf_file:
-
         line = line.strip()
         if not line or line.startswith('#'):
             continue

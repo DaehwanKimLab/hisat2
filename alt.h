@@ -30,38 +30,63 @@
 using namespace std;
 
 enum ALT_TYPE {
-    ALT_SNP_SGL = 0, // single nucleotide substitution
+    ALT_NONE = 0,
+    ALT_SNP_SGL,     // single nucleotide substitution
     ALT_SNP_INS,     // small insertion wrt reference genome
     ALT_SNP_DEL,     // small deletion wrt reference genome
     ALT_SNP_ALT,     // alternative sequence (to be implemented ...)
     ALT_SPLICESITE,
-    ALT_NONE,
+    ALT_EXON
 };
 
 template <typename index_t>
 struct ALT {
+    ALT() {
+        reset();
+    }
+    
+    void reset() {
+        type = ALT_NONE;
+        pos = len = 0;
+        seq = 0;
+    }
+    
+    ALT_TYPE type;
+    
     union {
         index_t pos;
         index_t left;
     };
-    ALT_TYPE type;
+    
     union {
         index_t len;
         index_t right;
     };
+    
     union {
         uint64_t seq;  // used to store 32 bp, but it can be used to store a pointer to EList<uint64_t>
-        uint64_t fw;
+        struct {
+            bool fw;
+            bool excluded;
+        };
     };
+        
+public:
     // in order to support a sequence longer than 32 bp
     
     bool snp() const { return type == ALT_SNP_SGL || type == ALT_SNP_DEL || type == ALT_SNP_INS; }
     bool splicesite() const { return type == ALT_SPLICESITE; }
     bool gap() const { return type == ALT_SNP_DEL || type == ALT_SNP_INS || type == ALT_SPLICESITE; }
+    bool exon() const { return type == ALT_EXON; }
     
     bool operator< (const ALT& o) const {
         if(pos != o.pos) return pos < o.pos;
-        if(type != o.type) return type < o.type;
+        if(type != o.type) {
+            if(type == ALT_NONE || o.type == ALT_NONE) {
+                return type == ALT_NONE;
+            }
+            return type < o.type;
+        }
         if(len != o.len) return len < o.len;
         if(seq != o.seq) return seq < o.seq;
         return false;
@@ -139,6 +164,7 @@ struct ALT {
     bool read(ifstream& f_in, bool bigEndian) {
         pos = readIndex<index_t>(f_in, bigEndian);
         type = (ALT_TYPE)readU32(f_in, bigEndian);
+        assert_neq(type, ALT_SNP_ALT);
         len = readIndex<index_t>(f_in, bigEndian);
         seq = readIndex<uint64_t>(f_in, bigEndian);
         return true;
@@ -149,13 +175,21 @@ struct ALT {
 template <typename index_t>
 class ALTDB {
 public:
-    ALTDB() {
-        
-    }
+    ALTDB() :
+    _snp(false),
+    _ss(false),
+    _exon(false)
+    {}
     
-    virtual ~ALTDB() {
-        
-    }
+    virtual ~ALTDB() {}
+    
+    bool hasSNPs() const { return _snp; }
+    bool hasSpliceSites() const { return _ss; }
+    bool hasExons() const { return _exon; }
+    
+    void setSNPs(bool snp) { _snp = snp; }
+    void setSpliceSites(bool ss) { _ss = ss; }
+    void setExons(bool exon) { _exon = exon; }
     
     EList<ALT<index_t> >& alts()     { return _alts; }
     EList<string>&        altnames() { return _altnames; }
@@ -164,6 +198,10 @@ public:
     const EList<string>&        altnames() const { return _altnames; }
 
 private:
+    bool _snp;
+    bool _ss;
+    bool _exon;
+    
     EList<ALT<index_t> > _alts;
     EList<string>        _altnames;
 };

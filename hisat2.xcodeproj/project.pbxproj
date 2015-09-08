@@ -26,6 +26,7 @@
 		E861E5A51B1B3C2200362002 /* gfm.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = gfm.cpp; sourceTree = "<group>"; };
 		E8645CE01B2B5EE00027075C /* alt.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = alt.h; sourceTree = "<group>"; };
 		E88C30AA1B15E23800761CCB /* gfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gfm.h; sourceTree = "<group>"; };
+		E89001AD1B93B7D800C63D6C /* tp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = tp.h; sourceTree = "<group>"; };
 		E8B0DBE81934F7AA005ED9FA /* aligner_bt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_bt.h; sourceTree = "<group>"; };
 		E8B0DBE91934F7AA005ED9FA /* aligner_cache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_cache.h; sourceTree = "<group>"; };
 		E8B0DBEA1934F7AA005ED9FA /* aligner_driver.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aligner_driver.h; sourceTree = "<group>"; };
@@ -262,6 +263,7 @@
 				E8B0DC2B1934F7AA005ED9FA /* timer.h */,
 				E8B0DC2C1934F7AA005ED9FA /* tinythread.h */,
 				E8B0DC2D1934F7AA005ED9FA /* tokenize.h */,
+				E89001AD1B93B7D800C63D6C /* tp.h */,
 				E8B0DC2E1934F7AA005ED9FA /* unique.h */,
 				E8B0DC2F1934F7AA005ED9FA /* util.h */,
 				E8B0DC301934F7AA005ED9FA /* word_io.h */,
@@ -334,7 +336,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-build-s-debug";
@@ -348,7 +350,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat-bp-bin-debug";
@@ -362,7 +364,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-inspect-s-debug";
@@ -376,7 +378,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-align-s-debug";
@@ -390,7 +392,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-align-s";
@@ -404,7 +406,7 @@
 			buildPhases = (
 			);
 			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = /Users/infphilo/work/HISAT2/codes/hisat2;
+			buildWorkingDirectory = /Users/infphilo/work/hisat2;
 			dependencies = (
 			);
 			name = "hisat2-build-s";

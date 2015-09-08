@@ -640,6 +640,7 @@ public:
         bool loadSASamp, // = true,
         bool loadFtab, // = true,
         bool loadRstarts, // = true,
+        bool loadSpliceSites, // = true,
         bool verbose, // = false,
         bool startVerbose, // = false,
         bool passMemExc, // = false,
@@ -700,6 +701,13 @@ public:
             while(!in7.eof()) {
                 alts.expand();
                 alts.back().read(in7, this->toBe());
+                if(!loadSpliceSites) {
+                    if(alts.back().splicesite()) {
+                        alts.pop_back();
+                        assert_gt(numAlts, 0);
+                        numAlts--;
+                    }
+                }
                 if(alts.size() == numAlts) break;
             }
         }
@@ -729,7 +737,10 @@ public:
         index_t nalts = alts.size();
         for(index_t s = 0; s < nalts; s++) {
             const ALT<index_t>& alt = alts[s];
+            if(alt.snp()) altdb->setSNPs(true);
+            if(alt.exon()) altdb->setExons(true);
             if(!alt.splicesite()) continue;
+            altdb->setSpliceSites(true);
             alts.push_back(alt);
             alts.back().left = alt.right;
             alts.back().right = alt.left;
@@ -808,6 +819,7 @@ public:
         int nthreads,
         const string& snpfile,
         const string& ssfile,
+        const string& exonfile,
         const string& svfile,
 		const string& outfile,   // base filename for GFM files
 		bool fw,
@@ -866,6 +878,7 @@ public:
 							 s,
                              snpfile,
                              ssfile,
+                             exonfile,
                              svfile,
 							 is,
 							 szs,
@@ -1095,6 +1108,7 @@ public:
 	void initFromVector(TStr& s,
                         const string& snpfile,
                         const string& ssfile,
+                        const string& exonfile,
                         const string& svfile,
 						EList<FileBuf*>& is,
 	                    EList<RefRecord>& szs,
@@ -1311,7 +1325,7 @@ public:
                         cerr << "Error: could not open "<< ssfile.c_str() << endl;
                         throw 1;
                     }
-                    set<uint64_t> ss_seq;
+                    map<uint64_t, uint64_t> ss_seq;
                     while(!ss_file.eof()) {
                         // 22	16062315	16062810	+
                         string chr;
@@ -1381,8 +1395,12 @@ public:
                             for(index_t si = right + 1; si < right + 1 + seqlen; si++) {
                                 seq = seq << 2 | s[si];
                             }
-                            if(ss_seq.find(seq) != ss_seq.end()) continue;
-                            ss_seq.insert(seq);
+                            if(_alts.size() > 0) {
+                                if(_alts.back().left == left &&
+                                   _alts.back().right == right) continue;
+                            }
+                            if(ss_seq.find(seq) == ss_seq.end()) ss_seq[seq] = 1;
+                            else                                 ss_seq[seq]++;
                         }
                         
                         _alts.expand();
@@ -1390,11 +1408,104 @@ public:
                         alt.type = ALT_SPLICESITE;
                         alt.left = left;
                         alt.right = right;
-                        alt.fw = (strand == '+' ? 1 : 0);
+                        alt.fw = (strand == '+' ? true : false);
+                        alt.excluded = false;
                         _altnames.push_back("ss");
                     }
                     ss_file.close();
                     assert_eq(_alts.size(), _altnames.size());
+                    
+                    for(size_t i = 0; i < _alts.size(); i++) {
+                        ALT<index_t>& alt = _alts[i];
+                        if(!alt.splicesite()) continue;
+                        index_t seqlen = 16; assert_leq(seqlen, 16);
+                        if(alt.left >= seqlen && alt.right + 1 + seqlen <= s.length()) {
+                            uint64_t seq = 0;
+                            for(index_t si = alt.left - seqlen; si < alt.left; si++) {
+                                seq = seq << 2 | s[si];
+                            }
+                            for(index_t si = alt.right + 1; si < alt.right + 1 + seqlen; si++) {
+                                seq = seq << 2 | s[si];
+                            }
+                            assert(ss_seq.find(seq) != ss_seq.end());
+                            alt.excluded = ss_seq[seq] > 1;
+                        }
+                    }
+                }
+                
+                if(exonfile != "") {
+                    ifstream exon_file(exonfile.c_str(), ios::in);
+                    if(!exon_file.is_open()) {
+                        cerr << "Error: could not open "<< ssfile.c_str() << endl;
+                        throw 1;
+                    }
+                    while(!exon_file.eof()) {
+                        // 22	16062156	16062315	+
+                        string chr;
+                        exon_file >> chr;
+                        if(chr.empty() || chr[0] == '#') {
+                            string line;
+                            getline(exon_file, line);
+                            continue;
+                        }
+                        index_t left, right;
+                        char strand;
+                        exon_file >> left >> right >> strand;
+                        // Convert exonic position to intronic position
+                        left += 1; right -= 1;
+                        if(left >= right) continue;
+                        index_t chr_idx = 0;
+                        for(; chr_idx < _refnames.size(); chr_idx++) {
+                            if(chr == _refnames[chr_idx])
+                                break;
+                        }
+                        if(chr_idx >= _refnames.size()) continue;
+                        assert_eq(chr_szs.size(), _refnames.size());
+                        assert_lt(chr_idx, chr_szs.size());
+                        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+                        const index_t sofar_len = tmp_pair.first;
+                        const index_t szs_idx = tmp_pair.second;
+                        bool inside_Ns = false;
+                        index_t add_pos = 0;
+                        assert(szs[szs_idx].first);
+                        for(index_t i = szs_idx; i < szs.size(); i++) {
+                            if(i != szs_idx && szs[i].first) break;
+                            if(left < szs[i].off) {
+                                inside_Ns = true;
+                                break;
+                            } else {
+                                left -= szs[i].off;
+                                right -= szs[i].off;
+                                if(left < szs[i].len) {
+                                    if(right >= szs[i].len) {
+                                        inside_Ns = true;
+                                    }
+                                    break;
+                                } else {
+                                    left -= szs[i].len;
+                                    right -= szs[i].len;
+                                    add_pos += szs[i].len;
+                                }
+                            }
+                        }
+                        if(inside_Ns) continue;
+                        left = sofar_len + add_pos + left;
+                        right = sofar_len + add_pos + right;
+                        if(chr_idx + 1 < chr_szs.size()) {
+                            if(right >= chr_szs[chr_idx + 1].first) continue;
+                        } else {
+                            if(right >= jlen) continue;
+                        }
+                        
+                        _alts.expand();
+                        ALT<index_t>& alt = _alts.back();
+                        alt.type = ALT_EXON;
+                        alt.left = left;
+                        alt.right = right;
+                        alt.fw = (strand == '+' ? true : false);
+                        _altnames.push_back("exon");
+                    }
+                    exon_file.close();
                 }
                 
                 // Todo - implement structural variations
@@ -1427,6 +1538,8 @@ public:
                             assert(_altnames[i] != "");
                         } else if(alt.splicesite()) {
                             assert(_altnames[i] == "ss");
+                        } else if(alt.exon()) {
+                            assert(_altnames[i] == "exon");
                         } else {
                             assert(false);
                         }
@@ -2018,11 +2131,11 @@ public:
         }
         assert(repOk(gh)); // Ebwt should be fully initialized now
 	}
-
+    
 	/**
 	 * Given basename of an Ebwt index, read and return its flag.
 	 */
-	static int32_t readFlags(const string& instr);
+	static int32_t readVersionFlags(const string& instr, index_t& major, index_t& minor, string& extra_version);
 
 	/**
 	 * Pretty-print the Ebwt to the given output stream.
@@ -3165,7 +3278,15 @@ public:
         
         index_t node_bot = node_top + 1;
         if(node_bot + 1 > M_occ) {
+            SideLocus<index_t> l2;
+#if 0
+            l2.initFromRow_bit(top + 1, gh(), gfm());
+            bot = select_F(l2, 1);
+            ASSERT_ONLY(index_t bot2 = select_F(l, node_bot + 1 - M_occ));
+            assert_eq(bot, bot2);
+#else
             bot = select_F(l, node_bot + 1 - M_occ);
+#endif
         } else {
             bot = F_loc;
         }
@@ -3232,7 +3353,14 @@ public:
         
         index_t node_bot = node_top + 1;
         if(node_bot + 1 > M_occ) {
+#if 0
+            l2.initFromRow_bit(top + 1, gh(), gfm());
+            bot = select_F(l2, 1);
+            ASSERT_ONLY(index_t bot2 = select_F(l, node_bot + 1 - M_occ));
+            assert_eq(bot, bot2);
+#else
             bot = select_F(l, node_bot + 1 - M_occ);
+#endif
         } else {
             bot = F_loc;
         }
@@ -5564,7 +5692,7 @@ void readGFMRefnames(const string& instr, EList<string>& refnames) {
  * Read just enough of the Ebwt's header to get its flags
  */
 template <typename index_t>
-int32_t GFM<index_t>::readFlags(const string& instr) {
+int32_t GFM<index_t>::readVersionFlags(const string& instr, index_t& major, index_t& minor, string& extra_version) {
     ifstream in;
     // Initialize our primary and secondary input-stream fields
     in.open((instr + ".1." + gfm_ext).c_str(), ios_base::in | ios::binary);
@@ -5580,7 +5708,14 @@ int32_t GFM<index_t>::readFlags(const string& instr) {
         assert_eq(1, endianSwapU32(one));
         switchEndian = true;
     }
-    readU32(in, switchEndian);
+    index_t version = readU32(in, switchEndian);
+    major = (version >> 16) & 0xff;
+    minor = (version >> 8) & 0xff;
+    if((version & 0xff) == 1) {
+        extra_version = "alpha";
+    } else if((version & 0xff) == 2) {
+        extra_version = "beta";
+    }
     readIndex<index_t>(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
@@ -5593,11 +5728,6 @@ int32_t GFM<index_t>::readFlags(const string& instr) {
     return flags;
 }
 
-/**
- * Read just enough of the Ebwt's header to determine whether it's
- * entirely reversed.
- */
-bool readEntireReverse(const string& instr);
 
 /**
  * Write an extended Burrows-Wheeler transform to a pair of output

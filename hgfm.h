@@ -78,6 +78,7 @@ public:
                  loadSASamp,
                  loadFtab,
                  loadRstarts,
+                 true, // load Splice Sites
                  verbose,
                  startVerbose,
                  passMemExc,
@@ -637,7 +638,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
             } else {
                 range = this->mapGLF1(range.first, tloc, nt);
             }
-            if(range.first == INDEX_MAX || range.first >= range.second) {
+            if(range.first == (index_t)INDEX_MAX || range.first >= range.second) {
                 break;
             }
             if(range.first + 1 == range.second) {
@@ -1565,6 +1566,7 @@ public:
          bool loadSASamp, // = true,
          bool loadFtab, // = true,
          bool loadRstarts, // = true,
+         bool loadSpliceSites, // = true,
          bool verbose, // = false,
          bool startVerbose, // = false,
          bool passMemExc, // = false,
@@ -1583,6 +1585,7 @@ public:
                  loadSASamp,
                  loadFtab,
                  loadRstarts,
+                 loadSpliceSites,
                  verbose,
                  startVerbose,
                  passMemExc,
@@ -1593,30 +1596,7 @@ public:
     {
         _in5Str = in + ".5." + gfm_ext;
         _in6Str = in + ".6." + gfm_ext;
-        
-        if(!skipLoading && false) {
-            readIntoMemory(
-                           fw ? -1 : needEntireReverse, // need REF_READ_REVERSE
-                           loadSASamp,  // load the SA sample portion?
-                           loadFtab,    // load the ftab & eftab?
-                           loadRstarts, // load the rstarts array?
-                           true,        // stop after loading the header portion?
-                           &(this->_gh),
-                           mmSweep,     // mmSweep
-                           loadNames,   // loadNames
-                           startVerbose); // startVerbose
-            // If the offRate has been overridden, reflect that in the
-            // _eh._offRate field
-            if(offRatePlus > 0 && this->_overrideOffRate == -1) {
-                this->_overrideOffRate = this->_gh._offRate + offRatePlus;
-            }
-            if(this->_overrideOffRate > this->_gh._offRate) {
-                this->_gh.setOffRate(this->_overrideOffRate);
-                assert_eq(this->_overrideOffRate, this->_gh._offRate);
-            }
-            assert(this->repOk());
-        }
-	}
+    }
 	
 	/// Construct an Ebwt from the given header parameters and string
 	/// vector, optionally using a blockwise suffix sorter with the
@@ -1635,6 +1615,7 @@ public:
          int nthreads,
          const string& snpfile,
          const string& ssfile,
+         const string& exonfile,
          const string& svfile,
          const string& outfile,   // base filename for GFM files
          bool fw,
@@ -1881,6 +1862,7 @@ HGFM<index_t, local_index_t>::HGFM(
                                    int nthreads,
                                    const string& snpfile,
                                    const string& ssfile,
+                                   const string& exonfile,
                                    const string& svfile,
                                    const string& outfile,   // base filename for EBWT files
                                    bool fw,
@@ -1907,6 +1889,7 @@ HGFM<index_t, local_index_t>::HGFM(
                  nthreads,
                  snpfile,
                  ssfile,
+                 exonfile,
                  svfile,
                  outfile,
                  fw,
@@ -2191,7 +2174,8 @@ HGFM<index_t, local_index_t>::HGFM(
                             tParam.alts.back().pos -= curr_sztot;
                         }
                     } else if(alt.splicesite()) {
-                        if(curr_sztot + local_sztot <= alt.right) continue;
+                        if(alt.excluded) continue;
+                        if(curr_sztot + local_sztot <= alt.right + 1) continue;
                         if(curr_sztot <= alt.left) {
                             tParam.alts.push_back(alt);
                             tParam.alts.back().left -= curr_sztot;

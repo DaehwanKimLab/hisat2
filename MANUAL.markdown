@@ -24,16 +24,6 @@ HISAT2 outputs alignments in [SAM] format, enabling interoperation with a large 
 HISAT2 is distributed under the [GPLv3 license], and it runs on the command line under
 Linux, Mac OS X and Windows.
 
-A few notes:
-
-1) HISAT2's index (HGFM) size for the human reference genome and 12.3 million common SNPs is 6.2GB. The SNPs consist of 11 million single nucleotide polymorphisms, 728,000 deletions, and 555,000 insertions. Insertions and deletions used in this index are small (usually <20bp). We plan to incorporate structural variations (SV) into this index.
-
-2) The memory footprint of HISAT2 is relatively low, 6.7GB.
-
-3) The runtime of HISAT2 is estimated to be slightly slower than [HISAT] (30–100% slower for some data sets).
-
-4) HISAT2 provides greater accuracy for alignment of reads containing SNPs.
-
 [HISAT2]:          http://ccb.jhu.edu/software/hisat2
 [HISAT]:          http://ccb.jhu.edu/software/hisat
 [Bowtie2]:         http://bowtie-bio.sf.net/bowtie2
@@ -306,8 +296,8 @@ considered valid, and `x` is the read length.
 </td><td>
 
 The basename of the index for the reference genome.  The basename is the name of
-any of the index files up to but not including the final `.1.bt2` / `.rev.1.bt2`
-/ etc.  `hisat2` looks for the specified index first in the current directory,
+any of the index files up to but not including the final `.1.ht2` / etc.
+`hisat2` looks for the specified index first in the current directory,
 then in the directory specified in the `HISAT2_INDEXES` environment variable.
 
 </td></tr><tr><td>
@@ -676,6 +666,21 @@ Otherwise, the number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
 where Q is the Phred quality value.  Default: `MX` = 6, `MN` = 2.
 
 </td></tr>
+<tr><td id="hisat2-options-sp">
+
+[`--sp`]: #hisat2-options-sp
+
+    --sp MX,MN
+
+</td><td>
+
+Sets the maximum (`MX`) and minimum (`MN`) penalties for soft-clipping per base, 
+both integers. A number less than or equal to `MX` and greater than or equal to `MN` is
+subtracted from the alignment score for each position.
+The number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
+where Q is the Phred quality value.  Default: `MX` = 2, `MN` = 1.
+
+</td></tr>
 <tr><td id="hisat2-options-np">
 
 [`--np`]: #hisat2-options-np
@@ -757,20 +762,31 @@ Sets the penalty for each pair of canonical splice sites (e.g. GT/AG). Default: 
 Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 3.
 
 </td></tr>
-<tr><td id="hisat2-options-pen-intronlen">
+<tr><td id="hisat2-options-pen-canintronlen">
 
-[`--pen-intronlen`]: #hisat2-options-pen-intronlen
+[`--pen-canintronlen`]: #hisat2-options-pen-canintronlen
 
-    --pen-intronlen <func>
+    --pen-canintronlen <func>
 
 </td><td>
 
-Sets the penalty for long introns so that alignments with shorter introns are preferred
+Sets the penalty for long introns with canonical splice sites so that alignments with shorter introns are preferred
 to those with longer ones.  Default: G,-8,1
 
 </td></tr>
+<tr><td id="hisat2-options-pen-noncanintronlen">
+
+[`--pen-noncanintronlen`]: #hisat2-options-pen-noncanintronlen
+
+    --pen-noncanintronlen <func>
+
+</td><td>
+
+Sets the penalty for long introns with noncanonical splice sites so that alignments with shorter introns are preferred
+to those with longer ones.  Default: G,-8,1
 
 
+</td></tr>
 <tr><td id="hisat2-options-min-intronlen">
 
 [`--min-intronlen`]: #hisat2-options-min-intronlen
@@ -865,7 +881,6 @@ Disable spliced alignment.
 
 
 <tr><td id="hisat2-options-rna-strandness">
-
 [`--rna-strandness`]: #hisat2-options-rna-strandness
 
     --rna-strandness <string>
@@ -882,6 +897,42 @@ With this option being used, every read alignment will have an XS attribute tag:
  '-' means a read belongs to a transcript on '-' strand of genome.
 
 (TopHat has a similar option, --library-type option, where fr-firststrand corresponds to R and RF; fr-secondstrand corresponds to F and FR.)
+</td></tr>
+
+<tr><td id="hisat2-options-tmo">
+[`--tmo/--transcriptome-mapping-only`]: #hisat2-options-tmo
+
+    --tmo/--transcriptome-mapping-only
+
+</td><td>
+
+Report only those alignments within known transcripts.
+
+</td></tr>
+
+<tr><td id="hisat2-options-dta">
+[`--dta/--downstream-transcriptome-assembly`]: #hisat2-options-dta
+
+    --dta/--downstream-transcriptome-assembly
+
+</td><td>
+
+Report alignments tailored for transcript assemblers including StringTie.
+With this option, HISAT2 requires longer anchor lengths for de-novo discovery of splice sites.
+This leads to less alignments with short-anchors, 
+which helps transcript assemblers improve significantly in computationa and memory usage.
+
+</td></tr>
+
+<tr><td id="hisat2-options-dta-cufflinks">
+[`--dta-cufflinks`]: #hisat2-options-dta-cufflinks
+
+    --dta-cufflinks
+
+</td><td>
+
+Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta),
+HISAT2 supports only three splice site signals (GT/AG, GC/AG, and AT/AC).  HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
 
 </td></tr>
 
@@ -1585,9 +1636,21 @@ alignment:
     </td>
     <td>
 
-    Alignment score.  Can be negative.  Can be greater than 0 in [`--local`]
-    mode (but not in [`--end-to-end`] mode).  Only present if SAM record is for
+    Alignment score.  Can be negative.  Only present if SAM record is for
     an aligned read.
+
+    </td></tr>
+    <tr><td id="hisat2-build-opt-fields-xs">
+
+        ZS:i:<N>
+
+    </td>
+    <td>
+    Alignment score for the best-scoring alignment found other than the
+    alignment reported.  Can be negative.  Only present if the SAM record is
+    for an aligned read and more than one alignment was found for the read.
+    Note that, when the read is part of a concordantly-aligned pair, this score
+    could be greater than [`AS:i`].
 
     </td></tr>
     <tr><td id="hisat2-build-opt-fields-ys">
@@ -1712,6 +1775,19 @@ alignment:
     </td><td>
 
     The number of mapped locations for the read or the pair.
+    
+    </td></tr>
+    <tr><td id="hisat2-opt-fields-Zs">
+
+        Zs:Z:<S>
+
+    </td><td>
+
+    When the alignment of a read involves SNPs that are in the index, this option is used to indicate where exactly the read involves the SNPs.
+    This optional field is similar to the above MD:Z field.
+    For example, `Zs:Z:1|S|rs3747203,97|S|rs16990981` indicates the second base of the read corresponds to a known SNP (ID: rs3747203).
+    97 bases after the third base (the base after the second one), the read at 100th base involves another known SNP (ID: rs16990981).
+    'S' indicates a single nucleotide polymorphism.  'D' and 'I' indicates a deletion and an insertion, respectively.
     </td></tr>
     
     </table>
@@ -1727,7 +1803,7 @@ The `hisat2-build` indexer
 `hisat2-build` builds a HISAT2 index from a set of DNA sequences.
 `hisat2-build` outputs a set of 6 files with suffixes `.1.ht2`, `.2.ht2`,
 `.3.ht2`, `.4.ht2`, `.5.ht2`, `.6.ht2`, `.7.ht2`, and `.8.ht2`.  In the case of a large 
-index these suffixes will have a `bt2l` termination.  These files together
+index these suffixes will have a `ht2l` termination.  These files together
 constitute the index: they are all that is needed to align reads to that
 reference.  The original sequence FASTA files are no longer used by HISAT2
 once the index is built.
@@ -1768,6 +1844,10 @@ Usage:
 
     hisat2-build [options]* <reference_in> <ht2_base>
 
+### Notes
+    If you use --snp, --ss, and/or --exon, hisat2-build will need about 200GB RAM for the human genome size as index building involves a graph construction. 
+    Otherwise, you will be able to build an index on your desktop with 8GB RAM.
+    
 ### Main arguments
 
 <table><tr><td>
@@ -1784,14 +1864,13 @@ or, if [`-c`](#hisat2-build-options-c) is specified, this might be
 
 </td></tr><tr><td>
 
-    <bt2_base>
+    <ht2_base>
 
 </td><td>
 
 The basename of the index files to write.  By default, `hisat2-build` writes
-files named `NAME.1.bt2`, `NAME.2.bt2`, `NAME.3.bt2`, `NAME.4.bt2`,
-`NAME.5.bt2`, `NAME.6.bt2`, `NAME.rev.1.bt2`, `NAME.rev.2.bt2`, 
-`NAME.rev.5.bt2`, and `NAME.rev.6.bt2` where `NAME` is `<bt2_base>`.
+files named `NAME.1.ht2`, `NAME.2.ht2`, `NAME.3.ht2`, `NAME.4.ht2`,
+`NAME.5.ht2`, `NAME.6.ht2`, `NAME.7.ht2`, and `NAME.8.ht2` where `NAME` is `<ht2_base>`.
 
 </td></tr></table>
 
@@ -1841,19 +1920,6 @@ values for the [`--bmax`], [`--dcv`] and [`--packed`] parameters according to
 available memory.  Instead, user may specify values for those parameters.  If
 memory is exhausted during indexing, an error message will be printed; it is up
 to the user to try new parameters.
-
-</td></tr><tr><td id="hisat2-build-options-p">
-
-[`--packed`]: #hisat2-build-options-p
-[`-p`/`--packed`]: #hisat2-build-options-p
-
-    -p/--packed
-
-</td><td>
-
-Use a packed (2-bits-per-nucleotide) representation for DNA strings. This saves
-memory but makes indexing 2-3 times slower.  Default: off. This is configured
-automatically by default; use [`-a`/`--noauto`] to configure manually.
 
 </td></tr><tr><td id="hisat2-build-options-bmax">
 
@@ -1914,7 +1980,7 @@ repetitive reference).  Default: off.
 
 </td><td>
 
-Do not build the `NAME.3.bt2` and `NAME.4.bt2` portions of the index, which
+Do not build the `NAME.3.ht2` and `NAME.4.ht2` portions of the index, which
 contain a bitpacked version of the reference sequences and are used for
 paired-end alignment.
 
@@ -1924,7 +1990,7 @@ paired-end alignment.
 
 </td><td>
 
-Build only the `NAME.3.bt2` and `NAME.4.bt2` portions of the index, which
+Build only the `NAME.3.ht2` and `NAME.4.ht2` portions of the index, which
 contain a bitpacked version of the reference sequences and are used for
 paired-end alignment.
 
@@ -1975,6 +2041,52 @@ this occupies about 16KB per local index).
 
 The local ftab is the lookup table in a local index.
 The default setting is 6 (ftab is 8KB per local index).
+
+</td></tr><tr><td>
+
+    -p <int>
+
+</td><td>
+
+Launch `NTHREADS` parallel build threads (default: 1).
+
+</td></tr><tr><td>
+
+    --snp <path>
+
+</td><td>
+
+Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).
+   
+   SNP ID `<tab>` chromosome name `<tab>` snp type (single, deletion, or insertion) `<tab>` zero-offset based genomic position of a SNP `<tab>` alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)
+
+Use `extract_snps.py` (in the HISAT2 package) to extract SNPs from a dbSNP file (e.g. snpCommon.txt).
+
+</td></tr><tr><td>
+
+    --ss <path>
+
+</td><td>
+
+Note this option should be used with the followig --exon option.
+Provide a list of splice sites (in the HISAT2's own format) as follows (four columns).
+   
+   chromosome name `<tab>` zero-offset based genomic position of the flanking base on the left side of an intron `<tab>` zero-offset based genomic position of the flanking base on the right `<tab>` strand
+
+Use `extract_splice_sites.py` (in the HISAT2 package) to extract splice sites from a GTF file.
+
+</td></tr><tr><td>
+
+    --exon <path>
+
+</td><td>
+
+Note this option should be used with the above --ss option.
+Provide a list of exons (in the HISAT2's own format) as follows (three columns).
+   
+   chromosome name `<tab>` zero-offset based left genomic position of an exon `<tab>` zero-offset based right genomic position of an exon
+
+Use `extract_exons.py` (in the HISAT2 package) to extract exons from a GTF file.
 
 </td></tr><tr><td>
 
@@ -2042,12 +2154,12 @@ Usage:
 
 <table><tr><td>
 
-    <bt2_base>
+    <ht2_base>
 
 </td><td>
 
 The basename of the index to be inspected.  The basename is name of any of the
-index files but with the `.X.bt2` suffix omitted.
+index files but with the `.X.ht2` suffix omitted.
 `hisat2-inspect` first looks in the current directory for the index files, then
 in the directory specified in the `HISAT2_INDEXES` environment variable.
 
@@ -2094,6 +2206,46 @@ names and lengths of the input sequences.  The summary has this format:
     Sequence-N	<name>	<len>
 
 Fields are separated by tabs.  Colorspace is always set to 0 for HISAT2.
+
+</td></tr><tr><td id="hisat2-inspect-options-snp">
+
+[`--snp`]: #hisat2-inspect-options-snp
+
+    --snp
+
+</td><td>
+
+Print SNPs, and quit.
+
+</td></tr><tr><td id="hisat2-inspect-options-ss">
+
+[`--ss`]: #hisat2-inspect-options-ss
+
+    --ss
+
+</td><td>
+
+Print splice sites, and quit.
+
+</td></tr><tr><td id="hisat2-inspect-options-ss-all">
+
+[`--ss-all`]: #hisat2-inspect-options-ss-all
+
+    --ss-all
+
+</td><td>
+
+Print splice sites including those not in the global index, and quit.
+
+</td></tr><tr><td id="hisat2-inspect-options-exon">
+
+[`--exon`]: #hisat2-inspect-options-exon
+
+    --exon
+
+</td><td>
+
+Print exons, and quit.
 
 </td></tr><tr><td>
 
@@ -2142,11 +2294,11 @@ Indexing a reference genome
 To create an index for the genomic region (1 million bps from the human chromosome 22 between 20,000,000 and 20,999,999)
 included with HISAT2, create a new temporary directory (it doesn't matter where), change into that directory, and run:
 
-    $HISAT2_HOME/hisat2-build $HISAT2_HOME/example/reference/22_20-21M.fa 22_20-21M
+    $HISAT2_HOME/hisat2-build $HISAT2_HOME/example/reference/22_20-21M.fa --snp $HISAT2_HOME/example/reference/22_20-21M.snp 22_20-21M_snp
 
 The command should print many lines of output then quit. When the command
 completes, the current directory will contain ten new files that all start with
-`22_20-21M` and end with `.1.ht2`, `.2.ht2`, `.3.ht2`, `.4.ht2`, `.5.ht2`, `.6.ht2`,
+`22_20-21M_snp` and end with `.1.ht2`, `.2.ht2`, `.3.ht2`, `.4.ht2`, `.5.ht2`, `.6.ht2`,
 `.7.ht2`, and `.8.ht2`.  These files constitute the index - you're done!
 
 You can use `hisat2-build` to create an index for a set of FASTA files obtained
@@ -2168,7 +2320,7 @@ Aligning example reads
 Stay in the directory created in the previous step, which now contains the
 `22_20-21M` index files.  Next, run:
 
-    $HISAT2_HOME/hisat2 -x 22_20-21M -U $HISAT2_HOME/example/reads/reads_1.fq -S eg1.sam
+    $HISAT2_HOME/hisat2 -f -x $HISAT2_HOME/example/index/22_20-21M_snp -U $HISAT2_HOME/example/reads/reads_1.fa -S eg1.sam
 
 This runs the HISAT2 aligner, which aligns a set of unpaired reads to the
 the genome region using the index generated in the previous step.
@@ -2183,20 +2335,19 @@ To see the first few lines of the SAM output, run:
 
 You will see something like this:
 
-    @HD VN:1.0   SO:unsorted
-    @SQ SN:22:20000000-20999999	LN:1000000
-    @PG ID:hisat2			PN:hisat2	VN:0.1.0
-    1   0				22:20000000-20999999	4115	255	100M			*	0	0	GGAGCGCAGCGTGGGCGGCCCCGCAGCGCGGCCTCGGACCCCAGAAGGGCTTCCCCGGGTCCGTTGGCGCGCGGGGAGCGGCGTTCCCAGGGCGCGGCGC IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:0 XN:i:0 XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU
-    2   16				22:20000000-20999999	4197	255	100M			*	0	0	GTTCCCAGGGCGCGGCGCGGTGCGGCGCGGCGCGGGTCGCAGTCCACGCGGCCGCAACTCGGACCGGTGCGGGGGCCGCCCCCTCCCTCCAGGCCCAGCG IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:0 XN:i:0	XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU
-    3   0				22:20000000-20999999	4113	255	100M			*	0	0	CTGGAGCGCAGCGTGGGCGGCCCCGCAGCGCGGCCTCGGACCCCAGAAGGGCTTCCCCGGGTCCGTTGGCGCGCGGGGAGCGGCGTTCCCAGGGCGCGGC IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:0 XN:i:0	XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU
-    4   0				22:20000000-20999999	52358	255	100M			*	0	0	TTCAGGGTCTGCCTTTATGCCAGTGAGGAGCAGCAGAGTCTGATACTAGGTCTAGGACCGGCCGAGGTATACCATGAACATGTGGATACACCTGAGCCCA IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:0 XN:i:0	XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU
-    5   16				22:20000000-20999999	52680	255	100M			*	0	0	CTTCTGGCCAGTAGGTCTTTGTTCTGGTCCAACGACAGGAGTAGGCTTGTATTTAAAAGCGGCCCCTCCTCTCCTGTGGCCACAGAACACAGGCGTGCTT IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:0 XN:i:0	XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU
-    6   16				22:20000000-20999999	52664	255	100M			*	0	0	TCTCACCTCTCATGTGCTTCTGGCCAGTAGGTCTTTGTTCTGGTCCAACGACAGGAGTAGGCTTGTATTTAAAAGCGGCCCCTCCTCTCCTGTGGCCACA IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:0 XN:i:0	XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU
-    7   0				22:20000000-20999999	52468	255	100M			*	0	0	TGTACACAGGCACTCACATGGCACACACATACACTCCTGCGTGTGCACAAGCACACACATGCAAGCCATATACATGGACACCGACACAGGCACATGTACG IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:0 XN:i:0	XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU
-    8   0				22:20000000-20999999	4538	255	100M			*	0	0	CGGCCCCGCACCTGCCCGAACCTCTGCGGCGGCGGTGGCAGGGTACGCGGGACCGCTCCCTCCCAGCCGACTTACGAGAACATCCCCCGACCATCCAGCC IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:0 XN:i:0	XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU
-    9   16				22:20000000-20999999	4667	255	50M19567N50M	*	0	0	CTTCCCCGGACTCTGGCCGCGTAGCCTCCGCCACCACTCCCAGTTCACAGACCTCGCGACCTGTGTCAGCAGAGCCGCCCTGCACCACCATGTGCATCAT IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:-1 XN:i:0 XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU XS:A:+
-    10  0				22:20000000-20999999	30948	255	20M9021N80M		*	0	0	CAACAACGAGATCCTCAGTGGGCTGGACATGGAGGAAGGCAAGGAAGGAGGCACATGGCTGGGCATCAGCACACGTGGCAAGCTGGCAGCACTCACCAAC IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:-1 XN:i:0 XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU XS:A:+
-    11  16				22:20000000-20999999	40044	255	65M8945N35M		*	0	0	TGGCAAGCTGGCAGCACTCACCAACTACCTGCAGCCGCAGCTGGACTGGCAGGCCCGAGGGCGAGGCACCTACGGGCTGAGCAACGCGCTGCTGGAGACT IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII AS:i:-1 XN:i:0 XM:i:0 XO:i:0 XG:i:0 NM:i:0 MD:Z:100 YT:Z:UU XS:A:+
+    @HD     VN:1.0  SO:unsorted
+    @SQ     SN:22:20000001-21000000 LN:1000000
+    @PG     ID:hisat2       PN:hisat2       VN:2.0.0-beta
+    1       0       22:20000001-21000000    397984  255     100M    *       0       0       GCCTGTGAGGGAGCCCCGGACCCGGTCAGAGCAGGAGCCTGGCCTGGGGCCAAGTTCACCTTATGGACTCTCTTCCCTGCCCTTCCAGGAGCAGCTCACT    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:100        YT:Z:UU NH:i:1
+    2       16      22:20000001-21000000    398131  255     100M    *       0       0       ATGACACACTGTACACACCAGGGGCCCTGTGCTCCCCAGGAAGAGGGCCCTCACTTGAAGCGGGGCCCGATGGCCGCCACGTGCCGGTTCATGCTCCCCT    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:80A19      YT:Z:UU NH:i:1  Zs:Z:80|S|rs576159895
+    3       16      22:20000001-21000000    398222  255     100M    *       0       0       TGCTCCCCTTGGCCCCGCCGATGTTCAGGGACATGGAGCGCTGCAGCAGGCTGGAGAAGATCTCCACTTGGTCAGAGCTGCAGTACTTGGCGATCTCAAA    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:16A83      YT:Z:UU NH:i:1  Zs:Z:16|S|rs2629364
+    4       16      22:20000001-21000000    398247  255     90M200N10M      *       0       0       CAGGGACATGGAGCGCTGCAGCAGGCTGGAGAAGATCTCCACTTGGTCAGAGCTGCAGTACTTGGCGATCTCAAACCGCTGCACCAGGAAGTCGATCCAG    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:100        YT:Z:UU XS:A:-  NH:i:1
+    5       16      22:20000001-21000000    398194  255     100M    *       0       0       GGCCCGATGGCCGCCACGTGCCGGTTCATGCTCCCCTTGGCCCCGCCGATGTTCAGGGACATGGAGCGCTGCAGCAGGCTGGAGAAGATCTCCACTTGGT    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:17A26A55   YT:Z:UU NH:i:1  Zs:Z:17|S|rs576159895,26|S|rs2629364
+    6       0       22:20000001-21000000    398069  255     100M    *       0       0       CAGGAGCAGCTCACTGAAATGTGTTCCCCGTCTACAGAAGTACCGTGATACACAGACGCCCCATGACACACTGTACACACCAGGGGCCCTGTGCTCCCCA    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:100        YT:Z:UU NH:i:1
+    7       0       22:20000001-21000000    397896  255     100M    *       0       0       GTGGAGTAGATCTTCTCGCGAAGCACATTGCAGATGGTTGCATTTGGAACCACATCGGCATGCAGGAGGGACAGCCCCAGGGTCAGCAGCCTGTGAGGGA    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:31G68      YT:Z:UU NH:i:1  Zs:Z:31|S|rs562662261
+    8       0       22:20000001-21000000    398150  255     100M    *       0       0       AGGGGCCCTGTGCTCCCCAGGAAGAGGGCCCTCACTTGAAGCGGGGCCCGATGGCCGCCACGTGCCGGTTCATGCTCCCCTTGGCCCCGCCGATGTTCAG    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:61A26A11   YT:Z:UU NH:i:1  Zs:Z:61|S|rs576159895,26|S|rs2629364
+    9       16      22:20000001-21000000    398329  255     8M200N92M       *       0       0       ACCAGGAAGTCGATCCAGATGTAGTGGGGGGTCACTTCGGGGGGACAGGGTTTGGGTTGACTTGCTTCCGAGGCAGCCAGGGGGTCTGCTTCCTTTATCT    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:100        YT:Z:UU XS:A:-  NH:i:1
+    10      16      22:20000001-21000000    398184  255     100M    *       0       0       CTTGAAGCGGGGCCCGATGGCCGCCACGTGCCGGTTCATGCTCCCCTTGGCCCCGCCGATGTTCAGGGACATGGAGCGCTGCAGCAGGCTGGAGAAGATC    IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII    AS:i:0  XN:i:0  XM:i:0  XO:i:0  XG:i:0  NM:i:0  MD:Z:27A26A45   YT:Z:UU NH:i:1  Zs:Z:27|S|rs576159895,26|S|rs2629364
 
 The first few lines (beginning with `@`) are SAM header lines, and the rest of
 the lines are SAM alignments, one line per read or mate.  See the [HISAT2
@@ -2211,7 +2362,7 @@ Paired-end example
 To align paired-end reads included with HISAT2, stay in the same directory and
 run:
 
-    $HISAT2_HOME/hisat2 -x 22_20-21M -1 $HISAT2_HOME/example/reads/reads_1.fq -2 $HISAT2_HOME/example/reads/reads_2.fq -S eg2.sam
+    $HISAT2_HOME/hisat2 -f -x $HISAT2_HOME/example/index/22_20-21M_snp -1 $HISAT2_HOME/example/reads/reads_1.fa -2 $HISAT2_HOME/example/reads/reads_2.fa -S eg2.sam
 
 This aligns a set of paired-end reads to the reference genome, with results
 written to the file `eg2.sam`.
@@ -2229,7 +2380,7 @@ in your [PATH environment variable].
 
 Run the paired-end example:
 
-    $HISAT2_HOME/hisat -x $HISAT2_HOME/example/index/22_20-21M -1 $HISAT2_HOME/example/reads/reads_1.fq -2 $HISAT2_HOME/example/reads/reads_2.fq -S eg2.sam
+    $HISAT2_HOME/hisat -f -x $HISAT2_HOME/example/index/22_20-21M_snp -1 $HISAT2_HOME/example/reads/reads_1.fa -2 $HISAT2_HOME/example/reads/reads_2.fa -S eg2.sam
 
 Use `samtools view` to convert the SAM file into a BAM file.  BAM is a the
 binary format corresponding to the SAM text format.  Run:

@@ -524,18 +524,17 @@ const
     }
     
     // Do not output suboptimal alignment score, which conflicts with Cufflinks and StringTie
-#if 0
     if(print_xs_) {
         // XS:i: Suboptimal alignment score
+        // Use ZS:i: to avoid conflict with XS:A:
         AlnScore sco = summ.secbestMate(rd.mate < 2);
         if(sco.valid()) {
             itoa10<TAlScore>(sco.score(), buf);
             WRITE_SEP();
-            o.append("XS:i:");
+            o.append("ZS:i:");
             o.append(buf);
         }
     }
-#endif
     if(print_xn_) {
         // XN:i: Number of ambiguous bases in the referenece
         itoa10<size_t>(res.refNs(), buf);
@@ -906,10 +905,10 @@ const
             if(whichsense != EDIT_SPL_UNKNOWN) {
                 WRITE_SEP();
                 o.append("XS:A:");
-                if(whichsense == EDIT_SPL_FW) {
+                if(whichsense == EDIT_SPL_FW || whichsense == EDIT_SPL_SEMI_FW) {
                     o.append('+');
                 } else {
-                    assert_eq(whichsense, EDIT_SPL_RC);
+                    assert(whichsense == EDIT_SPL_RC || whichsense == EDIT_SPL_SEMI_RC);
                     o.append('-');
                 }
             }
@@ -960,6 +959,10 @@ const
     
     bool snp_first = true;
     index_t prev_snp_idx = INDEX_MAX;
+    size_t len_trimmed = rd.length() - res.trimmed5p(true) - res.trimmed3p(true);
+    if(!res.fw()) {
+        Edit::invertPoss(const_cast<EList<Edit>&>(res.ned()), len_trimmed, false);
+    }
     for(size_t i = 0; i < res.ned().size(); i++) {
         if(res.ned()[i].snpID < altdb->alts().size()) {
             index_t snp_idx = res.ned()[i].snpID;
@@ -972,7 +975,23 @@ const
                 o.append("Zs:Z:");
             }
             if(!snp_first) o.append(",");
-            itoa10<uint64_t>(res.ned()[i].pos, buf);
+            uint64_t pos = res.ned()[i].pos;
+            size_t j = i;
+            while(j > 0) {
+                if(res.ned()[j-1].snpID < altdb->alts().size()) {
+                    const ALT<index_t>& snp2 = altdb->alts()[res.ned()[j-1].snpID];
+                    if(snp2.type == ALT_SNP_SGL) {
+                        pos -= (res.ned()[j-1].pos + 1);
+                    } else if(snp2.type == ALT_SNP_DEL) {
+                        pos -= res.ned()[j-1].pos;
+                    } else if(snp2.type == ALT_SNP_INS) {
+                        pos -= (res.ned()[j-1].pos + snp.len);
+                    }
+                    break;
+                }
+                j--;
+            }
+            itoa10<uint64_t>(pos, buf);
             o.append(buf);
             o.append("|");
             if(snp.type == ALT_SNP_SGL) {
@@ -989,6 +1008,9 @@ const
             if(snp_first) snp_first = false;
             prev_snp_idx = snp_idx;
         }
+    }
+    if(!res.fw()) {
+        Edit::invertPoss(const_cast<EList<Edit>&>(res.ned()), len_trimmed, false);
     }
     
     if(print_xr_) {

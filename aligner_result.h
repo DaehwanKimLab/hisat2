@@ -63,12 +63,23 @@ public:
 	/**
 	 * Gapped scores are invalid until proven valid.
 	 */
-	inline AlnScore(TAlScore score, TAlScore ns, TAlScore gaps, TAlScore splicescore = 0, bool nearSpliceSites = false) {
+	inline AlnScore(
+                    TAlScore score,
+                    TAlScore ns,
+                    TAlScore gaps,
+                    TAlScore splicescore = 0,
+                    bool knownTranscripts = false,
+                    bool nearSpliceSites = false,
+                    int leftTrim = 0,
+                    int rightTrim = 0) {
 		score_ = score;
 		ns_ = ns;
 		gaps_ = gaps;
         splicescore_ = splicescore;
+        knownTranscripts_ = knownTranscripts;
         nearSpliceSites_ = nearSpliceSites;
+        leftTrim_ = leftTrim;
+        rightTrim_ = rightTrim;
 		assert(valid());
 	}
 	
@@ -78,7 +89,10 @@ public:
 	void reset() {
 		score_ = ns_ = gaps_ = 0;
         splicescore_ = 0;
+        knownTranscripts_ = false;
         nearSpliceSites_ = false;
+        leftTrim_ = 0;
+        rightTrim_ = 0;
 	}
 
 	/**
@@ -146,7 +160,10 @@ public:
 		ns_    = o.ns_;
 		score_ = o.score_;
         splicescore_ = o.splicescore_;
+        knownTranscripts_ = o.knownTranscripts_;
         nearSpliceSites_ = o.nearSpliceSites_;
+        leftTrim_ = o.leftTrim_;
+        rightTrim_ = o.rightTrim_;
 		assert_lt(ns_, 0x7fffffff);
 		return *this;
 	}
@@ -272,20 +289,37 @@ public:
 		return s;
 	}
 
-	TAlScore score()           const { return  score_; }
-	TAlScore penalty()         const { return -score_; }
-	TAlScore gaps()            const { return  gaps_;  }
-	TAlScore ns()              const { return  ns_;    }
-    TAlScore splicescore()     const { return splicescore_; }
-    bool     nearSpliceSites() const { return nearSpliceSites_; }
+	TAlScore score()            const { return  score_; }
+	TAlScore penalty()          const { return -score_; }
+	TAlScore gaps()             const { return  gaps_;  }
+	TAlScore ns()               const { return  ns_;    }
+    TAlScore splicescore()      const { return splicescore_; }
+    bool     knownTranscripts() const { return knownTranscripts_; }
+    bool     nearSpliceSites()  const { return nearSpliceSites_; }
+    bool     trimed()           const { return leftTrim_ > 0 || rightTrim_ > 0; }
     
-    TAlScore hisat_score() const
+    TAlScore hisat2_score() const
     {
-        TAlScore r = (score_ << 10) - (splicescore_ / 100);
-        if(nearSpliceSites_) {
-            r += 1;
-        }
-        return r;
+        // TAlScore 32 bits used for score_
+        TAlScore score = score_;
+        if(score > MAX_I32) score = MAX_I32;
+        else if(score < MIN_I32) score = MIN_I32;
+        
+        // Next 8 bits for alignments against transcripts
+        TAlScore transcript_score = 0;
+        if(knownTranscripts_) transcript_score = 2;
+        else if(nearSpliceSites_) transcript_score = 1;
+        
+        // Next 8 bits for splice site score
+        TAlScore splicescore = splicescore_ / 100;
+        if(splicescore > MAX_U8) splicescore = 0;
+        else                     splicescore = MAX_U8 - splicescore;
+        
+        // Remaining 16 bits (rightmost 16 bits) for sum of left and right trim lengths
+        TAlScore trim = leftTrim_ + rightTrim_;
+        if(trim > MAX_U16) trim = 0;
+        else               trim = MAX_U16 - trim;
+        return (score << 32) | (transcript_score << 24) | (splicescore << 16) | trim;
     }
 
 	// Score accumulated so far (penalties are subtracted starting at 0)
@@ -303,8 +337,14 @@ public:
     // splice scores
     TAlScore splicescore_;
     
+    // mapped to known transcripts?
+    bool knownTranscripts_;
+    
     // continuous alignment near (known) splice sites?
     bool nearSpliceSites_;
+    
+    int leftTrim_;
+    int rightTrim_;
 };
 
 enum {
@@ -1196,9 +1236,17 @@ public:
                     whichsense = ed.splDir;
                 } else if(ed.splDir != EDIT_SPL_UNKNOWN) {
                     assert_neq(whichsense, EDIT_SPL_UNKNOWN);
-                    if(whichsense != ed.splDir) {
-                        whichsense = EDIT_SPL_UNKNOWN;
-                        break;
+                    if(whichsense == EDIT_SPL_FW || whichsense == EDIT_SPL_SEMI_FW) {
+                        if(ed.splDir != EDIT_SPL_FW && ed.splDir != EDIT_SPL_SEMI_FW) {
+                            whichsense = EDIT_SPL_UNKNOWN;
+                            break;
+                        }
+                    }
+                    if(whichsense == EDIT_SPL_RC || whichsense == EDIT_SPL_SEMI_RC) {
+                        if(ed.splDir != EDIT_SPL_RC && ed.splDir != EDIT_SPL_SEMI_RC) {
+                            whichsense = EDIT_SPL_UNKNOWN;
+                            break;
+                        }
                     }
                 }
             }
