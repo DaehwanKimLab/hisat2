@@ -1787,7 +1787,7 @@ alignment:
     This optional field is similar to the above MD:Z field.
     For example, `Zs:Z:1|S|rs3747203,97|S|rs16990981` indicates the second base of the read corresponds to a known SNP (ID: rs3747203).
     97 bases after the third base (the base after the second one), the read at 100th base involves another known SNP (ID: rs16990981).
-    'S' indicates a single nucleotide polymorphism.  'D' and 'I' indicates a deletion and an insertion, respectively.
+    'S' indicates a single nucleotide polymorphism.  'D' and 'I' indicate a deletion and an insertion, respectively.
     </td></tr>
     
     </table>

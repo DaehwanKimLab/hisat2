@@ -36,12 +36,12 @@
 <a href="./downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
-   <table width="100%"><tbody><tr><td>version 2.0.0-beta</td> <td align="right">9/XX/2015</td></tr>
+   <table width="100%"><tbody><tr><td>version 2.0.0-beta</td> <td align="right">9/8/2015</td></tr>
        <tr>
-	 <td><a href="./downloads/hisat2-0.0.0-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
+	 <td><a href="./downloads/hisat2-2.0.0-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
        </tr>
        <tr>
-	 <td><a href="./downloads/hisat2-0.0.0-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
+	 <td><a href="./downloads/hisat2-2.0.0-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
        </tr>
        <tr>
 	 <td><a href="./downloads/hisat2-2.0.0-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
@@ -135,7 +135,7 @@
 <h2>Related Tools</h2>
 <div class="box">
  <ul>
-   <li><a href="http://www.ccb.jhu.edu/software/hiast">HISAT</a>: Fast and sensitive spliced alignment</li>
+   <li><a href="http://www.ccb.jhu.edu/software/hisat">HISAT</a>: Fast and sensitive spliced alignment</li>
    <li><a href="http://bowtie-bio.sourceforge.net/bowtie2">Bowtie2</a>: Ultrafast read alignment</li>
    <li><a href="http://www.ccb.jhu.edu/software/tophat">TopHat2</a>: Spliced read mapper for RNA-Seq</li>
    <li><a href="http://cufflinks.cbcb.umd.edu">Cufflinks</a>: Isoform assembly and quantitation for RNA-Seq</li>
