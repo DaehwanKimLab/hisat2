@@ -118,8 +118,9 @@ def extract_snps(genome_file, snp_file, verbose = False, testset = False):
             assert start < end
         else:
             assert classType == "insertion"
-            assert start == end
-
+            if start != end:
+                continue
+            
         if chr not in chr_dic:
             continue
         chr_seq = chr_dic[chr]

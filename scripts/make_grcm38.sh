@@ -1,10 +1,8 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the MM10 version of M. musculus (mouse) from
-# UCSC.
-#
-# The base files, named ??.fa.gz
+# Downloads sequence for the GRCm38 release 81 version of M. Musculus (mouse) from
+# Ensembl.
 #
 # By default, this script builds and index for just the base files,
 # since alignments to those sequences are the most useful.  To change
@@ -12,8 +10,8 @@
 # variable below.
 #
 
-UCSC_MM10_BASE=http://hgdownload.cse.ucsc.edu/goldenPath/mm10/bigZips
-F=chromFa.tar.gz
+ENSEMBL_RELEASE=81
+ENSEMBL_GRCm38_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/mus_musculus/dna
 
 get() {
 	file=$1
@@ -41,9 +39,13 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 fi
 
 rm -f genome.fa
-get ${UCSC_MM10_BASE}/$F || (echo "Error getting $F" && exit 1)
-tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
-rm $F
+F=Mus_musculus.GRCm38.dna.primary_assembly.fa
+if [ ! -f $F ] ; then
+	get ${ENSEMBL_GRCm38_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
+	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
+	awk '{if($1 ~ /^>/) {print $1} else {print}}' $F > genome.fa
+	rm $F
+fi
 
 CMD="${HISAT2_BUILD_EXE} genome.fa genome"
 echo Running $CMD
