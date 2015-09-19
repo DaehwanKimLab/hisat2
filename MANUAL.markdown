@@ -350,6 +350,8 @@ filehandle.
 </td><td>
 
 Comma-separated list of SRA accession numbers, e.g. `--sra-acc SRR353653,SRR353654`.
+Information about read types is available at http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?sp=runinfo&acc=<b>sra-acc</b>&retmode=xml,
+where <b>sra-acc</b> is SRA accession number.
 
 </td></tr><tr><td>
 
