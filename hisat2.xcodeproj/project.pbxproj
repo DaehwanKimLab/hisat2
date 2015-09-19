@@ -419,7 +419,7 @@
 		E8B0DBD21934F022005ED9FA /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0510;
+				LastUpgradeCheck = 0700;
 				ORGANIZATIONNAME = "___FULLUSERNAME___";
 			};
 			buildConfigurationList = E8B0DBD51934F022005ED9FA /* Build configuration list for PBXProject "hisat2" */;
@@ -525,7 +525,9 @@
 		E85452641B1A2E400049F2AC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COPY_PHASE_STRIP = YES;
 				DEBUGGING_SYMBOLS = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -543,6 +545,7 @@
 		E85452651B1A2E400049F2AC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COPY_PHASE_STRIP = NO;
 				NCBI_NGS_DIR = "/usr/local/ngs/ngs-sdk";
 				NCBI_VDB_DIR = "/usr/local/ncbi/ncbi-vdb";
 				OTHER_CFLAGS = "";
@@ -624,6 +627,7 @@
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_ENABLE_OBJC_EXCEPTIONS = YES;

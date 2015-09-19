@@ -54,81 +54,179 @@
   <div class="box">
     <table width="100%">
       <tr>
-        <td>
-          <a href="./data/grch37.tar.gz"><i>H. sapiens</i>, Ensembl GRCh37</a>
-        </td>
-        <td align="right">
-          <b>3.7 GB</b>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="2" style="font-size: x-small">
-	  index base: <i>genome</i>
+        <td colspan="2">
+         <i>H. sapiens</i>, Ensembl GRCh37
         </td>
       </tr>
       <tr>
         <td>
-          <a href="./data/grch37_snp.tar.gz"><i>H. sapiens</i>, Ensembl GRCh37</a>
+	  <a href="./data/grch37.tar.gz"><i>genome</i></a>
         </td>
-        <td align="right">
-          <b>4.5 GB</b>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="2" style="font-size: x-small">
-	  index base: <i>genome_snp</i> with common SNPs
+	<td align="right" style="font-size: x-small">
+	  <b>3.7 GB</b>
         </td>
       </tr>
       <tr>
         <td>
-          <a href="./data/grch37_tran.tar.gz"><i>H. sapiens</i>, Ensembl GRCh37</a>
+	  <a href="./data/grch37_snp.tar.gz"><i>genome_snp</i></a>
         </td>
-        <td align="right">
-          <b>4.0 GB</b>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="2" style="font-size: x-small">
-	  index base: <i>genome_tran</i> with transcripts
-        </td>
-      </tr>
-            <tr>
-        <td>
-          <a href="./data/grch37_snp_tran.tar.gz"><i>H. sapiens</i>, Ensembl GRCh37</a>
-        </td>
-        <td align="right">
-          <b>4.5 GB</b>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="2" style="font-size: x-small">
-	  index base: <i>genome_snp_tran</i> with common SNPs and transcripts
+	<td align="right" style="font-size: x-small">
+	  <b>4.5 GB</b>
         </td>
       </tr>
       <tr>
         <td>
-          <a href="./data/hg19.tar.gz"><i>H. sapiens</i>, UCSC hg19</a>
+	  <a href="./data/grch37_tran.tar.gz"><i>genome_tran</i></a>
         </td>
-        <td align="right">
-          <b>3.8 GB</b>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="2" style="font-size: x-small">
-	  index base: <i>genome</i>
+	<td align="right" style="font-size: x-small">
+	  <b>4.0 GB</b>
         </td>
       </tr>
-      
-      <!--
       <tr>
         <td>
-          <a href="ftp://ftp.ccb.jhu.edu/pub/data/hisat_indexes/mm10_hisat.tar.gz"><i>M. musculus</i>, UCSC mm10</a>
+	  <a href="./data/grch37_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
         </td>
-        <td align="right">
-          <b>6.4 GB</b>
+	<td align="right" style="font-size: x-small">
+	  <b>4.5 GB</b>
         </td>
       </tr>
-      -->
+      <tr>
+	<td colspan="2">
+          <i>H. sapiens</i>, UCSC hg19
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/hg19.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>3.8 GB</b>
+        </td>
+      </tr>
+
+      <tr>
+      <td colspan="2">
+         <i>H. sapiens</i>, Ensembl GRCh38
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/grch38.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>3.8 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/grch38_snp.tar.gz"><i>genome_snp</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>4.6 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/grch38_tran.tar.gz"><i>genome_tran</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>4.1 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/grch38_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>4.6 GB</b>
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2">
+          <i>H. sapiens</i>, UCSC hg38
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/hg38.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>3.9 GB</b>
+        </td>
+      </tr>
+
+      <tr>
+      <td colspan="2">
+         <i>M. musculus</i>, Ensembl GRCm38
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/grcm38.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>3.4 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/grcm38_snp.tar.gz"><i>genome_snp</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>4.0 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/grcm38_tran.tar.gz"><i>genome_tran</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>3.7 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/grcm38_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>4.0 GB</b>
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2">
+          <i>M. musculus</i>, UCSC mm38
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="./data/mm38.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>3.4 GB</b>
+        </td>
+      </tr>
+
+      <tr>
+	<td colspan="2" style="font-size: x-small">
+	  <br/>
+	  * <i>genome</i>: HFM index for reference
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2" style="font-size: x-small">
+	  * <i>genome_snp</i>: HGFM index for reference plus SNPs
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2" style="font-size: x-small">
+	  * <i>genome_tran</i>: HGFM index for reference plus transcripts
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2" style="font-size: x-small">
+	  * <i>genome_snp_tran</i>: HGFM index for reference plus SNPs and transcripts
+        </td>
+      </tr>
     </table>
   </div>
 

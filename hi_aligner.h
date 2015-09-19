@@ -52,7 +52,7 @@ static const uint32_t maxDelLen = 3;
 inline uint32_t MaxIntronLen(uint32_t anchor, uint32_t minAnchorLen) {
     uint32_t intronLen = 0;
     if(anchor >= minAnchorLen) {
-        assert_geq(anchor, 2);
+        if(anchor < 2) anchor = 2;
         uint32_t shift = (anchor << 1) - 4;
         shift = min<uint32_t>(max<uint32_t>(shift, 13), 30);
         intronLen = 1 << shift;
@@ -74,7 +74,7 @@ inline float intronLen_prob(uint32_t anchor, uint32_t intronLen, uint32_t maxInt
 inline uint32_t MaxIntronLen_noncan(uint32_t anchor, uint32_t minAnchorLen_noncan) {
     uint32_t intronLen = 0;
     if(anchor >= minAnchorLen_noncan) {
-        assert_geq(anchor, 5);
+        if(anchor < 5) anchor = 5;
         uint32_t shift = (anchor << 1) - 10;
         shift = min<uint32_t>(shift, 30);
         intronLen = 1 << shift;
@@ -666,7 +666,7 @@ struct GenomeHit {
                                  const BitPairReference&     ref,
                                  SharedTempVars<index_t>&    sharedVar,
                                  index_t                     tidx,
-                                 index_t                     rfoff,
+                                 int                         rfoff,
                                  index_t                     rflen,
                                  bool                        left,
                                  EList<Edit>&                edits,
@@ -723,6 +723,9 @@ struct GenomeHit {
                    f.type == EDIT_TYPE_SPL) {
                     extlen = 0;
                 }
+                if(f.type == EDIT_TYPE_MM && f.chr == 'N') {
+                    extlen = 0;
+                }
             }
             const Edit& b = edits.back();
             if(extlen > 0 && b.pos == extlen - 1) {
@@ -759,7 +762,7 @@ struct GenomeHit {
                                        int&                        best_rdoff,
                                        const char*                 rfseq,
                                        index_t                     tidx,
-                                       index_t                     rfoff,
+                                       int                         rfoff,
                                        index_t                     rflen,
                                        bool                        left,
                                        EList<Edit>&                edits,
@@ -1871,64 +1874,57 @@ bool GenomeHit<index_t>::extend(
         this->getLeft(left_rdoff, left_len, left_toff);
         assert_eq(left_rdoff, _rdoff);
         assert_eq(left_toff, _toff);
-        if(_rdoff > _toff) return false;
-        assert_leq(_rdoff, _toff);
-        index_t rl = _toff - _rdoff;
+        if(_toff <= 0) return false;
+        int rl = (int)_toff - (int)_rdoff;
         assert_geq(_score, minsc);
-        if(rl + _rdoff <= ref.approxLen(_tidx)) {
-            index_t reflen = _rdoff + 10;
-            if(rl < reflen - _rdoff) {
-                reflen = _rdoff + rl;
+        index_t reflen = _rdoff + 10;
+        assert_geq(rl, reflen - _rdoff);
+        rl -= (reflen - _rdoff);
+        index_t numNs = 0;
+        index_t num_prev_edits = _edits->size();
+        index_t best_ext =  alignWithALTs(
+                                          altdb.alts(),
+                                          this->_joinedOff,
+                                          seq,
+                                          this->_rdoff - 1,
+                                          this->_rdoff - 1,
+                                          this->_rdoff,
+                                          ref,
+                                          *_sharedVars,
+                                          _tidx,
+                                          rl,
+                                          reflen,
+                                          true, /* left? */
+                                          *this->_edits,
+                                          NULL,
+                                          mm,
+                                          &numNs);
+        if(best_ext > 0) {
+            leftext = best_ext;
+            assert_leq(num_prev_edits, _edits->size());
+            index_t added_edits = _edits->size() - num_prev_edits;
+            int ref_ext = (int)best_ext;
+            for(index_t i = 0; i < added_edits; i++) {
+                const Edit& edit = (*_edits)[i];
+                if(edit.type == EDIT_TYPE_REF_GAP)       ref_ext--;
+                else if(edit.type == EDIT_TYPE_READ_GAP) ref_ext++;
+                else if(edit.type == EDIT_TYPE_SPL)      ref_ext += edit.splLen;
             }
-            assert_geq(rl, reflen - _rdoff);
-            rl -= (reflen - _rdoff);
-            assert_eq(rl + reflen, _toff);
-            index_t numNs = 0;
-            index_t num_prev_edits = _edits->size();
-            index_t best_ext =  alignWithALTs(
-                                              altdb.alts(),
-                                              this->_joinedOff,
-                                              seq,
-                                              this->_rdoff - 1,
-                                              this->_rdoff - 1,
-                                              this->_rdoff,
-                                              ref,
-                                              *_sharedVars,
-                                              _tidx,
-                                              rl,
-                                              reflen,
-                                              true, /* left? */
-                                              *this->_edits,
-                                              NULL,
-                                              mm,
-                                              &numNs);
-            if(best_ext > 0) {
-                leftext = best_ext;
-                assert_leq(num_prev_edits, _edits->size());
-                index_t added_edits = _edits->size() - num_prev_edits;
-                int ref_ext = (int)best_ext;
-                for(index_t i = 0; i < added_edits; i++) {
-                    const Edit& edit = (*_edits)[i];
-                    if(edit.type == EDIT_TYPE_REF_GAP)       ref_ext--;
-                    else if(edit.type == EDIT_TYPE_READ_GAP) ref_ext++;
-                    else if(edit.type == EDIT_TYPE_SPL)      ref_ext += edit.splLen;
-                }
-                assert_leq(best_ext, _rdoff);
-                _rdoff -= best_ext;
-                assert_leq(ref_ext, _toff);
-                _toff -= ref_ext;
-                _len += best_ext;
-                assert_leq(_len, rdlen);
-                assert_leq((int)numNs, ref_ext);
-                assert_leq(ref_ext - (int)numNs, _joinedOff);
-                _joinedOff -= (ref_ext - (int)numNs);
-                for(index_t i = 0; i < _edits->size(); i++) {
-                    if(i < added_edits) {
-                        assert_geq((*_edits)[i].pos, _rdoff);
-                        (*_edits)[i].pos -= _rdoff;
-                    } else {
-                        (*_edits)[i].pos += best_ext;
-                    }
+            assert_leq(best_ext, _rdoff);
+            _rdoff -= best_ext;
+            assert_leq(ref_ext, _toff);
+            _toff -= ref_ext;
+            _len += best_ext;
+            assert_leq(_len, rdlen);
+            assert_leq((int)numNs, ref_ext);
+            assert_leq(ref_ext - (int)numNs, _joinedOff);
+            _joinedOff -= (ref_ext - (int)numNs);
+            for(index_t i = 0; i < _edits->size(); i++) {
+                if(i < added_edits) {
+                    assert_geq((*_edits)[i].pos, _rdoff);
+                    (*_edits)[i].pos -= _rdoff;
+                } else {
+                    (*_edits)[i].pos += best_ext;
                 }
             }
         }
@@ -1942,7 +1938,7 @@ bool GenomeHit<index_t>::extend(
         index_t rl = right_toff + right_len;
         assert_eq(_rdoff + _len, right_rdoff + right_len);
         index_t rr = rdlen - (right_rdoff + right_len);
-        if(rl + rr <= ref.approxLen(_tidx)) {
+        if(rl + 1 <= ref.approxLen(_tidx)) {
             index_t reflen = rr + 10;
             int ref_ext = (int)_len;
             for(index_t ei = 0; ei < _edits->size(); ei++) {
@@ -1962,9 +1958,9 @@ bool GenomeHit<index_t>::extend(
                                              ref,
                                              *_sharedVars,
                                              _tidx,
-                                             rl, /* ? */
-                                             reflen, /* ? */
-                                             false, /* left? */
+                                             (int)rl,
+                                             reflen,
+                                             false,
                                              *this->_edits,
                                              NULL,
                                              mm);
@@ -2115,7 +2111,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                                ref,
                                                sharedVars,
                                                genomeHit._tidx,
-                                               genomeHit._toff,
+                                               (int)genomeHit._toff,
                                                reflen,
                                                false, /* left? */
                                                *genomeHit._edits,
@@ -2213,7 +2209,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            ref,
                                            *_sharedVars,
                                            this->_tidx,
-                                           this->_toff,
+                                           (int)this->_toff,
                                            reflen,
                                            false, /* left? */
                                            *this->_edits,
@@ -2511,7 +2507,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 int&                        best_rdoff,
                                                 const char*                 rfseq,
                                                 index_t                     tidx,
-                                                index_t                     rfoff,
+                                                int                         rfoff,
                                                 index_t                     rflen,
                                                 bool                        left,
                                                 EList<Edit>&                edits,
@@ -2528,17 +2524,19 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
     assert_gt(rflen, 0);
     assert_geq(rflen, rdlen);
     if(raw_refbufs.size() <= dep) raw_refbufs.expand();
+    if(rfoff < -16) return 0;
     if(rfseq == NULL) {
         SStringExpandable<char>& raw_refbuf = raw_refbufs[dep];
-        raw_refbuf.resize(rflen + 16);
+        raw_refbuf.resize(rflen + 16 + 16);
+        raw_refbuf.fill(0x4);
         int off = ref.getStretch(
-                                 reinterpret_cast<uint32_t*>(raw_refbuf.wbuf()),
+                                 reinterpret_cast<uint32_t*>(raw_refbuf.wbuf() + 16),
                                  tidx,
-                                 rfoff,
-                                 rflen
+                                 max<int>(rfoff, 0),
+                                 rfoff > 0 ? rflen : rflen + rfoff
                                  ASSERT_ONLY(, destU32));
         assert_lt(off, 16);
-        rfseq = raw_refbuf.wbuf() + off;
+        rfseq = raw_refbuf.wbuf() + 16 + off + min<int>(rfoff, 0);
     }
     
     if(left) {
@@ -2713,7 +2711,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     return rdlen;
                 }
                 index_t next_joinedOff = alt.pos;
-                index_t next_rfoff = rfoff, next_rdoff = rd_i;
+                int next_rfoff = rfoff, next_rdoff = rd_i;
                 const char* next_rfseq = rfseq;
                 index_t next_rflen = rf_i + 1, next_rdlen = rd_i + 1;
                 if(alt.splicesite()) {
@@ -2925,7 +2923,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     return rd_i;
                 }
                 index_t next_joinedOff = 0;
-                index_t next_rfoff = rfoff + rf_i, next_rdoff = rdoff + rd_i;
+                int next_rfoff = rfoff + rf_i, next_rdoff = rdoff + rd_i;
                 const char* next_rfseq = rfseq + rf_i;
                 index_t next_rflen = rflen - rf_i, next_rdlen = rdlen - rd_i;
                 if(alt.type == ALT_SNP_SGL) {
@@ -4554,7 +4552,6 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
             return false;
         }
         index_t global_toff = toff, global_tidx = tidx;
-        if(global_toff < rdoff) continue;
         
         // Coordinate of the seed hit w/r/t the pasted reference string
         coords.expand();

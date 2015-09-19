@@ -431,20 +431,23 @@ bool SpliceSiteDB::hasSpliceSites(
     assert_lt(ref, _mutex.size());
     ThreadSafe t(const_cast<MUTEX_T*>(&_mutex[ref]), _threadSafe && _write);
     
-    assert_lt(left1, right1);
-    assert_lt(ref, _bwIndex.size());
-    assert(_bwIndex[ref] != NULL);
-    const Node *cur = _bwIndex[ref]->root();
-    if(cur != NULL) {
-        if(hasSpliceSites_recur(cur, left1, right1, includeNovel))
-            return true;
+    if(left1 < right1) {
+        assert_lt(ref, _bwIndex.size());
+        assert(_bwIndex[ref] != NULL);
+        const Node *cur = _bwIndex[ref]->root();
+        if(cur != NULL) {
+            if(hasSpliceSites_recur(cur, left1, right1, includeNovel))
+                return true;
+        }
     }
 
-    assert_lt(ref, _fwIndex.size());
-    assert(_fwIndex[ref] != NULL);
-    cur = _fwIndex[ref]->root();
-    if(cur != NULL) {
-        return hasSpliceSites_recur(cur, left2, right2, includeNovel);
+    if(left2 < right2) {
+        assert_lt(ref, _fwIndex.size());
+        assert(_fwIndex[ref] != NULL);
+        const Node *cur = _fwIndex[ref]->root();
+        if(cur != NULL) {
+            return hasSpliceSites_recur(cur, left2, right2, includeNovel);
+        }
     }
     return false;
 }
