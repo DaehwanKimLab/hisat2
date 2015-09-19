@@ -1878,7 +1878,6 @@ bool GenomeHit<index_t>::extend(
         int rl = (int)_toff - (int)_rdoff;
         assert_geq(_score, minsc);
         index_t reflen = _rdoff + 10;
-        assert_geq(rl, reflen - _rdoff);
         rl -= (reflen - _rdoff);
         index_t numNs = 0;
         index_t num_prev_edits = _edits->size();
