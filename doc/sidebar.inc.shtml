@@ -50,7 +50,7 @@
  </ul>
 </div>
 
-<h2>Indexes</h2>
+<a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data"><h2><u>Indexes</u></h2></a>
   <div class="box">
     <table width="100%">
       <tr>
@@ -194,7 +194,7 @@
       </tr>
       <tr>
 	<td colspan="2">
-          <i>M. musculus</i>, UCSC mm38
+          <i>M. musculus</i>, UCSC mm10
         </td>
       </tr>
       <tr>
@@ -225,6 +225,11 @@
       <tr>
 	<td colspan="2" style="font-size: x-small">
 	  * <i>genome_snp_tran</i>: HGFM index for reference plus SNPs and transcripts
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2" style="font-size: x-small">
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data">more indexes</a>
         </td>
       </tr>
     </table>
