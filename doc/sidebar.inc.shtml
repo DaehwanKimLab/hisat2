@@ -194,12 +194,12 @@
       </tr>
       <tr>
 	<td colspan="2">
-          <i>M. musculus</i>, UCSC mm38
+          <i>M. musculus</i>, UCSC mm10
         </td>
       </tr>
       <tr>
         <td>
-	  <a href="./data/mm38.tar.gz"><i>genome</i></a>
+	  <a href="./data/mm10.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.4 GB</b>
@@ -225,6 +225,11 @@
       <tr>
 	<td colspan="2" style="font-size: x-small">
 	  * <i>genome_snp_tran</i>: HGFM index for reference plus SNPs and transcripts
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2" style="font-size: x-small">
+	  <a href="./data">more indexes</a>
         </td>
       </tr>
     </table>
