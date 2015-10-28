@@ -25,7 +25,7 @@ HISAT2 is distributed under the [GPLv3 license], and it runs on the command line
 Linux, Mac OS X and Windows.
 
 [HISAT2]:          http://ccb.jhu.edu/software/hisat2
-[HISAT]:          http://ccb.jhu.edu/software/hisat
+[HISAT]:           http://ccb.jhu.edu/software/hisat
 [Bowtie2]:         http://bowtie-bio.sf.net/bowtie2
 [Bowtie]:          http://bowtie-bio.sf.net
 [Bowtie1]:         http://bowtie-bio.sf.net
@@ -351,7 +351,9 @@ filehandle.
 
 Comma-separated list of SRA accession numbers, e.g. `--sra-acc SRR353653,SRR353654`.
 Information about read types is available at http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?sp=runinfo&acc=<b>sra-acc</b>&retmode=xml,
-where <b>sra-acc</b> is SRA accession number.
+where <b>sra-acc</b> is SRA accession number.  If users run HISAT2 on a computer cluster, it is recommended to disable SRA-related caching (see the instruction at [SRA-MANUAL]).
+
+[SRA-MANUAL]:	     https://github.com/ncbi/sra-tools/wiki/Toolkit-Configuration
 
 </td></tr><tr><td>
 

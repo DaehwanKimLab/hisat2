@@ -794,13 +794,14 @@ def calculate_read_cost():
         is_large_file = True
 
     aligners = [
-        ["hisat", "", "", ""],
-        ["hisat2", "", "", ""],
+        # ["hisat", "", "", ""],
+        # ["hisat2", "", "", ""],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "tran", ""],
-        ["hisat2", "", "snp_tran", ""],
+        # ["hisat2", "", "snp_tran", ""],
         # ["hisat", "", "", ""],
         # ["star", "", "", ""],
+        ["star", "x2", "", ""],
         # ["tophat2", "", "", ""],
         # ["bowtie", "", "", ""],
         # ["bowtie2", "", "", ""],
@@ -830,7 +831,7 @@ def calculate_read_cost():
     print >> sys.stderr, "aligner\tuse_annotation\tend_type\tedit_distance\tmapped_reads\tjunction_reads\tgtf_junction_reads\tjunctions\tgtf_junctions\truntime"
     
     # for paired in [False, True]:
-    for paired in [False, True]:
+    for paired in [True]:
         type_read1_fname = "1.fq"
         if paired:
             type_read2_fname = "2.fq"
@@ -977,7 +978,10 @@ def calculate_read_cost():
                 cmd = ["%s/STAR" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["--runThreadN", str(num_threads)]
-                cmd += ["--genomeDir", "%s/STAR%s" % (index_base, index_add)]
+                if type == "x2" and cmd_idx == 1:
+                    cmd += ["--genomeDir", "."]
+                else:
+                    cmd += ["--genomeDir", "%s/STAR%s" % (index_base, index_add)]
                 if desktop:
                     cmd += ["--genomeLoad", "NoSharedMemory"]
                 else:
@@ -1120,7 +1124,7 @@ def calculate_read_cost():
                         print >> sys.stderr, "\ttime: %.4f" % (duration)
                         # break
 
-                if aligner == "star":
+                if aligner == "star" and type in ["", "gtf"]:
                     os.system("mv Aligned.out.sam %s" % out_fname)
                 elif aligner in ["hisat2", "hisat"] and type == "x2":
                     aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
@@ -1144,9 +1148,8 @@ def calculate_read_cost():
                         if file in ["SJ.out.tab.Pass1.sjdb", "genome.fa"]:
                             continue
                         os.remove(file)
-                    star_index_cmd = "STAR --genomeDir ./ --runMode genomeGenerate --genomeFastaFiles genome.fa --sjdbFileChrStartEnd SJ.out.tab.Pass1.sjdb --sjdbOverhang 100 --runThreadN %d" % (num_threads)
-                    if verbose:
-                        print >> sys.stderr, "\t", datetime.now(), star_index_cmd
+                    star_index_cmd = "STAR --genomeDir ./ --runMode genomeGenerate --genomeFastaFiles ../../../../data/genome.fa --sjdbFileChrStartEnd SJ.out.tab.Pass1.sjdb --sjdbOverhang 100 --runThreadN %d" % (num_threads)
+                    print >> sys.stderr, "\t", datetime.now(), star_index_cmd
                     os.system(star_index_cmd)
                     if verbose:
                         print >> sys.stderr, "\t", datetime.now(), " ".join(dummy_cmd)

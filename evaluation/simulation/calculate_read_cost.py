@@ -1125,7 +1125,7 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
-        # ["hisat", "", "", ""],        
+        ["hisat", "", "", ""],        
         ["hisat2", "", "", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
@@ -1164,7 +1164,7 @@ def calculate_read_cost():
     gtf_junctions = extract_splice_sites("../../data/genome.gtf")
     align_stat = []
     # for paired in [False, True]:
-    for paired in [False, True]:
+    for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
