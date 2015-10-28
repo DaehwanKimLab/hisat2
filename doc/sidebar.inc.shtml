@@ -33,24 +33,24 @@
  </ul>
 </div>
 
-<a href="./downloads"><h2><u>Releases</u></h2></a>
+<a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
    <table width="100%"><tbody><tr><td>version 2.0.0-beta</td> <td align="right">9/8/2015</td></tr>
        <tr>
-	 <td><a href="./downloads/hisat2-2.0.0-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
+	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.0-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
        </tr>
        <tr>
-	 <td><a href="./downloads/hisat2-2.0.0-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
+	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.0-beta-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
        </tr>
        <tr>
-	 <td><a href="./downloads/hisat2-2.0.0-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
+	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.0-beta-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
        </tr>
    </tbody></table>
  </ul>
 </div>
 
-<h2>Indexes</h2>
+<a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data"><h2><u>Indexes</u></h2></a>
   <div class="box">
     <table width="100%">
       <tr>
@@ -60,7 +60,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grch37.tar.gz"><i>genome</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.7 GB</b>
@@ -68,7 +68,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grch37_snp.tar.gz"><i>genome_snp</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_snp.tar.gz"><i>genome_snp</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.5 GB</b>
@@ -76,7 +76,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grch37_tran.tar.gz"><i>genome_tran</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_tran.tar.gz"><i>genome_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.0 GB</b>
@@ -84,7 +84,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grch37_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.5 GB</b>
@@ -97,7 +97,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/hg19.tar.gz"><i>genome</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg19.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.8 GB</b>
@@ -111,7 +111,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grch38.tar.gz"><i>genome</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.8 GB</b>
@@ -119,7 +119,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grch38_snp.tar.gz"><i>genome_snp</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_snp.tar.gz"><i>genome_snp</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.6 GB</b>
@@ -127,7 +127,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grch38_tran.tar.gz"><i>genome_tran</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_tran.tar.gz"><i>genome_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.1 GB</b>
@@ -135,7 +135,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grch38_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.6 GB</b>
@@ -148,7 +148,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/hg38.tar.gz"><i>genome</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.9 GB</b>
@@ -162,7 +162,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grcm38.tar.gz"><i>genome</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.4 GB</b>
@@ -170,7 +170,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grcm38_snp.tar.gz"><i>genome_snp</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_snp.tar.gz"><i>genome_snp</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.0 GB</b>
@@ -178,7 +178,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grcm38_tran.tar.gz"><i>genome_tran</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_tran.tar.gz"><i>genome_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.7 GB</b>
@@ -186,7 +186,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/grcm38_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.0 GB</b>
@@ -199,7 +199,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="./data/mm10.tar.gz"><i>genome</i></a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/mm10.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.4 GB</b>
@@ -229,7 +229,7 @@
       </tr>
       <tr>
 	<td colspan="2" style="font-size: x-small">
-	  <a href="./data">more indexes</a>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data">more indexes</a>
         </td>
       </tr>
     </table>
