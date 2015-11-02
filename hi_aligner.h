@@ -1800,6 +1800,8 @@ bool GenomeHit<index_t>::combineWith(
     // update alignment score, trims
     assert_leq(this->_rdoff + this->_len, otherHit._rdoff + otherHit._len);
     _len = otherHit._rdoff + otherHit._len - this->_rdoff;
+    assert_eq(_trim3, 0);
+    _trim3 += otherHit._trim3;
     calculateScore(
                    rd,
                    ssdb,
@@ -1810,8 +1812,6 @@ bool GenomeHit<index_t>::combineWith(
                    minAnchorLen,
                    minAnchorLen_noncan,
                    ref);
-    assert_eq(_trim3, 0);
-    _trim3 += otherHit._trim3;
 #ifndef NDEBUG
     if(_joinedOff != (index_t)INDEX_MAX) {
         ASSERT_ONLY(bool straddled = false);

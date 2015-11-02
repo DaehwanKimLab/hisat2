@@ -3084,14 +3084,14 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 			continue;
 		}
 		TReadId rdid = ps->rdid();
-        
         if(nthreads > 1 && useTempSpliceSite) {
+            assert_gt(tid, 0);
+            assert_leq(tid, thread_rids.size());
+            assert(thread_rids[tid - 1] == 0 || rdid > thread_rids[tid - 1]);
+            thread_rids[tid - 1] = (rdid > 0 ? rdid - 1 : 0);
             while(true) {
-                uint64_t min_rdid = 0;
+                uint64_t min_rdid = thread_rids[0];
                 {
-                    // ThreadSafe t(&thread_rids_mutex, nthreads > 1);
-                    assert_gt(thread_rids.size(), 0);
-                    min_rdid = thread_rids[0];
                     for(size_t i = 1; i < thread_rids.size(); i++) {
                         if(thread_rids[i] < min_rdid) {
                             min_rdid = thread_rids[i];
@@ -3409,14 +3409,6 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                      !seedSumm,            // suppress seed summaries?
                                      seedSumm);            // suppress alignments?
 				assert(!retry || msinkwrap.empty());
-                
-                if(nthreads > 1 && useTempSpliceSite) {
-                    // ThreadSafe t(&thread_rids_mutex, nthreads > 1);
-                    assert_gt(tid, 0);
-                    assert_leq(tid, thread_rids.size());
-                    assert(thread_rids[tid - 1] == 0 || rdid > thread_rids[tid - 1]);
-                    thread_rids[tid - 1] = rdid;
-                }
 			} // while(retry)
 		} // if(rdid >= skipReads && rdid < qUpto)
 		else if(rdid >= qUpto) {
@@ -3466,8 +3458,7 @@ static void multiseedSearch(
         
         thread_rids.resize(nthreads);
         thread_rids.fill(0);
-        thread_rids_mindist = (nthreads == 1 || !useTempSpliceSite ? 0 : 1000 * nthreads);
-
+        thread_rids_mindist = (nthreads == 1 || !useTempSpliceSite ? 0 : 1000 * nthreads);        
 		for(int i = 0; i < nthreads; i++) {
 			// Thread IDs start at 1
 			tids[i] = i+1;
