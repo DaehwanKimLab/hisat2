@@ -373,7 +373,7 @@
 		};
 		E85452621B1A2E400049F2AC /* hisat2-align-s-debug */ = {
 			isa = PBXLegacyTarget;
-			buildArgumentsString = "USE_SRA=0 hisat2-align-s-debug";
+			buildArgumentsString = "USE_SRA=1 NCBI_NGS_DIR=/Users/infphilo/work/devel/ngs-sdk.1.1.1-mac NCBI_VDB_DIR=/Users/infphilo/work/devel/ngs-sdk.1.1.1-mac hisat2-align-s-debug";
 			buildConfigurationList = E85452631B1A2E400049F2AC /* Build configuration list for PBXLegacyTarget "hisat2-align-s-debug" */;
 			buildPhases = (
 			);

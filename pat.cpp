@@ -1651,13 +1651,7 @@ static void SRA_IO_Worker(void *vp)
                 }
                 assert_eq(rb.patFw.length(), rb.qual.length());
             }
-            
             sra_data->advanceWritePos();
-            
-#if 0
-            // ra.readOrigBuf.install(fb_.lastN(), fb_.lastNLen());
-            
-#endif
         } catch(ngs::ErrorMsg & x) {
             cerr << x.toString () << endl;
             exception_thrown = true;
@@ -1673,7 +1667,8 @@ static void SRA_IO_Worker(void *vp)
             ra.reset();
             rb.reset();
             sra_data->done = true;
-            return;
+            cerr << "An error happened while fetching SRA reads. Please rerun HISAT2. You may want to disable the SRA cache if you didn't (see the instructions at https://github.com/ncbi/sra-tools/wiki/Toolkit-Configuration).\n";
+            exit(1);
         }
     }
 }
