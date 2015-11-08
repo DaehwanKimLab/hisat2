@@ -1190,8 +1190,8 @@ public:
                     << "HISAT2." << endl;
                     throw 1;
                 }
-                writeIndex<int32_t>(fout7, 1, this->toBe()); // endianness sentinel
-                writeIndex<int32_t>(fout8, 1, this->toBe()); // endianness sentinel
+                writeIndex<index_t>(fout7, 1, this->toBe()); // endianness sentinel
+                writeIndex<index_t>(fout8, 1, this->toBe()); // endianness sentinel
                 
                 if(snpfile != "") {
                     ifstream snp_file(snpfile.c_str(), ios::in);
@@ -3057,7 +3057,7 @@ public:
             assert_eq(top, bot);
             return pair<index_t, index_t>(0, 0);
         }
-        
+
         tloc.initFromRow_bit(top + 1, gh(), gfm());
         index_t node_top = rank_M(tloc) - 1;
         
