@@ -539,6 +539,20 @@ struct USE_POPCNT_GENERIC {
 };
 #endif
 
+#ifdef POPCNT_CAPABILITY   // wrapping of "struct"
+struct USE_POPCNT_GENERIC_BITS {
+#endif
+    // Use this standard bit-bashing population count
+    inline static int pop64(uint64_t x) {
+	x -= (x >> 1) & 0x5555555555555555ULL;
+	x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
+	x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
+	return int((x * 0x0101010101010101ULL) >> 56);
+    }
+#ifdef POPCNT_CAPABILITY  // wrapping a "struct"
+};
+#endif
+
 #ifdef POPCNT_CAPABILITY
 struct USE_POPCNT_INSTRUCTION {
     inline static int pop64(uint64_t x) {
@@ -558,7 +572,7 @@ template<typename Operation>
 #endif
 inline static int countInU64(int c, uint64_t dw) {
     uint64_t c0 = c_table[c];
-	uint64_t x0 = dw ^ c0;
+    uint64_t x0 = dw ^ c0;
     uint64_t x1 = (x0 >> 1);
     uint64_t x2 = x1 & (0x5555555555555555);
     uint64_t x3 = x0 & x2;
@@ -2720,12 +2734,12 @@ public:
             }
         } else {
             for(; i + 7 < l._by; i += 8) {
-                cCnt += countInU64_bits<USE_POPCNT_GENERIC>(*(uint64_t*)&side[i]);
+	      cCnt += countInU64_bits<USE_POPCNT_GENERIC_BITS>(*(uint64_t*)&side[i]);
             }
         }
 #else
         for(; i + 7 < l._by; i += 8) {
-            cCnt += countInU64_bits(*(uint64_t*)&side[i]);
+            cCnt += countInU64_bits<USE_POPCNT_GENERIC_BITS>(*(uint64_t*)&side[i]);
         }
 #endif
         
@@ -3411,7 +3425,16 @@ public:
                 advance = minSide;
                 bits <<= (64 - minSide);
             }
-            uint8_t tmp_count = countInU64_bits<USE_POPCNT_INSTRUCTION>(bits);
+	    uint8_t tmp_count = 0;
+#ifdef POPCNT_CAPABILITY
+	    if(_usePOPCNTinstruction) {
+	      tmp_count = countInU64_bits<USE_POPCNT_INSTRUCTION>(bits);
+	    } else {
+	      tmp_count = countInU64_bits<USE_POPCNT_GENERIC_BITS>(bits);
+	    }
+#else
+	    tmp_count = countInU64_bits<USE_POPCNT_GENERIC_BITS>(bits);
+#endif
             assert_leq(tmp_count, count);
             count -= tmp_count;
             if(count == 0) {
