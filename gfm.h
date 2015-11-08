@@ -2739,7 +2739,7 @@ public:
         }
 #else
         for(; i + 7 < l._by; i += 8) {
-            cCnt += countInU64_bits<USE_POPCNT_GENERIC_BITS>(*(uint64_t*)&side[i]);
+            cCnt += countInU64_bits(*(uint64_t*)&side[i]);
         }
 #endif
         
@@ -3433,7 +3433,7 @@ public:
             tmp_count = countInU64_bits<USE_POPCNT_GENERIC_BITS>(bits);
 	    }
 #else
-	    tmp_count = countInU64_bits<USE_POPCNT_GENERIC_BITS>(bits);
+	    tmp_count = countInU64_bits(bits);
 #endif
             assert_leq(tmp_count, count);
             count -= tmp_count;
