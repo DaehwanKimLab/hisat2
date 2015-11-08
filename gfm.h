@@ -3428,9 +3428,9 @@ public:
 	    uint8_t tmp_count = 0;
 #ifdef POPCNT_CAPABILITY
 	    if(_usePOPCNTinstruction) {
-	      tmp_count = countInU64_bits<USE_POPCNT_INSTRUCTION>(bits);
+            tmp_count = countInU64_bits<USE_POPCNT_INSTRUCTION>(bits);
 	    } else {
-	      tmp_count = countInU64_bits<USE_POPCNT_GENERIC_BITS>(bits);
+            tmp_count = countInU64_bits<USE_POPCNT_GENERIC_BITS>(bits);
 	    }
 #else
 	    tmp_count = countInU64_bits<USE_POPCNT_GENERIC_BITS>(bits);
