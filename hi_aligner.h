@@ -1879,6 +1879,10 @@ bool GenomeHit<index_t>::extend(
         assert_geq(_score, minsc);
         index_t reflen = _rdoff + 10;
         rl -= (reflen - _rdoff);
+        if(rl < 0) {
+            reflen += rl;
+            rl = 0;
+        }
         index_t numNs = 0;
         index_t num_prev_edits = _edits->size();
         index_t best_ext =  alignWithALTs(
@@ -2521,7 +2525,6 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
     if(numALTsTried > 16) return 0;
     assert_gt(rdlen, 0);
     assert_gt(rflen, 0);
-    assert_geq(rflen, rdlen);
     if(raw_refbufs.size() <= dep) raw_refbufs.expand();
     if(rfoff < -16) return 0;
     if(rfseq == NULL) {
