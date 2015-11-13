@@ -750,7 +750,7 @@ public:
         // Sort SNPs and Splice Sites based on positions
         index_t nalts = alts.size();
         for(index_t s = 0; s < nalts; s++) {
-            const ALT<index_t>& alt = alts[s];
+            ALT<index_t> alt = alts[s];
             if(alt.snp()) altdb->setSNPs(true);
             if(alt.exon()) altdb->setExons(true);
             if(!alt.splicesite()) continue;
