@@ -1735,6 +1735,7 @@ bool SRAPatternSource::readPair(
 }
 
 void SRAPatternSource::open() {
+    ncbi::NGS::setAppVersionString(HISAT2_VERSION);
     assert(!sra_accs_.empty());
     while(sra_acc_cur_ < sra_accs_.size()) {
         // Open read
@@ -1746,7 +1747,7 @@ void SRAPatternSource::open() {
             delete sra_run_;
             sra_run_ = NULL;
         }
-        try {
+        try {            
             // open requested accession using SRA implementation of the API
             sra_run_ = new ngs::ReadCollection(ncbi::NGS::openReadCollection(sra_accs_[sra_acc_cur_]));
             // compute window to iterate through
