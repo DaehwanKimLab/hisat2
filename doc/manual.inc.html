@@ -493,14 +493,14 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 <pre><code>--dta/--downstream-transcriptome-assembly</code></pre>
 </td><td>
 
-<p>Report alignments tailored for transcript assemblers including StringTie. With this option, HISAT2 requires longer anchor lengths for de-novo discovery of splice sites. This leads to less alignments with short-anchors, which helps transcript assemblers improve significantly in computationa and memory usage.</p>
+<p>Report alignments tailored for transcript assemblers including StringTie. With this option, HISAT2 requires longer anchor lengths for de novo discovery of splice sites. This leads to fewer alignments with short-anchors, which helps transcript assemblers improve significantly in computationa and memory usage.</p>
 </td></tr>
 
 <tr><td id="hisat2-options-dta-cufflinks">
 <pre><code>--dta-cufflinks</code></pre>
 </td><td>
 
-<p>Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta), HISAT2 supports only three splice site signals (GT/AG, GC/AG, and AT/AC). HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.</p>
+<p>Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta), With this option, HISAT2 looks for novel splice sites with three signals (GT/AG, GC/AG, AT/AC), but all user-provided splice sites are used irrespective of their signals. HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.</p>
 </td></tr>
 
 </table>
@@ -513,7 +513,7 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 <pre><code>-k &lt;int&gt;</code></pre>
 </td><td>
 
-<p>It searches for at most <code>&lt;int&gt;</code> distinct, primary alignments for each read. Primary alignments mean alignments whose alignment score is equal or higher than any other alignments. The search terminates when it can't find more distinct valid alignments, or when it finds <code>&lt;int&gt;</code>, whichever happens first. The alignment score for a paired-end alignment equals the sum of the alignment scores of the individual mates. Each reported read or pair alignment beyond the first has the SAM 'secondary' bit (which equals 256) set in its FLAGS field. For reads that have more than <code>&lt;int&gt;</code> distinct, valid alignments, <code>hisat2</code> does not gaurantee that the <code>&lt;int&gt;</code> alignments reported are the best possible in terms of alignment score. Default: 5</p>
+<p>It searches for at most <code>&lt;int&gt;</code> distinct, primary alignments for each read. Primary alignments mean alignments whose alignment score is equal or higher than any other alignments. The search terminates when it can't find more distinct valid alignments, or when it finds <code>&lt;int&gt;</code>, whichever happens first. The alignment score for a paired-end alignment equals the sum of the alignment scores of the individual mates. Each reported read or pair alignment beyond the first has the SAM 'secondary' bit (which equals 256) set in its FLAGS field. For reads that have more than <code>&lt;int&gt;</code> distinct, valid alignments, <code>hisat2</code> does not gaurantee that the <code>&lt;int&gt;</code> alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)</p>
 <p>Note: HISAT2 is not designed with large values for <code>-k</code> in mind, and when aligning reads to long, repetitive genomes large <code>-k</code> can be very, very slow.</p>
 </td></tr>
 

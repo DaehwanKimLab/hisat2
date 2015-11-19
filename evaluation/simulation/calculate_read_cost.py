@@ -1249,7 +1249,7 @@ def calculate_read_cost():
                     # cmd += ["--pen-noncansplice", "12"]
                     # cmd += ["--pen-intronlen", "G,-8,1"]
                     # cmd += ["--metrics", "1",
-                    #         "--metrics-file", "metrics.out"]
+                    #        "--metrics-file", "metrics.out"]
 
                     if not RNA:
                         cmd += ["--no-spliced-alignment"]
