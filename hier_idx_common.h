@@ -31,12 +31,13 @@ static const uint32_t local_index_overlap  = 1024;
 static const uint32_t local_index_interval = local_index_size - local_index_overlap;
 
 // line rate in local indexes
-static const int32_t local_lineRate = 7;
+static const int32_t local_lineRate_fm = 6;
+static const int32_t local_lineRate_gfm = 7;
 
 // how many rows are marked in a local index, every 2^<int>th row is marked
-static const int32_t  local_offRate = 3;
+static const int32_t local_offRate = 3;
 
 // the look table in a local index 4^<int> entries
-static const int32_t  local_ftabChars = 6;
+static const int32_t local_ftabChars = 6;
 
 #endif /*HIERGBWT_COMMON_H_*/

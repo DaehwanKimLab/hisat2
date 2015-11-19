@@ -1745,6 +1745,7 @@ public:
 	
 	EList<EList<LocalGFM<local_index_t, index_t>*> > _localGFMs;
 	index_t                                  _nlocalGFMs;
+    //index_t                                  _local_index_interval;
 	
 	FILE                                     *_in5;    // input fd for primary index file
 	FILE                                     *_in6;    // input fd for secondary index file
@@ -1912,6 +1913,13 @@ HGFM<index_t, local_index_t>::HGFM(
 {
     _in5Str = outfile + ".5." + gfm_ext;
     _in6Str = outfile + ".6." + gfm_ext;
+    
+    int32_t local_lineRate;
+    if(snpfile == "" && ssfile == "" && exonfile == "") {
+        local_lineRate = local_lineRate_fm;
+    } else {
+        local_lineRate = local_lineRate_gfm;
+    }
     
     // Open output files
     ofstream fout5(_in5Str.c_str(), ios::binary);

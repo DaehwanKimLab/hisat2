@@ -922,8 +922,8 @@ Report only those alignments within known transcripts.
 </td><td>
 
 Report alignments tailored for transcript assemblers including StringTie.
-With this option, HISAT2 requires longer anchor lengths for de-novo discovery of splice sites.
-This leads to less alignments with short-anchors, 
+With this option, HISAT2 requires longer anchor lengths for de novo discovery of splice sites.
+This leads to fewer alignments with short-anchors, 
 which helps transcript assemblers improve significantly in computationa and memory usage.
 
 </td></tr>
@@ -936,7 +936,8 @@ which helps transcript assemblers improve significantly in computationa and memo
 </td><td>
 
 Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta),
-HISAT2 supports only three splice site signals (GT/AG, GC/AG, and AT/AC).  HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
+With this option, HISAT2 looks for novel splice sites with three signals (GT/AG, GC/AG, AT/AC), but all user-provided splice sites are used irrespective of their signals.
+HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
 
 </td></tr>
 
@@ -961,7 +962,7 @@ alignment equals the sum of the alignment scores of the individual mates. Each
 reported read or pair alignment beyond the first has the SAM 'secondary' bit
 (which equals 256) set in its FLAGS field.  For reads that have more than
 `<int>` distinct, valid alignments, `hisat2` does not gaurantee that the
-`<int>` alignments reported are the best possible in terms of alignment score. Default: 5
+`<int>` alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)
 
 Note: HISAT2 is not designed with large values for `-k` in mind, and when
 aligning reads to long, repetitive genomes large `-k` can be very, very slow.

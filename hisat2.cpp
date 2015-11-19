@@ -1640,7 +1640,7 @@ static void parseOptions(int argc, const char **argv) {
 	int next_option;
 	saw_M = false;
 	saw_a = false;
-	saw_k = true;
+	saw_k = false;
 	presetList.clear();
 	if(startVerbose) { cerr << "Parsing options: "; logTime(cerr, true); }
 	while(true) {
@@ -1716,7 +1716,7 @@ static void parseOptions(int argc, const char **argv) {
 		maxUgStreak = failStreakTmp;
 		maxDpStreak = failStreakTmp;
 	}
-	if(saw_a || saw_k) {
+	if(saw_a || saw_k || true) {
 		msample = false;
 		mhits = 0;
 	} else {
@@ -3598,6 +3598,10 @@ static void driver(
                            true,         // load rstarts (in forward index)
                            !noRefNames,  // load names?
                            startVerbose);
+    }
+    if(!saw_k) {
+        if(gfm.gh().linearFM()) khits = 5;
+        else                    khits = 10;
     }
 	OutputQueue oq(
 		*fout,                   // out file buffer

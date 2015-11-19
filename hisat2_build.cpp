@@ -59,6 +59,7 @@ static int seed;
 static int showVersion;
 //   GFM parameters
 static int32_t lineRate;
+static bool    lineRate_provided;
 static int32_t linesPerSide;
 static int32_t offRate;
 static int32_t ftabChars;
@@ -91,7 +92,8 @@ static void resetOptions() {
 	seed           = 0;     // srandom seed
 	showVersion    = 0;     // just print version and quit?
 	// GFM parameters
-	lineRate       = GFM<TIndexOffU>::default_lineRate;
+	lineRate       = GFM<TIndexOffU>::default_lineRate_gfm;
+    lineRate_provided = false;
 	linesPerSide   = 1;  // 1 64-byte line on a side
 	offRate        = 4;  // sample 1 out of 16 SA elts
 	ftabChars      = 10; // 10 chars in initial lookup table
@@ -275,6 +277,7 @@ static void parseOptions(int argc, const char **argv) {
 				break;
 			case 'l':
 				lineRate = parseNumber<int>(3, "-l/--lineRate arg must be at least 3");
+                lineRate_provided = true;
 				break;
 			case 'i':
 				linesPerSide = parseNumber<int>(1, "-i/--linesPerSide arg must be at least 1");
@@ -606,6 +609,14 @@ int hisat2_build(int argc, const char **argv) {
 			printUsage(cerr);
 			return 1;
 		}
+        
+        if(!lineRate_provided) {
+            if(snp_fname == "" && ss_fname == "" && exon_fname == "") {
+                lineRate = GFM<TIndexOffU>::default_lineRate_fm;
+            } else {
+                lineRate = GFM<TIndexOffU>::default_lineRate_gfm;
+            }
+        }
 
 		// Optionally summarize
 		if(verbose) {

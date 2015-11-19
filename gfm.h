@@ -539,20 +539,6 @@ struct USE_POPCNT_GENERIC {
 };
 #endif
 
-#ifdef POPCNT_CAPABILITY   // wrapping of "struct"
-struct USE_POPCNT_GENERIC_BITS {
-#endif
-    // Use this standard bit-bashing population count
-    inline static int pop64(uint64_t x) {
-	x -= (x >> 1) & 0x5555555555555555ULL;
-	x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
-	x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
-	return int((x * 0x0101010101010101ULL) >> 56);
-    }
-#ifdef POPCNT_CAPABILITY  // wrapping a "struct"
-};
-#endif
-
 #ifdef POPCNT_CAPABILITY
 struct USE_POPCNT_INSTRUCTION {
     inline static int pop64(uint64_t x) {
@@ -583,6 +569,20 @@ inline static int countInU64(int c, uint64_t dw) {
 #endif
     return (int) tmp;
 }
+
+#ifdef POPCNT_CAPABILITY   // wrapping of "struct"
+struct USE_POPCNT_GENERIC_BITS {
+#endif
+    // Use this standard bit-bashing population count
+    inline static int pop64(uint64_t x) {
+        x -= (x >> 1) & 0x5555555555555555ULL;
+        x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
+        x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
+        return int((x * 0x0101010101010101ULL) >> 56);
+    }
+#ifdef POPCNT_CAPABILITY  // wrapping a "struct"
+};
+#endif
 
 /**
  * Tricky-bit-bashing bitpair counting for given two-bit value (0-3)
@@ -3046,6 +3046,26 @@ public:
      * Given row i and character c, return the row that the GLF mapping maps
      * i to on character c.
      */
+    inline pair<index_t, index_t> mapLF(
+                                        SideLocus<index_t>& tloc, SideLocus<index_t>& bloc, int c,
+                                        pair<index_t, index_t>* node_range = NULL
+                                        ASSERT_ONLY(, bool overrideSanity = false)
+                                        ) const
+    {
+        assert_lt(c, 4);
+        assert_geq(c, 0);
+        index_t top = mapLF(tloc, c);
+        index_t bot = mapLF(bloc, c);
+        if(node_range != NULL) {
+            node_range->first = top; node_range->second = bot;
+        }
+        return pair<index_t, index_t>(top, bot);
+    }
+    
+    /**
+     * Given row i and character c, return the row that the GLF mapping maps
+     * i to on character c.
+     */
     inline pair<index_t, index_t> mapGLF(
                                          SideLocus<index_t>& tloc, SideLocus<index_t>& bloc, int c,
                                          pair<index_t, index_t>* node_range = NULL,
@@ -3594,9 +3614,11 @@ public:
 	static const bool     default_useBlockwise = true;
 	static const uint32_t default_seed = 0;
 #ifdef BOWTIE_64BIT_INDEX
-	static const int      default_lineRate = 8;
+    static const int      default_lineRate_gfm = 8;
+    static const int      default_lineRate_fm  = 7;
 #else
-	static const int      default_lineRate = 7;
+	static const int      default_lineRate_gfm = 7;
+    static const int      default_lineRate_fm  = 6;
 #endif
 	static const int      default_offRate = 5;
 	static const int      default_offRatePlus = 0;

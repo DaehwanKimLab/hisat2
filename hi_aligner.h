@@ -3614,7 +3614,8 @@ public:
             index_t fwi = (fw ? 0 : 1);
             ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
             assert(!hit.done());
-            bool pseudogeneStop = true, anchorStop = _anchorStop;
+            bool pseudogeneStop = gfm.gh().linearFM() && !_tpol.no_spliced_alignment();
+            bool anchorStop = _anchorStop;
             if(!_secondary) {
                 index_t numSearched = hit.numActualPartialSearch();
                 int64_t bestScore = 0;
@@ -3665,9 +3666,6 @@ public:
                 }
             }
             
-            // daehwan - for debugging purposes
-            pseudogeneStop = false;
-           
             // Align this read beginning from previously stopped base
             // stops when it is uniquelly mapped with at least 28bp or
             // it may involve processed pseudogene
@@ -5015,6 +5013,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
     bool pseudogeneStop_ = pseudogeneStop, anchorStop_ = anchorStop;
     pseudogeneStop = anchorStop = false;
 	const index_t ftabLen = gfm.gh().ftabChars();
+    const bool linearFM = gfm.gh().linearFM();
 	SideLocus<index_t> tloc, bloc;
 	const index_t len = (index_t)read.length();
     const BTDnaString& seq = fw ? read.patFw : read.patRc;
@@ -5103,7 +5102,11 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, rp.khits);
+                if(linearFM) {
+                    rangeTemp = gfm.mapLF(tloc, bloc, c, &node_rangeTemp);
+                } else {
+                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, rp.khits);
+                }
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
@@ -5159,7 +5162,7 @@ size_t HI_Aligner<index_t, local_index_t>::partialSearch(
             _tmp_node_iedge_count.clear();
         } else {
             _node_iedge_count.clear();
-        }        
+        }
         dep++;
 
         if(anchorStop_) {
@@ -5258,6 +5261,7 @@ size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
     const index_t ftabLen = gfm.gh().ftabChars();
+    const bool linearFM = gfm.gh().linearFM();
 	SideLocus<index_t> tloc, bloc;
 	const index_t len = (index_t)read.length();
     
@@ -5308,7 +5312,11 @@ size_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, rp.khits);
+                if(linearFM) {
+                    rangeTemp = gfm.mapLF(tloc, bloc, c, &node_rangeTemp);
+                } else {
+                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, rp.khits);
+                }
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
@@ -5399,6 +5407,7 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
     const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
+    const bool linearFM = gfm.gh().linearFM();
 	SideLocus<local_index_t> tloc, bloc;
 	const local_index_t len = (local_index_t)read.length();
 	size_t nelt = 0;
@@ -5447,7 +5456,11 @@ size_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
         } else {
             if(bloc.valid()) {
                 bwops_ += 2;
-                rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_local_node_iedge_count, rp.khits);
+                if(linearFM) {
+                    rangeTemp = gfm.mapLF(tloc, bloc, c, &node_rangeTemp);
+                } else {
+                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_local_node_iedge_count, rp.khits);
+                }
             } else {
                 bwops_++;
                 rangeTemp = gfm.mapGLF1(range.first, tloc, c, &node_rangeTemp);
