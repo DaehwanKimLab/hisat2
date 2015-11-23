@@ -20,7 +20,7 @@ HISAT2 is distributed under the [GPLv3 license], and it runs on the command line
 Linux, Mac OS X and Windows.
 
 [HISAT2]:          http://ccb.jhu.edu/software/hisat2
-[HISAT]:          http://ccb.jhu.edu/software/hisat
+[HISAT]:           http://ccb.jhu.edu/software/hisat
 [Bowtie2]:         http://bowtie-bio.sf.net/bowtie2
 [Bowtie]:          http://bowtie-bio.sf.net
 [Bowtie1]:         http://bowtie-bio.sf.net
@@ -309,6 +309,10 @@ filehandle.
     --sra-acc <SRA accession number>
 
 Comma-separated list of SRA accession numbers, e.g. `--sra-acc SRR353653,SRR353654`.
+Information about read types is available at http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?sp=runinfo&acc=<b>sra-acc</b>&retmode=xml,
+where <b>sra-acc</b> is SRA accession number.  If users run HISAT2 on a computer cluster, it is recommended to disable SRA-related caching (see the instruction at [SRA-MANUAL]).
+
+[SRA-MANUAL]:	     https://github.com/ncbi/sra-tools/wiki/Toolkit-Configuration
 
     -S <hit>
 
@@ -566,14 +570,15 @@ Report only those alignments within known transcripts.
     --dta/--downstream-transcriptome-assembly
 
 Report alignments tailored for transcript assemblers including StringTie.
-With this option, HISAT2 requires longer anchor lengths for de-novo discovery of splice sites.
-This leads to less alignments with short-anchors, 
+With this option, HISAT2 requires longer anchor lengths for de novo discovery of splice sites.
+This leads to fewer alignments with short-anchors, 
 which helps transcript assemblers improve significantly in computationa and memory usage.
 
     --dta-cufflinks
 
 Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta),
-HISAT2 supports only three splice site signals (GT/AG, GC/AG, and AT/AC).  HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
+With this option, HISAT2 looks for novel splice sites with three signals (GT/AG, GC/AG, AT/AC), but all user-provided splice sites are used irrespective of their signals.
+HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
 
 #### Reporting options
 
@@ -586,7 +591,7 @@ alignment equals the sum of the alignment scores of the individual mates. Each
 reported read or pair alignment beyond the first has the SAM 'secondary' bit
 (which equals 256) set in its FLAGS field.  For reads that have more than
 `<int>` distinct, valid alignments, `hisat2` does not gaurantee that the
-`<int>` alignments reported are the best possible in terms of alignment score. Default: 5
+`<int>` alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)
 
 Note: HISAT2 is not designed with large values for `-k` in mind, and when
 aligning reads to long, repetitive genomes large `-k` can be very, very slow.
@@ -1041,7 +1046,7 @@ alignment:
     This optional field is similar to the above MD:Z field.
     For example, `Zs:Z:1|S|rs3747203,97|S|rs16990981` indicates the second base of the read corresponds to a known SNP (ID: rs3747203).
     97 bases after the third base (the base after the second one), the read at 100th base involves another known SNP (ID: rs16990981).
-    'S' indicates a single nucleotide polymorphism.  'D' and 'I' indicates a deletion and an insertion, respectively.
+    'S' indicates a single nucleotide polymorphism.  'D' and 'I' indicate a deletion and an insertion, respectively.
     
 [SAM format specification]: http://samtools.sf.net/SAM1.pdf
 [FASTQ]: http://en.wikipedia.org/wiki/FASTQ_format

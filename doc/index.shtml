@@ -20,6 +20,14 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
+	  <h2>HISAT2 2.0.1-beta release 11/19/2015</h2>
+	  Version 2.0.1-beta is a maintenance release with the following changes.
+	  <ul>
+	    <li>Fixed a bug that caused reads to map beyond reference sequences.</li>
+	    <li>Fixed a deadlock issue that happened very rarely.</li>
+	    <li>Fixed a bug that led to illegal memory access when reading SNP information.</li>
+	    <li>Fixed a system-specific bug related to popcount instruction.</li>
+	  </ul>
 	  <h2>HISAT2 2.0.0-beta release 9/8/2015 - first release</h2>
 	  We extended the BWT/FM index to incorporate genomic differences among individuals into the reference genome, while keeping memory requirements low enough to fit the entire index onto a desktop computer. Using this novel Hierarchical Graph FM index (HGFM) approach, we built a new alignment system, HISAT2, with an index that incorporates ~12.3M common SNPs from the dbSNP database. HISAT2 provides greater alignment accuracy for reads containing SNPs. </li>
 	  <ul>
