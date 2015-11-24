@@ -48,7 +48,7 @@
        </tr>
    </tbody></table>
  </ul>
-Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html"><b>HISAT: a fast spliced aligner with low memory requirements</b></a>. <i><a href="http://www.nature.com/nmeth">Nature Methods</a></i> 2015</p>
+<font size="-1">Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html"><b>HISAT: a fast spliced aligner with low memory requirements</b></a>. <i><a href="http://www.nature.com/nmeth">Nature Methods</a></i></font> 2015</p>
 </div>
 
 <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data"><h2><u>Indexes</u></h2></a>
@@ -64,7 +64,7 @@ Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.co
 	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
-	  <b>3.7 GB</b>
+	  <b>3.9 GB</b>
         </td>
       </tr>
       <tr>
@@ -101,7 +101,7 @@ Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.co
 	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg19.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
-	  <b>3.8 GB</b>
+	  <b>3.9 GB</b>
         </td>
       </tr>
 
@@ -115,7 +115,7 @@ Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.co
 	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
-	  <b>3.8 GB</b>
+	  <b>3.9 GB</b>
         </td>
       </tr>
       <tr>
@@ -152,7 +152,7 @@ Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.co
 	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
-	  <b>3.9 GB</b>
+	  <b>4.1 GB</b>
         </td>
       </tr>
 
@@ -166,7 +166,7 @@ Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.co
 	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
-	  <b>3.4 GB</b>
+	  <b>3.7 GB</b>
         </td>
       </tr>
       <tr>
@@ -203,7 +203,7 @@ Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.co
 	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/mm10.tar.gz"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
-	  <b>3.4 GB</b>
+	  <b>3.5 GB</b>
         </td>
       </tr>
 

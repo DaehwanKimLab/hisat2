@@ -28,8 +28,9 @@
 	    <li>Fixed a bug that led to illegal memory access when reading SNP information.</li>
 	    <li>Fixed a system-specific bug related to popcount instruction.</li>
 	  </ul>
+	  <br>
 	  <h2>HISAT2 2.0.0-beta release 9/8/2015 - first release</h2>
-	  We extended the BWT/FM index to incorporate genomic differences among individuals into the reference genome, while keeping memory requirements low enough to fit the entire index onto a desktop computer. Using this novel Hierarchical Graph FM index (HGFM) approach, we built a new alignment system, HISAT2, with an index that incorporates ~12.3M common SNPs from the dbSNP database. HISAT2 provides greater alignment accuracy for reads containing SNPs. </li>
+	  We extended the BWT/FM index to incorporate genomic differences among individuals into the reference genome, while keeping memory requirements low enough to fit the entire index onto a desktop computer. Using this novel Hierarchical Graph FM index (HGFM) approach, we built a new alignment system, HISAT2, with an index that incorporates ~12.3M common SNPs from the dbSNP database. HISAT2 provides greater alignment accuracy for reads containing SNPs.
 	  <ul>
 	    <li>
 	      HISAT2's index size for the human reference genome and 12.3 million common SNPs is 6.2GB (the memory footprint of HISAT2 is 6.7GB). The SNPs consist of 11 million single nucleotide polymorphisms, 728,000 deletions, and 555,000 insertions. The insertions and deletions used in this index are small (usually <20bp).
