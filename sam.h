@@ -487,6 +487,9 @@ void SamConfig<index_t>::printPgLine(BTString& o) const {
     o.append(pg_pn_.c_str());
     o.append("\tVN:");
     o.append(pg_vn_.c_str());
+    o.append("\tCL:\"");
+    o.append(pg_cl_.c_str());
+    o.append('"');
     o.append('\n');
 }
 
