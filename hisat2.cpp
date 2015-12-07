@@ -3333,8 +3333,10 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 				// size_t nelt[2] = {0, 0};
                 if(filt[0] && filt[1]) {
                     splicedAligner.initReads(rds, nofw, norc, minsc, maxpen);
-                } else if(filt[0] || filt[1]) {
-                    splicedAligner.initRead(rds[0], nofw[0], norc[0], minsc[0], maxpen[0], filt[1]);
+                } else if(filt[0]) {
+                    splicedAligner.initRead(rds[0], nofw[0], norc[0], minsc[0], maxpen[0], false);
+                } else if(filt[1]) {
+                    splicedAligner.initRead(rds[1], nofw[1], norc[1], minsc[1], maxpen[1], true);
                 }
                 if(filt[0] || filt[1]) {
                     int ret = splicedAligner.go(sc, gfm, *altdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
@@ -3980,7 +3982,7 @@ int hisat2(int argc, const char **argv) {
 		return 1;
 	} catch(int e) {
 		if(e != 0) {
-			cerr << "Error: Encountered internal HISAT exception (#" << e << ")" << endl;
+			cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
 			cerr << "Command: ";
 			for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
 			cerr << endl;
