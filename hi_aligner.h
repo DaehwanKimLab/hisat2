@@ -1941,8 +1941,12 @@ bool GenomeHit<index_t>::extend(
         index_t rl = right_toff + right_len;
         assert_eq(_rdoff + _len, right_rdoff + right_len);
         index_t rr = rdlen - (right_rdoff + right_len);
-        if(rl + 1 <= ref.approxLen(_tidx)) {
+        index_t tlen = ref.approxLen(_tidx);
+        if(rl < tlen) {
             index_t reflen = rr + 10;
+            if(rl + reflen > tlen) {
+                reflen = tlen - rl;
+            }
             int ref_ext = (int)_len;
             for(index_t ei = 0; ei < _edits->size(); ei++) {
                 const Edit& e = (*_edits)[ei];

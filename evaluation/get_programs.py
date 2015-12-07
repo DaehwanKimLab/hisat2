@@ -11,7 +11,7 @@ def get_aligners():
     os.chdir("aligners")
     if not os.path.exists("bin"):
         os.mkdir("bin")
-    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "StringTie", "Cufflinks"]
+    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks"]
     for program in programs:
         if program == "HISAT":
             dir = "hisat-0.1.6-beta"
@@ -79,6 +79,13 @@ def get_aligners():
             installs = "gmap gmapl get-genome gmapindex iit_store iit_get iit_dump gsnap gsnapl uniqscan uniqscanl snpindex cmetindex atoiindex sam_sort ../util/*"
             cmd = "wget %s/%s; tar xvzf %s; cd %s; ./configure; make; cd src; cp %s ../../bin; cd ../.." % \
                 (url, fname, fname, dir, installs)
+        elif program == "BWA":
+            dir = "bwa-0.7.12"
+            if os.path.exists(dir):
+                continue
+            url = "http://sourceforge.net/projects/bio-bwa/files/%s.tar.bz2" % (dir)
+            installs = "bwa"
+            cmd = "wget %s; tar xvzf %s.tar.bz2; cd %s; make; cp %s ../bin/; cd .." % (url, dir, dir, installs)
         elif program == "StringTie":
             dir = "stringtie-1.0.4"
             url = "http://ccb.jhu.edu/software/stringtie/dl"

@@ -691,7 +691,7 @@
 				E8000AE61AE9324600E1F351 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		E818AEB019880CA400ED141B /* Build configuration list for PBXLegacyTarget "hisat-bp-bin-debug" */ = {
 			isa = XCConfigurationList;
@@ -700,7 +700,7 @@
 				E818AEB219880CA400ED141B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		E854525F1B1A2E350049F2AC /* Build configuration list for PBXLegacyTarget "hisat2-inspect-s-debug" */ = {
 			isa = XCConfigurationList;
@@ -709,7 +709,7 @@
 				E85452611B1A2E350049F2AC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		E85452631B1A2E400049F2AC /* Build configuration list for PBXLegacyTarget "hisat2-align-s-debug" */ = {
 			isa = XCConfigurationList;
@@ -718,7 +718,7 @@
 				E85452651B1A2E400049F2AC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		E8562A651B53FBDE003062A4 /* Build configuration list for PBXLegacyTarget "hisat2-align-s" */ = {
 			isa = XCConfigurationList;
@@ -727,7 +727,7 @@
 				E8562A671B53FBDE003062A4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		E861E5A71B1F35DC00362002 /* Build configuration list for PBXLegacyTarget "hisat2-build-s" */ = {
 			isa = XCConfigurationList;
@@ -736,7 +736,7 @@
 				E861E5A91B1F35DC00362002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		E8B0DBD51934F022005ED9FA /* Build configuration list for PBXProject "hisat2" */ = {
 			isa = XCConfigurationList;
@@ -745,7 +745,7 @@
 				E8B0DBE21934F022005ED9FA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 	};

@@ -1125,12 +1125,13 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
-        ["hisat", "", "", ""],        
-        ["hisat2", "", "", ""],
+        # ["hisat", "", "", ""],        
+        # ["hisat2", "", "", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "tran", ""],
         ["hisat2", "x1", "snp_tran", ""],
+        ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
         # ["star", "", "", ""],
@@ -1146,7 +1147,7 @@ def calculate_read_cost():
     verbose = True
     debug = False
     # sql_write = False
-    # just_runtime = True
+    just_runtime = True
 
     cwd = os.getcwd()
     if len(cwd.split("reads_")) > 1:
