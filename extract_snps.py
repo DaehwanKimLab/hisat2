@@ -51,28 +51,22 @@ def reverse_complement(seq):
 
     return result
 
-
 """
 """
 def read_genome(genome_file):
     chr_dic = {}
-
     chr_name, sequence = "", ""
     for line in genome_file:
-        if line[0] == ">":
+        if line.startswith(">"):
             if chr_name and sequence:
                 chr_dic[chr_name] = sequence
-
-            chr_name = line[1:-1]
+            chr_name = line.strip().split()[0][1:]
             sequence = ""
         else:
-            sequence += line[:-1]
-
+            sequence += line.strip()
     if chr_name and sequence:
         chr_dic[chr_name] = sequence
-
     return chr_dic
-
 
 """
 """
