@@ -636,7 +636,7 @@ public:
 	    _useMm(false), \
 	    useShmem_(false), \
 	    _refnames(EBWT_CAT), \
-	    mmFile1_(NULL), \
+        mmFile1_(NULL), \
 	    mmFile2_(NULL), \
         _nthreads(1)
 
@@ -1207,6 +1207,16 @@ public:
                 writeIndex<index_t>(fout7, 1, this->toBe()); // endianness sentinel
                 writeIndex<index_t>(fout8, 1, this->toBe()); // endianness sentinel
                 
+                EList<string> refnames_nospace;
+                for(index_t i = 0; i < _refnames.size(); i++) {
+                    refnames_nospace.push_back("");
+                    for(index_t j = 0; j < _refnames[i].size(); j++) {
+                        char c = _refnames[i][j];
+                        if(c == ' ') break;
+                        refnames_nospace.back().push_back(c);
+                    }
+                }
+                
                 if(snpfile != "") {
                     ifstream snp_file(snpfile.c_str(), ios::in);
                     if(!snp_file.is_open()) {
@@ -1238,12 +1248,12 @@ public:
                         }
                         
                         index_t chr_idx = 0;
-                        for(; chr_idx < _refnames.size(); chr_idx++) {
-                            if(chr == _refnames[chr_idx])
+                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
+                            if(chr == refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= _refnames.size()) continue;
-                        assert_eq(chr_szs.size(), _refnames.size());
+                        if(chr_idx >= refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1356,12 +1366,12 @@ public:
                         left += 1; right -= 1;
                         if(left >= right) continue;
                         index_t chr_idx = 0;
-                        for(; chr_idx < _refnames.size(); chr_idx++) {
-                            if(chr == _refnames[chr_idx])
+                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
+                            if(chr == refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= _refnames.size()) continue;
-                        assert_eq(chr_szs.size(), _refnames.size());
+                        if(chr_idx >= refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1469,12 +1479,12 @@ public:
                         left += 1; right -= 1;
                         if(left >= right) continue;
                         index_t chr_idx = 0;
-                        for(; chr_idx < _refnames.size(); chr_idx++) {
-                            if(chr == _refnames[chr_idx])
+                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
+                            if(chr == refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= _refnames.size()) continue;
-                        assert_eq(chr_szs.size(), _refnames.size());
+                        if(chr_idx >= refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1806,7 +1816,7 @@ public:
 	bool        verbose() const      { return _verbose; }
 	bool        sanityCheck() const  { return _sanity; }
 	EList<string>& refnames()        { return _refnames; }
-	bool        fw() const           { return fw_; }
+    bool        fw() const           { return fw_; }
     
 #ifdef POPCNT_CAPABILITY
     bool _usePOPCNTinstruction;
@@ -3600,7 +3610,7 @@ public:
 	bool       _useMm;        /// use memory-mapped files to hold the index
 	bool       useShmem_;     /// use shared memory to hold large parts of the index
 	EList<string> _refnames; /// names of the reference sequences
-	char *mmFile1_;
+    char *mmFile1_;
 	char *mmFile2_;
     int _nthreads;
 	GFMParams<index_t> _gh;
