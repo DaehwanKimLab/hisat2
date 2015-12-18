@@ -2402,8 +2402,8 @@ bool AlnSinkWrap<index_t>::report(
 	// Tally overall alignment score
 	TAlScore score = rsa->score().score();
 	if(rsb != NULL) score += rsb->score().score();
-    index_t num_spliced = rsa->num_spliced();
-    if(rsb != NULL) num_spliced += rsb->num_spliced();
+    index_t num_spliced = (index_t)rsa->num_spliced();
+    if(rsb != NULL) num_spliced += (index_t)rsb->num_spliced();
 	// Update best score so far
 	if(paired) {
 		if(score > bestPair_) {

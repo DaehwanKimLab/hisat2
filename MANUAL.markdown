@@ -828,8 +828,8 @@ With this mode, you can provide a list of known splice sites, which HISAT2 makes
 You can create such a list using `python extract_splice_sites.py genes.gtf > splicesites.txt`,
 where `extract_splice_sites.py` is included in the HISAT2 package, `genes.gtf` is a gene annotation file,
 and `splicesites.txt` is a list of splice sites with which you provide HISAT2 in this mode.
-Note that it is better to use indexes built using annotated transcripts (such as genome_tran or genome_snp_tran), which works better
-than using this option.  It has no effect to provide splice sites that are already included in indexes.
+Note that it is better to use indexes built using annotated transcripts (such as <i>genome_tran</i> or <i>genome_snp_tran</i>), which works better
+than using this option.  It has no effect to provide splice sites that are already included in the indexes.
 
 </td></tr>
 

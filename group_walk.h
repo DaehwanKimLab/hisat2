@@ -529,11 +529,11 @@ public:
         ASSERT_ONLY(index_t num_orig_iedges = 0, orig_e = 0);
         index_t num_iedges = 0, e = 0;
 		for(size_t i = mapi_; i < map_.size(); i++) {
-			bool resolved = (off(i, sa) != (index_t)OFF_MASK);
+			bool resolved = (off((index_t)i, sa) != (index_t)OFF_MASK);
 			if(!resolved) {
 #ifndef NDEBUG
                 while(orig_e < sa.node_iedge_count.size()) {
-                    if(map(i) <= sa.node_iedge_count[orig_e].first) {
+                    if(map((index_t)i) <= sa.node_iedge_count[orig_e].first) {
                         break;
                     }
                     num_orig_iedges += sa.node_iedge_count[orig_e].second;
@@ -551,8 +551,8 @@ public:
 				index_t bwrow = (index_t)(top + i + num_iedges);
                 index_t node = (index_t)(node_top + i);
 				index_t toff = gfm.tryOffset(bwrow, node);
-                ASSERT_ONLY(index_t origBwRow = sa.topf + map(i) + num_orig_iedges);
-                ASSERT_ONLY(index_t origNode = sa.node_top + map(i));
+                ASSERT_ONLY(index_t origBwRow = sa.topf + map((index_t)i) + num_orig_iedges);
+                ASSERT_ONLY(index_t origNode = sa.node_top + map((index_t)i));
 				assert_eq(bwrow, gfm.walkLeft(origBwRow, step));
 				if(toff != (index_t)OFF_MASK) {
 					// Yes, toff was resolvable
@@ -560,7 +560,7 @@ public:
 					met.resolves++;
 					toff += step;
                     assert_eq(toff, gfm.getOffset(origBwRow, origNode));
-					setOff(i, toff, sa, met);
+					setOff((index_t)i, toff, sa, met);
 					if(!reportList) ret.first++;
 #if 0
 // used to be #ifndef NDEBUG, but since we no longer require that the reference
@@ -625,22 +625,22 @@ public:
 			// resolved (whether this function did it just now, whether it did
 			// it a while ago, or whether some other function outside GroupWalk
 			// did it).
-			if(off(i, sa) != (index_t)OFF_MASK) {
-				if(reportList && !hit.reported(map(i))) {
+			if(off((index_t)i, sa) != (index_t)OFF_MASK) {
+				if(reportList && !hit.reported(map((index_t)i))) {
 					// Report it
-					index_t toff = off(i, sa);
+					index_t toff = off((index_t)i, sa);
 					assert(res != NULL);
 					res->expand();
-					index_t origBwRow = sa.topf + map(i);
+					index_t origBwRow = sa.topf + map((index_t)i);
 					res->back().init(
 						hit.offidx, // offset idx
 						hit.fw,     // orientation
 						hit.range,  // original range index
-						map(i),     // original element offset
+						map((index_t)i),     // original element offset
 						origBwRow,  // BW row resolved
 						hit.len,    // hit length
 						toff);      // text offset
-					hit.setReported(map(i));
+					hit.setReported(map((index_t)i));
 					met.reports++;
 				}
 				// Offset resolved
@@ -660,7 +660,7 @@ public:
 				// object to point to the appropriate element of our
 				// range
 				assert_geq(i, mapi_);
-				index_t bmap = map(i);
+				index_t bmap = map((index_t)i);
 				hit.fmap[bmap].first = range;
 				hit.fmap[bmap].second = (index_t)i;
 #ifndef NDEBUG
@@ -722,7 +722,7 @@ public:
 			// If range is done, all elements from map should be
 			// resolved
 			for(size_t i = mapi_; i < map_.size(); i++) {
-				assert_neq((index_t)OFF_MASK, off(i, sa));
+				assert_neq((index_t)OFF_MASK, off((index_t)i, sa));
 			}
 			// If this range is done, then it should be the case that
 			// all elements in the corresponding GWHit that point to
@@ -993,7 +993,7 @@ public:
 	 * this GWState.
 	 */
 	index_t size() const {
-		return map_.size() - mapi_;
+		return (index_t)(map_.size() - mapi_);
 	}
 	
 	/**
@@ -1379,7 +1379,7 @@ public:
 	 */
 	bool doneResolving(const SARangeWithOffs<T, index_t>& sa) const {
 		for(size_t i = mapi_; i < map_.size(); i++) {
-			if(sa.offs[map(i)] == (index_t)OFF_MASK) return false;
+			if(sa.offs[map((index_t)i)] == (index_t)OFF_MASK) return false;
 		}
 		return true;
 	}

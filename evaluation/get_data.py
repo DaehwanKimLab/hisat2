@@ -74,7 +74,8 @@ def get_data(small = False):
         else:
             files = ["108M_RNA_wgEncodeCshlLongRnaSeq",
                      "62M_RNA_SRR353653",
-                     "80M_DNA_SRR345300"]
+                     "80M_DNA_SRR345300",
+                     "5M_DNA_NA12878D"]
         for file in files:
             if small and file.find("20M") != -1:
                 continue

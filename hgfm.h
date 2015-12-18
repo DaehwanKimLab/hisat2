@@ -238,7 +238,7 @@ public:
             if(alts.empty()) {
                 assert(pg == NULL);
                 VMSG_NL("Constructing suffix-array element generator");
-                KarkkainenBlockwiseSA<TStr> bsa(s, s.length()+1, dcv, seed, this->_sanity, this->_passMemExc, this->_verbose);
+                KarkkainenBlockwiseSA<TStr> bsa(s, (index_t)(s.length()+1), 1, dcv, seed, this->_sanity, this->_passMemExc, this->_verbose);
                 assert(bsa.suffixItrIsReset());
                 assert_eq(bsa.size(), s.length()+1);
                 VMSG_NL("Converting suffix-array elements to index image");
@@ -2172,7 +2172,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 tParam.alts.clear();
                 ALT<index_t> alt;
                 alt.pos = curr_sztot;
-                index_t alt_i = this->_alts.bsearchLoBound(alt);
+                index_t alt_i = (index_t)this->_alts.bsearchLoBound(alt);
                 for(; alt_i < this->_alts.size(); alt_i++) {
                     const ALT<index_t>& alt = this->_alts[alt_i];
                     if(alt.snp()) {
@@ -2226,7 +2226,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 LocalGFM<local_index_t, index_t>(
                                                  tParam.s,
                                                  tParam.pg,
-                                                 tidx,
+                                                 (index_t)tidx,
                                                  tParam.local_offset,
                                                  tParam.curr_sztot,
                                                  tParam.alts,

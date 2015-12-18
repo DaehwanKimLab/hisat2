@@ -544,7 +544,7 @@ struct USE_POPCNT_INSTRUCTION {
     inline static int pop64(uint64_t x) {
         int64_t count;
         asm ("popcntq %[x],%[count]\n": [count] "=&r" (count): [x] "r" (x));
-        return count;
+        return (int)count;
     }
 };
 #endif
@@ -748,7 +748,7 @@ public:
         in8.close();
         
         // Sort SNPs and Splice Sites based on positions
-        index_t nalts = alts.size();
+        index_t nalts = (index_t)alts.size();
         for(index_t s = 0; s < nalts; s++) {
             ALT<index_t> alt = alts[s];
             if(alt.snp()) altdb->setSNPs(true);
@@ -766,7 +766,7 @@ public:
             EList<string> buf2; buf2.resize(alts.size());
             for(size_t i = 0; i < alts.size(); i++) {
                 buf[i].first = alts[i];
-                buf[i].second = i;
+                buf[i].second = (index_t)i;
                 buf2[i] = altnames[i];
             }
             buf.sort();
@@ -1235,9 +1235,9 @@ public:
                         }
                         string type, chr;
                         index_t pos;
-                        char snp_ch;
+                        char snp_ch = '\0';
                         string ins_seq;
-                        index_t del_len;
+                        index_t del_len = 0;
                         snp_file >> type >> chr >> pos;
                         if(type == "single") {
                             snp_file >> snp_ch;
@@ -1311,7 +1311,7 @@ public:
                             snp.seq = 0;
                         } else if(type == "insertion") {
                             snp.type = ALT_SNP_INS;
-                            snp.len = ins_seq.size();
+                            snp.len = (index_t)ins_seq.size();
                             if(snp.len > sizeof(snp.seq) * 4) {
                                 _alts.pop_back();
                                 continue;
@@ -1544,7 +1544,7 @@ public:
                     EList<string> buf2; buf2.resize(_alts.size());
                     for(size_t i = 0; i < _alts.size(); i++) {
                         buf[i].first = _alts[i];
-                        buf[i].second = i;
+                        buf[i].second = (index_t)i;
                         buf2[i] = _altnames[i];
                     }
                     buf.sort();
@@ -1571,8 +1571,8 @@ public:
 #endif
                 }
                 
-                writeIndex<int32_t>(fout7, _alts.size(), this->toBe());
-                writeIndex<int32_t>(fout8, _alts.size(), this->toBe());
+                writeIndex<index_t>(fout7, (index_t)_alts.size(), this->toBe());
+                writeIndex<index_t>(fout8, (index_t)_alts.size(), this->toBe());
                 for(index_t i = 0; i < _alts.size(); i++) {
                     _alts[i].write(fout7, this->toBe());
                     fout8 << _altnames[i] << endl;
@@ -1660,17 +1660,15 @@ public:
 			} else {
 				bmax -= (bmax >> 2); // reduce by 25%
 			}
-#if 0
-			VMSG("Using parameters --bmax " << bmax);
-			if(dcv == 0) {
-				VMSG_NL(" and *no difference cover*");
-			} else {
-				VMSG_NL(" --dcv " << dcv);
-			}
-#endif
 			iter++;
 			try {
                 if(_alts.empty()) {
+                    VMSG("Using parameters --bmax " << bmax);
+                    if(dcv == 0) {
+                        VMSG_NL(" and *no difference cover*");
+                    } else {
+                        VMSG_NL(" --dcv " << dcv);
+                    }
                     {
                         VMSG_NL("  Doing ahead-of-time memory usage test");
                         // Make a quick-and-dirty attempt to force a bad_alloc iff
@@ -1678,6 +1676,7 @@ public:
                         // constructing the DifferenceCoverSample
                         dcv <<= 1;
                         index_t sz = (index_t)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
+                        if(_nthreads > 1) sz *= (_nthreads + 1);
                         AutoArray<uint8_t> tmp(sz, EBWT_CAT);
                         dcv >>= 1;
                         // Likewise with the KarkkainenBlockwiseSA
@@ -1698,7 +1697,7 @@ public:
                         VMSG_NL("");
                     }
                     VMSG_NL("Constructing suffix-array element generator");
-                    KarkkainenBlockwiseSA<TStr> bsa(s, bmax, dcv, seed, _sanity, _passMemExc, _verbose);
+                    KarkkainenBlockwiseSA<TStr> bsa(s, bmax, _nthreads, dcv, seed, _sanity, _passMemExc, _verbose, outfile);
                     assert(bsa.suffixItrIsReset());
                     assert_eq(bsa.size(), s.length()+1);
                     VMSG_NL("Converting suffix-array elements to index image");
@@ -4242,7 +4241,7 @@ void GFM<index_t>::buildToDisk(
 	// Write zOffs to primary stream
 	//
     assert_gt(zOffs.size(), 0);
-    writeIndex<index_t>(out1, zOffs.size(), this->toBe());
+    writeIndex<index_t>(out1, (index_t)zOffs.size(), this->toBe());
     for(size_t i = 0; i < zOffs.size(); i++) {
         writeIndex<index_t>(out1, zOffs[i], this->toBe());
     }
@@ -4671,7 +4670,7 @@ void GFM<index_t>::buildToDisk(
     // Write zOffs to primary stream
     //
     assert_eq(zOffs.size(), 1);
-    writeIndex<index_t>(out1, zOffs.size(), this->toBe());
+    writeIndex<index_t>(out1, (index_t)zOffs.size(), this->toBe());
     for(size_t i = 0; i < zOffs.size(); i++) {
         assert_neq(zOffs[i], (index_t)OFF_MASK);
         writeIndex<index_t>(out1, zOffs[i], this->toBe());
@@ -5862,7 +5861,7 @@ void GFM<index_t>::writeFromMemory(bool justHeader,
         // written to the secondary file and discarded.
         writeIndex<index_t>(out1, gh._gbwtTotLen, be);
         out1.write((const char *)this->gfm(), gh._gbwtTotLen);
-        writeIndex<index_t>(out1, _zOffs.size(), be);
+        writeIndex<index_t>(out1, (index_t)_zOffs.size(), be);
         for(index_t i = 0; i < _zOffs.size(); i++)
             writeIndex<index_t>(out1, _zOffs[i], be);
         index_t offsLen = gh._offsLen;
@@ -5960,7 +5959,7 @@ void GFM<index_t>::szsToDisk(const EList<RefRecord>& szs, ostream& os, int rever
         if(szs[i].first) off = 0;
         off += szs[i].off;
         if(szs[i].first && szs[i].len > 0) seq++;
-        index_t seqm1 = seq-1;
+        index_t seqm1 = (index_t)(seq-1);
         assert_lt(seqm1, _nPat);
         index_t fwoff = off;
         if(reverse == REF_READ_REVERSE) {

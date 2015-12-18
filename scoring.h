@@ -486,7 +486,7 @@ public:
         return penintron + ncp;
     }
     
-    inline int conflictSpl() const { return csp; }
+    inline int conflictSpl() const { return (int)csp; }
 
 	int     matchType;    // how to reward matches
 	int     matchConst;   // reward for a match

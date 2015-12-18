@@ -194,7 +194,7 @@ bool SpliceSiteDB::addSpliceSite(
     }
         
     SpliceSitePos ssp;
-    uint32_t refoff = coord.off();
+    uint32_t refoff = (uint32_t)coord.off();
     uint32_t leftAnchorLen = 0, rightAnchorLen = 0;
     size_t eidx = 0;
     size_t last_eidx = 0;
@@ -237,7 +237,7 @@ bool SpliceSiteDB::addSpliceSite(
                             _spliceSites[ref].back()._editdist = editdist;
                             _spliceSites[ref].back()._numreads = 1;
                             assert(cur != NULL);
-                            cur->payload = _spliceSites[ref].size() - 1;
+                            cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
                             
                             SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.fw(), ssp.canonical());
                             assert_lt(ref, _bwIndex.size());
@@ -245,7 +245,7 @@ bool SpliceSiteDB::addSpliceSite(
                             cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
                             assert(added);
                             assert(cur != NULL);
-                            cur->payload = _spliceSites[ref].size() - 1;
+                            cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
                             assert_eq(_fwIndex[ref]->size(), _bwIndex[ref]->size());
                         } else {
                             assert(cur != NULL);
@@ -267,7 +267,7 @@ bool SpliceSiteDB::addSpliceSite(
                 }
                 bool fw = (edits[eidx].splDir == EDIT_SPL_FW || edits[eidx].splDir == EDIT_SPL_SEMI_FW || edits[eidx].splDir == EDIT_SPL_UNKNOWN);
                 bool canonical = (edits[eidx].splDir == EDIT_SPL_FW || edits[eidx].splDir == EDIT_SPL_RC);
-                ssp.init(coord.ref(), refoff - 1, refoff + edits[eidx].splLen, fw, canonical);
+                ssp.init((uint32_t)coord.ref(), refoff - 1, refoff + edits[eidx].splLen, fw, canonical);
                 refoff += edits[eidx].splLen;
                 last_eidx = eidx;
             }
@@ -277,7 +277,7 @@ bool SpliceSiteDB::addSpliceSite(
     if(ssp.inited()) {
         assert(edits[last_eidx].isSpliced());
         assert_lt(edits[last_eidx].pos, rd.length());
-        rightAnchorLen = rd.length() - edits[last_eidx].pos;
+        rightAnchorLen = (uint32_t)(rd.length() - edits[last_eidx].pos);
         uint32_t minLeftAnchorLen = minAnchorLen + mm * 2 + (edits[last_eidx].splDir == EDIT_SPL_UNKNOWN ? 6 : 0);
         uint32_t mm2 = 0;
         for(size_t j = last_eidx + 1; j < edits.size(); j++) {
@@ -301,7 +301,7 @@ bool SpliceSiteDB::addSpliceSite(
                 _spliceSites[ref].back()._editdist = editdist;
                 _spliceSites[ref].back()._numreads = 1;
                 assert(cur != NULL);
-                cur->payload = _spliceSites[ref].size() - 1;
+                cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
                 
                 SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.fw(), ssp.canonical());
                 assert_lt(ref, _bwIndex.size());
@@ -309,7 +309,7 @@ bool SpliceSiteDB::addSpliceSite(
                 cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
                 assert(added);
                 assert(cur != NULL);
-                cur->payload = _spliceSites[ref].size() - 1;
+                cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
                 assert_eq(_fwIndex[ref]->size(), _bwIndex[ref]->size());
             } else {
                 assert(cur != NULL);
@@ -540,7 +540,7 @@ uint32_t calculate_splicesite_read_dist(const EList<RedBlack<SpliceSitePos, uint
     for(size_t i = 0; i < splicesite_read_dist.size(); i++) {
         float cmf_i = float(splicesite_read_dist[i]) / splicesite_read_dist.back();
         if(cmf_i > 0.7)
-            return i;
+            return (uint32_t)i;
     }
     
     return 0;
@@ -672,7 +672,7 @@ void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> 
             }
             assert(added);
             assert(cur != NULL);
-            cur->payload = _spliceSites[ref].size() - 1;
+            cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
             
             added = false;
             SpliceSitePos rssp(ref,
@@ -685,7 +685,7 @@ void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> 
             cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
             assert(added);
             assert(cur != NULL);
-            cur->payload = _spliceSites[ref].size() - 1;
+            cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
         } else {
             assert(alt.exon());
             // Given some relaxation
@@ -740,7 +740,7 @@ void SpliceSiteDB::read(ifstream& in, bool known)
         }
         
         assert(cur != NULL);
-        cur->payload = _spliceSites[ref].size() - 1;
+        cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
         added = false;
         SpliceSitePos rssp(ref,
                            right,
@@ -752,7 +752,7 @@ void SpliceSiteDB::read(ifstream& in, bool known)
         cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
         assert(added);
         assert(cur != NULL);
-        cur->payload = _spliceSites[ref].size() - 1;
+        cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
     }
 }
 
@@ -818,7 +818,7 @@ float SpliceSiteDB::probscore(
     assert_lt(donor_seq, (int)(1 << (donor_len << 1)));
     probscore = donor_prob_sum[donor_seq];
     
-    int acceptor_seq1 = acceptor_seq >> (acceptor_len2 << 1);
+    int acceptor_seq1 = (int)(acceptor_seq >> (acceptor_len2 << 1));
     assert_lt(acceptor_seq1, (int)(1 << (acceptor_len1 << 1)));
     probscore *= acceptor_prob_sum1[acceptor_seq1];
     

@@ -7,6 +7,8 @@ import string
 import re
 from datetime import datetime, date, time
 
+MAX_EDIT = 51
+
 """
 """
 def reverse_complement(seq):
@@ -448,7 +450,7 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
         NM = XM + gap
         if hisat2:
             XM, NM = HISAT2_XM, HISAT2_NM
-        if NM < 10:
+        if NM < MAX_EDIT:
             print >> temp_read_file, "%s\t%d\t%s\t%s\t%s\tXM:i:%d\tNM:i:%d" % \
                   (read_id, flag, chr, pos, cigar_str, XM, NM)
 
@@ -522,9 +524,9 @@ def remove_redundant_junctions(junctions):
 
 
 def read_stat(read_filename, gtf_junctions, chr_dic = None, debug = False):
-    read_stat = [[0, 0, 0] for i in range(10)]
-    temp_junctions = [set() for i in range(10)]
-    temp_gtf_junctions = [set() for i in range(10)]
+    read_stat = [[0, 0, 0] for i in range(MAX_EDIT)]
+    temp_junctions = [set() for i in range(MAX_EDIT)]
+    temp_gtf_junctions = [set() for i in range(MAX_EDIT)]
 
     alignment = []
     prev_read_id = ""
@@ -592,10 +594,10 @@ def read_stat(read_filename, gtf_junctions, chr_dic = None, debug = False):
 
 
 def pair_stat(pair_filename, gtf_junctions, chr_dic):
-    pair_stat = [[0, 0, 0] for i in range(10)]
-    dis_pair_stat = [0 for i in range(10)]
-    temp_junctions = [set() for i in range(10)]
-    temp_gtf_junctions = [set() for i in range(10)]
+    pair_stat = [[0, 0, 0] for i in range(MAX_EDIT)]
+    dis_pair_stat = [0 for i in range(MAX_EDIT)]
+    temp_junctions = [set() for i in range(MAX_EDIT)]
+    temp_gtf_junctions = [set() for i in range(MAX_EDIT)]
 
     alignment, dis_alignments = [], []
     prev_read_id = ""
@@ -745,7 +747,7 @@ def write_analysis_data(sql_db, database_name, paired):
 
     print >> database_file, "aligner\tuse_annotation\tend_type\tedit_distance\tmapped_reads\tjunction_reads\tgtf_junction_reads\tjunctions\tgtf_junctions\truntime"
     for aligner in aligners:
-        for edit_distance in range(10):
+        for edit_distance in range(MAX_EDIT):
             sql_row = "SELECT aligner, use_annotation, end_type, edit_distance, mapped_reads, junction_reads, gtf_junction_reads, junctions, gtf_junctions, runtime FROM Mappings"
             sql_row += " WHERE reads = '%s' and aligner = '%s' and edit_distance = %d and end_type = '%s' ORDER BY created DESC LIMIT 1" % (database_name, aligner, edit_distance, paired)
             output = sql_execute(sql_db, sql_row)
@@ -786,7 +788,8 @@ def calculate_read_cost():
         ["star", "x2", "", ""],
         ["gsnap", "", "", ""],
         ["bowtie", "", "", ""],
-        ["bowtie2", "", "", ""]
+        ["bowtie2", "", "", ""],
+        ["bwa", "", "", ""]
         ]
     is_large_file = False
     assert os.path.exists("1.fq")
@@ -794,11 +797,13 @@ def calculate_read_cost():
         is_large_file = True
 
     aligners = [
-        ["hisat", "", "", ""],
-        ["hisat2", "", "", ""],
+        # ["hisat", "", "", ""],
+        # ["hisat2", "", "", ""],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "tran", ""],
-        ["hisat2", "x1", "snp_tran", ""],
+        ["hisat2", "x1", "snp", ""],
+        ["bwa", "mem", "", ""],
+        # ["bwa", "sw", "", ""],
         # ["hisat", "", "", ""],
         # ["star", "", "", ""],
         # ["star", "x2", "", ""],
@@ -862,7 +867,12 @@ def calculate_read_cost():
                 cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                 version = cmd_process.communicate()[1][:-1].split("\n")[0]
                 version = version.split()[2]
-
+            elif aligner == "bwa":
+                cmd = ["%s/bwa" % (aligner_bin_base)]
+                cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
+                version = cmd_process.communicate()[1][:-1].split("\n")[2]
+                version = version.split()[1]
+                
             return version
 
         index_base = "../../../../indexes"
@@ -878,6 +888,9 @@ def calculate_read_cost():
                     
                 # cmd += ["-k", "5"]
                 # cmd += ["--score-min", "C,-18"]
+
+                # daehwan - for debugging purposes
+                # cmd += ["--score-min", "C,-50"]
                     
                 if version != "":
                     version = int(version)
@@ -1037,17 +1050,29 @@ def calculate_read_cost():
                         read1_fname]
                 if paired:
                     cmd += [read2_fname]
+            elif aligner == "bwa":
+                cmd = ["%s/bwa" % (aligner_bin_base)]
+                if type in ["mem", "aln"]:
+                    cmd += [type]
+                elif type == "sw":
+                    cmd += ["bwa" + type]
+                if num_threads > 1:
+                    cmd += ["-t", str(num_threads)]
+                cmd += ["%s/BWA%s/%s.fa" % (index_base, index_add, genome)]
+                cmd += [read1_fname]
+                if paired:
+                    cmd += [read2_fname]
             else:
                 assert False
 
             return cmd
 
-        init_time = {"hisat2" : 0.0, "hisat" : 0.0, "bowtie" : 0.0, "bowtie2" : 0.0, "star" : 0.0, "olego" : 0.0, "gsnap" : 0.0, "tophat2" : 0.0}
+        init_time = {"hisat2" : 0.0, "hisat" : 0.0, "bowtie" : 0.0, "bowtie2" : 0.0, "star" : 0.0, "olego" : 0.0, "gsnap" : 0.0, "tophat2" : 0.0, "bwa" : 0.0}
         if not is_large_file:
             if desktop:
-                init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 12}
+                init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 1, "bwa" : 1.3}
             else:
-                init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1}
+                init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1, "bwa" : 3.3}
         init_time["tophat2"] = 0.0
                     
         for aligner, type, index_type, version in aligners:
@@ -1077,7 +1102,7 @@ def calculate_read_cost():
                         start_time = datetime.now()
                         if verbose:
                             print >> sys.stderr, start_time, "\t", " ".join(dummy_cmd)
-                        if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap"]:
+                        if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
                             proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
                         else:
                             proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1105,7 +1130,7 @@ def calculate_read_cost():
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, start_time, "\t", " ".join(aligner_cmd)
-                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap"]:
+                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
                         proc = subprocess.Popen(aligner_cmd, stdout=open(out_fname, "w"), stderr=subprocess.PIPE)
                     else:
                         proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

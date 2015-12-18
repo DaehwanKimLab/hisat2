@@ -237,7 +237,7 @@ static struct option long_options[] = {
  * exit with an error and a usage message.
  */
 template<typename T>
-static int parseNumber(T lower, const char *errmsg) {
+static T parseNumber(T lower, const char *errmsg) {
 	char *endPtr= NULL;
 	T t = (T)strtoll(optarg, &endPtr, 10);
 	if (endPtr != NULL) {
@@ -450,6 +450,8 @@ static void driver(
 		cerr << "Warning: All fasta inputs were empty" << endl;
 		throw 1;
 	}
+    filesWritten.push_back(outfile + ".1." + gfm_ext);
+    filesWritten.push_back(outfile + ".2." + gfm_ext);
 	// Vector for the ordered list of "records" comprising the input
 	// sequences.  A record represents a stretch of unambiguous
 	// characters in one of the input sequences.
@@ -471,9 +473,11 @@ static void driver(
 	assert_gt(sztot.second, 0);
 	assert_gt(szs.size(), 0);
     
-	// Construct index from input strings and parameters
-	filesWritten.push_back(outfile + ".1." + gfm_ext);
-	filesWritten.push_back(outfile + ".2." + gfm_ext);
+	// Construct index from input strings and parameters	
+    filesWritten.push_back(outfile + ".5." + gfm_ext);
+    filesWritten.push_back(outfile + ".6." + gfm_ext);
+    filesWritten.push_back(outfile + ".7." + gfm_ext);
+    filesWritten.push_back(outfile + ".8." + gfm_ext);
 	TStr s;
 	HGFM<TIndexOffU> hGFM(
                           s,

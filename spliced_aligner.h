@@ -149,8 +149,8 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                          this->_minsc[rdi],
                          rnd,
                          INDEX_MAX,
-                         this->_minIntronLen,
-                         this->_maxIntronLen,
+                         (index_t)this->_minIntronLen,
+                         (index_t)this->_maxIntronLen,
                          this->_minAnchorLen,
                          this->_minAnchorLen_noncan,
                          leftext,
@@ -231,7 +231,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
     assert_lt(rdi, 2);
     assert(this->_rds[rdi] != NULL);
     const Read& rd = *(this->_rds[rdi]);
-    index_t rdlen = rd.length();
+    index_t rdlen = (index_t)rd.length();
     if(hit.score() < this->_minsc[rdi]) return maxsc;
     
     // if it's already examined, just return
@@ -284,7 +284,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 
                 index_t fragoff = 0, fraglen = 0, left = 0, right = 0;
                 hit.getLeft(fragoff, fraglen, left);
-                const index_t minMatchLen = this->_minK;
+                const index_t minMatchLen = (index_t)this->_minK;
                 index_t min_left_anchor = rdlen, min_right_anchor = rdlen;
                 // make use of a list of known or novel splice sites to further align the read
                 if(fraglen >= minMatchLen &&
@@ -309,7 +309,12 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      frag2off + 1,
                                      (index_t)INDEX_MAX,
                                      this->_sharedVars);
-                        if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
+                        if(!tempHit.compatibleWith(
+                                                   hit,
+                                                   (index_t)this->_minIntronLen,
+                                                   (index_t)this->_maxIntronLen,
+                                                   this->_tpol.no_spliced_alignment()))
+                            continue;
                         int64_t minsc = max<int64_t>(this->_minsc[rdi], best_score);
                         bool combined = tempHit.combineWith(
                                                             hit,
@@ -323,9 +328,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             sc,
                                                             minsc,
                                                             rnd,
-                                                            this->_minK_local,
-                                                            this->_minIntronLen,
-                                                            this->_maxIntronLen,
+                                                            (index_t)this->_minK_local,
+                                                            (index_t)this->_minIntronLen,
+                                                            (index_t)this->_maxIntronLen,
                                                             1,
                                                             1,
                                                             &ss);
@@ -379,7 +384,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                          frag2off,
                                          (index_t)INDEX_MAX,
                                          this->_sharedVars);
-                            if(!canHit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
+                            if(!canHit.compatibleWith(tempHit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                             GenomeHit<index_t> combinedHit = canHit;
                             int64_t minsc = max<int64_t>(this->_minsc[rdi], best_score);
                             bool combined = combinedHit.combineWith(
@@ -394,9 +399,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                     sc,
                                                                     minsc,
                                                                     rnd,
-                                                                    this->_minK_local,
-                                                                    this->_minIntronLen,
-                                                                    this->_maxIntronLen,
+                                                                    (index_t)this->_minK_local,
+                                                                    (index_t)this->_minIntronLen,
+                                                                    (index_t)this->_maxIntronLen,
                                                                     1,
                                                                     1,
                                                                     &ss);
@@ -453,7 +458,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             // extend the partial alignment in the left direction
             index_t fragoff = 0, fraglen = 0, left = 0;
             hit.getLeft(fragoff, fraglen, left);
-            const index_t minMatchLen = this->_minK_local;
+            const index_t minMatchLen = (index_t)this->_minK_local;
             // make use of a list of known or novel splice sites to further align the read
             if(fraglen >= minMatchLen && left >= minMatchLen && !this->_tpol.no_spliced_alignment()) {
                 spliceSites.clear();
@@ -474,7 +479,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  frag2off + 1 - fragoff,
                                  (index_t)INDEX_MAX,
                                  this->_sharedVars);
-                    if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
+                    if(!tempHit.compatibleWith(hit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                     int64_t minsc = this->_minsc[rdi];
                     bool combined = tempHit.combineWith(
                                                         hit,
@@ -488,9 +493,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                         sc,
                                                         minsc,
                                                         rnd,
-                                                        this->_minK_local,
-                                                        this->_minIntronLen,
-                                                        this->_maxIntronLen,
+                                                        (index_t)this->_minK_local,
+                                                        (index_t)this->_minIntronLen,
+                                                        (index_t)this->_maxIntronLen,
                                                         1,
                                                         1,
                                                         &ss);
@@ -544,9 +549,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            sc,
                            this->_minsc[rdi],
                            rnd,
-                           this->_minK_local,
-                           this->_minIntronLen,
-                           this->_maxIntronLen,
+                           (index_t)this->_minK_local,
+                           (index_t)this->_minIntronLen,
+                           (index_t)this->_maxIntronLen,
                            this->_minAnchorLen,
                            this->_minAnchorLen_noncan,
                            leftext,
@@ -587,8 +592,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             index_t nelt = (index_t)INDEX_MAX;
             index_t max_nelt = std::max<index_t>(5, extlen);
             bool no_extension = false;
-            bool uniqueStop;
-            index_t minUniqueLen = this->_minK_local;
+            bool uniqueStop= false;
+            index_t minUniqueLen = (index_t)this->_minK_local;
             for(; extoff < rdlen; extoff++) {
                 extlen = 0;
                 uniqueStop = true;
@@ -648,7 +653,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                             straddled);
                 assert_leq(coords.size(), nelt);
                 coords.sort();
-                for(int ri = coords.size() - 1; ri >= 0; ri--) {
+                for(int ri = (int)coords.size() - 1; ri >= 0; ri--) {
                     const Coord& coord = coords[ri];
                     GenomeHit<index_t> tempHit;
                     tempHit.init(coord.orient(),
@@ -656,13 +661,13 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  extlen,
                                  0, // trim5
                                  0, // trim3
-                                 coord.ref(),
-                                 coord.off(),
-                                 coord.joinedOff(),
+                                 (index_t)coord.ref(),
+                                 (index_t)coord.off(),
+                                 (index_t)coord.joinedOff(),
                                  this->_sharedVars);
                     if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref)) continue;
                     // check if the partial alignment is compatible with the new alignment using the local index
-                    if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) {
+                    if(!tempHit.compatibleWith(hit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) {
                         if(count == 1) continue;
                         else break;
                     }
@@ -681,9 +686,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                        sc,
                                        this->_minsc[rdi],
                                        rnd,
-                                       this->_minK_local,
-                                       this->_minIntronLen,
-                                       this->_maxIntronLen,
+                                       (index_t)this->_minK_local,
+                                       (index_t)this->_minIntronLen,
+                                       (index_t)this->_maxIntronLen,
                                        this->_minAnchorLen,
                                        this->_minAnchorLen_noncan,
                                        leftext,
@@ -703,9 +708,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                         sc,
                                                         minsc,
                                                         rnd,
-                                                        this->_minK_local,
-                                                        this->_minIntronLen,
-                                                        this->_maxIntronLen,
+                                                        (index_t)this->_minK_local,
+                                                        (index_t)this->_minIntronLen,
+                                                        (index_t)this->_maxIntronLen,
                                                         this->_minAnchorLen,
                                                         this->_minAnchorLen_noncan);
                     if(!this->_secondary) {
@@ -827,7 +832,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                           straddled);
                     assert_leq(coords.size(), nelt);
                     if(coords.size() > 1) coords.sort();
-                    for(int ri = coords.size() - 1; ri >= 0; ri--) {
+                    for(int ri = (int)coords.size() - 1; ri >= 0; ri--) {
                         const Coord& coord = coords[ri];
                         GenomeHit<index_t> tempHit;
                         tempHit.init(coord.orient(),
@@ -835,12 +840,12 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      extlen,
                                      0, // trim5
                                      0, // trim3
-                                     coord.ref(),
-                                     coord.off(),
-                                     coord.joinedOff(),
+                                     (index_t)coord.ref(),
+                                     (index_t)coord.off(),
+                                     (index_t)coord.joinedOff(),
                                      this->_sharedVars);
                         if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref)) continue;
-                        if(!tempHit.compatibleWith(hit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
+                        if(!tempHit.compatibleWith(hit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                         if(uniqueStop) {
                             assert_eq(coords.size(), 1);
                             index_t leftext = (index_t)INDEX_MAX, rightext = (index_t)0;
@@ -856,9 +861,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                            sc,
                                            this->_minsc[rdi],
                                            rnd,
-                                           this->_minK_local,
-                                           this->_minIntronLen,
-                                           this->_maxIntronLen,
+                                           (index_t)this->_minK_local,
+                                           (index_t)this->_minIntronLen,
+                                           (index_t)this->_maxIntronLen,
                                            this->_minAnchorLen,
                                            this->_minAnchorLen_noncan,
                                            leftext,
@@ -877,9 +882,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             sc,
                                                             minsc,
                                                             rnd,
-                                                            this->_minK_local,
-                                                            this->_minIntronLen,
-                                                            this->_maxIntronLen,
+                                                            (index_t)this->_minK_local,
+                                                            (index_t)this->_minIntronLen,
+                                                            (index_t)this->_maxIntronLen,
                                                             this->_minAnchorLen,
                                                             this->_minAnchorLen_noncan);
                         if(!this->_secondary) {
@@ -913,7 +918,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 }
             }
             GenomeHit<index_t> tempHit = hit;
-            index_t trimMax = (tempHit.score() - max<int64_t>(maxsc, this->_minsc[rdi])) / sc.sc(0);
+            index_t trimMax = (index_t)((tempHit.score() - max<int64_t>(maxsc, this->_minsc[rdi])) / sc.sc(0));
             if(tempHit.rdoff() < trimMax) {
                 index_t trim5 = tempHit.rdoff();
                 GenomeHit<index_t> trimedHit = tempHit;
@@ -921,9 +926,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                 rd,
                                 ssdb,
                                 sc,
-                                this->_minK_local,
-                                this->_minIntronLen,
-                                this->_maxIntronLen,
+                                (index_t)this->_minK_local,
+                                (index_t)this->_minIntronLen,
+                                (index_t)this->_maxIntronLen,
                                 this->_minAnchorLen,
                                 this->_minAnchorLen_noncan,
                                 ref);
@@ -956,7 +961,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             // with mismatches or a gap allowed
             int64_t minsc = this->_minsc[rdi];
             assert_geq(tempHit.score(), minsc);
-            index_t mm = (tempHit.score() - minsc) / sc.mmpMax;
+            index_t mm = (index_t)((tempHit.score() - minsc) / sc.mmpMax);
             index_t leftext = (index_t)INDEX_MAX, rightext = (index_t)0;
             index_t num_mismatch_allowed = 1;
             if(hitoff <= this->_minK_local) {
@@ -975,9 +980,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            sc,
                            this->_minsc[rdi],
                            rnd,
-                           this->_minK_local,
-                           this->_minIntronLen,
-                           this->_maxIntronLen,
+                           (index_t)this->_minK_local,
+                           (index_t)this->_minIntronLen,
+                           (index_t)this->_maxIntronLen,
                            this->_minAnchorLen,
                            this->_minAnchorLen_noncan,
                            leftext,
@@ -987,7 +992,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                 else         minsc = max(minsc, sink.bestUnp2());
             }
-            if(tempHit.score() >= minsc && leftext >= min<index_t>(this->_minK_local, hit.rdoff())) {
+            if(tempHit.score() >= minsc && leftext >= min<index_t>((index_t)this->_minK_local, hit.rdoff())) {
                 assert_eq(tempHit.trim5(), 0);
                 assert_leq(tempHit.rdoff() + tempHit.len() + tempHit.trim3(), rdlen);
                 int64_t tmp_maxsc = hybridSearch_recur(
@@ -1011,7 +1016,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 maxsc = max<int64_t>(maxsc, tmp_maxsc);
             } else if(hitoff > this->_minK_local) {
                 // skip some bases of a read
-                index_t jumplen = hitoff > this->_minK ? this->_minK : this->_minK_local;
+                index_t jumplen = hitoff > this->_minK ? (index_t)this->_minK : (index_t)this->_minK_local;
                 assert_leq(hitoff, hit.rdoff());
                 int64_t expected_score = hit.score() - (hit.rdoff() - hitoff) / jumplen * sc.mmpMax - sc.mmpMax;
                 if(expected_score >= minsc) {
@@ -1046,7 +1051,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
         if(!ssdb.empty()) {
             index_t fragoff = 0, fraglen = 0, right = 0;
             hit.getRight(fragoff, fraglen, right);
-            const index_t minMatchLen = this->_minK_local;
+            const index_t minMatchLen = (index_t)this->_minK_local;
             // make use of a list of known or novel splice sites to further align the read
             if(fraglen >= minMatchLen && !this->_tpol.no_spliced_alignment()) {
                 spliceSites.clear();
@@ -1069,7 +1074,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  frag2off,
                                  (index_t)INDEX_MAX,
                                  this->_sharedVars);
-                    if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
+                    if(!hit.compatibleWith(tempHit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                     GenomeHit<index_t> combinedHit = hit;
                     int64_t minsc = this->_minsc[rdi];
                     bool combined = combinedHit.combineWith(
@@ -1084,9 +1089,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             sc,
                                                             minsc,
                                                             rnd,
-                                                            this->_minK_local,
-                                                            this->_minIntronLen,
-                                                            this->_maxIntronLen,
+                                                            (index_t)this->_minK_local,
+                                                            (index_t)this->_minIntronLen,
+                                                            (index_t)this->_maxIntronLen,
                                                             1,
                                                             1,
                                                             &ss);
@@ -1139,9 +1144,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            sc,
                            this->_minsc[rdi],
                            rnd,
-                           this->_minK_local,
-                           this->_minIntronLen,
-                           this->_maxIntronLen,
+                           (index_t)this->_minK_local,
+                           (index_t)this->_minIntronLen,
+                           (index_t)this->_maxIntronLen,
                            this->_minAnchorLen,
                            this->_minAnchorLen_noncan,
                            leftext,
@@ -1173,7 +1178,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             index_t extlen = 0;
             local_index_t top = (local_index_t)INDEX_MAX, bot = (local_index_t)INDEX_MAX;
             local_index_t node_top = (local_index_t)INDEX_MAX, node_bot = (local_index_t)INDEX_MAX;
-            index_t extoff = hitoff + hitlen + this->_minK_local;
+            index_t extoff = hitoff + hitlen + (index_t)this->_minK_local;
             if(extoff + 1 < rdlen) extoff += 1;
             if(extoff >= rdlen) {
                 extoff = rdlen - 1;
@@ -1182,8 +1187,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             index_t max_nelt = std::max<index_t>(5, extlen);
             bool no_extension = false;
             bool uniqueStop;
-            index_t minUniqueLen = this->_minK_local;
-            index_t maxHitLen = max<index_t>(extoff - hitoff - hitlen, this->_minK_local);
+            index_t minUniqueLen = (index_t)this->_minK_local;
+            index_t maxHitLen = max<index_t>(extoff - hitoff - hitlen, (index_t)this->_minK_local);
             for(; maxHitLen < extoff + 1 && extoff < rdlen;) {
                 extlen = 0;
                 uniqueStop = false;
@@ -1258,13 +1263,13 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  extlen,
                                  0, // trim5
                                  0, // trim3
-                                 coord.ref(),
-                                 coord.off(),
-                                 coord.joinedOff(),
+                                 (index_t)coord.ref(),
+                                 (index_t)coord.off(),
+                                 (index_t)coord.joinedOff(),
                                  this->_sharedVars);
                     if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref)) continue;
                     // check if the partial alignment is compatible with the new alignment using the local index
-                    if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) {
+                    if(!hit.compatibleWith(tempHit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) {
                         if(count == 1) continue;
                         else break;
                     }
@@ -1281,9 +1286,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                    sc,
                                    this->_minsc[rdi],
                                    rnd,
-                                   this->_minK_local,
-                                   this->_minIntronLen,
-                                   this->_maxIntronLen,
+                                   (index_t)this->_minK_local,
+                                   (index_t)this->_minIntronLen,
+                                   (index_t)this->_maxIntronLen,
                                    this->_minAnchorLen,
                                    this->_minAnchorLen_noncan,
                                    leftext,
@@ -1303,9 +1308,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             sc,
                                                             minsc,
                                                             rnd,
-                                                            this->_minK_local,
-                                                            this->_minIntronLen,
-                                                            this->_maxIntronLen,
+                                                            (index_t)this->_minK_local,
+                                                            (index_t)this->_minIntronLen,
+                                                            (index_t)this->_maxIntronLen,
                                                             this->_minAnchorLen,
                                                             this->_minAnchorLen_noncan);
                     if(!this->_secondary) {
@@ -1385,7 +1390,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 index_t top = (index_t)INDEX_MAX, bot = (index_t)INDEX_MAX;
                 index_t node_top = (index_t)INDEX_MAX, node_bot = (index_t)INDEX_MAX;
                 this->_node_iedge_count.clear();
-                index_t extoff = hitoff + hitlen + this->_minK + 1;
+                index_t extoff = hitoff + hitlen + (index_t)this->_minK + 1;
                 bool uniqueStop = true;
                 index_t nelt = this->globalGFMSearch(
                                                      gfm,    // GFM index
@@ -1435,12 +1440,12 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      extlen,
                                      0, // trim5
                                      0, // trim3
-                                     coord.ref(),
-                                     coord.off(),
-                                     coord.joinedOff(),
+                                     (index_t)coord.ref(),
+                                     (index_t)coord.off(),
+                                     (index_t)coord.joinedOff(),
                                      this->_sharedVars);
                         if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref)) continue;
-                        if(!hit.compatibleWith(tempHit, this->_minIntronLen, this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
+                        if(!hit.compatibleWith(tempHit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                         index_t leftext = (index_t)0, rightext = (index_t)INDEX_MAX;
                         tempHit.extend(
                                        rd,
@@ -1454,9 +1459,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                        sc,
                                        this->_minsc[rdi],
                                        rnd,
-                                       this->_minK_local,
-                                       this->_minIntronLen,
-                                       this->_maxIntronLen,
+                                       (index_t)this->_minK_local,
+                                       (index_t)this->_minIntronLen,
+                                       (index_t)this->_maxIntronLen,
                                        this->_minAnchorLen,
                                        this->_minAnchorLen_noncan,
                                        leftext,
@@ -1475,9 +1480,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                 sc,
                                                                 minsc,
                                                                 rnd,
-                                                                this->_minK_local,
-                                                                this->_minIntronLen,
-                                                                this->_maxIntronLen,
+                                                                (index_t)this->_minK_local,
+                                                                (index_t)this->_minIntronLen,
+                                                                (index_t)this->_maxIntronLen,
                                                                 this->_minAnchorLen,
                                                                 this->_minAnchorLen_noncan);
                         if(!this->_secondary) {
@@ -1512,7 +1517,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             GenomeHit<index_t> tempHit = hit;
             assert(tempHit.trim5() == 0 || hitoff == 0);
             index_t trimLen = rdlen - hitoff - tempHit.len() - tempHit.trim5();
-            index_t trimMax = (tempHit.score() - max<int64_t>(maxsc, this->_minsc[rdi])) / sc.sc(0);
+            index_t trimMax = (index_t)((tempHit.score() - max<int64_t>(maxsc, this->_minsc[rdi])) / sc.sc(0));
             if(trimLen < trimMax) {
                 index_t trim3 = rdlen - hitoff - tempHit.len() - tempHit.trim5();
                 GenomeHit<index_t> trimedHit = tempHit;
@@ -1520,9 +1525,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                 rd,
                                 ssdb,
                                 sc,
-                                this->_minK_local,
-                                this->_minIntronLen,
-                                this->_maxIntronLen,
+                                (index_t)this->_minK_local,
+                                (index_t)this->_minIntronLen,
+                                (index_t)this->_maxIntronLen,
                                 this->_minAnchorLen,
                                 this->_minAnchorLen_noncan,
                                 ref);
@@ -1557,7 +1562,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             int64_t minsc = this->_minsc[rdi];
             assert_geq(tempHit.score(), minsc);
             index_t leftext = (index_t)0, rightext = (index_t)INDEX_MAX;
-            index_t mm = (tempHit.score() - minsc) / sc.mmpMax;
+            index_t mm = (index_t)((tempHit.score() - minsc) / sc.mmpMax);
             index_t num_mismatch_allowed = 1;
             if(rdlen - hitoff - hitlen <= this->_minK_local) {
                 num_mismatch_allowed = min<index_t>(rdlen - tempHit.rdoff() - tempHit.len(), mm);
@@ -1575,9 +1580,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            sc,
                            this->_minsc[rdi],
                            rnd,
-                           this->_minK_local,
-                           this->_minIntronLen,
-                           this->_maxIntronLen,
+                           (index_t)this->_minK_local,
+                           (index_t)this->_minIntronLen,
+                           (index_t)this->_maxIntronLen,
                            this->_minAnchorLen,
                            this->_minAnchorLen_noncan,
                            leftext,
@@ -1587,7 +1592,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                 else         minsc = max(minsc, sink.bestUnp2());
             }
-            if(tempHit.score() >= minsc && rightext >= min<index_t>(this->_minK_local, rdlen - hit.len() - hit.rdoff())) {
+            if(tempHit.score() >= minsc && rightext >= min<index_t>((index_t)this->_minK_local, rdlen - hit.len() - hit.rdoff())) {
                 assert_eq(tempHit.trim3(), 0);
                 assert_leq(tempHit.trim5(), tempHit.rdoff());
                 int64_t tmp_maxsc = hybridSearch_recur(
@@ -1611,7 +1616,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 maxsc = max<int64_t>(maxsc, tmp_maxsc);
             } else if(hitoff + hitlen + this->_minK_local < rdlen) {
                 // skip some bases of a read
-                index_t jumplen = hitoff + hitlen + this->_minK < rdlen ? this->_minK : this->_minK_local;
+                index_t jumplen = hitoff + hitlen + this->_minK < rdlen ? (index_t)this->_minK : (index_t)this->_minK_local;
                 assert_lt(hitoff + hitlen + jumplen, rdlen);
                 assert_leq(hit.len(), hitlen);
                 int64_t expected_score = hit.score() - (hitlen - hit.len()) / jumplen * sc.mmpMax - sc.mmpMax;

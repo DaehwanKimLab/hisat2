@@ -75,7 +75,7 @@ static inline uint64_t endianSwapU64(uint64_t u) {
 template <typename index_t>
 static inline index_t endianSwapIndex(index_t u) {
 	if(sizeof(index_t) == 8) {
-		return endianSwapU64(u);
+		return (index_t)endianSwapU64(u);
 	} else if(sizeof(index_t) == 4) {
 		return endianSwapU32(u);
 	} else {
