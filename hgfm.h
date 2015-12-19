@@ -133,6 +133,7 @@ public:
 	template<typename TStr>
 	LocalGFM(
              TStr& s,
+             const EList<full_index_t>& sa,
              PathGraph<full_index_t>* pg,
              full_index_t tidx,
              full_index_t localOffset,
@@ -237,12 +238,7 @@ public:
             
             if(alts.empty()) {
                 assert(pg == NULL);
-                VMSG_NL("Constructing suffix-array element generator");
-                KarkkainenBlockwiseSA<TStr> bsa(s, (index_t)(s.length()+1), 1, dcv, seed, this->_sanity, this->_passMemExc, this->_verbose);
-                assert(bsa.suffixItrIsReset());
-                assert_eq(bsa.size(), s.length()+1);
-                VMSG_NL("Converting suffix-array elements to index image");
-                buildToDisk(bsa, s, out5, out6, headerPos);
+                buildToDisk(sa, s, out5, out6, headerPos);
             } else {
                 assert(pg != NULL);
                 // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
@@ -274,7 +270,7 @@ public:
                                               streampos& headerPos);
     
     template <typename TStr> void buildToDisk(
-                                              InorderBlockwiseSA<TStr>& sa,
+                                              const EList<full_index_t>& sa,
                                               const TStr& s,
                                               ostream& out1,
                                               ostream& out2,
@@ -767,7 +763,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
 template <typename index_t, typename full_index_t>
 template <typename TStr>
 void LocalGFM<index_t, full_index_t>::buildToDisk(
-                                                  InorderBlockwiseSA<TStr>& sa,
+                                                  const EList<full_index_t>& sa,
                                                   const TStr& s,
                                                   ostream& out5,
                                                   ostream& out6,
@@ -876,7 +872,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
             bool count = true;
             if(si <= len) {
                 // Still in the SA; extract the bwtChar
-                index_t saElt = (index_t)sa.nextSuffix();
+                index_t saElt = (index_t)sa[si];
                 // (that might have triggered sa to calc next suf block)
                 if(saElt == 0) {
                     // Don't add the '$' in the last column to the BWT
@@ -1767,6 +1763,9 @@ private:
         index_t                      local_sztot;
         index_t                      index_size;
         string                       file;
+        EList<index_t>               sa;
+        index_t                      dcv;
+        index_t                      seed;
         
         // output
         RefGraph<index_t>*           rg;
@@ -1788,7 +1787,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
     while(!tParam.last) {
         if(tParam.mainThread) {
             assert(!tParam.done);
-            if(tParam.s.length() <= 0 || tParam.alts.empty()) {
+            if(tParam.s.length() <= 0) {
                 tParam.done = true;
                 return;
             }
@@ -1802,43 +1801,61 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                 nanosleep(&ts, NULL);
 #endif
             }
-            if(tParam.s.length() <= 0 || tParam.alts.empty()) {
+            if(tParam.s.length() <= 0) {
                 tParam.done = true;
                 continue;
             }
         }
-        while(true) {
-            tParam.rg = new RefGraph<index_t>(
-                                              tParam.s,
-                                              tParam.conv_local_szs,
-                                              tParam.alts,
-                                              tParam.file,
-                                              1,        /* num threads */
-                                              false);   /* verbose? */
-            tParam.pg = new PathGraph<index_t>(
-                                               *tParam.rg,
-                                               tParam.file,
-                                               1,         /* num threads */
-                                               false);    /* verbose? */
-
-            if(!tParam.pg->generateEdges(*tParam.rg)) {
-                cerr << "An error occurred - generateEdges" << endl;
-                throw 1;
+        if(tParam.alts.empty()) {
+            KarkkainenBlockwiseSA<SString<char> > bsa(
+                                                      tParam.s,
+                                                      (index_t)(tParam.s.length()+1),
+                                                      1,
+                                                      tParam.dcv,
+                                                      tParam.seed,
+                                                      false,  /* this->_sanity */
+                                                      false,  /* this->_passMemExc */
+                                                      false); /* this->_verbose */
+            assert(bsa.suffixItrIsReset());
+            assert_eq(bsa.size(), tParam.s.length()+1);
+            tParam.sa.clear();
+            for(index_t i = 0; i < bsa.size(); i++) {
+                tParam.sa.push_back(bsa.nextSuffix());
             }
-            if(tParam.pg->getNumEdges() > local_max_gbwt) {
-                delete tParam.pg; tParam.pg = NULL;
-                delete tParam.rg; tParam.rg = NULL;
-                if(tParam.alts.size() <= 1) {
-                    tParam.alts.clear();
-                } else {
-                    for(index_t s = 2; s < tParam.alts.size(); s += 2) {
-                        tParam.alts[s >> 1] = tParam.alts[s];
-                    }
-                    tParam.alts.resize(tParam.alts.size() >> 1);
+        } else {
+            while(true) {
+                tParam.rg = new RefGraph<index_t>(
+                                                  tParam.s,
+                                                  tParam.conv_local_szs,
+                                                  tParam.alts,
+                                                  tParam.file,
+                                                  1,        /* num threads */
+                                                  false);   /* verbose? */
+                tParam.pg = new PathGraph<index_t>(
+                                                   *tParam.rg,
+                                                   tParam.file,
+                                                   1,         /* num threads */
+                                                   false);    /* verbose? */
+                
+                if(!tParam.pg->generateEdges(*tParam.rg)) {
+                    cerr << "An error occurred - generateEdges" << endl;
+                    throw 1;
                 }
-                continue;
+                if(tParam.pg->getNumEdges() > local_max_gbwt) {
+                    delete tParam.pg; tParam.pg = NULL;
+                    delete tParam.rg; tParam.rg = NULL;
+                    if(tParam.alts.size() <= 1) {
+                        tParam.alts.clear();
+                    } else {
+                        for(index_t s = 2; s < tParam.alts.size(); s += 2) {
+                            tParam.alts[s >> 1] = tParam.alts[s];
+                        }
+                        tParam.alts.resize(tParam.alts.size() >> 1);
+                    }
+                    continue;
+                }
+                break;
             }
-            break;
         }
         tParam.done = true;
         if(tParam.mainThread) break;
@@ -2115,6 +2132,8 @@ HGFM<index_t, local_index_t>::HGFM(
         tParams.back().file = outfile;
         tParams.back().done = true;
         tParams.back().last = false;
+        tParams.back().dcv = 1024;
+        tParams.back().seed = seed;
         if(t + 1 < (index_t)this->_nthreads) {
             tParams.back().mainThread = false;
             threads[t] = new tthread::thread(gbwt_worker, (void*)&tParams.back());
@@ -2225,6 +2244,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 
                 LocalGFM<local_index_t, index_t>(
                                                  tParam.s,
+                                                 tParam.sa,
                                                  tParam.pg,
                                                  (index_t)tidx,
                                                  tParam.local_offset,
