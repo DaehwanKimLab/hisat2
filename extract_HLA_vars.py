@@ -28,9 +28,9 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def extract_HLA_vars(HLA_MSA_file, verbose = False):
-    HLA_names = {}
-    HLA_seqs = []
+def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
+    HLA_names = {} # HLA alleles to numeric IDs
+    HLA_seqs = []  # HLA multiple alignment sequences
     for line in HLA_MSA_file:
         line = line.strip()
         if not line or \
@@ -92,17 +92,20 @@ def extract_HLA_vars(HLA_MSA_file, verbose = False):
         """
 
         def insert_Var(indel, type):
-            varKey = "%s-%s-%s" % (indel[0], type, indel[1])
+            varKey = "%d-%s-%s" % (indel[0], type, indel[1])
             if varKey not in Vars:
                 Vars[varKey] = [cmp_name]
             else:
                 Vars[varKey].append(cmp_name)
             
         insertion, deletion = [], []
+        ndots = 0
         for s in range(seq_len):
             assert not (insertion and deletion)
             bc = backbone_seq[s]
             cc = cmp_seq[s]
+            if bc == ".":
+                ndots += 1
             if bc == cc:
                 if not insertion and not deletion:
                     continue
@@ -115,23 +118,23 @@ def extract_HLA_vars(HLA_MSA_file, verbose = False):
                     deletion = []
             else:
                 if bc != "." and cc != ".":
-                    varKey = "%d-M-%s" % (s, cc)
+                    varKey = "%d-M-%s" % (s - ndots, cc)
                     if varKey not in Vars:
-                        Vars[varKey] = ["hv%d" % (len(Vars)), cmp_name]
+                        Vars[varKey] = [cmp_name]
                     else:
-                        Vars[varKey][1].append(cmp_name)
+                        Vars[varKey].append(cmp_name)
                 else:
                     if bc == ".":
                         if insertion:
                             insertion[1] += cc
                         else:
-                            insertion = [s, cc]
+                            insertion = [s - ndots + 1, cc]
                     else:
                         assert cc == "."
                         if deletion:
                             deletion[1] += bc
                         else:
-                            deletion = [s, bc]
+                            deletion = [s - ndots, bc]
 
             """
             if backbone_seq[s] != cmp_seq[s]:
@@ -145,17 +148,39 @@ def extract_HLA_vars(HLA_MSA_file, verbose = False):
             insert_Var(deletion, 'D')
 
 
+    print >> sys.stderr, "Number of variants is %d." % (len(Vars.keys()))
+
+    def cmp_varKey(a, b):
+        a_locus, a_type, a_data = a.split('-')
+        b_locus, b_type, b_data = b.split('-')
+        a_locus, b_locus = int(a_locus), int(b_locus)
+        if a_locus != b_locus:
+            return a_locus - b_locus
+        if a_type != b_type:
+            if a_type == 'M':
+                return -1
+            elif b_type == 'M':
+                return 1
+            elif a_type == 'I':
+                return -1
+            else:
+                assert b_type == 'I'
+                return 1
+        assert a_data != b_data
+        if a_data < b_data:
+            return -1
+        else:
+            return 1
+        
     HLA_Vars = {}
-    for key, values in Vars.items():
-        varID, names = values
+    for key, names in Vars.items():
         for name in names:
             if not name in HLA_Vars:
                 HLA_Vars[name] = [key]
             else:
                 HLA_Vars[name].append(key)
-
-    print >> sys.stderr, "Number of variants is %d" % (len(HLA_Vars))
-
+    for name, vars in HLA_Vars.items():
+        HLA_Vars[name] = sorted(vars, cmp=cmp_varKey)
 
     # sanity check -
     #    (1) Reconstruct the other sequences from the backbone sequence and variants and
@@ -164,7 +189,9 @@ def extract_HLA_vars(HLA_MSA_file, verbose = False):
         if cmp_name == backbone_name:
             continue
 
-        constr_seq = list(backbone_seq)
+        constr_seq = backbone_seq.replace('.', '')
+        constr_seq = list(constr_seq)
+        locus_diff = 0
         for var in HLA_Vars[cmp_name]:
             try:
                 locus, type, data = var.split('-')
@@ -173,31 +200,42 @@ def extract_HLA_vars(HLA_MSA_file, verbose = False):
                 continue
 
             if type == 'M':
-                constr_seq[locus] = data
+                assert len(data) == 1
+                constr_seq[locus + locus_diff] = data[0]
             elif type == 'I':
-                for i in range(len(data)):
-                    assert constr_seq[locus + i] == "."
-                    constr_seq[locus + i] = data[i]
+                assert locus + locus_diff >= 0
+                assert locus + locus_diff <= len(constr_seq)
+                constr_seq = constr_seq[:locus + locus_diff] + list(data) + constr_seq[locus + locus_diff:]
+                locus_diff += len(data)
             else:
-                for i in range(len(data)):
-                    assert data[i] != "."
-                    constr_seq[locus + i] = "."
                 assert type == 'D'
+                assert locus + locus_diff + len(data) <= len(constr_seq)
+                assert locus + locus_diff >= 0
+                constr_seq = constr_seq[:locus + locus_diff] + constr_seq[locus + locus_diff + len(data):]
+                locus_diff -= len(data)
+
         constr_seq = "".join(constr_seq)
 
         assert id < len(HLA_seqs)
-        cmp_seq = HLA_seqs[id]
-        diff_count = 0
-        for s in range(seq_len):
-            if constr_seq[s] != cmp_seq[s]:
-                diff_count += 1
+        cmp_seq = HLA_seqs[id].replace('.', '')
+        if len(constr_seq) != len(cmp_seq):
+            print >> sys.stderr, "Error: reconstruction fails (%s)! Lengths different: %d vs. %d" % \
+                (cmp_name, len(constr_seq), len(cmp_seq))
+            assert False
 
-        if constr_seq != cmp_seq:
+        # daehwan - for debugging purposes
+        for s in range(len(constr_seq)):
+            if constr_seq[s] != cmp_seq[s]:
+                print >> sys.stderr, "Differ at %d: %s vs. %s (reconstruction vs. original)" % \
+                    (s, constr_seq[s], cmp_seq[s])
+                print "%s:%s vs. %s:%s" % \
+                    (constr_seq[s-10:s], constr_seq[s:s+10], cmp_seq[s-10:s], cmp_seq[s:s+10])
+
+        if constr_seq != cmp_seq.replace('.', ''):
             print >> sys.stderr, "Error: reconstruction fails for %s" % (cmp_name)
             assert False
 
-
-
+            
     
         
 """
@@ -209,6 +247,11 @@ if __name__ == '__main__':
         nargs='?',
         type=FileType('r'),
         help='input snp file')
+    parser.add_argument('-b', '--base',
+        dest='base_fname',
+        type=str,
+        default="hla",
+        help='base filename for backbone HLA sequence, HLA variants, and HLA linking info.')
     parser.add_argument('-v', '--verbose',
         dest='verbose',
         action='store_true',
@@ -218,4 +261,4 @@ if __name__ == '__main__':
     if not args.HLA_MSA_file:
         parser.print_help()
         exit(1)
-    extract_HLA_vars(args.HLA_MSA_file, args.verbose)
+    extract_HLA_vars(args.HLA_MSA_file, args.base_fname, args.verbose)
