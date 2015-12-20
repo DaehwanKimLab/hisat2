@@ -104,16 +104,11 @@ def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
             assert not (insertion and deletion)
             bc = backbone_seq[s]
             cc = cmp_seq[s]
-            if bc == ".":
-                ndots += 1
             if bc == cc:
-                if not insertion and not deletion:
-                    continue
                 if insertion:
                     insert_Var(insertion, 'I')
                     insertion = []
-                else:
-                    assert deletion
+                elif deletion:
                     insert_Var(deletion, 'D')
                     deletion = []
             else:
@@ -128,13 +123,17 @@ def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
                         if insertion:
                             insertion[1] += cc
                         else:
-                            insertion = [s - ndots + 1, cc]
+                            insertion = [s - ndots, cc]
                     else:
                         assert cc == "."
                         if deletion:
                             deletion[1] += bc
                         else:
                             deletion = [s - ndots, bc]
+
+            if bc == ".":
+                ndots += 1
+
 
             """
             if backbone_seq[s] != cmp_seq[s]:
