@@ -117,9 +117,9 @@ def extract_HLA_vars(HLA_MSA_file, verbose = False):
                 if bc != "." and cc != ".":
                     varKey = "%d-M-%s" % (s, cc)
                     if varKey not in Vars:
-                        Vars[varKey] = [cmp_name]
+                        Vars[varKey] = ["hv%d" % (len(Vars)), cmp_name]
                     else:
-                        Vars[varKey].append(cmp_name)
+                        Vars[varKey][1].append(cmp_name)
                 else:
                     if bc == ".":
                         if insertion:
@@ -146,7 +146,8 @@ def extract_HLA_vars(HLA_MSA_file, verbose = False):
 
 
     HLA_Vars = {}
-    for key, names in Vars.items():
+    for key, values in Vars.items():
+        varID, names = values
         for name in names:
             if not name in HLA_Vars:
                 HLA_Vars[name] = [key]
