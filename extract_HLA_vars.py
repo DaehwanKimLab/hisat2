@@ -112,26 +112,26 @@ def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
                     insert_Var(deletion, 'D')
                     deletion = []
             else:
-                if bc != "." and cc != ".":
+                if bc != '.' and cc != '.':
                     varKey = "%d-M-%s" % (s - ndots, cc)
                     if varKey not in Vars:
                         Vars[varKey] = [cmp_name]
                     else:
                         Vars[varKey].append(cmp_name)
                 else:
-                    if bc == ".":
+                    if bc == '.':
                         if insertion:
                             insertion[1] += cc
                         else:
                             insertion = [s - ndots, cc]
                     else:
-                        assert cc == "."
+                        assert cc == '.'
                         if deletion:
                             deletion[1] += bc
                         else:
                             deletion = [s - ndots, bc]
 
-            if bc == ".":
+            if bc == '.':
                 ndots += 1
 
 
