@@ -85,19 +85,117 @@ def extract_HLA_vars(HLA_MSA_file, verbose = False):
         assert id < len(HLA_seqs)
         cmp_seq = HLA_seqs[id]
 
+        """
         for s in range(0, seq_len, 100):
             print s, backbone_seq[s:s+100]
             print s, cmp_seq[s:s+100]
+        """
 
-
+        def insert_Var(indel, type):
+            varKey = "%s-%s-%s" % (indel[0], type, indel[1])
+            if varKey not in Vars:
+                Vars[varKey] = [cmp_name]
+            else:
+                Vars[varKey].append(cmp_name)
+            
+        insertion, deletion = [], []
         for s in range(seq_len):
+            assert not (insertion and deletion)
+            bc = backbone_seq[s]
+            cc = cmp_seq[s]
+            if bc == cc:
+                if not insertion and not deletion:
+                    continue
+                if insertion:
+                    insert_Var(insertion, 'I')
+                    insertion = []
+                else:
+                    assert deletion
+                    insert_Var(deletion, 'D')
+                    deletion = []
+            else:
+                if bc != "." and cc != ".":
+                    varKey = "%d-M-%s" % (s, cc)
+                    if varKey not in Vars:
+                        Vars[varKey] = [cmp_name]
+                    else:
+                        Vars[varKey].append(cmp_name)
+                else:
+                    if bc == ".":
+                        if insertion:
+                            insertion[1] += cc
+                        else:
+                            insertion = [s, cc]
+                    else:
+                        assert cc == "."
+                        if deletion:
+                            deletion[1] += bc
+                        else:
+                            deletion = [s, bc]
+
+            """
             if backbone_seq[s] != cmp_seq[s]:
                 print "%s is different %s at %d: %s vs. %s" % \
                     (backbone_name, cmp_name, s+1, backbone_seq[s], cmp_seq[s])
-        break
+            """
+
+        if insertion:
+            insert_Var(insertion, 'I')
+        elif deletion:
+            insert_Var(deletion, 'D')
 
 
-    # sanity check - reconstruct other sequences from the backbone sequence and variants
+    HLA_Vars = {}
+    for key, names in Vars.items():
+        for name in names:
+            if not name in HLA_Vars:
+                HLA_Vars[name] = [key]
+            else:
+                HLA_Vars[name].append(key)
+
+    print >> sys.stderr, "Number of variants is %d" % (len(HLA_Vars))
+
+
+    # sanity check -
+    #    (1) Reconstruct the other sequences from the backbone sequence and variants and
+    #    (2) Confirm these constructed sequences are the same as those input sequences.
+    for cmp_name, id in HLA_names.items():
+        if cmp_name == backbone_name:
+            continue
+
+        constr_seq = list(backbone_seq)
+        for var in HLA_Vars[cmp_name]:
+            try:
+                locus, type, data = var.split('-')
+                locus = int(locus)
+            except ValueError:
+                continue
+
+            if type == 'M':
+                constr_seq[locus] = data
+            elif type == 'I':
+                for i in range(len(data)):
+                    assert constr_seq[locus + i] == "."
+                    constr_seq[locus + i] = data[i]
+            else:
+                for i in range(len(data)):
+                    assert data[i] != "."
+                    constr_seq[locus + i] = "."
+                assert type == 'D'
+        constr_seq = "".join(constr_seq)
+
+        assert id < len(HLA_seqs)
+        cmp_seq = HLA_seqs[id]
+        diff_count = 0
+        for s in range(seq_len):
+            if constr_seq[s] != cmp_seq[s]:
+                diff_count += 1
+
+        if constr_seq != cmp_seq:
+            print >> sys.stderr, "Error: reconstruction fails for %s" % (cmp_name)
+            assert False
+
+
 
     
         
