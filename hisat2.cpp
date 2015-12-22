@@ -410,8 +410,8 @@ static void resetOptions() {
 	penRfGapConst   = DEFAULT_REF_GAP_CONST;
 	penRdGapLinear  = DEFAULT_READ_GAP_LINEAR;
 	penRfGapLinear  = DEFAULT_REF_GAP_LINEAR;
-	// scoreMin.init  (SIMPLE_FUNC_LINEAR, DEFAULT_MIN_CONST,   DEFAULT_MIN_LINEAR);
-    scoreMin.init  (SIMPLE_FUNC_CONST, -18, 0);
+    scoreMin.init  (SIMPLE_FUNC_LINEAR, 0.0f, -0.2f);
+    // scoreMin.init  (SIMPLE_FUNC_CONST, -18, 0);
 	nCeil.init     (SIMPLE_FUNC_LINEAR, 0.0f, DMAX, 2.0f, 0.1f);
 	msIval.init    (SIMPLE_FUNC_LINEAR, 1.0f, DMAX, DEFAULT_IVAL_B, DEFAULT_IVAL_A);
 	descConsExp     = 2.0;

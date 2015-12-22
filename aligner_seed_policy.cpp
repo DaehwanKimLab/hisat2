@@ -287,16 +287,10 @@ void SeedAlignmentPolicy::parseString(
     penScMax          = DEFAULT_SC_PENALTY_MIN;
 	
 	const double DMAX = std::numeric_limits<double>::max();
-    /*
-	costMin.init(
-		local ? SIMPLE_FUNC_LOG : SIMPLE_FUNC_LINEAR,
-		local ? DEFAULT_MIN_CONST_LOCAL  : DEFAULT_MIN_CONST,
-		local ? DEFAULT_MIN_LINEAR_LOCAL : DEFAULT_MIN_LINEAR);
-    */
     costMin.init(
-                 local ? SIMPLE_FUNC_LOG : SIMPLE_FUNC_CONST,
-                 local ? DEFAULT_MIN_CONST_LOCAL  : -18,
-                 local ? DEFAULT_MIN_LINEAR_LOCAL : 0);
+		local ? SIMPLE_FUNC_LOG : SIMPLE_FUNC_LINEAR,
+		local ? DEFAULT_MIN_CONST_LOCAL  : 0.0f,
+		local ? DEFAULT_MIN_LINEAR_LOCAL : -0.2f);
 	nCeil.init(
 		SIMPLE_FUNC_LINEAR, 0.0f, DMAX,
 		DEFAULT_N_CEIL_CONST, DEFAULT_N_CEIL_LINEAR);
