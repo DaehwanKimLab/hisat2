@@ -2526,7 +2526,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 index_t&                    numALTsTried,
                                                 ALT_TYPE                    prev_alt_type)
 {
-    if(numALTsTried > 16) return 0;
+    if(numALTsTried > 16 + dep) return 0;
     assert_gt(rdlen, 0);
     assert_gt(rflen, 0);
     if(raw_refbufs.size() <= dep) raw_refbufs.expand();
@@ -2588,7 +2588,21 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         pair<index_t, index_t> alt_range;
         {
             ALT<index_t> cmp_alt;
+            // daehwan - for debugging purposes
+#if 1
+            const index_t minK = 16;
+            assert_leq(mm_min_rd_i, rdoff);
+            index_t rd_diff = rdoff - mm_min_rd_i;
+            
+            rd_diff = (rd_diff > minK ? rd_diff - minK : 0);
+            if(rd_diff >= joinedOff) {
+                cmp_alt.pos = joinedOff;
+            } else {
+                cmp_alt.pos = joinedOff - rd_diff;
+            }
+#else
             cmp_alt.pos = joinedOff;
+#endif
             alt_range.first = alt_range.second = (index_t)alts.bsearchLoBound(cmp_alt);
             if(alt_range.first >= alts.size()) return 0;
             for(; alt_range.first > 0; alt_range.first--) {
@@ -2811,7 +2825,14 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         pair<index_t, index_t> alt_range;
         {
             ALT<index_t> cmp_alt;
+            // daehwan - for debugging purposes
+#if 1
+            const index_t minK = 16;
+            index_t rd_diff = (max_rd_i > minK ? max_rd_i - minK : 0);
+            cmp_alt.pos = joinedOff + rd_diff;
+#else
             cmp_alt.pos = joinedOff;
+#endif
             alt_range.first = alt_range.second = (index_t)alts.bsearchLoBound(cmp_alt);
             if(alt_range.first >= alts.size()) return 0;
             for(; alt_range.second < alts.size(); alt_range.second++) {

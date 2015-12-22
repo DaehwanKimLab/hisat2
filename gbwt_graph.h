@@ -606,11 +606,18 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         edges.expand();
         edges.back().from = (index_t)nodes.size() - 2;
         edges.back().to = (index_t)nodes.size() - 1;
-
+        
+        // Keep track of previous alternatives
+        EList<pair<index_t, index_t> > prev_alt_nodes; // first as node idx, and second as alt pos
         // Create nodes and edges for SNPs
         for(size_t i = 0; i < alts.size(); i++) {
             const ALT<index_t>& alt = alts[i];
             if(alt.pos >= s.length()) break;
+            if(prev_alt_nodes.size() > 0) {
+                if(prev_alt_nodes.back().second + 1 < alt.pos) {
+                    prev_alt_nodes.clear();
+                }
+            }
             if(alt.type == ALT_SNP_SGL) {
                 assert_eq(alt.len, 1);
                 nodes.expand();
@@ -624,6 +631,23 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 edges.expand();
                 edges.back().from = (index_t)nodes.size() - 1;
                 edges.back().to = alt.pos + 2;
+                if(prev_alt_nodes.size() > 0){
+                    size_t j = prev_alt_nodes.size() - 1;
+                    while(true) {
+                        const pair<index_t, index_t>& prev_alt = prev_alt_nodes[j];
+                        if(prev_alt.second + 1 < alt.pos) break;
+                        if(prev_alt.second + 1 == alt.pos) {
+                            edges.expand();
+                            edges.back().from = prev_alt.first;
+                            edges.back().to = (index_t)nodes.size() - 1;
+                        }
+                        if(j == 0) break;
+                        j--;
+                    }
+                }
+                prev_alt_nodes.expand();
+                prev_alt_nodes.back().first = (index_t)nodes.size() - 1;
+                prev_alt_nodes.back().second = alt.pos;
             }
             else if(alt.type == ALT_SNP_DEL) {
                 assert_gt(alt.len, 0);
