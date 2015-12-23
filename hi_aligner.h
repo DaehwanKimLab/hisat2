@@ -2644,11 +2644,11 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             if(rf_i < diff || rd_i < diff) continue;
             rf_i -= diff;
             rd_i -= diff;
-            if(rd_i < min_rd_i) break;
-            int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[rd_i];
+            if(rd_i + (alt.type == ALT_SNP_INS ? 1 : 0) < min_rd_i) break;
             if(alt.type == ALT_SNP_SGL) {
                 if(rd_bp == (int)alt.seq) {
+                    int rf_bp = rfseq[rf_i];
                     Edit e(
                            rd_i,
                            "ACGTN"[rf_bp],
@@ -2664,7 +2664,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             } else if(alt.type == ALT_SNP_DEL) {
                 if(rf_i > (int)alt.len) {
                     for(index_t i = 0; i < alt.len; i++) {
-                        rf_bp = rfseq[rf_i - i];
+                        int rf_bp = rfseq[rf_i - i];
                         Edit e(
                                rd_i + 1,
                                "ACGTN"[rf_bp],
