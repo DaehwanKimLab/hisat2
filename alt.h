@@ -66,7 +66,10 @@ struct ALT {
     union {
         uint64_t seq;  // used to store 32 bp, but it can be used to store a pointer to EList<uint64_t>
         struct {
-            bool fw;
+            union {
+                bool fw;
+                bool reversed;
+            };
             bool excluded;
         };
     };
@@ -77,6 +80,8 @@ public:
     bool snp() const { return type == ALT_SNP_SGL || type == ALT_SNP_DEL || type == ALT_SNP_INS; }
     bool splicesite() const { return type == ALT_SPLICESITE; }
     bool gap() const { return type == ALT_SNP_DEL || type == ALT_SNP_INS || type == ALT_SPLICESITE; }
+    bool deletion() const { return type == ALT_SNP_DEL; }
+    bool insertion() const { return type == ALT_SNP_INS; }
     bool exon() const { return type == ALT_EXON; }
     
     bool operator< (const ALT& o) const {

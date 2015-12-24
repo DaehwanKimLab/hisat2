@@ -753,12 +753,18 @@ public:
             ALT<index_t> alt = alts[s];
             if(alt.snp()) altdb->setSNPs(true);
             if(alt.exon()) altdb->setExons(true);
-            if(!alt.splicesite()) continue;
-            altdb->setSpliceSites(true);
-            alts.push_back(alt);
-            alts.back().left = alt.right;
-            alts.back().right = alt.left;
-            altnames.push_back("ssr");
+            if(alt.splicesite()) {
+                altdb->setSpliceSites(true);
+                alts.push_back(alt);
+                alts.back().left = alt.right;
+                alts.back().right = alt.left;
+                altnames.push_back("ssr");
+            } else if(alt.deletion()) {
+                alts.push_back(alt);
+                alts.back().pos = alt.pos + alt.len - 1;
+                alts.back().reversed = true;
+                altnames.push_back(altnames[s]);
+            }
         }
         if(alts.size() > 1 && alts.size() > nalts) {
             assert_eq(alts.size(), altnames.size());
@@ -1309,6 +1315,7 @@ public:
                             snp.type = ALT_SNP_DEL;
                             snp.len = del_len;
                             snp.seq = 0;
+                            snp.reversed = false;
                         } else if(type == "insertion") {
                             snp.type = ALT_SNP_INS;
                             snp.len = (index_t)ins_seq.size();

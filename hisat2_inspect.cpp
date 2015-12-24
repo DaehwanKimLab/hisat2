@@ -382,6 +382,8 @@ static void print_snps(
         const ALT<index_t>& alt = alts[i];
         if(!alt.snp())
             continue;
+        if(alt.deletion() && alt.reversed)
+            continue;
         string type = "single";
         if(alt.type == ALT_SNP_DEL) {
             type = "deletion";
