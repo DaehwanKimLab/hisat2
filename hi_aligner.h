@@ -2608,7 +2608,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 const char* next_rfseq = rfseq;
                 index_t next_rflen = rf_i + 1, next_rdlen = rd_i + 1;
                 if(alt.splicesite()) {
-                    assert_gt(alt.left, alt.right);
+                    assert_lt(alt.left, alt.right);
                     next_joinedOff = alt.left;
                     index_t intronLen = alt.right - alt.left + 1;
                     assert_geq(next_rfoff, intronLen);
@@ -2740,6 +2740,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             if(alt.splicesite()) {
                 if(alt.left > alt.right) continue;
             }
+            if(alt.exon()) continue;
             if(alt.deletion()) {
                 if(alt.reversed) continue;
             }
@@ -2824,6 +2825,14 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             if(alt_compatible) {
                 numALTsTried++;
                 if(rd_i == rdlen) {
+                    assert_leq(best_rdoff, rdoff + rd_i);
+                    if(best_rdoff < rdoff + rd_i) {
+                        if(candidate_edits != NULL) candidate_edits->clear();
+                    }
+                    if(candidate_edits != NULL) {
+                        candidate_edits->expand();
+                        candidate_edits->back() = tmp_edits;
+                    }
                     best_rdoff = rdoff + rd_i;
                     edits = tmp_edits;
                     return rd_i;

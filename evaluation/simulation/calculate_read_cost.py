@@ -1120,7 +1120,8 @@ def calculate_read_cost():
         ["star", "x2", "", ""],
         ["gsnap", "", "", ""],
         ["bowtie", "", "", ""],
-        ["bowtie2", "", "", ""]
+        ["bowtie2", "", "", ""],
+        ["bwa", "mem", "", ""]
         ]
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
@@ -1130,8 +1131,15 @@ def calculate_read_cost():
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "tran", ""],
+        # ["hisat2", "", "", "201b"],
+        # ["hisat2", "", "", ""],
+        # ["hisat2", "x1", "tran", "201b"],
+        # ["hisat2", "x1", "tran", ""],
+        # ["hisat2", "", "snp", "201b"],
+        # ["hisat2", "", "snp", ""],
+        ["hisat2", "x1", "snp_tran", "201b"],
         ["hisat2", "x1", "snp_tran", ""],
-        ["hisat2", "x1", "snp_tran_ercc", ""],
+        # ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
         # ["star", "", "", ""],
@@ -1147,7 +1155,7 @@ def calculate_read_cost():
     verbose = True
     debug = False
     # sql_write = False
-    just_runtime = True
+    # just_runtime = True
 
     cwd = os.getcwd()
     if len(cwd.split("reads_")) > 1:
@@ -1201,19 +1209,20 @@ def calculate_read_cost():
             type_junction_file.close()
 
             aligner_bin_base = "../../../aligners/bin"
-            def get_aligner_version(aligner):
+            def get_aligner_version(aligner, version):
                 version = ""
                 if aligner == "hisat2" or \
                         aligner == "hisat" or \
                         aligner == "bowtie" or \
                         aligner == "bowtie2":
-                    cmd = ["%s/%s" % (aligner_bin_base, aligner)]
+                    if version:
+                        cmd = ["%s/%s_%s/%s" % (aligner_bin_base, aligner, version, aligner)]
+                    else:
+                        cmd = ["%s/%s" % (aligner_bin_base, aligner)]
                     cmd += ["--version"]                    
                     cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
                     version = cmd_process.communicate()[0][:-1].split("\n")[0]
                     version = version.split()[-1]
-                    # if aligner[:5] == "hisat":
-                    #    version += (" svn%d" % svn_revision)
                 elif aligner == "tophat2":
                     cmd = ["%s/tophat" % (aligner_bin_base)]
                     cmd += ["--version"]
@@ -1226,6 +1235,11 @@ def calculate_read_cost():
                     cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                     version = cmd_process.communicate()[1][:-1].split("\n")[0]
                     version = version.split()[2]
+                elif aligner == "bwa":
+                    cmd = ["%s/bwa" % (aligner_bin_base)]
+                    cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
+                    version = cmd_process.communicate()[1][:-1].split("\n")[2]
+                    version = version.split()[1]
                     
                 return version
 
@@ -1236,16 +1250,15 @@ def calculate_read_cost():
             def get_aligner_cmd(RNA, aligner, type, index_type, version, read1_fname, read2_fname, out_fname, cmd_idx = 0):
                 cmd = []
                 if aligner == "hisat2":
-                    cmd = ["%s/hisat2" % (aligner_bin_base)]
+                    if version:
+                        cmd = ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
+                    else:
+                        cmd = ["%s/hisat2" % (aligner_bin_base)]
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
                     cmd += ["-f"]
                     # cmd += ["-k", "5"]
                     # cmd += ["--score-min", "C,-18"]
-                    if version != "":
-                        version = int(version)
-                    else:
-                        version = sys.maxint
                     # cmd += ["--pen-cansplice", "0"]
                     # cmd += ["--pen-noncansplice", "12"]
                     # cmd += ["--pen-intronlen", "G,-8,1"]
@@ -1406,31 +1419,45 @@ def calculate_read_cost():
                             read1_fname]
                     if paired:
                         cmd += [read2_fname]
-                else:
-                    assert False
+                elif aligner == "bwa":
+                    cmd = ["%s/bwa" % (aligner_bin_base)]
+                    if type in ["mem", "aln"]:
+                        cmd += [type]
+                    elif type == "sw":
+                        cmd += ["bwa" + type]
+                    if num_threads > 1:
+                        cmd += ["-t", str(num_threads)]
+                    cmd += ["%s/BWA%s/%s.fa" % (index_base, index_add, genome)]
+                    cmd += [read1_fname]
+                    if paired:
+                        cmd += [read2_fname]
+                    else:
+                        assert False
 
                 return cmd
 
             if test_small:
-                init_time = {"hisat2" : 0.2, "hisat" : 0.1, "bowtie" : 0.1, "bowtie2" : 0.2, "gsnap" : 0.0}
+                init_time = {"hisat2" : 0.2, "hisat" : 0.1, "bowtie" : 0.1, "bowtie2" : 0.2, "gsnap" : 0.0, "bwa" : 0.0}
                 if desktop:
                     init_time["star"] = 1.7
                 else:
                     init_time["star"] = 0.0
             else:
                 if desktop:
-                    init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 12}
+                    init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 12, "bwa" : 1.3}
                 else:
-                    init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1}
+                    init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1, "bwa" : 3.3}
                     
             init_time["tophat2"] = 0.0
             for aligner, type, index_type, version in aligners:
-                aligner_name = aligner + type + version
+                aligner_name = aligner + type
+                if version:
+                    aligner_name += ("_%s" % version)
                 if aligner == "hisat2" and index_type != "":
                     aligner_name += ("_" + index_type)
                 two_step = (aligner == "tophat2" or type == "x2" or (aligner in ["hisat2", "hisat"] and type == ""))
                 if RNA and readtype != "M":
-                    if aligner in ["bowtie", "bowtie2"]:
+                    if aligner in ["bowtie", "bowtie2", "bwa"]:
                         continue
                 if readtype != "all":
                     if two_step:
@@ -1467,7 +1494,7 @@ def calculate_read_cost():
                         dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../one.fa", "../two.fa", "/dev/null")
                         if verbose:
                             print >> sys.stderr, "\t", datetime.now(), " ".join(dummy_cmd)
-                        if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap"]:
+                        if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
                             proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
                         else:
                             proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1480,7 +1507,7 @@ def calculate_read_cost():
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
-                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap"]:
+                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
                         proc = subprocess.Popen(aligner_cmd, stdout=open(out_fname, "w"), stderr=subprocess.PIPE)
                     else:
                         proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1603,7 +1630,7 @@ def calculate_read_cost():
                             else:
                                 end_type = "single"
                             sql_insert = "INSERT INTO \"ReadCosts\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %f, %f, %d, %d, %d, '%s', datetime('now', 'localtime'), '%s');" % \
-                                (genome, data_base, end_type, readtype2, aligner_name, get_aligner_version(aligner), numreads, mapped, unique_mapped, unmapped, mapping_point, duration, len(junctions), temp_junctions, temp_gtf_junctions, platform.node(), " ".join(aligner_cmd))
+                                (genome, data_base, end_type, readtype2, aligner_name, get_aligner_version(aligner, version), numreads, mapped, unique_mapped, unmapped, mapping_point, duration, len(junctions), temp_junctions, temp_gtf_junctions, platform.node(), " ".join(aligner_cmd))
                             sql_execute("../" + sql_db_name, sql_insert)     
 
                         if two_step:
