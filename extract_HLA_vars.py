@@ -112,12 +112,13 @@ def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
             bc = backbone_seq[s]
             cc = cmp_seq[s]
             if bc == cc:
-                if insertion:
-                    insertVar(insertion, 'I')
-                    insertion = []
-                elif deletion:
-                    insertVar(deletion, 'D')
-                    deletion = []
+                if bc != ".":
+                    if insertion:
+                        insertVar(insertion, 'I')
+                        insertion = []
+                    elif deletion:
+                        insertVar(deletion, 'D')
+                        deletion = []
             else:
                 if bc != '.' and cc != '.':
                     mismatch = [s - ndots, cc]
@@ -227,7 +228,6 @@ def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
                 locus_diff -= del_len
 
         constr_seq = "".join(constr_seq)
-
         assert id < len(HLA_seqs)
         cmp_seq = HLA_seqs[id].replace('.', '')
         if len(constr_seq) != len(cmp_seq):
@@ -255,28 +255,16 @@ def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
     for s in range(0, len(backbone_seq_), 60):
         print >> backbone_file, backbone_seq_[s:s+60]
     backbone_file.close()
-
+    
     # Write
     #       (1) variants w.r.t the backbone sequences into a SNP file
     #       (2) pairs of a variant and the corresponding HLA allels into a LINK file    
     keys = sorted(Vars.keys(), cmp=cmp_varKey)
     var_file = open(base_fname + ".snp", 'w')
     link_file = open(base_fname + ".link", 'w')
-    prev_locus = -1
     for k in range(len(keys)):
         locus, type, data = keys[k].split('-')
         locus = int(locus)
-
-        # daehwan - for debugging purposes
-        """
-        if type in "ID":
-            continue
-        if prev_locus != -1 and \
-                prev_locus + 10 >= locus:
-            continue
-        prev_locus = locus
-        """
-        
         if type == 'M':
             type_str = "single"
         elif type == 'I':

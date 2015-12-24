@@ -2578,7 +2578,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             best_rdoff = mm_min_rd_i;
             edits = tmp_edits;
             if(numNs != NULL) *numNs = mm_tmp_numNs;
-        }
+        }        
         if(mm_min_rd_i < 0) return rdlen;
         if(tmp_mm > 0) {
             tmp_edits.erase(0, tmp_mm);
@@ -2645,7 +2645,21 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             rf_i -= diff;
             rd_i -= diff;
             int rd_bp = rdseq[rd_i];
-            if(rd_i + (alt.type == ALT_SNP_INS ? 1 : 0) < min_rd_i) break;
+            // daehwan - for debugging purposes
+            if(rd_i + (alt.type == ALT_SNP_INS ? 1 : 0) < min_rd_i) {
+                bool deletionFound = false;
+                for(index_t j = alt_range.second - 1; j > alt_range.first; j--) {
+                    if(alt_range.second - j > 10) break;
+                    const ALT<index_t>& alt2 = alts[j];
+                    if(alt2.type == ALT_SNP_DEL) {
+                        alt_range.second = j + 1;
+                        deletionFound = true;
+                        break;
+                    }
+                }
+                if(deletionFound) continue;
+                else break;
+            }
             if(alt.type == ALT_SNP_SGL) {
                 if(rd_bp == (int)alt.seq) {
                     int rf_bp = rfseq[rf_i];
@@ -3202,7 +3216,7 @@ int64_t GenomeHit<index_t>::calculateScore(
     const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
     const BTString& qual = _fw ? rd.qual : rd.qualRev;
     index_t rdlen = (index_t)seq.length();
-    index_t toff_base = _toff;
+    int64_t toff_base = _toff;
     bool conflict_splicesites = false;
     uint8_t whichsense = EDIT_SPL_UNKNOWN;
     for(index_t i = 0; i < _edits->size(); i++) {
@@ -3334,7 +3348,6 @@ int64_t GenomeHit<index_t>::calculateScore(
                 if(open)    score -= sc.refGapOpen();
                 else        score -= sc.refGapExtend();
             }
-            assert_gt(toff_base, 0);
             toff_base--;
         }
 #ifndef NDEBUG
