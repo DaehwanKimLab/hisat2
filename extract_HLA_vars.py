@@ -111,30 +111,26 @@ def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
             assert not (insertion and deletion)
             bc = backbone_seq[s]
             cc = cmp_seq[s]
-            if bc == cc:
-                if bc != ".":
-                    if insertion:
-                        insertVar(insertion, 'I')
-                        insertion = []
-                    elif deletion:
-                        insertVar(deletion, 'D')
-                        deletion = []
-            else:
-                if bc != '.' and cc != '.':
+            if bc != '.' and cc != '.':
+                if insertion:
+                    insertVar(insertion, 'I')
+                    insertion = []
+                elif deletion:
+                    insertVar(deletion, 'D')
+                    deletion = []
+                if bc != cc:
                     mismatch = [s - ndots, cc]
                     insertVar(mismatch, 'M')
+            elif bc == '.' and cc != '.':
+                if insertion:
+                    insertion[1] += cc
                 else:
-                    if bc == '.':
-                        if insertion:
-                            insertion[1] += cc
-                        else:
-                            insertion = [s - ndots, cc]
-                    else:
-                        assert cc == '.'
-                        if deletion:
-                            deletion[1] += 1
-                        else:
-                            deletion = [s - ndots, 1]
+                    insertion = [s - ndots, cc]
+            elif bc != '.' and cc == '.':
+                if deletion:
+                    deletion[1] += 1
+                else:
+                    deletion = [s - ndots, 1]
 
             if bc == '.':
                 ndots += 1
@@ -153,7 +149,6 @@ def extract_HLA_vars(HLA_MSA_file, base_fname, verbose = False):
 
 
     print >> sys.stderr, "Number of variants is %d." % (len(Vars.keys()))
-
 
     # Compare variants
     def cmp_varKey(a, b):
