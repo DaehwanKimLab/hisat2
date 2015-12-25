@@ -3110,18 +3110,17 @@ public:
 
         tloc.initFromRow_bit(top + 1, gh(), gfm());
         index_t node_top = rank_M(tloc) - 1;
-        
-        const uint8_t *side = tloc.side(gfm()) + gh()._sideGbwtSz;
-        index_t top_F_loc = *((index_t*)side);
-        side += sizeof(index_t);
-        index_t top_M_occ = *((index_t*)side);
-        assert_leq(top_M_occ, node_top + 1);
-        if(top_M_occ > node_top) {
-            side = tloc.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
+
+        index_t top_F_loc = 0, top_M_occ = 0;
+        size_t iter = 0;
+        while(true) {
+            const uint8_t *side = tloc.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz * iter;
             top_F_loc = *((index_t*)side);
             side += sizeof(index_t);
             top_M_occ = *((index_t*)side);
             assert_leq(top_M_occ, node_top + 1);
+            if(top_M_occ <= node_top) break;
+            iter++;
         }
         if(top_M_occ > 0) top_F_loc++;
         
@@ -3136,7 +3135,7 @@ public:
         bloc.initFromRow_bit(bot, gh(), gfm());
         index_t node_bot = rank_M(bloc);
         
-        side = bloc.side(gfm()) + gh()._sideGbwtSz;
+        const uint8_t *side = bloc.side(gfm()) + gh()._sideGbwtSz;
         index_t bot_F_loc = *((index_t*)side);
         side += sizeof(index_t);
         index_t bot_M_occ = *((index_t*)side);
@@ -3304,17 +3303,16 @@ public:
         l.initFromRow_bit(top + 1, gh(), gfm());
         index_t node_top = rank_M(l) - 1;
         
-        const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
-        index_t F_loc = *((index_t*)side);
-        side += sizeof(index_t);
-        index_t M_occ = *((index_t*)side);
-        assert_leq(M_occ, node_top + 1);
-        if(M_occ > node_top) {
-            side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
+        index_t F_loc = 0, M_occ = 0;
+        size_t iter = 0;
+        while(true) {
+            const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz * iter;
             F_loc = *((index_t*)side);
             side += sizeof(index_t);
             M_occ = *((index_t*)side);
             assert_leq(M_occ, node_top + 1);
+            if(M_occ <= node_top) break;
+            iter++;
         }
         if(M_occ > 0) F_loc++;
         
@@ -3379,17 +3377,16 @@ public:
         l.initFromRow_bit(top + 1, gh(), gfm());
         index_t node_top = rank_M(l) - 1;
         
-        const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz;
-        index_t F_loc = *((index_t*)side);
-        side += sizeof(index_t);
-        index_t M_occ = *((index_t*)side);
-        assert_leq(M_occ, node_top + 1);
-        if(M_occ > node_top) {
-            side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz;
+        index_t F_loc = 0, M_occ = 0;
+        size_t iter = 0;
+        while(true) {
+            const uint8_t *side = l.side(gfm()) + gh()._sideGbwtSz - gh()._sideSz * iter;
             F_loc = *((index_t*)side);
             side += sizeof(index_t);
             M_occ = *((index_t*)side);
             assert_leq(M_occ, node_top + 1);
+            if(M_occ <= node_top) break;
+            iter++;
         }
         if(M_occ > 0) F_loc++;
         
