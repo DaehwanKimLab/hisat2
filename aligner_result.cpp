@@ -664,6 +664,7 @@ void StackedAln::init(
 	ASSERT_ONLY(size_t ln_postsoft = s.length() - trimLS - trimRS);
 	stackRef_.clear();
 	stackRel_.clear();
+    stackSNP_.clear();
 	stackRead_.clear();
 	size_t rdoff = trimLS;
 	for(size_t i = 0; i < ed.size(); i++) {
@@ -674,6 +675,7 @@ void StackedAln::init(
 			assert_range(0, 4, c);
 			stackRef_.push_back("ACGTN"[c]);
 			stackRel_.push_back('=');
+            stackSNP_.push_back(false);
 			stackRead_.push_back("ACGTN"[c]);
 		}
 		if(ed[i].isMismatch()) {
@@ -683,6 +685,7 @@ void StackedAln::init(
             assert_neq(c, asc2dna[(int)ed[i].chr]);
 			stackRef_.push_back(ed[i].chr);
 			stackRel_.push_back('X');
+            stackSNP_.push_back(ed[i].snpID != (uint32_t)INDEX_MAX);
 			stackRead_.push_back("ACGTN"[c]);
 		} else if(ed[i].isRefGap()) {
 			int c = s[rdoff++];
@@ -690,10 +693,12 @@ void StackedAln::init(
 			assert_eq(c, asc2dna[(int)ed[i].qchr]);
 			stackRef_.push_back('-');
 			stackRel_.push_back('I');
+            stackSNP_.push_back(ed[i].snpID != (uint32_t)INDEX_MAX);
 			stackRead_.push_back("ACGTN"[c]);
 		} else if(ed[i].isReadGap()) {
 			stackRef_.push_back(ed[i].chr);
 			stackRel_.push_back('D');
+            stackSNP_.push_back(ed[i].snpID != (uint32_t)INDEX_MAX);
 			stackRead_.push_back('-');
 		} else if(ed[i].isSpliced()) {
             stackRef_.push_back('N');
@@ -738,6 +743,7 @@ void StackedAln::leftAlign(bool pastMms) {
 		if(rel != '=' && rel != 'X' && rel != 'N') {
 			// Neither a match nor a mismatch - must be a gap
 			assert(rel == 'I' || rel == 'D');
+            if(stackSNP_[i]) continue;
 			size_t glen = 1;
 			// Scan further right to measure length of gap
 			for(size_t j = i+1; j < ln; j++) {

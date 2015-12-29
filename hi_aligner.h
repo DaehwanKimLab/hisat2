@@ -2914,7 +2914,8 @@ void GenomeHit<index_t>::leftAlign(const Read& rd)
         Edit& edit = (*_edits)[ei];
         if(edit.type != EDIT_TYPE_READ_GAP && edit.type != EDIT_TYPE_REF_GAP)
             continue;
-        
+        if(edit.snpID != (index_t)INDEX_MAX)
+            continue;
         index_t ei2 = ei + 1;
         for(; ei2 < _edits->size(); ei2++) {
             const Edit& edit2 = (*_edits)[ei2];

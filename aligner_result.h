@@ -695,15 +695,16 @@ class StackedAln {
 public:
 
 	StackedAln() :
-		stackRef_(RES_CAT),
-		stackRel_(RES_CAT),
-		stackRead_(RES_CAT),
-        stackSkip_(RES_CAT),
-        cigOp_(RES_CAT),
-		cigRun_(RES_CAT),
-		mdzOp_(RES_CAT),
-		mdzChr_(RES_CAT),
-		mdzRun_(RES_CAT)
+    stackRef_(RES_CAT),
+    stackRel_(RES_CAT),
+    stackSNP_(RES_CAT),
+    stackRead_(RES_CAT),
+    stackSkip_(RES_CAT),
+    cigOp_(RES_CAT),
+    cigRun_(RES_CAT),
+    mdzOp_(RES_CAT),
+    mdzChr_(RES_CAT),
+    mdzRun_(RES_CAT)
 	{
 		reset();
 	}
@@ -716,6 +717,7 @@ public:
 		trimLS_ = trimLH_ = trimRS_ = trimRH_ = 0;
 		stackRef_.clear();
 		stackRel_.clear();
+        stackSNP_.clear();
 		stackRead_.clear();
         stackSkip_.clear();
 		cigDistMm_ = cigCalc_ = false;
@@ -817,6 +819,7 @@ protected:
 
 	EList<char>     stackRef_;  // reference characters
 	EList<char>     stackRel_;  // bars relating reference to read characters
+    EList<bool>     stackSNP_;  // known SNP?
 	EList<char>     stackRead_; // read characters
     EList<uint32_t> stackSkip_;
 
