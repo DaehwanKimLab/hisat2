@@ -32,6 +32,10 @@ def test_HLA_genotyping(base_fname, verbose = False):
     # Current directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
     ex_path = os.path.dirname(curr_script)
+
+    # Clone a git repository, IMGTHLA
+    if not os.path.exists("IMGTHLA"):
+        os.system("git clone https://github.com/jrob119/IMGTHLA.git")
     
     # Extract HLA variants, backbone sequence, and other sequeces
     HLA_fnames = ["hla_backbone.fa",
@@ -49,26 +53,52 @@ def test_HLA_genotyping(base_fname, verbose = False):
         extract_hla_script = os.path.join(ex_path, "extract_HLA_vars.py")
         extract_cmd = [extract_hla_script,
                        "IMGTHLA/msf/A_gen.msf"]
-        proc = subprocess.Popen(extract_cmd, stderr=open("/dev/null", 'w'))
+        proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):
             print >> sys.stderr, "Error: extract_HLA_vars failed!"
             sys.exit(1)
 
-    # Build HISAT2 indexes based on the above information
-    HLA_index_fnames = ["hla.%d.ht2" % (i+1) for i in range(8)]
-    if not check_files(HLA_index_fnames):
+    # Build HISAT2 graph indexes based on the above information
+    HLA_hisat2_graph_index_fnames = ["hla.graph.%d.ht2" % (i+1) for i in range(8)]
+    if not check_files(HLA_hisat2_graph_index_fnames):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
                      "--snp",
                      "hla.snp",
                      "hla_backbone.fa",
-                     "hla"]
-        proc = subprocess.Popen(build_cmd, stderr=open("/dev/null", 'w'))
+                     "hla.graph"]
+        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
-        if not check_files(HLA_index_fnames):
+        if not check_files(HLA_hisat2_graph_index_fnames):
             print >> sys.stderr, "Error: indexing HLA failed!"
-            sys.exit(1)   
+            sys.exit(1)
+
+    # Build HISAT2 linear indexes based on the above information
+    HLA_hisat2_linear_index_fnames = ["hla.linear.%d.ht2" % (i+1) for i in range(8)]
+    if not check_files(HLA_hisat2_linear_index_fnames):
+        hisat2_build = os.path.join(ex_path, "hisat2-build")
+        build_cmd = [hisat2_build,
+                     "hla_sequences.fa",
+                     "hla.linear"]
+        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+        proc.communicate()        
+        if not check_files(HLA_hisat2_graph_index_fnames):
+            print >> sys.stderr, "Error: indexing HLA failed!"
+            sys.exit(1)
+
+    # Build Bowtie2 indexes based on the above information
+    HLA_bowtie2_index_fnames = ["hla.%d.bt2" % (i+1) for i in range(4)]
+    HLA_bowtie2_index_fnames += ["hla.rev.%d.bt2" % (i+1) for i in range(2)]
+    if not check_files(HLA_bowtie2_index_fnames):
+        build_cmd = ["bowtie2-build",
+                     "hla_sequences.fa",
+                     "hla"]
+        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
+        proc.communicate()        
+        if not check_files(HLA_bowtie2_index_fnames):
+            print >> sys.stderr, "Error: indexing HLA failed!"
+            sys.exit(1)
 
     # Read HLA alleles (names and sequences)
     HLAs = {}
@@ -118,8 +148,13 @@ def test_HLA_genotyping(base_fname, verbose = False):
         Links[var_id] = alleles
 
     # Test HLA genotyping
+    aligners = [
+        ["hisat2", "graph"],
+        # ["hisat2", "linear"],
+        # ["bowtie2", "linear"]
+        ]
     basic_test, random_test = False, True
-    test_passed = 0
+    test_passed = {}
     test_list = []
     if basic_test:
         for i in range(len(HLA_names)):
@@ -133,11 +168,15 @@ def test_HLA_genotyping(base_fname, verbose = False):
             test_HLA_names = [HLA_names[nums[i]] for i in range(allele_count)]
             test_list.append(test_HLA_names)
     for test_i in range(len(test_list)):
+        # daehwan - for debugging purposes
+        if test_i + 1 != 13:
+            continue
+        
         print >> sys.stderr, "Test %d" % (test_i + 1)
         test_HLA_names = test_list[test_i]
-        
+
         # daehwan - for debugging purposes
-        # test_HLA_names = ["A*80:01:01:01"]
+        test_HLA_names = ["A*31:14N"]
         
         for test_HLA_name in test_HLA_names:
             print >> sys.stderr, "\t%s" % (test_HLA_name)
@@ -160,432 +199,500 @@ def test_HLA_genotyping(base_fname, verbose = False):
             print >> read_file, HLA_reads[read_i]
         read_file.close()
 
-        # Align reads, and sort the alignments into a BAM file
-        hisat2 = os.path.join(ex_path, "hisat2")
-        hisat2_cmd = [hisat2,
-                      "-x",
-                      "hla",
-                      "-f",
-                      "hla_input.fa"]
-        align_proc = subprocess.Popen(hisat2_cmd,
-                                      stdout=subprocess.PIPE,
-                                      stderr=open("/dev/null", 'w'))
-        sambam_cmd = ["samtools",
-                      "view",
-                      "-bS",
-                      "-"]
-
-        sambam_proc = subprocess.Popen(sambam_cmd,
-                                       stdin=align_proc.stdout,
-                                       stdout=open("hla_input_unsorted.bam", 'w'),
-                                       stderr=open("/dev/null", 'w'))
-        sambam_proc.communicate()
-
-        bamsort_cmd = ["samtools",
-                       "sort",
-                       "hla_input_unsorted.bam",
-                       "hla_input"]
-        bamsort_proc = subprocess.Popen(bamsort_cmd,
-                                        stderr=open("/dev/null", 'w'))
-        bamsort_proc.communicate()
-
-        bamindex_cmd = ["samtools",
-                        "index",
-                        "hla_input.bam"]
-        bamindex_proc = subprocess.Popen(bamindex_cmd,
-                                         stderr=open("/dev/null", 'w'))
-        bamindex_proc.communicate()
-
-        os.system("rm hla_input_unsorted.bam")
-
-        # Read alignments
-        alignview_cmd = ["samtools",
-                         "view",
-                         "hla_input.bam",
-                         "A*01:01:01:01:0-10000"]
-        alignview_proc = subprocess.Popen(alignview_cmd,
+        for aligner, index_type in aligners:
+            print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
+            # Align reads, and sort the alignments into a BAM file
+            if aligner == "hisat2":
+                hisat2 = os.path.join(ex_path, "hisat2")
+                aligner_cmd = [hisat2]
+                if index_type == "linear":
+                    aligner_cmd += ["-k", "10"]
+                aligner_cmd += ["-x", "hla.%s" % index_type,
+                                "-f", "hla_input.fa"]                
+            elif aligner == "bowtie2":
+                aligner_cmd = [aligner,
+                               "-k", "10",
+                               "-x", "hla",
+                               "-f", "hla_input.fa"]
+            else:
+                assert False
+            align_proc = subprocess.Popen(aligner_cmd,
                                           stdout=subprocess.PIPE,
                                           stderr=open("/dev/null", 'w'))
 
-        # Cigar regular expression
-        cigar_re = re.compile('\d+\w')
+            sambam_cmd = ["samtools",
+                          "view",
+                          "-bS",
+                          "-"]
+            sambam_proc = subprocess.Popen(sambam_cmd,
+                                           stdin=align_proc.stdout,
+                                           stdout=open("hla_input_unsorted.bam", 'w'),
+                                           stderr=open("/dev/null", 'w'))
+            sambam_proc.communicate()
 
-        # Count alleles
-        HLA_counts, HLA_cmpt = {}, {}
-        for line in alignview_proc.stdout:
-            cols = line[:-1].split()
-            read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
-            read_seq = cols[9]
+            if index_type == "graph":
+                bamsort_cmd = ["samtools",
+                               "sort",
+                               "hla_input_unsorted.bam",
+                               "hla_input"]
+                bamsort_proc = subprocess.Popen(bamsort_cmd,
+                                                stderr=open("/dev/null", 'w'))
+                bamsort_proc.communicate()
 
-            flag = int(flag)
-            pos = int(pos)
+                bamindex_cmd = ["samtools",
+                                "index",
+                                "hla_input.bam"]
+                bamindex_proc = subprocess.Popen(bamindex_cmd,
+                                                 stderr=open("/dev/null", 'w'))
+                bamindex_proc.communicate()
 
-            # daehwan - for debugging purposes
-            debug = False
-            if pos - 1 == 545 and False:
-                debug = True
+                os.system("rm hla_input_unsorted.bam")            
+            else:
+                os.system("mv hla_input_unsorted.bam hla_input.bam")
 
-            if flag & 0x4 != 0:
-                continue
+            # Read alignments
+            alignview_cmd = ["samtools",
+                             "view",
+                             "hla_input.bam",
+                             # "A*01:01:01:01:0-10000",
+                             ]
+            alignview_proc = subprocess.Popen(alignview_cmd,
+                                              stdout=subprocess.PIPE,
+                                              stderr=open("/dev/null", 'w'))
 
-            Zs, MD = "", ""
-            for i in range(11, len(cols)):
-                col = cols[i]
-                if col.startswith("Zs"):
-                    Zs = col[5:]
-                elif col.startswith("MD"):
-                    MD = col[5:]
+            # Count alleles
+            HLA_counts, HLA_cmpt = {}, {}
+            if index_type == "graph":
+                # Cigar regular expression
+                cigar_re = re.compile('\d+\w')
+                for line in alignview_proc.stdout:
+                    cols = line[:-1].split()
+                    read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
+                    read_seq = cols[9]
 
-            vars = []
-            if Zs:
-                vars = Zs.split(',')
-                
-            assert MD != ""
-            MD_str_pos, MD_len = 0, 0
-            read_pos, left_pos = 0, pos - 1
-            right_pos = left_pos
-            cigars = cigar_re.findall(cigar_str)
-            cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
-            cmp_list = []
-            for i in range(len(cigars)):
-                cigar_op, length = cigars[i]
-                if cigar_op == 'M':
-                    first = True
-                    MD_len_used = 0
-                    while True:
-                        if not first or MD_len == 0:
-                            if MD[MD_str_pos].isdigit():
-                                num = int(MD[MD_str_pos])
-                                MD_str_pos += 1
-                                while MD_str_pos < len(MD):
-                                    if MD[MD_str_pos].isdigit():
-                                        num = num * 10 + int(MD[MD_str_pos])
-                                        MD_str_pos += 1
-                                    else:
-                                        break
-                                MD_len += num
-                        # Insertion or full match followed
-                        if MD_len >= length:
-                            MD_len -= length
-                            cmp_list.append(["match", right_pos + MD_len_used, length - MD_len_used])
-                            break
-                        first = False
-                        read_base = read_seq[read_pos + MD_len]
-                        MD_ref_base = MD[MD_str_pos]
-                        MD_str_pos += 1
-                        assert MD_ref_base in "ACGT"
-                        assert MD_ref_base != read_base
-                        cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
-                        cmp_list.append(["mismatch", right_pos + MD_len, 1])
-                        MD_len_used = MD_len + 1
-                        MD_len += 1
-                        # Full match
-                        if MD_len == length:
-                            MD_len = 0
-                            break
-                elif cigar_op == 'I':
-                    cmp_list.append(["insertion", right_pos, length])
-                elif cigar_op == 'D':
-                    if MD[MD_str_pos] == '0':
-                        MD_str_pos += 1
-                    assert MD[MD_str_pos] == '^'
-                    MD_str_pos += 1
-                    while MD_str_pos < len(MD):
-                        if not MD[MD_str_pos] in "ACGT":
-                            break
-                        MD_str_pos += 1
-                    cmp_list.append(["deletion", right_pos, length])
-                elif cigar_op == 'S':
-                    cmp_list.append(["soft", right_pos, length])
-                else:                    
-                    assert cigar_op == 'N'
-                    cmp_list.append(["intron", right_pos, length])
-                
-                if cigar_op in "MND":
-                    right_pos += length
+                    flag = int(flag)
+                    pos = int(pos)
 
-                if cigar_op in "MIS":
-                    read_pos += length
-
-            HLA_count_per_read = {}
-            for HLA_name in HLA_names:
-                HLA_count_per_read[HLA_name] = 0
-               
-            def add_count(var_id, add):
-                assert var_id in Links
-                alleles = Links[var_id]
-                for allele in alleles:
-                    HLA_count_per_read[allele] += add
-            
-            # Sanity check - read length, cigar string, and MD string
-            # Decide which allele(s) a read most likely came from
-            ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
-            cigar_match_len, MD_match_len = 0, 0            
-            for cmp in cmp_list:
-                type = cmp[0]
-                length = cmp[2]
-                if type == "match":
-                    var_idx = lower_bound(Var_list, ref_pos)
-                    while var_idx < len(Var_list):
-                        var_pos, var_id = Var_list[var_idx]
-                        if ref_pos + length <= var_pos:
-                            break
-                        if ref_pos <= var_pos:
-                            var_type, _, var_data = Vars[var_id]
-                            if var_type == "insertion":
-                                if ref_pos + length > var_pos + len(var_data):
-                                    add_count(var_id, -1)
-                                # daehwan - for debugging purposes
-                                if debug:
-                                    print cmp, var_id
-                                    
-                            else:
-                                add_count(var_id, -1)
-                        var_idx += 1
-                    
-                    read_pos += length
-                    ref_pos += length
-                    cigar_match_len += length
-                    MD_match_len += length
-                elif type == "mismatch":
-                    read_base = read_seq[read_pos]
-                    var_idx = lower_bound(Var_list, ref_pos)
-                    while var_idx < len(Var_list):
-                        var_pos, var_id = Var_list[var_idx]
-                        if ref_pos < var_pos:
-                            break
-                        if ref_pos == var_pos:
-                            var_type, _, var_data = Vars[var_id]
-                            if var_type == "single":
-                                # daehwan - for debugging purposes
-                                if debug:
-                                    print cmp, var_id, var_data, read_base
-                                if var_data == read_base:
-                                    add_count(var_id, 1)
-                                else:
-                                    add_count(var_id, -1)
-                        var_idx += 1
-                    
-                    cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
-                    MD_match_len = 0
-                    cigar_match_len += 1
-                    read_pos += 1
-                    ref_pos += 1
-                elif type == "insertion":
-                    ins_seq = read_seq[read_pos:read_pos+length]
-                    var_idx = lower_bound(Var_list, ref_pos)
                     # daehwan - for debugging purposes
-                    if debug:
-                        print left_pos, cigar_str, MD, vars
-                        print ref_pos, ins_seq, Var_list[var_idx], Vars[Var_list[var_idx][1]]
-                        # sys.exit(1)
-                    while var_idx < len(Var_list):
-                        var_pos, var_id = Var_list[var_idx]
-                        if ref_pos < var_pos:
-                            break
-                        if ref_pos == var_pos:
-                            var_type, _, var_data = Vars[var_id]
-                            if var_type == "insertion":                                
-                                if var_data == ins_seq:
-                                    # daehwan - for debugging purposes
-                                    if debug:
-                                        print cmp, var_id
-                                    add_count(var_id, 1)
-                        var_idx += 1
+                    debug = False
+                    if pos - 1 == 545 and False:
+                        debug = True
 
+                    if flag & 0x4 != 0:
+                        continue
+
+                    Zs, MD = "", ""
+                    for i in range(11, len(cols)):
+                        col = cols[i]
+                        if col.startswith("Zs"):
+                            Zs = col[5:]
+                        elif col.startswith("MD"):
+                            MD = col[5:]
+
+                    vars = []
+                    if Zs:
+                        vars = Zs.split(',')
+
+                    assert MD != ""
+                    MD_str_pos, MD_len = 0, 0
+                    read_pos, left_pos = 0, pos - 1
+                    right_pos = left_pos
+                    cigars = cigar_re.findall(cigar_str)
+                    cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+                    cmp_list = []
+                    for i in range(len(cigars)):
+                        cigar_op, length = cigars[i]
+                        if cigar_op == 'M':
+                            first = True
+                            MD_len_used = 0
+                            while True:
+                                if not first or MD_len == 0:
+                                    if MD[MD_str_pos].isdigit():
+                                        num = int(MD[MD_str_pos])
+                                        MD_str_pos += 1
+                                        while MD_str_pos < len(MD):
+                                            if MD[MD_str_pos].isdigit():
+                                                num = num * 10 + int(MD[MD_str_pos])
+                                                MD_str_pos += 1
+                                            else:
+                                                break
+                                        MD_len += num
+                                # Insertion or full match followed
+                                if MD_len >= length:
+                                    MD_len -= length
+                                    cmp_list.append(["match", right_pos + MD_len_used, length - MD_len_used])
+                                    break
+                                first = False
+                                read_base = read_seq[read_pos + MD_len]
+                                MD_ref_base = MD[MD_str_pos]
+                                MD_str_pos += 1
+                                assert MD_ref_base in "ACGT"
+                                assert MD_ref_base != read_base
+                                cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
+                                cmp_list.append(["mismatch", right_pos + MD_len, 1])
+                                MD_len_used = MD_len + 1
+                                MD_len += 1
+                                # Full match
+                                if MD_len == length:
+                                    MD_len = 0
+                                    break
+                        elif cigar_op == 'I':
+                            cmp_list.append(["insertion", right_pos, length])
+                        elif cigar_op == 'D':
+                            if MD[MD_str_pos] == '0':
+                                MD_str_pos += 1
+                            assert MD[MD_str_pos] == '^'
+                            MD_str_pos += 1
+                            while MD_str_pos < len(MD):
+                                if not MD[MD_str_pos] in "ACGT":
+                                    break
+                                MD_str_pos += 1
+                            cmp_list.append(["deletion", right_pos, length])
+                        elif cigar_op == 'S':
+                            cmp_list.append(["soft", right_pos, length])
+                        else:                    
+                            assert cigar_op == 'N'
+                            cmp_list.append(["intron", right_pos, length])
+
+                        if cigar_op in "MND":
+                            right_pos += length
+
+                        if cigar_op in "MIS":
+                            read_pos += length
+
+                    HLA_count_per_read = {}
+                    for HLA_name in HLA_names:
+                        HLA_count_per_read[HLA_name] = 0
+
+                    def add_count(var_id, add):
+                        assert var_id in Links
+                        alleles = Links[var_id]
+                        for allele in alleles:
+                            HLA_count_per_read[allele] += add
+
+                    # Sanity check - read length, cigar string, and MD string
+                    # Decide which allele(s) a read most likely came from
+                    ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
+                    cigar_match_len, MD_match_len = 0, 0            
+                    for cmp in cmp_list:
+                        type = cmp[0]
+                        length = cmp[2]
+                        if type == "match":
+                            var_idx = lower_bound(Var_list, ref_pos)
+                            while var_idx < len(Var_list):
+                                var_pos, var_id = Var_list[var_idx]
+                                if ref_pos + length <= var_pos:
+                                    break
+                                if ref_pos <= var_pos:
+                                    var_type, _, var_data = Vars[var_id]
+                                    if var_type == "insertion":
+                                        if ref_pos + length > var_pos + len(var_data):
+                                            add_count(var_id, -1)
+                                        # daehwan - for debugging purposes
+                                        if debug:
+                                            print cmp, var_id
+
+                                    else:
+                                        add_count(var_id, -1)
+                                var_idx += 1
+
+                            read_pos += length
+                            ref_pos += length
+                            cigar_match_len += length
+                            MD_match_len += length
+                        elif type == "mismatch":
+                            read_base = read_seq[read_pos]
+                            var_idx = lower_bound(Var_list, ref_pos)
+                            while var_idx < len(Var_list):
+                                var_pos, var_id = Var_list[var_idx]
+                                if ref_pos < var_pos:
+                                    break
+                                if ref_pos == var_pos:
+                                    var_type, _, var_data = Vars[var_id]
+                                    if var_type == "single":
+                                        # daehwan - for debugging purposes
+                                        if debug:
+                                            print cmp, var_id, var_data, read_base
+                                        if var_data == read_base:
+                                            add_count(var_id, 1)
+                                        else:
+                                            add_count(var_id, -1)
+                                var_idx += 1
+
+                            cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
+                            MD_match_len = 0
+                            cigar_match_len += 1
+                            read_pos += 1
+                            ref_pos += 1
+                        elif type == "insertion":
+                            ins_seq = read_seq[read_pos:read_pos+length]
+                            var_idx = lower_bound(Var_list, ref_pos)
+                            # daehwan - for debugging purposes
+                            if debug:
+                                print left_pos, cigar_str, MD, vars
+                                print ref_pos, ins_seq, Var_list[var_idx], Vars[Var_list[var_idx][1]]
+                                # sys.exit(1)
+                            while var_idx < len(Var_list):
+                                var_pos, var_id = Var_list[var_idx]
+                                if ref_pos < var_pos:
+                                    break
+                                if ref_pos == var_pos:
+                                    var_type, _, var_data = Vars[var_id]
+                                    if var_type == "insertion":                                
+                                        if var_data == ins_seq:
+                                            # daehwan - for debugging purposes
+                                            if debug:
+                                                print cmp, var_id
+                                            add_count(var_id, 1)
+                                var_idx += 1
+
+                            if cigar_match_len > 0:
+                                cmp_cigar_str += ("%dM" % cigar_match_len)
+                                cigar_match_len = 0
+                            read_pos += length
+                            cmp_cigar_str += ("%dI" % length)
+                        elif type == "deletion":
+                            var_idx = lower_bound(Var_list, ref_pos)
+                            while var_idx < len(Var_list):
+                                var_pos, var_id = Var_list[var_idx]
+                                if ref_pos < var_pos:
+                                    break
+                                if ref_pos == var_pos:
+                                    var_type, _, var_data = Vars[var_id]
+                                    if var_type == "deletion":
+                                        var_len = int(var_data)
+                                        if var_len == length:
+                                            # daehwan - for debugging purposes
+                                            if debug:
+                                                print cmp, var_id
+                                            add_count(var_id, 1)
+                                var_idx += 1
+
+                            if cigar_match_len > 0:
+                                cmp_cigar_str += ("%dM" % cigar_match_len)
+                                cigar_match_len = 0
+                            cmp_MD += ("%d" % MD_match_len)
+                            MD_match_len = 0
+                            cmp_cigar_str += ("%dD" % length)
+                            cmp_MD += ("^%s" % ref_seq[ref_pos:ref_pos+length])
+                            ref_pos += length
+                        elif type == "soft":
+                            if cigar_match_len > 0:
+                                cmp_cigar_str += ("%dM" % cigar_match_len)
+                                cigar_match_len = 0
+                            read_pos += length
+                            cmp_cigar_str += ("%dS" % length)
+                        else:
+                            assert type == "intron"
+                            if cigar_match_len > 0:
+                                cmp_cigar_str += ("%dM" % cigar_match_len)
+                                cigar_match_len = 0
+                            cmp_cigar_str += ("%dN" % length)
+                            ref_pos += length                    
                     if cigar_match_len > 0:
                         cmp_cigar_str += ("%dM" % cigar_match_len)
-                        cigar_match_len = 0
-                    read_pos += length
-                    cmp_cigar_str += ("%dI" % length)
-                elif type == "deletion":
-                    var_idx = lower_bound(Var_list, ref_pos)
-                    while var_idx < len(Var_list):
-                        var_pos, var_id = Var_list[var_idx]
-                        if ref_pos < var_pos:
-                            break
-                        if ref_pos == var_pos:
-                            var_type, _, var_data = Vars[var_id]
-                            if var_type == "deletion":
-                                var_len = int(var_data)
-                                if var_len == length:
-                                    # daehwan - for debugging purposes
-                                    if debug:
-                                        print cmp, var_id
-                                    add_count(var_id, 1)
-                        var_idx += 1
-
-                    if cigar_match_len > 0:
-                        cmp_cigar_str += ("%dM" % cigar_match_len)
-                        cigar_match_len = 0
                     cmp_MD += ("%d" % MD_match_len)
-                    MD_match_len = 0
-                    cmp_cigar_str += ("%dD" % length)
-                    cmp_MD += ("^%s" % ref_seq[ref_pos:ref_pos+length])
-                    ref_pos += length
-                elif type == "soft":
-                    if cigar_match_len > 0:
-                        cmp_cigar_str += ("%dM" % cigar_match_len)
-                        cigar_match_len = 0
-                    read_pos += length
-                    cmp_cigar_str += ("%dS" % length)
-                else:
-                    assert type == "intron"
-                    if cigar_match_len > 0:
-                        cmp_cigar_str += ("%dM" % cigar_match_len)
-                        cigar_match_len = 0
-                    cmp_cigar_str += ("%dN" % length)
-                    ref_pos += length                    
-            if cigar_match_len > 0:
-                cmp_cigar_str += ("%dM" % cigar_match_len)
-            cmp_MD += ("%d" % MD_match_len)
-            if read_pos != len(read_seq) or \
-                    cmp_cigar_str != cigar_str or \
-                    cmp_MD != MD:
-                print >> sys.stderr, "Error:", cigar_str, MD
-                print >> sys.stderr, "\tcomputed:", cmp_cigar_str, cmp_MD
-                print >> sys.stderr, "\tcmp list:", cmp_list
-                assert False            
+                    if read_pos != len(read_seq) or \
+                            cmp_cigar_str != cigar_str or \
+                            cmp_MD != MD:
+                        print >> sys.stderr, "Error:", cigar_str, MD
+                        print >> sys.stderr, "\tcomputed:", cmp_cigar_str, cmp_MD
+                        print >> sys.stderr, "\tcmp list:", cmp_list
+                        assert False            
 
-            max_count = None
-            for allele, count in HLA_count_per_read.items():
-                if not max_count:
-                    max_count = count
-                elif count > max_count:
-                    max_count = count
-            cur_cmpt = set()
-            # daehwan - for debugging purposes
-            allele1_found, allele2_found = False, False
-            for allele, count in HLA_count_per_read.items():
-                if count < max_count:
-                    continue
-                if allele == "A*68:02:01:01":
-                    allele1_found = True
-                elif allele == "A*68:18N":
-                    allele2_found = True
-                cur_cmpt.add(allele)                    
-                if not allele in HLA_counts:
-                    HLA_counts[allele] = 1
-                else:
-                    HLA_counts[allele] += 1
+                    max_count = None
+                    for allele, count in HLA_count_per_read.items():
+                        if not max_count:
+                            max_count = count
+                        elif count > max_count:
+                            max_count = count
+                    cur_cmpt = set()
+                    # daehwan - for debugging purposes
+                    allele1_found, allele2_found = False, False
+                    for allele, count in HLA_count_per_read.items():
+                        if count < max_count:
+                            continue
+                        if allele == "A*31:01:02:01":
+                            allele1_found = True
+                        elif allele == "A*31:14N":
+                            allele2_found = True
+                        cur_cmpt.add(allele)                    
+                        if not allele in HLA_counts:
+                            HLA_counts[allele] = 1
+                        else:
+                            HLA_counts[allele] += 1
 
-            # daehwan - for debugging purposes
-            """
-            if allele1_found != allele2_found:
-                if allele1_found:
-                    print ("read_id %s]" % read_id), left_pos, cigar_str, MD, Zs
-                    print read_seq
-            """
-
-            cur_cmpt = sorted(list(cur_cmpt))
-            cur_cmpt = '-'.join(cur_cmpt)
-            if not cur_cmpt in HLA_cmpt:
-                HLA_cmpt[cur_cmpt] = 1
-            else:
-                HLA_cmpt[cur_cmpt] += 1
-
-        HLA_counts = [[allele, count] for allele, count in HLA_counts.items()]
-        def HLA_count_cmp(a, b):
-            if a[1] != b[1]:
-                return b[1] - a[1]
-            assert a[0] != b[0]
-            if a[0] < b[0]:
-                return -1
-            else:
-                return 1
-        HLA_counts = sorted(HLA_counts, cmp=HLA_count_cmp)
-        for count_i in range(len(HLA_counts)):
-            count = HLA_counts[count_i]
-            for test_HLA_name in test_HLA_names:
-                if count[0] == test_HLA_name:
-                    print >> sys.stderr, "*** %d ranked %s (count: %d)" % (count_i + 1, test_HLA_name, count[1])
+                    # daehwan - for debugging purposes
                     """
-                    if count_i > 0 and HLA_counts[0][1] > count[1]:
-                        print >> sys.stderr, "Warning: %s ranked first (count: %d)" % (HLA_counts[0][0], HLA_counts[0][1])
-                        assert False
+                    if allele1_found != allele2_found:
+                        if allele1_found:
+                            print ("read_id %s]" % read_id), left_pos, cigar_str, MD, Zs
+                            print read_seq
+                    """
+
+                    cur_cmpt = sorted(list(cur_cmpt))
+                    cur_cmpt = '-'.join(cur_cmpt)
+                    if not cur_cmpt in HLA_cmpt:
+                        HLA_cmpt[cur_cmpt] = 1
                     else:
-                        test_passed += 1
-                    """
-            if count_i < 2 and False:
-                print >> sys.stderr, "%d %s (count: %d)" % (count_i + 1, count[0], count[1])
+                        HLA_cmpt[cur_cmpt] += 1
+            else:
+                assert index_type == "linear"
+                def add_alleles(alleles):
+                    if not allele in HLA_counts:
+                        HLA_counts[allele] = 1
+                    else:
+                        HLA_counts[allele] += 1
 
-        HLA_prob, HLA_prob_next = {}, {}
-        for cmpt, count in HLA_cmpt.items():
-            alleles = cmpt.split('-')
-            for allele in alleles:
-                if allele not in HLA_prob:
-                    HLA_prob[allele] = 0.0
-                HLA_prob[allele] += (float(count) / len(alleles))
+                    cur_cmpt = sorted(list(alleles))
+                    cur_cmpt = '-'.join(cur_cmpt)
+                    if not cur_cmpt in HLA_cmpt:
+                        HLA_cmpt[cur_cmpt] = 1
+                    else:
+                        HLA_cmpt[cur_cmpt] += 1
 
-        def normalize(prob):
-            total = sum(prob.values())
-            for allele, mass in prob.items():
-                prob[allele] = mass / total
+                prev_read_id, prev_AS = None, None
+                alleles = set()
+                for line in alignview_proc.stdout:
+                    cols = line[:-1].split()
+                    read_id, flag, allele = cols[:3]
+                    flag = int(flag)
+                    if flag & 0x4 != 0:
+                        continue
 
-        normalize(HLA_prob)
-        def prob_diff(prob1, prob2):
-            diff = 0.0
-            for allele in prob1.keys():
-                assert allele in prob2
-                diff += abs(prob1[allele] - prob2[allele])
-            return diff
+                    AS = None
+                    for i in range(11, len(cols)):
+                        col = cols[i]
+                        if col.startswith("AS"):
+                            AS = int(col[5:])
+                    assert AS != None
+                    if read_id != prev_read_id:
+                        if alleles:
+                            if aligner == "hisat2" or \
+                                    (aligner == "bowtie2" and len(alleles) < 10):
+                                add_alleles(alleles)
+                            alleles = set()
+                        prev_AS = None
+                    if prev_AS != None and AS < prev_AS:
+                        continue
+                    prev_read_id = read_id
+                    prev_AS = AS
+                    alleles.add(allele)
 
-        def next_prob(HLA_cmpt, HLA_prob):
-            HLA_prob_next = {}
+                if alleles:
+                    add_alleles(alleles)
+                    
+            HLA_counts = [[allele, count] for allele, count in HLA_counts.items()]
+            def HLA_count_cmp(a, b):
+                if a[1] != b[1]:
+                    return b[1] - a[1]
+                assert a[0] != b[0]
+                if a[0] < b[0]:
+                    return -1
+                else:
+                    return 1
+            HLA_counts = sorted(HLA_counts, cmp=HLA_count_cmp)
+            for count_i in range(len(HLA_counts)):
+                count = HLA_counts[count_i]
+                for test_HLA_name in test_HLA_names:
+                    if count[0] == test_HLA_name:
+                        print >> sys.stderr, "\t\t\t*** %d ranked %s (count: %d)" % (count_i + 1, test_HLA_name, count[1])
+                        """
+                        if count_i > 0 and HLA_counts[0][1] > count[1]:
+                            print >> sys.stderr, "Warning: %s ranked first (count: %d)" % (HLA_counts[0][0], HLA_counts[0][1])
+                            assert False
+                        else:
+                            test_passed += 1
+                        """
+                if count_i < 10 and False:
+                    print >> sys.stderr, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
+
+            HLA_prob, HLA_prob_next = {}, {}
             for cmpt, count in HLA_cmpt.items():
                 alleles = cmpt.split('-')
-                alleles_prob = 0.0
                 for allele in alleles:
-                    assert allele in HLA_prob
-                    alleles_prob += HLA_prob[allele]
-                for allele in alleles:
-                    if allele not in HLA_prob_next:
-                        HLA_prob_next[allele] = 0.0
-                    HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
-            normalize(HLA_prob_next)
-            return HLA_prob_next
+                    if allele not in HLA_prob:
+                        HLA_prob[allele] = 0.0
+                    HLA_prob[allele] += (float(count) / len(alleles))
 
-        diff, iter = 1.0, 0
-        while diff > 0.0001 and iter < 1000:
-            HLA_prob_next = next_prob(HLA_cmpt, HLA_prob)
-            diff = prob_diff(HLA_prob, HLA_prob_next)
-            HLA_prob = HLA_prob_next
-            iter += 1
-        HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
-        def HLA_prob_cmp(a, b):
-            if a[1] != b[1]:
-                if a[1] < b[1]:
-                    return 1
-                else:
+            def normalize(prob):
+                total = sum(prob.values())
+                for allele, mass in prob.items():
+                    prob[allele] = mass / total
+
+            normalize(HLA_prob)
+            def prob_diff(prob1, prob2):
+                diff = 0.0
+                for allele in prob1.keys():
+                    assert allele in prob2
+                    diff += abs(prob1[allele] - prob2[allele])
+                return diff
+
+            def next_prob(HLA_cmpt, HLA_prob):
+                HLA_prob_next = {}
+                for cmpt, count in HLA_cmpt.items():
+                    alleles = cmpt.split('-')
+                    alleles_prob = 0.0
+                    for allele in alleles:
+                        assert allele in HLA_prob
+                        alleles_prob += HLA_prob[allele]
+                    for allele in alleles:
+                        if allele not in HLA_prob_next:
+                            HLA_prob_next[allele] = 0.0
+                        HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
+                normalize(HLA_prob_next)
+                return HLA_prob_next
+
+            diff, iter = 1.0, 0
+            while diff > 0.0001 and iter < 1000:
+                HLA_prob_next = next_prob(HLA_cmpt, HLA_prob)
+                diff = prob_diff(HLA_prob, HLA_prob_next)
+                HLA_prob = HLA_prob_next
+                iter += 1
+            for allele, prob in HLA_prob.items():
+                allele_len = len(HLAs[allele])
+                HLA_prob[allele] /= float(allele_len)
+            normalize(HLA_prob)
+            HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
+            def HLA_prob_cmp(a, b):
+                if a[1] != b[1]:
+                    if a[1] < b[1]:
+                        return 1
+                    else:
+                        return -1
+                assert a[0] != b[0]
+                if a[0] < b[0]:
                     return -1
-            assert a[0] != b[0]
-            if a[0] < b[0]:
-                return -1
-            else:
-                return 1
-            
-        HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
-        success = [False for i in range(len(test_HLA_names))]
-        found_list = [False for i in range(len(test_HLA_names))]
-        for prob_i in range(len(HLA_prob)):
-            prob = HLA_prob[prob_i]
-            found = False
-            for test_i in range(len(test_HLA_names)):
-                test_HLA_name = test_HLA_names[test_i]
-                if prob[0] == test_HLA_name:
-                    print >> sys.stderr, "*** %d ranked %s (abundance: %.2f%%)" % (prob_i + 1, test_HLA_name, prob[1] * 100.0)
-                    if prob_i < len(success):
-                        success[prob_i] = True
-                    found_list[test_i] = True
-                    found = True                        
-            if not False in found_list:
-                break
-            if not found:
-                print >> sys.stderr, "%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, prob[0], prob[1] * 100.0)
-        if not False in success:
-            test_passed += 1
+                else:
+                    return 1
 
-    print >> sys.stderr, "%d/%d passed (%.2f)" % (test_passed, len(test_list), test_passed * 100.0 / len(test_list))
+            HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
+            success = [False for i in range(len(test_HLA_names))]
+            found_list = [False for i in range(len(test_HLA_names))]
+            for prob_i in range(len(HLA_prob)):
+                prob = HLA_prob[prob_i]
+                found = False
+                for test_i in range(len(test_HLA_names)):
+                    test_HLA_name = test_HLA_names[test_i]
+                    if prob[0] == test_HLA_name:
+                        print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (prob_i + 1, test_HLA_name, prob[1] * 100.0)
+                        if prob_i < len(success):
+                            success[prob_i] = True
+                        found_list[test_i] = True
+                        found = True                        
+                if not False in found_list:
+                    break
+                if not found:
+                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, prob[0], prob[1] * 100.0)
+            if not False in success:
+                aligner_type = "%s %s" % (aligner, index_type)
+                if not aligner_type in test_passed:
+                    test_passed[aligner_type] = 1
+                else:
+                    test_passed[aligner_type] += 1
+
+    for aligner_type, passed in test_passed.items():
+        print >> sys.stderr, "%s:\t%d/%d passed (%.2f)" % (aligner_type, passed, len(test_list), passed * 100.0 / len(test_list))
     
         
 """
