@@ -150,8 +150,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
     # Test HLA genotyping
     aligners = [
         ["hisat2", "graph"],
-        ["hisat2", "linear"],
-        ["bowtie2", "linear"]
+        # ["hisat2", "linear"],
+        # ["bowtie2", "linear"]
         ]
     basic_test, random_test = False, True
     test_passed = {}
@@ -160,7 +160,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
         for i in range(len(HLA_names)):
             test_list.append([HLA_names[i]])
     if random_test:
-        test_size = 100
+        test_size = 500
         allele_count = 2
         for test_i in range(test_size):
             nums = [i for i in range(len(HLA_names))]
@@ -169,7 +169,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
             test_list.append(test_HLA_names)
     for test_i in range(len(test_list)):
         # daehwan - for debugging purposes
-        #if test_i + 1 != 130:
+        # if test_i + 1 != 11:
         #    continue
         # two allele test (#11, #95)
         
@@ -562,7 +562,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
                 coverage_avg = coverage_sum / float(len(coverage))
                 assert len(ref_seq) < len(coverage)
                 for i in range(len(ref_seq)):
-                    coverage_threshold = 0.7 * coverage_avg
+                    coverage_threshold = 1.0 * coverage_avg
                     if i < read_len:
                         coverage_threshold *= ((i+1) / float(read_len))
                     elif i + read_len > len(ref_seq):
@@ -587,12 +587,9 @@ def test_HLA_genotyping(base_fname, verbose = False):
                         var_idx -= 1
                     if cur_cmpt:
                         cur_cmpt = '-'.join(list(cur_cmpt))
-                        # daehwan - for debugging purposes
-                        # """
                         if not cur_cmpt in HLA_cmpt:
                             HLA_cmpt[cur_cmpt] = 0
                         HLA_cmpt[cur_cmpt] += pseudo_num_reads
-                        # """
             else:
                 assert index_type == "linear"
                 def add_alleles(alleles):
