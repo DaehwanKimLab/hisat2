@@ -678,89 +678,199 @@ def test_HLA_genotyping(base_fname, verbose = False):
                 if count_i < 10 and False:
                     print >> sys.stderr, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
 
-            HLA_prob, HLA_prob_next = {}, {}
-            for cmpt, count in HLA_cmpt.items():
-                alleles = cmpt.split('-')
-                for allele in alleles:
-                    if allele not in HLA_prob:
-                        HLA_prob[allele] = 0.0
-                    HLA_prob[allele] += (float(count) / len(alleles))
-
             def normalize(prob):
                 total = sum(prob.values())
                 for allele, mass in prob.items():
                     prob[allele] = mass / total
 
-            normalize(HLA_prob)
-            def prob_diff(prob1, prob2):
-                diff = 0.0
-                for allele in prob1.keys():
-                    assert allele in prob2
-                    diff += abs(prob1[allele] - prob2[allele])
-                return diff
-
-            def next_prob(HLA_cmpt, HLA_prob):
-                HLA_prob_next = {}
+            if len(test_HLA_names) != 2 or True:
+                HLA_prob, HLA_prob_next = {}, {}
                 for cmpt, count in HLA_cmpt.items():
                     alleles = cmpt.split('-')
-                    alleles_prob = 0.0
                     for allele in alleles:
-                        assert allele in HLA_prob
-                        alleles_prob += HLA_prob[allele]
-                    for allele in alleles:
-                        if allele not in HLA_prob_next:
-                            HLA_prob_next[allele] = 0.0
-                        HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
-                normalize(HLA_prob_next)
-                return HLA_prob_next
+                        if allele not in HLA_prob:
+                            HLA_prob[allele] = 0.0
+                        HLA_prob[allele] += (float(count) / len(alleles))
 
-            diff, iter = 1.0, 0
-            while diff > 0.0001 and iter < 1000:
-                HLA_prob_next = next_prob(HLA_cmpt, HLA_prob)
-                diff = prob_diff(HLA_prob, HLA_prob_next)
-                HLA_prob = HLA_prob_next
-                iter += 1
-            for allele, prob in HLA_prob.items():
-                allele_len = len(HLAs[gene][allele])
-                HLA_prob[allele] /= float(allele_len)
-            normalize(HLA_prob)
-            HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
-            def HLA_prob_cmp(a, b):
-                if a[1] != b[1]:
-                    if a[1] < b[1]:
-                        return 1
-                    else:
+                normalize(HLA_prob)
+                def prob_diff(prob1, prob2):
+                    diff = 0.0
+                    for allele in prob1.keys():
+                        assert allele in prob2
+                        diff += abs(prob1[allele] - prob2[allele])
+                    return diff
+
+                def next_prob(HLA_cmpt, HLA_prob):
+                    HLA_prob_next = {}
+                    for cmpt, count in HLA_cmpt.items():
+                        alleles = cmpt.split('-')
+                        alleles_prob = 0.0
+                        for allele in alleles:
+                            assert allele in HLA_prob
+                            alleles_prob += HLA_prob[allele]
+                        for allele in alleles:
+                            if allele not in HLA_prob_next:
+                                HLA_prob_next[allele] = 0.0
+                            HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
+                    normalize(HLA_prob_next)
+                    return HLA_prob_next
+
+                diff, iter = 1.0, 0
+                while diff > 0.0001 and iter < 1000:
+                    HLA_prob_next = next_prob(HLA_cmpt, HLA_prob)
+                    diff = prob_diff(HLA_prob, HLA_prob_next)
+                    HLA_prob = HLA_prob_next
+                    iter += 1
+                for allele, prob in HLA_prob.items():
+                    allele_len = len(HLAs[gene][allele])
+                    HLA_prob[allele] /= float(allele_len)
+                normalize(HLA_prob)
+                HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
+                def HLA_prob_cmp(a, b):
+                    if a[1] != b[1]:
+                        if a[1] < b[1]:
+                            return 1
+                        else:
+                            return -1
+                    assert a[0] != b[0]
+                    if a[0] < b[0]:
                         return -1
-                assert a[0] != b[0]
-                if a[0] < b[0]:
-                    return -1
-                else:
-                    return 1
+                    else:
+                        return 1
 
-            HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
-            success = [False for i in range(len(test_HLA_names))]
-            found_list = [False for i in range(len(test_HLA_names))]
-            for prob_i in range(len(HLA_prob)):
-                prob = HLA_prob[prob_i]
-                found = False
-                for test_i in range(len(test_HLA_names)):
-                    test_HLA_name = test_HLA_names[test_i]
-                    if prob[0] == test_HLA_name:
-                        print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (prob_i + 1, test_HLA_name, prob[1] * 100.0)
-                        if prob_i < len(success):
-                            success[prob_i] = True
-                        found_list[test_i] = True
-                        found = True                        
-                if not False in found_list:
-                    break
-                if not found:
-                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, prob[0], prob[1] * 100.0)
-            if not False in success:
-                aligner_type = "%s %s" % (aligner, index_type)
-                if not aligner_type in test_passed:
-                    test_passed[aligner_type] = 1
-                else:
-                    test_passed[aligner_type] += 1
+                HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
+                success = [False for i in range(len(test_HLA_names))]
+                found_list = [False for i in range(len(test_HLA_names))]
+                for prob_i in range(len(HLA_prob)):
+                    prob = HLA_prob[prob_i]
+                    found = False
+                    for test_i in range(len(test_HLA_names)):
+                        test_HLA_name = test_HLA_names[test_i]
+                        if prob[0] == test_HLA_name:
+                            print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (prob_i + 1, test_HLA_name, prob[1] * 100.0)
+                            if prob_i < len(success):
+                                success[prob_i] = True
+                            found_list[test_i] = True
+                            found = True                        
+                    if not False in found_list:
+                        break
+                    if not found:
+                        print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, prob[0], prob[1] * 100.0)
+                if not False in success:
+                    aligner_type = "%s %s" % (aligner, index_type)
+                    if not aligner_type in test_passed:
+                        test_passed[aligner_type] = 1
+                    else:
+                        test_passed[aligner_type] += 1
+            else:
+                assert len(test_HLA_names) == 2
+                HLA_prob = {}
+                for cmpt, count in HLA_cmpt.items():
+                    alleles = cmpt.split('-')
+                    for allele in alleles:
+                        if allele not in HLA_prob:
+                            HLA_prob[allele] = 0.0
+                        HLA_prob[allele] += (float(count) / len(alleles))
+                HLA_pair_prob, HLA_pair_prob_next = {}, {}
+                for allele1 in HLA_prob.keys():
+                    for allele2 in HLA_prob.keys():
+                        if allele1 > allele2:
+                            allele1, allele2 = allele2, allele1
+                        allele_pair = "%s-%s" % (allele1, allele2)
+                        prob = HLA_prob[allele1] * HLA_prob[allele2]
+                        if prob > 0:
+                            HLA_pair_prob[allele_pair] = prob
+
+                normalize(HLA_pair_prob)
+                def prob_diff(prob1, prob2):
+                    diff = 0.0
+                    for allele_pair in prob1.keys():
+                        if allele_pair in prob2:
+                            diff += abs(prob1[allele_pair] - prob2[allele_pair])
+                        else:
+                            diff += prob1[allele_pair]
+                    return diff
+
+                def next_prob(HLA_cmpt, HLA_pair_prob):
+                    HLA_pair_prob_next = {}
+                    for cmpt, count in HLA_cmpt.items():
+                        alleles = cmpt.split('-')
+                        pairs_prob = 0.0
+                        for allele1 in alleles:
+                            for allele2 in alleles:
+                                if allele1 > allele2:
+                                    allele1, allele2 = allele2, allele1
+                                allele_pair = "%s-%s" % (allele1, allele2)
+                                if allele_pair in HLA_pair_prob:
+                                    pairs_prob += HLA_pair_prob[allele_pair]
+                        for allele1 in alleles:
+                            for allele2 in alleles:
+                                if allele1 > allele2:
+                                    allele1, allele2 = allele2, allele1
+                                allele_pair = "%s-%s" % (allele1, allele2)
+                                if allele_pair in HLA_pair_prob:
+                                    if allele_pair not in HLA_pair_prob_next:
+                                        HLA_pair_prob_next[allele_pair] = 0.0
+                                    HLA_pair_prob_next[allele_pair] += (float(count) * HLA_pair_prob[allele_pair] / pairs_prob)
+                    normalize(HLA_pair_prob_next)
+                    return HLA_pair_prob_next
+
+                diff, iter = 1.0, 0
+                while diff > 0.0001 and iter < 30:
+                    HLA_pair_prob_next = next_prob(HLA_cmpt, HLA_pair_prob)
+                    diff = prob_diff(HLA_pair_prob, HLA_pair_prob_next)
+                    HLA_pair_prob = HLA_pair_prob_next
+                    iter += 1
+                for allele_pair, prob in HLA_pair_prob.items():
+                    allele1, allele2 = allele_pair.split('-')
+                    allele1_len = len(HLAs[gene][allele1])
+                    allele2_len = len(HLAs[gene][allele2])
+                    HLA_prob[allele] /= float(allele1_len + allele2_len)
+                normalize(HLA_pair_prob)
+                HLA_pair_prob = [[allele_pair, prob] for allele_pair, prob in HLA_pair_prob.items()]
+                def HLA_prob_cmp(a, b):
+                    if a[1] != b[1]:
+                        if a[1] < b[1]:
+                            return 1
+                        else:
+                            return -1
+                    assert a[0] != b[0]
+                    if a[0] < b[0]:
+                        return -1
+                    else:
+                        return 1
+
+                HLA_pair_prob = sorted(HLA_pair_prob, cmp=HLA_prob_cmp)
+                for i in range(0, 10):
+                    print i + 1, HLA_pair_prob[i]
+                    
+                continue
+                
+                
+                success = [False for i in range(len(test_HLA_names))]
+                found_list = [False for i in range(len(test_HLA_names))]
+                for prob_i in range(len(HLA_prob)):
+                    prob = HLA_prob[prob_i]
+                    found = False
+                    for test_i in range(len(test_HLA_names)):
+                        test_HLA_name = test_HLA_names[test_i]
+                        if prob[0] == test_HLA_name:
+                            print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (prob_i + 1, test_HLA_name, prob[1] * 100.0)
+                            if prob_i < len(success):
+                                success[prob_i] = True
+                            found_list[test_i] = True
+                            found = True                        
+                    if not False in found_list:
+                        break
+                    if not found:
+                        print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, prob[0], prob[1] * 100.0)
+                if not False in success:
+                    aligner_type = "%s %s" % (aligner, index_type)
+                    if not aligner_type in test_passed:
+                        test_passed[aligner_type] = 1
+                    else:
+                        test_passed[aligner_type] += 1
+
 
     for aligner_type, passed in test_passed.items():
         print >> sys.stderr, "%s:\t%d/%d passed (%.2f%%)" % (aligner_type, passed, len(test_list), passed * 100.0 / len(test_list))
