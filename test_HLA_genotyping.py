@@ -51,8 +51,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
 
     if not check_files(HLA_fnames):
         extract_hla_script = os.path.join(ex_path, "extract_HLA_vars.py")
-        extract_cmd = [extract_hla_script,
-                       "IMGTHLA/msf/A_gen.msf"]
+        extract_cmd = [extract_hla_script]
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):
@@ -101,18 +100,27 @@ def test_HLA_genotyping(base_fname, verbose = False):
             sys.exit(1)
 
     # Read HLA alleles (names and sequences)
+    refHLAs = {}
+    for line in open("hla_backbone.fa"):
+        if line.startswith('>'):
+            HLA_name = line.strip().split()[0][1:]
+            HLA_gene = HLA_name.split('*')[0]
+            assert not HLA_gene in refHLAs
+            refHLAs[HLA_gene] = HLA_name
     HLAs = {}
     for line in open("hla_sequences.fa"):
         if line.startswith(">"):
             HLA_name = line.strip().split()[0][1:]
+            HLA_gene = HLA_name.split('*')[0]
+            if not HLA_gene in HLAs:
+                HLAs[HLA_gene] = {}
+            if not HLA_name in HLAs[HLA_gene]:
+                HLAs[HLA_gene][HLA_name] = ""
         else:
-            if not HLA_name in HLAs:
-                HLAs[HLA_name] = ""
-            HLAs[HLA_name] += line.strip()
-    HLA_names = list(HLAs.keys())
-
-    # Backbone sequence
-    ref_seq = HLAs["A*01:01:01:01"]
+            HLAs[HLA_gene][HLA_name] += line.strip()
+    HLA_names = {}
+    for HLA_gene, data in HLAs.items():
+        HLA_names[HLA_gene] = list(data.keys())
 
     # Read HLA variants, and link information
     Vars, Var_list = {}, []
@@ -150,22 +158,27 @@ def test_HLA_genotyping(base_fname, verbose = False):
     # Test HLA genotyping
     aligners = [
         ["hisat2", "graph"],
-        # ["hisat2", "linear"],
-        # ["bowtie2", "linear"]
+        ["hisat2", "linear"],
+        ["bowtie2", "linear"]
         ]
     basic_test, random_test = False, True
     test_passed = {}
     test_list = []
     if basic_test:
-        for i in range(len(HLA_names)):
-            test_list.append([HLA_names[i]])
+        for HLA_gene, HLA_gene_alleles in HLA_names.items():
+            for HLA_name in HLA_gene_alleles:
+                test_list.append([HLA_name])
     if random_test:
-        test_size = 500
+        test_size = 100
         allele_count = 2
         for test_i in range(test_size):
-            nums = [i for i in range(len(HLA_names))]
+            genes = HLA_names.keys()
+            random.shuffle(genes)
+            gene = genes[0]
+            HLA_gene_alleles = HLA_names[gene]
+            nums = [i for i in range(len(HLA_gene_alleles))]
             random.shuffle(nums)
-            test_HLA_names = [HLA_names[nums[i]] for i in range(allele_count)]
+            test_HLA_names = [HLA_gene_alleles[nums[i]] for i in range(allele_count)]
             test_list.append(test_HLA_names)
     for test_i in range(len(test_list)):
         # daehwan - for debugging purposes
@@ -182,6 +195,10 @@ def test_HLA_genotyping(base_fname, verbose = False):
         for test_HLA_name in test_HLA_names:
             print >> sys.stderr, "\t%s" % (test_HLA_name)
 
+        gene = test_HLA_names[0].split('*')[0]
+        ref_allele = refHLAs[gene]
+        ref_seq = HLAs[gene][ref_allele]
+    
         # Simulate reads from two HLA alleles
         def simulate_reads(seq, read_len = 100):
             reads = []
@@ -190,7 +207,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
             return reads
         HLA_reads = []
         for test_HLA_name in test_HLA_names:
-            HLA_seq = HLAs[test_HLA_name]
+            HLA_seq = HLAs[gene][test_HLA_name]
             HLA_reads += simulate_reads(HLA_seq)
 
         # Write reads into a fasta read file
@@ -372,7 +389,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
                             read_pos += length
 
                     HLA_count_per_read = {}
-                    for HLA_name in HLA_names:
+                    for HLA_name in HLA_names[gene]:
                         HLA_count_per_read[HLA_name] = 0
 
                     def add_count(var_id, add):
@@ -704,7 +721,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
                 HLA_prob = HLA_prob_next
                 iter += 1
             for allele, prob in HLA_prob.items():
-                allele_len = len(HLAs[allele])
+                allele_len = len(HLAs[gene][allele])
                 HLA_prob[allele] /= float(allele_len)
             normalize(HLA_prob)
             HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
