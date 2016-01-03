@@ -150,8 +150,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
     # Test HLA genotyping
     aligners = [
         ["hisat2", "graph"],
-        # ["hisat2", "linear"],
-        # ["bowtie2", "linear"]
+        ["hisat2", "linear"],
+        ["bowtie2", "linear"]
         ]
     basic_test, random_test = False, True
     test_passed = {}
@@ -169,14 +169,15 @@ def test_HLA_genotyping(base_fname, verbose = False):
             test_list.append(test_HLA_names)
     for test_i in range(len(test_list)):
         # daehwan - for debugging purposes
-        if test_i + 1 != 13:
-            continue
+        #if test_i + 1 != 130:
+        #    continue
+        # two allele test (#11, #95)
         
         print >> sys.stderr, "Test %d" % (test_i + 1)
         test_HLA_names = test_list[test_i]
 
         # daehwan - for debugging purposes
-        test_HLA_names = ["A*31:14N"]
+        # test_HLA_names = ["A*31:14N"]
         
         for test_HLA_name in test_HLA_names:
             print >> sys.stderr, "\t%s" % (test_HLA_name)
@@ -262,6 +263,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
 
             # Count alleles
             HLA_counts, HLA_cmpt = {}, {}
+            coverage = [0 for i in range(len(ref_seq) + 1)]
+            num_reads, total_read_len = 0, 0
             if index_type == "graph":
                 # Cigar regular expression
                 cigar_re = re.compile('\d+\w')
@@ -270,12 +273,15 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
                     read_seq = cols[9]
 
+                    num_reads += 1
+                    total_read_len += len(read_seq)
+
                     flag = int(flag)
                     pos = int(pos)
 
                     # daehwan - for debugging purposes
                     debug = False
-                    if pos - 1 == 545 and False:
+                    if pos - 1 == 1809 and False:
                         debug = True
 
                     if flag & 0x4 != 0:
@@ -303,6 +309,11 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     for i in range(len(cigars)):
                         cigar_op, length = cigars[i]
                         if cigar_op == 'M':
+                            # Update coverage
+                            assert right_pos + length < len(coverage)
+                            coverage[right_pos] += 1
+                            coverage[right_pos + length] -= 1
+
                             first = True
                             MD_len_used = 0
                             while True:
@@ -370,8 +381,14 @@ def test_HLA_genotyping(base_fname, verbose = False):
                         for allele in alleles:
                             HLA_count_per_read[allele] += add
 
-                    # Sanity check - read length, cigar string, and MD string
                     # Decide which allele(s) a read most likely came from
+                    # also sanity check - read length, cigar string, and MD string
+                    for var_id, data in Vars.items():
+                        var_type, var_pos, var_data = data
+                        if var_type != "deletion":
+                            continue
+                        if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
+                            add_count(var_id, -1)                            
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0            
                     for cmp in cmp_list:
@@ -386,12 +403,11 @@ def test_HLA_genotyping(base_fname, verbose = False):
                                 if ref_pos <= var_pos:
                                     var_type, _, var_data = Vars[var_id]
                                     if var_type == "insertion":
-                                        if ref_pos + length > var_pos + len(var_data):
+                                        if ref_pos < var_pos and ref_pos + length > var_pos + len(var_data):
                                             add_count(var_id, -1)
-                                        # daehwan - for debugging purposes
-                                        if debug:
-                                            print cmp, var_id
-
+                                            # daehwan - for debugging purposes
+                                            if debug:
+                                                print cmp, var_id
                                     else:
                                         add_count(var_id, -1)
                                 var_idx += 1
@@ -502,7 +518,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
 
                     max_count = None
                     for allele, count in HLA_count_per_read.items():
-                        if not max_count:
+                        if max_count == None:
                             max_count = count
                         elif count > max_count:
                             max_count = count
@@ -512,23 +528,21 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     for allele, count in HLA_count_per_read.items():
                         if count < max_count:
                             continue
-                        if allele == "A*31:01:02:01":
+                        if allele == "A*24:02:01:01" and False:
                             allele1_found = True
-                        elif allele == "A*31:14N":
+                        elif allele == "A*24:11N" and False:
                             allele2_found = True
                         cur_cmpt.add(allele)                    
                         if not allele in HLA_counts:
                             HLA_counts[allele] = 1
                         else:
                             HLA_counts[allele] += 1
-
-                    # daehwan - for debugging purposes
-                    """
                     if allele1_found != allele2_found:
                         if allele1_found:
-                            print ("read_id %s]" % read_id), left_pos, cigar_str, MD, Zs
-                            print read_seq
-                    """
+                            print ("A*24:02:01:01\tread_id %s]" % read_id), left_pos, cigar_str, MD, Zs
+                        else:
+                            print ("A*24:11N\tread_id %s]" % read_id), left_pos, cigar_str, MD, Zs
+                        print read_seq
 
                     cur_cmpt = sorted(list(cur_cmpt))
                     cur_cmpt = '-'.join(cur_cmpt)
@@ -536,6 +550,49 @@ def test_HLA_genotyping(base_fname, verbose = False):
                         HLA_cmpt[cur_cmpt] = 1
                     else:
                         HLA_cmpt[cur_cmpt] += 1
+
+                # Coverage
+                assert num_reads > 0
+                read_len = int(total_read_len / float(num_reads))
+                coverage_sum = 0
+                for i in range(len(coverage)):
+                    if i > 0:
+                        coverage[i] += coverage[i-1]
+                    coverage_sum += coverage[i]
+                coverage_avg = coverage_sum / float(len(coverage))
+                assert len(ref_seq) < len(coverage)
+                for i in range(len(ref_seq)):
+                    coverage_threshold = 0.7 * coverage_avg
+                    if i < read_len:
+                        coverage_threshold *= ((i+1) / float(read_len))
+                    elif i + read_len > len(ref_seq):
+                        coverage_threshold *= ((len(ref_seq) - i) / float(read_len))
+                    if coverage[i] >= coverage_threshold:
+                        continue
+                    pseudo_num_reads = (coverage_threshold - coverage[i]) / read_len
+                    var_idx = lower_bound(Var_list, i + 1)
+                    if var_idx >= len(Var_list):
+                        var_idx = len(Var_list) - 1
+                    cur_cmpt = set()
+                    while var_idx >= 0:
+                        var_pos, var_id = Var_list[var_idx]
+                        var_type, _, var_data = Vars[var_id]
+                        if var_type == "deletion":
+                            del_len = int(var_data)
+                            if i < var_pos:
+                                break
+                            if i + read_len < var_pos + int(var_data):
+                                assert var_id in Links
+                                cur_cmpt = cur_cmpt.union(set(Links[var_id]))
+                        var_idx -= 1
+                    if cur_cmpt:
+                        cur_cmpt = '-'.join(list(cur_cmpt))
+                        # daehwan - for debugging purposes
+                        # """
+                        if not cur_cmpt in HLA_cmpt:
+                            HLA_cmpt[cur_cmpt] = 0
+                        HLA_cmpt[cur_cmpt] += pseudo_num_reads
+                        # """
             else:
                 assert index_type == "linear"
                 def add_alleles(alleles):
@@ -692,7 +749,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     test_passed[aligner_type] += 1
 
     for aligner_type, passed in test_passed.items():
-        print >> sys.stderr, "%s:\t%d/%d passed (%.2f)" % (aligner_type, passed, len(test_list), passed * 100.0 / len(test_list))
+        print >> sys.stderr, "%s:\t%d/%d passed (%.2f%%)" % (aligner_type, passed, len(test_list), passed * 100.0 / len(test_list))
     
         
 """
