@@ -183,9 +183,9 @@ def test_HLA_genotyping(base_fname, verbose = False):
             test_list.append(test_HLA_names)
     for test_i in range(len(test_list)):
         # daehwan - for debugging purposes
-        # if test_i + 1 != 11:
+        # if test_i + 1 != 346:
         #    continue
-        # two allele test (#11, #95)
+        # two allele test (#266, #346)
         
         print >> sys.stderr, "Test %d" % (test_i + 1)
         test_HLA_names = test_list[test_i]
@@ -705,7 +705,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     else:
                         return 1
 
-            if len(test_HLA_names) != 2 or True:
+            if len(test_HLA_names) != 2:
                 HLA_prob, HLA_prob_next = {}, {}
                 for cmpt, count in HLA_cmpt.items():
                     alleles = cmpt.split('-')
@@ -785,8 +785,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     for i in range(len(HLA_prob_list)):
                         allele_pair, prob = HLA_prob_list[i]
                         if prob * 2 <= best_prob:
-                            break
-                        HLA_prob[allele_pair] = prob                
+                            break                        
+                        HLA_prob[allele_pair] = prob
                     normalize(HLA_prob)
                     return HLA_prob
                 HLA_prob = choose_top_alleles(HLA_prob)
