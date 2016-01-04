@@ -158,8 +158,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
     # Test HLA genotyping
     aligners = [
         ["hisat2", "graph"],
-        # ["hisat2", "linear"],
-        # ["bowtie2", "linear"]
+        ["hisat2", "linear"],
+        ["bowtie2", "linear"]
         ]
     basic_test, random_test = False, True
     test_passed = {}
@@ -694,16 +694,16 @@ def test_HLA_genotyping(base_fname, verbose = False):
                 return diff
 
             def HLA_prob_cmp(a, b):
-                    if a[1] != b[1]:
-                        if a[1] < b[1]:
-                            return 1
-                        else:
-                            return -1
-                    assert a[0] != b[0]
-                    if a[0] < b[0]:
-                        return -1
-                    else:
+                if a[1] != b[1]:
+                    if a[1] < b[1]:
                         return 1
+                    else:
+                        return -1
+                assert a[0] != b[0]
+                if a[0] < b[0]:
+                    return -1
+                else:
+                    return 1
 
             if len(test_HLA_names) != 2:
                 HLA_prob, HLA_prob_next = {}, {}

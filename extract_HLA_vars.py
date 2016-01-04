@@ -293,6 +293,7 @@ def extract_HLA_vars(base_fname, verbose = False):
             else:
                 assert type == 'D'
                 type_str = "deletion"
+
             print >> var_file, "hv%d\t%s\t%s\t%d\t%s" % \
                 (num_vars+1, type_str, backbone_name, locus, data)
 
