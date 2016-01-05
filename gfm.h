@@ -838,6 +838,7 @@ public:
 		int32_t ftabChars,
         int nthreads,
         const string& snpfile,
+        const string& htfile,
         const string& ssfile,
         const string& exonfile,
         const string& svfile,

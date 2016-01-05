@@ -75,6 +75,7 @@ static bool reverseEach;
 static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
 static string snp_fname;
+static string ht_fname;
 static string ss_fname;
 static string exon_fname;
 static string sv_fname;
@@ -109,6 +110,7 @@ static void resetOptions() {
     nthreads       = 1;
     wrapper.clear();
     snp_fname = "";
+    ht_fname = "";
     ss_fname = "";
     exon_fname = "";
     sv_fname = "";
@@ -131,6 +133,7 @@ enum {
     ARG_LOCAL_OFFRATE,
     ARG_LOCAL_FTABCHARS,
     ARG_SNP,
+    ARG_HAPLOTYPE,
     ARG_SPLICESITE,
     ARG_EXON,
     ARG_SV,
@@ -174,6 +177,7 @@ static void printUsage(ostream& out) {
         << "    --localoffrate <int>    SA (local) is sampled every 2^offRate BWT chars (default: 3)" << endl
         << "    --localftabchars <int>  # of chars consumed in initial lookup in a local index (default: 6)" << endl
         << "    --snp <path>            SNP file name" << endl
+        << "    --haplotype <path>      haplotype file name" << endl
         << "    --ss <path>             Splice site file name" << endl
         << "    --exon <path>           Exon file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
@@ -217,6 +221,7 @@ static struct option long_options[] = {
     {(char*)"localoffrate",   required_argument, 0,            ARG_LOCAL_OFFRATE},
 	{(char*)"localftabchars", required_argument, 0,            ARG_LOCAL_FTABCHARS},
     {(char*)"snp",            required_argument, 0,            ARG_SNP},
+    {(char*)"haplotype",      required_argument, 0,            ARG_HAPLOTYPE},
     {(char*)"ss",             required_argument, 0,            ARG_SPLICESITE},
     {(char*)"exon",           required_argument, 0,            ARG_EXON},
     {(char*)"sv",             required_argument, 0,            ARG_SV},
@@ -309,6 +314,9 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_SNP:
                 snp_fname = optarg;
                 break;
+            case ARG_HAPLOTYPE:
+                ht_fname = optarg;
+                break;
             case ARG_SPLICESITE:
                 ss_fname = optarg;
                 break;
@@ -396,15 +404,16 @@ extern void initializeCntBit();
  */
 template<typename TStr>
 static void driver(
-	const string& infile,
-	EList<string>& infiles,
-    const string& snpfile,
-    const string& ssfile,
-    const string& exonfile,
-    const string& svfile,
-	const string& outfile,
-	bool packed,
-	int reverse)
+                   const string& infile,
+                   EList<string>& infiles,
+                   const string& snpfile,
+                   const string& htfile,
+                   const string& ssfile,
+                   const string& exonfile,
+                   const string& svfile,
+                   const string& outfile,
+                   bool packed,
+                   int reverse)
 {
     initializeCntLut();
     initializeCntBit();
@@ -490,6 +499,7 @@ static void driver(
                           localFtabChars,
                           nthreads,
                           snpfile,
+                          htfile,
                           ssfile,
                           exonfile,
                           svfile,
@@ -673,7 +683,7 @@ int hisat2_build(int argc, const char **argv) {
 		{
 			Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, snp_fname, ss_fname, exon_fname, sv_fname, outfile, false, REF_READ_FORWARD);
+                driver<SString<char> >(infile, infiles, snp_fname, ht_fname, ss_fname, exon_fname, sv_fname, outfile, false, REF_READ_FORWARD);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;
