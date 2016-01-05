@@ -567,7 +567,7 @@ static void print_index_summary(
 	const string& fname,
 	ostream& fout)
 {
-    index_t major, minor;
+    int major, minor;
     string extra_version;
 	int32_t flags = GFM<index_t>::readVersionFlags(fname, major, minor, extra_version);
 	bool entireReverse = false;    

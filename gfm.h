@@ -2165,7 +2165,30 @@ public:
 	/**
 	 * Given basename of an Ebwt index, read and return its flag.
 	 */
-	static int32_t readVersionFlags(const string& instr, index_t& major, index_t& minor, string& extra_version);
+	static int32_t readVersionFlags(const string& instr, int& major, int& minor, string& extra_version);
+    
+    static void readProgramVersion(int& major_version, int& minor_version, string& extra_version) {
+        char extra[256] = {0,};
+        int second_version;
+        sscanf(HISAT2_VERSION, "%d.%d.%d-%s",
+               &second_version,
+               &major_version,
+               &minor_version,
+               extra);
+        extra_version = extra;
+    }
+    
+    static void readIndexVersion(int index_version, int& major_version, int& minor_version, string& extra_version) {
+        major_version = (index_version >> 16) & 0xff;
+        minor_version = (index_version >> 8) & 0xff;
+        if((index_version & 0xff) == 1) {
+            extra_version = "alpha";
+        } else if((index_version & 0xff) == 2) {
+            extra_version = "beta";
+        } else {
+            extra_version = "";
+        }
+    }
 
 	/**
 	 * Pretty-print the Ebwt to the given output stream.
@@ -5157,8 +5180,21 @@ void GFM<index_t>::readIntoMemory(
     }
     
     // Reads header entries one by one from primary stream
-    readU32(_in1, switchEndian); bytesRead += 4; // version
-    index_t len           = readIndex<index_t>(_in1, switchEndian);
+    int index_version = (int)readU32(_in1, switchEndian); bytesRead += 4;
+    int major_index_version, minor_index_version;
+    string index_version_extra;
+    readIndexVersion(index_version, major_index_version, minor_index_version, index_version_extra);
+    int major_program_version, minor_program_version;
+    string program_version_extra;
+    readProgramVersion(major_program_version, minor_program_version, program_version_extra);
+    if(major_program_version < major_index_version ||
+       (major_program_version == major_index_version && minor_program_version < minor_index_version)) {
+        cerr << "Warning: the current version of HISAT2 (" << HISAT2_VERSION << ") is older than the version (2."
+             << major_index_version << "." << minor_index_version << "-" << index_version_extra << ") used to build the index." << endl;
+        cerr << "         Users are strongly recommended to update HISAT2 to the latest version." << endl;
+    }
+    
+    index_t len       = readIndex<index_t>(_in1, switchEndian);
     bytesRead += sizeof(index_t);
     index_t gbwtLen       = readIndex<index_t>(_in1, switchEndian);
     bytesRead += sizeof(index_t);
@@ -5750,7 +5786,7 @@ void readGFMRefnames(const string& instr, EList<string>& refnames) {
  * Read just enough of the Ebwt's header to get its flags
  */
 template <typename index_t>
-int32_t GFM<index_t>::readVersionFlags(const string& instr, index_t& major, index_t& minor, string& extra_version) {
+int32_t GFM<index_t>::readVersionFlags(const string& instr, int& major, int& minor, string& extra_version) {
     ifstream in;
     // Initialize our primary and secondary input-stream fields
     in.open((instr + ".1." + gfm_ext).c_str(), ios_base::in | ios::binary);
@@ -5767,13 +5803,8 @@ int32_t GFM<index_t>::readVersionFlags(const string& instr, index_t& major, inde
         switchEndian = true;
     }
     index_t version = readU32(in, switchEndian);
-    major = (version >> 16) & 0xff;
-    minor = (version >> 8) & 0xff;
-    if((version & 0xff) == 1) {
-        extra_version = "alpha";
-    } else if((version & 0xff) == 2) {
-        extra_version = "beta";
-    }
+    readIndexVersion(version, major, minor, extra_version);
+    
     readIndex<index_t>(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
     readIndex<index_t>(in, switchEndian);
@@ -5806,20 +5837,16 @@ void GFM<index_t>::writeFromMemory(bool justHeader,
     assert(out1.good());
     assert(out2.good());
     
-    char extra_version[256] = {0,};
-    int second_version, major_version = 0, minor_version = 0;
-    sscanf(HISAT2_VERSION, "%d.%d.%d-%s",
-           &second_version,
-           &major_version,
-           &minor_version,
-           extra_version);
-    int version = second_version & 0xff;
+    int major_version = 0, minor_version = 0;
+    string extra_version;
+    readProgramVersion(major_version, minor_version, extra_version);
+    int version = 2; // HISAT2
     version = (version << 8) | (major_version & 0xff);
     version = (version << 8) | (minor_version & 0xff);
     version = version << 8;
-    if(strcmp(extra_version, "alpha") == 0) {
+    if(extra_version == "alpha") {
         version |= 0x1;
-    } else if(strcmp(extra_version, "beta") == 0) {
+    } else if(extra_version == "beta") {
         version |= 0x2;
     }
     
