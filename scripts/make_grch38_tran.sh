@@ -47,7 +47,7 @@ fi
 
 HISAT2_SS_SCRIPT=./extract_splice_sites.py
 if [ ! -x "$HISAT2_SS_SCRIPT" ] ; then
-	if ! which extract_snps.py ; then
+	if ! which extract_splice_sites.py ; then
 		echo "Could not find extract_splice_sites.py in current directory or in PATH"
 		exit 1
 	else
