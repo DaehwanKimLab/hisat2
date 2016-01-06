@@ -303,7 +303,6 @@ def extract_HLA_vars(base_fname, gap, split, verbose = False):
             var2ID[keys[k]] = num_vars
             num_vars += 1
 
-        # daehwan - for debugging purposes
         add_seq_len = 0
         # Write haplotypes
         i = 0
@@ -411,8 +410,8 @@ def extract_HLA_vars(base_fname, gap, split, verbose = False):
                 assert h_begin <= h_end
                 varIDs = []
                 for var in h:
-                    # daehwan - for debugging purposes
                     varIDs.append(str(var2ID[var]))
+                    # daehwan - for debugging purposes
                     # varIDs.append(var)
                     sanity_vars.add(var2ID[var])
                 h_new_end = h_end
