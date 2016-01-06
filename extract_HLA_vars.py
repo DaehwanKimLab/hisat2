@@ -28,7 +28,7 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def extract_HLA_vars(base_fname, verbose = False):
+def extract_HLA_vars(base_fname, gap, split, verbose = False):
     # Samples of HLA_MSA_file are found in
     #    ftp://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/msf/
     HLA_genes = {
@@ -44,11 +44,13 @@ def extract_HLA_vars(base_fname, verbose = False):
     backbone_file = open(base_fname + "_backbone.fa", 'w')        
     # variants w.r.t the backbone sequences into a SNP file
     var_file = open(base_fname + ".snp", 'w')
+    # haplotypes
+    haplotype_file = open(base_fname + ".haplotype", 'w')
     # pairs of a variant and the corresponding HLA allels into a LINK file    
     link_file = open(base_fname + ".link", 'w')
     # Write all the sequences with dots removed into a file
     input_file = open(base_fname + "_sequences.fa", 'w')
-    num_vars = 0
+    num_vars, num_haplotypes = 0, 0
     for HLA_gene, HLA_ref_gene in HLA_genes.items():
         if HLA_ref_gene == "":
             continue
@@ -199,8 +201,6 @@ def extract_HLA_vars(base_fname, verbose = False):
                     assert b_type == 'I'
                     return 1
             assert a_data != b_data
-            if len(a_data) != len(b_data):
-                return len(a_data) - len(b_data)            
             if a_type in "MI":
                 if a_data < b_data:
                     return -1
@@ -220,7 +220,7 @@ def extract_HLA_vars(base_fname, verbose = False):
         for name, vars in HLA_Vars.items():
             HLA_Vars[name] = sorted(vars, cmp=cmp_varKey)
 
-        # sanity check -
+        # Sanity check -
         #    (1) Reconstruct the other sequences from the backbone sequence and variants and
         #    (2) Confirm these constructed sequences are the same as those input sequences.
         for cmp_name, id in HLA_names.items():
@@ -261,7 +261,7 @@ def extract_HLA_vars(base_fname, verbose = False):
                     (cmp_name, len(constr_seq), len(cmp_seq))
                 assert False
 
-            # daehwan - for debugging purposes
+            # Sanity check
             for s in range(len(constr_seq)):
                 if constr_seq[s] != cmp_seq[s]:
                     print >> sys.stderr, "Differ at %d: %s vs. %s (reconstruction vs. original)" % \
@@ -283,6 +283,7 @@ def extract_HLA_vars(base_fname, verbose = False):
         #       (1) variants w.r.t the backbone sequences into a SNP file
         #       (2) pairs of a variant and the corresponding HLA allels into a LINK file    
         keys = sorted(Vars.keys(), cmp=cmp_varKey)
+        var2ID = {}
         for k in range(len(keys)):
             locus, type, data = keys[k].split('-')
             locus = int(locus)
@@ -294,13 +295,146 @@ def extract_HLA_vars(base_fname, verbose = False):
                 assert type == 'D'
                 type_str = "deletion"
 
-            print >> var_file, "hv%d\t%s\t%s\t%d\t%s" % \
-                (num_vars+1, type_str, backbone_name, locus, data)
-
+            varID = "hv%d" % (num_vars)
+            print >> var_file, "%s\t%s\t%s\t%d\t%s" % \
+                (varID, type_str, backbone_name, locus, data)
             names = sorted(Vars[keys[k]])
-            print >> link_file, "hv%d\t%s" % (num_vars+1, ' '.join(names))
+            print >> link_file, "%s\t%s" % (varID, ' '.join(names))
+            var2ID[keys[k]] = num_vars
             num_vars += 1
 
+        # daehwan - for debugging purposes
+        add_seq_len = 0
+        # Write haplotypes
+        i = 0
+        while i < len(keys):
+            key_i = keys[i]
+            locus, type, data = key_i.split('-')
+            locus = int(locus)
+            if type == 'D':
+                locus += (int(data)- 1)
+            prev_locus = locus
+            j = i + 1
+            while j < len(keys):
+                key_j = keys[j]
+                locus2, type2, data2 = key_j.split('-')
+                locus2 = int(locus2)
+                if prev_locus + gap < locus2:
+                    break
+                prev_locus = locus2
+                if type == 'D':
+                    prev_locus += (int(data)- 1)                
+                j += 1
+
+            alleles = set()
+            for k in range(i, j):
+                key_k = keys[k]
+                add_alleles = set(Vars[key_k])
+                alleles |= add_alleles
+
+            haplotypes = set()
+            cur_vars = set(keys[i:j])
+            for allele in alleles:
+                allele_vars = set(HLA_Vars[allele])
+                allele_cur_vars = '#'.join(sorted(list(cur_vars & allele_vars), cmp=cmp_varKey))
+                haplotypes.add(allele_cur_vars)
+
+            # Split some haplotypes that include large gaps inside
+            def split_haplotypes(haplotypes):
+                split_haplotypes = set()
+                for haplotype in haplotypes:
+                    haplotype = haplotype.split('#')
+                    assert len(haplotype) > 0
+                    if len(haplotype) == 1:
+                        split_haplotypes.add(haplotype[0])
+                        continue
+                    prev_s, s = 0, 1
+                    while s < len(haplotype):
+                        prev_locus, prev_type, prev_data = haplotype[s-1].split('-')
+                        locus, type, data = haplotype[s].split('-')
+                        prev_locus, locus = int(prev_locus), int(locus)
+                        if prev_type == 'D':
+                            prev_locus += (int(prev_data) - 1)
+                        if prev_locus + split < locus:
+                            split_haplotypes.add('#'.join(haplotype[prev_s:s]))
+                            prev_s = s
+                        s += 1
+                        if s == len(haplotype):
+                            split_haplotypes.add('#'.join(haplotype[prev_s:s]))
+                return split_haplotypes
+
+            haplotypes2 = split_haplotypes(haplotypes)
+
+            def cmp_haplotype(a, b):
+                a = a.split('#')
+                a1_locus, _, _ = a[0].split('-')
+                a2_locus, a2_type, a2_data = a[-1].split('-')
+                a_begin, a_end = int(a1_locus), int(a2_locus)
+                if a2_type == 'D':
+                    a_end += (int(a2_data) - 1)
+                b = b.split('#')
+                b1_locus, _, _ = b[0].split('-')
+                b2_locus, b2_type, b2_data = b[-1].split('-')
+                b_begin, b_end = int(b1_locus), int(b2_locus)
+                if b2_type == 'D':
+                    b_end += (int(b2_data) - 1)
+                if a_begin != b_begin:
+                    return a_begin - b_begin
+                return a_end - b_end
+
+            haplotypes = sorted(list(haplotypes), cmp=cmp_haplotype)
+            haplotypes2 = sorted(list(haplotypes2), cmp=cmp_haplotype)
+            
+            # daehwan - for debugging purposes
+            """
+            dis = prev_locus - locus
+            print "\n[%d, %d]: %d haplotypes" % (i, j, len(haplotypes)), dis
+            if len(cur_vars) in range(0, 1000):
+                # print "vars:", sorted(list(cur_vars), cmp=cmp_varKey
+                print "num:", len(haplotypes)
+                for haplotype in haplotypes:
+                    print haplotype.split('#')
+                print "\nnum:", len(haplotypes2)
+                for haplotype in haplotypes2:
+                    print haplotype.split('#')
+            """
+
+            # Write haplotypes
+            sanity_vars = set()
+            for h_i in range(len(haplotypes2)):
+                h = haplotypes2[h_i].split('#')
+                h1_locus, _, _ = h[0].split('-')
+                h2_locus, h2_type, h2_data = h[-1].split('-')
+                h_begin, h_end = int(h1_locus), int(h2_locus)
+                if h2_type == 'D':
+                    h_end += (int(h2_data) - 1)
+                assert h_begin <= h_end
+                varIDs = []
+                for var in h:
+                    # daehwan - for debugging purposes
+                    varIDs.append(str(var2ID[var]))
+                    # varIDs.append(var)
+                    sanity_vars.add(var2ID[var])
+                h_new_end = h_end
+                for h_j in range(h_i + 1, len(haplotypes2)):
+                    hc = haplotypes2[h_j].split('#')
+                    hc_begin, _, _ = hc[0].split('-')
+                    hc_begin = int(hc_begin)
+                    if h_end + gap < hc_begin:
+                        break
+                    if h_new_end < hc_begin:
+                        h_new_end = hc_begin
+                assert h_end <= h_new_end
+                print >> haplotype_file, "ht%d\t%s\t%d\t%d\t%s" % \
+                    (num_haplotypes, backbone_name, h_begin, h_new_end, ','.join(varIDs))
+                num_haplotypes += 1
+                add_seq_len += (h_new_end - h_end + 1)
+            assert len(sanity_vars) == len(cur_vars)
+                    
+            i = j
+
+        print >> sys.stderr, "Length of additional sequences for haplotypes:", add_seq_len
+                    
         # Write all the sequences with dots removed into a file
         for name, ID in HLA_names.items():
             print >> input_file, ">%s" % (name)
@@ -311,6 +445,7 @@ def extract_HLA_vars(base_fname, verbose = False):
 
     backbone_file.close()
     var_file.close()
+    haplotype_file.close()
     link_file.close()
     input_file.close()
     
@@ -319,16 +454,30 @@ def extract_HLA_vars(base_fname, verbose = False):
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Extract HLA variants from HLA multiple sequence alignments')
-    parser.add_argument('-b', '--base',
-        dest='base_fname',
-        type=str,
-        default="hla",
-        help='base filename for backbone HLA sequence, HLA variants, and HLA linking info.')
-    parser.add_argument('-v', '--verbose',
-        dest='verbose',
-        action='store_true',
-        help='also print some statistics to stderr')
+        description="Extract HLA variants from HLA multiple sequence alignments")
+    parser.add_argument("-b", "--base",
+                        dest="base_fname",
+                        type=str,
+                        default="hla",
+                        help="base filename for backbone HLA sequence, HLA variants, and HLA linking info.")
+    parser.add_argument("-g", "--gap",
+                        dest="gap",
+                        type=int,
+                        default=20,
+                        help="Maximum distance for variants to be in the same haplotype.")
+    parser.add_argument("-s", "--split",
+                        dest="split",
+                        type=int,
+                        default=30,
+                        help="Break a haplotype into several haplotypes.")
+    parser.add_argument("-v", "--verbose",
+                        dest="verbose",
+                        action="store_true",
+                        help="also print some statistics to stderr")
 
     args = parser.parse_args()
-    extract_HLA_vars(args.base_fname, args.verbose)
+    if args.gap > args.split:
+        print >> sys.stderr, "Error: -g/--gap (%d) must be smaller than -s/--split (%d)" % (args.gap, args.split)
+        sys.exit(1)
+        
+    extract_HLA_vars(args.base_fname, args.gap, args.split, args.verbose)

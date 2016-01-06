@@ -41,6 +41,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
     HLA_fnames = ["hla_backbone.fa",
                   "hla_sequences.fa",
                   "hla.snp",
+                  "hla.haplotype",
                   "hla.link"]
 
     def check_files(fnames):
@@ -63,8 +64,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
     if not check_files(HLA_hisat2_graph_index_fnames):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
-                     "--snp",
-                     "hla.snp",
+                     "--snp", "hla.snp",
+                     "--haplotype", "hla.haplotype",
                      "hla_backbone.fa",
                      "hla.graph"]
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -183,7 +184,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
             test_list.append(test_HLA_names)
     for test_i in range(len(test_list)):
         # daehwan - for debugging purposes
-        # if test_i + 1 != 346:
+        # if test_i + 1 not in [187, 195, 266, 346]:
         #    continue
         # two allele test (#266, #346)
         
