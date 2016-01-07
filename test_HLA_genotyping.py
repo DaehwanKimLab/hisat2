@@ -52,7 +52,9 @@ def test_HLA_genotyping(base_fname, verbose = False):
 
     if not check_files(HLA_fnames):
         extract_hla_script = os.path.join(ex_path, "extract_HLA_vars.py")
-        extract_cmd = [extract_hla_script]
+        extract_cmd = [extract_hla_script,
+                       "--gap", "30",
+                       "--split", "50"]
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):
@@ -65,8 +67,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
                      "--snp", "hla.snp",
-                     # daehwan - for debugging purposes
-                     # "--haplotype", "hla.haplotype",
+                     "--haplotype", "hla.haplotype",
                      "hla_backbone.fa",
                      "hla.graph"]
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -125,13 +126,20 @@ def test_HLA_genotyping(base_fname, verbose = False):
         HLA_names[HLA_gene] = list(data.keys())
 
     # Read HLA variants, and link information
-    Vars, Var_list = {}, []
+    Vars, Var_list = {}, {}
     for line in open("hla.snp"):
         var_id, var_type, allele, pos, data = line.strip().split('\t')
-        assert not var_id in Vars
-        Vars[var_id] = [var_type, int(pos), data]
-        Var_list.append([int(pos), var_id])
-    Var_list = sorted(Var_list)
+        gene = allele.split('*')[0]
+        if not gene in Vars:
+            Vars[gene] = {}
+            assert not gene in Var_list
+            Var_list[gene] = []
+            
+        assert not var_id in Vars[gene]
+        Vars[gene][var_id] = [var_type, int(pos), data]
+        Var_list[gene].append([int(pos), var_id])
+    for gene, in_var_list in Var_list.items():
+        Var_list[gene] = sorted(in_var_list)
     def lower_bound(Var_list, pos):
         low, high = 0, len(Var_list)
         while low < high:
@@ -160,8 +168,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
     # Test HLA genotyping
     aligners = [
         ["hisat2", "graph"],
-        ["hisat2", "linear"],
-        ["bowtie2", "linear"]
+        # ["hisat2", "linear"],
+        # ["bowtie2", "linear"]
         ]
     basic_test, random_test = False, True
     test_passed = {}
@@ -293,6 +301,9 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
                     read_seq = cols[9]
 
+                    if not chr.startswith(gene):
+                        continue
+
                     num_reads += 1
                     total_read_len += len(read_seq)
 
@@ -403,7 +414,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
 
                     # Decide which allele(s) a read most likely came from
                     # also sanity check - read length, cigar string, and MD string
-                    for var_id, data in Vars.items():
+                    for var_id, data in Vars[gene].items():
                         var_type, var_pos, var_data = data
                         if var_type != "deletion":
                             continue
@@ -415,13 +426,13 @@ def test_HLA_genotyping(base_fname, verbose = False):
                         type = cmp[0]
                         length = cmp[2]
                         if type == "match":
-                            var_idx = lower_bound(Var_list, ref_pos)
-                            while var_idx < len(Var_list):
-                                var_pos, var_id = Var_list[var_idx]
+                            var_idx = lower_bound(Var_list[gene], ref_pos)
+                            while var_idx < len(Var_list[gene]):
+                                var_pos, var_id = Var_list[gene][var_idx]
                                 if ref_pos + length <= var_pos:
                                     break
                                 if ref_pos <= var_pos:
-                                    var_type, _, var_data = Vars[var_id]
+                                    var_type, _, var_data = Vars[gene][var_id]
                                     if var_type == "insertion":
                                         if ref_pos < var_pos and ref_pos + length > var_pos + len(var_data):
                                             add_count(var_id, -1)
@@ -438,13 +449,13 @@ def test_HLA_genotyping(base_fname, verbose = False):
                             MD_match_len += length
                         elif type == "mismatch":
                             read_base = read_seq[read_pos]
-                            var_idx = lower_bound(Var_list, ref_pos)
-                            while var_idx < len(Var_list):
-                                var_pos, var_id = Var_list[var_idx]
+                            var_idx = lower_bound(Var_list[gene], ref_pos)
+                            while var_idx < len(Var_list[gene]):
+                                var_pos, var_id = Var_list[gene][var_idx]
                                 if ref_pos < var_pos:
                                     break
                                 if ref_pos == var_pos:
-                                    var_type, _, var_data = Vars[var_id]
+                                    var_type, _, var_data = Vars[gene][var_id]
                                     if var_type == "single":
                                         # daehwan - for debugging purposes
                                         if debug:
@@ -462,18 +473,18 @@ def test_HLA_genotyping(base_fname, verbose = False):
                             ref_pos += 1
                         elif type == "insertion":
                             ins_seq = read_seq[read_pos:read_pos+length]
-                            var_idx = lower_bound(Var_list, ref_pos)
+                            var_idx = lower_bound(Var_list[gene], ref_pos)
                             # daehwan - for debugging purposes
                             if debug:
                                 print left_pos, cigar_str, MD, vars
-                                print ref_pos, ins_seq, Var_list[var_idx], Vars[Var_list[var_idx][1]]
+                                print ref_pos, ins_seq, Var_list[gene][var_idx], Vars[gene][Var_list[gene][var_idx][1]]
                                 # sys.exit(1)
-                            while var_idx < len(Var_list):
-                                var_pos, var_id = Var_list[var_idx]
+                            while var_idx < len(Var_list[gene]):
+                                var_pos, var_id = Var_list[gene][var_idx]
                                 if ref_pos < var_pos:
                                     break
                                 if ref_pos == var_pos:
-                                    var_type, _, var_data = Vars[var_id]
+                                    var_type, _, var_data = Vars[gene][var_id]
                                     if var_type == "insertion":                                
                                         if var_data == ins_seq:
                                             # daehwan - for debugging purposes
@@ -488,13 +499,13 @@ def test_HLA_genotyping(base_fname, verbose = False):
                             read_pos += length
                             cmp_cigar_str += ("%dI" % length)
                         elif type == "deletion":
-                            var_idx = lower_bound(Var_list, ref_pos)
-                            while var_idx < len(Var_list):
-                                var_pos, var_id = Var_list[var_idx]
+                            var_idx = lower_bound(Var_list[gene], ref_pos)
+                            while var_idx < len(Var_list[gene]):
+                                var_pos, var_id = Var_list[gene][var_idx]
                                 if ref_pos < var_pos:
                                     break
                                 if ref_pos == var_pos:
-                                    var_type, _, var_data = Vars[var_id]
+                                    var_type, _, var_data = Vars[gene][var_id]
                                     if var_type == "deletion":
                                         var_len = int(var_data)
                                         if var_len == length:
@@ -590,13 +601,13 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     if coverage[i] >= coverage_threshold:
                         continue
                     pseudo_num_reads = (coverage_threshold - coverage[i]) / read_len
-                    var_idx = lower_bound(Var_list, i + 1)
-                    if var_idx >= len(Var_list):
-                        var_idx = len(Var_list) - 1
+                    var_idx = lower_bound(Var_list[gene], i + 1)
+                    if var_idx >= len(Var_list[gene]):
+                        var_idx = len(Var_list[gene]) - 1
                     cur_cmpt = set()
                     while var_idx >= 0:
-                        var_pos, var_id = Var_list[var_idx]
-                        var_type, _, var_data = Vars[var_id]
+                        var_pos, var_id = Var_list[gene][var_idx]
+                        var_type, _, var_data = Vars[gene][var_id]
                         if var_type == "deletion":
                             del_len = int(var_data)
                             if i < var_pos:
@@ -632,6 +643,9 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     read_id, flag, allele = cols[:3]
                     flag = int(flag)
                     if flag & 0x4 != 0:
+                        continue
+
+                    if not allele.startswith(gene):
                         continue
 
                     AS = None
@@ -707,6 +721,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
                 else:
                     return 1
 
+            # daehwan - for debugging purposes
             if len(test_HLA_names) != 2:
                 HLA_prob, HLA_prob_next = {}, {}
                 for cmpt, count in HLA_cmpt.items():

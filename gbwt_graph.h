@@ -611,12 +611,6 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         
         // Create nodes and edges for haplotypes
         for(index_t i = 0; i < haplotypes.size(); i++) {
-            // daehwan - for debugging purposes
-            // if(i >= 100) continue;
-            if(i == 39) {
-                int kk = 20;
-                kk += 20;
-            }
             const Haplotype<index_t>& haplotype = haplotypes[i];
             const EList<index_t, 4>& snpIDs = haplotype.alts;
             assert_gt(snpIDs.size(), 0);
@@ -737,9 +731,6 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 }
             }
         }
-        
-        // daehwan - for debugging purposes
-        cerr << "daehwan num nodes: " << nodes.size() << endl;
         
         // Create nodes and edges for SNPs
         for(size_t i = 0; i < alts.size(); i++) {

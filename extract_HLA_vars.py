@@ -33,11 +33,11 @@ def extract_HLA_vars(base_fname, gap, split, verbose = False):
     #    ftp://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/msf/
     HLA_genes = {
         "A" : "A*01:01:01:01",
-        # "B" : "B*07:02:01",
-        # "C" : "C*07:01:01:01",
+        "B" : "B*07:02:01",
+        "C" : "C*01:02:01",       # ref: C*01:02:01 
         "DQA" : "",
         "DQB" : "",
-        # "DRB1" : "DRB1*15:01:01:01"
+        "DRB1" : "DRB1*01:01:01"  # ref: DRB1*15:01:01:01
         }
 
     # Write the backbone sequences into a fasta file
@@ -414,20 +414,23 @@ def extract_HLA_vars(base_fname, gap, split, verbose = False):
                     # daehwan - for debugging purposes
                     # varIDs.append(var)
                     sanity_vars.add(var2ID[var])
-                h_new_end = h_end
-                for h_j in range(h_i + 1, len(haplotypes2)):
+                h_new_begin = h_begin
+                for h_j in reversed(range(0, h_i)):
                     hc = haplotypes2[h_j].split('#')
-                    hc_begin, _, _ = hc[0].split('-')
+                    hc_begin, hc_type, hc_data = hc[-1].split('-')
                     hc_begin = int(hc_begin)
-                    if h_end + gap < hc_begin:
+                    hc_end = hc_begin
+                    if hc_type == 'D':
+                        hc_end += (int(hc_data) - 1)
+                    if hc_end + gap < h_begin:
                         break
-                    if h_new_end < hc_begin:
-                        h_new_end = hc_begin
-                assert h_end <= h_new_end
+                    if h_new_begin > hc_end:
+                        h_new_begin = hc_end
+                assert h_new_begin <= h_begin
                 print >> haplotype_file, "ht%d\t%s\t%d\t%d\t%s" % \
-                    (num_haplotypes, backbone_name, h_begin, h_new_end, ','.join(varIDs))
+                    (num_haplotypes, backbone_name, h_new_begin, h_end, ','.join(varIDs))
                 num_haplotypes += 1
-                add_seq_len += (h_new_end - h_end + 1)
+                add_seq_len += (h_end - h_new_begin + 1)
             assert len(sanity_vars) == len(cur_vars)
                     
             i = j
@@ -462,12 +465,12 @@ if __name__ == '__main__':
     parser.add_argument("-g", "--gap",
                         dest="gap",
                         type=int,
-                        default=20,
+                        default=30,
                         help="Maximum distance for variants to be in the same haplotype.")
     parser.add_argument("-s", "--split",
                         dest="split",
                         type=int,
-                        default=30,
+                        default=50,
                         help="Break a haplotype into several haplotypes.")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
