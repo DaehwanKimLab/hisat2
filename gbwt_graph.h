@@ -612,8 +612,8 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         // Create nodes and edges for haplotypes
         for(index_t i = 0; i < haplotypes.size(); i++) {
             // daehwan - for debugging purposes
-            if(i >= 1) continue;
-            if(i == 226) {
+            // if(i >= 100) continue;
+            if(i == 39) {
                 int kk = 20;
                 kk += 20;
             }
@@ -622,11 +622,12 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             assert_gt(snpIDs.size(), 0);
             assert_lt(haplotype.right, s.length());
 #ifndef NDEBUG
-            for(index_t s = 0; s < snpIDs.size() - 1; s++) {
+            for(index_t s = 0; s < snpIDs.size(); s++) {
                 index_t snpID = snpIDs[s];
                 assert_lt(snpID, alts.size());
                 const ALT<index_t>& snp = alts[snpID];
                 assert(snp.snp());
+                if(s + 1 >= snpIDs.size()) break;
                 index_t snpID2 = snpIDs[s+1];
                 assert_lt(snpID2, alts.size());
                 const ALT<index_t>& snp2 = alts[snpID2];
@@ -644,7 +645,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             index_t ID_i = 0;
             for(index_t j = haplotype.left; j <= haplotype.right; j++) {
                 if(prev_ALT_type == ALT_SNP_INS) j--;
-                const ALT<index_t>* altp = (ID_i < snpIDs.size() ? &(alts[snpIDs[ID_i]]) : NULL);
+                const ALT<index_t>* altp = (ID_i < snpIDs.size() ? &(alts[snpIDs[ID_i]]) : NULL);                
                 assert(altp == NULL || altp->pos >= j);
                 if(altp != NULL && altp->pos == j) {
                     const ALT<index_t>& alt = *altp;
@@ -663,8 +664,9 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                                 edges.back().from = alt.pos;
                             } else {
                                 assert_gt(nodes.size(), 2);
-                                edges.back().to = (index_t)nodes.size() - 2;
+                                edges.back().from = (index_t)nodes.size() - 2;
                             }
+                            edges.back().to = (index_t)nodes.size() - 1;
                         }
                         if(j == haplotype.right) {
                             edges.expand();
@@ -722,7 +724,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                         if(j == haplotype.left) {
                             edges.back().from = j;
                         } else {
-                            edges.back().from = (index_t)nodes.size() - 1;
+                            edges.back().from = (index_t)nodes.size() - 2;
                         }
                         edges.back().to = (index_t)nodes.size() - 1;
                     }
@@ -735,6 +737,9 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 }
             }
         }
+        
+        // daehwan - for debugging purposes
+        cerr << "daehwan num nodes: " << nodes.size() << endl;
         
         // Create nodes and edges for SNPs
         for(size_t i = 0; i < alts.size(); i++) {

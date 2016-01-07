@@ -2215,7 +2215,14 @@ HGFM<index_t, local_index_t>::HGFM(
                 for(; alt_i < this->_alts.size(); alt_i++) {
                     const ALT<index_t>& alt = this->_alts[alt_i];
                     if(alt.snp()) {
-                        if(curr_sztot + local_sztot <= alt.pos + alt.len + 1) break;
+                        if(alt.mismatch()) {
+                            if(curr_sztot + local_sztot <= alt.pos) break;
+                        } else if(alt.insertion()) {
+                            if(curr_sztot + local_sztot < alt.pos) break;
+                        } else {
+                            assert(alt.deletion());
+                            if(curr_sztot + local_sztot < alt.pos + alt.len) break;
+                        }
                         if(curr_sztot <= alt.pos) {
                             tParam.alts.push_back(alt);
                             tParam.alts.back().pos -= curr_sztot;

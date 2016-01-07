@@ -65,7 +65,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
                      "--snp", "hla.snp",
-                     "--haplotype", "hla.haplotype",
+                     # daehwan - for debugging purposes
+                     # "--haplotype", "hla.haplotype",
                      "hla_backbone.fa",
                      "hla.graph"]
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))

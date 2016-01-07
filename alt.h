@@ -79,6 +79,7 @@ public:
     
     bool snp() const { return type == ALT_SNP_SGL || type == ALT_SNP_DEL || type == ALT_SNP_INS; }
     bool splicesite() const { return type == ALT_SPLICESITE; }
+    bool mismatch() const { return type == ALT_SNP_SGL; }
     bool gap() const { return type == ALT_SNP_DEL || type == ALT_SNP_INS || type == ALT_SPLICESITE; }
     bool deletion() const { return type == ALT_SNP_DEL; }
     bool insertion() const { return type == ALT_SNP_INS; }
