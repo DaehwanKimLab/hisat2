@@ -191,14 +191,14 @@ def extract_HLA_vars(base_fname, gap, split, verbose = False):
             if a_locus != b_locus:
                 return a_locus - b_locus
             if a_type != b_type:
-                if a_type == 'M':
+                if a_type == 'I':
                     return -1
-                elif b_type == 'M':
+                elif b_type == 'I':
                     return 1
-                elif a_type == 'I':
+                elif a_type == 'M':
                     return -1
                 else:
-                    assert b_type == 'I'
+                    assert b_type == 'M'
                     return 1
             assert a_data != b_data
             if a_type in "MI":

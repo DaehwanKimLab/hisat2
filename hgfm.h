@@ -1757,6 +1757,7 @@ private:
         // input
         SString<char>                s;
         EList<ALT<index_t> >         alts;
+        EList<Haplotype<index_t> >   haplotypes;
         bool                         bigEndian;
         index_t                      local_offset;
         index_t                      curr_sztot;
@@ -1829,6 +1830,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                                                   tParam.s,
                                                   tParam.conv_local_szs,
                                                   tParam.alts,
+                                                  tParam.haplotypes,
                                                   tParam.file,
                                                   1,        /* num threads */
                                                   false);   /* verbose? */
@@ -1852,6 +1854,20 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                             tParam.alts[s >> 1] = tParam.alts[s];
                         }
                         tParam.alts.resize(tParam.alts.size() >> 1);
+                        tParam.haplotypes.clear();
+                        for(index_t a = 0; a < tParam.alts.size(); a++) {
+                            const ALT<index_t>& alt = tParam.alts[a];
+                            if(!alt.snp()) continue;
+                            tParam.haplotypes.expand();
+                            tParam.haplotypes.back().left = alt.pos;
+                            if(alt.deletion()) {
+                                tParam.haplotypes.back().right = alt.pos + alt.len - 1;
+                            } else {
+                                tParam.haplotypes.back().right = alt.pos;
+                            }
+                            tParam.haplotypes.back().alts.clear();
+                            tParam.haplotypes.back().alts.push_back(a);
+                        }
                     }
                     continue;
                 }
@@ -2191,6 +2207,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 }
                 
                 // Extract ALTs corresponding to this local index
+                index_t firstSNP = (index_t)OFF_MAX;
                 tParam.alts.clear();
                 ALT<index_t> alt;
                 alt.pos = curr_sztot;
@@ -2202,6 +2219,9 @@ HGFM<index_t, local_index_t>::HGFM(
                         if(curr_sztot <= alt.pos) {
                             tParam.alts.push_back(alt);
                             tParam.alts.back().pos -= curr_sztot;
+                            if(firstSNP == (index_t)OFF_MASK) {
+                                firstSNP = alt_i;
+                            }
                         }
                     } else if(alt.splicesite()) {
                         if(alt.excluded) continue;
@@ -2213,6 +2233,25 @@ HGFM<index_t, local_index_t>::HGFM(
                         }
                     } else {
                         assert(false);
+                    }
+                }
+                
+                // Extract haplotypes
+                tParam.haplotypes.clear();
+                Haplotype<index_t> haplotype;
+                haplotype.left = curr_sztot;
+                index_t haplotpye_i = (index_t)this->_haplotypes.bsearchLoBound(haplotype);
+                for(; haplotpye_i < this->_haplotypes.size(); haplotpye_i++) {
+                    const Haplotype<index_t>& haplotype = this->_haplotypes[haplotpye_i];
+                    if(curr_sztot + local_sztot <= haplotype.right) continue;
+                    if(curr_sztot <= haplotype.left) {
+                        tParam.haplotypes.push_back(haplotype);
+                        tParam.haplotypes.back().left -= curr_sztot;
+                        tParam.haplotypes.back().right -= curr_sztot;
+                        assert_neq(firstSNP, (index_t)OFF_MAX);
+                        for(index_t a = 0; a < tParam.haplotypes.back().alts.size(); a++) {
+                            tParam.haplotypes.back().alts[a] -= firstSNP;
+                        }
                     }
                 }
                 

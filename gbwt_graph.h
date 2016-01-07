@@ -122,6 +122,7 @@ public:
     RefGraph(const SString<char>& s,
              const EList<RefRecord>& szs,
              const EList<ALT<index_t> >& alts,
+             const EList<Haplotype<index_t> >& haplotypes,
              const string& out_fname,
              int nthreads_,
              bool verbose);
@@ -345,6 +346,7 @@ template <typename index_t>
 RefGraph<index_t>::RefGraph(const SString<char>& s,
                             const EList<RefRecord>& szs,
                             const EList<ALT<index_t> >& alts,
+                            const EList<Haplotype<index_t> >& haplotypes,
                             const string& out_fname,
                             int nthreads_,
                             bool verbose)
@@ -607,79 +609,138 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         edges.back().from = (index_t)nodes.size() - 2;
         edges.back().to = (index_t)nodes.size() - 1;
         
-        // Keep track of previous alternatives
-        EList<pair<index_t, index_t> > prev_alt_nodes; // first as node idx, and second as alt pos
+        // Create nodes and edges for haplotypes
+        for(index_t i = 0; i < haplotypes.size(); i++) {
+            // daehwan - for debugging purposes
+            if(i >= 1) continue;
+            if(i == 226) {
+                int kk = 20;
+                kk += 20;
+            }
+            const Haplotype<index_t>& haplotype = haplotypes[i];
+            const EList<index_t, 4>& snpIDs = haplotype.alts;
+            assert_gt(snpIDs.size(), 0);
+            assert_lt(haplotype.right, s.length());
+#ifndef NDEBUG
+            for(index_t s = 0; s < snpIDs.size() - 1; s++) {
+                index_t snpID = snpIDs[s];
+                assert_lt(snpID, alts.size());
+                const ALT<index_t>& snp = alts[snpID];
+                assert(snp.snp());
+                index_t snpID2 = snpIDs[s+1];
+                assert_lt(snpID2, alts.size());
+                const ALT<index_t>& snp2 = alts[snpID2];
+                assert(snp2.snp());
+                if(snp.type == ALT_SNP_INS) {
+                    assert_leq(snp.pos, snp2.pos);
+                } else if(snp.type == ALT_SNP_DEL) {
+                    assert_lt(snp.pos + snp.len - 1, snp2.pos);
+                } else {
+                    assert_lt(snp.pos, snp2.pos);
+                }
+            }
+#endif
+            index_t prev_ALT_type = ALT_NONE;
+            index_t ID_i = 0;
+            for(index_t j = haplotype.left; j <= haplotype.right; j++) {
+                if(prev_ALT_type == ALT_SNP_INS) j--;
+                const ALT<index_t>* altp = (ID_i < snpIDs.size() ? &(alts[snpIDs[ID_i]]) : NULL);
+                assert(altp == NULL || altp->pos >= j);
+                if(altp != NULL && altp->pos == j) {
+                    const ALT<index_t>& alt = *altp;
+                    assert_lt(alt.pos, s.length());
+                    assert(alt.snp());
+                    if(alt.type == ALT_SNP_SGL) {
+                        assert_eq(alt.len, 1);
+                        nodes.expand();
+                        assert_lt(alt.seq, 4);
+                        assert_neq(alt.seq & 0x3, s[alt.pos]);
+                        nodes.back().label = "ACGT"[alt.seq];
+                        nodes.back().value = alt.pos;
+                        if(prev_ALT_type != ALT_SNP_DEL) {
+                            edges.expand();
+                            if(j == haplotype.left) {
+                                edges.back().from = alt.pos;
+                            } else {
+                                assert_gt(nodes.size(), 2);
+                                edges.back().to = (index_t)nodes.size() - 2;
+                            }
+                        }
+                        if(j == haplotype.right) {
+                            edges.expand();
+                            edges.back().from = (index_t)nodes.size() - 1;
+                            edges.back().to = alt.pos + 2;
+                        }
+                    }
+                    else if(alt.type == ALT_SNP_DEL) {
+                        assert_gt(alt.len, 0);
+                        assert_leq(alt.pos + alt.len, s.length());
+                        edges.expand();
+                        if(j == haplotype.left) {
+                            edges.back().from = alt.pos;
+                        } else {
+                            edges.back().from = (index_t)nodes.size() - 1;
+                        }
+                        j += (alt.len - 1);
+                        assert_leq(j, haplotype.right);
+                        if(j == haplotype.right) {
+                            edges.back().to = alt.pos + alt.len + 1;
+                        } else {
+                            edges.back().to = (index_t)nodes.size();
+                        }
+                    } else {
+                        assert_eq(alt.type, ALT_SNP_INS)
+                        assert_gt(alt.len, 0);
+                        for(size_t k = 0; k < alt.len; k++) {
+                            uint64_t bp = alt.seq >> ((alt.len - k - 1) << 1);
+                            bp &= 0x3;
+                            char ch = "ACGT"[bp];
+                            nodes.expand();
+                            nodes.back().label = ch;
+                            nodes.back().value = (index_t)INDEX_MAX;
+                            if(prev_ALT_type == ALT_SNP_DEL && k == 0) continue;
+                            edges.expand();
+                            edges.back().from = (k == 0 ? alt.pos : (index_t)nodes.size() - 2);
+                            edges.back().to = (index_t)nodes.size() - 1;
+                        }
+                        if(j == haplotype.right) {
+                            edges.expand();
+                            edges.back().from = (index_t)nodes.size() - 1;
+                            edges.back().to = alt.pos + 1;
+                        }
+                    }
+                    ID_i++;
+                    prev_ALT_type = alt.type;
+                } else {
+                    int nt = s[j];
+                    assert_lt(nt, 4);
+                    nodes.expand();
+                    nodes.back().label = "ACGT"[nt];
+                    nodes.back().value = j;
+                    if(prev_ALT_type != ALT_SNP_DEL) {
+                        edges.expand();
+                        if(j == haplotype.left) {
+                            edges.back().from = j;
+                        } else {
+                            edges.back().from = (index_t)nodes.size() - 1;
+                        }
+                        edges.back().to = (index_t)nodes.size() - 1;
+                    }
+                    if(j == haplotype.right) {
+                        edges.expand();
+                        edges.back().from = (index_t)nodes.size() - 1;
+                        edges.back().to = j + 2;
+                    }
+                    prev_ALT_type = ALT_SNP_SGL;
+                }
+            }
+        }
+        
         // Create nodes and edges for SNPs
         for(size_t i = 0; i < alts.size(); i++) {
             const ALT<index_t>& alt = alts[i];
             if(alt.pos >= s.length()) break;
-            if(prev_alt_nodes.size() > 0) {
-                if(prev_alt_nodes.back().second + 1 < alt.pos) {
-                    prev_alt_nodes.clear();
-                }
-            }
-            if(alt.type == ALT_SNP_SGL) {
-                assert_eq(alt.len, 1);
-                nodes.expand();
-                assert_lt(alt.seq, 4);
-                assert_neq(alt.seq & 0x3, s[alt.pos]);
-                nodes.back().label = "ACGT"[alt.seq];
-                nodes.back().value = alt.pos;
-                edges.expand();
-                edges.back().from = alt.pos;
-                edges.back().to = (index_t)nodes.size() - 1;
-                edges.expand();
-                edges.back().from = (index_t)nodes.size() - 1;
-                edges.back().to = alt.pos + 2;
-                if(prev_alt_nodes.size() > 0){
-                    size_t j = prev_alt_nodes.size() - 1;
-                    while(true) {
-                        const pair<index_t, index_t>& prev_alt = prev_alt_nodes[j];
-                        if(prev_alt.second + 1 < alt.pos) break;
-                        if(prev_alt.second + 1 == alt.pos) {
-                            edges.expand();
-                            edges.back().from = prev_alt.first;
-                            edges.back().to = (index_t)nodes.size() - 1;
-                        }
-                        if(j == 0) break;
-                        j--;
-                    }
-                }
-                prev_alt_nodes.expand();
-                prev_alt_nodes.back().first = (index_t)nodes.size() - 1;
-                prev_alt_nodes.back().second = alt.pos;
-            }
-            else if(alt.type == ALT_SNP_DEL) {
-                assert_gt(alt.len, 0);
-                if(alt.pos + alt.len >= s.length()) break;
-                edges.expand();
-                edges.back().from = alt.pos;
-                edges.back().to = alt.pos + alt.len + 1;
-            } else if(alt.type == ALT_SNP_INS) {
-                assert_gt(alt.len, 0);
-                for(size_t j = 0; j < alt.len; j++) {
-                    uint64_t bp = alt.seq >> ((alt.len - j - 1) << 1);
-                    bp &= 0x3;
-                    char ch = "ACGT"[bp];
-                    nodes.expand();
-                    nodes.back().label = ch;
-                    nodes.back().value = (index_t)INDEX_MAX;
-                    edges.expand();
-                    edges.back().from = (j == 0 ? alt.pos : (index_t)nodes.size() - 2);
-                    edges.back().to = (index_t)nodes.size() - 1;
-                }
-                edges.expand();
-                edges.back().from = (index_t)nodes.size() - 1;
-                edges.back().to = alt.pos + 1;
-            } else if(alt.type == ALT_SPLICESITE) {
-                if(alt.excluded) continue;
-                assert_lt(alt.left, alt.right);
-                edges.expand();
-                edges.back().from = alt.left;
-                edges.back().to = alt.right + 2;
-            } else {
-                assert(false);
-            }
+            if(alt.type != ALT_SPLICESITE) continue;
         }
 
         if(!isReverseDeterministic(nodes, edges)) {

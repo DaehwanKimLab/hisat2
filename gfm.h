@@ -55,6 +55,7 @@
 #include "random_source.h"
 #include "mem_ids.h"
 #include "btypes.h"
+#include "tokenize.h"
 
 #ifdef POPCNT_CAPABILITY
 #include "processor_support.h"
@@ -898,6 +899,7 @@ public:
 		initFromVector<TStr>(
 							 s,
                              snpfile,
+                             htfile,
                              ssfile,
                              exonfile,
                              svfile,
@@ -1128,6 +1130,7 @@ public:
 	template <typename TStr>
 	void initFromVector(TStr& s,
                         const string& snpfile,
+                        const string& htfile,
                         const string& ssfile,
                         const string& exonfile,
                         const string& svfile,
@@ -1224,6 +1227,7 @@ public:
                     }
                 }
                 
+                EList<index_t> snpID2num;
                 if(snpfile != "") {
                     ifstream snp_file(snpfile.c_str(), ios::in);
                     if(!snp_file.is_open()) {
@@ -1253,7 +1257,7 @@ public:
                         } else if(type == "insertion") {
                             snp_file >> ins_seq;
                         }
-                        
+                        snpID2num.push_back((index_t)OFF_MAX);
                         index_t chr_idx = 0;
                         for(; chr_idx < refnames_nospace.size(); chr_idx++) {
                             if(chr == refnames_nospace[chr_idx])
@@ -1346,9 +1350,109 @@ public:
                         }
                         _altnames.push_back(snp_id);
                         assert_eq(_alts.size(), _altnames.size());
+                        snpID2num.back() = (index_t)_alts.size() - 1;
                     }
                     snp_file.close();
                     assert_eq(_alts.size(), _altnames.size());
+                }
+                
+                _haplotypes.clear();
+                if(_alts.size() > 0 && htfile != "") {
+                    ifstream ht_file(htfile.c_str(), ios::in);
+                    if(!ht_file.is_open()) {
+                        cerr << "Error: could not open "<< htfile.c_str() << endl;
+                        throw 1;
+                    }
+                    
+                    while(!ht_file.eof()) {
+                        // ht66    A*01:01:01:01   371     533     66,69,72,75,76,77,84,88,90,92,95
+                        string ht_id;
+                        ht_file >> ht_id;
+                        if(ht_id.empty() || ht_id[0] == '#') {
+                            string line;
+                            getline(ht_file, line);
+                            continue;
+                        }
+                        string chr, alt_list;
+                        index_t left, right;  // inclusive [left, right]
+                        ht_file >> chr >> left >> right >> alt_list;
+                        assert_leq(left, right);
+                        index_t chr_idx = 0;
+                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
+                            if(chr == refnames_nospace[chr_idx])
+                                break;
+                        }
+                        if(chr_idx >= refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        assert_lt(chr_idx, chr_szs.size());
+                        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+                        const index_t sofar_len = tmp_pair.first;
+                        const index_t szs_idx = tmp_pair.second;
+                        bool inside_Ns = false;
+                        index_t add_pos = 0;
+                        assert(szs[szs_idx].first);
+                        for(index_t i = szs_idx; i < szs.size(); i++) {
+                            if(i != szs_idx && szs[i].first) break;
+                            if(left < szs[i].off) {
+                                inside_Ns = true;
+                                break;
+                            } else {
+                                left -= szs[i].off;
+                                right -= szs[i].off;
+                                if(left < szs[i].len) {
+                                    if(right >= szs[i].len) {
+                                        inside_Ns = true;
+                                    }
+                                    break;
+                                } else {
+                                    left -= szs[i].len;
+                                    right -= szs[i].len;
+                                    add_pos += szs[i].len;
+                                }
+                            }
+                        }
+                        if(inside_Ns) continue;
+                        left = sofar_len + add_pos + left;
+                        right = sofar_len + add_pos + right;
+                        if(chr_idx + 1 < chr_szs.size()) {
+                            if(right >= chr_szs[chr_idx + 1].first) continue;
+                        } else {
+                            if(right >= jlen) continue;
+                        }
+                        _haplotypes.expand();
+                        _haplotypes.back().left = left;
+                        _haplotypes.back().right = right;
+                        EList<string> alts;
+                        tokenize(alt_list, ",", alts);
+                        assert_gt(alts.size(), 0);
+                        _haplotypes.back().alts.clear();
+                        for(size_t i = 0; i < alts.size(); i++) {
+                            index_t alt = (index_t)atoi(alts[i].c_str());
+                            assert_lt(alt, snpID2num.size());
+                            alt = snpID2num[alt];
+                            if(alt < (index_t)OFF_MAX) {
+                                _haplotypes.back().alts.push_back(alt);
+                            }
+                        }
+                        if(_haplotypes.back().alts.size() <= 0) {
+                            _haplotypes.pop_back();
+                        }
+                    }
+                    ht_file.close();
+                } else {
+                    for(index_t a = 0; a < _alts.size(); a++) {
+                        const ALT<index_t>& alt = _alts[a];
+                        if(!alt.snp()) continue;
+                        _haplotypes.expand();
+                        _haplotypes.back().left = alt.pos;
+                        if(alt.deletion()) {
+                            _haplotypes.back().right = alt.pos + alt.len - 1;
+                        } else {
+                            _haplotypes.back().right = alt.pos;
+                        }
+                        _haplotypes.back().alts.clear();
+                        _haplotypes.back().alts.push_back(a);
+                    }
                 }
                 
                 if(ssfile != "") {
@@ -1711,7 +1815,7 @@ public:
                     VMSG_NL("Converting suffix-array elements to index image");
                     buildToDisk(bsa, s, out1, out2);
                 } else {
-                    RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, outfile, _nthreads, verbose);
+                    RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, _haplotypes, outfile, _nthreads, verbose);
                     PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, outfile, _nthreads, verbose);
 
                     if(verbose) { cerr << "Generating edges... " << endl; }
@@ -3662,8 +3766,9 @@ public:
 	static const int      default_ftabChars = 10;
 	static const bool     default_bigEndian = false;
     
-    EList<ALT<index_t> >  _alts;
-    EList<string>         _altnames;
+    EList<ALT<index_t> >       _alts;
+    EList<string>              _altnames;
+    EList<Haplotype<index_t> > _haplotypes;
 
 protected:
 

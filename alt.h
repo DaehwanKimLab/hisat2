@@ -90,6 +90,8 @@ public:
             if(type == ALT_NONE || o.type == ALT_NONE) {
                 return type == ALT_NONE;
             }
+            if(type == ALT_SNP_INS) return true;
+            else if(o.type == ALT_SNP_INS) return false;
             return type < o.type;
         }
         if(len != o.len) return len < o.len;
@@ -209,6 +211,28 @@ private:
     
     EList<ALT<index_t> > _alts;
     EList<string>        _altnames;
+};
+
+template <typename index_t>
+struct Haplotype {
+    Haplotype() {
+        reset();
+    }
+    
+    void reset() {
+        left = right = 0;
+        alts.clear();
+    }
+    
+    bool operator< (const Haplotype& o) const {
+        if(left != o.left) return left < o.left;
+        if(right != o.right) return right < o.right;
+        return false;
+    }
+    
+    index_t left;
+    index_t right;
+    EList<index_t, 4> alts;
 };
 
 #endif /*ifndef ALT_H_*/
