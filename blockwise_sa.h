@@ -249,7 +249,7 @@ public:
             const string fname = sa->_base_fname + "." + number.str() + ".sa";
             ofstream sa_file(fname.c_str(), ios::binary);
             if(!sa_file.good()) {
-                cerr << "Could not open file for writing a reference graph: \"" << fname << "\"" << endl;
+                cerr << "Could not open file for writing a bucket: \"" << fname << "\"" << endl;
                 throw 1;
             }
             const EList<TIndexOffU>& bucket = sa->_itrBuckets[tid];
@@ -310,7 +310,7 @@ public:
                 const string fname = _base_fname + "." + number.str() + ".sa";
                 ifstream sa_file(fname.c_str(), ios::binary);
                 if(!sa_file.good()) {
-                    cerr << "Could not open file for reading a reference graph: \"" << fname << "\"" << endl;
+                    cerr << "Could not open file for reading a bucket: \"" << fname << "\"" << endl;
                     throw 1;
                 }
                 size_t numSAs = readIndex<TIndexOffU>(sa_file, _bigEndian);

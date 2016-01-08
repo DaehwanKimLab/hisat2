@@ -210,18 +210,19 @@ private:
 private:
     struct ThreadParam {
         // input
-        index_t                      thread_id;
-        RefGraph<index_t>*           refGraph;
-        const SString<char>*         s;
-        const EList<ALT<index_t> >*  alts;
-        string                       out_fname;
-        bool                         bigEndian;
+        index_t                           thread_id;
+        RefGraph<index_t>*                refGraph;
+        const SString<char>*              s;
+        const EList<ALT<index_t> >*       alts;
+        const EList<Haplotype<index_t> >* haplotypes;
+        string                            out_fname;
+        bool                              bigEndian;
 
         // output
-        index_t                      num_nodes;
-        index_t                      num_edges;
-        index_t                      lastNode;
-        bool                         multipleHeadNodes;
+        index_t                           num_nodes;
+        index_t                           num_edges;
+        index_t                           lastNode;
+        bool                              multipleHeadNodes;
     };
     static void buildGraph_worker(void* vp);
 
@@ -475,6 +476,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             threadParams.back().refGraph = this;
             threadParams.back().s = &s;
             threadParams.back().alts = &alts;
+            threadParams.back().haplotypes = &haplotypes;
             threadParams.back().out_fname = out_fname;
             threadParams.back().bigEndian = bigEndian;
             threadParams.back().num_nodes = 0;
@@ -829,6 +831,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
     index_t jlen = (index_t)s.length();
 
     const EList<ALT<index_t> >& alts = *(threadParam->alts);
+    const EList<Haplotype<index_t> >& haplotypes = *(threadParam->haplotypes);
 
     EList<Node> nodes; EList<Edge> edges;
     const EList<RefRecord>& tmp_szs = refGraph.tmp_szs;
@@ -862,7 +865,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         curr_pos += tmp_szs[i].len;
     }
     EList<index_t> prev_tail_nodes;
-    index_t alt_idx = 0;
+    index_t alt_idx = 0, haplotype_idx = 0;
     for(; szs_idx < szs_idx_end; szs_idx++) {
         index_t curr_len = tmp_szs[szs_idx].len;
         if(curr_len <= 0) continue;
@@ -896,62 +899,150 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         edges.back().from = (index_t)nodes.size() - 2;
         edges.back().to = (index_t)nodes.size() - 1;
         ASSERT_ONLY(index_t backbone_nodes = (index_t)nodes.size());
-        // Create nodes and edges for SNPs
+     
+        // Create nodes and edges for haplotypes
+        for(; haplotype_idx < haplotypes.size(); haplotype_idx++) {
+            const Haplotype<index_t>& haplotype = haplotypes[haplotype_idx];
+            if(haplotype.left < curr_pos) continue;
+            if(haplotype.right >= curr_pos + curr_len) break;
+            const EList<index_t, 4>& snpIDs = haplotype.alts;
+            assert_gt(snpIDs.size(), 0);
+#ifndef NDEBUG
+            for(index_t s = 0; s < snpIDs.size(); s++) {
+                index_t snpID = snpIDs[s];
+                assert_lt(snpID, alts.size());
+                const ALT<index_t>& snp = alts[snpID];
+                assert(snp.snp());
+                if(s + 1 >= snpIDs.size()) break;
+                index_t snpID2 = snpIDs[s+1];
+                assert_lt(snpID2, alts.size());
+                const ALT<index_t>& snp2 = alts[snpID2];
+                assert(snp2.snp());
+                if(snp.type == ALT_SNP_INS) {
+                    assert_leq(snp.pos, snp2.pos);
+                } else if(snp.type == ALT_SNP_DEL) {
+                    assert_lt(snp.pos + snp.len - 1, snp2.pos);
+                } else {
+                    assert_lt(snp.pos, snp2.pos);
+                }
+            }
+#endif
+            index_t prev_ALT_type = ALT_NONE;
+            index_t ID_i = 0;
+            for(index_t j = haplotype.left; j <= haplotype.right; j++) {
+                if(prev_ALT_type == ALT_SNP_INS) j--;
+                const ALT<index_t>* altp = (ID_i < snpIDs.size() ? &(alts[snpIDs[ID_i]]) : NULL);
+                assert(altp == NULL || altp->pos >= j);
+                if(altp != NULL && altp->pos == j) {
+                    const ALT<index_t>& alt = *altp;
+                    assert_lt(alt.pos, s.length());
+                    assert(alt.snp());
+                    if(alt.type == ALT_SNP_SGL) {
+                        assert_eq(alt.len, 1);
+                        nodes.expand();
+                        assert_lt(alt.seq, 4);
+                        assert_neq(alt.seq & 0x3, s[alt.pos]);
+                        nodes.back().label = "ACGT"[alt.seq];
+                        nodes.back().value = alt.pos;
+                        if(prev_ALT_type != ALT_SNP_DEL) {
+                            edges.expand();
+                            if(j == haplotype.left) {
+                                edges.back().from = alt.pos - curr_pos;
+                            } else {
+                                assert_gt(nodes.size(), 2);
+                                edges.back().from = (index_t)nodes.size() - 2;
+                            }
+                            assert_lt(edges.back().from, backbone_nodes);
+                            edges.back().to = (index_t)nodes.size() - 1;
+                        }
+                        if(j == haplotype.right) {
+                            edges.expand();
+                            edges.back().from = (index_t)nodes.size() - 1;
+                            edges.back().to = alt.pos - curr_pos + 2;
+                            assert_lt(edges.back().to, backbone_nodes);
+                        }
+                    }
+                    else if(alt.type == ALT_SNP_DEL) {
+                        assert_gt(alt.len, 0);
+                        assert_leq(alt.pos - curr_pos + alt.len, s.length());
+                        edges.expand();
+                        if(j == haplotype.left) {
+                            edges.back().from = alt.pos - curr_pos;
+                            assert_lt(edges.back().from, backbone_nodes);
+                        } else {
+                            edges.back().from = (index_t)nodes.size() - 1;
+                        }
+                        j += (alt.len - 1);
+                        assert_leq(j, haplotype.right);
+                        if(j == haplotype.right) {
+                            edges.back().to = alt.pos - curr_pos + alt.len + 1;
+                            assert_lt(edges.back().to, backbone_nodes);
+                        } else {
+                            edges.back().to = (index_t)nodes.size();
+                        }
+                    } else {
+                        assert_eq(alt.type, ALT_SNP_INS)
+                        assert_gt(alt.len, 0);
+                        for(size_t k = 0; k < alt.len; k++) {
+                            uint64_t bp = alt.seq >> ((alt.len - k - 1) << 1);
+                            bp &= 0x3;
+                            char ch = "ACGT"[bp];
+                            nodes.expand();
+                            nodes.back().label = ch;
+                            nodes.back().value = (index_t)INDEX_MAX;
+                            if(prev_ALT_type == ALT_SNP_DEL && k == 0) continue;
+                            edges.expand();
+                            edges.back().from = (k == 0 ? alt.pos - curr_pos : (index_t)nodes.size() - 2);
+                            edges.back().to = (index_t)nodes.size() - 1;
+                        }
+                        if(j == haplotype.right) {
+                            edges.expand();
+                            edges.back().from = (index_t)nodes.size() - 1;
+                            edges.back().to = alt.pos - curr_pos + 1;
+                        }
+                    }
+                    ID_i++;
+                    prev_ALT_type = alt.type;
+                } else {
+                    int nt = s[j];
+                    assert_lt(nt, 4);
+                    nodes.expand();
+                    nodes.back().label = "ACGT"[nt];
+                    nodes.back().value = j;
+                    if(prev_ALT_type != ALT_SNP_DEL) {
+                        edges.expand();
+                        if(j == haplotype.left) {
+                            edges.back().from = j - curr_pos;
+                        } else {
+                            edges.back().from = (index_t)nodes.size() - 2;
+                        }
+                        assert_lt(edges.back().from, backbone_nodes);
+                        edges.back().to = (index_t)nodes.size() - 1;
+                    }
+                    if(j == haplotype.right) {
+                        edges.expand();
+                        edges.back().from = (index_t)nodes.size() - 1;
+                        edges.back().to = j - curr_pos + 2;
+                        assert_lt(edges.back().to, backbone_nodes);
+                    }
+                    prev_ALT_type = ALT_SNP_SGL;
+                }
+            }
+        }
+        
+        // Create nodes and edges for splice sites
         for(; alt_idx < alts.size(); alt_idx++) {
             const ALT<index_t>& alt = alts[alt_idx];
             if(alt.pos < curr_pos) continue;
-            assert_geq(alt.pos, curr_pos);
             if(alt.pos >= curr_pos + curr_len) break;
-            if(alt.type == ALT_SNP_SGL) {
-                assert_eq(alt.len, 1);
-                nodes.expand();
-                assert_lt(alt.seq, 4);
-                assert_neq(alt.seq & 0x3, s[alt.pos]);
-                nodes.back().label = "ACGT"[alt.seq];
-                nodes.back().value = alt.pos;
-                edges.expand();
-                edges.back().from = alt.pos - curr_pos;
-                edges.back().to = (index_t)nodes.size() - 1;
-                assert_lt(edges.back().from, backbone_nodes);
-                edges.expand();
-                edges.back().from = (index_t)nodes.size() - 1;
-                edges.back().to = alt.pos - curr_pos + 2;
-                assert_lt(edges.back().to, backbone_nodes);
-            } else if(alt.type == ALT_SNP_DEL) {
-                assert_gt(alt.len, 0);
-                edges.expand();
-                edges.back().from = alt.pos - curr_pos;
-                edges.back().to = alt.pos - curr_pos + alt.len + 1;
-                assert_lt(edges.back().from, backbone_nodes);
-                assert_lt(edges.back().to, backbone_nodes);
-            } else if(alt.type == ALT_SNP_INS) {
-                assert_gt(alt.len, 0);
-                for(size_t j = 0; j < alt.len; j++) {
-                    uint64_t bp = alt.seq >> ((alt.len - j - 1) << 1);
-                    bp &= 0x3;
-                    char ch = "ACGT"[bp];
-                    nodes.expand();
-                    nodes.back().label = ch;
-                    nodes.back().value = (index_t)INDEX_MAX;
-                    edges.expand();
-                    edges.back().from = (j == 0 ? alt.pos - curr_pos : (index_t)nodes.size() - 2);
-                    edges.back().to = (index_t)nodes.size() - 1;
-                }
-                edges.expand();
-                edges.back().from = (index_t)nodes.size() - 1;
-                edges.back().to = alt.pos - curr_pos + 1;
-            } else if(alt.type == ALT_SPLICESITE) {
-                if(alt.excluded) continue;
-                assert_lt(alt.left, alt.right);
-                edges.expand();
-                edges.back().from = alt.left - curr_pos;
-                edges.back().to = alt.right - curr_pos + 2;
-                assert_lt(edges.back().from, backbone_nodes);
-                assert_lt(edges.back().to, backbone_nodes);
-            } else {
-                assert(alt.exon());
-                continue;
-            }
+            if(!alt.splicesite()) continue;
+            if(alt.excluded) continue;
+            assert_lt(alt.left, alt.right);
+            edges.expand();
+            edges.back().from = alt.left - curr_pos;
+            edges.back().to = alt.right - curr_pos + 2;
+            assert_lt(edges.back().from, backbone_nodes);
+            assert_lt(edges.back().to, backbone_nodes);
         }
 
 #ifndef NDEBUG

@@ -1231,7 +1231,7 @@ public:
                 if(snpfile != "") {
                     ifstream snp_file(snpfile.c_str(), ios::in);
                     if(!snp_file.is_open()) {
-                        cerr << "Error: could not open "<< snpfile.c_str() << endl;
+                        cerr << "Error: could not open " << snpfile.c_str() << endl;
                         throw 1;
                     }
                     
@@ -1458,7 +1458,7 @@ public:
                 if(ssfile != "") {
                     ifstream ss_file(ssfile.c_str(), ios::in);
                     if(!ss_file.is_open()) {
-                        cerr << "Error: could not open "<< ssfile.c_str() << endl;
+                        cerr << "Error: could not open " << ssfile.c_str() << endl;
                         throw 1;
                     }
                     map<uint64_t, uint64_t> ss_seq;
@@ -1572,7 +1572,7 @@ public:
                 if(exonfile != "") {
                     ifstream exon_file(exonfile.c_str(), ios::in);
                     if(!exon_file.is_open()) {
-                        cerr << "Error: could not open "<< ssfile.c_str() << endl;
+                        cerr << "Error: could not open " << ssfile.c_str() << endl;
                         throw 1;
                     }
                     while(!exon_file.eof()) {
@@ -1646,7 +1646,7 @@ public:
                 
                 // Todo - implement structural variations
                 if(svfile != "") {
-                    cerr << "Warning: SV option is not implemented "<< svfile.c_str() << endl;
+                    cerr << "Warning: SV option is not implemented " << svfile.c_str() << endl;
                 }
                 
                 // Sort SNPs and Splice Sites based on positions
@@ -1663,6 +1663,21 @@ public:
                     for(size_t i = 0; i < _alts.size(); i++) {
                         _alts[i] = buf[i].first;
                         _altnames[i] = buf2[buf[i].second];
+                    }
+                    
+                    EList<index_t> buf3; buf3.resize(_alts.size());
+                    for(size_t i = 0; i < buf3.size(); i++) {
+                        index_t before = buf[i].second;
+                        assert_lt(before, buf3.size());
+                        buf3[before] = (index_t)i;
+                    }
+                    for(size_t h = 0; h < _haplotypes.size(); h++) {
+                        EList<index_t, 4>& alts = _haplotypes[h].alts;
+                        for(size_t a = 0; a < alts.size(); a++) {
+                            index_t before = alts[a];
+                            assert_lt(before, buf3.size());
+                            alts[a] = buf3[before];
+                        }
                     }
 #ifndef NDEBUG
                     for(size_t i = 0; i < _alts.size(); i++) {

@@ -187,7 +187,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
             gene = genes[0]
 
             # daehwan - for debugging purposes
-            gene = "B"
+            # gene = "B"
             
             HLA_gene_alleles = HLA_names[gene]
             nums = [i for i in range(len(HLA_gene_alleles))]
@@ -240,8 +240,9 @@ def test_HLA_genotyping(base_fname, verbose = False):
                 aligner_cmd = [hisat2]
                 if index_type == "linear":
                     aligner_cmd += ["-k", "10"]
-                aligner_cmd += ["-x", "hla.%s" % index_type,
-                                "-f", "hla_input.fa"]                
+                aligner_cmd += ["-x", "hla.%s" % index_type]
+                # aligner_cmd += ["-x", "test"]
+                aligner_cmd += ["-f", "hla_input.fa"]                
             elif aligner == "bowtie2":
                 aligner_cmd = [aligner,
                                "-k", "10",
@@ -304,7 +305,6 @@ def test_HLA_genotyping(base_fname, verbose = False):
                     cols = line[:-1].split()
                     read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
                     read_seq = cols[9]
-
                     if not chr.startswith(gene):
                         continue
 
