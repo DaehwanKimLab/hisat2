@@ -185,6 +185,10 @@ def test_HLA_genotyping(base_fname, verbose = False):
             genes = HLA_names.keys()
             random.shuffle(genes)
             gene = genes[0]
+
+            # daehwan - for debugging purposes
+            gene = "B"
+            
             HLA_gene_alleles = HLA_names[gene]
             nums = [i for i in range(len(HLA_gene_alleles))]
             random.shuffle(nums)

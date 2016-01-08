@@ -732,11 +732,16 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             }
         }
         
-        // Create nodes and edges for SNPs
+        // Create nodes and edges for splice sites
         for(size_t i = 0; i < alts.size(); i++) {
             const ALT<index_t>& alt = alts[i];
             if(alt.pos >= s.length()) break;
             if(alt.type != ALT_SPLICESITE) continue;
+            if(alt.excluded) continue;
+            assert_lt(alt.left, alt.right);
+            edges.expand();
+            edges.back().from = alt.left;
+            edges.back().to = alt.right + 2;
         }
 
         if(!isReverseDeterministic(nodes, edges)) {
