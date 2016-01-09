@@ -20,7 +20,7 @@
 #
 
 
-import os, sys, re
+import os, sys, subprocess, re
 from collections import defaultdict as dd, Counter
 from argparse import ArgumentParser, FileType
 
@@ -28,20 +28,30 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def extract_HLA_vars(base_fname, gap, split, verbose = False):
+def extract_HLA_vars(base_fname, gap, split, sequence_type, verbose = False):
     # Samples of HLA_MSA_file are found in
     #    ftp://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/msf/
     HLA_genes = {
-        "A" : "A*01:01:01:01",
-        "B" : "B*07:02:01",
-        "C" : "C*01:02:01",       # ref: C*01:02:01 
-        "DQA" : "",
-        "DQB" : "",
-        "DRB1" : "DRB1*01:01:01"  # ref: DRB1*15:01:01:01
+        "A"    : "A*03:01:01:01",    # first: A*01:01:01:01
+        "B"    : "B*07:02:01",       # same first
+        "C"    : "C*07:02:01:03",    # first: C*01:02:01
+        "DQA"  : "",
+        "DQB"  : "",
+        "DRB1" : "DRB1*15:01:01:01", # first: DRB1*15:01:01:01
+        }
+
+    # Corresponding genomic loci found by Bowtie2
+    #   e.g. bowtie2 --no-unal --score-min C,0 -x 6 -f IMGTHLA/fasta/A_gen.fasta
+    HLA_gene_loci = {
+        "A"    : [29942254, "3502M"],  # AS:i:0
+        "B"    : [31354120, "3323M"],  # AS:i:0
+        "C"    : [31268998, "3354M"],  # AS:i:0
+        "DRB1" : [32578769, "11080M"], # AS:i:0
         }
 
     # Write the backbone sequences into a fasta file
-    backbone_file = open(base_fname + "_backbone.fa", 'w')        
+    if sequence_type == "gene":
+        backbone_file = open(base_fname + "_backbone.fa", 'w')        
     # variants w.r.t the backbone sequences into a SNP file
     var_file = open(base_fname + ".snp", 'w')
     # haplotypes
@@ -104,12 +114,89 @@ def extract_HLA_vars(base_fname, gap, split, verbose = False):
         for i in range(1, len(HLA_seqs)):
             assert seq_len == len(HLA_seqs[i])
 
-        print >> sys.stderr, "%s: number of HLA genes is %d." % (HLA_gene, len(HLA_names))
-
-        Vars = {}
         backbone_name = HLA_ref_gene
         backbone_id = HLA_names[backbone_name]
         backbone_seq = HLA_seqs[backbone_id]
+        print >> sys.stderr, "%s: number of HLA genes is %d." % (HLA_gene, len(HLA_names))
+
+        # Extract sequence from the genome
+        if sequence_type in ["chromosome", "genome"]:
+            cigar_re = re.compile('\d+\w')
+            locus = HLA_gene_loci[HLA_gene]
+            assert locus != []
+            left, cigar_str = locus
+            right = left
+            cigars = cigar_re.findall(cigar_str)
+            cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+            for cigar_op, length in cigars:
+                if cigar_op in "MDN":
+                    right += length
+
+            seqview_cmd = ["samtools",
+                           "faidx",
+                           "genome.fa",
+                           "6:%d-%d" % (left, right - 1),
+                           ]
+            seqview_proc = subprocess.Popen(seqview_cmd,
+                                            stdout=subprocess.PIPE,
+                                            stderr=open("/dev/null", 'w'))
+
+            ref_seq = ""
+            for line in seqview_proc.stdout:
+                line = line.strip()
+                if line.startswith('>'):
+                    continue
+                else:
+                    ref_seq += line
+
+            msf_ref_seq = ""
+            i, j = 0, 0
+            right = left
+            dot_list = []
+            for cigar_op, length in cigars:
+                prev_i = i
+                if cigar_op == 'M':
+                    while i < prev_i + length:
+                        assert i < len(ref_seq) and j < len(backbone_seq)
+                        ref_bp, backbone_bp = ref_seq[i], backbone_seq[j]                        
+                        if backbone_bp == '.':
+                            msf_ref_seq += backbone_bp
+                        else:
+                            msf_ref_seq += ref_bp
+                            i += 1
+                        j += 1
+                elif cigar_op == 'I':
+                    msf_ref_seq += ('.' * length)
+                    j += length
+                elif cigar_op in "DN":
+                    msf_ref_seq += ref_seq[i:i+length]
+                    dot_list.append([j, length])
+                    i += length
+                else:
+                    assert cigar_op == 'S'
+                    assert False
+
+            if len(dot_list) > 0:
+                for allele_name, allele_id in HLA_names:
+                    allele_seq = HLA_seqs[allele_id]
+                    new_allele_seq = ""
+                    prev_pos = 0
+                    for dot in dot_list:
+                        pos, length = dot
+                        new_allele_seq += allele_seq[prev_pos:pos]
+                        new_allele_seq += ('.' * length)
+                        prev_pos = pos
+                    new_allele_seq += allele_seq[prev_pos:]
+                    HLA_seqs[allele_id] = new_allele_seq
+                    assert len(msf_ref_seq) == len(new_allele_seq)
+                    
+            backbone_name = "%s*REF" % (HLA_gene)
+            HLA_seqs.append(msf_ref_seq)
+            HLA_names[backbone_name] = len(HLA_seqs) - 1
+            backbone_id = HLA_names[backbone_name]
+            backbone_seq = HLA_seqs[backbone_id]
+
+        Vars = {}
         for cmp_name, id in HLA_names.items():
             if cmp_name == backbone_name:
                 continue
@@ -274,10 +361,11 @@ def extract_HLA_vars(base_fname, gap, split, verbose = False):
                 assert False
 
         # Write the backbone sequences into a fasta file
-        print >> backbone_file, ">%s" % (backbone_name)
-        backbone_seq_ = backbone_seq.replace('.', '')
-        for s in range(0, len(backbone_seq_), 60):
-            print >> backbone_file, backbone_seq_[s:s+60]
+        if sequence_type == "gene":
+            print >> backbone_file, ">%s" % (backbone_name)
+            backbone_seq_ = backbone_seq.replace('.', '')
+            for s in range(0, len(backbone_seq_), 60):
+                print >> backbone_file, backbone_seq_[s:s+60]
 
         # Write
         #       (1) variants w.r.t the backbone sequences into a SNP file
@@ -445,7 +533,14 @@ def extract_HLA_vars(base_fname, gap, split, verbose = False):
             for s in range(0, len(seq), 60):
                 print >> input_file, seq[s:s+60]
 
-    backbone_file.close()
+    if sequence_type == "gene":
+        backbone_file.close()
+    elif sequence_type == "chromosome":
+        os.system("samtools faidx genome.fa 6 > hla_backbone.fa")
+    else:
+        assert sequence_type == "genome"
+        os.system("cp genome.fa hla_backbone.fa")
+                      
     var_file.close()
     haplotype_file.close()
     link_file.close()
@@ -472,6 +567,11 @@ if __name__ == '__main__':
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes.")
+    parser.add_argument("--sequence-type",
+                        dest="sequence_type",
+                        type=str,
+                        default="gene",
+                        help="Sequence type: (1) gene, (2) chromosome, and (3) genome.")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -481,5 +581,8 @@ if __name__ == '__main__':
     if args.gap > args.split:
         print >> sys.stderr, "Error: -g/--gap (%d) must be smaller than -s/--split (%d)" % (args.gap, args.split)
         sys.exit(1)
+    if not args.sequence_type in ["gene", "chromosome", "genome"]:
+        print >> sys.stderr, "Error: --seqeuence-type (%s) must be one of gene, chromosome, and genome" % (args.sequence_type)
+        sys.exit(1)
         
-    extract_HLA_vars(args.base_fname, args.gap, args.split, args.verbose)
+    extract_HLA_vars(args.base_fname, args.gap, args.split, args.sequence_type, args.verbose)

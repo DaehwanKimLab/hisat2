@@ -28,7 +28,7 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def test_HLA_genotyping(base_fname, verbose = False):
+def test_HLA_genotyping(base_fname, sequence_type, verbose = False):
     # Current directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
     ex_path = os.path.dirname(curr_script)
@@ -54,7 +54,8 @@ def test_HLA_genotyping(base_fname, verbose = False):
         extract_hla_script = os.path.join(ex_path, "extract_HLA_vars.py")
         extract_cmd = [extract_hla_script,
                        "--gap", "30",
-                       "--split", "50"]
+                       "--split", "50",
+                       "--sequence-type", sequence_type]
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):
@@ -238,6 +239,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
             if aligner == "hisat2":
                 hisat2 = os.path.join(ex_path, "hisat2")
                 aligner_cmd = [hisat2]
+                aligner_cmd += ["--no-unal"]
                 if index_type == "linear":
                     aligner_cmd += ["-k", "10"]
                 aligner_cmd += ["-x", "hla.%s" % index_type]
@@ -245,6 +247,7 @@ def test_HLA_genotyping(base_fname, verbose = False):
                 aligner_cmd += ["-f", "hla_input.fa"]                
             elif aligner == "bowtie2":
                 aligner_cmd = [aligner,
+                               "--no-unal",
                                "-k", "10",
                                "-x", "hla",
                                "-f", "hla_input.fa"]
@@ -875,16 +878,19 @@ if __name__ == '__main__':
         type=str,
         default="hla",
         help='base filename for backbone HLA sequence, HLA variants, and HLA linking info.')
+    parser.add_argument("--sequence-type",
+                        dest="sequence_type",
+                        type=str,
+                        default="gene",
+                        help="Sequence type: (1) gene, (2) chromosome, and (3) genome.")
     parser.add_argument('-v', '--verbose',
         dest='verbose',
         action='store_true',
         help='also print some statistics to stderr')
 
     args = parser.parse_args()
-    """
-    if not args.HLA_MSA_file:
-        parser.print_help()
-        exit(1)
-    """
+    if not args.sequence_type in ["gene", "chromosome", "genome"]:
+        print >> sys.stderr, "Error: --seqeuence-type (%s) must be one of gene, chromosome, and genome" % (args.sequence_type)
+        sys.exit(1)
     random.seed(1)
-    test_HLA_genotyping(args.base_fname, args.verbose)
+    test_HLA_genotyping(args.base_fname, args.sequence_type, args.verbose)
