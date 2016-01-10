@@ -51,7 +51,31 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, verbose = False):
         os.system("wget ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz; tar xvzf grch38.tar.gz; rm grch38.tar.gz")
         hisat2_inspect = os.path.join(ex_path, "hisat2-inspect")
         os.system("%s grch38/genome > genome.fa" % hisat2_inspect)
-        os.system("samtools faidx genome.fa")        
+        os.system("samtools faidx genome.fa")
+
+    # Check if the pre-existing files (hla*) are compatible with the current parameter setting
+    if os.path.exists("hla.ref"):
+        left = 0
+        HLA_genes = set()
+        for line in open("hla.ref"):
+            HLA_name, chr, left, _ = line.strip().split()
+            HLA_gene = HLA_name.split('*')[0]
+            HLA_genes.add(HLA_gene)
+            left = int(left)
+        delete_hla_files = False
+        if reference_type == "gene":
+            if left > 0:
+                delete_hla_files = True
+        elif reference_type == "chromosome":
+            if left == 0:
+                delete_hla_files = True
+        else:
+            assert reference_type == "genome"
+            assert False
+        if not set(hla_list).issubset(HLA_genes):
+            delete_hla_files = True
+        if delete_hla_files:
+            os.system("rm hla*")
     
     # Extract HLA variants, backbone sequence, and other sequeces
     HLA_fnames = ["hla_backbone.fa",
@@ -261,7 +285,10 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, verbose = False):
         read_file.close()
 
         for aligner, index_type in aligners:
-            print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
+            if index_type == "graph":
+                print >> sys.stderr, "\n\t\t%s %s on %s" % (aligner, index_type, reference_type)
+            else:
+                print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
             # Align reads, and sort the alignments into a BAM file
             if aligner == "hisat2":
                 hisat2 = os.path.join(ex_path, "hisat2")
