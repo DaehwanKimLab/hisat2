@@ -27,7 +27,7 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
+def extract_HLA_vars(base_fname, hla_list, gap, split, reference_type, verbose = False):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(extract_HLA_vars))
     ex_path = os.path.dirname(curr_script)
@@ -39,11 +39,8 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
     hla_ref_file = open("hla.ref", 'w')
-    HLA_genes, HLA_gene_loci = {}, {}
-    for gene in ["A", "B", "C", "DRB1"]:
-        # daehwan - for debugging purposes
-        if gene != "A":
-            continue
+    HLA_genes, HLA_gene_strand = {}, {}
+    for gene in hla_list:
         hisat2 = os.path.join(ex_path, "hisat2")
         aligner_cmd = [hisat2,
                        "--score-min", "C,0",
@@ -53,33 +50,23 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
         align_proc = subprocess.Popen(aligner_cmd,
                                       stdout=subprocess.PIPE,
                                       stderr=open("/dev/null", 'w'))
-        allele_id, chr, cigar_str = "", "", ""
-        left, right = 0, 0
+        allele_id, strand = "", ''
         for line in align_proc.stdout:
             if line.startswith('@'):
                 continue
             line = line.strip()
             cols = line.split()
-            allele_id, flag, chr, left, mapQ, cigar_str = cols[:6]
-            left = int(left) - 1
+            allele_id, flag = cols[:2]
+            flag = int(flag)
+            strand = '-' if flag & 0x10 else '+'
             AS = ""
             for i in range(11, len(cols)):
                 col = cols[i]
                 if col.startswith("AS"):
                     AS = col[5:]
             assert int(AS) == 0
-            cigar_re = re.compile('\d+\w')
-            right = left
-            cigars = cigar_re.findall(cigar_str)
-            cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
-            assert len(cigars) == 1
-            for cigar_op, length in cigars:
-                assert cigar_op == 'M'
-                right += (length - 1)
-            break            
         align_proc.communicate()
-        assert allele_id != "" and cigar_str != ""
-
+        assert allele_id != ""
         allele_name = ""
         for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene):
             line = line.strip()
@@ -89,12 +76,10 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
             if allele_id == tmp_allele_id:
                 allele_name = tmp_allele_name
                 break
-        assert allele_name != ""
+        assert allele_name != "" and strand != ''
         HLA_genes[gene] = allele_name
-        HLA_gene_loci[gene] = [chr, left, right]
-        print allele_id, allele_name, left, right
-        print >> hla_ref_file, "%s\t6\t%d\t%d" % (allele_name, left, right)
-    hla_ref_file.close()
+        HLA_gene_strand[gene] = strand
+        print "HLA-%s's backbone allele is %s on '%s' strand" % (gene, allele_name, strand)
         
     # Write the backbone sequences into a fasta file
     if reference_type == "gene":
@@ -109,13 +94,12 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
     input_file = open(base_fname + "_sequences.fa", 'w')
     num_vars, num_haplotypes = 0, 0
     for HLA_gene, HLA_ref_gene in HLA_genes.items():
-        if HLA_ref_gene == "":
-            continue
         HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % HLA_gene
         if not os.path.exists(HLA_MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
             continue
-        
+
+        strand = HLA_gene_strand[HLA_gene]        
         HLA_names = {} # HLA allele names to numeric IDs
         HLA_seqs = []  # HLA multiple alignment sequences
         for line in open(HLA_MSA_fname):
@@ -154,6 +138,18 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
                 id = HLA_names[name]
                 HLA_seqs[id] += (five1 + five2 + five3 + five4 + five5)
 
+        # Reverse complement MSF if this gene is on '-' strand
+        if strand == '-':
+            comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
+            for i in range(len(HLA_seqs)):
+                rc_seq = ""
+                for s in reversed(HLA_seqs[i]):
+                    if s in comp_table:
+                        rc_seq += comp_table[s]
+                    else:
+                        rc_seq += s
+                HLA_seqs[i] = rc_seq
+
         # sanity check -
         #    Assert the lengths of the input MSF are the same
         assert len(HLA_seqs) > 0
@@ -166,11 +162,6 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
         backbone_seq = HLA_seqs[backbone_id]
         print >> sys.stderr, "%s: number of HLA genes is %d." % (HLA_gene, len(HLA_names))
 
-        # Extract sequence from the genome
-        base_locus = 0
-        if reference_type in ["chromosome", "genome"]:
-            _, base_locus, _ = HLA_gene_loci[HLA_gene]
-                    
         Vars = {}
         for cmp_name, id in HLA_names.items():
             if cmp_name == backbone_name:
@@ -335,15 +326,59 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
                 print >> sys.stderr, "Error: reconstruction fails for %s" % (cmp_name)
                 assert False
 
-        if reference_type != "gene":
-            backbone_name = "6"
-
         # Write the backbone sequences into a fasta file
         if reference_type == "gene":
             print >> backbone_file, ">%s" % (backbone_name)
             backbone_seq_ = backbone_seq.replace('.', '')
             for s in range(0, len(backbone_seq_), 60):
                 print >> backbone_file, backbone_seq_[s:s+60]
+
+        # Remap the backbone allele, which is sometimes slighly different from
+        #   IMGTHLA/fasta version
+        if reference_type == "gene":
+            base_locus = 0
+            backbone_seq_ = backbone_seq.replace('.', '')
+            print >> hla_ref_file, "%s\t6\t0\t%d" % (backbone_name, len(backbone_seq_) - 1)
+        else:
+            hisat2 = os.path.join(ex_path, "hisat2")
+            aligner_cmd = [hisat2,
+                           "--score-min", "C,0",
+                           "--no-unal",
+                           "-x", "grch38/genome",
+                           "-f", 
+                           "-c", "%s" % backbone_seq.replace('.', '')]
+            align_proc = subprocess.Popen(aligner_cmd,
+                                          stdout=subprocess.PIPE,
+                                          stderr=open("/dev/null", 'w'))
+            left, right = 0, 0
+            for line in align_proc.stdout:
+                if line.startswith('@'):
+                    continue
+                line = line.strip()
+                cols = line.split()
+                allele_id, flag, chr, left, mapQ, cigar_str = cols[:6]
+                flag = int(flag)
+                assert flag & 0x10 == 0
+                left = int(left) - 1
+                AS = ""
+                for i in range(11, len(cols)):
+                    col = cols[i]
+                    if col.startswith("AS"):
+                        AS = col[5:]
+                assert int(AS) == 0
+                cigar_re = re.compile('\d+\w')
+                right = left
+                cigars = cigar_re.findall(cigar_str)
+                cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+                assert len(cigars) == 1
+                for cigar_op, length in cigars:
+                    assert cigar_op == 'M'
+                    right += (length - 1)
+                break            
+            align_proc.communicate()
+            assert left < right
+            print >> hla_ref_file, "%s\t6\t%d\t%d" % (backbone_name, left, right)
+            base_locus = left
 
         # Write
         #       (1) variants w.r.t the backbone sequences into a SNP file
@@ -362,8 +397,11 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
                 type_str = "deletion"
 
             varID = "hv%d" % (num_vars)
+            tmp_backbone_name = backbone_name
+            if reference_type != "gene":
+                tmp_backbone_name = "6"
             print >> var_file, "%s\t%s\t%s\t%d\t%s" % \
-                (varID, type_str, backbone_name, base_locus + locus, data)
+                (varID, type_str, tmp_backbone_name, base_locus + locus, data)
             names = sorted(Vars[keys[k]])
             print >> link_file, "%s\t%s" % (varID, ' '.join(names))
             var2ID[keys[k]] = num_vars
@@ -493,8 +531,11 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
                     if h_new_begin > hc_end:
                         h_new_begin = hc_end
                 assert h_new_begin <= h_begin
+                tmp_backbone_name = backbone_name
+                if reference_type != "gene":
+                    tmp_backbone_name = "6"
                 print >> haplotype_file, "ht%d\t%s\t%d\t%d\t%s" % \
-                    (num_haplotypes, backbone_name, base_locus + h_new_begin, base_locus + h_end, ','.join(varIDs))
+                    (num_haplotypes, tmp_backbone_name, base_locus + h_new_begin, base_locus + h_end, ','.join(varIDs))
                 num_haplotypes += 1
                 add_seq_len += (h_end - h_new_begin + 1)
             assert len(sanity_vars) == len(cur_vars)
@@ -518,7 +559,8 @@ def extract_HLA_vars(base_fname, gap, split, reference_type, verbose = False):
     else:
         assert reference_type == "genome"
         os.system("cp genome.fa hla_backbone.fa")
-                      
+
+    hla_ref_file.close()
     var_file.close()
     haplotype_file.close()
     link_file.close()
@@ -535,6 +577,11 @@ if __name__ == '__main__':
                         type=str,
                         default="hla",
                         help="base filename for backbone HLA sequence, HLA variants, and HLA linking info.")
+    parser.add_argument("--hla-list",
+                        dest="hla_list",
+                        type=str,
+                        default="A,B,C,DRB1",
+                        help="A comma-separated list of HLA genes.")
     parser.add_argument("-g", "--gap",
                         dest="gap",
                         type=int,
@@ -556,11 +603,11 @@ if __name__ == '__main__':
                         help="also print some statistics to stderr")
 
     args = parser.parse_args()
+    args.hla_list = args.hla_list.split(',')
     if args.gap > args.split:
         print >> sys.stderr, "Error: -g/--gap (%d) must be smaller than -s/--split (%d)" % (args.gap, args.split)
         sys.exit(1)
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome" % (args.reference_type)
-        sys.exit(1)
-        
-    extract_HLA_vars(args.base_fname, args.gap, args.split, args.reference_type, args.verbose)
+        sys.exit(1)        
+    extract_HLA_vars(args.base_fname, args.hla_list, args.gap, args.split, args.reference_type, args.verbose)

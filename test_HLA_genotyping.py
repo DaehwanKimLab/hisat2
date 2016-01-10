@@ -28,7 +28,7 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def test_HLA_genotyping(base_fname, reference_type, verbose = False):
+def test_HLA_genotyping(base_fname, hla_list, reference_type, verbose = False):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
     ex_path = os.path.dirname(curr_script)
@@ -64,6 +64,7 @@ def test_HLA_genotyping(base_fname, reference_type, verbose = False):
     if not check_files(HLA_fnames):
         extract_hla_script = os.path.join(ex_path, "extract_HLA_vars.py")
         extract_cmd = [extract_hla_script,
+                       "--hla-list", ','.join(hla_list),
                        "--gap", "30",
                        "--split", "50",
                        "--reference-type", reference_type]
@@ -78,6 +79,7 @@ def test_HLA_genotyping(base_fname, reference_type, verbose = False):
     if not check_files(HLA_hisat2_graph_index_fnames):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
+                     "-p", "%d" % (1 if reference_type == "gene" else 4),
                      "--snp", "hla.snp",
                      "--haplotype", "hla.haplotype",
                      "hla_backbone.fa",
@@ -212,13 +214,9 @@ def test_HLA_genotyping(base_fname, reference_type, verbose = False):
         test_size = 500
         allele_count = 2
         for test_i in range(test_size):
-            genes = HLA_names.keys()
+            genes = list(set(hla_list) & set(HLA_names.keys()))
             random.shuffle(genes)
             gene = genes[0]
-
-            # daehwan - for debugging purposes
-            # gene = "B"
-            
             HLA_gene_alleles = HLA_names[gene]
             nums = [i for i in range(len(HLA_gene_alleles))]
             random.shuffle(nums)
@@ -327,8 +325,8 @@ def test_HLA_genotyping(base_fname, reference_type, verbose = False):
                     alignview_cmd += ["%s" % ref_allele]
                 else:
                     assert reference_type in ["chromosome", "genome"]
-                    base_locus = left
                     _, chr, left, right = refHLA_loci[gene]
+                    base_locus = left
                     alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
             
             alignview_proc = subprocess.Popen(alignview_cmd,
@@ -384,9 +382,12 @@ def test_HLA_genotyping(base_fname, reference_type, verbose = False):
                         cigar_op, length = cigars[i]
                         if cigar_op == 'M':
                             # Update coverage
-                            assert right_pos + length < len(coverage)
-                            coverage[right_pos] += 1
-                            coverage[right_pos + length] -= 1
+                            if right_pos + length < len(coverage):
+                                coverage[right_pos] += 1
+                                coverage[right_pos + length] -= 1
+                            elif right_pos < len(coverage):
+                                coverage[right_pos] += 1
+                                coverage[-1] -= 1
 
                             first = True
                             MD_len_used = 0
@@ -444,6 +445,9 @@ def test_HLA_genotyping(base_fname, reference_type, verbose = False):
 
                         if cigar_op in "MIS":
                             read_pos += length
+
+                    if right_pos > len(ref_seq):
+                        continue
 
                     HLA_count_per_read = {}
                     for HLA_name in HLA_names[gene]:
@@ -911,19 +915,25 @@ if __name__ == '__main__':
         type=str,
         default="hla",
         help='base filename for backbone HLA sequence, HLA variants, and HLA linking info.')
+    parser.add_argument("--hla-list",
+                        dest="hla_list",
+                        type=str,
+                        default="A,B,C,DRB1",
+                        help="A comma-separated list of HLA genes (default: A,B,C,DRB1).")
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
                         default="gene",
-                        help="Reference type: gene, chromosome, and genome.")
+                        help="Reference type: gene, chromosome, and genome (default: gene).")
     parser.add_argument('-v', '--verbose',
         dest='verbose',
         action='store_true',
         help='also print some statistics to stderr')
 
     args = parser.parse_args()
+    args.hla_list = args.hla_list.split(',')
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome" % (args.reference_type)
         sys.exit(1)
     random.seed(1)
-    test_HLA_genotyping(args.base_fname, args.reference_type, args.verbose)
+    test_HLA_genotyping(args.base_fname, args.hla_list, args.reference_type, args.verbose)
