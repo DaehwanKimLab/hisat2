@@ -43,6 +43,8 @@ def extract_HLA_vars(base_fname,
 
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
+    gene_to_fname = {"A" : "A", "B" : "B", "C" : "C",
+                     "DQA1" : "DQA", "DQB1" : "DQB", "DRB1" : "DRB1"}
     hla_ref_file = open("hla.ref", 'w')
     HLA_genes, HLA_gene_strand = {}, {}
     for gene in hla_list:
@@ -51,7 +53,7 @@ def extract_HLA_vars(base_fname,
                        "--score-min", "C,0",
                        "--no-unal",
                        "-x", "grch38/genome",
-                       "-f", "IMGTHLA/fasta/%s_gen.fasta" % gene]
+                       "-f", "IMGTHLA/fasta/%s_gen.fasta" % gene_to_fname[gene]]
         align_proc = subprocess.Popen(aligner_cmd,
                                       stdout=subprocess.PIPE,
                                       stderr=open("/dev/null", 'w'))
@@ -73,7 +75,7 @@ def extract_HLA_vars(base_fname,
         align_proc.communicate()
         assert allele_id != ""
         allele_name = ""
-        for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene):
+        for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene_to_fname[gene]):
             line = line.strip()
             if not line.startswith('>'):
                 continue
@@ -99,7 +101,7 @@ def extract_HLA_vars(base_fname,
     input_file = open(base_fname + "_sequences.fa", 'w')
     num_vars, num_haplotypes = 0, 0
     for HLA_gene, HLA_ref_gene in HLA_genes.items():
-        HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % HLA_gene
+        HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % gene_to_fname[HLA_gene]
         if not os.path.exists(HLA_MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
             continue
@@ -590,7 +592,7 @@ if __name__ == '__main__':
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
-                        default="A,B,C,DRB1",
+                        default="A,B,C,DQA1,DQB1,DRB1",
                         help="A comma-separated list of HLA genes.")
     parser.add_argument("-g", "--gap",
                         dest="gap",
