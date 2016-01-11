@@ -28,7 +28,15 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbose = False):
+
+def test_HLA_genotyping(base_fname,
+                        reference_type,
+                        hla_list,
+                        aligners,
+                        read_fname,
+                        alignment_fname,
+                        threads,
+                        verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
     ex_path = os.path.dirname(curr_script)
@@ -37,7 +45,7 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
     if not os.path.exists("IMGTHLA"):
         os.system("git clone https://github.com/jrob119/IMGTHLA.git")
 
-    simulation = (read_fname == [])
+    simulation = (read_fname == [] and alignment_fname == "")
 
     def check_files(fnames):
         for fname in fnames:
@@ -90,10 +98,11 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
     if not check_files(HLA_fnames):
         extract_hla_script = os.path.join(ex_path, "extract_HLA_vars.py")
         extract_cmd = [extract_hla_script,
+                       "--reference-type", reference_type,
                        "--hla-list", ','.join(hla_list),
                        "--gap", "30",
-                       "--split", "50",
-                       "--reference-type", reference_type]
+                       "--split", "50"]
+                       
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):
@@ -105,7 +114,7 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
     if not check_files(HLA_hisat2_graph_index_fnames):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
-                     "-p", "%d" % (1 if reference_type == "gene" else 4),
+                     "-p", str(threads),
                      "--snp", "hla.snp",
                      "--haplotype", "hla.haplotype",
                      "hla_backbone.fa",
@@ -224,12 +233,6 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
         Links[var_id] = alleles
 
     # Test HLA genotyping
-    aligners = [
-        ["hisat2", "graph"],
-        # ["hisat2", "linear"],
-        # ["bowtie2", "linear"]
-        ]
-    
     test_list = []
     if simulation:
         basic_test, random_test = False, True
@@ -272,7 +275,6 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
         if simulation:
             HLA_reads = []
             for test_HLA_names in test_HLA_list:
-                print >> sys.stderr, "\t%s" % (test_HLA_names)
                 gene = test_HLA_names[0].split('*')[0]
                 ref_allele = refHLAs[gene]
                 ref_seq = HLAs[gene][ref_allele]
@@ -300,64 +302,67 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
                 print >> sys.stderr, "\n\t\t%s %s on %s" % (aligner, index_type, reference_type)
             else:
                 print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
-            # Align reads, and sort the alignments into a BAM file
-            if aligner == "hisat2":
-                hisat2 = os.path.join(ex_path, "hisat2")
-                aligner_cmd = [hisat2]
-                aligner_cmd += ["--no-unal"]
-                if index_type == "linear":
-                    aligner_cmd += ["-k", "10"]
-                aligner_cmd += ["-x", "hla.%s" % index_type]
-            elif aligner == "bowtie2":
-                aligner_cmd = [aligner,
-                               "--no-unal",
-                               "-k", "10",
-                               "-x", "hla"]
-            else:
-                assert False
-            if simulation:
-                aligner_cmd += ["-f", "hla_input.fa"]
-            else:
-                assert len(read_fname) in [1,2]
-                if len(read_fname) == 1:
-                    aligner_cmd += [read_fname[0]]
+
+            if alignment_fname == "":
+                # Align reads, and sort the alignments into a BAM file
+                if aligner == "hisat2":
+                    hisat2 = os.path.join(ex_path, "hisat2")
+                    aligner_cmd = [hisat2]
+                    aligner_cmd += ["--no-unal"]
+                    if index_type == "linear":
+                        aligner_cmd += ["-k", "10"]
+                    aligner_cmd += ["-x", "hla.%s" % index_type]
+                elif aligner == "bowtie2":
+                    aligner_cmd = [aligner,
+                                   "--no-unal",
+                                   "-k", "10",
+                                   "-x", "hla"]
                 else:
-                    aligner_cmd += ["-1", "%s" % read_fname[0],
-                                    "-2", "%s" % read_fname[1]]
-                    
-            align_proc = subprocess.Popen(aligner_cmd,
-                                          stdout=subprocess.PIPE,
-                                          stderr=open("/dev/null", 'w'))
+                    assert False
+                if simulation:
+                    aligner_cmd += ["-f", "hla_input.fa"]
+                else:
+                    assert len(read_fname) in [1,2]
+                    aligner_cmd += ["-p", str(threads)]
+                    if len(read_fname) == 1:
+                        aligner_cmd += [read_fname[0]]
+                    else:
+                        aligner_cmd += ["-1", "%s" % read_fname[0],
+                                        "-2", "%s" % read_fname[1]]
 
-            sambam_cmd = ["samtools",
-                          "view",
-                          "-bS",
-                          "-"]
-            sambam_proc = subprocess.Popen(sambam_cmd,
-                                           stdin=align_proc.stdout,
-                                           stdout=open("hla_input_unsorted.bam", 'w'),
-                                           stderr=open("/dev/null", 'w'))
-            sambam_proc.communicate()
+                align_proc = subprocess.Popen(aligner_cmd,
+                                              stdout=subprocess.PIPE,
+                                              stderr=open("/dev/null", 'w'))
 
-            if index_type == "graph":
-                bamsort_cmd = ["samtools",
-                               "sort",
-                               "hla_input_unsorted.bam",
-                               "hla_input"]
-                bamsort_proc = subprocess.Popen(bamsort_cmd,
-                                                stderr=open("/dev/null", 'w'))
-                bamsort_proc.communicate()
+                sambam_cmd = ["samtools",
+                              "view",
+                              "-bS",
+                              "-"]
+                sambam_proc = subprocess.Popen(sambam_cmd,
+                                               stdin=align_proc.stdout,
+                                               stdout=open("hla_input_unsorted.bam", 'w'),
+                                               stderr=open("/dev/null", 'w'))
+                sambam_proc.communicate()
 
-                bamindex_cmd = ["samtools",
-                                "index",
-                                "hla_input.bam"]
-                bamindex_proc = subprocess.Popen(bamindex_cmd,
-                                                 stderr=open("/dev/null", 'w'))
-                bamindex_proc.communicate()
+                if index_type == "graph":
+                    bamsort_cmd = ["samtools",
+                                   "sort",
+                                   "hla_input_unsorted.bam",
+                                   "hla_input"]
+                    bamsort_proc = subprocess.Popen(bamsort_cmd,
+                                                    stderr=open("/dev/null", 'w'))
+                    bamsort_proc.communicate()
 
-                os.system("rm hla_input_unsorted.bam")            
-            else:
-                os.system("mv hla_input_unsorted.bam hla_input.bam")
+                    bamindex_cmd = ["samtools",
+                                    "index",
+                                    "hla_input.bam"]
+                    bamindex_proc = subprocess.Popen(bamindex_cmd,
+                                                     stderr=open("/dev/null", 'w'))
+                    bamindex_proc.communicate()
+
+                    os.system("rm hla_input_unsorted.bam")            
+                else:
+                    os.system("mv hla_input_unsorted.bam hla_input.bam")
 
             for test_HLA_names in test_HLA_list:
                 if simulation:
@@ -369,9 +374,13 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
 
                 # Read alignments
                 alignview_cmd = ["samtools",
-                                 "view",
-                                 "hla_input.bam",
-                                 ]
+                                 "view"]
+                if alignment_fname == "":
+                    alignview_cmd += ["hla_input.bam"]
+                else:
+                    if not os.path.exists(alignment_fname + ".bai"):
+                        os.system("samtools index %s" % alignment_fname)
+                    alignview_cmd += [alignment_fname]
                 base_locus = 0
                 if index_type == "graph":
                     if reference_type == "gene":
@@ -562,8 +571,9 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
                                                 print cmp, var_id, var_data, read_base
                                             if var_data == read_base:
                                                 add_count(var_id, 1)
-                                            else:
-                                                add_count(var_id, -1)
+                                            # daehwan - check out this routine
+                                            # else:
+                                            #    add_count(var_id, -1)
                                     var_idx += 1
 
                                 cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
@@ -825,7 +835,8 @@ def test_HLA_genotyping(base_fname, hla_list, reference_type, read_fname, verbos
                     else:
                         return 1
 
-                if len(test_HLA_names) != 2 and simulation:
+                # daehwan - for debugging purposes
+                if True or (len(test_HLA_names) != 2 and simulation):
                     HLA_prob, HLA_prob_next = {}, {}
                     for cmpt, count in HLA_cmpt.items():
                         alleles = cmpt.split('-')
@@ -982,38 +993,73 @@ if __name__ == '__main__':
     parser = ArgumentParser(
         description='test HLA genotyping')
     parser.add_argument('-b', '--base',
-        dest='base_fname',
-        type=str,
-        default="hla",
-        help='base filename for backbone HLA sequence, HLA variants, and HLA linking info.')
-    parser.add_argument("--hla-list",
-                        dest="hla_list",
+                        dest='base_fname',
                         type=str,
-                        default="A,B,C,DRB1",
-                        help="A comma-separated list of HLA genes (default: A,B,C,DRB1).")
+                        default="hla",
+                        help='base filename for backbone HLA sequence, HLA variants, and HLA linking info.')
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
                         default="gene",
                         help="Reference type: gene, chromosome, and genome (default: gene).")
+    parser.add_argument("--hla-list",
+                        dest="hla_list",
+                        type=str,
+                        default="A,B,C,DRB1",
+                        help="A comma-separated list of HLA genes (default: A,B,C,DRB1).")
+    parser.add_argument("--aligners",
+                        dest="aligners",
+                        type=str,
+                        default="hisat2.graph,hisat2.linear,bowtie2.linear",
+                        help="A comma-separated list of aligners (default: hisat2.graph,hisat2.linear,bowtie2.linear).")
     parser.add_argument("--reads",
                         dest="read_fname",
                         type=str,
                         default="",
                         help="Fastq read file name.")
+    parser.add_argument("--alignment",
+                        dest="alignment_fname",
+                        type=str,
+                        default="",
+                        help="BAM file name.")
+    parser.add_argument("-p", "--threads",
+                        dest="threads",
+                        type=int,
+                        default=1,
+                        help="Number of threads.")
     parser.add_argument('-v', '--verbose',
-        dest='verbose',
-        action='store_true',
-        help='also print some statistics to stderr')
+                        dest='verbose',
+                        action='store_true',
+                        help='also print some statistics to stderr')
 
     args = parser.parse_args()
-    args.hla_list = args.hla_list.split(',')
     if not args.reference_type in ["gene", "chromosome", "genome"]:
-        print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome" % (args.reference_type)
+        print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
         sys.exit(1)
+    args.hla_list = args.hla_list.split(',')
+    if args.aligners == "":
+        print >> sys.stderr, "Error: --aligners must be non-empty."
+        sys.exit(1)    
+    args.aligners = args.aligners.split(',')
+    for i in range(len(args.aligners)):
+        args.aligners[i] = args.aligners[i].split('.')
+
     if args.read_fname:
         args.read_fname = args.read_fname.split(',')
     else:
         args.read_fname = []
+
+    if args.alignment_fname != "" and \
+            not os.path.exists(args.alignment_fname):
+        print >> sys.stderr, "Error: %s doesn't exist." % args.alignment_fname
+        sys.exit(1)    
+
     random.seed(1)
-    test_HLA_genotyping(args.base_fname, args.hla_list, args.reference_type, args.read_fname, args.verbose)
+    test_HLA_genotyping(args.base_fname,
+                        args.reference_type,
+                        args.hla_list,
+                        args.aligners,
+                        args.read_fname,
+                        args.alignment_fname,
+                        args.threads,
+                        args.verbose)

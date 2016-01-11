@@ -27,7 +27,12 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def extract_HLA_vars(base_fname, hla_list, gap, split, reference_type, verbose = False):
+def extract_HLA_vars(base_fname,
+                     reference_type,
+                     hla_list,
+                     gap,
+                     split,
+                     verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(extract_HLA_vars))
     ex_path = os.path.dirname(curr_script)
@@ -577,6 +582,11 @@ if __name__ == '__main__':
                         type=str,
                         default="hla",
                         help="base filename for backbone HLA sequence, HLA variants, and HLA linking info.")
+    parser.add_argument("--reference-type",
+                        dest="reference_type",
+                        type=str,
+                        default="gene",
+                        help="Reference type: gene, chromosome, and genome.")
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
@@ -592,11 +602,6 @@ if __name__ == '__main__':
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes.")
-    parser.add_argument("--reference-type",
-                        dest="reference_type",
-                        type=str,
-                        default="gene",
-                        help="Reference type: gene, chromosome, and genome.")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -610,4 +615,9 @@ if __name__ == '__main__':
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome" % (args.reference_type)
         sys.exit(1)        
-    extract_HLA_vars(args.base_fname, args.hla_list, args.gap, args.split, args.reference_type, args.verbose)
+    extract_HLA_vars(args.base_fname,
+                     args.reference_type,
+                     args.hla_list,
+                     args.gap,
+                     args.split,
+                     args.verbose)
