@@ -1257,7 +1257,7 @@ public:
                         } else if(type == "insertion") {
                             snp_file >> ins_seq;
                         }
-                        snpID2num.push_back((index_t)OFF_MAX);
+                        snpID2num.push_back((index_t)INDEX_MAX);
                         index_t chr_idx = 0;
                         for(; chr_idx < refnames_nospace.size(); chr_idx++) {
                             if(chr == refnames_nospace[chr_idx])
@@ -1430,7 +1430,7 @@ public:
                             index_t alt = (index_t)atoi(alts[i].c_str());
                             assert_lt(alt, snpID2num.size());
                             alt = snpID2num[alt];
-                            if(alt < (index_t)OFF_MAX) {
+                            if(alt < (index_t)INDEX_MAX) {
                                 _haplotypes.back().alts.push_back(alt);
                             }
                         }

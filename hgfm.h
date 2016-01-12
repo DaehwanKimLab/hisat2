@@ -2207,7 +2207,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 }
                 
                 // Extract ALTs corresponding to this local index
-                index_t firstSNP = (index_t)OFF_MAX;
+                index_t firstSNP = (index_t)INDEX_MAX;
                 tParam.alts.clear();
                 ALT<index_t> alt;
                 alt.pos = curr_sztot;
@@ -2255,7 +2255,7 @@ HGFM<index_t, local_index_t>::HGFM(
                         tParam.haplotypes.push_back(haplotype);
                         tParam.haplotypes.back().left -= curr_sztot;
                         tParam.haplotypes.back().right -= curr_sztot;
-                        assert_neq(firstSNP, (index_t)OFF_MAX);
+                        assert_neq(firstSNP, (index_t)INDEX_MAX);
                         for(index_t a = 0; a < tParam.haplotypes.back().alts.size(); a++) {
                             tParam.haplotypes.back().alts[a] -= firstSNP;
                         }
