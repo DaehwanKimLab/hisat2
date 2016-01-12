@@ -2513,10 +2513,10 @@ public:
 		assert_leq(acgt[1], this->fchr()[2]-this->fchr()[1]);
 		assert_leq(acgt[2], this->fchr()[3]-this->fchr()[2]);
 		assert_leq(acgt[3], this->fchr()[4]-this->fchr()[3]);
-		assert_leq(acgt[0], this->_gh._len + this->_gh.sideGbwtLen());
-		assert_leq(acgt[1], this->_gh._len);
-		assert_leq(acgt[2], this->_gh._len);
-		assert_leq(acgt[3], this->_gh._len);
+		assert_leq(acgt[0], this->_gh._gbwtLen + this->_gh.sideGbwtLen());
+		assert_leq(acgt[1], this->_gh._gbwtLen);
+		assert_leq(acgt[2], this->_gh._gbwtLen);
+		assert_leq(acgt[3], this->_gh._gbwtLen);
 		cntsUpto[0] += (acgt[0] + this->fchr()[0]);
 		cntsUpto[1] += (acgt[1] + this->fchr()[1]);
 		cntsUpto[2] += (acgt[2] + this->fchr()[2]);

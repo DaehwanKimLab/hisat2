@@ -415,7 +415,7 @@ def test_HLA_genotyping(base_fname,
 
                         # daehwan - for debugging purposes
                         debug = False
-                        if pos == 0 and False:
+                        if pos == 1051 and False:
                             debug = True
 
                         if flag & 0x4 != 0:
@@ -475,7 +475,16 @@ def test_HLA_genotyping(base_fname,
                                     MD_ref_base = MD[MD_str_pos]
                                     MD_str_pos += 1
                                     assert MD_ref_base in "ACGT"
+                                    # daehwan - for debugging purposes
+                                    """
+                                    if MD_ref_base == read_base:
+                                        print line,
+                                        print left_pos, right_pos
+                                        print read_pos
+                                        print MD, MD_str_pos - 1
+                                        print cmp_list
                                     assert MD_ref_base != read_base
+                                    """
                                     cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
                                     cmp_list.append(["mismatch", right_pos + MD_len, 1])
                                     MD_len_used = MD_len + 1
@@ -691,6 +700,9 @@ def test_HLA_genotyping(base_fname,
                             HLA_cmpt[cur_cmpt] = 1
                         else:
                             HLA_cmpt[cur_cmpt] += 1
+
+                    if num_reads <= 0:
+                        continue
 
                     # Coverage
                     assert num_reads > 0
