@@ -2395,6 +2395,7 @@ public:
 
 	// Searching and reporting
 	void joinedToTextOff(index_t qlen, index_t off, index_t& tidx, index_t& textoff, index_t& tlen, bool rejectStraddle, bool& straddled) const;
+    void textOffToJoined(index_t tid, index_t tlen, index_t& off) const;
 
 #define WITHIN_BWT_LEN(x) \
 	assert_leq(x[0], this->_gh._sideGbwtLen); \
@@ -5009,6 +5010,47 @@ void GFM<index_t>::joinedToTextOff(
 		// continue with binary search
 	}
 	tlen = this->plen()[tidx];
+}
+
+template <typename index_t>
+void GFM<index_t>::textOffToJoined(
+                                   index_t  tid,
+                                   index_t  textoff,
+                                   index_t& off) const
+{
+    assert(rstarts() != NULL); // must have loaded rstarts
+    index_t top = 0;
+    index_t bot = _nFrag; // 1 greater than largest addressable element
+    index_t elt = (index_t)INDEX_MAX;
+    // Begin binary search
+    while(true) {
+        ASSERT_ONLY(index_t oldelt = elt);
+        elt = top + ((bot - top) >> 1);
+        assert_neq(oldelt, elt); // must have made progress
+        index_t elt_tid = rstarts()[elt*3 + 1];
+        if(elt_tid == tid) {
+            while(true) {
+                if(rstarts()[elt*3 + 2] <= textoff) break;
+                elt--;
+            }
+            while(true) {
+                assert_leq(rstarts()[elt*3+2], textoff);
+                if(elt + 1 == _nFrag ||
+                   tid + 1 == rstarts()[(elt+1)*3 + 1] ||
+                   textoff < rstarts()[(elt+1)*3 + 2]) {
+                    off = rstarts()[elt*3] + (textoff - rstarts()[elt*3 + 2]);
+                    break;
+                }
+                elt++;
+            }
+            break; // done with binary search
+        } else if(elt_tid < tid) {
+            top = elt;
+        } else {
+            bot = elt;
+        }
+        // continue with binary search
+    }
 }
 
 /**

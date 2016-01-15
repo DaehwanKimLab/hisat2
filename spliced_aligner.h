@@ -468,7 +468,23 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     if(!ss._fromfile && ss._readid + this->_thread_rids_mindist > rd.rdid) continue;
                     if(left + fraglen - 1 < ss.right()) continue;
                     index_t frag2off = ss.left() -  (ss.right() - left);
-                    if(frag2off + 1 < hitoff) continue;
+                    if(frag2off + 1 < hit.rdoff()) continue;
+                    index_t toff = frag2off + 1 - fragoff;
+                    index_t joinedOff = 0;
+                    gfm.textOffToJoined(hit.ref(), toff, joinedOff);
+#ifndef NDEBUG
+                    index_t debug_tid = 0, debug_toff = 0, debug_tlen = 0;
+                    bool debug_straddled = false;
+                    gfm.joinedToTextOff(1, // qlen
+                                        joinedOff,
+                                        debug_tid,
+                                        debug_toff,
+                                        debug_tlen,
+                                        false,
+                                        debug_straddled);
+                    assert_eq(hit.ref(), debug_tid);
+                    assert_eq(toff, debug_toff);
+#endif
                     GenomeHit<index_t> tempHit;
                     tempHit.init(hit.fw(),
                                  0, // rdoff
@@ -476,8 +492,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  0, // trim5
                                  0, // trim3
                                  hit.ref(),
-                                 frag2off + 1 - fragoff,
-                                 (index_t)INDEX_MAX,
+                                 toff,
+                                 joinedOff,
                                  this->_sharedVars);
                     if(!tempHit.compatibleWith(hit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                     int64_t minsc = this->_minsc[rdi];

@@ -713,6 +713,7 @@ void StackedAln::init(
 		assert_range(0, 4, c);
 		stackRef_.push_back("ACGTN"[c]);
 		stackRel_.push_back('=');
+        stackSNP_.push_back(false);
 		stackRead_.push_back("ACGTN"[c]);
 	}
 	inited_ = true;

@@ -746,8 +746,8 @@ public:
             }
 #endif
             assert_neq(top, gfm._zOffs[i]);
-            assert_neq(bot-1, gfm._zOffs[i]);
-            if(gfm._zOffs[i] > top && gfm._zOffs[i] < bot-1) {
+            // assert_neq(bot-1, gfm._zOffs[i]);
+            if(gfm._zOffs[i] > top && gfm._zOffs[i] < bot) {
                 tmp_zOffs.push_back(gfm._zOffs[i]);
             }
         }
@@ -797,7 +797,20 @@ public:
                     }
                     new_top++;
                 }
-                assert_lt(new_top - top, tmp_gbwt_to_node.size());
+                assert_leq(new_top - top, tmp_gbwt_to_node.size());
+                if(new_top - top == tmp_gbwt_to_node.size()) {
+#if 0
+                    if(node_iedge_count.size() > 0 &&
+                       node_iedge_count.back().first + 1 == node_bot - node_top) {
+                        assert_gt(node_iedge_count.back().second, 0);
+                        node_iedge_count.back().second -= 1;
+                        if(node_iedge_count.back().second == 0) {
+                            node_iedge_count.resize(node_iedge_count.size()- 1);
+                        }
+                    }
+#endif
+                    break;
+                }
                 index_t new_node_top = tmp_gbwt_to_node[new_top - top] + node_top;
                 assert_lt(new_node_top, node_bot);
                 index_t new_bot;
@@ -806,15 +819,16 @@ public:
                 } else {
                     new_bot = bot;
                 }
-                while(new_bot - top < tmp_gbwt_to_node.size()) {
-                    if(tmp_gbwt_to_node[new_bot - top] != (index_t)INDEX_MAX) {
+                index_t new_bot2 = new_bot;
+                while(new_bot2 - top < tmp_gbwt_to_node.size()) {
+                    if(tmp_gbwt_to_node[new_bot2 - top] != (index_t)INDEX_MAX) {
                         break;
                     }
-                    new_bot++;
+                    new_bot2++;
                 }
                 index_t new_node_bot = node_bot;
-                if(new_bot - top < tmp_gbwt_to_node.size()) {
-                    new_node_bot = node_top + tmp_gbwt_to_node[new_bot - top];
+                if(new_bot2 - top < tmp_gbwt_to_node.size()) {
+                    new_node_bot = node_top + tmp_gbwt_to_node[new_bot2 - top];
                 }
                 tmp_node_iedge_count.clear();
                 if(new_top >= new_bot) continue;
@@ -869,7 +883,14 @@ public:
                     break;
                 }
             }
-
+            if(node_iedge_count.size() > 0 &&
+               node_iedge_count.back().first + 1 == node_bot - node_top) {
+                   assert_gt(node_iedge_count.back().second, 0);
+                   node_iedge_count.back().second -= 1;
+                   if(node_iedge_count.back().second == 0) {
+                       node_iedge_count.resize(node_iedge_count.size()- 1);
+                   }
+            }
         }
 		assert_gt(bot, top);
 		// Prepare SideLocus's for next step

@@ -717,7 +717,7 @@ struct GenomeHit {
                 }
             }
             const Edit& b = edits.back();
-            if(extlen > 0 && b.pos == extlen - 1) {
+            if(extlen > 0 && b.pos == rdoff - base_rdoff + extlen - 1) {
                 if(b.type == EDIT_TYPE_READ_GAP ||
                    b.type == EDIT_TYPE_REF_GAP) {
                     extlen = 0;
@@ -2874,20 +2874,22 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          dep + 1,
                                                          numALTsTried,
                                                          alt.type);
-                assert_leq(rdoff + rd_i + alignedLen, best_rdoff);
-                bool search_further = false;
-                if(alt.splicesite()) {
-                    for(index_t sf = alt_range.first + 1; sf < alt_range.second; sf++) {
-                        const ALT<index_t>& alt2 = alts[sf];
-                        if(alt2.splicesite() && alt2.left < alt2.right) {
-                            search_further = true;
-                            break;
+                if(alignedLen > 0) {
+                    assert_leq(rdoff + rd_i + alignedLen, best_rdoff);
+                    bool search_further = false;
+                    if(alt.splicesite()) {
+                        for(index_t sf = alt_range.first + 1; sf < alt_range.second; sf++) {
+                            const ALT<index_t>& alt2 = alts[sf];
+                            if(alt2.splicesite() && alt2.left < alt2.right) {
+                                search_further = true;
+                                break;
+                            }
                         }
                     }
-                }
-                if(!search_further) {
-                    if(rd_i + alignedLen == rdlen) {
-                        return rd_i + alignedLen;
+                    if(!search_further) {
+                        if(rd_i + alignedLen == rdlen) {
+                            return rd_i + alignedLen;
+                        }
                     }
                 }
             }
