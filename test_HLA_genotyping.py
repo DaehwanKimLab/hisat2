@@ -161,16 +161,20 @@ def test_HLA_genotyping(base_fname,
         left, right = int(left), int(right)
         refHLA_loci[HLA_gene] = [HLA_name, chr, left, right]
     HLAs = {}
-    for line in open("hla_sequences.fa"):
-        if line.startswith(">"):
-            HLA_name = line.strip().split()[0][1:]
-            HLA_gene = HLA_name.split('*')[0]
-            if not HLA_gene in HLAs:
-                HLAs[HLA_gene] = {}
-            if not HLA_name in HLAs[HLA_gene]:
-                HLAs[HLA_gene][HLA_name] = ""
-        else:
-            HLAs[HLA_gene][HLA_name] += line.strip()
+    def read_HLA_alleles(fname):
+        for line in open(fname):
+            if line.startswith(">"):
+                HLA_name = line.strip().split()[0][1:]
+                HLA_gene = HLA_name.split('*')[0]
+                if not HLA_gene in HLAs:
+                    HLAs[HLA_gene] = {}
+                if not HLA_name in HLAs[HLA_gene]:
+                    HLAs[HLA_gene][HLA_name] = ""
+            else:
+                HLAs[HLA_gene][HLA_name] += line.strip()
+    if reference_type == "gene":
+        read_HLA_alleles("hla_backbone.fa")
+    read_HLA_alleles("hla_sequences.fa")
     HLA_names = {}
     for HLA_gene, data in HLAs.items():
         HLA_names[HLA_gene] = list(data.keys())
@@ -260,6 +264,8 @@ def test_HLA_genotyping(base_fname,
 
     for test_i in range(len(test_list)):
         # daehwan - for debugging purposes
+        # if test_i + 1 != 4:
+        #     continue
         # if test_i + 1 not in [187, 195, 266, 346]:
         #    continue
         # two allele test (#266, #346)        
@@ -270,7 +276,26 @@ def test_HLA_genotyping(base_fname,
         # daehwan - for debugging purposes
         # test_HLA_list = [["A*31:14N"]]
         for test_HLA_names in test_HLA_list:
-            print >> sys.stderr, "\t%s" % (test_HLA_names)
+            if simulation:
+                for test_HLA_name in test_HLA_names:
+                    gene = test_HLA_name.split('*')[0]
+                    test_HLA_seq = HLAs[gene][test_HLA_name]
+                    print >> sys.stderr, "\t%s - %d bp" % (test_HLA_name, len(test_HLA_seq))
+                    """
+                    # daehwan - for debugging purposes
+                    vars = []
+                    for var_id, alleles in Links.items():
+                        if test_HLA_name in alleles:
+                            vars.append(Vars[gene][var_id])
+                    for var in sorted(vars):
+                        var_type, var_pos, var_data = var
+                        if var_type != "insertion":
+                            continue
+                        print >> sys.stderr, "\t\t", var, len(var_data)
+                    """
+            else:
+                print >> sys.stderr, "\t%s" % (test_HLA_names)
+                
             
         if simulation:
             HLA_reads = []

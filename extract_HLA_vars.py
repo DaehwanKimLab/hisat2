@@ -158,15 +158,42 @@ def extract_HLA_vars(base_fname,
                 HLA_seqs[i] = rc_seq
 
         # sanity check -
-        #    Assert the lengths of the input MSF are the same
+        #    Assert the input MSF are of the same length
         assert len(HLA_seqs) > 0
         seq_len = len(HLA_seqs[0])
         for i in range(1, len(HLA_seqs)):
             assert seq_len == len(HLA_seqs[i])
 
-        backbone_name = HLA_ref_gene
-        backbone_id = HLA_names[backbone_name]
-        backbone_seq = HLA_seqs[backbone_id]
+        # Identify a consensus sequence
+        if reference_type == "gene":
+            consensus_count = [[0, 0, 0, 0] for i in range(seq_len)]
+            for i in range(len(HLA_seqs)):
+                HLA_seq = HLA_seqs[i]
+                for j in range(seq_len):
+                    nt = HLA_seq[j]
+                    if not nt in "ACGT":
+                        continue
+                    if nt == 'A':
+                        consensus_count[j][0] += 1
+                    elif nt == 'C':
+                        consensus_count[j][1] += 1
+                    elif nt == 'G':
+                        consensus_count[j][2] += 1
+                    else:
+                        assert nt == 'T'
+                        consensus_count[j][3] += 1
+            backbone_name = "%s*BACKBONE" % HLA_gene
+            backbone_seq = ""
+            for count in consensus_count:
+                assert sum(consensus_count[j]) > 0
+                idx = count.index(max(count))
+                assert idx < 4
+                backbone_seq += "ACGT"[idx]
+        else:
+            backbone_name = HLA_ref_gene
+            backbone_id = HLA_names[backbone_name]
+            backbone_seq = HLA_seqs[backbone_id]
+
         print >> sys.stderr, "%s: number of HLA genes is %d." % (HLA_gene, len(HLA_names))
 
         Vars = {}
