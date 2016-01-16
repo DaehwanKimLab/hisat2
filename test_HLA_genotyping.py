@@ -130,7 +130,7 @@ def test_HLA_genotyping(base_fname,
     if not check_files(HLA_hisat2_linear_index_fnames):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
-                     "hla_sequences.fa",
+                     "hla_backbone.fa,hla_sequences.fa",
                      "hla.linear"]
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
@@ -143,7 +143,7 @@ def test_HLA_genotyping(base_fname,
     HLA_bowtie2_index_fnames += ["hla.rev.%d.bt2" % (i+1) for i in range(2)]
     if not check_files(HLA_bowtie2_index_fnames):
         build_cmd = ["bowtie2-build",
-                     "hla_sequences.fa",
+                     "hla_backbone.fa,hla_sequences.fa",
                      "hla"]
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
         proc.communicate()        
@@ -249,7 +249,7 @@ def test_HLA_genotyping(base_fname,
                 for HLA_name in HLA_gene_alleles:
                     test_list.append([[HLA_name]])
         if random_test:
-            test_size = 500
+            test_size = 100
             allele_count = 2
             for test_i in range(test_size):
                 test_pairs = []
@@ -298,29 +298,43 @@ def test_HLA_genotyping(base_fname,
                 
             
         if simulation:
-            HLA_reads = []
+            HLA_reads_1, HLA_reads_2 = [], []
             for test_HLA_names in test_HLA_list:
                 gene = test_HLA_names[0].split('*')[0]
                 ref_allele = refHLAs[gene]
                 ref_seq = HLAs[gene][ref_allele]
 
                 # Simulate reads from two HLA alleles
-                def simulate_reads(seq, read_len = 100):
-                    reads = []
-                    for i in range(0, len(seq) - read_len + 1):
-                        reads.append(seq[i:i+read_len])
-                    return reads
+                def simulate_reads(seq, frag_len = 250, read_len = 100):
+                    comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
+                    reads_1, reads_2 = [], []
+                    for i in range(0, len(seq) - frag_len + 1):
+                        reads_1.append(seq[i:i+read_len])
+                        tmp_read_2 = reversed(seq[i+frag_len-read_len:i+frag_len])
+                        read_2 = ""
+                        for s in tmp_read_2:
+                            if s in comp_table:
+                                read_2 += comp_table[s]
+                            else:
+                                read_2 += s
+                        reads_2.append(read_2)
+                    return reads_1, reads_2
 
                 for test_HLA_name in test_HLA_names:
                     HLA_seq = HLAs[gene][test_HLA_name]
-                    HLA_reads += simulate_reads(HLA_seq)
+                    tmp_reads_1, tmp_reads_2 = simulate_reads(HLA_seq)
+                    HLA_reads_1 += tmp_reads_1
+                    HLA_reads_2 += tmp_reads_2
 
             # Write reads into a fasta read file
-            read_file = open('hla_input.fa', 'w')
-            for read_i in range(len(HLA_reads)):
-                print >> read_file, ">%d" % (read_i + 1)
-                print >> read_file, HLA_reads[read_i]
-            read_file.close()
+            def write_reads(reads, idx):
+                read_file = open('hla_input_%d.fa' % idx, 'w')
+                for read_i in range(len(reads)):
+                    print >> read_file, ">%d" % (read_i + 1)
+                    print >> read_file, reads[read_i]
+                read_file.close()
+            write_reads(HLA_reads_1, 1)
+            write_reads(HLA_reads_2, 2)
 
         for aligner, index_type in aligners:
             if index_type == "graph":
@@ -345,7 +359,9 @@ def test_HLA_genotyping(base_fname,
                 else:
                     assert False
                 if simulation:
-                    aligner_cmd += ["-f", "hla_input.fa"]
+                    aligner_cmd += ["-f",
+                                    "-1", "hla_input_1.fa",
+                                    "-2", "hla_input_2.fa"]
                 else:
                     assert len(read_fname) in [1,2]
                     aligner_cmd += ["-p", str(threads)]
@@ -368,7 +384,6 @@ def test_HLA_genotyping(base_fname,
                                                stdout=open("hla_input_unsorted.bam", 'w'),
                                                stderr=open("/dev/null", 'w'))
                 sambam_proc.communicate()
-
                 if index_type == "graph":
                     bamsort_cmd = ["samtools",
                                    "sort",
@@ -416,14 +431,25 @@ def test_HLA_genotyping(base_fname,
                         base_locus = left
                         alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
 
-                alignview_proc = subprocess.Popen(alignview_cmd,
-                                                  stdout=subprocess.PIPE,
-                                                  stderr=open("/dev/null", 'w'))
+                    bamview_proc = subprocess.Popen(alignview_cmd,
+                                                    stdout=subprocess.PIPE,
+                                                    stderr=open("/dev/null", 'w'))
+
+                    sort_read_cmd = ["sort", "-k", "1", "-n"]
+                    alignview_proc = subprocess.Popen(sort_read_cmd,
+                                                      stdin=bamview_proc.stdout,
+                                                      stdout=subprocess.PIPE,
+                                                      stderr=open("/dev/null", 'w'))
+                else:
+                    alignview_proc = subprocess.Popen(alignview_cmd,
+                                                 stdout=subprocess.PIPE,
+                                                 stderr=open("/dev/null", 'w'))
 
                 # Count alleles
                 HLA_counts, HLA_cmpt = {}, {}
                 coverage = [0 for i in range(len(ref_seq) + 1)]
                 num_reads, total_read_len = 0, 0
+                prev_read_id = None
                 if index_type == "graph":
                     # Cigar regular expression
                     cigar_re = re.compile('\d+\w')
@@ -545,9 +571,49 @@ def test_HLA_genotyping(base_fname,
                         if right_pos > len(ref_seq):
                             continue
 
-                        HLA_count_per_read = {}
-                        for HLA_name in HLA_names[gene]:
-                            HLA_count_per_read[HLA_name] = 0
+                        def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read):
+                            max_count = None
+                            for allele, count in HLA_count_per_read.items():
+                                if max_count == None:
+                                    max_count = count
+                                elif count > max_count:
+                                    max_count = count
+                            cur_cmpt = set()
+                            # daehwan - for debugging purposes
+                            allele1_found, allele2_found = False, False
+                            for allele, count in HLA_count_per_read.items():
+                                if count < max_count:
+                                    continue
+                                if allele == "A*24:02:01:01" and False:
+                                    allele1_found = True
+                                elif allele == "A*24:11N" and False:
+                                    allele2_found = True
+                                cur_cmpt.add(allele)                    
+                                if not allele in HLA_counts:
+                                    HLA_counts[allele] = 1
+                                else:
+                                    HLA_counts[allele] += 1
+                            if allele1_found != allele2_found:
+                                if allele1_found:
+                                    print ("A*24:02:01:01\tread_id %s]" % read_id), left_pos, cigar_str, MD, Zs
+                                else:
+                                    print ("A*24:11N\tread_id %s]" % read_id), left_pos, cigar_str, MD, Zs
+                                print read_seq
+
+                            cur_cmpt = sorted(list(cur_cmpt))
+                            cur_cmpt = '-'.join(cur_cmpt)
+                            if not cur_cmpt in HLA_cmpt:
+                                HLA_cmpt[cur_cmpt] = 1
+                            else:
+                                HLA_cmpt[cur_cmpt] += 1
+
+                        if read_id != prev_read_id:
+                            if prev_read_id != None:
+                                add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
+                                
+                            HLA_count_per_read = {}
+                            for HLA_name in HLA_names[gene]:
+                                HLA_count_per_read[HLA_name] = 0
 
                         def add_count(var_id, add):
                             assert var_id in Links
@@ -691,43 +757,13 @@ def test_HLA_genotyping(base_fname,
                             print >> sys.stderr, "\tcmp list:", cmp_list
                             assert False            
 
-                        max_count = None
-                        for allele, count in HLA_count_per_read.items():
-                            if max_count == None:
-                                max_count = count
-                            elif count > max_count:
-                                max_count = count
-                        cur_cmpt = set()
-                        # daehwan - for debugging purposes
-                        allele1_found, allele2_found = False, False
-                        for allele, count in HLA_count_per_read.items():
-                            if count < max_count:
-                                continue
-                            if allele == "A*24:02:01:01" and False:
-                                allele1_found = True
-                            elif allele == "A*24:11N" and False:
-                                allele2_found = True
-                            cur_cmpt.add(allele)                    
-                            if not allele in HLA_counts:
-                                HLA_counts[allele] = 1
-                            else:
-                                HLA_counts[allele] += 1
-                        if allele1_found != allele2_found:
-                            if allele1_found:
-                                print ("A*24:02:01:01\tread_id %s]" % read_id), left_pos, cigar_str, MD, Zs
-                            else:
-                                print ("A*24:11N\tread_id %s]" % read_id), left_pos, cigar_str, MD, Zs
-                            print read_seq
-
-                        cur_cmpt = sorted(list(cur_cmpt))
-                        cur_cmpt = '-'.join(cur_cmpt)
-                        if not cur_cmpt in HLA_cmpt:
-                            HLA_cmpt[cur_cmpt] = 1
-                        else:
-                            HLA_cmpt[cur_cmpt] += 1
+                        prev_read_id = read_id
 
                     if num_reads <= 0:
                         continue
+
+                    if prev_read_id != None:
+                        add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
 
                     # Coverage
                     assert num_reads > 0
@@ -919,9 +955,15 @@ def test_HLA_genotyping(base_fname,
                         for test_i in range(len(test_HLA_names)):
                             test_HLA_name = test_HLA_names[test_i]
                             if prob[0] == test_HLA_name:
-                                print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (prob_i + 1, test_HLA_name, prob[1] * 100.0)
-                                if prob_i < len(success):
-                                    success[prob_i] = True
+                                rank_i = prob_i
+                                while rank_i > 0:
+                                    if prob == HLA_prob[rank_i - 1][1]:
+                                        rank_i -= 1
+                                    else:
+                                        break
+                                print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (rank_i + 1, test_HLA_name, prob[1] * 100.0)
+                                if rank_i < len(success):
+                                    success[rank_i] = True
                                 found_list[test_i] = True
                                 found = True                        
                         if not False in found_list:
@@ -1000,8 +1042,14 @@ def test_HLA_genotyping(base_fname,
                         allele1, allele2 = allele_pair.split('-')
                         if simulation:
                             if allele1 in test_HLA_names and allele2 in test_HLA_names:
-                                print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (prob_i + 1, allele_pair, prob * 100.0)
-                                if prob_i == 0:
+                                rank_i = prob_i
+                                while rank_i > 0:
+                                    if HLA_prob[rank_i-1][1] == prob:                                        
+                                        rank_i -= 1
+                                    else:
+                                        break
+                                print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (rank_i + 1, allele_pair, prob * 100.0)
+                                if rank_i == 0:
                                     success[0] = True
                                 break
                         print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, allele_pair, prob * 100.0)
