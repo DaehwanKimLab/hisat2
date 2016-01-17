@@ -32,6 +32,7 @@ from argparse import ArgumentParser, FileType
 def test_HLA_genotyping(base_fname,
                         reference_type,
                         hla_list,
+                        partial,
                         aligners,
                         read_fname,
                         alignment_fname,
@@ -99,9 +100,11 @@ def test_HLA_genotyping(base_fname,
         extract_hla_script = os.path.join(ex_path, "extract_HLA_vars.py")
         extract_cmd = [extract_hla_script,
                        "--reference-type", reference_type,
-                       "--hla-list", ','.join(hla_list),
-                       "--gap", "30",
-                       "--split", "50"]
+                       "--hla-list", ','.join(hla_list)]
+        if partial:
+            extract_cmd += ["--partial"]
+        extract_cmd += ["--gap", "30",
+                        "--split", "50"]
                        
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
@@ -151,6 +154,16 @@ def test_HLA_genotyping(base_fname,
             print >> sys.stderr, "Error: indexing HLA failed!"
             sys.exit(1)
 
+    # Read partial alleles from hla.data (temporary)
+    partial_alleles = set()
+    for line in open("IMGTHLA/hla.dat"):
+        if not line.startswith("DE"):
+            continue
+        allele_name = line.split()[1][4:-1]
+        gene = allele_name.split('*')[0]
+        if line.find("partial") != -1:
+            partial_alleles.add(allele_name)
+
     # Read HLA alleles (names and sequences)
     refHLAs, refHLA_loci = {}, {}
     for line in open("hla.ref"):
@@ -161,7 +174,7 @@ def test_HLA_genotyping(base_fname,
         left, right = int(left), int(right)
         refHLA_loci[HLA_gene] = [HLA_name, chr, left, right]
     HLAs = {}
-    def read_HLA_alleles(fname):
+    def read_HLA_alleles(fname, HLAs):
         for line in open(fname):
             if line.startswith(">"):
                 HLA_name = line.strip().split()[0][1:]
@@ -172,9 +185,10 @@ def test_HLA_genotyping(base_fname,
                     HLAs[HLA_gene][HLA_name] = ""
             else:
                 HLAs[HLA_gene][HLA_name] += line.strip()
+        return HLAs
     if reference_type == "gene":
-        read_HLA_alleles("hla_backbone.fa")
-    read_HLA_alleles("hla_sequences.fa")
+        read_HLA_alleles("hla_backbone.fa", HLAs)
+    read_HLA_alleles("hla_sequences.fa", HLAs)
     HLA_names = {}
     for HLA_gene, data in HLAs.items():
         HLA_names[HLA_gene] = list(data.keys())
@@ -239,7 +253,7 @@ def test_HLA_genotyping(base_fname,
     # Test HLA genotyping
     test_list = []
     if simulation:
-        basic_test, random_test = False, True
+        basic_test, random_test = True, False
         test_passed = {}
         test_list = []
         genes = list(set(hla_list) & set(HLA_names.keys()))
@@ -249,7 +263,7 @@ def test_HLA_genotyping(base_fname,
                 for HLA_name in HLA_gene_alleles:
                     test_list.append([[HLA_name]])
         if random_test:
-            test_size = 100
+            test_size = 500
             allele_count = 2
             for test_i in range(test_size):
                 test_pairs = []
@@ -280,7 +294,8 @@ def test_HLA_genotyping(base_fname,
                 for test_HLA_name in test_HLA_names:
                     gene = test_HLA_name.split('*')[0]
                     test_HLA_seq = HLAs[gene][test_HLA_name]
-                    print >> sys.stderr, "\t%s - %d bp" % (test_HLA_name, len(test_HLA_seq))
+                    seq_type = "partial" if test_HLA_name in partial_alleles else "full"
+                    print >> sys.stderr, "\t%s - %d bp (%s sequence)" % (test_HLA_name, len(test_HLA_seq), seq_type)
                     """
                     # daehwan - for debugging purposes
                     vars = []
@@ -1079,37 +1094,41 @@ if __name__ == '__main__':
                         dest='base_fname',
                         type=str,
                         default="hla",
-                        help='base filename for backbone HLA sequence, HLA variants, and HLA linking info.')
+                        help='base filename for backbone HLA sequence, HLA variants, and HLA linking info')
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
                         default="gene",
-                        help="Reference type: gene, chromosome, and genome (default: gene).")
+                        help="Reference type: gene, chromosome, and genome (default: gene)")
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
                         default="A,B,C,DQA1,DQB1,DRB1",
-                        help="A comma-separated list of HLA genes (default: A,B,C,DQA1,DQB1,DRB1).")
+                        help="A comma-separated list of HLA genes (default: A,B,C,DQA1,DQB1,DRB1)")
+    parser.add_argument('--partial',
+                        dest='partial',
+                        action='store_true',
+                        help='Include partial alleles (e.g. A_nuc.fasta)')
     parser.add_argument("--aligner-list",
                         dest="aligners",
                         type=str,
                         default="hisat2.graph,hisat2.linear,bowtie2.linear",
-                        help="A comma-separated list of aligners (default: hisat2.graph,hisat2.linear,bowtie2.linear).")
+                        help="A comma-separated list of aligners (default: hisat2.graph,hisat2.linear,bowtie2.linear)")
     parser.add_argument("--reads",
                         dest="read_fname",
                         type=str,
                         default="",
-                        help="Fastq read file name.")
+                        help="Fastq read file name")
     parser.add_argument("--alignment",
                         dest="alignment_fname",
                         type=str,
                         default="",
-                        help="BAM file name.")
+                        help="BAM file name")
     parser.add_argument("-p", "--threads",
                         dest="threads",
                         type=int,
                         default=1,
-                        help="Number of threads.")
+                        help="Number of threads")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -1141,6 +1160,7 @@ if __name__ == '__main__':
     test_HLA_genotyping(args.base_fname,
                         args.reference_type,
                         args.hla_list,
+                        args.partial,
                         args.aligners,
                         args.read_fname,
                         args.alignment_fname,

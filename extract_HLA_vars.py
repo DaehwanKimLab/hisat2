@@ -30,6 +30,7 @@ from argparse import ArgumentParser, FileType
 def extract_HLA_vars(base_fname,
                      reference_type,
                      hla_list,
+                     partial,
                      gap,
                      split,
                      verbose):
@@ -87,6 +88,28 @@ def extract_HLA_vars(base_fname,
         HLA_genes[gene] = allele_name
         HLA_gene_strand[gene] = strand
         print "HLA-%s's backbone allele is %s on '%s' strand" % (gene, allele_name, strand)
+
+    # Extract exon information from hla.data
+    HLA_gene_exons = {}
+    skip = False
+    for line in open("IMGTHLA/hla.dat"):
+        if line.startswith("DE"):
+            allele_name = line.split()[1][4:-1]
+            gene = allele_name.split('*')[0]
+            if line.find("partial") != -1 or \
+                    not gene in HLA_genes or \
+                    allele_name != HLA_genes[gene]:
+                skip = True
+                continue
+            skip = False
+        elif not skip:
+            if not line.startswith("FT") or \
+                    line.find("exon") == -1:
+                continue
+            exon_range = line.split()[2].split("..")
+            if not gene in HLA_gene_exons:
+                HLA_gene_exons[gene] = []
+            HLA_gene_exons[gene].append([int(exon_range[0]) - 1, int(exon_range[1]) - 1])
         
     # Write the backbone sequences into a fasta file
     if reference_type == "gene":
@@ -101,70 +124,59 @@ def extract_HLA_vars(base_fname,
     input_file = open(base_fname + "_sequences.fa", 'w')
     num_vars, num_haplotypes = 0, 0
     for HLA_gene, HLA_ref_gene in HLA_genes.items():
+        strand = HLA_gene_strand[HLA_gene]        
+        def read_MSF_file(fname):
+            HLA_names = {} # HLA allele names to numeric IDs
+            HLA_seqs = []  # HLA multiple alignment sequences
+            for line in open(fname):
+                line = line.strip()
+                if not line or \
+                        not line[0].isalnum():
+                    continue
+
+                if line.startswith("MSF"):
+                    continue
+
+                if line.startswith("Name"):
+                    try:
+                        name = line.split('\t')[0]
+                        name = name.split()[1]
+                    except ValueError:
+                        continue
+
+                    if name in HLA_names:
+                        print >> sys.stderr, "Warning: %s is found more than once in Names" % (name)
+                        continue
+
+                    HLA_names[name] = len(HLA_names)
+                else:
+                    if len(HLA_seqs) == 0:
+                        HLA_seqs = ["" for i in range(len(HLA_names))]
+                    try:
+                        cols = line.split()
+                        name = cols[0]
+                        fives = cols[1:]
+                        assert len(fives) > 0
+                    except ValueError:
+                        continue
+
+                    if name not in HLA_names:
+                        print >> sys.stderr, "Warning: %s is not present in Names" % (name)
+                        continue
+
+                    id = HLA_names[name]
+                    HLA_seqs[id] += ''.join(fives)
+            return HLA_names, HLA_seqs
+
         HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % gene_to_fname[HLA_gene]
         if not os.path.exists(HLA_MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
             continue
-
-        strand = HLA_gene_strand[HLA_gene]        
-        HLA_names = {} # HLA allele names to numeric IDs
-        HLA_seqs = []  # HLA multiple alignment sequences
-        for line in open(HLA_MSA_fname):
-            line = line.strip()
-            if not line or \
-                    not line[0].isalnum():
-                continue
-
-            if line.startswith("MSF"):
-                continue
-
-            if line.startswith("Name"):
-                try:
-                    name = line.split('\t')[0]
-                    name = name.split()[1]
-                except ValueError:
-                    continue
-
-                if name in HLA_names:
-                    print >> sys.stderr, "Warning: %s is found more than once in Names" % (name)
-                    continue
-
-                HLA_names[name] = len(HLA_names)
-            else:
-                if len(HLA_seqs) == 0:
-                    HLA_seqs = ["" for i in range(len(HLA_names))]
-                try:
-                    name, five1, five2, five3, five4, five5 = line.split()
-                except ValueError:
-                    continue
-
-                if name not in HLA_names:
-                    print >> sys.stderr, "Warning: %s is not present in Names" % (name)
-                    continue
-
-                id = HLA_names[name]
-                HLA_seqs[id] += (five1 + five2 + five3 + five4 + five5)
-
-        # Reverse complement MSF if this gene is on '-' strand
-        if strand == '-':
-            comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
-            for i in range(len(HLA_seqs)):
-                rc_seq = ""
-                for s in reversed(HLA_seqs[i]):
-                    if s in comp_table:
-                        rc_seq += comp_table[s]
-                    else:
-                        rc_seq += s
-                HLA_seqs[i] = rc_seq
-
-        # sanity check -
-        #    Assert the input MSF are of the same length
-        assert len(HLA_seqs) > 0
-        seq_len = len(HLA_seqs[0])
-        for i in range(1, len(HLA_seqs)):
-            assert seq_len == len(HLA_seqs[i])
+        HLA_names, HLA_seqs = read_MSF_file(HLA_MSA_fname)
 
         # Identify a consensus sequence
+        assert len(HLA_seqs) > 0
+        seq_len = len(HLA_seqs[0])
         if reference_type == "gene":
             consensus_count = [[0, 0, 0, 0] for i in range(seq_len)]
             for i in range(len(HLA_seqs)):
@@ -193,6 +205,76 @@ def extract_HLA_vars(base_fname,
             backbone_name = HLA_ref_gene
             backbone_id = HLA_names[backbone_name]
             backbone_seq = HLA_seqs[backbone_id]
+
+        if partial:
+            HLA_partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % gene_to_fname[HLA_gene]
+            if not os.path.exists(HLA_partial_MSA_fname):
+                print >> sys.stderr, "Warning: %s does not exist" % HLA_partial_MSA_fname
+                continue
+            HLA_partial_names, HLA_partial_seqs = read_MSF_file(HLA_partial_MSA_fname)
+            # Mapping from base pair to a location in MSF format
+            def create_map(seq):
+                seq_map = {}
+                count = 0
+                for i in range(len(seq)):
+                    bp = seq[i]
+                    if bp == '.':
+                        continue
+                    assert bp in "ACGT"
+                    seq_map[count] = i
+                    count += 1
+                return seq_map
+            
+            ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
+            ref_seq_map = create_map(ref_seq)
+            ref_partial_seq = HLA_partial_seqs[HLA_partial_names[HLA_ref_gene]]
+            ref_partial_seq_map = create_map(ref_partial_seq)
+            exons = HLA_gene_exons[HLA_gene]
+            exon_len = 0
+            ref_exons = [] # converted exons to MSF file (e.g. A_gen.msf)
+            ref_partial_exons = [] # converted exons to MSF file (e.g. A_nuc.msf)
+            for exon in exons:
+                left, right = exon
+                ref_exons.append([ref_seq_map[left], ref_seq_map[right]])
+                ref_partial_exons.append([ref_partial_seq_map[exon_len], ref_partial_seq_map[right - left + exon_len]])
+                exon_len += (right - left + 1)
+                # Make sure two MSF files (e.g. A_gen.msf and A_nuc.msf) share the same MSF lengths in the exonic sequences
+                ref_exon_len = ref_exons[-1][1] - ref_exons[-1][0] + 1
+                ref_partial_exon_len =  ref_partial_exons[-1][1] - ref_partial_exons[-1][0] + 1
+                assert ref_exon_len == ref_partial_exon_len
+                
+            for HLA_name, seq_id in HLA_partial_names.items():
+                if HLA_name in HLA_names:
+                    continue
+                seq = HLA_partial_seqs[seq_id]
+                new_seq = ""
+                right = 0
+                for e in range(len(exons)):
+                    ref_exon = ref_exons[e]
+                    ref_partial_exon = ref_partial_exons[e]
+                    new_seq += backbone_seq[right:ref_exon[0]]
+                    new_seq += seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
+                    right = ref_exon[1] + 1
+                new_seq += backbone_seq[right:]
+                HLA_names[HLA_name] = len(HLA_seqs)
+                HLA_seqs.append(new_seq)
+
+        # Reverse complement MSF if this gene is on '-' strand
+        if strand == '-':
+            comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
+            for i in range(len(HLA_seqs)):
+                rc_seq = ""
+                for s in reversed(HLA_seqs[i]):
+                    if s in comp_table:
+                        rc_seq += comp_table[s]
+                    else:
+                        rc_seq += s
+                HLA_seqs[i] = rc_seq
+
+        # sanity check -
+        #    Assert the input MSF are of the same length
+        for i in range(1, len(HLA_seqs)):
+            assert seq_len == len(HLA_seqs[i])
 
         print >> sys.stderr, "%s: number of HLA genes is %d." % (HLA_gene, len(HLA_names))
 
@@ -610,27 +692,31 @@ if __name__ == '__main__':
                         dest="base_fname",
                         type=str,
                         default="hla",
-                        help="base filename for backbone HLA sequence, HLA variants, and HLA linking info.")
+                        help="base filename for backbone HLA sequence, HLA variants, and HLA linking info")
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
                         default="gene",
-                        help="Reference type: gene, chromosome, and genome.")
+                        help="Reference type: gene, chromosome, and genome")
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
                         default="A,B,C,DQA1,DQB1,DRB1",
-                        help="A comma-separated list of HLA genes.")
+                        help="A comma-separated list of HLA genes")
+    parser.add_argument("--partial",
+                        dest="partial",
+                        action="store_true",
+                        help="Include partial alleles (e.g. A_nuc.fasta)")
     parser.add_argument("-g", "--gap",
                         dest="gap",
                         type=int,
                         default=30,
-                        help="Maximum distance for variants to be in the same haplotype.")
+                        help="Maximum distance for variants to be in the same haplotype")
     parser.add_argument("-s", "--split",
                         dest="split",
                         type=int,
                         default=50,
-                        help="Break a haplotype into several haplotypes.")
+                        help="Break a haplotype into several haplotypes")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -647,6 +733,7 @@ if __name__ == '__main__':
     extract_HLA_vars(args.base_fname,
                      args.reference_type,
                      args.hla_list,
+                     args.partial,
                      args.gap,
                      args.split,
                      args.verbose)
