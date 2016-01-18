@@ -877,19 +877,22 @@ public:
             assert_lt(bot - top, tmp_gbwt_to_node.size());
             node_bot = tmp_gbwt_to_node[bot - top - 1] + node_top + 1;
             map_.resize(node_bot - node_top + mapi_);
+            index_t width = node_bot - node_top;
             for(index_t e = 0; e < node_iedge_count.size(); e++) {
                 if(node_iedge_count[e].first >= node_bot - node_top) {
                     node_iedge_count.resize(e);
                     break;
                 }
+                width += node_iedge_count[e].second;
             }
-            if(node_iedge_count.size() > 0 &&
-               node_iedge_count.back().first + 1 == node_bot - node_top) {
-                   assert_gt(node_iedge_count.back().second, 0);
-                   node_iedge_count.back().second -= 1;
-                   if(node_iedge_count.back().second == 0) {
-                       node_iedge_count.resize(node_iedge_count.size()- 1);
-                   }
+            if(width != bot - top) {
+                assert_eq(width, bot - top + 1);
+                assert_gt(node_iedge_count.size(), 0);
+                assert_gt(node_iedge_count.back().second, 0);
+                node_iedge_count.back().second -= 1;
+                if(node_iedge_count.back().second == 0) {
+                    node_iedge_count.resize(node_iedge_count.size()- 1);
+                }
             }
         }
 		assert_gt(bot, top);

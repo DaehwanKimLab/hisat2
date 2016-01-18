@@ -487,13 +487,22 @@ def test_HLA_genotyping(base_fname,
                         if flag & 0x4 != 0:
                             continue
 
-                        Zs, MD = "", ""
+                        NM, Zs, MD = "", "", ""
                         for i in range(11, len(cols)):
                             col = cols[i]
                             if col.startswith("Zs"):
                                 Zs = col[5:]
                             elif col.startswith("MD"):
                                 MD = col[5:]
+                            elif col.startswith("NM"):
+                                NM = int(col[5:])
+
+                        # daehwan - for debugging purposes
+                        # interesting!
+                        """
+                        if NM > 0:
+                            continue
+                        """
 
                         vars = []
                         if Zs:
@@ -541,16 +550,6 @@ def test_HLA_genotyping(base_fname,
                                     MD_ref_base = MD[MD_str_pos]
                                     MD_str_pos += 1
                                     assert MD_ref_base in "ACGT"
-                                    # daehwan - for debugging purposes
-                                    """
-                                    if MD_ref_base == read_base:
-                                        print line,
-                                        print left_pos, right_pos
-                                        print read_pos
-                                        print MD, MD_str_pos - 1
-                                        print cmp_list
-                                    assert MD_ref_base != read_base
-                                    """
                                     cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
                                     cmp_list.append(["mismatch", right_pos + MD_len, 1])
                                     MD_len_used = MD_len + 1
@@ -628,12 +627,16 @@ def test_HLA_genotyping(base_fname,
                                 
                             HLA_count_per_read = {}
                             for HLA_name in HLA_names[gene]:
+                                if HLA_name.find("BACKBONE") != -1:
+                                    continue
                                 HLA_count_per_read[HLA_name] = 0
 
                         def add_count(var_id, add):
                             assert var_id in Links
                             alleles = Links[var_id]
                             for allele in alleles:
+                                if allele.find("BACKBONE") != -1:
+                                    continue
                                 HLA_count_per_read[allele] += add
 
                         # Decide which allele(s) a read most likely came from
@@ -843,6 +846,8 @@ def test_HLA_genotyping(base_fname,
                         if flag & 0x4 != 0:
                             continue
                         if not allele.startswith(gene):
+                            continue
+                        if allele.find("BACKBONE") != -1:
                             continue
 
                         AS = None

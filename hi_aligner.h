@@ -2689,6 +2689,9 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 candidate_edits->back() = tmp_edits;
             }
         }
+        if(mm_max_rd_i == rflen) {
+            return mm_max_rd_i;
+        }
         // Find SNPs included in this region
         pair<index_t, index_t> alt_range;
         {
@@ -4312,7 +4315,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                       coord,
                                                       _sharedVars,
                                                       _genomeHits,
-                                                      *this->_rds[rdi],
+                                                      *this->_rds[ordi],
                                                       gfm,
                                                       altdb,
                                                       ref);
