@@ -37,6 +37,7 @@ def test_HLA_genotyping(base_fname,
                         read_fname,
                         alignment_fname,
                         threads,
+                        simulate_interval,
                         verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
@@ -261,6 +262,8 @@ def test_HLA_genotyping(base_fname,
             for gene in genes:
                 HLA_gene_alleles = HLA_names[gene]
                 for HLA_name in HLA_gene_alleles:
+                    if HLA_name.find("BACKBONE") != -1:
+                        continue
                     test_list.append([[HLA_name]])
         if random_test:
             test_size = 500
@@ -320,10 +323,10 @@ def test_HLA_genotyping(base_fname,
                 ref_seq = HLAs[gene][ref_allele]
 
                 # Simulate reads from two HLA alleles
-                def simulate_reads(seq, frag_len = 250, read_len = 100):
+                def simulate_reads(seq, simulate_interval = 1, frag_len = 250, read_len = 100):
                     comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
                     reads_1, reads_2 = [], []
-                    for i in range(0, len(seq) - frag_len + 1):
+                    for i in range(0, len(seq) - frag_len + 1, simulate_interval):
                         reads_1.append(seq[i:i+read_len])
                         tmp_read_2 = reversed(seq[i+frag_len-read_len:i+frag_len])
                         read_2 = ""
@@ -337,7 +340,7 @@ def test_HLA_genotyping(base_fname,
 
                 for test_HLA_name in test_HLA_names:
                     HLA_seq = HLAs[gene][test_HLA_name]
-                    tmp_reads_1, tmp_reads_2 = simulate_reads(HLA_seq)
+                    tmp_reads_1, tmp_reads_2 = simulate_reads(HLA_seq, simulate_interval)
                     HLA_reads_1 += tmp_reads_1
                     HLA_reads_2 += tmp_reads_2
 
@@ -885,9 +888,11 @@ def test_HLA_genotyping(base_fname,
                 for count_i in range(len(HLA_counts)):
                     count = HLA_counts[count_i]
                     if simulation:
+                        found = False
                         for test_HLA_name in test_HLA_names:
                             if count[0] == test_HLA_name:
                                 print >> sys.stderr, "\t\t\t*** %d ranked %s (count: %d)" % (count_i + 1, test_HLA_name, count[1])
+                                found = True
                                 """
                                 if count_i > 0 and HLA_counts[0][1] > count[1]:
                                     print >> sys.stderr, "Warning: %s ranked first (count: %d)" % (HLA_counts[0][0], HLA_counts[0][1])
@@ -895,7 +900,7 @@ def test_HLA_genotyping(base_fname,
                                 else:
                                     test_passed += 1
                                 """
-                        if count_i < 10 and False:
+                        if count_i < 5 and not found:
                             print >> sys.stderr, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
                     else:
                         print >> sys.stderr, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
@@ -1134,6 +1139,11 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Number of threads")
+    parser.add_argument("--simulate-interval",
+                        dest="simulate_interval",
+                        type=int,
+                        default=1,
+                        help="Reads simulated at every these base pairs (default: 1)")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -1170,4 +1180,5 @@ if __name__ == '__main__':
                         args.read_fname,
                         args.alignment_fname,
                         args.threads,
+                        args.simulate_interval,
                         args.verbose)

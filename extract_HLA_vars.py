@@ -261,15 +261,18 @@ def extract_HLA_vars(base_fname,
 
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
-            comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
-            for i in range(len(HLA_seqs)):
+            def reverse_complement(seq):
+                comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
                 rc_seq = ""
-                for s in reversed(HLA_seqs[i]):
+                for s in reversed(seq):
                     if s in comp_table:
                         rc_seq += comp_table[s]
                     else:
                         rc_seq += s
-                HLA_seqs[i] = rc_seq
+                return rc_seq
+            for i in range(len(HLA_seqs)):
+                HLA_seqs[i] = reverse_complement(HLA_seqs[i])
+            backbone_seq = reverse_complement(backbone_seq)
 
         # sanity check -
         #    Assert the input MSF are of the same length
