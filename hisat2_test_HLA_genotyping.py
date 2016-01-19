@@ -29,8 +29,7 @@ from argparse import ArgumentParser, FileType
 """
 """
 
-def test_HLA_genotyping(base_fname,
-                        reference_type,
+def test_HLA_genotyping(reference_type,
                         hla_list,
                         partial,
                         aligners,
@@ -39,6 +38,7 @@ def test_HLA_genotyping(base_fname,
                         threads,
                         simulate_interval,
                         enable_coverage,
+                        best_alleles,
                         verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
@@ -998,6 +998,8 @@ def test_HLA_genotyping(base_fname,
                             break
                     if not found:
                         print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, prob[0], prob[1] * 100.0)
+                        if best_alleles and prob_i < 2:
+                            print >> sys.stdout, "%s (abundance: %.2f%%)" % (prob[0], prob[1] * 100.0)
                     if not simulation and prob_i >= 9:
                         break
                 print >> sys.stderr
@@ -1103,11 +1105,6 @@ def test_HLA_genotyping(base_fname,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='test HLA genotyping')
-    parser.add_argument('-b', '--base',
-                        dest='base_fname',
-                        type=str,
-                        default="hla",
-                        help='base filename for backbone HLA sequence, HLA variants, and HLA linking info')
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
@@ -1151,6 +1148,10 @@ if __name__ == '__main__':
                         dest="coverage",
                         action='store_true',
                         help="Experimental purpose (assign reads based on coverage)")
+    parser.add_argument("--best-alleles",
+                        dest="best_alleles",
+                        action='store_true',
+                        help="")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -1176,11 +1177,10 @@ if __name__ == '__main__':
     if args.alignment_fname != "" and \
             not os.path.exists(args.alignment_fname):
         print >> sys.stderr, "Error: %s doesn't exist." % args.alignment_fname
-        sys.exit(1)    
+        sys.exit(1)
 
     random.seed(1)
-    test_HLA_genotyping(args.base_fname,
-                        args.reference_type,
+    test_HLA_genotyping(args.reference_type,
                         args.hla_list,
                         args.partial,
                         args.aligners,
@@ -1189,4 +1189,5 @@ if __name__ == '__main__':
                         args.threads,
                         args.simulate_interval,
                         args.coverage,
+                        args.best_alleles,
                         args.verbose)
