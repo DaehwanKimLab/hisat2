@@ -108,18 +108,20 @@ def test_HLA_genotyping(reference_type,
                             "--reads", "%s,%s" % (read_fname_1, read_fname_2),
                             "--best-alleles"]
             proc = subprocess.Popen(test_hla_cmd, stdout=subprocess.PIPE, stderr=open("/dev/null", 'w'))
-            num_test += 1
+            num_test += 2
             test_alleles = set()
             for line in proc.stdout:
                 print "\t\t", line,
-                allele = line.split()[0]
+                model, allele = line.split()[:2]
+                if model != "SingleModel":
+                    continue
                 allele = allele.split('*')[1]
                 allele = ':'.join(allele.split(':')[:2])
                 test_alleles.add(allele)
             proc.communicate()
-            if test_alleles == set(alleles) or \
-                    test_alleles.issuperset(set(alleles)):
-                num_success += 1
+            for allele in alleles:
+                if allele in test_alleles:
+                    num_success += 1
 
     print >> sys.stderr, "%d/%d (%.2f)" % (num_success, num_test, num_success * 100.0 / num_test)
 

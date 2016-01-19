@@ -28,7 +28,6 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-
 def test_HLA_genotyping(reference_type,
                         hla_list,
                         partial,
@@ -282,8 +281,8 @@ def test_HLA_genotyping(reference_type,
 
     for test_i in range(len(test_list)):
         # daehwan - for debugging purposes
-        # if test_i + 1 != 4:
-        #     continue
+        # if test_i + 1 != 28:
+        #    continue
         # if test_i + 1 not in [187, 195, 266, 346]:
         #    continue
         # two allele test (#266, #346)        
@@ -378,9 +377,13 @@ def test_HLA_genotyping(reference_type,
                 else:
                     assert False
                 if simulation:
+                    # daehwan - for debugging purposes
+                    # """
                     aligner_cmd += ["-f",
                                     "-1", "hla_input_1.fa",
                                     "-2", "hla_input_2.fa"]
+                    # """
+                    # aligner_cmd += ["-f", "hla_input_1.fa"]
                 else:
                     assert len(read_fname) in [1,2]
                     aligner_cmd += ["-p", str(threads)]
@@ -483,11 +486,6 @@ def test_HLA_genotyping(reference_type,
                         if pos < 0:
                             continue
 
-                        # daehwan - for debugging purposes
-                        debug = False
-                        if pos == 1051 and False:
-                            debug = True
-
                         if flag & 0x4 != 0:
                             continue
 
@@ -503,10 +501,16 @@ def test_HLA_genotyping(reference_type,
 
                         # daehwan - for debugging purposes
                         # interesting!
-                        """
+                        # """
                         if NM > 0:
                             continue
-                        """
+                        # """
+
+                        # daehwan - for debugging purposes
+                        debug = False
+                        if read_id == "5690" and False:
+                            debug = True
+                            print "read_id:", read_id, pos, cigar_str, "NM:", NM, MD, Zs
 
                         vars = []
                         if Zs:
@@ -591,32 +595,35 @@ def test_HLA_genotyping(reference_type,
                             continue
 
                         def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read):
-                            max_count = None
-                            for allele, count in HLA_count_per_read.items():
-                                if max_count == None:
-                                    max_count = count
-                                elif count > max_count:
-                                    max_count = count
+                            max_count = max(HLA_count_per_read.values())
                             cur_cmpt = set()
-                            # daehwan - for debugging purposes
-                            allele1_found, allele2_found = False, False
                             for allele, count in HLA_count_per_read.items():
                                 if count < max_count:
                                     continue
-                                if allele == "A*24:02:01:01" and False:
-                                    allele1_found = True
-                                elif allele == "A*24:11N" and False:
-                                    allele2_found = True
                                 cur_cmpt.add(allele)                    
                                 if not allele in HLA_counts:
                                     HLA_counts[allele] = 1
                                 else:
                                     HLA_counts[allele] += 1
+                            
+                            # daehwan - for debugging purposes                            
+                            alleles = ["", ""]
+                            # alleles = ["DQA1*05:05:01:01", "DQA1*05:05:01:02"]
+                            allele1_found, allele2_found = False, False
+                            for allele, count in HLA_count_per_read.items():
+                                if count < max_count:
+                                    continue
+                                if allele == alleles[0]:
+                                    allele1_found = True
+                                elif allele == alleles[1]:
+                                    allele2_found = True
                             if allele1_found != allele2_found:
+                                print alleles[0], HLA_count_per_read[alleles[0]]
+                                print alleles[1], HLA_count_per_read[alleles[1]]
                                 if allele1_found:
-                                    print ("A*24:02:01:01\tread_id %s]" % read_id), left_pos, cigar_str, MD, Zs
+                                    print ("%s\tread_id %s - %d vs. %d]" % (alleles[0], prev_read_id, max_count, HLA_count_per_read[alleles[1]]))
                                 else:
-                                    print ("A*24:11N\tread_id %s]" % read_id), left_pos, cigar_str, MD, Zs
+                                    print ("%s\tread_id %s - %d vs. %d]" % (alleles[1], prev_read_id, max_count, HLA_count_per_read[alleles[0]]))
                                 print read_seq
 
                             cur_cmpt = sorted(list(cur_cmpt))
@@ -643,6 +650,10 @@ def test_HLA_genotyping(reference_type,
                                 if allele.find("BACKBONE") != -1:
                                     continue
                                 HLA_count_per_read[allele] += add
+                                # daehwan - for debugging purposes
+                                if debug:
+                                    if allele in ["DQA1*05:05:01:01", "DQA1*05:05:01:02"]:
+                                        print allele, add, var_id
 
                         # Decide which allele(s) a read most likely came from
                         # also sanity check - read length, cigar string, and MD string
@@ -670,8 +681,21 @@ def test_HLA_genotyping(reference_type,
                                                 add_count(var_id, -1)
                                                 # daehwan - for debugging purposes
                                                 if debug:
-                                                    print cmp, var_id
+                                                    print cmp, var_id, Links[var_id]
+                                        elif var_type == "deletion":
+                                            if ref_pos < var_pos and ref_pos + length > var_pos + int(var_data):
+                                                # daehwan - for debugging purposes
+                                                if debug:
+                                                    print cmp, var_id, Links[var_id], -1
+                                                    cmp_left, cmp_right = cmp[1], cmp[1] + cmp[2]
+                                                    print ref_seq[cmp_left:cmp_right]
+                                                    print "vs."
+                                                    print ref_seq[cmp_left:var_pos] + ref_seq[var_pos+int(var_data):cmp_right]
+                                                    
+                                                add_count(var_id, -1)
                                         else:
+                                            if debug:
+                                                print cmp, var_id, Links[var_id], -1
                                             add_count(var_id, -1)
                                     var_idx += 1
 
@@ -689,10 +713,10 @@ def test_HLA_genotyping(reference_type,
                                     if ref_pos == var_pos:
                                         var_type, _, var_data = Vars[gene][var_id]
                                         if var_type == "single":
-                                            # daehwan - for debugging purposes
-                                            if debug:
-                                                print cmp, var_id, var_data, read_base
                                             if var_data == read_base:
+                                                # daehwan - for debugging purposes
+                                                if debug:
+                                                    print cmp, var_id, var_data, read_base, Links[var_id]
                                                 add_count(var_id, 1)
                                             # daehwan - check out this routine
                                             # else:
@@ -722,7 +746,7 @@ def test_HLA_genotyping(reference_type,
                                             if var_data == ins_seq:
                                                 # daehwan - for debugging purposes
                                                 if debug:
-                                                    print cmp, var_id
+                                                    print cmp, var_id, Links[var_id]
                                                 add_count(var_id, 1)
                                     var_idx += 1
 
@@ -744,7 +768,7 @@ def test_HLA_genotyping(reference_type,
                                             if var_len == length:
                                                 # daehwan - for debugging purposes
                                                 if debug:
-                                                    print cmp, var_id
+                                                    print cmp, var_id, Links[var_id]
                                                 add_count(var_id, 1)
                                     var_idx += 1
 
@@ -999,7 +1023,7 @@ def test_HLA_genotyping(reference_type,
                     if not found:
                         print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, prob[0], prob[1] * 100.0)
                         if best_alleles and prob_i < 2:
-                            print >> sys.stdout, "%s (abundance: %.2f%%)" % (prob[0], prob[1] * 100.0)
+                            print >> sys.stdout, "SingleModel %s (abundance: %.2f%%)" % (prob[0], prob[1] * 100.0)
                     if not simulation and prob_i >= 9:
                         break
                 print >> sys.stderr
@@ -1070,6 +1094,8 @@ def test_HLA_genotyping(reference_type,
                     for prob_i in range(len(HLA_prob)):
                         allele_pair, prob = HLA_prob[prob_i]
                         allele1, allele2 = allele_pair.split('-')
+                        if best_alleles and prob_i < 1:
+                            print >> sys.stdout, "PairModel %s (abundance: %.2f%%)" % (allele_pair, prob * 100.0)
                         if simulation:
                             if allele1 in test_HLA_names and allele2 in test_HLA_names:
                                 rank_i = prob_i
