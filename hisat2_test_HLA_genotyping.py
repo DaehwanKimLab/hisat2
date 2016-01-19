@@ -266,7 +266,7 @@ def test_HLA_genotyping(reference_type,
                         continue
                     test_list.append([[HLA_name]])
         if random_test:
-            test_size = 1 
+            test_size = 500
             allele_count = 2
             for test_i in range(test_size):
                 test_pairs = []
@@ -1112,19 +1112,30 @@ def test_HLA_genotyping(reference_type,
                         if not simulation and prob_i >= 9:
                             break
                     print >> sys.stderr
-		# Li's method
-                if len(test_HLA_names) == 2 or not simulation:
-			li_hla = os.path.join(ex_path, "li_hla/hla")
-			os.system("%s hla hla_input.bam -b A*BACKBONE > li_hla.out" % li_hla)
-			# read in the result of Li's hla
-			line = open( "li_hla.out" ).readline() 
-			allele1, allele2, scroe = line.strip().split()
-			if simulation:
-				if allele1 in test_HLA_names and allele2 in test_HLA_names:
-					print >> sys.stderr, "li_hla success"
-					success[0] = True
-				else:
-					print >> sys.stderr, "li_hla fail"
+                    
+                    # Li's method
+                    li_hla = os.path.join(ex_path, "li_hla/hla")
+                    li_hla_cmd = [li_hla,
+                                  "hla",
+                                  "hla_input.bam",
+                                  "-b", "%s*BACKBONE" % gene]
+                    li_hla_proc = subprocess.Popen(li_hla_cmd,
+                                                   stdout=subprocess.PIPE,
+                                                   stderr=open("/dev/null", 'w'))
+
+                    # read in the result of Li's hla
+                    for line in li_hla_proc.stdout:
+                        allele1, allele2, score = line.strip().split()
+                        score = float(score)
+                        if simulation:
+                            if allele1 in test_HLA_names and allele2 in test_HLA_names:
+                                print >> sys.stderr, "\t\t\t*** 1 ranked %s-%s (score: %.2f)" % (allele1, allele2, score)
+                                success[0] = True
+                            else:
+                                print >> sys.stderr, "\t\t\tLiModel fails"
+                        if best_alleles:
+                            print >> sys.stdout, "LiModel %s-%s (score: %.2f)" % (allele1, allele2, score)
+                    li_hla_proc.communicate()
 
                 if simulation and not False in success:
                     aligner_type = "%s %s" % (aligner, index_type)

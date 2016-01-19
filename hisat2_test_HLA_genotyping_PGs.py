@@ -147,8 +147,8 @@ if __name__ == '__main__':
                         default="hisat2.graph",
                         help="A comma-separated list of aligners (default: hisat2.graph)")
     genomes_default = ','.join(gold_allele_info.keys())
-    parser.add_argument("--genomes",
-                        dest="genomes",
+    parser.add_argument("--genome-list",
+                        dest="genome_list",
                         type=str,
                         default=genomes_default,
                         help="A comma-separated list of genomes (default: %s)" % genomes_default)
@@ -168,10 +168,10 @@ if __name__ == '__main__':
     args.aligners = args.aligners.split(',')
     for i in range(len(args.aligners)):
         args.aligners[i] = args.aligners[i].split('.')
-    args.genomes = args.genomes.split(',')
+    args.genome_list = args.genome_list.split(',')
 
     test_HLA_genotyping(args.reference_type,
                         args.hla_list,
                         args.aligners,
-                        args.genomes,
+                        args.genome_list,
                         args.verbose)
