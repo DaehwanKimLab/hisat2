@@ -45,23 +45,23 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 	fi
 fi
 
-HISAT2_SS_SCRIPT=./extract_splice_sites.py
+HISAT2_SS_SCRIPT=./hisat2_extract_splice_sites.py
 if [ ! -x "$HISAT2_SS_SCRIPT" ] ; then
-	if ! which extract_splice_sites.py ; then
-		echo "Could not find extract_splice_sites.py in current directory or in PATH"
+	if ! which hisat2_extract_splice_sites.py ; then
+		echo "Could not find hisat2_extract_splice_sites.py in current directory or in PATH"
 		exit 1
 	else
-		HISAT2_SS_SCRIPT=`which extract_splice_sites.py`
+		HISAT2_SS_SCRIPT=`which hisat2_extract_splice_sites.py`
 	fi
 fi
 
-HISAT2_EXON_SCRIPT=./extract_exons.py
+HISAT2_EXON_SCRIPT=./hisat2_extract_exons.py
 if [ ! -x "$HISAT2_EXON_SCRIPT" ] ; then
-	if ! which extract_exons.py ; then
-		echo "Could not find extract_exons.py in current directory or in PATH"
+	if ! which hisat2_extract_exons.py ; then
+		echo "Could not find hisat2_extract_exons.py in current directory or in PATH"
 		exit 1
 	else
-		HISAT2_EXON_SCRIPT=`which extract_exons.py`
+		HISAT2_EXON_SCRIPT=`which hisat2_extract_exons.py`
 	fi
 fi
 

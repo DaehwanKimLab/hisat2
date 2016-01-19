@@ -47,13 +47,13 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 	fi
 fi
 
-HISAT2_SNP_SCRIPT=./extract_snps.py
+HISAT2_SNP_SCRIPT=./hisat2_extract_snps.py
 if [ ! -x "$HISAT2_SNP_SCRIPT" ] ; then
-	if ! which extract_snps.py ; then
-		echo "Could not find extract_snps.py in current directory or in PATH"
+	if ! which hisat2_extract_snps.py ; then
+		echo "Could not find hisat2_extract_snps.py in current directory or in PATH"
 		exit 1
 	else
-		HISAT2_SNP_SCRIPT=`which extract_snps.py`
+		HISAT2_SNP_SCRIPT=`which hisat2_extract_snps.py`
 	fi
 fi
 

@@ -38,6 +38,7 @@ def test_HLA_genotyping(base_fname,
                         alignment_fname,
                         threads,
                         simulate_interval,
+                        enable_coverage,
                         verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
@@ -98,7 +99,7 @@ def test_HLA_genotyping(base_fname,
                   "hla.link"]
 
     if not check_files(HLA_fnames):
-        extract_hla_script = os.path.join(ex_path, "extract_HLA_vars.py")
+        extract_hla_script = os.path.join(ex_path, "hisat2_extract_HLA_vars.py")
         extract_cmd = [extract_hla_script,
                        "--reference-type", reference_type,
                        "--hla-list", ','.join(hla_list)]
@@ -522,12 +523,13 @@ def test_HLA_genotyping(base_fname,
                             cigar_op, length = cigars[i]
                             if cigar_op == 'M':
                                 # Update coverage
-                                if right_pos + length < len(coverage):
-                                    coverage[right_pos] += 1
-                                    coverage[right_pos + length] -= 1
-                                elif right_pos < len(coverage):
-                                    coverage[right_pos] += 1
-                                    coverage[-1] -= 1
+                                if enable_coverage:
+                                    if right_pos + length < len(coverage):
+                                        coverage[right_pos] += 1
+                                        coverage[right_pos + length] -= 1
+                                    elif right_pos < len(coverage):
+                                        coverage[right_pos] += 1
+                                        coverage[-1] -= 1
 
                                 first = True
                                 MD_len_used = 0
@@ -787,44 +789,45 @@ def test_HLA_genotyping(base_fname,
                         add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
 
                     # Coverage
-                    assert num_reads > 0
-                    read_len = int(total_read_len / float(num_reads))
-                    coverage_sum = 0
-                    for i in range(len(coverage)):
-                        if i > 0:
-                            coverage[i] += coverage[i-1]
-                        coverage_sum += coverage[i]
-                    coverage_avg = coverage_sum / float(len(coverage))
-                    assert len(ref_seq) < len(coverage)
-                    for i in range(len(ref_seq)):
-                        coverage_threshold = 1.0 * coverage_avg
-                        if i < read_len:
-                            coverage_threshold *= ((i+1) / float(read_len))
-                        elif i + read_len > len(ref_seq):
-                            coverage_threshold *= ((len(ref_seq) - i) / float(read_len))
-                        if coverage[i] >= coverage_threshold:
-                            continue
-                        pseudo_num_reads = (coverage_threshold - coverage[i]) / read_len
-                        var_idx = lower_bound(Var_list[gene], i + 1)
-                        if var_idx >= len(Var_list[gene]):
-                            var_idx = len(Var_list[gene]) - 1
-                        cur_cmpt = set()
-                        while var_idx >= 0:
-                            var_pos, var_id = Var_list[gene][var_idx]
-                            var_type, _, var_data = Vars[gene][var_id]
-                            if var_type == "deletion":
-                                del_len = int(var_data)
-                                if i < var_pos:
-                                    break
-                                if i + read_len < var_pos + int(var_data):
-                                    assert var_id in Links
-                                    cur_cmpt = cur_cmpt.union(set(Links[var_id]))
-                            var_idx -= 1
-                        if cur_cmpt:
-                            cur_cmpt = '-'.join(list(cur_cmpt))
-                            if not cur_cmpt in HLA_cmpt:
-                                HLA_cmpt[cur_cmpt] = 0
-                            HLA_cmpt[cur_cmpt] += pseudo_num_reads
+                    if enable_coverage:
+                        assert num_reads > 0
+                        read_len = int(total_read_len / float(num_reads))
+                        coverage_sum = 0
+                        for i in range(len(coverage)):
+                            if i > 0:
+                                coverage[i] += coverage[i-1]
+                            coverage_sum += coverage[i]
+                        coverage_avg = coverage_sum / float(len(coverage))
+                        assert len(ref_seq) < len(coverage)
+                        for i in range(len(ref_seq)):
+                            coverage_threshold = 1.0 * coverage_avg
+                            if i < read_len:
+                                coverage_threshold *= ((i+1) / float(read_len))
+                            elif i + read_len > len(ref_seq):
+                                coverage_threshold *= ((len(ref_seq) - i) / float(read_len))
+                            if coverage[i] >= coverage_threshold:
+                                continue
+                            pseudo_num_reads = (coverage_threshold - coverage[i]) / read_len
+                            var_idx = lower_bound(Var_list[gene], i + 1)
+                            if var_idx >= len(Var_list[gene]):
+                                var_idx = len(Var_list[gene]) - 1
+                            cur_cmpt = set()
+                            while var_idx >= 0:
+                                var_pos, var_id = Var_list[gene][var_idx]
+                                var_type, _, var_data = Vars[gene][var_id]
+                                if var_type == "deletion":
+                                    del_len = int(var_data)
+                                    if i < var_pos:
+                                        break
+                                    if i + read_len < var_pos + int(var_data):
+                                        assert var_id in Links
+                                        cur_cmpt = cur_cmpt.union(set(Links[var_id]))
+                                var_idx -= 1
+                            if cur_cmpt:
+                                cur_cmpt = '-'.join(list(cur_cmpt))
+                                if not cur_cmpt in HLA_cmpt:
+                                    HLA_cmpt[cur_cmpt] = 0
+                                HLA_cmpt[cur_cmpt] += pseudo_num_reads
                 else:
                     assert index_type == "linear"
                     def add_alleles(alleles):
@@ -1144,6 +1147,10 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Reads simulated at every these base pairs (default: 1)")
+    parser.add_argument("--coverage",
+                        dest="coverage",
+                        action='store_true',
+                        help="Experimental purpose (assign reads based on coverage)")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -1181,4 +1188,5 @@ if __name__ == '__main__':
                         args.alignment_fname,
                         args.threads,
                         args.simulate_interval,
+                        args.coverage,
                         args.verbose)
