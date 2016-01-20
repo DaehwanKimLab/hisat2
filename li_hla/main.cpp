@@ -161,23 +161,37 @@ int main( int argc, char *argv[] )
 	int backboneLength = 0 ;
 	sprintf( buffer, "%s_backbone.fa", argv[1] ) ;
 	fp = fopen( buffer, "r" ) ;
-	fgets( buffer, sizeof( buffer ), fp ) ;
 	/*for ( i = 1 ; buffer[i] && buffer[i] != ' ' && buffer[i] != '\n' ; ++i )
 		;
 	buffer[i] = '\0' ;
 	std::string backboneName( buffer + 1 ) ;
 	alleleNameToId[ backboneName ] = 0 ;
 	alleleIdToName.push_back( backboneName ) ;*/
+	bool start = false ;
 	while ( fgets( buffer, sizeof( buffer ), fp ) )
 	{
-		int len = strlen( buffer ) ;
-		if ( buffer[len - 1 ] == '\n' )
-			backboneLength += len - 1 ;
-		else
-			backboneLength += len ;
+		if ( buffer[0] == '>' )
+		{
+			for ( i = 1 ; buffer[i] && buffer[i] != ' ' && buffer[i] != '\n' ; ++i )
+				;
+			buffer[i] = '\0' ;
+			if ( !strcmp( backboneName, buffer + 1 ) )
+			{
+				start = true ;
+			}
+			else if ( start )
+				break ;
+		}
+		if ( start && buffer[0] != '>' )
+		{
+			int len = strlen( buffer ) ;
+			if ( buffer[len - 1 ] == '\n' )
+				backboneLength += len - 1 ;
+			else
+				backboneLength += len ;
+		}
 	}
 	fclose( fp ) ;
-	
 	/*k = 0 ;
 	if ( k == 0 )
 	{
@@ -319,7 +333,7 @@ int main( int argc, char *argv[] )
 							v = 0 ;
 						}
 						compatibility[i][j].value += v ;
-						/*if ( i == 1267 && j == 121 )
+						/*if ( i == 8 && j == 78 )
 						{
 							printf( "Bad snp %d: %d %d\n", tag, k, positionToSnp[k][l] ) ;
 						}*/
@@ -361,13 +375,27 @@ int main( int argc, char *argv[] )
 				}
 				else if ( vj == vk + 2 )
 				{
-					weightJ = 0.99 ;
-					weightK = 0.01 ;
+					if ( vj == 0 )
+					{
+						weightJ = 1 ;
+					}
+					else
+					{
+						weightJ = 0.99 ;
+						weightK = 0.01 ;
+					}
 				}
 				else if ( vk == vj + 2 )
 				{
-					weightJ = 0.01 ;
-					weightK = 0.99 ;
+					if ( vk == 0 )
+					{
+						weightK = 1 ;
+					}
+					else
+					{
+						weightJ = 0.01 ;
+						weightK = 0.99 ;
+					}
 				}
 				else
 				{
@@ -384,6 +412,8 @@ int main( int argc, char *argv[] )
 						( assignJBin > averageRead + 4 * sqrt( averageRead ) 
 							|| assignKBin > averageRead + 4 * sqrt( averageRead ) ) )
 					{
+						//if ( j == 8 && k == 78 )
+						//	printf( "%lf: %lf %lf %d %d\n", averageRead, assignJBin, assignKBin, alleleLength[j], alleleLength[k] ) ;
 						binAdjust -= 4 ;
 					}
 					prevBin = alignmentCoords[i].a / binSize ;
@@ -393,7 +423,7 @@ int main( int argc, char *argv[] )
 				assignJBin += weightJ ;
 				assignKBin += weightK ;
 				
-				/*if ( j == 119 && k == 121 && l < 0 )
+				/*if ( j == 8 && k == 78 && l < 0 )
 				{
 					printf( "Bad alignment %d (%s %s). %lf %lf: %lf\n", i,
 						alleleIdToName[j].c_str(), alleleIdToName[k].c_str(),
