@@ -76,6 +76,8 @@ def test_HLA_genotyping(reference_type,
                         hla_list,
                         aligners,
                         query_genomes,
+                        exclude_allele_list,
+                        num_mismatch,
                         verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
@@ -106,7 +108,9 @@ def test_HLA_genotyping(reference_type,
                             "--hla-list", gene,
                             "--aligner-list", ','.join(cmd_aligners),
                             "--reads", "%s,%s" % (read_fname_1, read_fname_2),
-                            "--best-alleles"]
+                            "--best-alleles",
+                            "--exclude-allele-list", ','.join(exclude_allele_list),
+                            "--num-mismatch", str(num_mismatch)]
             proc = subprocess.Popen(test_hla_cmd, stdout=subprocess.PIPE, stderr=open("/dev/null", 'w'))
             num_test += 2
             test_alleles = set()
@@ -152,12 +156,23 @@ if __name__ == '__main__':
                         type=str,
                         default=genomes_default,
                         help="A comma-separated list of genomes (default: %s)" % genomes_default)
+    parser.add_argument("--exclude-allele-list",
+                        dest="exclude_allele_list",
+                        type=str,
+                        default="",
+                        help="A comma-separated list of allleles to be excluded")
+    parser.add_argument("--num-mismatch",
+                        dest="num_mismatch",
+                        type=int,
+                        default=2,
+                        help="Maximum number of mismatches per read alignment to be considered (default: 2)")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
                         help='also print some statistics to stderr')
 
     args = parser.parse_args()
+
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
         sys.exit(1)
@@ -169,9 +184,12 @@ if __name__ == '__main__':
     for i in range(len(args.aligners)):
         args.aligners[i] = args.aligners[i].split('.')
     args.genome_list = args.genome_list.split(',')
+    args.exclude_allele_list = args.exclude_allele_list.split(',')
 
     test_HLA_genotyping(args.reference_type,
                         args.hla_list,
                         args.aligners,
                         args.genome_list,
+                        args.exclude_allele_list,
+                        args.num_mismatch,
                         args.verbose)
