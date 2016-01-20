@@ -261,10 +261,10 @@ def test_HLA_genotyping(reference_type,
         basic_test, pair_test = True, False
         if daehwan_debug:
             if "basic_test" in daehwan_debug:
-                if daehwan_debug["basic_test"] == "0":
-                    basic_test, pair_test = False, True
-                else:
-                    basic_test, pair_test = True, False
+                basic_test, pair_test = True, False
+            else:
+                basic_test, pair_test = False, True
+
         test_passed = {}
         test_list = []
         genes = list(set(hla_list) & set(HLA_names.keys()))
@@ -1233,8 +1233,8 @@ if __name__ == '__main__':
     parser.add_argument("--num-mismatch",
                         dest="num_mismatch",
                         type=int,
-                        default=2,
-                        help="Maximum number of mismatches per read alignment to be considered (default: 2)")
+                        default=0,
+                        help="Maximum number of mismatches per read alignment to be considered (default: 0)")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -1243,7 +1243,7 @@ if __name__ == '__main__':
                         dest="daehwan_debug",
                         type=str,
                         default="",
-                        help="e.g., test_id:10,read_id:10000,basic_test:1")
+                        help="e.g., test_id:10,read_id:10000,basic_test")
 
     args = parser.parse_args()
     if not args.reference_type in ["gene", "chromosome", "genome"]:
@@ -1268,8 +1268,11 @@ if __name__ == '__main__':
     daehwan_debug = {}
     if args.daehwan_debug != "":
         for item in args.daehwan_debug.split(','):
-            key, value = item.split(':')
-            daehwan_debug[key] = value
+            if ':' in item:
+                key, value = item.split(':')
+                daehwan_debug[key] = value
+            else:
+                daehwan_debug[key] = 1
 
     random.seed(1)
     test_HLA_genotyping(args.reference_type,

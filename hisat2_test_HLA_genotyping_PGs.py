@@ -164,8 +164,8 @@ if __name__ == '__main__':
     parser.add_argument("--num-mismatch",
                         dest="num_mismatch",
                         type=int,
-                        default=2,
-                        help="Maximum number of mismatches per read alignment to be considered (default: 2)")
+                        default=0,
+                        help="Maximum number of mismatches per read alignment to be considered (default: 0)")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
