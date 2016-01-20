@@ -254,7 +254,7 @@ def test_HLA_genotyping(reference_type,
     # Test HLA genotyping
     test_list = []
     if simulation:
-        basic_test, random_test = False, True
+        basic_test, random_test = True, False
         test_passed = {}
         test_list = []
         genes = list(set(hla_list) & set(HLA_names.keys()))
@@ -271,7 +271,11 @@ def test_HLA_genotyping(reference_type,
             for test_i in range(test_size):
                 test_pairs = []
                 for gene in genes:
-                    HLA_gene_alleles = HLA_names[gene]
+                    HLA_gene_alleles = []
+                    for allele in HLA_names[gene]:
+                        if allele.find("BACKBONE") != -1:
+                            continue
+                        HLA_gene_alleles.append(allele)
                     nums = [i for i in range(len(HLA_gene_alleles))]
                     random.shuffle(nums)
                     test_pairs.append(sorted([HLA_gene_alleles[nums[i]] for i in range(allele_count)]))
@@ -281,8 +285,8 @@ def test_HLA_genotyping(reference_type,
 
     for test_i in range(len(test_list)):
         # daehwan - for debugging purposes
-        # if test_i + 1 != 28:
-        #    continue
+        # if test_i + 1 not in [3, 26, 28]:
+        #     continue
         # if test_i + 1 not in [187, 195, 266, 346]:
         #    continue
         # two allele test (#266, #346)        
@@ -508,9 +512,10 @@ def test_HLA_genotyping(reference_type,
 
                         # daehwan - for debugging purposes
                         debug = False
-                        if read_id == "5690" and False:
+                        if read_id in ["5746"] and False:
                             debug = True
-                            print "read_id:", read_id, pos, cigar_str, "NM:", NM, MD, Zs
+                            print "read_id: %s)" % read_id, pos, cigar_str, "NM:", NM, MD, Zs
+                            print "            ", read_seq
 
                         vars = []
                         if Zs:
@@ -683,16 +688,22 @@ def test_HLA_genotyping(reference_type,
                                                 if debug:
                                                     print cmp, var_id, Links[var_id]
                                         elif var_type == "deletion":
-                                            if ref_pos < var_pos and ref_pos + length > var_pos + int(var_data):
+                                            del_len = int(var_data)
+                                            if ref_pos < var_pos and ref_pos + length > var_pos + del_len:
                                                 # daehwan - for debugging purposes
                                                 if debug:
-                                                    print cmp, var_id, Links[var_id], -1
-                                                    cmp_left, cmp_right = cmp[1], cmp[1] + cmp[2]
-                                                    print ref_seq[cmp_left:cmp_right]
-                                                    print "vs."
-                                                    print ref_seq[cmp_left:var_pos] + ref_seq[var_pos+int(var_data):cmp_right]
-                                                    
-                                                add_count(var_id, -1)
+                                                    print cmp, var_id, Links[var_id], -1, Vars[gene][var_id]
+                                                # Check if this might be one of the two tandem repeats (the same left coordinate)
+                                                cmp_left, cmp_right = cmp[1], cmp[1] + cmp[2]
+                                                test1_seq1 = ref_seq[cmp_left:cmp_right]
+                                                test1_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos + del_len:cmp_right + del_len]
+                                                # Check if this happens due to small repeats (the same right coordinate - e.g. 19 times of TTTC in DQA1*05:05:01:02)
+                                                cmp_left -= read_pos
+                                                cmp_right += (len(read_seq) - read_pos - cmp[2])
+                                                test2_seq1 = ref_seq[cmp_left+int(var_data):cmp_right]
+                                                test2_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos+int(var_data):cmp_right]
+                                                if test1_seq1 != test1_seq2 and test2_seq1 != test2_seq2:
+                                                    add_count(var_id, -1)
                                         else:
                                             if debug:
                                                 print cmp, var_id, Links[var_id], -1
@@ -718,7 +729,7 @@ def test_HLA_genotyping(reference_type,
                                                 if debug:
                                                     print cmp, var_id, var_data, read_base, Links[var_id]
                                                 add_count(var_id, 1)
-                                            # daehwan - check out this routine
+                                            # daehwan - check out if this routine is appropriate
                                             # else:
                                             #    add_count(var_id, -1)
                                     var_idx += 1

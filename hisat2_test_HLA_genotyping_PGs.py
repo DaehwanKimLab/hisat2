@@ -123,7 +123,7 @@ def test_HLA_genotyping(reference_type,
                 if allele in test_alleles:
                     num_success += 1
 
-    print >> sys.stderr, "%d/%d (%.2f)" % (num_success, num_test, num_success * 100.0 / num_test)
+    print >> sys.stderr, "%d/%d (%.2f%%)" % (num_success, num_test, num_success * 100.0 / num_test)
 
 
 """
