@@ -412,8 +412,8 @@ int main( int argc, char *argv[] )
 						( assignJBin > averageRead + 4 * sqrt( averageRead ) 
 							|| assignKBin > averageRead + 4 * sqrt( averageRead ) ) )
 					{
-						if ( j == 8 && k == 78 )
-							printf( "%lf: %lf %lf %d %d\n", averageRead, assignJBin, assignKBin, alleleLength[j], alleleLength[k] ) ;
+						//if ( j == 8 && k == 78 )
+						//	printf( "%lf: %lf %lf %d %d\n", averageRead, assignJBin, assignKBin, alleleLength[j], alleleLength[k] ) ;
 						binAdjust -= 4 ;
 					}
 					prevBin = alignmentCoords[i].a / binSize ;
