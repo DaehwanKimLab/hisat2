@@ -24,6 +24,7 @@
 	  Version 2.0.2-beta is a minor release with the following changes.
 	  <ul>
 	    <li>Memory mappaped IO (--mm option) works now.</li>
+	    <li>Fixed a bug that the same read was written into a file multiple times when --un-conc was used.</li>
 	    <li>Fixed another bug that caused reads to map beyond reference sequences.</li>
 	    <li>Changed several python script names as follows</li>
 	    <ol>
