@@ -47,6 +47,7 @@ public:
              full_index_t& joinedOffset,
              bool switchEndian,
              size_t& bytesRead,
+             size_t& bytesRead2,
              int needEntireReverse,
              bool fw,
              int32_t overrideOffRate, // = -1,
@@ -97,6 +98,7 @@ public:
                        joinedOffset,
 					   switchEndian,
 					   bytesRead,
+                       bytesRead2,
 					   needEntireReverse,
 					   loadSASamp,
 					   loadFtab,
@@ -286,7 +288,8 @@ public:
 						full_index_t& localOffset,
                         full_index_t& joinedOffset,
 						bool switchEndian,
-						size_t bytesRead,
+						size_t& bytesRead,
+                        size_t& bytesRead2,
 						int needEntireRev,
 						bool loadSASamp, 
 						bool loadFtab,
@@ -1105,7 +1108,8 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
                                                      full_index_t& localOffset,
                                                      full_index_t& joinedOffset,
                                                      bool switchEndian,
-                                                     size_t bytesRead,
+                                                     size_t& bytesRead,
+                                                     size_t& bytesRead2,
                                                      int entireRev,
                                                      bool loadSASamp,
                                                      bool loadFtab,
@@ -1430,7 +1434,6 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 	
 	this->_offs.reset();
 	if(loadSASamp) {
-		bytesRead = 4; // reset for secondary index file (already read 1-sentinel)		
 		shmemLeader = true;
 		if(this->_verbose || startVerbose) {
 			cerr << "Reading offs (" << offsLenSampled << " " << std::setw(2) << sizeof(index_t)*8 << "-bit words): ";
@@ -1491,8 +1494,8 @@ void LocalGFM<index_t, full_index_t>::readIntoMemory(
 				} else {
 					if(this->_useMm) {
 #ifdef BOWTIE_MM
-						this->_offs.init((index_t*)(mmFile[1] + bytesRead), offsLen, false);
-						bytesRead += (offsLen * sizeof(index_t));
+						this->_offs.init((index_t*)(mmFile[1] + bytesRead2), offsLen, false);
+						bytesRead2 += (offsLen * sizeof(index_t));
 						fseek(in6, (offsLen * sizeof(index_t)), SEEK_CUR);
 #endif
 					} else {
@@ -2497,7 +2500,7 @@ void HGFM<index_t, local_index_t>::readIntoMemory(
 	}
 	
 	// Read endianness hints from both streams
-	size_t bytesRead = 0;
+    size_t bytesRead = 0, bytesRead2 = 4;
 	switchEndian = false;
 	uint32_t one = readU32(_in5, switchEndian); // 1st word of primary stream
 	bytesRead += 4;
@@ -2544,7 +2547,7 @@ void HGFM<index_t, local_index_t>::readIntoMemory(
 	clearLocalGFMs();
 	
     index_t tidx = 0, localOffset = 0, joinedOffset = 0;
-	string base = "";
+    string base = "";
 	for(size_t i = 0; i < _nlocalGFMs; i++) {
 		LocalGFM<local_index_t, index_t> *localGFM = new LocalGFM<local_index_t, index_t>(base,
                                                                                           NULL,
@@ -2557,6 +2560,7 @@ void HGFM<index_t, local_index_t>::readIntoMemory(
                                                                                           joinedOffset,
                                                                                           switchEndian,
                                                                                           bytesRead,
+                                                                                          bytesRead2,
                                                                                           needEntireRev,
                                                                                           this->fw_,
                                                                                           -1, // overrideOffRate
