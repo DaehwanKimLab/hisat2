@@ -741,7 +741,7 @@ static void printUsage(ostream& out) {
 	out << "HISAT2 version " << string(HISAT2_VERSION).c_str() << " by Daehwan Kim (infphilo@gmail.com, www.ccb.jhu.edu/people/infphilo)" << endl;
 	string tool_name = "hisat2-align";
 	if(wrapper == "basic-0") {
-		tool_name = "hisat";
+		tool_name = "hisat2";
 	}
 	out << "Usage: " << endl
 #ifdef USE_SRA

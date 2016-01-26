@@ -520,6 +520,7 @@ if(defined($cap_out)) {
 			my $tab2_i = index($_, "\t", $tab1_i);
 			my $fl = substr($_, $tab1_i, $tab2_i - $tab1_i);
 			my $unal = ($fl & 4) != 0;
+			my $secondary = ($fl & 256) != 0;
 			$filt = 1 if $no_unal && $unal;
 			if($passthru) {
 				if(scalar(keys %read_fhs) == 0) {
@@ -543,9 +544,9 @@ if(defined($cap_out)) {
 							print {$read_fhs{al}} $l if defined($read_fhs{al});
 						}
 					}
-					if((defined($read_fhs{"un-conc"}) || defined($read_fhs{"al-conc"})) && $pair) {
+					if((defined($read_fhs{"un-conc"}) || defined($read_fhs{"al-conc"})) && $pair && !$secondary) {
 						my $conc  = (($fl &   2) != 0);
-						if     ($conc && $mate1) {
+						if($conc && $mate1) {
 							print {$read_fhs{"al-conc"}{1}} $l if defined($read_fhs{"al-conc"});
 						} elsif($conc && $mate2) {
 							print {$read_fhs{"al-conc"}{2}} $l if defined($read_fhs{"al-conc"});
