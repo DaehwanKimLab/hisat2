@@ -20,6 +20,20 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
+	  <h2>HISAT2 2.0.2-beta release 2/XX/2016</h2>
+	  Version 2.0.2-beta is a minor release with the following changes.
+	  <ul>
+	    <li>Memory mappaped IO (--mm option) works now.</li>
+	    <li>Fixed another bug that caused reads to map beyond reference sequences.</li>
+	    <li>Changed several python script names as follows</li>
+	    <ol>
+	      <li><i>extract_splice_sites.py</i> to <i>hisat2_extract_splice_sites.py</i></li>
+	      <li><i>extract_exons.py</i> to <i>hisat2_extract_exons.py</i></li>
+	      <li><i>extract_snps.py</i> to <i>hisat2_extract_snps.py</i></li>
+	    </ol>
+	    <li>Introduced --haplotype option in the hisat2-build (index building), which is used with --snp option together to allow for SNP combinations present in the human population.  This option also prevents graph construction from exploding due to exponential combinations of SNPs in some regions.</li>
+	  </ul>
+	  <br>
 	  <h2>HISAT2 2.0.1-beta release 11/19/2015</h2>
 	  Version 2.0.1-beta is a maintenance release with the following changes.
 	  <ul>
