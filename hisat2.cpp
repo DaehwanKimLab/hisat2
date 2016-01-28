@@ -791,6 +791,7 @@ static void printUsage(ostream& out) {
         << "  --sra-acc          SRA accession ID" << endl
 #endif
 		<< endl
+#if 0
 	    << " Presets:                 Same as:" << endl
 		<< "  For --end-to-end:" << endl
 		<< "   --very-fast            -D 5 -R 1 -N 0 -L 22 -i S,0,2.50" << endl
@@ -798,7 +799,6 @@ static void printUsage(ostream& out) {
 		<< "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
 		<< "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
 		<< endl
-#if 0
 		<< "  For --local:" << endl
 		<< "   --very-fast-local      -D 5 -R 1 -N 0 -L 25 -i S,1,2.00" << endl
 		<< "   --fast-local           -D 10 -R 2 -N 0 -L 22 -i S,1,1.75" << endl
@@ -857,14 +857,18 @@ static void printUsage(ostream& out) {
 	    << "  -R <int>           for reads w/ repetitive seeds, try <int> sets of seeds (2)" << endl
 		<< endl
 		<< " Paired-end:" << endl
+#if 0
 	    << "  -I/--minins <int>  minimum fragment length (0)" << endl
 	    << "  -X/--maxins <int>  maximum fragment length (500)" << endl
+#endif
 	    << "  --fr/--rf/--ff     -1, -2 mates align fw/rev, rev/fw, fw/fw (--fr)" << endl
 		<< "  --no-mixed         suppress unpaired alignments for paired reads" << endl
 		<< "  --no-discordant    suppress discordant alignments for paired reads" << endl
+#if 0
 		<< "  --no-dovetail      not concordant when mates extend past each other" << endl
 		<< "  --no-contain       not concordant when one mate alignment contains other" << endl
 		<< "  --no-overlap       not concordant when mates overlap at all" << endl
+#endif
 		<< endl
 	    << " Output:" << endl;
 	//if(wrapper == "basic-0") {
