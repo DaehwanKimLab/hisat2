@@ -471,7 +471,10 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     if(frag2off + 1 < hit.rdoff()) continue;
                     index_t toff = frag2off + 1 - fragoff;
                     index_t joinedOff = 0;
-                    gfm.textOffToJoined(hit.ref(), toff, joinedOff);
+                    bool success = gfm.textOffToJoined(hit.ref(), toff, joinedOff);
+                    if(!success) {
+                        continue;
+                    }
 #ifndef NDEBUG
                     index_t debug_tid = 0, debug_toff = 0, debug_tlen = 0;
                     bool debug_straddled = false;

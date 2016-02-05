@@ -2395,7 +2395,7 @@ public:
 
 	// Searching and reporting
 	void joinedToTextOff(index_t qlen, index_t off, index_t& tidx, index_t& textoff, index_t& tlen, bool rejectStraddle, bool& straddled) const;
-    void textOffToJoined(index_t tid, index_t tlen, index_t& off) const;
+    bool textOffToJoined(index_t tid, index_t tlen, index_t& off) const;
 
 #define WITHIN_BWT_LEN(x) \
 	assert_leq(x[0], this->_gh._sideGbwtLen); \
@@ -5013,7 +5013,7 @@ void GFM<index_t>::joinedToTextOff(
 }
 
 template <typename index_t>
-void GFM<index_t>::textOffToJoined(
+bool GFM<index_t>::textOffToJoined(
                                    index_t  tid,
                                    index_t  textoff,
                                    index_t& off) const
@@ -5030,7 +5030,11 @@ void GFM<index_t>::textOffToJoined(
         index_t elt_tid = rstarts()[elt*3 + 1];
         if(elt_tid == tid) {
             while(true) {
+                if(tid != rstarts()[elt*3+1]) {
+                    return false;
+                }
                 if(rstarts()[elt*3 + 2] <= textoff) break;
+                if(elt == 0) return false;
                 elt--;
             }
             while(true) {
@@ -5051,6 +5055,7 @@ void GFM<index_t>::textOffToJoined(
         }
         // continue with binary search
     }
+    return true;
 }
 
 /**
