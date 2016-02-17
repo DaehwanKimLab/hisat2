@@ -86,7 +86,6 @@ def test_HLA_genotyping(reference_type,
                 delete_hla_files = True
         else:
             assert reference_type == "genome"
-            assert False
         if not set(hla_list).issubset(HLA_genes):
             delete_hla_files = True
         if delete_hla_files:
@@ -129,12 +128,12 @@ def test_HLA_genotyping(reference_type,
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
         if not check_files(HLA_hisat2_graph_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!"
+            print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to buildvhisat2 executables?"
             sys.exit(1)
 
     # Build HISAT2 linear indexes based on the above information
     HLA_hisat2_linear_index_fnames = ["hla.linear.%d.ht2" % (i+1) for i in range(8)]
-    if not check_files(HLA_hisat2_linear_index_fnames):
+    if reference_type == "gene" and not check_files(HLA_hisat2_linear_index_fnames):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
                      "hla_backbone.fa,hla_sequences.fa",
@@ -148,7 +147,7 @@ def test_HLA_genotyping(reference_type,
     # Build Bowtie2 indexes based on the above information
     HLA_bowtie2_index_fnames = ["hla.%d.bt2" % (i+1) for i in range(4)]
     HLA_bowtie2_index_fnames += ["hla.rev.%d.bt2" % (i+1) for i in range(2)]
-    if not check_files(HLA_bowtie2_index_fnames):
+    if reference_type == "gene" and not check_files(HLA_bowtie2_index_fnames):
         build_cmd = ["bowtie2-build",
                      "hla_backbone.fa,hla_sequences.fa",
                      "hla"]
@@ -364,8 +363,9 @@ def test_HLA_genotyping(reference_type,
                 # Align reads, and sort the alignments into a BAM file
                 if aligner == "hisat2":
                     hisat2 = os.path.join(ex_path, "hisat2")
-                    aligner_cmd = [hisat2]
-                    aligner_cmd += ["--no-unal"]
+                    aligner_cmd = [hisat2,
+                                   "--no-unal",
+                                   "--mm"]
                     if index_type == "linear":
                         aligner_cmd += ["-k", "10"]
                     aligner_cmd += ["-x", "hla.%s" % index_type]
@@ -1272,7 +1272,7 @@ if __name__ == '__main__':
                 key, value = item.split(':')
                 daehwan_debug[key] = value
             else:
-                daehwan_debug[key] = 1
+                daehwan_debug[item] = 1
 
     random.seed(1)
     test_HLA_genotyping(args.reference_type,
