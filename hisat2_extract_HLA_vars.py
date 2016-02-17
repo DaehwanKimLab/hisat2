@@ -207,7 +207,7 @@ def extract_HLA_vars(base_fname,
             backbone_seq = HLA_seqs[backbone_id]
 
         if partial:
-            HLA_partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % gene_to_fname[HLA_gene]
+            HLA_partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % HLA_gene
             if not os.path.exists(HLA_partial_MSA_fname):
                 print >> sys.stderr, "Warning: %s does not exist" % HLA_partial_MSA_fname
                 continue
