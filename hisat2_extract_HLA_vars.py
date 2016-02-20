@@ -633,7 +633,7 @@ def extract_HLA_vars(base_fname,
                 assert h_begin <= h_end
                 varIDs = []
                 for var in h:
-                    varIDs.append(str(var2ID[var]))
+                    varIDs.append("hv%s" % var2ID[var])
                     # daehwan - for debugging purposes
                     # varIDs.append(var)
                     sanity_vars.add(var2ID[var])
