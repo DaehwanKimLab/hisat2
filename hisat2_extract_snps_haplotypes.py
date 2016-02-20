@@ -30,7 +30,9 @@ def generate_haplotypes(snp_file,
                         vars,
                         genotypes_list,
                         inter_gap,
-                        intra_gap):
+                        intra_gap,
+                        num_vars,
+                        num_haplotypes):
     assert len(vars) == len(genotypes_list)
     assert len(vars) > 0
     num_chromosomes = len(genotypes_list[0])
@@ -52,6 +54,7 @@ def generate_haplotypes(snp_file,
         for i in range(len(genotypes)):
             genotype = genotypes[i]
             cnv_genotypes[i] += genotype
+
     cnv_genotypes = set(cnv_genotypes)
     for raw_haplotype in cnv_genotypes:
         if '1' not in raw_haplotype:
@@ -110,6 +113,7 @@ def generate_haplotypes(snp_file,
         if a_begin != b_begin:
             return a_begin - b_begin
         return a_end - b_end
+    
     haplotypes = sorted(list(haplotypes2), cmp=cmp_haplotype)
 
     # daehwan - for debugging purposes
@@ -135,11 +139,6 @@ def generate_haplotypes(snp_file,
         if h2_type == 'D':
             h_end += (int(h2_data) - 1)
         assert h_begin <= h_end
-        varIDs = []
-        # for var in h:
-        #    varIDs.append(str(var2ID[var]))
-            # daehwan - for debugging purposes
-            # varIDs.append(var)
         h_new_begin = h_begin
         for h_j in reversed(range(0, h_i)):
             hc = haplotypes[h_j].split('#')
@@ -153,14 +152,17 @@ def generate_haplotypes(snp_file,
             if h_new_begin > hc_end:
                 h_new_begin = hc_end
         assert h_new_begin <= h_begin
-        num_haplotypes = 1
+        h_add = [str(int(id) + num_vars) for id in h]
         print >> haplotype_file, "ht%d\t%s\t%d\t%d\t%s" % \
-            (num_haplotypes, chr, h_new_begin, h_end, ','.join(varIDs))
+            (num_haplotypes, chr, h_new_begin, h_end, ','.join(h_add))
+        num_haplotypes += 1
 
-        
+        return num_haplotypes
+
 
 """
 """
+digit2str = [str(i) for i in range(10)]
 def main(base_fname,
          species,
          inter_gap,
@@ -178,6 +180,8 @@ def main(base_fname,
 
     SNP_file = open("%s.snp" % base_fname, 'w')
     haplotype_file = open("%s.haplotype" % base_fname, 'w')
+
+    num_vars, num_haplotypes = 0, 0
         
     url_base = VCF_url_bases[species]
     for fname in VCF_fnames[species]:
@@ -211,16 +215,20 @@ def main(base_fname,
             pos = int(pos)
             if curr_right + inter_gap < pos and len(vars) > 0:
                 assert len(vars) == len(genotypes_list)
-                generate_haplotypes(SNP_file,
-                                    haplotype_file,
-                                    vars,
-                                    genotypes_list,
-                                    inter_gap,
-                                    intra_gap)
+                num_haplotypes = generate_haplotypes(SNP_file,
+                                                     haplotype_file,
+                                                     vars,
+                                                     genotypes_list,
+                                                     inter_gap,
+                                                     intra_gap,
+                                                     num_vars,
+                                                     num_haplotypes)
+                num_vars += len(vars)
                 vars, genotypes_list = [], []
 
             assert ',' not in ref_allele
             alt_alleles = alt_alleles.split(',')
+            assert len(alt_alleles) < 10
             for a in range(len(alt_alleles)):
                 alt_allele = alt_alleles[a]
                 ref_allele2, pos2 = ref_allele, pos
@@ -245,19 +253,19 @@ def main(base_fname,
                     data = len(ref_allele2) - 1
                 else:
                     assert False
-            
+
                 cnv_genotypes = []
                 for genotype in genotypes:
-                    P1, P2 = genotype.split('|')
-                    P1, P2 = int(P1), int(P2)
-                    if P1 == a + 1:
+                    P1, P2 = genotype[0], genotype[2]
+                    if P1 == digit2str[a + 1]:
                         cnv_genotypes.append('1')
                     else:
                         cnv_genotypes.append('0')
-                    if P2 == a + 1:
+                    if P2 == digit2str[a + 1]:
                         cnv_genotypes.append('1')
                     else:
                         cnv_genotypes.append('0')
+
                 # Skip SNPs not present in a given population (e.g. 2,504 genomes in 1000 Genomes Project)
                 if '1' not in cnv_genotypes:
                     continue
@@ -272,12 +280,15 @@ def main(base_fname,
 
         if len(vars) > 0:
             assert len(vars) == len(genotypes_list)
-            generate_haplotypes(SNP_file,
-                                haplotype_file,
-                                vars,
-                                genotypes_list,
-                                inter_gap,
-                                intra_gap)
+            num_haplotypes = generate_haplotypes(SNP_file,
+                                                 haplotype_file,
+                                                 vars,
+                                                 genotypes_list,
+                                                 inter_gap,
+                                                 intra_gap,
+                                                 num_vars,
+                                                 num_haplotypes)
+            num_vars += len(vars)
             vars, genotypes_list = [], []
 
     SNP_file.close()
