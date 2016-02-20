@@ -1227,7 +1227,7 @@ public:
                     }
                 }
                 
-                EList<index_t> snpID2num;
+                map<string, index_t> snpID2num;
                 if(snpfile != "") {
                     ifstream snp_file(snpfile.c_str(), ios::in);
                     if(!snp_file.is_open()) {
@@ -1257,7 +1257,6 @@ public:
                         } else if(type == "insertion") {
                             snp_file >> ins_seq;
                         }
-                        snpID2num.push_back((index_t)INDEX_MAX);
                         index_t chr_idx = 0;
                         for(; chr_idx < refnames_nospace.size(); chr_idx++) {
                             if(chr == refnames_nospace[chr_idx])
@@ -1350,7 +1349,7 @@ public:
                         }
                         _altnames.push_back(snp_id);
                         assert_eq(_alts.size(), _altnames.size());
-                        snpID2num.back() = (index_t)_alts.size() - 1;
+                        snpID2num[snp_id] = (index_t)_alts.size() - 1;
                     }
                     snp_file.close();
                     assert_eq(_alts.size(), _altnames.size());
@@ -1427,11 +1426,9 @@ public:
                         assert_gt(alts.size(), 0);
                         _haplotypes.back().alts.clear();
                         for(size_t i = 0; i < alts.size(); i++) {
-                            index_t alt = (index_t)atoi(alts[i].c_str());
-                            assert_lt(alt, snpID2num.size());
-                            alt = snpID2num[alt];
-                            if(alt < (index_t)INDEX_MAX) {
-                                _haplotypes.back().alts.push_back(alt);
+                            const string& alt = alts[i];
+                            if(snpID2num.find(alt) != snpID2num.end()) {
+                                _haplotypes.back().alts.push_back(snpID2num[alt]);
                             }
                         }
                         if(_haplotypes.back().alts.size() <= 0) {
