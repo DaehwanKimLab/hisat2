@@ -36,7 +36,7 @@ def generate_haplotypes(snp_file,
     assert len(vars) > 0
     num_chromosomes = len(genotypes_list[0])
 
-    # Write SNPs
+    # Write SNPs into a file (.snp)
     for var in vars:
         snpID, chr, pos, type, data = var
         if type == 'S':
@@ -177,8 +177,7 @@ def main(base_fname,
     VCF_url_bases = {}
     VCF_url_bases["human"] =  "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
     VCF_fnames = {}
-    VCF_fnames["human"] = ["ALL.chr%d.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" % (i+1) for i in range(16,17)]
-
+    VCF_fnames["human"] = ["ALL.chr%s.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" % (chr) for chr in [str(i+1) for i in range(22)] + ["X", "Y", "MT"]]
     if species not in VCF_url_bases or \
             species not in VCF_fnames:
         print >> sys.stderr, "Error: %s is not supported." % species
@@ -220,9 +219,6 @@ def main(base_fname,
                 continue
 
             pos = int(pos) - 1
-            # daehwan - for debugging purposes
-            if pos > 10000000:
-                break
             if curr_right + inter_gap < pos and len(vars) > 0:
                 assert len(vars) == len(genotypes_list)
                 num_haplotypes = generate_haplotypes(SNP_file,
