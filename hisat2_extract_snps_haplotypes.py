@@ -21,10 +21,29 @@
 
 
 import sys, os, subprocess
-import re
 from argparse import ArgumentParser, FileType
 
 
+"""
+"""
+def read_genome(genome_file):
+    chr_dic = {}
+    chr_name, sequence = "", ""
+    for line in genome_file:
+        if line.startswith(">"):
+            if chr_name and sequence:
+                chr_dic[chr_name] = sequence
+            chr_name = line.strip().split()[0][1:]
+            sequence = ""
+        else:
+            sequence += line.strip()
+    if chr_name and sequence:
+        chr_dic[chr_name] = sequence
+    return chr_dic
+
+
+"""
+"""
 def generate_haplotypes(snp_file,
                         haplotype_file,
                         vars,
@@ -169,17 +188,29 @@ def generate_haplotypes(snp_file,
 """
 """
 digit2str = [str(i) for i in range(10)]
-def main(base_fname,
+def main(genome_file,
+         base_fname,
          species,
+         assembly_version,
          inter_gap,
          intra_gap,
          verbose = False):
-    VCF_url_bases = {}
-    VCF_url_bases["human"] =  "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
+    # load genomic sequences
+    chr_dic = read_genome(genome_file)
+    
     VCF_fnames = {}
-    VCF_fnames["human"] = ["ALL.chr%s.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" % (chr) for chr in [str(i+1) for i in range(22)] + ["X", "Y", "MT"]]
-    if species not in VCF_url_bases or \
-            species not in VCF_fnames:
+    if species == "human":
+        grch38_url_base = "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions"
+        grch37_url_base = "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
+        if assembly_version == "GRCh38":
+            VCF_fnames["human"] = [["%s" % chr, "%s/ALL.chr%s.phase3_shapeit2_mvncall_integrated_v3plus_nounphased.rsID.genotypes.GRCh38_dbSNP_no_SVs.vcf.gz" % (grch38_url_base, chr)] for chr in [str(i+1) for i in range(22)] + ["X", "Y"]]
+        else:
+            assert assebmly_version == "GRCh37"
+            VCF_fnames["human"] = [["%s" % chr, "%s/ALL.chr%s.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" % (grch17_url_base, chr)] for chr in [str(i+1) for i in range(22)] + ["X", "Y"]]
+        # MT is common in both two assemblies.
+        VCF_fnames["human"].append(["MT", "%s/ALL.chrMT.phase3_callmom.20130502.genotypes.vcf.gz" % grch37_url_base])
+    
+    if species not in VCF_fnames:
         print >> sys.stderr, "Error: %s is not supported." % species
         sys.exit(1)
 
@@ -187,11 +218,19 @@ def main(base_fname,
     haplotype_file = open("%s.haplotype" % base_fname, 'w')
 
     num_haplotypes = 0
+    num_unassigned = 0
+    for chr, url in VCF_fnames[species]:
+        if chr not in chr_dic:
+            continue
+        chr_seq = chr_dic[chr]
+        fname = url.split('/')[-1]
+
+        # daehwan - for debugging purposes
+        # if fname.find("chrMT") == -1:
+        #    continue
         
-    url_base = VCF_url_bases[species]
-    for fname in VCF_fnames[species]:
         if not os.path.exists(fname):
-            os.system("wget %s/%s" % (url_base, fname))
+            os.system("wget %s" % (url))
         assert os.path.exists(fname)
         gzip_cmd = ["gzip", "-cd", fname]
         gzip_proc = subprocess.Popen(gzip_cmd,
@@ -242,21 +281,28 @@ def main(base_fname,
                     ref_allele2 = ref_allele2[min_len - 1:]
                     alt_allele = alt_allele[min_len - 1:]
                     pos2 += (min_len - 1)
-                    
+
                 type, data = '', ''
                 if len(ref_allele2) == 1 and len(alt_allele) == 1:
                     type = 'S'
                     data = alt_allele
+                    assert ref_allele2 != alt_allele
+                    if chr_seq[pos2] != ref_allele2:
+                        continue
                 elif len(ref_allele2) == 1:
                     assert len(alt_allele) > 1
                     type = 'I'
                     data = alt_allele[1:]
                     if len(data) > 32:
                         continue
+                    if chr_seq[pos] != ref_allele2:
+                        continue
                 elif len(alt_allele) == 1:
                     assert len(ref_allele2) > 1
                     type = 'D'
                     data = len(ref_allele2) - 1
+                    if chr_seq[pos2:pos2+data+1] != ref_allele2:
+                        continue
                 else:
                     assert False
 
@@ -305,16 +351,10 @@ def main(base_fname,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Extract haplotypes from a VCF file')
-    """
     parser.add_argument('genome_file',
                         nargs='?',
                         type=FileType('r'),
                         help='input genome file')
-    parser.add_argument('snp_file',
-                        nargs='?',
-                        type=FileType('r'),
-                        help='input snp file')
-    """
     parser.add_argument("-b", "--base",
                         dest="base_fname",
                         type=str,
@@ -325,6 +365,11 @@ if __name__ == '__main__':
                         type=str,
                         default="human",
                         help='species (default: human)')
+    parser.add_argument('--assembly-version',
+                        dest='assembly_version',
+                        type=str,
+                        default="GRCh38",
+                        help='species (default: GRCh38)')
     parser.add_argument("--inter-gap",
                         dest="inter_gap",
                         type=int,
@@ -344,8 +389,10 @@ if __name__ == '__main__':
     if args.base_fname == "":
         args.base_fname = args.species
 
-    main(args.base_fname,
+    main(args.genome_file,
+         args.base_fname,
          args.species,
+         args.assembly_version,
          args.inter_gap,
          args.intra_gap,
          args.verbose)

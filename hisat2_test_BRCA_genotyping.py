@@ -42,6 +42,10 @@ def test_BRCA_genotyping(reference_type,
                          num_mismatch,
                          verbose,
                          daehwan_debug):
+    # Daehwan - download
+    # ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz
+    # ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar_20160203.vcf.gz
+    
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
     ex_path = os.path.dirname(curr_script)
