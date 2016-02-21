@@ -1433,9 +1433,9 @@ public:
                         }
                         if(_haplotypes.back().alts.size() <= 0) {
                             _haplotypes.pop_back();
-                        }
-                        _haplotypes.sort();
+                        }                        
                     }
+                    _haplotypes.sort();
                     ht_file.close();
                 } else {
                     for(index_t a = 0; a < _alts.size(); a++) {
