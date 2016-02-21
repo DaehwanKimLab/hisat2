@@ -1245,11 +1245,11 @@ public:
                             continue;
                         }
                         string type, chr;
-                        index_t pos;
+                        index_t genome_pos;
                         char snp_ch = '\0';
                         string ins_seq;
                         index_t del_len = 0;
-                        snp_file >> type >> chr >> pos;
+                        snp_file >> type >> chr >> genome_pos;
                         if(type == "single") {
                             snp_file >> snp_ch;
                         } else if(type == "deletion") {
@@ -1269,6 +1269,7 @@ public:
                         const index_t sofar_len = tmp_pair.first;
                         const index_t szs_idx = tmp_pair.second;
                         bool inside_Ns = false;
+			index_t pos = genome_pos;
                         index_t add_pos = 0;
                         assert(szs[szs_idx].first);
                         for(index_t i = szs_idx; i < szs.size(); i++) {
@@ -1308,10 +1309,11 @@ public:
                             uint64_t bp = asc2dna[(int)snp_ch];
                             assert_lt(bp, 4);
                             if((int)bp == s[pos]) {
-                                cerr << "Error: single type (" << "ACGTN"[(int)s[pos]]
-                                << ") should have a different base than " << "ACGTN"[(int)s[pos]]
-                                << " (" << snp_id << ")" << endl;
-                                throw 1;
+                                cerr << "Warning: single type should have a different base than " << "ACGTN"[(int)s[pos]]
+                                << " (" << snp_id << ") at " << genome_pos << " on " << chr << endl;
+				_alts.pop_back();
+				continue;
+                                // throw 1;
                             }
                             snp.len = 1;
                             snp.seq = bp;

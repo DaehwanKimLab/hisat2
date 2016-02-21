@@ -128,7 +128,7 @@ def test_HLA_genotyping(reference_type,
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
         if not check_files(HLA_hisat2_graph_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to buildvhisat2 executables?"
+            print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
             sys.exit(1)
 
     # Build HISAT2 linear indexes based on the above information
