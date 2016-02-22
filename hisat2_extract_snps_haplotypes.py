@@ -182,7 +182,7 @@ def generate_haplotypes(snp_file,
             (num_haplotypes, chr, h_new_begin, h_end, ','.join(h_add))
         num_haplotypes += 1
 
-        return num_haplotypes
+    return num_haplotypes
 
 
 """
@@ -192,6 +192,8 @@ def main(genome_file,
          base_fname,
          species,
          assembly_version,
+         genotype_vcf,
+         genotype_gene_list,
          inter_gap,
          intra_gap,
          verbose = False):
@@ -226,7 +228,7 @@ def main(genome_file,
         fname = url.split('/')[-1]
 
         # daehwan - for debugging purposes
-        # if fname.find("chrMT") == -1:
+        # if fname.find("chr17") == -1:
         #    continue
         
         if not os.path.exists(fname):
@@ -370,6 +372,16 @@ if __name__ == '__main__':
                         type=str,
                         default="GRCh38",
                         help='species (default: GRCh38)')
+    parser.add_argument('--genotype-vcf',
+                        dest='genotype_vcf',
+                        type=str,
+                        default="",
+                        help='VCF file name for genotyping (default: empty)')
+    parser.add_argument('--genotype-gene-list',
+                        dest='genotype_gene_list',
+                        type=str,
+                        default="",
+                        help='A comma-separated list of genes to be genotyped (default: empty)')
     parser.add_argument("--inter-gap",
                         dest="inter_gap",
                         type=int,
@@ -389,10 +401,20 @@ if __name__ == '__main__':
     if args.base_fname == "":
         args.base_fname = args.species
 
+    if args.genotype_vcf != "":
+        if args.genotype_gene_list == "":
+            print >> sys.stderr, "Error: please specify --genotype-gene-list."
+            sys.exit(1)
+        args.genotype_gene_list = args.genotype_gene_list.split(',')
+    else:
+        args.genotype_gene_list = []
+
     main(args.genome_file,
          args.base_fname,
          args.species,
          args.assembly_version,
+         args.genotype_vcf,
+         args.genotype_gene_list,
          args.inter_gap,
          args.intra_gap,
          args.verbose)

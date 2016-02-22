@@ -29,32 +29,27 @@ from argparse import ArgumentParser, FileType
 """
 """
 def test_BRCA_genotyping(reference_type,
-                         hla_list,
-                         partial,
+                         brca_list,
                          aligners,
                          read_fname,
                          alignment_fname,
                          threads,
                          simulate_interval,
                          enable_coverage,
-                         best_alleles,
-                         exclude_allele_list,
                          num_mismatch,
                          verbose,
                          daehwan_debug):
-    # Daehwan - download
-    # ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz
-    # ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar_20160203.vcf.gz
+    # File location for ClinVar
+    clinvar_url_base = "ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38"
+    clinvar_fname = "clinvar_20160203.vcf.gz"
+
+    if not os.path.exists(clinvar_fname):
+        os.system("wget %s/%s" % (clinvar_url_base, clinvar_fname))
+        assert os.path.exists(clinvar_fname)
     
     # Current script directory
-    curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
+    curr_script = os.path.realpath(inspect.getsourcefile(test_BRCA_genotyping))
     ex_path = os.path.dirname(curr_script)
-
-    # Clone a git repository, IMGTHLA
-    if not os.path.exists("IMGTHLA"):
-        os.system("git clone https://github.com/jrob119/IMGTHLA.git")
-
-    simulation = (read_fname == [] and alignment_fname == "")
 
     def check_files(fnames):
         for fname in fnames:
@@ -73,15 +68,15 @@ def test_BRCA_genotyping(reference_type,
         os.system("samtools faidx genome.fa")
 
     # Check if the pre-existing files (hla*) are compatible with the current parameter setting
-    if os.path.exists("hla.ref"):
+    if os.path.exists("brca.ref"):
         left = 0
-        HLA_genes = set()
-        for line in open("hla.ref"):
-            HLA_name, chr, left, _ = line.strip().split()
-            HLA_gene = HLA_name.split('*')[0]
-            HLA_genes.add(HLA_gene)
+        BRCA_genes = set()
+        for line in open("brca.ref"):
+            BRCA_name, chr, left, _ = line.strip().split()
+            BRCA_gene = BRCA_name.split('*')[0]
+            BRCA_genes.add(BRCA_gene)
             left = int(left)
-        delete_hla_files = False
+        delete_brca_files = False
         if reference_type == "gene":
             if left > 0:
                 delete_hla_files = True
@@ -90,34 +85,37 @@ def test_BRCA_genotyping(reference_type,
                 delete_hla_files = True
         else:
             assert reference_type == "genome"
-        if not set(hla_list).issubset(HLA_genes):
-            delete_hla_files = True
-        if delete_hla_files:
-            os.system("rm hla*")
-    
-    # Extract HLA variants, backbone sequence, and other sequeces
-    HLA_fnames = ["hla_backbone.fa",
-                  "hla_sequences.fa",
-                  "hla.ref",
-                  "hla.snp",
-                  "hla.haplotype",
-                  "hla.link"]
+        if not set(brca_list).issubset(BRCA_genes):
+            delete_brca_files = True
+        if delete_brca_files:
+            os.system("rm brca*")
 
-    if not check_files(HLA_fnames):
-        extract_hla_script = os.path.join(ex_path, "hisat2_extract_HLA_vars.py")
-        extract_cmd = [extract_hla_script,
-                       "--reference-type", reference_type,
-                       "--hla-list", ','.join(hla_list)]
-        if partial:
-            extract_cmd += ["--partial"]
-        extract_cmd += ["--gap", "30",
-                        "--split", "50"]
+    # Extract BRCA variants, backbone sequence, and other sequeces
+    BRCA_fnames = ["brca_backbone.fa",
+                   "brca.ref",
+                   "brca.snp",
+                   "brca.haplotype",
+                   "brca.cl"]
+
+    if not check_files(BRCA_fnames):
+        extract_brca_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes.py")
+        extract_cmd = [extract_brca_script,
+                       "genome.fa",
+                       "--base", "brca",
+                       "--genotype-vcf", clinvar_fname,
+                       "--genotype-gene-list", ','.join(brca_list)]
+        extract_cmd += ["--inter-gap", "30",
+                        "--intra-gap", "50"]
+
+        print ' '.join(extract_cmd)
                        
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
-        if not check_files(HLA_fnames):
-            print >> sys.stderr, "Error: extract_HLA_vars failed!"
+        if not check_files(BRCA_fnames):
+            print >> sys.stderr, "Error: extract_BRCA_vars failed!"
             sys.exit(1)
+
+    sys.exit(1)
 
     # Build HISAT2 graph indexes based on the above information
     HLA_hisat2_graph_index_fnames = ["hla.graph.%d.ht2" % (i+1) for i in range(8)]
@@ -160,16 +158,6 @@ def test_BRCA_genotyping(reference_type,
         if not check_files(HLA_bowtie2_index_fnames):
             print >> sys.stderr, "Error: indexing HLA failed!"
             sys.exit(1)
-
-    # Read partial alleles from hla.data (temporary)
-    partial_alleles = set()
-    for line in open("IMGTHLA/hla.dat"):
-        if not line.startswith("DE"):
-            continue
-        allele_name = line.split()[1][4:-1]
-        gene = allele_name.split('*')[0]
-        if line.find("partial") != -1:
-            partial_alleles.add(allele_name)
 
     # Read HLA alleles (names and sequences)
     refHLAs, refHLA_loci = {}, {}
@@ -1187,15 +1175,11 @@ if __name__ == '__main__':
                         type=str,
                         default="gene",
                         help="Reference type: gene, chromosome, and genome (default: gene)")
-    parser.add_argument("--hla-list",
-                        dest="hla_list",
+    parser.add_argument("--brca-list",
+                        dest="brca_list",
                         type=str,
-                        default="A,B,C,DQA1,DQB1,DRB1",
-                        help="A comma-separated list of HLA genes (default: A,B,C,DQA1,DQB1,DRB1)")
-    parser.add_argument('--partial',
-                        dest='partial',
-                        action='store_true',
-                        help='Include partial alleles (e.g. A_nuc.fasta)')
+                        default="BRCA1,BRCA2",
+                        help="A comma-separated list of BRCA genes (default: BRCA1,BRCA2)")
     parser.add_argument("--aligner-list",
                         dest="aligners",
                         type=str,
@@ -1225,15 +1209,6 @@ if __name__ == '__main__':
                         dest="coverage",
                         action='store_true',
                         help="Experimental purpose (assign reads based on coverage)")
-    parser.add_argument("--best-alleles",
-                        dest="best_alleles",
-                        action='store_true',
-                        help="")
-    parser.add_argument("--exclude-allele-list",
-                        dest="exclude_allele_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of allleles to be excluded")
     parser.add_argument("--num-mismatch",
                         dest="num_mismatch",
                         type=int,
@@ -1253,7 +1228,7 @@ if __name__ == '__main__':
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
         sys.exit(1)
-    args.hla_list = args.hla_list.split(',')
+    args.brca_list = args.brca_list.split(',')
     if args.aligners == "":
         print >> sys.stderr, "Error: --aligners must be non-empty."
         sys.exit(1)    
@@ -1268,7 +1243,6 @@ if __name__ == '__main__':
             not os.path.exists(args.alignment_fname):
         print >> sys.stderr, "Error: %s doesn't exist." % args.alignment_fname
         sys.exit(1)
-    args.exclude_allele_list = args.exclude_allele_list.split(',')
     daehwan_debug = {}
     if args.daehwan_debug != "":
         for item in args.daehwan_debug.split(','):
@@ -1280,16 +1254,13 @@ if __name__ == '__main__':
 
     random.seed(1)
     test_BRCA_genotyping(args.reference_type,
-                         args.hla_list,
-                         args.partial,
+                         args.brca_list,
                          args.aligners,
                          args.read_fname,
                          args.alignment_fname,
                          args.threads,
                          args.simulate_interval,
                          args.coverage,
-                         args.best_alleles,
-                         args.exclude_allele_list,
                          args.num_mismatch,
                          args.verbose,
                          daehwan_debug)
