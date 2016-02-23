@@ -907,7 +907,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             if(haplotype.right >= curr_pos + curr_len) break;
             const EList<index_t, 4>& snpIDs = haplotype.alts;
             assert_gt(snpIDs.size(), 0);
-#ifndef NDEBUG
+            bool pass = true;
             for(index_t s = 0; s < snpIDs.size(); s++) {
                 index_t snpID = snpIDs[s];
                 assert_lt(snpID, alts.size());
@@ -919,14 +919,24 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                 const ALT<index_t>& snp2 = alts[snpID2];
                 assert(snp2.snp());
                 if(snp.type == ALT_SNP_INS) {
-                    assert_leq(snp.pos, snp2.pos);
+                    if(snp.pos > snp2.pos) {
+                        pass = false;
+                        break;
+                    }
                 } else if(snp.type == ALT_SNP_DEL) {
-                    assert_lt(snp.pos + snp.len - 1, snp2.pos);
+                    if(snp.pos + snp.len - 1 >= snp2.pos) {
+                        pass = false;
+                        break;
+                    }
                 } else {
-                    assert_lt(snp.pos, snp2.pos);
+                    if(snp.pos >= snp2.pos) {
+                        pass = false;
+                        break;
+                    }
                 }
             }
-#endif
+            if(!pass) continue;
+            
             index_t prev_ALT_type = ALT_NONE;
             index_t ID_i = 0;
             for(index_t j = haplotype.left; j <= haplotype.right; j++) {
@@ -948,11 +958,11 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                             edges.expand();
                             if(j == haplotype.left) {
                                 edges.back().from = alt.pos - curr_pos;
+                                assert_lt(edges.back().from, backbone_nodes);
                             } else {
                                 assert_gt(nodes.size(), 2);
                                 edges.back().from = (index_t)nodes.size() - 2;
-                            }
-                            assert_lt(edges.back().from, backbone_nodes);
+                            }                            
                             edges.back().to = (index_t)nodes.size() - 1;
                         }
                         if(j == haplotype.right) {
@@ -1013,10 +1023,10 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                         edges.expand();
                         if(j == haplotype.left) {
                             edges.back().from = j - curr_pos;
+                            assert_lt(edges.back().from, backbone_nodes);
                         } else {
                             edges.back().from = (index_t)nodes.size() - 2;
                         }
-                        assert_lt(edges.back().from, backbone_nodes);
                         edges.back().to = (index_t)nodes.size() - 1;
                     }
                     if(j == haplotype.right) {
