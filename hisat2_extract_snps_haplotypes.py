@@ -216,7 +216,7 @@ def main(genome_file,
         print >> sys.stderr, "Error: %s is not supported." % species
         sys.exit(1)
 
-    genotype_chr_list, genotype_var_list = {}, set()
+    genotype_chr_list, genotype_var_list = {}, {}
     if genotype_vcf != "":
         assert len(genotype_gene_list) > 0
         gzip_cmd = ["gzip", "-cd", genotype_vcf]
@@ -242,7 +242,7 @@ def main(genome_file,
                         genotype_chr_list[chr][0] = pos
                     elif pos > genotype_chr_list[chr][1]:
                         genotype_chr_list[chr][1] = pos
-                genotype_var_list.add(varID)
+                genotype_var_list[varID] = False
 
         print genotype_chr_list
         print len(genotype_var_list)
@@ -262,10 +262,6 @@ def main(genome_file,
         chr_seq = chr_dic[chr]
         fname = url.split('/')[-1]
 
-        # daehwan - for debugging purposes
-        # if fname.find("chr17") == -1:
-        #    continue
-        
         if not os.path.exists(fname):
             os.system("wget %s" % (url))
         assert os.path.exists(fname)
@@ -277,7 +273,9 @@ def main(genome_file,
         vars, genotypes_list = [], []
         curr_right = -1
         prev_varID, prev_pos = "", -1
+        num_lines = 0
         for line in gzip_proc.stdout:
+            num_lines += 1
             if line.startswith("##"):
                 continue
 
@@ -299,11 +297,27 @@ def main(genome_file,
                     pos == prev_pos:
                 continue
 
-            if len(genotype_gene_list) > 0 and \
-                    varID not in genotype_var_list:
-                continue
-
             pos = int(pos) - 1
+            if num_lines % 10000 == 1:
+                print >> sys.stderr, "\t%s:%d\r" % (chr, pos),
+            
+            if len(genotype_gene_list) > 0:
+                assert chr in genotype_chr_list
+                min_pos, max_pos = genotype_chr_list[chr]
+                assert min_pos < max_pos
+                if pos < min_pos:
+                    continue
+                elif pos > max_pos:
+                    break
+
+            if len(genotype_gene_list) > 0:
+                if varID not in genotype_var_list:
+                    # daehwan - for debugging purposes
+                    # continue
+                    None
+                else:
+                    genotype_var_list[varID] = True
+                
             if curr_right + inter_gap < pos and len(vars) > 0:
                 assert len(vars) == len(genotypes_list)
                 num_haplotypes = generate_haplotypes(SNP_file,
@@ -395,7 +409,7 @@ def main(genome_file,
 
     SNP_file.close()
     haplotype_file.close()
-    
+
 
 if __name__ == '__main__':
     parser = ArgumentParser(
