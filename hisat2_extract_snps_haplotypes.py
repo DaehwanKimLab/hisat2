@@ -301,6 +301,10 @@ def main(genome_file,
                 continue
 
             pos = int(pos) - 1
+
+            if num_lines % 10000 == 1:
+                print >> sys.stderr, "\t%s:%d\r" % (chr, pos),
+            
             if pos == prev_pos:
                 continue
 
@@ -319,6 +323,7 @@ def main(genome_file,
                 assert ',' not in ref_allele
                 alt_alleles = alt_alleles.split(',')
                 assert len(alt_alleles) < 10
+                max_right = -1
                 for a in range(len(alt_alleles)):
                     alt_allele = alt_alleles[a]
                     ref_allele2, pos2 = ref_allele, pos
@@ -377,7 +382,9 @@ def main(genome_file,
                     right = pos2
                     if type == 'D':
                         right += (int(data) - 1)
-                    return right
+                    if max_right < right:
+                        max_right = right
+                return max_right
 
             if len(chr_genotype_vars) > 0:
                 if reference_type == "gene" and \
@@ -403,9 +410,6 @@ def main(genome_file,
                     genotype_pos = chr_genotype_vars[genotype_i][1]
 
                         
-            if num_lines % 10000 == 1:
-                print >> sys.stderr, "\t%s:%d\r" % (chr, pos),
-            
             if curr_right + inter_gap < pos and len(vars) > 0:
                 assert len(vars) == len(genotypes_list)
                 num_haplotypes = generate_haplotypes(SNP_file,

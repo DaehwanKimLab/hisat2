@@ -95,7 +95,7 @@ def test_BRCA_genotyping(reference_type,
                    "brca.ref",
                    "brca.snp",
                    "brca.haplotype",
-                   "brca.cl"]
+                   "brca.clnsig"]
 
     if not check_files(BRCA_fnames):
         extract_brca_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes.py")
@@ -116,24 +116,25 @@ def test_BRCA_genotyping(reference_type,
             print >> sys.stderr, "Error: extract_BRCA_vars failed!"
             sys.exit(1)
 
-    sys.exit(1)
-
     # Build HISAT2 graph indexes based on the above information
     HLA_hisat2_graph_index_fnames = ["hla.graph.%d.ht2" % (i+1) for i in range(8)]
     if not check_files(HLA_hisat2_graph_index_fnames):
         hisat2_build = os.path.join(ex_path, "hisat2-build")
         build_cmd = [hisat2_build,
                      "-p", str(threads),
-                     "--snp", "hla.snp",
-                     "--haplotype", "hla.haplotype",
-                     "hla_backbone.fa",
-                     "hla.graph"]
+                     "--snp", "brca.snp",
+                     "--haplotype", "brca.haplotype",
+                     "braca_backbone.fa",
+                     "brca.graph"]
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
         if not check_files(HLA_hisat2_graph_index_fnames):
             print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to buildvhisat2 executables?"
             sys.exit(1)
 
+    sys.exit(1)
+
+    """
     # Build HISAT2 linear indexes based on the above information
     HLA_hisat2_linear_index_fnames = ["hla.linear.%d.ht2" % (i+1) for i in range(8)]
     if reference_type == "gene" and not check_files(HLA_hisat2_linear_index_fnames):
@@ -159,6 +160,7 @@ def test_BRCA_genotyping(reference_type,
         if not check_files(HLA_bowtie2_index_fnames):
             print >> sys.stderr, "Error: indexing HLA failed!"
             sys.exit(1)
+    """
 
     # Read HLA alleles (names and sequences)
     refHLAs, refHLA_loci = {}, {}
@@ -247,7 +249,7 @@ def test_BRCA_genotyping(reference_type,
         assert not var_id in Links
         Links[var_id] = alleles
 
-    # Test HLA genotyping
+    # Test BRCA genotyping
     test_list = []
     if simulation:
         basic_test, pair_test = True, False
