@@ -192,6 +192,7 @@ def main(genome_file,
          base_fname,
          species,
          assembly_version,
+         reference_type,
          genotype_vcf,
          genotype_gene_list,
          inter_gap,
@@ -216,7 +217,7 @@ def main(genome_file,
         print >> sys.stderr, "Error: %s is not supported." % species
         sys.exit(1)
 
-    genotype_chr_list, genotype_var_list = {}, {}
+    genotype_var_list = {}
     if genotype_vcf != "":
         assert len(genotype_gene_list) > 0
         gzip_cmd = ["gzip", "-cd", genotype_vcf]
@@ -235,17 +236,9 @@ def main(genome_file,
                     include = True
                     break
             if include:
-                if chr not in genotype_chr_list:
-                    genotype_chr_list[chr] = [pos, pos]
-                else:
-                    if pos < genotype_chr_list[chr][0]:
-                        genotype_chr_list[chr][0] = pos
-                    elif pos > genotype_chr_list[chr][1]:
-                        genotype_chr_list[chr][1] = pos
-                genotype_var_list[varID] = False
-
-        print genotype_chr_list
-        print len(genotype_var_list)
+                if chr not in genotype_var_list:
+                    genotype_var_list[chr] = []
+                genotype_var_list[chr].append([chr, pos, varID, ref_allele, alt_alleles, qual, filter, info])
 
     SNP_file = open("%s.snp" % base_fname, 'w')
     haplotype_file = open("%s.haplotype" % base_fname, 'w')
@@ -255,8 +248,9 @@ def main(genome_file,
     for chr, url in VCF_fnames[species]:
         if chr not in chr_dic:
             continue
-        if len(genotype_gene_list) > 0 and \
-                chr not in genotype_chr_list:
+        if reference_type != "genome" and \
+                len(genotype_gene_list) > 0 and \
+                chr not in genotype_var_list:
             continue
         
         chr_seq = chr_dic[chr]
@@ -269,6 +263,15 @@ def main(genome_file,
         gzip_proc = subprocess.Popen(gzip_cmd,
                                      stdout=subprocess.PIPE,
                                      stderr=open("/dev/null", 'w'))
+
+        chr_genotype_vars = []
+        if len(genotype_gene_list) > 0:
+            assert chr in genotype_var_list
+            chr_genotype_vars = genotype_var_list[chr]
+            assert len(chr_genotype_vars) > 0
+            genotype_i = 0
+            genotype_pos = chr_genotype_vars[genotype_i][1]
+        
         genomeIDs = []
         vars, genotypes_list = [], []
         curr_right = -1
@@ -281,6 +284,7 @@ def main(genome_file,
 
             fields = line.strip().split()
             chr, pos, varID, ref_allele, alt_alleles, qual, filter, info, format = fields[:9]
+
             genotypes = fields[9:]
 
             if line.startswith("#"):
@@ -293,31 +297,115 @@ def main(genome_file,
                     ';' in varID:
                 continue
 
-            if varID == prev_varID or \
-                    pos == prev_pos:
+            if varID == prev_varID:
                 continue
 
             pos = int(pos) - 1
+            if pos == prev_pos:
+                continue
+
+            if reference_type == "gene" and len(genotype_gene_list) > 0:
+                if genotype_i >= len(chr_genotype_vars):
+                    break
+
+            def add_vars(pos,
+                         varID,
+                         ref_allele,
+                         alt_alleles,
+                         genotypes):
+                # daehwan - for debugging purposes
+                # print "%d\t%s\t%s\t%s" % (pos, varID, ref_allele, alt_alleles), genotypes[:20]
+                
+                assert ',' not in ref_allele
+                alt_alleles = alt_alleles.split(',')
+                assert len(alt_alleles) < 10
+                for a in range(len(alt_alleles)):
+                    alt_allele = alt_alleles[a]
+                    ref_allele2, pos2 = ref_allele, pos
+                    min_len = min(len(ref_allele2), len(alt_allele))
+                    assert min_len >= 1
+                    if min_len > 1:
+                        ref_allele2 = ref_allele2[min_len - 1:]
+                        alt_allele = alt_allele[min_len - 1:]
+                        pos2 += (min_len - 1)
+
+                    type, data = '', ''
+                    if len(ref_allele2) == 1 and len(alt_allele) == 1:
+                        type = 'S'
+                        data = alt_allele
+                        assert ref_allele2 != alt_allele
+                        if chr_seq[pos2] != ref_allele2:
+                            continue
+                    elif len(ref_allele2) == 1:
+                        assert len(alt_allele) > 1
+                        type = 'I'
+                        data = alt_allele[1:]
+                        if len(data) > 32:
+                            continue
+                        if chr_seq[pos] != ref_allele2:
+                            continue
+                    elif len(alt_allele) == 1:
+                        assert len(ref_allele2) > 1
+                        type = 'D'
+                        data = len(ref_allele2) - 1
+                        if chr_seq[pos2:pos2+data+1] != ref_allele2:
+                            continue
+                    else:
+                        assert False
+
+                    cnv_genotypes = []
+                    for genotype in genotypes:
+                        P1, P2 = genotype[0], genotype[2]
+                        if P1 == digit2str[a + 1]:
+                            cnv_genotypes.append('1')
+                        else:
+                            cnv_genotypes.append('0')
+                        if P2 == digit2str[a + 1]:
+                            cnv_genotypes.append('1')
+                        else:
+                            cnv_genotypes.append('0')
+
+                    # Skip SNPs not present in a given population (e.g. 2,504 genomes in 1000 Genomes Project)
+                    if '1' not in cnv_genotypes:
+                        continue
+
+                    tmp_varID = varID
+                    if len(alt_alleles) > 1:
+                        tmp_varID += (".%d" % a)
+                    vars.append([tmp_varID, chr, pos2, type, data])
+                    genotypes_list.append(''.join(cnv_genotypes))
+                    right = pos2
+                    if type == 'D':
+                        right += (int(data) - 1)
+                    return right
+
+            if len(chr_genotype_vars) > 0:
+                if reference_type == "gene" and \
+                        genotype_i == 0 and \
+                        pos + 100 < genotype_pos:
+                    continue
+                while pos >= genotype_pos:
+                    if pos > genotype_pos:
+                        genotype_varID, genotype_ref_allele, genotype_alt_alleles = \
+                            chr_genotype_vars[genotype_i][2:5]
+                        num_genotype_alt_alleles = len(genotype_alt_alleles.split(','))
+                        right = add_vars(genotype_pos,
+                                         genotype_varID,
+                                         genotype_ref_allele,
+                                         genotype_alt_alleles,
+                                         ['0|%d' % ((i % num_genotype_alt_alleles) + 1) for i in range(len(genotypes))])
+                        if curr_right < right:
+                            curr_right = right
+                        
+                    genotype_i += 1
+                    if genotype_i >= len(chr_genotype_vars):
+                        break
+                    genotype_pos = chr_genotype_vars[genotype_i][1]
+
+                        
             if num_lines % 10000 == 1:
                 print >> sys.stderr, "\t%s:%d\r" % (chr, pos),
             
-            if len(genotype_gene_list) > 0:
-                assert chr in genotype_chr_list
-                min_pos, max_pos = genotype_chr_list[chr]
-                assert min_pos < max_pos
-                if pos < min_pos:
-                    continue
-                elif pos > max_pos:
-                    break
-
-            if len(genotype_gene_list) > 0:
-                if varID not in genotype_var_list:
-                    # daehwan - for debugging purposes
-                    # continue
-                    None
-                else:
-                    genotype_var_list[varID] = True
-                
             if curr_right + inter_gap < pos and len(vars) > 0:
                 assert len(vars) == len(genotypes_list)
                 num_haplotypes = generate_haplotypes(SNP_file,
@@ -329,70 +417,14 @@ def main(genome_file,
                                                      num_haplotypes)
                 vars, genotypes_list = [], []
 
-            assert ',' not in ref_allele
-            alt_alleles = alt_alleles.split(',')
-            assert len(alt_alleles) < 10
-            for a in range(len(alt_alleles)):
-                alt_allele = alt_alleles[a]
-                ref_allele2, pos2 = ref_allele, pos
-                min_len = min(len(ref_allele2), len(alt_allele))
-                assert min_len >= 1
-                if min_len > 1:
-                    ref_allele2 = ref_allele2[min_len - 1:]
-                    alt_allele = alt_allele[min_len - 1:]
-                    pos2 += (min_len - 1)
+            right = add_vars(pos,
+                             varID,
+                             ref_allele,
+                             alt_alleles,
+                             genotypes)
+            if curr_right < right:
+                curr_right = right
 
-                type, data = '', ''
-                if len(ref_allele2) == 1 and len(alt_allele) == 1:
-                    type = 'S'
-                    data = alt_allele
-                    assert ref_allele2 != alt_allele
-                    if chr_seq[pos2] != ref_allele2:
-                        continue
-                elif len(ref_allele2) == 1:
-                    assert len(alt_allele) > 1
-                    type = 'I'
-                    data = alt_allele[1:]
-                    if len(data) > 32:
-                        continue
-                    if chr_seq[pos] != ref_allele2:
-                        continue
-                elif len(alt_allele) == 1:
-                    assert len(ref_allele2) > 1
-                    type = 'D'
-                    data = len(ref_allele2) - 1
-                    if chr_seq[pos2:pos2+data+1] != ref_allele2:
-                        continue
-                else:
-                    assert False
-
-                cnv_genotypes = []
-                for genotype in genotypes:
-                    P1, P2 = genotype[0], genotype[2]
-                    if P1 == digit2str[a + 1]:
-                        cnv_genotypes.append('1')
-                    else:
-                        cnv_genotypes.append('0')
-                    if P2 == digit2str[a + 1]:
-                        cnv_genotypes.append('1')
-                    else:
-                        cnv_genotypes.append('0')
-
-                # Skip SNPs not present in a given population (e.g. 2,504 genomes in 1000 Genomes Project)
-                if '1' not in cnv_genotypes:
-                    continue
-
-                tmp_varID = varID
-                if len(alt_alleles) > 1:
-                    tmp_varID += (".%d" % a)
-                vars.append([tmp_varID, chr, pos2, type, data])
-                genotypes_list.append(''.join(cnv_genotypes))
-                right = pos2
-                if type == 'D':
-                    right += (int(data) - 1)
-                if curr_right < right:
-                    curr_right = right
-                    
             prev_varID = varID
             prev_pos = pos
 
@@ -433,6 +465,11 @@ if __name__ == '__main__':
                         type=str,
                         default="GRCh38",
                         help='species (default: GRCh38)')
+    parser.add_argument("--reference-type",
+                        dest="reference_type",
+                        type=str,
+                        default="genome",
+                        help="Reference type: gene, chromosome, and genome (default: genome)")
     parser.add_argument('--genotype-vcf',
                         dest='genotype_vcf',
                         type=str,
@@ -474,6 +511,7 @@ if __name__ == '__main__':
          args.base_fname,
          args.species,
          args.assembly_version,
+         args.reference_type,
          args.genotype_vcf,
          args.genotype_gene_list,
          args.inter_gap,
