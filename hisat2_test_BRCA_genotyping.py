@@ -104,7 +104,8 @@ def test_BRCA_genotyping(reference_type,
                        "--base", "brca",
                        "--reference-type", "gene",
                        "--genotype-vcf", clinvar_fname,
-                       "--genotype-gene-list", ','.join(brca_list)]
+                       "--genotype-gene-list", ','.join(brca_list),
+                       "--extra-files"]
         extract_cmd += ["--inter-gap", "30",
                         "--intra-gap", "50"]
 

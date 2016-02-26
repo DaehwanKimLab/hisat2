@@ -845,6 +845,10 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         cerr << "Could not open file for writing a reference graph: \"" << rg_fname << "\"" << endl;
         throw 1;
     }
+    
+#ifndef NDEBUG
+    set<index_t> snp_set;
+#endif
 
     const bool bigEndian = threadParam->bigEndian;
 
@@ -935,7 +939,15 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                     }
                 }
             }
+            
             if(!pass) continue;
+            
+#ifndef NDEBUG
+            for(index_t s = 0; s < snpIDs.size(); s++) {
+                index_t snpID = snpIDs[s];
+                snp_set.insert(snpID);
+            }
+#endif
             
             index_t prev_ALT_type = ALT_NONE;
             index_t ID_i = 0;

@@ -195,6 +195,7 @@ def main(genome_file,
          reference_type,
          genotype_vcf,
          genotype_gene_list,
+         extra_files,
          inter_gap,
          intra_gap,
          verbose = False):
@@ -219,17 +220,29 @@ def main(genome_file,
 
     genotype_var_list = {}
     if genotype_vcf != "":
+        var_set = set()
         assert len(genotype_gene_list) > 0
         gzip_cmd = ["gzip", "-cd", genotype_vcf]
         gzip_proc = subprocess.Popen(gzip_cmd,
                                      stdout=subprocess.PIPE,
                                      stderr=open("/dev/null", 'w'))
+        prev_chr, prev_pos = "", -1
         for line in gzip_proc.stdout:
             if line.startswith("#"):
                 continue
 
             chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = line.strip().split()
+
+            # for the time being, ignore non-(single, deletion, and insertion) types
+            if len(ref_allele) > 1 and len(alt_alleles) > 1:
+                continue
+            
             pos = int(pos) - 1
+
+            if prev_chr == chr:
+                if abs(prev_pos - pos) <= 10:
+                    continue
+            
             include = False
             for gene in genotype_gene_list:
                 if info.find(gene) != -1:
@@ -238,10 +251,24 @@ def main(genome_file,
             if include:
                 if chr not in genotype_var_list:
                     genotype_var_list[chr] = []
-                genotype_var_list[chr].append([chr, pos, varID, ref_allele, alt_alleles, qual, filter, info])
+                # for the time being, let's ignore semi duplicate entries
+                assert len(ref_allele) >= 1
+                tmp_pos = pos + len(ref_allele) - 1
+                var = "%s-%d" % (chr, tmp_pos)
+                if var not in var_set:
+                    var_set.add(var)
+                    genotype_var_list[chr].append([chr, pos, varID, ref_allele, alt_alleles, qual, filter, info])
+
+            prev_chr = chr
+            prev_pos = pos
+            
+        clnsig_file = open("%s.clnsig" % base_fname, 'w')
 
     SNP_file = open("%s.snp" % base_fname, 'w')
     haplotype_file = open("%s.haplotype" % base_fname, 'w')
+    if extra_files:
+        backbone_file = open("%s_backbone.fa" % base_fname, 'w')
+        ref_file = open("%s.ref" % base_fname, 'w')
 
     num_haplotypes = 0
     num_unassigned = 0
@@ -407,7 +434,8 @@ def main(genome_file,
                     genotype_i += 1
                     if genotype_i >= len(chr_genotype_vars):
                         break
-                    genotype_pos = chr_genotype_vars[genotype_i][1]
+                    if genotype_pos < chr_genotype_vars[genotype_i][1]:
+                        genotype_pos = chr_genotype_vars[genotype_i][1]
 
                         
             if curr_right + inter_gap < pos and len(vars) > 0:
@@ -445,6 +473,14 @@ def main(genome_file,
 
     SNP_file.close()
     haplotype_file.close()
+
+    if extra_files:
+        backbone_file.close()
+        ref_file.close()
+
+    if genotype_vcf != "":
+        clnsig_file.close()
+        
 
 
 if __name__ == '__main__':
@@ -484,6 +520,10 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help='A comma-separated list of genes to be genotyped (default: empty)')
+    parser.add_argument('--extra-files',
+                        dest='extra_files',
+                        action='store_true',
+                        help='Output extra files such as _backbone.fa and .ref')
     parser.add_argument("--inter-gap",
                         dest="inter_gap",
                         type=int,
@@ -518,6 +558,7 @@ if __name__ == '__main__':
          args.reference_type,
          args.genotype_vcf,
          args.genotype_gene_list,
+         args.extra_files,
          args.inter_gap,
          args.intra_gap,
          args.verbose)
