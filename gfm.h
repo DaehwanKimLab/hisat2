@@ -710,7 +710,7 @@ public:
             cerr << "Could not open index file " << in7Str.c_str() << endl;
         }
         
-        readU32(in7, this->toBe());
+        readI32(in7, this->toBe());
         index_t numAlts = readIndex<index_t>(in7, this->toBe());
         if(numAlts > 0) {
             while(!in7.eof()) {
@@ -734,7 +734,7 @@ public:
             cerr << "Could not open index file " << in8Str.c_str() << endl;
         }
         
-        readU32(in8, this->toBe());
+        readI32(in8, this->toBe());
         numAlts = readIndex<index_t>(in8, this->toBe());
         if(numAlts > 0) {
             while(!in8.eof()) {
@@ -1214,8 +1214,8 @@ public:
                     << "HISAT2." << endl;
                     throw 1;
                 }
-                writeIndex<index_t>(fout7, 1, this->toBe()); // endianness sentinel
-                writeIndex<index_t>(fout8, 1, this->toBe()); // endianness sentinel
+                writeIndex<int32_t>(fout7, 1, this->toBe()); // endianness sentinel
+                writeIndex<int32_t>(fout8, 1, this->toBe()); // endianness sentinel
                 
                 EList<string> refnames_nospace;
                 for(index_t i = 0; i < _refnames.size(); i++) {
