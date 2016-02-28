@@ -135,6 +135,7 @@
 		E8FD97DC1C81CCED00861B09 /* hisat2.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CEA1C20B2B600C03464 /* hisat2.cpp */; };
 		E8FD97DD1C81CCED00861B09 /* pat.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CF11C20B2B600C03464 /* pat.cpp */; };
 		E8FD97DE1C81CCED00861B09 /* qual.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CF41C20B2B600C03464 /* qual.cpp */; };
+		E8FD97E51C8343EF00861B09 /* diff_sample.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CDF1C20B2B600C03464 /* diff_sample.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -765,6 +766,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E8FD97E51C8343EF00861B09 /* diff_sample.cpp in Sources */,
 				E8EAEDD41C24675500E62E69 /* hisat2_build_main.cpp in Sources */,
 				E8EAEDD51C24675500E62E69 /* hisat2_build.cpp in Sources */,
 				E8EAEDD61C24675500E62E69 /* limit.cpp in Sources */,
@@ -987,6 +989,7 @@
 					"$(inherited)",
 					BOWTIE_64BIT_INDEX,
 				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -1008,6 +1011,7 @@
 					"COMPILER_VERSION=\"\\\"`$(CXX) -v 2>&1 | tail -1`\\\"\"",
 					"COMPILER_OPTIONS=\"\\\"test\\\"\"",
 				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
