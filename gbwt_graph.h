@@ -617,7 +617,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             const EList<index_t, 4>& snpIDs = haplotype.alts;
             assert_gt(snpIDs.size(), 0);
             assert_lt(haplotype.right, s.length());
-#ifndef NDEBUG
+            bool pass = true;
             for(index_t s = 0; s < snpIDs.size(); s++) {
                 index_t snpID = snpIDs[s];
                 assert_lt(snpID, alts.size());
@@ -629,14 +629,24 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 const ALT<index_t>& snp2 = alts[snpID2];
                 assert(snp2.snp());
                 if(snp.type == ALT_SNP_INS) {
-                    assert_leq(snp.pos, snp2.pos);
+                    if(snp.pos > snp2.pos) {
+                        pass = false;
+                        break;
+                    }
                 } else if(snp.type == ALT_SNP_DEL) {
-                    assert_lt(snp.pos + snp.len - 1, snp2.pos);
+                    if(snp.pos + snp.len - 1 >= snp2.pos) {
+                        pass = false;
+                        break;
+                    }
                 } else {
-                    assert_lt(snp.pos, snp2.pos);
+                    if(snp.pos >= snp2.pos) {
+                        pass = false;
+                        break;
+                    }
                 }
             }
-#endif
+            if(!pass) continue;
+            
             index_t prev_ALT_type = ALT_NONE;
             index_t ID_i = 0;
             for(index_t j = haplotype.left; j <= haplotype.right; j++) {
@@ -698,7 +708,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                             nodes.back().value = (index_t)INDEX_MAX;
                             if(prev_ALT_type == ALT_SNP_DEL && k == 0) continue;
                             edges.expand();
-                            edges.back().from = (k == 0 ? alt.pos : (index_t)nodes.size() - 2);
+                            edges.back().from = ((k == 0 && j == haplotype.left) ? alt.pos : (index_t)nodes.size() - 2);
                             edges.back().to = (index_t)nodes.size() - 1;
                         }
                         if(j == haplotype.right) {
@@ -717,7 +727,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     nodes.back().value = j;
                     if(prev_ALT_type != ALT_SNP_DEL) {
                         edges.expand();
-                        if(j == haplotype.left) {
+                        if(j == haplotype.left && prev_ALT_type == ALT_NONE) {
                             edges.back().from = j;
                         } else {
                             edges.back().from = (index_t)nodes.size() - 2;
@@ -942,13 +952,6 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             
             if(!pass) continue;
             
-#ifndef NDEBUG
-            for(index_t s = 0; s < snpIDs.size(); s++) {
-                index_t snpID = snpIDs[s];
-                snp_set.insert(snpID);
-            }
-#endif
-            
             index_t prev_ALT_type = ALT_NONE;
             index_t ID_i = 0;
             for(index_t j = haplotype.left; j <= haplotype.right; j++) {
@@ -1014,7 +1017,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                             nodes.back().value = (index_t)INDEX_MAX;
                             if(prev_ALT_type == ALT_SNP_DEL && k == 0) continue;
                             edges.expand();
-                            edges.back().from = (k == 0 ? alt.pos - curr_pos : (index_t)nodes.size() - 2);
+                            edges.back().from = ((k == 0 && j == haplotype.left) ? alt.pos - curr_pos : (index_t)nodes.size() - 2);
                             edges.back().to = (index_t)nodes.size() - 1;
                         }
                         if(j == haplotype.right) {
@@ -1023,6 +1026,9 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                             edges.back().to = alt.pos - curr_pos + 1;
                         }
                     }
+#ifndef NDEBUG
+                    snp_set.insert(snpIDs[ID_i]);
+#endif
                     ID_i++;
                     prev_ALT_type = alt.type;
                 } else {
@@ -1033,7 +1039,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                     nodes.back().value = j;
                     if(prev_ALT_type != ALT_SNP_DEL) {
                         edges.expand();
-                        if(j == haplotype.left) {
+                        if(j == haplotype.left && prev_ALT_type == ALT_NONE) {
                             edges.back().from = j - curr_pos;
                             assert_lt(edges.back().from, backbone_nodes);
                         } else {
