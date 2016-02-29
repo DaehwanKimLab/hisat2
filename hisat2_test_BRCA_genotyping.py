@@ -125,15 +125,13 @@ def test_BRCA_genotyping(reference_type,
                      "-p", str(threads),
                      "--snp", "brca.snp",
                      "--haplotype", "brca.haplotype",
-                     "braca_backbone.fa",
+                     "brca_backbone.fa",
                      "brca.graph"]
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
         if not check_files(HLA_hisat2_graph_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to buildvhisat2 executables?"
+            print >> sys.stderr, "Error: indexing BRCA genes failed!  Perhaps, you may have forgotten to build hisat2 executables?"
             sys.exit(1)
-
-    sys.exit(1)
 
     """
     # Build HISAT2 linear indexes based on the above information
@@ -163,39 +161,9 @@ def test_BRCA_genotyping(reference_type,
             sys.exit(1)
     """
 
-    # Read HLA alleles (names and sequences)
-    refHLAs, refHLA_loci = {}, {}
-    for line in open("hla.ref"):
-        HLA_name, chr, left, right = line.strip().split()
-        HLA_gene = HLA_name.split('*')[0]
-        assert not HLA_gene in refHLAs
-        refHLAs[HLA_gene] = HLA_name
-        left, right = int(left), int(right)
-        refHLA_loci[HLA_gene] = [HLA_name, chr, left, right]
-    HLAs = {}
-    def read_HLA_alleles(fname, HLAs):
-        for line in open(fname):
-            if line.startswith(">"):
-                HLA_name = line.strip().split()[0][1:]
-                HLA_gene = HLA_name.split('*')[0]
-                if not HLA_gene in HLAs:
-                    HLAs[HLA_gene] = {}
-                if not HLA_name in HLAs[HLA_gene]:
-                    HLAs[HLA_gene][HLA_name] = ""
-            else:
-                HLAs[HLA_gene][HLA_name] += line.strip()
-        return HLAs
-    if reference_type == "gene":
-        read_HLA_alleles("hla_backbone.fa", HLAs)
-    read_HLA_alleles("hla_sequences.fa", HLAs)
-
-    HLA_names = {}
-    for HLA_gene, data in HLAs.items():
-        HLA_names[HLA_gene] = list(data.keys())
-
-    # Read HLA variants, and link information
+    # Read BRCA variants
     Vars, Var_list = {}, {}
-    for line in open("hla.snp"):
+    for line in open("brca.snp"):
         var_id, var_type, allele, pos, data = line.strip().split('\t')
         pos = int(pos)
         if reference_type != "gene":
@@ -241,14 +209,10 @@ def test_BRCA_genotyping(reference_type,
                         break
                     m -= 1
                 return m
-        return low        
-            
-    Links = {}
-    for line in open("hla.link"):
-        var_id, alleles = line.strip().split('\t')
-        alleles = alleles.split()
-        assert not var_id in Links
-        Links[var_id] = alleles
+        return low
+
+    # daehwan - for debugging purposes
+    sys.exit(1)
 
     # Test BRCA genotyping
     test_list = []
@@ -287,6 +251,9 @@ def test_BRCA_genotyping(reference_type,
                 test_list.append(test_pairs)
     else:
         test_list = [hla_list]
+
+    # daehwan - for debugging purposes
+    sys.exit(1)
 
     for test_i in range(len(test_list)):
         if "test_id" in daehwan_debug:

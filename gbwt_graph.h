@@ -949,7 +949,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                     }
                 }
             }
-            
+
             if(!pass) continue;
             
             index_t prev_ALT_type = ALT_NONE;
