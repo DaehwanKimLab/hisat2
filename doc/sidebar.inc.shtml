@@ -24,11 +24,10 @@
      <tbody><tr><td>
 	   <!-- 
 		Questions and comments about HISAT2 can be posted on the 
-		<a href="https://groups.google.com/forum/#!forum/hisat-tools-users"><b>HISAT Tools Users Google Group</b></a>. 
-		Please use <a href="mailto:hisat@gmail.com">hisat@gmail.com</a> for 
+		<a href="https://groups.google.com/forum/#!forum/hisat-tools-users"><b>HISAT Tools Users Google Group</b></a>.
+		-->
+		Please use <a href="mailto:hisat@gmail.com">hisat2.genomics@gmail.com</a> for 
 		private communications only. Please do not email technical questions to HISAT contributors directly.</td></tr>
-	     -->
-	   Please email <a href="mailto:infphilo@gmail.com">Daehwan Kim</a> for questions.
    </tbody></table>
  </ul>
 </div>
@@ -36,7 +35,7 @@
 <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
-   <table width="100%"><tbody><tr><td>version 2.0.2-beta</td> <td align="right">2/XX/2016</td></tr>
+   <table width="100%"><tbody><tr><td>version 2.0.2-beta</td> <td align="right">3/XX/2016</td></tr>
        <tr>
 	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.2-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
        </tr>

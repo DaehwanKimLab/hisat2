@@ -20,7 +20,7 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
-	  <h2>HISAT2 2.0.2-beta release 2/XX/2016</h2>
+	  <h2>HISAT2 2.0.2-beta release 3/XX/2016</h2>
 	  Version 2.0.2-beta is a minor release with the following changes.
 	  <ul>
 	    <li>Memory mappaped IO (--mm option) works now.</li>
