@@ -1262,14 +1262,16 @@ public:
                             if(chr == refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) continue;
+                        if(chr_idx >= refnames_nospace.size()) {
+                            continue;
+                        }
                         assert_eq(chr_szs.size(), refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
                         const index_t szs_idx = tmp_pair.second;
                         bool inside_Ns = false;
-			index_t pos = genome_pos;
+                        index_t pos = genome_pos;
                         index_t add_pos = 0;
                         assert(szs[szs_idx].first);
                         for(index_t i = szs_idx; i < szs.size(); i++) {
@@ -1288,12 +1290,18 @@ public:
                             }
                         }
                         
-                        if(inside_Ns) continue;
+                        if(inside_Ns) {
+                            continue;
+                        }
                         pos = sofar_len + add_pos + pos;
                         if(chr_idx + 1 < chr_szs.size()) {
-                            if(pos >= chr_szs[chr_idx + 1].first) continue;
+                            if(pos >= chr_szs[chr_idx + 1].first) {
+                                continue;
+                            }
                         } else {
-                            if(pos >= jlen) continue;
+                            if(pos >= jlen){
+                                continue;
+                            }
                         }
                         
                         _alts.expand();
@@ -1311,8 +1319,8 @@ public:
                             if((int)bp == s[pos]) {
                                 cerr << "Warning: single type should have a different base than " << "ACGTN"[(int)s[pos]]
                                 << " (" << snp_id << ") at " << genome_pos << " on " << chr << endl;
-				_alts.pop_back();
-				continue;
+                                _alts.pop_back();
+                                continue;
                                 // throw 1;
                             }
                             snp.len = 1;
@@ -1383,7 +1391,9 @@ public:
                             if(chr == refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) continue;
+                        if(chr_idx >= refnames_nospace.size()) {
+                            continue;
+                        }
                         assert_eq(chr_szs.size(), refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
@@ -1412,13 +1422,19 @@ public:
                                 }
                             }
                         }
-                        if(inside_Ns) continue;
+                        if(inside_Ns) {
+                            continue;
+                        }
                         left = sofar_len + add_pos + left;
                         right = sofar_len + add_pos + right;
                         if(chr_idx + 1 < chr_szs.size()) {
-                            if(right >= chr_szs[chr_idx + 1].first) continue;
+                            if(right >= chr_szs[chr_idx + 1].first) {
+                                continue;
+                            }
                         } else {
-                            if(right >= jlen) continue;
+                            if(right >= jlen) {
+                                continue;
+                            }
                         }
                         _haplotypes.expand();
                         _haplotypes.back().left = left;

@@ -30,7 +30,7 @@
 	    <ol>
 	      <li><i>extract_splice_sites.py</i> to <i>hisat2_extract_splice_sites.py</i></li>
 	      <li><i>extract_exons.py</i> to <i>hisat2_extract_exons.py</i></li>
-	      <li><i>extract_snps.py</i> to <i>hisat2_extract_snps.py</i></li>
+	      <li><i>extract_snps.py</i> to <i>hisat2_extract_snps_haplotypes_UCSC.py</i></li>
 	    </ol>
 	    <li>Introduced --haplotype option in the hisat2-build (index building), which is used with --snp option together to allow for SNP combinations present in the human population.  This option also prevents graph construction from exploding due to exponential combinations of SNPs in some regions.</li>
 	  </ul>
