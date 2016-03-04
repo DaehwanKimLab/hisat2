@@ -370,10 +370,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             EList<pair<index_t, index_t> > alt_ranges; // each range inclusive
             for(index_t i = 0; i < alts.size(); i++) {
                 const ALT<index_t>& alt = alts[i];
-                index_t left_relax = 10, right_relax = 10;
-                if(alt.type == ALT_SNP_INS) {
-                    right_relax = 128;
-                }
+                index_t left_relax = 128, right_relax = 128;
                 pair<index_t, index_t> range;
                 range.first = alt.pos > left_relax ? alt.pos - left_relax - 1 : 0;
                 if(alt.type == ALT_SNP_SGL) {
@@ -1253,7 +1250,9 @@ bool RefGraph<index_t>::isReverseDeterministic(EList<Node>& nodes, EList<Edge>& 
             seen.fillZero();
             seen[nt] = true;
         } else {
-            if(seen[nt]) return false;
+            if(seen[nt]) {
+                return false;
+            }
             seen[nt] = true;
         }
     }

@@ -1270,17 +1270,25 @@ public:
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
                         const index_t szs_idx = tmp_pair.second;
-                        bool inside_Ns = false;
+                        bool involve_Ns = false;
                         index_t pos = genome_pos;
                         index_t add_pos = 0;
                         assert(szs[szs_idx].first);
                         for(index_t i = szs_idx; i < szs.size(); i++) {
-                            if(i != szs_idx && szs[i].first) break;
+                            if(i != szs_idx && szs[i].first) {
+                                break;
+                            }
                             if(pos < szs[i].off) {
-                                inside_Ns = true;
+                                involve_Ns = true;
                                 break;
                             } else {
                                 pos -= szs[i].off;
+                                if(pos == 0) {
+                                   if(type == "deletion" || type == "insertion") {
+                                       involve_Ns = true;
+                                       break;
+                                   }
+                                }
                                 if(pos < szs[i].len) {
                                     break;
                                 } else {
@@ -1290,7 +1298,7 @@ public:
                             }
                         }
                         
-                        if(inside_Ns) {
+                        if(involve_Ns) {
                             continue;
                         }
                         pos = sofar_len + add_pos + pos;

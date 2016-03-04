@@ -419,6 +419,10 @@ def main(genome_file,
                     print >> alt_testset_file, alt_seq
                 
         elif classType == "deletion":
+            if start > 0:
+                prev_base = chr_seq[start-1].upper()
+                if prev_base not in "ACGT":
+                    continue
             delLen = end - start
             snp_list.append([chr, start, 'D', delLen, {"id":rs_id}])
             if testset and delLen > 0 and delLen <= 10:
@@ -430,6 +434,10 @@ def main(genome_file,
                 print >> alt_testset_file, alt_seq
         else:
             assert classType == "insertion"
+            if start > 0:
+                prev_base = chr_seq[start-1].upper()
+                if prev_base not in "ACGT":
+                    continue
             for allele in allele_list:
                 if allele == "-" or len(allele) <= 0:
                     continue
