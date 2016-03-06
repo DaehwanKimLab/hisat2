@@ -105,7 +105,7 @@ def simulate_reads():
             cmd_add += "--error-rate 0.5 "
         if rna and constant:
             cmd_add += "--expr-profile constant "
-        cmd = "../../../aligners/bin/simulate_reads.py --sanity-check %s --num-fragment %d %s %s %s sim" % \
+        cmd = "../../../aligners/bin/hisat2_simulate_reads.py --sanity-check %s --num-fragment %d %s %s %s sim" % \
             (cmd_add, numreads, genome_fname, gtf_fname, snp_fname)
         print >> sys.stderr, cmd
         os.system(cmd)

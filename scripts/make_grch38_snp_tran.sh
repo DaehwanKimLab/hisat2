@@ -15,12 +15,12 @@
 # variable below.
 #
 
-ENSEMBL_RELEASE=81
+ENSEMBL_RELEASE=83
 ENSEMBL_GRCh38_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
 ENSEMBL_GRCh38_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
 GTF_FILE=Homo_sapiens.GRCh38.${ENSEMBL_RELEASE}.gtf
 
-DBSNP_RELEASE=142
+DBSNP_RELEASE=144
 SNP_FILE=snp${DBSNP_RELEASE}Common.txt
 UCSC_COMMON_SNP=http://hgdownload.cse.ucsc.edu/goldenPath/hg38/database/${SNP_FILE}
 
@@ -49,13 +49,13 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 	fi
 fi
 
-HISAT2_SNP_SCRIPT=./hisat2_extract_snps.py
+HISAT2_SNP_SCRIPT=./hisat2_extract_snps_haplotypes_UCSC.py
 if [ ! -x "$HISAT2_SNP_SCRIPT" ] ; then
 	if ! which hisat2_extract_snps.py ; then
-		echo "Could not find hisat2_extract_snps.py in current directory or in PATH"
+		echo "Could not find hisat2_extract_snps_haplotypes_UCSC.py in current directory or in PATH"
 		exit 1
 	else
-		HISAT2_SNP_SCRIPT=`which hisat2_extract_snps.py`
+		HISAT2_SNP_SCRIPT=`which hisat2_extract_snps_haplotypes_UCSC.py`
 	fi
 fi
 
@@ -84,8 +84,7 @@ F=Homo_sapiens.GRCh38.dna.primary_assembly.fa
 if [ ! -f $F ] ; then
 	get ${ENSEMBL_GRCh38_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
 	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
-	awk '{if($1 ~ /^>/) {print $1} else {print}}' $F > genome.fa
-	rm $F
+	mv $F genome.fa
 fi
 
 
@@ -94,7 +93,7 @@ if [ ! -f $SNP_FILE ] ; then
        gunzip ${SNP_FILE}.gz || (echo "Error unzipping ${SNP_FILE}" && exit 1)
        awk 'BEGIN{OFS="\t"} {if($2 ~ /^chr/) {$2 = substr($2, 4)}; if($2 == "M") {$2 = "MT"} print}' ${SNP_FILE} > ${SNP_FILE}.tmp
        mv ${SNP_FILE}.tmp ${SNP_FILE}
-       ${HISAT2_SNP_SCRIPT} genome.fa ${SNP_FILE} > genome.snp
+       ${HISAT2_SNP_SCRIPT} genome.fa ${SNP_FILE} genome
 fi
 
 if [ ! -f $GTF_FILE ] ; then
@@ -104,7 +103,7 @@ if [ ! -f $GTF_FILE ] ; then
        ${HISAT2_EXON_SCRIPT} ${GTF_FILE} > genome.exon
 fi
 
-CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --snp genome.snp --ss genome.ss --exon genome.exon genome_snp_tran"
+CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --snp genome.snp --haplotype genome.haplotype --ss genome.ss --exon genome.exon genome_snp_tran"
 echo Running $CMD
 if $CMD ; then
 	echo "genome index built; you may remove fasta files"

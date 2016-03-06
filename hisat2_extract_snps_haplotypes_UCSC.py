@@ -77,6 +77,12 @@ Compare two variants [chr, pos, type, data, dic]
 def compare_vars(a, b):
     a_chr, a_pos, a_type, a_data = a[:4]
     b_chr, b_pos, b_type, b_data = b[:4]
+
+    # daehwan - for debugging purposes
+    if a_chr != b_chr:
+        print a
+        print b
+    
     assert a_chr == b_chr
     if a_pos != b_pos:
         return a_pos - b_pos
@@ -344,12 +350,14 @@ def main(genome_file,
 
         line = line.strip()
         try:
+            fields = line.split('\t')
             """
             id, chr, start, end, rs_id, score, strand, refNCBI, refUCSC, observed, molType, classType, valid, \
                 avHet, avHetSE, func, locType, weight, exceptions, submitterCount, submitters, \
-                alleleFreqCount, alleles, alleleNs, alleleFreqs, bitfields = line.split("\t")
+                alleleFreqCount, alleles, alleleNs, alleleFreqs, bitfields = fields
             """
-            id, chr, start, end, rs_id, score, strand, refNCBI, refUCSC, observed, molType, classType = line.split('\t')[:12]
+            id, chr, start, end, rs_id, score, strand, refNCBI, refUCSC, observed, molType, classType = fields[:12]
+            alleleFreqs = fields[-2].split(',')[:-1]
         except ValueError:
             continue
 
@@ -380,7 +388,8 @@ def main(genome_file,
         if start >= len(chr_seq):
             continue
 
-        if curr_right + inter_gap < start and len(snp_list) > 0:
+        if (prev_chr != chr or curr_right + inter_gap < start) and \
+                len(snp_list) > 0:
             num_haplotypes = generate_haplotypes(snp_out_file,
                                                  haplotype_out_file,
                                                  snp_list,
@@ -400,15 +409,18 @@ def main(genome_file,
             allele_list = tmp_allele_list
             
         if classType == "single":
+            allele_count = min(len(allele_list), len(alleleFreqs))
             ref_base = chr_seq[start].upper()
             if ref_base not in allele_list:
                 continue
-            for allele in allele_list:
+            for a in range(allele_count):
+                allele = allele_list[a]
+                freq = float(alleleFreqs[a])
                 if allele not in "ACGT" or len(allele) != 1:
                     continue
                 if allele == ref_base:
                     continue
-                snp_list.append([chr, start, 'S', allele, {"id":rs_id}])
+                snp_list.append([chr, start, 'S', allele, {"id":rs_id, "freq":freq}])
 
                 if testset:
                     ref_seq = chr_seq[start-50:start+50]
@@ -423,8 +435,18 @@ def main(genome_file,
                 prev_base = chr_seq[start-1].upper()
                 if prev_base not in "ACGT":
                     continue
+
+            assert len(allele_list) == 2
+            assert len(allele_list) == len(alleleFreqs)
+            freq = 0.0
+            if allele_list[0] == "-":
+                freq = float(alleleFreqs[1])
+            else:
+                assert allele_list[1] == "-"
+                freq = float(alleleFreqs[0])
+            
             delLen = end - start
-            snp_list.append([chr, start, 'D', delLen, {"id":rs_id}])
+            snp_list.append([chr, start, 'D', delLen, {"id":rs_id, "freq":freq}])
             if testset and delLen > 0 and delLen <= 10:
                 ref_seq = chr_seq[start-50:start+50]
                 alt_seq = chr_seq[start-50:start] + chr_seq[start+delLen:start+50+delLen]
@@ -438,11 +460,14 @@ def main(genome_file,
                 prev_base = chr_seq[start-1].upper()
                 if prev_base not in "ACGT":
                     continue
-            for allele in allele_list:
+            allele_count = min(len(allele_list), len(alleleFreqs))
+            for a in range(allele_count):
+                allele = allele_list[a]
+                freq = float(alleleFreqs[a])
                 if allele == "-" or len(allele) <= 0:
                     continue
                 if re.match('^[ACGT]+$', allele):
-                    snp_list.append([chr, start, 'I', allele, {"id":rs_id}])
+                    snp_list.append([chr, start, 'I', allele, {"id":rs_id, "freq":freq}])
                     insLen = len(allele)
                     if testset and insLen > 0 and insLen <= 10:
                         ref_seq = chr_seq[start-50:start+50]

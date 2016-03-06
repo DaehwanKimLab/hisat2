@@ -1,0 +1,24 @@
+GRCh37 - release 75
+
+1) for 22
+   samtools faidx genome.fa 22 > 22.fa
+   awk '{if($3 == 22) print}' genome.snp > 22.snp
+   awk '{if($2 == 22) print}' genome.haplotype > 22.haplotype
+   awk '{if($1 == 22) print}' genome.exon > 22.exon
+   awk '{if($1 == 22) print}' genome.ss > 22.ss
+   hisat2-build 22.fa 22
+   hisat2-build --snp 22.snp --haplotype 22.haplotype 22.fa 22_snp
+   hisat2-build --exon 22.exon --ss 22.ss 22.fa 22_tran
+   hisat2-build --snp 22.snp --haplotype 22.haplotype --exon 22.exon --ss 22.ss 22.fa 22_snp_tran
+
+2) for 22_20-21M
+   samtools faidx genome.fa 22:20000001-21000000 > 22_20-21M.fa
+   awk 'BEGIN{OFS="\t"} {if($4 >= 20000000 && $4 < 21000000) {$3 = "22:20000001-21000000"; $4 -= 20000000; print}}' 22.snp > 22_20-21M.snp
+   awk 'BEGIN{OFS="\t"} {if($3 >= 20000000 && $4 < 21000000) {$2 = "22:20000001-21000000"; $3 -= 20000000; $4 -= 20000000; print}}' 22.haplotype > 22_20-21M.haplotype
+   awk 'BEGIN{OFS="\t"} {if($2 >= 20000000 && $3 < 21000000) {$1 = "22:20000001-21000000"; $2 -= 20000000; $3 -= 20000000; print}}' 22.exon > 22_20-21M.exon
+   awk 'BEGIN{OFS="\t"} {if($2 >= 20000000 && $3 < 21000000) {$1 = "22:20000001-21000000"; $2 -= 20000000; $3 -= 20000000; print}}' 22.ss > 22_20-21M.ss
+   hisat2-build 22_20-21M.fa 22_20-21M
+   hisat2-build --snp 22_20-21M.snp --haplotype 22_20-21M.haplotype 22_20-21M.fa 22_20-21M_snp
+   hisat2-build --exon 22_20-21M.exon --ss 22_20-21M.ss 22_20-21M.fa 22_20-21M_tran
+   hisat2-build --snp 22_20-21M.snp --haplotype 22_20-21M.haplotype --exon 22_20-21M.exon --ss 22_20-21M.ss 22_20-21M.fa 22_20-21M_snp_tran
+   

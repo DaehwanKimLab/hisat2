@@ -1132,13 +1132,13 @@ def calculate_read_cost():
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "tran", ""],
         # ["hisat2", "", "", "201b"],
-        # ["hisat2", "", "", ""],
+        ["hisat2", "", "", ""],
         # ["hisat2", "x1", "tran", "201b"],
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "snp", "201b"],
-        # ["hisat2", "", "snp", ""],
-        ["hisat2", "x1", "snp_tran", "201b"],
-        ["hisat2", "x1", "snp_tran", ""],
+        ["hisat2", "", "snp", ""],
+        # ["hisat2", "x1", "snp_tran", "201b"],
+        # ["hisat2", "x1", "snp_tran", ""],
         # ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
@@ -1243,7 +1243,9 @@ def calculate_read_cost():
                     
                 return version
 
+            # daehwan - for debugging purposes
             index_base = "../../../indexes"
+            index_base = "../../../new_indexes"
             index_add = ""
             if genome != "genome":
                 index_add = "_" + genome
