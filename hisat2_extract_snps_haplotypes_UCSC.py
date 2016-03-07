@@ -446,8 +446,10 @@ def main(genome_file,
                 if prev_base not in "ACGT":
                     continue
 
-            assert len(allele_list) == 2
-            assert len(allele_list) == len(alleleFreqs)
+            if len(allele_list) != 2 or \
+                    len(allele_list) != len(alleleFreqs):
+                continue
+                
             freq = 0.0
             if allele_list[0] == "-":
                 freq = float(alleleFreqs[1])
