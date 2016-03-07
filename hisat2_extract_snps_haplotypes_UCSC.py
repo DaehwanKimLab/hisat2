@@ -20,8 +20,8 @@
 #
 
 
-import sys, re
-from collections import defaultdict as dd, Counter
+import sys, subprocess
+import re
 from argparse import ArgumentParser, FileType
 
 
@@ -146,6 +146,7 @@ def generate_haplotypes(snp_file,
     vars = tmp_vars
 
     # Create new variant ID for variants with the same ID
+    # e.g. same two variant ID, rs60160543, are split into rs60160543.0 and rs60160543.1
     vars_count = {}
     for var in vars:
         id = var[4]["id"]
@@ -181,7 +182,7 @@ def generate_haplotypes(snp_file,
             var2_chr, var2_pos = vars[v2][:2]
             if var_chr != var2_chr:
                 break
-            if var_pos < var2_pos:
+            if var_pos + inter_gap < var2_pos:
                 break
             vars_cmpt[v2] = v
 
@@ -190,12 +191,14 @@ def generate_haplotypes(snp_file,
     for v in range(len(vars)):
         var = vars[v]
         var_dic = var[4]
+        freq = var_dic["freq"]
         used = [False for i in range(100)]
         if vars_cmpt[v] >= 0:
             v2 = v - 1
             while v2 >= vars_cmpt[v]:
                 var2 = vars[v2]
-                if not compatible_vars(var2, var):
+                if not compatible_vars(var2, var) or \
+                        freq >= 0.1:
                     var2_dic = var2[4]
                     assert "genotype" in var2_dic
                     genotype_num = var2_dic["genotype"]
@@ -324,7 +327,7 @@ def generate_haplotypes(snp_file,
 """
 """
 def main(genome_file,
-         snp_file,
+         snp_fname,
          base_fname,
          inter_gap,
          intra_gap,
@@ -344,7 +347,14 @@ def main(genome_file,
     snp_list = []
     prev_chr, curr_right = "", -1
     num_haplotypes = 0
-    for line in snp_file:
+    if snp_fname.endswith(".gz"):
+        snp_cmd = ["gzip", "-cd", snp_fname]
+    else:
+        snp_cmd = ["cat", snp_fname]
+    snp_proc = subprocess.Popen(snp_cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=open("/dev/null", 'w'))        
+    for line in snp_proc.stdout:
         if not line or line.startswith('#'):
             continue
 
@@ -504,14 +514,14 @@ def main(genome_file,
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Extract SNPs and haplotypes from a SNP file downloaded from UCSC')
+        description='Extract SNPs and haplotypes from a SNP file downloaded from UCSC (e.g. http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/snp144.txt.gz)')
     parser.add_argument('genome_file',
                         nargs='?',
                         type=FileType('r'),
                         help='input genome file')
-    parser.add_argument('snp_file',
+    parser.add_argument('snp_fname',
                         nargs='?',
-                        type=FileType('r'),
+                        type=str,
                         help='input snp file')
     parser.add_argument("base_fname",
                         nargs='?',
@@ -537,11 +547,13 @@ if __name__ == '__main__':
                         help='print test reads')
 
     args = parser.parse_args()
-    if not args.snp_file:
+    if not args.genome_file or \
+            not args.snp_fname or \
+            not args.base_fname:
         parser.print_help()
         exit(1)
     main(args.genome_file,
-         args.snp_file,
+         args.snp_fname,
          args.base_fname,
          args.inter_gap,
          args.intra_gap,
