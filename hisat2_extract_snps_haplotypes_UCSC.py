@@ -389,6 +389,9 @@ def main(genome_file,
             assert classType == "insertion"
             if start != end:
                 continue
+
+        if chr.endswith("alt"):
+            continue
             
         if chr not in chr_dic:
             continue
