@@ -56,7 +56,9 @@ fi
 
 rm -f genome.fa
 get ${UCSC_HG38_BASE}/$F || (echo "Error getting $F" && exit 1)
-tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
+tar xvzf $F || (echo "Error unzipping $F" && exit 1)
+for i in {1..22}; do cat chroms/chr$i.fa >> genome.fa; done
+cat chroms/chr[XYM].fa >> genome.fa 
 rm $F
 
 if [ ! -f $SNP_FILE ] ; then

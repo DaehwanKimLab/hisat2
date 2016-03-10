@@ -17,7 +17,7 @@ F=hg38.chromFa.tar.gz
 
 DBSNP_RELEASE=144
 SNP_FILE=snp${DBSNP_RELEASE}.txt
-UCSC_COMMON_SNP=http://hgdownload.cse.ucsc.edu/goldenPath/hg38/database/${SNP_FILE}
+UCSC_SNP=http://hgdownload.cse.ucsc.edu/goldenPath/hg38/database/${SNP_FILE}
 
 get() {
 	file=$1
@@ -56,11 +56,13 @@ fi
 
 rm -f genome.fa
 get ${UCSC_HG38_BASE}/$F || (echo "Error getting $F" && exit 1)
-tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
+tar xvzf $F || (echo "Error unzipping $F" && exit 1)
+for i in {1..22}; do cat chroms/chr$i.fa >> genome.fa; done
+cat chroms/chr[XYM].fa >> genome.fa 
 rm $F
 
 if [ ! -f $SNP_FILE ] ; then
-       get ${UCSC_COMMON_SNP}.gz || (echo "Error getting ${UCSC_COMMON_SNP}" && exit 1)
+       get ${UCSC_SNP}.gz || (echo "Error getting ${UCSC_COMMON_SNP}" && exit 1)
        ${HISAT2_SNP_SCRIPT} genome.fa ${SNP_FILE}.gz genome
 fi
 
