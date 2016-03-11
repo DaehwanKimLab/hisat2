@@ -353,7 +353,8 @@ def main(genome_file,
         snp_cmd = ["cat", snp_fname]
     snp_proc = subprocess.Popen(snp_cmd,
                                 stdout=subprocess.PIPE,
-                                stderr=open("/dev/null", 'w'))        
+                                stderr=open("/dev/null", 'w'))
+    ids_seen = set()
     for line in snp_proc.stdout:
         if not line or line.startswith('#'):
             continue
@@ -368,6 +369,11 @@ def main(genome_file,
             """
             id, chr, start, end, rs_id, score, strand, refNCBI, refUCSC, observed, molType, classType = fields[:12]
             alleleFreqs = fields[-2].split(',')[:-1]
+            if len(alleleFreqs) > 0:
+                try:
+                    float(alleleFreqs[0])
+                except ValueError:
+                    alleleFreqs = []
         except ValueError:
             continue
 
@@ -389,7 +395,7 @@ def main(genome_file,
             assert classType == "insertion"
             if start != end:
                 continue
-            
+
         if chr not in chr_dic:
             continue
         chr_seq = chr_dic[chr]
@@ -397,6 +403,10 @@ def main(genome_file,
 
         if start >= len(chr_seq):
             continue
+
+        if rs_id in ids_seen:
+            continue
+        ids_seen.add(rs_id)
 
         if (prev_chr != chr or curr_right + inter_gap < start) and \
                 len(snp_list) > 0:
@@ -410,6 +420,8 @@ def main(genome_file,
 
         observed = observed.upper()
         allele_list = observed.split("/")
+        if len(alleleFreqs) == 0:
+            alleleFreqs = [0.0 for i in range(len(allele_list))]
         
         # Reverse complement alleles if strand is negative
         if strand == "-":
