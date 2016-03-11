@@ -1245,7 +1245,7 @@ def calculate_read_cost():
 
             # daehwan - for debugging purposes
             index_base = "../../../indexes"
-            index_base = "../../../new_indexes"
+            # index_base = "../../../new_indexes"
             index_add = ""
             if genome != "genome":
                 index_add = "_" + genome

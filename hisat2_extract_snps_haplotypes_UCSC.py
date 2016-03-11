@@ -524,7 +524,7 @@ if __name__ == '__main__':
     parser.add_argument('snp_fname',
                         nargs='?',
                         type=str,
-                        help='input snp file')
+                        help='input snp file downloaded from UCSC')
     parser.add_argument("base_fname",
                         nargs='?',
                         type=str,

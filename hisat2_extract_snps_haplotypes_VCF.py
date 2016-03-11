@@ -367,33 +367,22 @@ def generate_haplotypes(snp_file,
 """
 """
 def main(genome_file,
+         VCF_fnames,
          base_fname,
-         species,
-         assembly_version,
+         inter_gap,
+         intra_gap,
          reference_type,
          genotype_vcf,
          genotype_gene_list,
          extra_files,
-         inter_gap,
-         intra_gap,
-         verbose = False):
+         verbose):
     # Load genomic sequences
     chr_dic = read_genome(genome_file)
-    
-    VCF_fnames = {}
-    if species == "human":
-        grch38_url_base = "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions"
-        grch37_url_base = "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
-        if assembly_version == "GRCh38":
-            VCF_fnames["human"] = [["%s" % chr, "%s/ALL.chr%s.phase3_shapeit2_mvncall_integrated_v3plus_nounphased.rsID.genotypes.GRCh38_dbSNP_no_SVs.vcf.gz" % (grch38_url_base, chr)] for chr in [str(i+1) for i in range(22)] + ["X", "Y"]]
-        else:
-            assert assebmly_version == "GRCh37"
-            VCF_fnames["human"] = [["%s" % chr, "%s/ALL.chr%s.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" % (grch17_url_base, chr)] for chr in [str(i+1) for i in range(22)] + ["X", "Y"]]
-            VCF_fnames["human"].append(["MT", "%s/ALL.chrMT.phase3_callmom.20130502.genotypes.vcf.gz" % grch37_url_base])
-    
-    if species not in VCF_fnames:
-        print >> sys.stderr, "Error: %s is not supported." % species
-        sys.exit(1)
+
+    # GRCh38 - ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions
+    #             ALL.chr22.phase3_shapeit2_mvncall_integrated_v3plus_nounphased.rsID.genotypes.GRCh38_dbSNP_no_SVs.vcf.gz
+    # GRCh37 - ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502
+    #             ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz
 
     # List of variants (e.g. ClinVar database)
     genotype_var_list = {}
@@ -402,11 +391,14 @@ def main(genome_file,
     if genotype_vcf != "":
         var_set = set()
         assert len(genotype_gene_list) > 0
-        gzip_cmd = ["gzip", "-cd", genotype_vcf]
-        gzip_proc = subprocess.Popen(gzip_cmd,
-                                     stdout=subprocess.PIPE,
-                                     stderr=open("/dev/null", 'w'))
-        for line in gzip_proc.stdout:
+        if genotype_vcf.endswith(".gz"):
+            vcf_cmd = ["gzip", "-cd", genotype_vcf]
+        else:
+            vcf_cmd = ["cat", genotype_vcf]
+        vcf_proc = subprocess.Popen(vcf_cmd,
+                                    stdout=subprocess.PIPE,
+                                    stderr=open("/dev/null", 'w'))
+        for line in vcf_proc.stdout:
             if line.startswith("#"):
                 continue
 
@@ -520,24 +512,20 @@ def main(genome_file,
         
     num_haplotypes = 0
     num_unassigned = 0
-    for chr, url in VCF_fnames[species]:
-        if chr not in chr_dic:
-            continue
+
+    for VCF_fname in VCF_fnames:
         if reference_type != "genome" and \
                 len(genotype_gene_list) > 0 and \
                 chr not in genotype_var_list:
             continue
-        
-        chr_seq = chr_dic[chr]
-        fname = url.split('/')[-1]
 
-        if not os.path.exists(fname):
-            os.system("wget %s" % (url))
-        assert os.path.exists(fname)
-        gzip_cmd = ["gzip", "-cd", fname]
-        gzip_proc = subprocess.Popen(gzip_cmd,
-                                     stdout=subprocess.PIPE,
-                                     stderr=open("/dev/null", 'w'))
+        if VCF_fname.endswith(".gz"):
+            vcf_cmd = ["gzip", "-cd", VCF_fname]
+        else:
+            vcf_cmd = ["cat", VCF_fname]
+        vcf_proc = subprocess.Popen(vcf_cmd,
+                                    stdout=subprocess.PIPE,
+                                    stderr=open("/dev/null", 'w'))
 
         chr_genotype_vars = []
         chr_genotype_ranges = {}
@@ -552,14 +540,14 @@ def main(genome_file,
         curr_right = -1
         prev_varID, prev_pos = "", -1
         num_lines = 0
-        for line in gzip_proc.stdout:
+        for line in vcf_proc.stdout:
             num_lines += 1
             if line.startswith("##"):
                 continue
 
             fields = line.strip().split()
             chr, pos, varID, ref_allele, alt_alleles, qual, filter, info, format = fields[:9]
-
+            
             genotypes = fields[9:]
 
             if line.startswith("#"):
@@ -575,6 +563,10 @@ def main(genome_file,
 
             if varID == prev_varID:
                 continue
+
+            if chr not in chr_dic:
+                break
+            chr_seq = chr_dic[chr]
 
             pos = int(pos) - 1
             offset = 0
@@ -692,31 +684,34 @@ def main(genome_file,
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Extract haplotypes from a VCF file')
+        description='Extract SNPs and haplotypes from VCF files (e.g., ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/ALL.chr22.phase3_shapeit2_mvncall_integrated_v3plus_nounphased.rsID.genotypes.GRCh38_dbSNP_no_SVs.vcf.gz)')
     parser.add_argument('genome_file',
                         nargs='?',
                         type=FileType('r'),
                         help='input genome file')
-    parser.add_argument("-b", "--base",
-                        dest="base_fname",
+    parser.add_argument('VCF_fnames',
+                        nargs='?',
                         type=str,
-                        default="",
-                        help="base filename for SNPs and haplotypes (default: same as --species)")
-    parser.add_argument('--species',
-                        dest='species',
+                        help='A comma-seperated VCF files')
+    parser.add_argument("base_fname",
+                        nargs='?',
                         type=str,
-                        default="human",
-                        help='species (default: human)')
-    parser.add_argument('--assembly-version',
-                        dest='assembly_version',
-                        type=str,
-                        default="GRCh38",
-                        help='species (default: GRCh38)')
+                        help="base filename for SNPs and haplotypes")
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
                         default="genome",
                         help="Reference type: gene, chromosome, and genome (default: genome)")
+    parser.add_argument("--inter-gap",
+                        dest="inter_gap",
+                        type=int,
+                        default=30,
+                        help="Maximum distance for variants to be in the same haplotype (default: 30)")
+    parser.add_argument("--intra-gap",
+                        dest="intra_gap",
+                        type=int,
+                        default=50,
+                        help="Break a haplotype into several haplotypes (default: 50)")
     parser.add_argument('--genotype-vcf',
                         dest='genotype_vcf',
                         type=str,
@@ -731,24 +726,18 @@ if __name__ == '__main__':
                         dest='extra_files',
                         action='store_true',
                         help='Output extra files such as _backbone.fa and .ref')
-    parser.add_argument("--inter-gap",
-                        dest="inter_gap",
-                        type=int,
-                        default=30,
-                        help="Maximum distance for variants to be in the same haplotype")
-    parser.add_argument("--intra-gap",
-                        dest="intra_gap",
-                        type=int,
-                        default=50,
-                        help="Break a haplotype into several haplotypes")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
                         help='also print some statistics to stderr')
 
     args = parser.parse_args()
-    if args.base_fname == "":
-        args.base_fname = args.species
+    if not args.genome_file or \
+            not args.VCF_fnames or \
+            not args.base_fname:
+        parser.print_help()
+        exit(1)
+    args.VCF_fnames = args.VCF_fnames.split(',')
 
     if args.genotype_vcf != "":
         if args.genotype_gene_list == "":
@@ -759,13 +748,12 @@ if __name__ == '__main__':
         args.genotype_gene_list = []
 
     main(args.genome_file,
+         args.VCF_fnames,
          args.base_fname,
-         args.species,
-         args.assembly_version,
+         args.inter_gap,
+         args.intra_gap,
          args.reference_type,
          args.genotype_vcf,
          args.genotype_gene_list,
-         args.extra_files,
-         args.inter_gap,
-         args.intra_gap,
+         args.extra_files,         
          args.verbose)

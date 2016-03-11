@@ -101,7 +101,7 @@ def test_BRCA_genotyping(reference_type,
                    "brca.clnsig"]
 
     if not check_files(BRCA_fnames):
-        extract_brca_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes.py")
+        extract_brca_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes_VCF.py")
         extract_cmd = [extract_brca_script,
                        "genome.fa",
                        "--base", "brca",

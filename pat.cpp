@@ -1735,7 +1735,9 @@ bool SRAPatternSource::readPair(
 }
 
 void SRAPatternSource::open() {
-    ncbi::NGS::setAppVersionString(HISAT2_VERSION);
+    string version = "hisat2-";
+    version += HISAT2_VERSION;
+    ncbi::NGS::setAppVersionString(version.c_str());
     assert(!sra_accs_.empty());
     while(sra_acc_cur_ < sra_accs_.size()) {
         // Open read

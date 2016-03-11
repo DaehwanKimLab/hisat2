@@ -26,13 +26,15 @@
 	    <li>Memory mappaped IO (--mm option) works now.</li>
 	    <li>Fixed a bug that the same read was written into a file multiple times when --un-conc was used.</li>
 	    <li>Fixed another bug that caused reads to map beyond reference sequences.</li>
+	    <li>Introduced --haplotype option in the hisat2-build (index building), which is used with --snp option together to allow for SNP combinations present in the human population.  This option also prevents graph construction from exploding due to exponential combinations of SNPs in some regions.</li>
+	    <li>Provided a new python script to extract SNPs and haplotypes from VCF files, <i>hisat2_extract_snps_haplotypes_VCF.py</i></li>
 	    <li>Changed several python script names as follows</li>
 	    <ol>
-	      <li><i>extract_splice_sites.py</i> to <i>hisat2_extract_splice_sites.py</i></li>
+	      <li><i>extract_splice_sites.py</i> to <i>hisat2_extract_splice_sites_UCSC.py</i></li>
 	      <li><i>extract_exons.py</i> to <i>hisat2_extract_exons.py</i></li>
 	      <li><i>extract_snps.py</i> to <i>hisat2_extract_snps_haplotypes_UCSC.py</i></li>
 	    </ol>
-	    <li>Introduced --haplotype option in the hisat2-build (index building), which is used with --snp option together to allow for SNP combinations present in the human population.  This option also prevents graph construction from exploding due to exponential combinations of SNPs in some regions.</li>
+
 	  </ul>
 	  <br>
 	  <h2>HISAT2 2.0.1-beta release 11/19/2015</h2>

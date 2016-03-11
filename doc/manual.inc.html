@@ -438,7 +438,7 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 <pre><code>--known-splicesite-infile &lt;path&gt;</code></pre>
 </td><td>
 
-<p>With this mode, you can provide a list of known splice sites, which HISAT2 makes use of to align reads with small anchors.<br />You can create such a list using <code>python extract_splice_sites.py genes.gtf &gt; splicesites.txt</code>, where <code>extract_splice_sites.py</code> is included in the HISAT2 package, <code>genes.gtf</code> is a gene annotation file, and <code>splicesites.txt</code> is a list of splice sites with which you provide HISAT2 in this mode. Note that it is better to use indexes built using annotated transcripts (such as <i>genome_tran</i> or <i>genome_snp_tran</i>), which works better than using this option. It has no effect to provide splice sites that are already included in the indexes.</p>
+<p>With this mode, you can provide a list of known splice sites, which HISAT2 makes use of to align reads with small anchors.<br />You can create such a list using <code>python hisat2_extract_splice_sites.py genes.gtf &gt; splicesites.txt</code>, where <code>hisat2_extract_splice_sites.py</code> is included in the HISAT2 package, <code>genes.gtf</code> is a gene annotation file, and <code>splicesites.txt</code> is a list of splice sites with which you provide HISAT2 in this mode. Note that it is better to use indexes built using annotated transcripts (such as <i>genome_tran</i> or <i>genome_snp_tran</i>), which works better than using this option. It has no effect to provide splice sites that are already included in the indexes.</p>
 </td></tr>
 
 <tr><td id="hisat-options-novel-splice-outfile">
@@ -1086,7 +1086,7 @@ Otherwise, you will be able to build an index on your desktop with 8GB RAM.</cod
 
 <p>Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).</p>
 <p>SNP ID <code>&lt;tab&gt;</code> chromosome name <code>&lt;tab&gt;</code> snp type (single, deletion, or insertion) <code>&lt;tab&gt;</code> zero-offset based genomic position of a SNP <code>&lt;tab&gt;</code> alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)</p>
-<p>Use <code>extract_snps.py</code> (in the HISAT2 package) to extract SNPs from a dbSNP file (e.g. snpCommon.txt).</p>
+<p>Use <code>hisat2_extract_snps.py</code> (in the HISAT2 package) to extract SNPs from a dbSNP file (e.g. snpCommon.txt).</p>
 </td></tr><tr><td>
 
 <pre><code>--ss &lt;path&gt;</code></pre>
@@ -1094,7 +1094,7 @@ Otherwise, you will be able to build an index on your desktop with 8GB RAM.</cod
 
 <p>Note this option should be used with the followig --exon option. Provide a list of splice sites (in the HISAT2's own format) as follows (four columns).</p>
 <p>chromosome name <code>&lt;tab&gt;</code> zero-offset based genomic position of the flanking base on the left side of an intron <code>&lt;tab&gt;</code> zero-offset based genomic position of the flanking base on the right <code>&lt;tab&gt;</code> strand</p>
-<p>Use <code>extract_splice_sites.py</code> (in the HISAT2 package) to extract splice sites from a GTF file.</p>
+<p>Use <code>hisat2_extract_splice_sites.py</code> (in the HISAT2 package) to extract splice sites from a GTF file.</p>
 </td></tr><tr><td>
 
 <pre><code>--exon &lt;path&gt;</code></pre>
@@ -1102,7 +1102,7 @@ Otherwise, you will be able to build an index on your desktop with 8GB RAM.</cod
 
 <p>Note this option should be used with the above --ss option. Provide a list of exons (in the HISAT2's own format) as follows (three columns).</p>
 <p>chromosome name <code>&lt;tab&gt;</code> zero-offset based left genomic position of an exon <code>&lt;tab&gt;</code> zero-offset based right genomic position of an exon</p>
-<p>Use <code>extract_exons.py</code> (in the HISAT2 package) to extract exons from a GTF file.</p>
+<p>Use <code>hisat2_extract_exons.py</code> (in the HISAT2 package) to extract exons from a GTF file.</p>
 </td></tr><tr><td>
 
 <pre><code>--seed &lt;int&gt;</code></pre>
