@@ -353,7 +353,8 @@ def main(genome_file,
         snp_cmd = ["cat", snp_fname]
     snp_proc = subprocess.Popen(snp_cmd,
                                 stdout=subprocess.PIPE,
-                                stderr=open("/dev/null", 'w'))        
+                                stderr=open("/dev/null", 'w'))
+    ids_seen = set()
     for line in snp_proc.stdout:
         if not line or line.startswith('#'):
             continue
@@ -402,6 +403,10 @@ def main(genome_file,
 
         if start >= len(chr_seq):
             continue
+
+        if rs_id in ids_seen:
+            continue
+        ids_seen.add(rs_id)
 
         if (prev_chr != chr or curr_right + inter_gap < start) and \
                 len(snp_list) > 0:
