@@ -15,10 +15,10 @@
 # variable below.
 #
 
-ENSEMBL_RELEASE=81
+ENSEMBL_RELEASE=84
 ENSEMBL_GRCh38_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
 
-DBSNP_RELEASE=142
+DBSNP_RELEASE=144
 SNP_FILE=snp${DBSNP_RELEASE}Common.txt
 UCSC_COMMON_SNP=http://hgdownload.cse.ucsc.edu/goldenPath/hg38/database/${SNP_FILE}
 
@@ -47,13 +47,13 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 	fi
 fi
 
-HISAT2_SNP_SCRIPT=./hisat2_extract_snps.py
+HISAT2_SNP_SCRIPT=./hisat2_extract_snps_haplotypes_UCSC.py
 if [ ! -x "$HISAT2_SNP_SCRIPT" ] ; then
 	if ! which hisat2_extract_snps.py ; then
-		echo "Could not find hisat2_extract_snps.py in current directory or in PATH"
+		echo "Could not find hisat2_extract_snps_haplotypes_UCSC.py in current directory or in PATH"
 		exit 1
 	else
-		HISAT2_SNP_SCRIPT=`which hisat2_extract_snps.py`
+		HISAT2_SNP_SCRIPT=`which hisat2_extract_snps_haplotypes_UCSC.py`
 	fi
 fi
 
@@ -72,10 +72,10 @@ if [ ! -f $SNP_FILE ] ; then
        gunzip ${SNP_FILE}.gz || (echo "Error unzipping ${SNP_FILE}" && exit 1)
        awk 'BEGIN{OFS="\t"} {if($2 ~ /^chr/) {$2 = substr($2, 4)}; if($2 == "M") {$2 = "MT"} print}' ${SNP_FILE} > ${SNP_FILE}.tmp
        mv ${SNP_FILE}.tmp ${SNP_FILE}
-       ${HISAT2_SNP_SCRIPT} genome.fa ${SNP_FILE} > genome.snp
+       ${HISAT2_SNP_SCRIPT} genome.fa ${SNP_FILE} genome
 fi
 
-CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --snp genome.snp genome_snp"
+CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --snp genome.snp --haplotype genome.haplotype genome_snp"
 echo Running $CMD
 if $CMD ; then
 	echo "genome index built; you may remove fasta files"

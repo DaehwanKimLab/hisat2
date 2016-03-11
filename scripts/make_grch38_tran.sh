@@ -15,7 +15,7 @@
 # variable below.
 #
 
-ENSEMBL_RELEASE=81
+ENSEMBL_RELEASE=84
 ENSEMBL_GRCh38_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
 ENSEMBL_GRCh38_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
 GTF_FILE=Homo_sapiens.GRCh38.${ENSEMBL_RELEASE}.gtf

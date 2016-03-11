@@ -15,7 +15,7 @@
 # variable below.
 #
 
-ENSEMBL_RELEASE=81
+ENSEMBL_RELEASE=84
 ENSEMBL_GRCh38_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
 
 get() {
@@ -52,7 +52,7 @@ if [ ! -f $F ] ; then
 	rm $F
 fi
 
-CMD="${HISAT2_BUILD_EXE} genome.fa genome"
+CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa genome"
 echo Running $CMD
 if $CMD ; then
 	echo "genome index built; you may remove fasta files"

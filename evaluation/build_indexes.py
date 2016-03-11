@@ -4,7 +4,8 @@ import sys, os
 use_message = '''
 '''
 
-def build_indexes():
+# GRCh38 release 84
+def build_indexes():    
     # Build indexes
     if not os.path.exists("indexes"):
         os.mkdir("indexes")

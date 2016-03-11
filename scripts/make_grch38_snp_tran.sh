@@ -15,7 +15,7 @@
 # variable below.
 #
 
-ENSEMBL_RELEASE=83
+ENSEMBL_RELEASE=84
 ENSEMBL_GRCh38_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
 ENSEMBL_GRCh38_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
 GTF_FILE=Homo_sapiens.GRCh38.${ENSEMBL_RELEASE}.gtf
@@ -51,7 +51,7 @@ fi
 
 HISAT2_SNP_SCRIPT=./hisat2_extract_snps_haplotypes_UCSC.py
 if [ ! -x "$HISAT2_SNP_SCRIPT" ] ; then
-	if ! which hisat2_extract_snps.py ; then
+	if ! which hisat2_extract_snps_UCSC.py ; then
 		echo "Could not find hisat2_extract_snps_haplotypes_UCSC.py in current directory or in PATH"
 		exit 1
 	else
