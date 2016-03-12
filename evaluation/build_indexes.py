@@ -11,7 +11,7 @@ def build_indexes():
         os.mkdir("indexes")
     os.chdir("indexes")
     aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP", "BWA"]
-    for genome in ["genome", "22", "22_20-21M"]:
+    for genome in ["22_20-21M", "22", "genome"]:
         for aligner in aligners:
             if genome == "genome":
                 dir = aligner
@@ -23,9 +23,9 @@ def build_indexes():
             os.chdir(dir)
             if aligner == "HISAT2":
                 cmd = "../../aligners/bin/hisat2-build ../../data/%s.fa %s" % (genome, genome)
-                cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp %s_snp" % (genome, genome, genome)
+                cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --haplotype ../../data/%s.haplotype %s_snp" % (genome, genome, genome, genome)
                 cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --ss ../../data/%s.ss --exon ../../data/%s.exon %s_tran" % (genome, genome, genome, genome)
-                cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --ss ../../data/%s.ss --exon ../../data/%s.exon %s_snp_tran" % (genome, genome, genome, genome, genome)
+                cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --haplotype ../../data/%s.haplotype --ss ../../data/%s.ss --exon ../../data/%s.exon %s_snp_tran" % (genome, genome, genome, genome, genome, genome)
             elif aligner == "HISAT":
                 cmd = "../../aligners/bin/hisat-build ../../data/%s.fa %s" % (genome, genome)
                 cmd = cmd + "; ../../aligners/bin/tophat -G ../../data/%s.gtf --transcriptome-index=gtf %s; rm -rf tophat_out" % (genome, genome)
@@ -37,7 +37,7 @@ def build_indexes():
             elif aligner == "GSNAP":
                 cmd = "../../aligners/bin/gmap_build -B ../../aligners/bin -D . -d %s ../../data/%s.fa" % (genome, genome)
             elif aligner == "BWA":
-                cmd = "../../aligners/bin/bwa -p %s.fa ../../data/%s.fa" % (genome, genome)
+                cmd = "../../aligners/bin/bwa index -p %s.fa ../../data/%s.fa" % (genome, genome)
             else:
                 assert False
             print >> sys.stderr, cmd
