@@ -1,22 +1,22 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the rn6 version of R. norvegicus (rat) from
-# UCSC.
+# Downloads sequence for the BDGP6 release 84 version of drosophila melanogaster (fly) from
+# Ensembl.
 #
-# Note that UCSC's rn6 build has two categories of compressed fasta
+# Note that Ensembl's build has three categories of compressed fasta
 # files:
 #
-# 1. The base files, named chr??.fa.gz
-# 2. The unplaced-sequence files, named chr??_random.fa.gz
+# The base files, named ??.fa.gz
 #
-# By default, this script indexes all these files.  To change which
-# categories are built by this script, edit the CHRS_TO_INDEX
+# By default, this script builds and index for just the base files,
+# since alignments to those sequences are the most useful.  To change
+# which categories are built by this script, edit the CHRS_TO_INDEX
 # variable below.
 #
 
-RN6_BASE=ftp://hgdownload.cse.ucsc.edu/goldenPath/rn6/bigZips
-F=rn6.fa.gz
+ENSEMBL_RELEASE=84
+ENSEMBL_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/drosophila_melanogaster/dna
 
 get() {
 	file=$1
@@ -44,9 +44,12 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 fi
 
 rm -f genome.fa
-get ${RN6_BASE}/$F || (echo "Error getting $F" && exit 1)
-gzip -cd $F > genome.fa || (echo "Error unzipping $F" && exit 1)
-rm $F
+F=Drosophila_melanogaster.BDGP6.dna.toplevel.fa
+if [ ! -f $F ] ; then
+	get ${ENSEMBL_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
+	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
+	mv $F genome.fa
+fi
 
 CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa genome"
 echo Running $CMD

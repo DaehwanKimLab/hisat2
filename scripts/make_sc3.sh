@@ -1,22 +1,7 @@
 #!/bin/sh
 
-#
-# Downloads sequence for the rn6 version of R. norvegicus (rat) from
-# UCSC.
-#
-# Note that UCSC's rn6 build has two categories of compressed fasta
-# files:
-#
-# 1. The base files, named chr??.fa.gz
-# 2. The unplaced-sequence files, named chr??_random.fa.gz
-#
-# By default, this script indexes all these files.  To change which
-# categories are built by this script, edit the CHRS_TO_INDEX
-# variable below.
-#
-
-RN6_BASE=ftp://hgdownload.cse.ucsc.edu/goldenPath/rn6/bigZips
-F=rn6.fa.gz
+SC3_BASE=ftp://hgdownload.cse.ucsc.edu/goldenPath/sacCer3/bigZips
+F=chromFa.tar.gz
 
 get() {
 	file=$1
@@ -44,8 +29,8 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 fi
 
 rm -f genome.fa
-get ${RN6_BASE}/$F || (echo "Error getting $F" && exit 1)
-gzip -cd $F > genome.fa || (echo "Error unzipping $F" && exit 1)
+get ${SC3_BASE}/$F || (echo "Error getting $F" && exit 1)
+tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
 rm $F
 
 CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa genome"
