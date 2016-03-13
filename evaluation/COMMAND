@@ -2,6 +2,7 @@ GRCh37 - release 75
 
 1) for 22
    samtools faidx genome.fa 22 > 22.fa
+   awk '{if($1 == 22) print}' genome.gtf > 22.gtf
    awk '{if($3 == 22) print}' genome.snp > 22.snp
    awk '{if($2 == 22) print}' genome.haplotype > 22.haplotype
    awk '{if($1 == 22) print}' genome.exon > 22.exon
@@ -13,6 +14,7 @@ GRCh37 - release 75
 
 2) for 22_20-21M
    samtools faidx genome.fa 22:20000001-21000000 > 22_20-21M.fa
+   awk 'BEGIN{OFS="\t"} {if($4 >= 20000000 && $5 < 21000000) {$3 = "22:20000001-21000000"; $4 -= 20000000; $5 -= 20000000; print}}' 22.gtf > 22_20-21M.gtf
    awk 'BEGIN{OFS="\t"} {if($4 >= 20000000 && $4 < 21000000) {$3 = "22:20000001-21000000"; $4 -= 20000000; print}}' 22.snp > 22_20-21M.snp
    awk 'BEGIN{OFS="\t"} {if($3 >= 20000000 && $4 < 21000000) {$2 = "22:20000001-21000000"; $3 -= 20000000; $4 -= 20000000; print}}' 22.haplotype > 22_20-21M.haplotype
    awk 'BEGIN{OFS="\t"} {if($2 >= 20000000 && $3 < 21000000) {$1 = "22:20000001-21000000"; $2 -= 20000000; $3 -= 20000000; print}}' 22.exon > 22_20-21M.exon

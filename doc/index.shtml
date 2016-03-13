@@ -24,6 +24,7 @@
 	  Version 2.0.2-beta is a minor release with the following changes.
 	  <ul>
 	    <li>Memory mappaped IO (--mm option) works now.</li>
+	    <li>Changed the minimum score for alignment to work with long reads, so it's now --score-min L,0.0,-0.2, meaning -20 for 100-bp reads and -30 for 150-bp reads.</li>
 	    <li>Fixed a bug that the same read was written into a file multiple times when --un-conc was used.</li>
 	    <li>Fixed another bug that caused reads to map beyond reference sequences.</li>
 	    <li>Introduced --haplotype option in the hisat2-build (index building), which is used with --snp option together to allow for SNP combinations present in the human population.  This option also prevents graph construction from exploding due to exponential combinations of SNPs in some regions.</li>

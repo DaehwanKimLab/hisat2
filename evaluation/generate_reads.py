@@ -59,12 +59,12 @@ def simulate_reads():
         ["22", 1000000, _rna, _snp, not _mismatch, _constant],
         ["22", 1000000, _rna, _snp, _mismatch, not _constant],
         ["22", 1000000, _rna, _snp, _mismatch, _constant],
-        ["22_20-21M", 1000000, _rna, not _snp, not _mismatch, not _constant],
-        ["22_20-21M", 1000000, _rna, _snp, not _mismatch, _constant],
-        ["genome", 20000000, _dna, not _snp, not _mismatch, _constant],
-        ["genome", 20000000, _dna, _snp, not _mismatch, _constant],
-        ["genome", 20000000, _rna, not _snp, not _mismatch, not _constant],
-        ["genome", 20000000, _rna, _snp, not _mismatch, not _constant],
+        # ["22_20-21M", 1000000, _rna, not _snp, not _mismatch, not _constant],
+        # ["22_20-21M", 1000000, _rna, _snp, not _mismatch, _constant],
+        ["genome", 10000000, _dna, not _snp, not _mismatch, _constant],
+        ["genome", 10000000, _dna, _snp, not _mismatch, _constant],
+        ["genome", 10000000, _rna, not _snp, not _mismatch, not _constant],
+        ["genome", 10000000, _rna, _snp, not _mismatch, not _constant],
         ]
 
     data_dir_base = "../../../data"
