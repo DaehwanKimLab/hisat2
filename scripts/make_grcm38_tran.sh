@@ -11,7 +11,7 @@
 # variable below.
 #
 
-ENSEMBL_RELEASE=81
+ENSEMBL_RELEASE=84
 ENSEMBL_GRCm38_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/mus_musculus/dna
 ENSEMBL_GRCm38_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/mus_musculus
 GTF_FILE=Mus_musculus.GRCm38.${ENSEMBL_RELEASE}.gtf
@@ -66,8 +66,7 @@ F=Mus_musculus.GRCm38.dna.primary_assembly.fa
 if [ ! -f $F ] ; then
 	get ${ENSEMBL_GRCm38_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
 	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
-	awk '{if($1 ~ /^>/) {print $1} else {print}}' $F > genome.fa
-	rm $F
+	mv $F genome.fa
 fi
 
 if [ ! -f $GTF_FILE ] ; then

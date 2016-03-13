@@ -1,7 +1,7 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the GRCh37 release 75 version of H. spiens (human) from
+# Downloads sequence for the GRCh37 release 75 version of H. sapiens (human) from
 # Ensembl.
 #
 # Note that Ensembl's GRCh37 build has three categories of compressed fasta
@@ -20,7 +20,7 @@ ENSEMBL_GRCh37_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/h
 ENSEMBL_GRCh37_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
 GTF_FILE=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.gtf
 
-DBSNP_RELEASE=142
+DBSNP_RELEASE=144
 SNP_FILE=snp${DBSNP_RELEASE}Common.txt
 UCSC_COMMON_SNP=http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/${SNP_FILE}
 

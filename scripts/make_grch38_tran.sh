@@ -1,7 +1,7 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the GRCh38 release 81 version of H. spiens (human) from
+# Downloads sequence for the GRCh38 release 84 version of H. sapiens (human) from
 # Ensembl.
 #
 # Note that Ensembl's GRCh38 build has three categories of compressed fasta

@@ -7,13 +7,13 @@
 
 GENOMES_MIRROR=ftp://ftpmips.gsf.de/yeast/sequences 
 
-BOWTIE_BUILD_EXE=./bowtie2-build
-if [ ! -x "$BOWTIE_BUILD_EXE" ] ; then
-	if ! which bowtie2-build ; then
-		echo "Could not find bowtie2-build in current directory or in PATH"
+HISAT2_BUILD_EXE=./hisat2-build
+if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
+	if ! which hisat2-build ; then
+		echo "Could not find hisat2-build in current directory or in PATH"
 		exit 1
 	else
-		BOWTIE_BUILD_EXE=`which bowtie2-build`
+		BOWTIE_BUILD_EXE=`which hisat2-build`
 	fi
 fi
 
@@ -38,7 +38,7 @@ if [ ! -f Scerevisiae_chr.fna ] ; then
 	exit 2
 fi
 
-CMD="$BOWTIE_BUILD_EXE $* Scerevisiae_chr.fna s_cerevisiae"
+CMD="$HISAT2_BUILD_EXE $* Scerevisiae_chr.fna s_cerevisiae"
 echo $CMD
 if $CMD ; then
 	echo "s_cerevisiae index built; you may remove fasta files"

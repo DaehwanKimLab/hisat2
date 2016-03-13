@@ -1,19 +1,22 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the HG19 version of H. sapiens (human) from
+# Downloads sequence for the rn4 version of R. norvegicus (rat) from
 # UCSC.
 #
-# The base files, named ??.fa.gz
+# Note that UCSC's rn6 build has two categories of compressed fasta
+# files:
 #
-# By default, this script builds and index for just the base files,
-# since alignments to those sequences are the most useful.  To change
-# which categories are built by this script, edit the CHRS_TO_INDEX
+# 1. The base files, named chr??.fa.gz
+# 2. The unplaced-sequence files, named chr??_random.fa.gz
+#
+# By default, this script indexes all these files.  To change which
+# categories are built by this script, edit the CHRS_TO_INDEX
 # variable below.
 #
 
-UCSC_HG19_BASE=http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips
-F=chromFa.tar.gz
+RN6_BASE=ftp://hgdownload.cse.ucsc.edu/goldenPath/rn6/bigZips
+F=rn6.fa.gz
 
 get() {
 	file=$1
@@ -41,11 +44,11 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 fi
 
 rm -f genome.fa
-get ${UCSC_HG19_BASE}/$F || (echo "Error getting $F" && exit 1)
-tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
+get ${RN6_BASE}/$F || (echo "Error getting $F" && exit 1)
+gzip -cd $F > genome.fa || (echo "Error unzipping $F" && exit 1)
 rm $F
 
-CMD="${HISAT2_BUILD_EXE} genome.fa genome"
+CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa genome"
 echo Running $CMD
 if $CMD ; then
 	echo "genome index built; you may remove fasta files"

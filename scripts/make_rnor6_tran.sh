@@ -1,10 +1,10 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the GRCh37 release 75 version of H. sapiens (human) from
+# Downloads sequence for the RNor_6.0 release 84 version of rattus_norvegicus (rat) from
 # Ensembl.
 #
-# Note that Ensembl's GRCh37 build has three categories of compressed fasta
+# Note that Ensembl's build has three categories of compressed fasta
 # files:
 #
 # The base files, named ??.fa.gz
@@ -15,10 +15,10 @@
 # variable below.
 #
 
-ENSEMBL_RELEASE=75
-ENSEMBL_GRCh37_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
-ENSEMBL_GRCh37_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
-GTF_FILE=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.gtf
+ENSEMBL_RELEASE=84
+ENSEMBL_RNOR6_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/rattus_norvegicus/dna
+ENSEMBL_RNOR6_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/rattus_norvegicus
+GTF_FILE=Rattus_norvegicus.Rnor_6.0.${ENSEMBL_RELEASE}.gtf
 
 get() {
 	file=$1
@@ -66,15 +66,15 @@ if [ ! -x "$HISAT2_EXON_SCRIPT" ] ; then
 fi
 
 rm -f genome.fa
-F=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.dna.primary_assembly.fa
+F=Rattus_norvegicus.Rnor_6.0.dna.toplevel.fa
 if [ ! -f $F ] ; then
-	get ${ENSEMBL_GRCh37_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
+	get ${ENSEMBL_RNOR6_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
 	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
 	mv $F genome.fa
 fi
 
 if [ ! -f $GTF_FILE ] ; then
-       get ${ENSEMBL_GRCh37_GTF_BASE}/${GTF_FILE}.gz || (echo "Error getting ${GTF_FILE}" && exit 1)
+       get ${ENSEMBL_RNOR6_GTF_BASE}/${GTF_FILE}.gz || (echo "Error getting ${GTF_FILE}" && exit 1)
        gunzip ${GTF_FILE}.gz || (echo "Error unzipping ${GTF_FILE}" && exit 1)
        ${HISAT2_SS_SCRIPT} ${GTF_FILE} > genome.ss
        ${HISAT2_EXON_SCRIPT} ${GTF_FILE} > genome.exon
