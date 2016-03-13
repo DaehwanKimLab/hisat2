@@ -1,18 +1,6 @@
 #!/bin/sh
 
-#
-# Downloads sequence for the HG19 version of H. sapiens (human) from
-# UCSC.
-#
-# The base files, named ??.fa.gz
-#
-# By default, this script builds and index for just the base files,
-# since alignments to those sequences are the most useful.  To change
-# which categories are built by this script, edit the CHRS_TO_INDEX
-# variable below.
-#
-
-UCSC_HG19_BASE=http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips
+SC3_BASE=ftp://hgdownload.cse.ucsc.edu/goldenPath/sacCer3/bigZips
 F=chromFa.tar.gz
 
 get() {
@@ -41,11 +29,11 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 fi
 
 rm -f genome.fa
-get ${UCSC_HG19_BASE}/$F || (echo "Error getting $F" && exit 1)
+get ${SC3_BASE}/$F || (echo "Error getting $F" && exit 1)
 tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
 rm $F
 
-CMD="${HISAT2_BUILD_EXE} genome.fa genome"
+CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa genome"
 echo Running $CMD
 if $CMD ; then
 	echo "genome index built; you may remove fasta files"

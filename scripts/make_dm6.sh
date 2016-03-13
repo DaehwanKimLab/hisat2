@@ -7,10 +7,8 @@
 # to change the date in REL.)
 #
 
-GENOMES_MIRROR=ftp://ftp.flybase.net/genomes/Drosophila_melanogaster
-F=dmel-all-chromosome-r5.48.fasta
-REL=dmel_r5.48_FB2012_06
-IDX_NAME=d_melanogaster_fb5_48
+DM6_BASE=ftp://hgdownload.cse.ucsc.edu/goldenPath/dm6/bigZips
+F=dm6.fa.gz
 
 get() {
 	file=$1
@@ -27,26 +25,25 @@ get() {
 	fi
 }
 
-BOWTIE_BUILD_EXE=./bowtie2-build
-if [ ! -x "$BOWTIE_BUILD_EXE" ] ; then
-	if ! which bowtie2-build ; then
-		echo "Could not find bowtie2-build in current directory or in PATH"
+HISAT2_BUILD_EXE=./hisat2-build
+if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
+	if ! which hisat2-build ; then
+		echo "Could not find hisat2-build in current directory or in PATH"
 		exit 1
 	else
-		BOWTIE_BUILD_EXE=`which bowtie2-build`
+		HISAT2_BUILD_EXE=`which hisat2-build`
 	fi
 fi
 
-if [ ! -f $F ] ; then
-	FGZ=$F.gz
-	get ${GENOMES_MIRROR}/$REL/fasta/$FGZ || (echo "Error getting $FGZ" && exit 1)
-	gunzip $FGZ || (echo "Error unzipping $FGZ" && exit 1)
-fi
+rm -f genome.fa
+get ${DM6_BASE}/$F || (echo "Error getting $F" && exit 1)
+gzip -cd $F > genome.fa || (echo "Error unzipping $F" && exit 1)
+rm $F
 
-CMD="${BOWTIE_BUILD_EXE} $* $F $IDX_NAME"
+CMD="${HISAT2_BUILD_EXE} genome.fa genome"
 echo "Running $CMD"
 if $CMD ; then
-	echo "$IDX_NAME index built; you may remove fasta files"
+	echo "genome index built; you may remove fasta files"
 else
 	echo "Index building failed; see error message"
 fi

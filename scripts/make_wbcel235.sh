@@ -1,8 +1,11 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the HG19 version of H. sapiens (human) from
-# UCSC.
+# Downloads sequence for the WBcel235 release 84 version of caenorhabditis elegans (worm) from
+# Ensembl.
+#
+# Note that Ensembl's build has three categories of compressed fasta
+# files:
 #
 # The base files, named ??.fa.gz
 #
@@ -12,8 +15,8 @@
 # variable below.
 #
 
-UCSC_HG19_BASE=http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips
-F=chromFa.tar.gz
+ENSEMBL_RELEASE=84
+ENSEMBL_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/caenorhabditis_elegans/dna
 
 get() {
 	file=$1
@@ -41,11 +44,14 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 fi
 
 rm -f genome.fa
-get ${UCSC_HG19_BASE}/$F || (echo "Error getting $F" && exit 1)
-tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
-rm $F
+F=Caenorhabditis_elegans.WBcel235.dna.toplevel.fa
+if [ ! -f $F ] ; then
+	get ${ENSEMBL_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
+	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
+	mv $F genome.fa
+fi
 
-CMD="${HISAT2_BUILD_EXE} genome.fa genome"
+CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa genome"
 echo Running $CMD
 if $CMD ; then
 	echo "genome index built; you may remove fasta files"

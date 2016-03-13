@@ -1811,24 +1811,24 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                 continue;
             }
         }
-        if(tParam.alts.empty()) {
-            KarkkainenBlockwiseSA<SString<char> > bsa(
-                                                      tParam.s,
-                                                      (index_t)(tParam.s.length()+1),
-                                                      1,
-                                                      tParam.dcv,
-                                                      tParam.seed,
-                                                      false,  /* this->_sanity */
-                                                      false,  /* this->_passMemExc */
-                                                      false); /* this->_verbose */
-            assert(bsa.suffixItrIsReset());
-            assert_eq(bsa.size(), tParam.s.length()+1);
-            tParam.sa.clear();
-            for(index_t i = 0; i < bsa.size(); i++) {
-                tParam.sa.push_back(bsa.nextSuffix());
-            }
-        } else {
-            while(true) {
+        while(true) {
+            if(tParam.alts.empty()) {
+                KarkkainenBlockwiseSA<SString<char> > bsa(
+                                                          tParam.s,
+                                                          (index_t)(tParam.s.length()+1),
+                                                          1,
+                                                          tParam.dcv,
+                                                          tParam.seed,
+                                                          false,  /* this->_sanity */
+                                                          false,  /* this->_passMemExc */
+                                                          false); /* this->_verbose */
+                assert(bsa.suffixItrIsReset());
+                assert_eq(bsa.size(), tParam.s.length()+1);
+                tParam.sa.clear();
+                for(index_t i = 0; i < bsa.size(); i++) {
+                    tParam.sa.push_back(bsa.nextSuffix());
+                }
+            } else {
                 tParam.rg = new RefGraph<index_t>(
                                                   tParam.s,
                                                   tParam.conv_local_szs,
@@ -1874,8 +1874,8 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                     }
                     continue;
                 }
-                break;
             }
+            break;
         }
         tParam.done = true;
         if(tParam.mainThread) break;
@@ -2242,7 +2242,7 @@ HGFM<index_t, local_index_t>::HGFM(
                             tParam.alts.back().right -= curr_sztot;
                         }
                     } else {
-                        assert(false);
+                        assert(alt.exon());
                     }
                 }
                 

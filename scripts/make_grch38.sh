@@ -1,10 +1,10 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the GRCh38 release 81 version of H. spiens (human) from
+# Downloads sequence for the GRCh38 release 84 version of H. sapiens (human) from
 # Ensembl.
 #
-# Note that Ensembl's GRCh81 build has three categories of compressed fasta
+# Note that Ensembl's GRCh38 build has three categories of compressed fasta
 # files:
 #
 # The base files, named ??.fa.gz
@@ -48,8 +48,7 @@ F=Homo_sapiens.GRCh38.dna.primary_assembly.fa
 if [ ! -f $F ] ; then
 	get ${ENSEMBL_GRCh38_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
 	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
-	awk '{if($1 ~ /^>/) {print $1} else {print}}' $F > genome.fa
-	rm $F
+	mv $F genome.fa
 fi
 
 CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa genome"

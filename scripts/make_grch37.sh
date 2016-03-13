@@ -1,7 +1,7 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the GRCh37 release 75 version of H. spiens (human) from
+# Downloads sequence for the GRCh37 release 75 version of H. sapiens (human) from
 # Ensembl.
 #
 # Note that Ensembl's GRCh37 build has three categories of compressed fasta
@@ -48,8 +48,7 @@ F=Homo_sapiens.GRCh37.${ENSEMBL_RELEASE}.dna.primary_assembly.fa
 if [ ! -f $F ] ; then
 	get ${ENSEMBL_GRCh37_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
 	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
-	awk '{if($1 ~ /^>/) {print $1} else {print}}' $F > genome.fa
-	rm $F
+	mv $F genome.fa
 fi
 
 CMD="${HISAT2_BUILD_EXE} genome.fa genome"

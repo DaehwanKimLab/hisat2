@@ -1,7 +1,7 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the HG38 version of H. spiens (human) from
+# Downloads sequence for the HG38 version of H. sapiens (human) from
 # UCSC.
 #
 # The base files, named ??.fa.gz
