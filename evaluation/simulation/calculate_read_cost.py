@@ -1126,7 +1126,7 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
-        # ["hisat", "", "", ""],        
+        ["hisat", "", "", ""],        
         # ["hisat2", "", "", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
@@ -1142,11 +1142,13 @@ def calculate_read_cost():
         # ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
-        # ["star", "", "", ""],
+        ["star", "", "", ""],
+        # ["star", "x2", "", ""],
         # ["star", "gtf", "", ""],
         # ["bowtie", "", "", ""],
         # ["bowtie2", "", "", ""],
         # ["gsnap", "", "", ""],
+        # ["bwa", "mem", "", ""]
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "tran", ""],
         # ["hisat2", "", "snp_tran", ""],
@@ -1361,10 +1363,15 @@ def calculate_read_cost():
                     if num_threads > 1:
                         cmd += ["--runThreadN", str(num_threads)]
                     cmd += ["--genomeDir"]
-                    if type == "gtf":
-                        cmd += ["%s/STAR%s/gtf" % (index_base, index_add)]
+                    if cmd_idx == 0:
+                        if type == "gtf":
+                            cmd += ["%s/STAR%s/gtf" % (index_base, index_add)]
+                        else:
+                            cmd += ["%s/STAR%s" % (index_base, index_add)]
                     else:
-                        cmd += ["%s/STAR%s" % (index_base, index_add)]
+                        assert cmd_idx == 1
+                        cmd += ["."]
+                        
                     if desktop:
                         cmd += ["--genomeLoad", "NoSharedMemory"]
                     else:
@@ -1433,8 +1440,8 @@ def calculate_read_cost():
                     cmd += [read1_fname]
                     if paired:
                         cmd += [read2_fname]
-                    else:
-                        assert False
+                else:
+                    assert False
 
                 return cmd
 
@@ -1551,7 +1558,7 @@ def calculate_read_cost():
                             if file in ["SJ.out.tab.Pass1.sjdb", "genome.fa"]:
                                 continue
                             os.remove(file)
-                        star_index_cmd = "STAR --genomeDir ./ --runMode genomeGenerate --genomeFastaFiles genome.fa --sjdbFileChrStartEnd SJ.out.tab.Pass1.sjdb --sjdbOverhang 99 --runThreadN %d" % (num_threads)
+                        star_index_cmd = "STAR --genomeDir ./ --runMode genomeGenerate --genomeFastaFiles ../../../data/%s.fa --sjdbFileChrStartEnd SJ.out.tab.Pass1.sjdb --sjdbOverhang 99 --runThreadN %d" % (genome, num_threads)
                         if verbose:
                             print >> sys.stderr, "\t", datetime.now(), star_index_cmd
                         os.system(star_index_cmd)
@@ -1621,9 +1628,10 @@ def calculate_read_cost():
                     print >> sys.stderr, "\t\tuniquely and correctly mapped: %d (%.2f%%)" % (unique_mapped, float(unique_mapped) * 100.0 / numreads)
                     if readtype == readtype2:
                         print >> sys.stderr, "\t\t\t%d reads per sec (all)" % (numreads / max(1.0, duration))
-                    print >> sys.stderr, "\t\tjunc. sensitivity %d / %d (%.2f%%), junc. accuracy: %d / %d (%.2f%%)" % \
-                        (temp_gtf_junctions, len(junctions), float(temp_gtf_junctions) * 100.0 / max(1, len(junctions)), \
-                             temp_gtf_junctions, temp_junctions, float(temp_gtf_junctions) * 100.0 / max(1, temp_junctions))
+                    if RNA:
+                        print >> sys.stderr, "\t\tjunc. sensitivity %d / %d (%.2f%%), junc. accuracy: %d / %d (%.2f%%)" % \
+                            (temp_gtf_junctions, len(junctions), float(temp_gtf_junctions) * 100.0 / max(1, len(junctions)), \
+                                 temp_gtf_junctions, temp_junctions, float(temp_gtf_junctions) * 100.0 / max(1, temp_junctions))
 
                     if duration > 0.0:
                         if sql_write and os.path.exists("../" + sql_db_name):

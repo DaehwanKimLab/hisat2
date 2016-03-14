@@ -4525,14 +4525,15 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
                                   prm);         // per-read metrics
         assert_neq(wr.toff, (local_index_t)INDEX_MAX);
         bool straddled2 = false;
-        gfm.joinedToTextOff(
-                            wr.elt.len,
-                            wr.toff,
-                            tidx,
-                            toff,
-                            tlen,
-                            rejectStraddle,        // reject straddlers?
-                            straddled2);  // straddled?
+        bool result = gfm.joinedToTextOff(
+                                          wr.elt.len,
+                                          wr.toff,
+                                          tidx,
+                                          toff,
+                                          tlen,
+                                          rejectStraddle,        // reject straddlers?
+                                          straddled2);  // straddled?
+        if(!result) continue;
         
         straddled |= straddled2;
         

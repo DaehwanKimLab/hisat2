@@ -2418,7 +2418,7 @@ public:
 	void checkOrigs(const EList<SString<char> >& os, bool mirror) const;
 
 	// Searching and reporting
-	void joinedToTextOff(index_t qlen, index_t off, index_t& tidx, index_t& textoff, index_t& tlen, bool rejectStraddle, bool& straddled) const;
+	bool joinedToTextOff(index_t qlen, index_t off, index_t& tidx, index_t& textoff, index_t& tlen, bool rejectStraddle, bool& straddled) const;
     bool textOffToJoined(index_t tid, index_t tlen, index_t& off) const;
 
 #define WITHIN_BWT_LEN(x) \
@@ -4965,14 +4965,14 @@ inline bool is_fread_err(FILE* file_hd, size_t ret, size_t count) {
  * sorted list of reference fragment ranges t
  */
 template <typename index_t>
-void GFM<index_t>::joinedToTextOff(
-									index_t qlen,
-									index_t off,
-									index_t& tidx,
-									index_t& textoff,
-									index_t& tlen,
-									bool rejectStraddle,
-									bool& straddled) const
+bool GFM<index_t>::joinedToTextOff(
+                                   index_t qlen,
+                                   index_t off,
+                                   index_t& tidx,
+                                   index_t& textoff,
+                                   index_t& tlen,
+                                   bool rejectStraddle,
+                                   bool& straddled) const
 {
 	assert(rstarts() != NULL); // must have loaded rstarts
 	index_t top = 0;
@@ -4980,9 +4980,12 @@ void GFM<index_t>::joinedToTextOff(
 	index_t elt = (index_t)INDEX_MAX;
 	// Begin binary search
 	while(true) {
-		ASSERT_ONLY(index_t oldelt = elt);
+		index_t oldelt = elt;
 		elt = top + ((bot - top) >> 1);
-		assert_neq(oldelt, elt); // must have made progress
+        if(oldelt == elt) {
+            tidx = (index_t)INDEX_MAX;
+            return false;
+        }
 		index_t lower = rstarts()[elt*3];
 		index_t upper;
 		if(elt == _nFrag-1) {
@@ -5000,7 +5003,7 @@ void GFM<index_t>::joinedToTextOff(
 					if(rejectStraddle) {
 						// it falls off; signal no-go and return
 						tidx = (index_t)INDEX_MAX;
-						return;
+						return false;
 					}
 				}
 				// This is the correct text idx whether the index is
@@ -5034,6 +5037,7 @@ void GFM<index_t>::joinedToTextOff(
 		// continue with binary search
 	}
 	tlen = this->plen()[tidx];
+    return true;
 }
 
 template <typename index_t>

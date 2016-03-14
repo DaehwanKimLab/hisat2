@@ -77,7 +77,7 @@ static inline index_t endianSwapIndex(index_t u) {
 	if(sizeof(index_t) == 8) {
 		return (index_t)endianSwapU64(u);
 	} else if(sizeof(index_t) == 4) {
-		return endianSwapU32(u);
+		return endianSwapU32((uint32_t)u);
 	} else {
 		return endianSwapU16(u);
 	}
