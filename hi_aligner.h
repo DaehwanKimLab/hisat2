@@ -2414,7 +2414,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         for(int rf_i = (int)rflen - 1; rf_i >= 0 && mm_min_rd_i >= 0; rf_i--, mm_min_rd_i--) {
             int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[mm_min_rd_i];
-            if(rf_bp != rd_bp) {
+            if(rf_bp != rd_bp || rd_bp == 4) {
                 if(tmp_mm == 0) {
                     min_rd_i = mm_min_rd_i;
                 }
@@ -2657,7 +2657,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         for(index_t rf_i = 0; rf_i < rflen && mm_max_rd_i < rdlen; rf_i++, mm_max_rd_i++) {
             int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[rdoff + mm_max_rd_i];
-            if(rf_bp != rd_bp) {
+            if(rf_bp != rd_bp || rd_bp == 4) {
                 if(tmp_mm == 0) {
                     max_rd_i = mm_max_rd_i;
                 }

@@ -7,7 +7,7 @@ import string
 import re
 from datetime import datetime, date, time
 
-MAX_EDIT = 51
+MAX_EDIT = 21
 
 """
 """
@@ -797,23 +797,23 @@ def calculate_read_cost():
         is_large_file = True
 
     aligners = [
-        # ["hisat", "", "", ""],
-        # ["hisat2", "", "", ""],
+        ["hisat", "", "", ""],
+        ["hisat2", "", "", ""],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "tran", ""],
-        ["hisat2", "x1", "snp", ""],
-        ["bwa", "mem", "", ""],
-        # ["bwa", "sw", "", ""],
-        # ["hisat", "", "", ""],
-        # ["star", "", "", ""],
-        # ["star", "x2", "", ""],
-        # ["tophat2", "", "", ""],
-        # ["bowtie", "", "", ""],
-        # ["bowtie2", "", "", ""],
+        # ["hisat2", "x1", "snp", ""],
         # ["hisat2", "x1", "", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "", "tran", ""],
-        # ["hisat2", "", "snp_tran", ""],
+        ["hisat2", "", "snp_tran", ""],
+        # ["hisat", "", "", ""],
+        # ["tophat2", "", "", ""],
+        # ["bowtie", "", "", ""],
+        # ["bowtie2", "", "", ""],
+        # ["bwa", "mem", "", ""],
+        # ["bwa", "sw", "", ""],
+        ["star", "", "", ""],
+        # ["star", "x2", "", ""],        
         ]
 
     # sql_write = False
@@ -835,8 +835,8 @@ def calculate_read_cost():
 
     print >> sys.stderr, "aligner\tuse_annotation\tend_type\tedit_distance\tmapped_reads\tjunction_reads\tgtf_junction_reads\tjunctions\tgtf_junctions\truntime"
     
-    # for paired in [False, True]:
-    for paired in [True]:
+    for paired in [False, True]:
+    # for paired in [True]:
         type_read1_fname = "1.fq"
         if paired:
             type_read2_fname = "2.fq"

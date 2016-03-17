@@ -703,6 +703,7 @@ void StackedAln::init(
 		} else if(ed[i].isSpliced()) {
             stackRef_.push_back('N');
 			stackRel_.push_back('N');
+            stackSNP_.push_back(false);
 			stackRead_.push_back('N');
             assert_gt(ed[i].splLen, 0);
             stackSkip_.push_back(ed[i].splLen);

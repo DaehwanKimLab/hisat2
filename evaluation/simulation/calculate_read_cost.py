@@ -1138,7 +1138,7 @@ def calculate_read_cost():
         # ["hisat2", "", "snp", "201b"],
         ["hisat2", "", "snp", ""],
         # ["hisat2", "x1", "snp_tran", "201b"],
-        # ["hisat2", "x1", "snp_tran", ""],
+        ["hisat2", "x1", "snp_tran", ""],
         # ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],

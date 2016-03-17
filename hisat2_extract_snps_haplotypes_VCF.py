@@ -168,6 +168,20 @@ def generate_haplotypes(snp_file,
         v += 1
     vars = tmp_vars
 
+    # Write SNPs into a file (.snp)
+    for var in vars:
+        chr, pos, type, data, var_dic = var
+        varID = var_dic["id2"]
+        if type == 'S':
+            type = "single"
+        elif type == 'D':
+            type = "deletion"
+        else:
+            assert type == 'I'
+            type = "insertion"
+        print >> snp_file, "%s\t%s\t%s\t%s\t%s" % \
+            (varID, type, chr, pos, data)
+
     # variant compatibility
     vars_cmpt = [-1 for i in range(len(vars))]
     for v in range(len(vars)):
@@ -185,13 +199,82 @@ def generate_haplotypes(snp_file,
             vars_cmpt[v2] = v
 
     # Assign genotypes for those missing genotypes
-    max_genotype_num = 1
     genotypes_list = []
-    for v in range(len(vars)):
-        var = vars[v]
-        var_dic = var[4]
-        if "genotype" not in var_dic:
-            used = [True, True] + [False for i in range(8)]
+    if num_genomes > 0:
+        max_genotype_num = 1
+        for v in range(len(vars)):
+            var = vars[v]
+            var_dic = var[4]
+            if "genotype" not in var_dic:
+                used = [True, True] + [False for i in range(8)]
+                if vars_cmpt[v] >= 0:
+                    v2 = v - 1
+                    while v2 >= vars_cmpt[v]:
+                        var2 = vars[v2]
+                        if not compatible_vars(var2, var):
+                            var2_dic = var2[4]
+                            assert "genotype" in var2_dic
+                            genotype_num = int(var2_dic["genotype"][0])
+                            used[genotype_num] = True
+                        v2 -= 1
+
+                assert False in used
+                for i in range(len(used)):
+                    if not used[i]:                
+                        var_dic["genotype"] = ("%d" % i) * (num_genomes * 2)
+                        if i > max_genotype_num:
+                            max_genotype_num = i
+                        break
+            genotypes_list.append(var_dic["genotype"])
+            
+        num_chromosomes = len(genotypes_list[0])
+        # daehwan - for debugging purposes
+        """
+        for v in range(len(vars)):
+            var = vars[v]
+            var_chr, var_pos, var_type, var_data, var_dic = var
+            print v, var_chr, var_pos, var_type, var_data, var_dic["id"], var_dic["id2"],
+            if "CLNSIG" in var_dic:
+                print "CLNSIG:", var_dic["CLNSIG"],
+            if "genotype" in var_dic:
+                print var_dic["genotype"][:50],
+            print
+        """
+
+        # genotypes_list looks like
+        #    Var0: 000001000
+        #    Var1: 010000000
+        #    Var2: 001100000
+        #    Var3: 222222222
+        # Get haplotypes from genotypes_list
+        haplotypes = set()
+        cnv_genotypes = ["" for i in range(num_chromosomes)]
+        for genotypes in genotypes_list:
+            for i in range(len(genotypes)):
+                genotype = genotypes[i]
+                cnv_genotypes[i] += genotype
+
+        cnv_genotypes = set(cnv_genotypes)
+        for raw_haplotype in cnv_genotypes:
+            for num in range(1, max_genotype_num + 1):
+                num_str = str(num)
+                if num_str not in raw_haplotype:
+                    continue
+                haplotype = ""
+                for i in range(len(raw_haplotype)):
+                    if raw_haplotype[i] == num_str:
+                        if haplotype == "":
+                            haplotype = str(i)
+                        else:
+                            haplotype += ("#%d" % i)                    
+                assert haplotype != ""            
+                haplotypes.add(haplotype)
+
+    else:
+        for v in range(len(vars)):
+            var = vars[v]
+            var_dic = var[4]
+            used = [False for i in range(100)]
             if vars_cmpt[v] >= 0:
                 v2 = v - 1
                 while v2 >= vars_cmpt[v]:
@@ -199,76 +282,33 @@ def generate_haplotypes(snp_file,
                     if not compatible_vars(var2, var):
                         var2_dic = var2[4]
                         assert "genotype" in var2_dic
-                        genotype_num = int(var2_dic["genotype"][0])
+                        genotype_num = var2_dic["genotype"]
                         used[genotype_num] = True
                     v2 -= 1
 
             assert False in used
             for i in range(len(used)):
                 if not used[i]:                
-                    var_dic["genotype"] = ("%d" % i) * (num_genomes * 2)
-                    if i > max_genotype_num:
-                        max_genotype_num = i
+                    var_dic["genotype"] = i
                     break
-        genotypes_list.append(var_dic["genotype"])
+            genotypes_list.append(var_dic["genotype"])
+            
+        # genotypes_list looks like
+        #    Var0: 0
+        #    Var1: 0
+        #    Var2: 1
+        #    Var3: 2
+        # Get haplotypes from genotypes_list
+        max_genotype_num = max(genotypes_list)
+        haplotypes = ["" for i in range(max_genotype_num + 1)]
+        for i in range(len(genotypes_list)):
+            num = genotypes_list[i]
+            if haplotypes[num] == "":
+                haplotypes[num] = str(i)
+            else:
+                haplotypes[num] += ("#%d" % i)
+        haplotypes = set(haplotypes)
 
-    # daehwan - for debugging purposes
-    """
-    for v in range(len(vars)):
-        var = vars[v]
-        var_chr, var_pos, var_type, var_data, var_dic = var
-        print v, var_chr, var_pos, var_type, var_data, var_dic["id"], var_dic["id2"],
-        if "CLNSIG" in var_dic:
-            print "CLNSIG:", var_dic["CLNSIG"],
-        if "genotype" in var_dic:
-            print var_dic["genotype"][:50],
-        print
-    """
-
-    num_chromosomes = len(genotypes_list[0])
-
-    # Write SNPs into a file (.snp)
-    for var in vars:
-        chr, pos, type, data, var_dic = var
-        varID = var_dic["id2"]
-        if type == 'S':
-            type = "single"
-        elif type == 'D':
-            type = "deletion"
-        else:
-            assert type == 'I'
-            type = "insertion"
-        print >> snp_file, "%s\t%s\t%s\t%s\t%s" % \
-            (varID, type, chr, pos, data)
-
-    # genotypes_list looks like
-    #    Var0: 000001000
-    #    Var1: 010000000
-    #    Var2: 001100000
-    #    Var3: 222222222
-    # Get haplotypes from genotypes_list
-    haplotypes = set()
-    cnv_genotypes = ["" for i in range(num_chromosomes)]
-    for genotypes in genotypes_list:
-        for i in range(len(genotypes)):
-            genotype = genotypes[i]
-            cnv_genotypes[i] += genotype
-
-    cnv_genotypes = set(cnv_genotypes)
-    for raw_haplotype in cnv_genotypes:
-        for num in range(1, max_genotype_num + 1):
-            num_str = str(num)
-            if num_str not in raw_haplotype:
-                continue
-            haplotype = ""
-            for i in range(len(raw_haplotype)):
-                if raw_haplotype[i] == num_str:
-                    if haplotype == "":
-                        haplotype = str(i)
-                    else:
-                        haplotype += ("#%d" % i)                    
-            assert haplotype != ""            
-            haplotypes.add(haplotype)
     # haplotypes look like
     #    '8#10#12#23', '8#12#23', '5#8#12#23#30'
 
@@ -538,7 +578,7 @@ def main(genome_file,
         genomeIDs = []
         vars, genotypes_list = [], []
         curr_right = -1
-        prev_varID, prev_pos = "", -1
+        prev_varID, prev_chr, prev_pos = "", "", -1
         num_lines = 0
         for line in vcf_proc.stdout:
             num_lines += 1
@@ -546,9 +586,13 @@ def main(genome_file,
                 continue
 
             fields = line.strip().split()
-            chr, pos, varID, ref_allele, alt_alleles, qual, filter, info, format = fields[:9]
-            
-            genotypes = fields[9:]
+            chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = fields[:8]
+
+            if len(fields) >= 9:
+                format = fields[8]
+            genotypes = []
+            if len(fields) >= 10:
+                genotypes = fields[9:]
 
             if line.startswith("#"):
                 genomeIDs = genotypes
@@ -565,7 +609,8 @@ def main(genome_file,
                 continue
 
             if chr not in chr_dic:
-                break
+                continue
+            
             chr_seq = chr_dic[chr]
 
             pos = int(pos) - 1
@@ -573,7 +618,7 @@ def main(genome_file,
             gene = None
             if num_lines % 10000 == 1:
                 print >> sys.stderr, "\t%s:%d\r" % (chr, pos),
-            
+
             if chr_genotype_ranges:
                 skip = True
                 for gene_, range_ in chr_genotype_ranges.items():
@@ -625,7 +670,8 @@ def main(genome_file,
                             cnv_genotypes.append('0')
 
                     # Skip SNPs not present in a given population (e.g. 2,504 genomes in 1000 Genomes Project)
-                    if '1' not in cnv_genotypes:
+                    if cnv_genotypes != [] and \
+                            '1' not in cnv_genotypes:
                         continue
 
                     tmp_varID = var[4]["id2"]
@@ -642,7 +688,8 @@ def main(genome_file,
                 return max_right
 
 
-            if curr_right + inter_gap < pos and len(vars) > 0:
+            if len(vars) > 0 and \
+                    (curr_right + inter_gap < pos or prev_chr != chr):                    
                 num_haplotypes = generate_haplotypes(SNP_file,
                                                      haplotype_file,
                                                      vars,
@@ -662,6 +709,7 @@ def main(genome_file,
                 curr_right = right
 
             prev_varID = varID
+            prev_chr = chr
             prev_pos = pos
 
         if len(vars) > 0:
@@ -692,7 +740,7 @@ if __name__ == '__main__':
     parser.add_argument('VCF_fnames',
                         nargs='?',
                         type=str,
-                        help='A comma-seperated VCF files')
+                        help='A comma-seperated VCF files (gz is also accepted)')
     parser.add_argument("base_fname",
                         nargs='?',
                         type=str,
