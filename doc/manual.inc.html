@@ -1086,7 +1086,17 @@ Otherwise, you will be able to build an index on your desktop with 8GB RAM.</cod
 
 <p>Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).</p>
 <p>SNP ID <code>&lt;tab&gt;</code> chromosome name <code>&lt;tab&gt;</code> snp type (single, deletion, or insertion) <code>&lt;tab&gt;</code> zero-offset based genomic position of a SNP <code>&lt;tab&gt;</code> alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)</p>
-<p>Use <code>hisat2_extract_snps.py</code> (in the HISAT2 package) to extract SNPs from a dbSNP file (e.g. snpCommon.txt).</p>
+<p>For example, rs58784443 single 13 18447947 T</p>
+<p>Use <code>hisat2_extract_snps_haplotypes_UCSC.py</code> (in the HISAT2 package) to extract SNPs and haplotypes from a dbSNP file (e.g. http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/snp144Common.txt.gz). or <code>hisat2_extract_snps_haplotypes_VCF.py</code> to extract SNPs and haplotypes from a VCF file (e.g. ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/ALL.chr22.phase3_shapeit2_mvncall_integrated_v3plus_nounphased.rsID.genotypes.GRCh38_dbSNP_no_SVs.vcf.gz).</p>
+</td></tr><tr><td>
+
+<pre><code>--haplotype &lt;path&gt;</code></pre>
+</td><td>
+
+<p>Provide a list of haplotypes (in the HISAT2's own format) as follows (five columns).</p>
+<p>Haplotype ID <code>&lt;tab&gt;</code> chromosome name <code>&lt;tab&gt;</code> zero-offset based left coordinate of haplotype <code>&lt;tab&gt;</code> zero-offset based right coordinate of haplotype <code>&lt;tab&gt;</code> a comma separated list of SNP ids in the haplotype</p>
+<p>For example, ht35 13 18446877 18446945 rs12381094,rs12381056,rs192016659,rs538569910</p>
+<p>See the above option, --snp, about how to extract haplotypes. This option is not required, but haplotype information can keep the index construction from exploding and reduce the index size substantially.</p>
 </td></tr><tr><td>
 
 <pre><code>--ss &lt;path&gt;</code></pre>

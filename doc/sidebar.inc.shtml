@@ -35,7 +35,7 @@
 <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
-   <table width="100%"><tbody><tr><td>version 2.0.2-beta</td> <td align="right">3/XX/2016</td></tr>
+   <table width="100%"><tbody><tr><td>version 2.0.2-beta</td> <td align="right">3/17/2016</td></tr>
        <tr>
 	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.2-beta-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
        </tr>
@@ -205,7 +205,123 @@
 	  <b>3.5 GB</b>
         </td>
       </tr>
-
+      <tr>
+	<td colspan="2">
+          <i>R. norvegicus</i>, UCSC rn6
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/rn6.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>3.7 GB</b>
+        </td>
+      </tr>
+      <tr>
+      <td colspan="2">
+         <i>D. melanogaster</i>, Ensembl BDGP6
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/bdgp6.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.2 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/bdgp6_tran.tar.gz"><i>genome_tran</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.2 GB</b>
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2">
+          <i>D. melanogaster</i>, UCSC dm6
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/dm6.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.2 GB</b>
+        </td>
+      </tr>
+      
+      <tr>
+      <td colspan="2">
+         <i>C. elegans</i>, Ensembl WBcel235
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/wbcel235.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.1 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/wbcel235_tran.tar.gz"><i>genome_tran</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.1 GB</b>
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2">
+          <i>C. elegans</i>, UCSC ce10
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/ce10.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.1 GB</b>
+        </td>
+      </tr>
+      
+      <tr>
+      <td colspan="2">
+         <i>S. cerevisiae</i>, Ensembl R64-1-1
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.01 GB</b>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64_tran.tar.gz"><i>genome_tran</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.01 GB</b>
+        </td>
+      </tr>
+      <tr>
+	<td colspan="2">
+          <i>S. cerevisiae</i>, UCSC sacCer3
+        </td>
+      </tr>      
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/sc3.tar.gz"><i>genome</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>0.01 GB</b>
+        </td>
+      </tr>
       <tr>
 	<td colspan="2" style="font-size: x-small">
 	  <br/>
