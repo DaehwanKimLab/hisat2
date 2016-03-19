@@ -120,12 +120,23 @@ SpliceSiteDB::SpliceSiteDB(
                            bool write,
                            bool read) :
 _numRefs(refs.numRefs()),
-_refnames(refnames),
 _write(write),
 _read(read),
 _threadSafe(threadSafe),
 _empty(true)
 {
+    for(size_t r = 0; r < refnames.size(); r++) {
+        const string& refname = refnames[r];
+        _refnames.expand();
+        size_t i = 0;
+        for(; i < refname.size(); i++) {
+            if(isspace(refname[i])) {
+                break;
+            }
+        }
+         _refnames.back() = refname.substr(0, i);
+    }
+    
     assert_gt(_numRefs, 0);
     assert_eq(_numRefs, _refnames.size());
     for(uint64_t i = 0; i < _numRefs; i++) {
