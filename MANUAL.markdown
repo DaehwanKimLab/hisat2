@@ -166,7 +166,7 @@ possible in terms of alignment score.
 HISAT2 searches for up to N distinct, primary alignments for
 each read, where N equals the integer specified with the `-k` parameter.
 Primary alignments mean alignments whose alignment score is equal or higher than any other alignments.
-It is possible that multiple distinct alignments whave the same score.
+It is possible that multiple distinct alignments have the same score.
 That is, if `-k 2` is specified, HISAT2 will search for at most 2 distinct
 alignments. The alignment score for a paired-end alignment equals the sum of the
 alignment scores of the individual mates.  Each reported read or pair alignment

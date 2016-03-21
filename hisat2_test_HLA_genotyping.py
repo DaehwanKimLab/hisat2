@@ -73,7 +73,7 @@ def test_HLA_genotyping(reference_type,
         left = 0
         HLA_genes = set()
         for line in open("hla.ref"):
-            HLA_name, chr, left, _ = line.strip().split()
+            HLA_name, chr, left, _, exon_str = line.strip().split()
             HLA_gene = HLA_name.split('*')[0]
             HLA_genes.add(HLA_gene)
             left = int(left)
@@ -108,7 +108,7 @@ def test_HLA_genotyping(reference_type,
             extract_cmd += ["--partial"]
         extract_cmd += ["--gap", "30",
                         "--split", "50"]
-                       
+
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):
@@ -170,12 +170,16 @@ def test_HLA_genotyping(reference_type,
     # Read HLA alleles (names and sequences)
     refHLAs, refHLA_loci = {}, {}
     for line in open("hla.ref"):
-        HLA_name, chr, left, right = line.strip().split()
+        HLA_name, chr, left, right, exon_str = line.strip().split()
         HLA_gene = HLA_name.split('*')[0]
         assert not HLA_gene in refHLAs
         refHLAs[HLA_gene] = HLA_name
         left, right = int(left), int(right)
-        refHLA_loci[HLA_gene] = [HLA_name, chr, left, right]
+        exons = []
+        for exon in exon_str.split(','):
+            exon_left, exon_right = exon.split('-')
+            exons.append([int(exon_left), int(exon_right)])
+        refHLA_loci[HLA_gene] = [HLA_name, chr, left, right, exons]
     HLAs = {}
     def read_HLA_alleles(fname, HLAs):
         for line in open(fname):
@@ -205,7 +209,7 @@ def test_HLA_genotyping(reference_type,
         if reference_type != "gene":
             allele, dist = None, 0
             for tmp_gene, values in refHLA_loci.items():
-                allele_name, chr, left, right = values
+                allele_name, chr, left, right, exons = values
                 if allele == None:
                     allele = allele_name
                     dist = abs(pos - left)
@@ -223,7 +227,7 @@ def test_HLA_genotyping(reference_type,
         assert not var_id in Vars[gene]
         left = 0
         if reference_type != "gene":
-            _, _, left, _ = refHLA_loci[gene]
+            _, _, left, _, _ = refHLA_loci[gene]
         Vars[gene][var_id] = [var_type, pos - left, data]
         Var_list[gene].append([pos - left, var_id])
         
@@ -432,6 +436,7 @@ def test_HLA_genotyping(reference_type,
                     gene = test_HLA_names
                 ref_allele = refHLAs[gene]
                 ref_seq = HLAs[gene][ref_allele]
+                ref_exons = refHLA_loci[gene][-1]
 
                 # Read alignments
                 alignview_cmd = ["samtools",
@@ -448,7 +453,7 @@ def test_HLA_genotyping(reference_type,
                         alignview_cmd += ["%s" % ref_allele]
                     else:
                         assert reference_type in ["chromosome", "genome"]
-                        _, chr, left, right = refHLA_loci[gene]
+                        _, chr, left, right, _ = refHLA_loci[gene]
                         base_locus = left
                         alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
 
@@ -471,6 +476,7 @@ def test_HLA_genotyping(reference_type,
                 coverage = [0 for i in range(len(ref_seq) + 1)]
                 num_reads, total_read_len = 0, 0
                 prev_read_id = None
+                prev_exon = False
                 if index_type == "graph":
                     # Cigar regular expression
                     cigar_re = re.compile('\d+\w')
@@ -587,10 +593,19 @@ def test_HLA_genotyping(reference_type,
                             if cigar_op in "MIS":
                                 read_pos += length
 
+                        exon = False
+                        for exon in ref_exons:
+                            exon_left, exon_right = exon
+                            if right_pos <= exon_left or pos > exon_right:
+                                continue
+                            else:
+                                exon = True
+                                break
+
                         if right_pos > len(ref_seq):
                             continue
 
-                        def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read):
+                        def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, exon = True):
                             max_count = max(HLA_count_per_read.values())
                             cur_cmpt = set()
                             for allele, count in HLA_count_per_read.items():
@@ -629,14 +644,17 @@ def test_HLA_genotyping(reference_type,
 
                             cur_cmpt = sorted(list(cur_cmpt))
                             cur_cmpt = '-'.join(cur_cmpt)
+                            add = 1
+                            if not exon:
+                                add *= 0.2
                             if not cur_cmpt in HLA_cmpt:
-                                HLA_cmpt[cur_cmpt] = 1
+                                HLA_cmpt[cur_cmpt] = add
                             else:
-                                HLA_cmpt[cur_cmpt] += 1
+                                HLA_cmpt[cur_cmpt] += add
 
                         if read_id != prev_read_id:
                             if prev_read_id != None:
-                                add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
+                                add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, prev_exon)
                                 
                             HLA_count_per_read = {}
                             for HLA_name in HLA_names[gene]:
@@ -827,6 +845,7 @@ def test_HLA_genotyping(reference_type,
                             assert False            
 
                         prev_read_id = read_id
+                        prev_exon = exon
 
                     if num_reads <= 0:
                         continue
@@ -835,6 +854,7 @@ def test_HLA_genotyping(reference_type,
                         add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
 
                     # Coverage
+                    # it is not used by the default
                     if enable_coverage:
                         assert num_reads > 0
                         read_len = int(total_read_len / float(num_reads))
@@ -1026,8 +1046,8 @@ def test_HLA_genotyping(reference_type,
                     prob = HLA_prob[prob_i]
                     found = False
                     if simulation:
-                        for test_i in range(len(test_HLA_names)):
-                            test_HLA_name = test_HLA_names[test_i]
+                        for name_i in range(len(test_HLA_names)):
+                            test_HLA_name = test_HLA_names[name_i]
                             if prob[0] == test_HLA_name:
                                 rank_i = prob_i
                                 while rank_i > 0:
@@ -1038,7 +1058,7 @@ def test_HLA_genotyping(reference_type,
                                 print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (rank_i + 1, test_HLA_name, prob[1] * 100.0)
                                 if rank_i < len(success):
                                     success[rank_i] = True
-                                found_list[test_i] = True
+                                found_list[name_i] = True
                                 found = True                        
                         if not False in found_list:
                             break
@@ -1166,6 +1186,8 @@ def test_HLA_genotyping(reference_type,
                         test_passed[aligner_type] = 1
                     else:
                         test_passed[aligner_type] += 1
+
+                print >> sys.stderr, "\t\tPassed so far: %d/%d (abundance: %.2f%%)" % (test_passed[aligner_type], test_i + 1, (test_passed[aligner_type] * 100.0 / (test_i + 1)))
 
 
     if simulation:

@@ -25,6 +25,23 @@ import inspect
 from argparse import ArgumentParser, FileType
 
 
+
+"""
+Mapping from base pair to a location in MSF format
+"""
+def create_map(seq):
+    seq_map = {}
+    count = 0
+    for i in range(len(seq)):
+        bp = seq[i]
+        if bp == '.':
+            continue
+        assert bp in "ACGT"
+        seq_map[count] = i
+        count += 1
+    return seq_map
+
+
 """
 """
 def extract_HLA_vars(base_fname,
@@ -212,19 +229,6 @@ def extract_HLA_vars(base_fname,
                 print >> sys.stderr, "Warning: %s does not exist" % HLA_partial_MSA_fname
                 continue
             HLA_partial_names, HLA_partial_seqs = read_MSF_file(HLA_partial_MSA_fname)
-            # Mapping from base pair to a location in MSF format
-            def create_map(seq):
-                seq_map = {}
-                count = 0
-                for i in range(len(seq)):
-                    bp = seq[i]
-                    if bp == '.':
-                        continue
-                    assert bp in "ACGT"
-                    seq_map[count] = i
-                    count += 1
-                return seq_map
-            
             ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
             ref_seq_map = create_map(ref_seq)
             ref_partial_seq = HLA_partial_seqs[HLA_partial_names[HLA_ref_gene]]
@@ -457,7 +461,18 @@ def extract_HLA_vars(base_fname,
         if reference_type == "gene":
             base_locus = 0
             backbone_seq_ = backbone_seq.replace('.', '')
-            print >> hla_ref_file, "%s\t6\t0\t%d" % (backbone_name, len(backbone_seq_) - 1)
+
+            ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
+            ref_seq_map = create_map(ref_seq)
+            exons = HLA_gene_exons[HLA_gene]
+            exon_str = ""
+            for exon in exons:
+                left, right = exon
+                if exon_str != "":
+                    exon_str += ','
+                exon_str += ("%d-%d" % (ref_seq_map[left], ref_seq_map[right]))
+                
+            print >> hla_ref_file, "%s\t6\t0\t%d\t%s" % (backbone_name, len(backbone_seq_) - 1, exon_str)
         else:
             hisat2 = os.path.join(ex_path, "hisat2")
             aligner_cmd = [hisat2,
@@ -496,7 +511,14 @@ def extract_HLA_vars(base_fname,
                 break            
             align_proc.communicate()
             assert left < right
-            print >> hla_ref_file, "%s\t6\t%d\t%d" % (backbone_name, left, right)
+            exons = HLA_gene_exons[HLA_gene]
+            exon_str = ""
+            for exon in exons:
+                if exon_str != "":
+                    exon_str += ','
+                exon_str += ("%d-%d" % (left + exon[0], left + exon[1]))
+
+            print >> hla_ref_file, "%s\t6\t%d\t%d\t%s" % (backbone_name, left, right, exon_str)
             base_locus = left
 
         # Write
