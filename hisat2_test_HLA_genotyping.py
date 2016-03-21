@@ -197,9 +197,17 @@ def test_HLA_genotyping(reference_type,
         read_HLA_alleles("hla_backbone.fa", HLAs)
     read_HLA_alleles("hla_sequences.fa", HLAs)
 
+    # HLA gene alleles
     HLA_names = {}
     for HLA_gene, data in HLAs.items():
         HLA_names[HLA_gene] = list(data.keys())
+
+    # HLA gene allele lengths
+    HLA_lengths = {}
+    for HLA_gene, HLA_alleles in HLAs.items():
+        HLA_lengths[HLA_gene] = {}
+        for allele_name, seq in HLA_alleles.items():
+            HLA_lengths[HLA_gene][allele_name] = len(seq)
 
     # Read HLA variants, and link information
     Vars, Var_list = {}, {}
@@ -982,6 +990,15 @@ def test_HLA_genotyping(reference_type,
                     for allele, mass in prob.items():
                         prob[allele] = mass / total
 
+                def normalize2(prob, length):
+                    total = 0
+                    for allele, mass in prob.items():
+                        assert allele in length
+                        total += (mass / length[allele])
+                    for allele, mass in prob.items():
+                        assert allele in length
+                        prob[allele] = mass / length[allele] / total
+
                 def prob_diff(prob1, prob2):
                     diff = 0.0
                     for allele in prob1.keys():
@@ -1011,8 +1028,10 @@ def test_HLA_genotyping(reference_type,
                             HLA_prob[allele] = 0.0
                         HLA_prob[allele] += (float(count) / len(alleles))
 
-                normalize(HLA_prob)
-                def next_prob(HLA_cmpt, HLA_prob):
+                assert gene in HLA_lengths
+                HLA_length = HLA_lengths[gene]
+                normalize2(HLA_prob, HLA_length)
+                def next_prob(HLA_cmpt, HLA_prob, HLA_length):
                     HLA_prob_next = {}
                     for cmpt, count in HLA_cmpt.items():
                         alleles = cmpt.split('-')
@@ -1024,19 +1043,15 @@ def test_HLA_genotyping(reference_type,
                             if allele not in HLA_prob_next:
                                 HLA_prob_next[allele] = 0.0
                             HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
-                    normalize(HLA_prob_next)
+                    normalize2(HLA_prob_next, HLA_length)
                     return HLA_prob_next
 
                 diff, iter = 1.0, 0
                 while diff > 0.0001 and iter < 1000:
-                    HLA_prob_next = next_prob(HLA_cmpt, HLA_prob)
+                    HLA_prob_next = next_prob(HLA_cmpt, HLA_prob, HLA_length)
                     diff = prob_diff(HLA_prob, HLA_prob_next)
                     HLA_prob = HLA_prob_next
                     iter += 1
-                for allele, prob in HLA_prob.items():
-                    allele_len = len(HLAs[gene][allele])
-                    HLA_prob[allele] /= float(allele_len)
-                normalize(HLA_prob)
                 HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
 
                 HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
