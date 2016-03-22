@@ -653,7 +653,7 @@ def test_HLA_genotyping(reference_type,
                             cur_cmpt = sorted(list(cur_cmpt))
                             cur_cmpt = '-'.join(cur_cmpt)
                             add = 1
-                            if not exon:
+                            if partial and not exon:
                                 add *= 0.2
                             if not cur_cmpt in HLA_cmpt:
                                 HLA_cmpt[cur_cmpt] = add
@@ -1030,7 +1030,8 @@ def test_HLA_genotyping(reference_type,
 
                 assert gene in HLA_lengths
                 HLA_length = HLA_lengths[gene]
-                normalize2(HLA_prob, HLA_length)
+                # normalize2(HLA_prob, HLA_length)
+                normalize(HLA_prob)
                 def next_prob(HLA_cmpt, HLA_prob, HLA_length):
                     HLA_prob_next = {}
                     for cmpt, count in HLA_cmpt.items():
@@ -1043,7 +1044,8 @@ def test_HLA_genotyping(reference_type,
                             if allele not in HLA_prob_next:
                                 HLA_prob_next[allele] = 0.0
                             HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
-                    normalize2(HLA_prob_next, HLA_length)
+                    # normalize2(HLA_prob_next, HLA_length)
+                    normalize(HLA_prob_next)
                     return HLA_prob_next
 
                 diff, iter = 1.0, 0
@@ -1052,6 +1054,10 @@ def test_HLA_genotyping(reference_type,
                     diff = prob_diff(HLA_prob, HLA_prob_next)
                     HLA_prob = HLA_prob_next
                     iter += 1
+                for allele, prob in HLA_prob.items():
+                    allele_len = len(HLAs[gene][allele])
+                    HLA_prob[allele] /= float(allele_len)
+                normalize(HLA_prob)
                 HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
 
                 HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
@@ -1202,7 +1208,8 @@ def test_HLA_genotyping(reference_type,
                     else:
                         test_passed[aligner_type] += 1
 
-                print >> sys.stderr, "\t\tPassed so far: %d/%d (abundance: %.2f%%)" % (test_passed[aligner_type], test_i + 1, (test_passed[aligner_type] * 100.0 / (test_i + 1)))
+                if simulation:
+                    print >> sys.stderr, "\t\tPassed so far: %d/%d (abundance: %.2f%%)" % (test_passed[aligner_type], test_i + 1, (test_passed[aligner_type] * 100.0 / (test_i + 1)))
 
 
     if simulation:

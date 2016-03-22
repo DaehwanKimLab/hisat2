@@ -5071,6 +5071,11 @@ bool GFM<index_t>::textOffToJoined(
                    tid + 1 == rstarts()[(elt+1)*3 + 1] ||
                    textoff < rstarts()[(elt+1)*3 + 2]) {
                     off = rstarts()[elt*3] + (textoff - rstarts()[elt*3 + 2]);
+                    if(elt + 1 < _nFrag &&
+                       tid == rstarts()[(elt+1)*3 + 1] &&
+                       off >= rstarts()[(elt+1)*3]) {
+                        return false;
+                    }
                     break;
                 }
                 elt++;
