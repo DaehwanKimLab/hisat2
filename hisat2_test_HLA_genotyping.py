@@ -108,7 +108,7 @@ def test_HLA_genotyping(reference_type,
             extract_cmd += ["--partial"]
         extract_cmd += ["--gap", "30",
                         "--split", "50"]
-
+        print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):

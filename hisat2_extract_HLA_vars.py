@@ -50,6 +50,7 @@ def extract_HLA_vars(base_fname,
                      partial,
                      gap,
                      split,
+                     DRB1_REF,
                      verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(extract_HLA_vars))
@@ -194,7 +195,8 @@ def extract_HLA_vars(base_fname,
         # Identify a consensus sequence
         assert len(HLA_seqs) > 0
         seq_len = len(HLA_seqs[0])
-        if reference_type == "gene":
+        if reference_type == "gene" and \
+                (not DRB1_REF or HLA_gene != "DRB1"):
             consensus_count = [[0, 0, 0, 0] for i in range(seq_len)]
             for i in range(len(HLA_seqs)):
                 HLA_seq = HLA_seqs[i]
@@ -742,6 +744,10 @@ if __name__ == '__main__':
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes")
+    parser.add_argument("--DRB1-REF",
+                        dest="DRB1_REF",
+                        action="store_true",
+                        help="Some DRB1 alleles seem to include vector sequences, so use this option to avoid including them")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -761,4 +767,5 @@ if __name__ == '__main__':
                      args.partial,
                      args.gap,
                      args.split,
+                     args.DRB1_REF,
                      args.verbose)
