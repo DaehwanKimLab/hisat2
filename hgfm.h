@@ -2273,6 +2273,9 @@ HGFM<index_t, local_index_t>::HGFM(
                 assert(tParam.pg == NULL);
                 tParam.done = false;
                 
+                // daehwan - for debugging purposes
+                cerr << tidx << ": " << curr_sztot << endl;
+                
                 curr_sztot += local_sztot_interval;
                 local_offset += local_index_interval;
                 

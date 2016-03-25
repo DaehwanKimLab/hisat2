@@ -21,8 +21,8 @@
 
 
 import sys, os, subprocess, re
-import inspect
-import random
+import inspect, random
+import math
 from argparse import ArgumentParser, FileType
 
 
@@ -125,6 +125,7 @@ def test_HLA_genotyping(reference_type,
                      "--haplotype", "hla.haplotype",
                      "hla_backbone.fa",
                      "hla.graph"]
+        print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
         if not check_files(HLA_hisat2_graph_index_fnames):
@@ -266,6 +267,14 @@ def test_HLA_genotyping(reference_type,
         assert not var_id in Links
         Links[var_id] = alleles
 
+    # Scoring schemes from Sangtae Kim (Illumina)'s implementation
+    max_qual_value = 100
+    match_score, mismatch_score = [0] * max_qual_value, [0] * max_qual_value
+    for qual in range(max_qual_value):
+        error_rate = 0.1 ** (qual / 10.0)
+        match_score[qual] = math.log(1.000000000001 - error_rate);
+        mismatch_score[qual] = math.log(error_rate / 3.0);
+        
     # Test HLA genotyping
     test_list = []
     if simulation:
@@ -491,7 +500,7 @@ def test_HLA_genotyping(reference_type,
                     for line in alignview_proc.stdout:
                         cols = line.strip().split()
                         read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
-                        read_seq = cols[9]
+                        read_seq, qual = cols[9], cols[10]
                         num_reads += 1
                         total_read_len += len(read_seq)
                         flag, pos = int(flag), int(pos)
@@ -750,7 +759,13 @@ def test_HLA_genotyping(reference_type,
                                                 # daehwan - for debugging purposes
                                                 if debug:
                                                     print cmp, var_id, 1, var_data, read_base, Links[var_id]
-                                                add_count(var_id, 1)
+
+                                                # daehwan - for debugging purposes
+                                                if True:
+                                                    read_qual = ord(qual[read_pos])
+                                                    add_count(var_id, (read_qual - 60) / 60.0)
+                                                else:
+                                                    add_count(var_id, 1)
                                             # daehwan - check out if this routine is appropriate
                                             # else:
                                             #    add_count(var_id, -1)

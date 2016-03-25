@@ -1854,6 +1854,8 @@ public:
                     VMSG_NL("Converting suffix-array elements to index image");
                     buildToDisk(bsa, s, out1, out2);
                 } else {
+                    // daehwan - for debugging purposes
+#if 0
                     RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, _haplotypes, outfile, _nthreads, verbose);
                     PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, outfile, _nthreads, verbose);
 
@@ -1872,6 +1874,7 @@ public:
                     buildToDisk(*pg, s, out1, out2);
                     delete pg; pg = NULL;
                     delete graph; graph = NULL;
+#endif
                 }
                 out1.flush(); out2.flush();
 				if(out1.fail() || out2.fail()) {

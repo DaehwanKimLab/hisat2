@@ -111,6 +111,9 @@ def test_HLA_genotyping(reference_type,
                             "--best-alleles",
                             "--exclude-allele-list", ','.join(exclude_allele_list),
                             "--num-mismatch", str(num_mismatch)]
+
+            if verbose:
+                print >> sys.stderr, ' '.join(test_hla_cmd)
             
             proc = subprocess.Popen(test_hla_cmd, stdout=subprocess.PIPE, stderr=open("/dev/null", 'w'))
             num_test += 2
