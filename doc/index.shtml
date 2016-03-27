@@ -20,6 +20,14 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
+	  <h2>HISAT2 2.0.3-beta release 3/XX/2016</h2>
+	  Version 2.0.3-beta is a minor release with the following changes.
+	  <ul>
+	    <li>Fixed graph index building when using both SNPs and transcripts.</li>
+	    <li>Fixed the small test example that comes with the HISAT2 source and binary packages.</li>
+	  </ul>
+	  <br/>
+	  
 	  <h2>HISAT2 2.0.2-beta release 3/17/2016</h2>
 	  <b>Note (3/19/2016):</b> this version is slightly updated to handle reporting splice sites with the correct chromosome names. <br/>
 	  Version 2.0.2-beta is a major release with the following changes.
@@ -37,9 +45,9 @@
 	      <li><i>extract_exons.py</i> to <i>hisat2_extract_exons.py</i></li>
 	      <li><i>extract_snps.py</i> to <i>hisat2_extract_snps_haplotypes_UCSC.py</i></li>
 	    </ol>
-
 	  </ul>
-	  <br>
+	  <br/>
+	  
 	  <h2>HISAT2 2.0.1-beta release 11/19/2015</h2>
 	  Version 2.0.1-beta is a maintenance release with the following changes.
 	  <ul>

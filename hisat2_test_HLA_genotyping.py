@@ -761,7 +761,7 @@ def test_HLA_genotyping(reference_type,
                                                     print cmp, var_id, 1, var_data, read_base, Links[var_id]
 
                                                 # daehwan - for debugging purposes
-                                                if True:
+                                                if False:
                                                     read_qual = ord(qual[read_pos])
                                                     add_count(var_id, (read_qual - 60) / 60.0)
                                                 else:

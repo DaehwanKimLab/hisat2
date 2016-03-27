@@ -2210,7 +2210,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 }
                 
                 // Extract ALTs corresponding to this local index
-                index_t firstSNP = (index_t)INDEX_MAX;
+                map<index_t, index_t> alt_map;
                 tParam.alts.clear();
                 ALT<index_t> alt;
                 alt.pos = curr_sztot;
@@ -2227,11 +2227,9 @@ HGFM<index_t, local_index_t>::HGFM(
                             if(curr_sztot + local_sztot < alt.pos + alt.len) break;
                         }
                         if(curr_sztot <= alt.pos) {
+                            alt_map[alt_i] = (index_t)tParam.alts.size();
                             tParam.alts.push_back(alt);
                             tParam.alts.back().pos -= curr_sztot;
-                            if(firstSNP == (index_t)OFF_MASK) {
-                                firstSNP = alt_i;
-                            }
                         }
                     } else if(alt.splicesite()) {
                         if(alt.excluded) continue;
@@ -2258,9 +2256,14 @@ HGFM<index_t, local_index_t>::HGFM(
                         tParam.haplotypes.push_back(haplotype);
                         tParam.haplotypes.back().left -= curr_sztot;
                         tParam.haplotypes.back().right -= curr_sztot;
-                        assert_neq(firstSNP, (index_t)INDEX_MAX);
                         for(index_t a = 0; a < tParam.haplotypes.back().alts.size(); a++) {
-                            tParam.haplotypes.back().alts[a] -= firstSNP;
+                            index_t alt_i = tParam.haplotypes.back().alts[a];
+                            if(alt_map.find(alt_i) == alt_map.end()) {
+                                assert(false);
+                                tParam.haplotypes.pop_back();
+                                break;
+                            }
+                            tParam.haplotypes.back().alts[a] = alt_map[alt_i];
                         }
                     }
                 }
@@ -2268,13 +2271,10 @@ HGFM<index_t, local_index_t>::HGFM(
                 tParam.local_offset = local_offset;
                 tParam.curr_sztot = curr_sztot;
                 tParam.local_sztot = local_sztot;
-                
+
                 assert(tParam.rg == NULL);
                 assert(tParam.pg == NULL);
                 tParam.done = false;
-                
-                // daehwan - for debugging purposes
-                cerr << tidx << ": " << curr_sztot << endl;
                 
                 curr_sztot += local_sztot_interval;
                 local_offset += local_index_interval;
@@ -2296,7 +2296,7 @@ HGFM<index_t, local_index_t>::HGFM(
                     nanosleep(&ts, NULL);
 #endif
                 }
-                
+ 
                 LocalGFM<local_index_t, index_t>(
                                                  tParam.s,
                                                  tParam.sa,
