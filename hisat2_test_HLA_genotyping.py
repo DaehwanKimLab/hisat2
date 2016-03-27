@@ -21,8 +21,8 @@
 
 
 import sys, os, subprocess, re
-import inspect
-import random
+import inspect, random
+import math
 from argparse import ArgumentParser, FileType
 
 
@@ -108,7 +108,7 @@ def test_HLA_genotyping(reference_type,
             extract_cmd += ["--partial"]
         extract_cmd += ["--gap", "30",
                         "--split", "50"]
-
+        print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):
@@ -125,6 +125,7 @@ def test_HLA_genotyping(reference_type,
                      "--haplotype", "hla.haplotype",
                      "hla_backbone.fa",
                      "hla.graph"]
+        print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
         if not check_files(HLA_hisat2_graph_index_fnames):
@@ -197,9 +198,17 @@ def test_HLA_genotyping(reference_type,
         read_HLA_alleles("hla_backbone.fa", HLAs)
     read_HLA_alleles("hla_sequences.fa", HLAs)
 
+    # HLA gene alleles
     HLA_names = {}
     for HLA_gene, data in HLAs.items():
         HLA_names[HLA_gene] = list(data.keys())
+
+    # HLA gene allele lengths
+    HLA_lengths = {}
+    for HLA_gene, HLA_alleles in HLAs.items():
+        HLA_lengths[HLA_gene] = {}
+        for allele_name, seq in HLA_alleles.items():
+            HLA_lengths[HLA_gene][allele_name] = len(seq)
 
     # Read HLA variants, and link information
     Vars, Var_list = {}, {}
@@ -258,6 +267,14 @@ def test_HLA_genotyping(reference_type,
         assert not var_id in Links
         Links[var_id] = alleles
 
+    # Scoring schemes from Sangtae Kim (Illumina)'s implementation
+    max_qual_value = 100
+    match_score, mismatch_score = [0] * max_qual_value, [0] * max_qual_value
+    for qual in range(max_qual_value):
+        error_rate = 0.1 ** (qual / 10.0)
+        match_score[qual] = math.log(1.000000000001 - error_rate);
+        mismatch_score[qual] = math.log(error_rate / 3.0);
+        
     # Test HLA genotyping
     test_list = []
     if simulation:
@@ -483,7 +500,7 @@ def test_HLA_genotyping(reference_type,
                     for line in alignview_proc.stdout:
                         cols = line.strip().split()
                         read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
-                        read_seq = cols[9]
+                        read_seq, qual = cols[9], cols[10]
                         num_reads += 1
                         total_read_len += len(read_seq)
                         flag, pos = int(flag), int(pos)
@@ -645,7 +662,7 @@ def test_HLA_genotyping(reference_type,
                             cur_cmpt = sorted(list(cur_cmpt))
                             cur_cmpt = '-'.join(cur_cmpt)
                             add = 1
-                            if not exon:
+                            if partial and not exon:
                                 add *= 0.2
                             if not cur_cmpt in HLA_cmpt:
                                 HLA_cmpt[cur_cmpt] = add
@@ -742,7 +759,13 @@ def test_HLA_genotyping(reference_type,
                                                 # daehwan - for debugging purposes
                                                 if debug:
                                                     print cmp, var_id, 1, var_data, read_base, Links[var_id]
-                                                add_count(var_id, 1)
+
+                                                # daehwan - for debugging purposes
+                                                if False:
+                                                    read_qual = ord(qual[read_pos])
+                                                    add_count(var_id, (read_qual - 60) / 60.0)
+                                                else:
+                                                    add_count(var_id, 1)
                                             # daehwan - check out if this routine is appropriate
                                             # else:
                                             #    add_count(var_id, -1)
@@ -982,6 +1005,15 @@ def test_HLA_genotyping(reference_type,
                     for allele, mass in prob.items():
                         prob[allele] = mass / total
 
+                def normalize2(prob, length):
+                    total = 0
+                    for allele, mass in prob.items():
+                        assert allele in length
+                        total += (mass / length[allele])
+                    for allele, mass in prob.items():
+                        assert allele in length
+                        prob[allele] = mass / length[allele] / total
+
                 def prob_diff(prob1, prob2):
                     diff = 0.0
                     for allele in prob1.keys():
@@ -1011,8 +1043,11 @@ def test_HLA_genotyping(reference_type,
                             HLA_prob[allele] = 0.0
                         HLA_prob[allele] += (float(count) / len(alleles))
 
+                assert gene in HLA_lengths
+                HLA_length = HLA_lengths[gene]
+                # normalize2(HLA_prob, HLA_length)
                 normalize(HLA_prob)
-                def next_prob(HLA_cmpt, HLA_prob):
+                def next_prob(HLA_cmpt, HLA_prob, HLA_length):
                     HLA_prob_next = {}
                     for cmpt, count in HLA_cmpt.items():
                         alleles = cmpt.split('-')
@@ -1024,12 +1059,13 @@ def test_HLA_genotyping(reference_type,
                             if allele not in HLA_prob_next:
                                 HLA_prob_next[allele] = 0.0
                             HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
+                    # normalize2(HLA_prob_next, HLA_length)
                     normalize(HLA_prob_next)
                     return HLA_prob_next
 
                 diff, iter = 1.0, 0
                 while diff > 0.0001 and iter < 1000:
-                    HLA_prob_next = next_prob(HLA_cmpt, HLA_prob)
+                    HLA_prob_next = next_prob(HLA_cmpt, HLA_prob, HLA_length)
                     diff = prob_diff(HLA_prob, HLA_prob_next)
                     HLA_prob = HLA_prob_next
                     iter += 1
@@ -1187,7 +1223,8 @@ def test_HLA_genotyping(reference_type,
                     else:
                         test_passed[aligner_type] += 1
 
-                print >> sys.stderr, "\t\tPassed so far: %d/%d (abundance: %.2f%%)" % (test_passed[aligner_type], test_i + 1, (test_passed[aligner_type] * 100.0 / (test_i + 1)))
+                if simulation:
+                    print >> sys.stderr, "\t\tPassed so far: %d/%d (abundance: %.2f%%)" % (test_passed[aligner_type], test_i + 1, (test_passed[aligner_type] * 100.0 / (test_i + 1)))
 
 
     if simulation:

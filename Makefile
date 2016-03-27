@@ -189,10 +189,10 @@ GENERAL_LIST = $(wildcard scripts/*.sh) \
 	doc/manual.inc.html \
 	doc/README \
 	doc/style.css \
-	$(wildcard example/index/*.bt2) \
-	$(wildcard example/reads/*.fq) \
-	$(wildcard example/reads/*.pl) \
+	$(wildcard example/index/*.ht2) \
+	$(wildcard example/reads/*.fa) \
 	example/reference/22_20-21M.fa \
+	example/reference/22_20-21M.snp \
 	$(PTHREAD_PKG) \
 	hisat2 \
 	hisat2-build \

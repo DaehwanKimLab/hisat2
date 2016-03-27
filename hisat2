@@ -181,7 +181,7 @@ for(my $i = 0; $i < scalar(@bt2_args); $i++) {
 		$large_idx = 1;
 		$bt2_args[$i] = undef;
 	}
-	for my $rarg ("un-conc", "al-conc", "un", "al") {
+	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
 		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
 			$bt2_args[$i] = undef;
 			if(scalar(@args) > 1 && $args[1] ne "") {
@@ -462,14 +462,14 @@ if(defined($cap_out)) {
 			Fail("Could not open output file '$cap_out' for writing.\n");
 	}
 	my %read_fhs = ();
-	for my $i ("al", "un", "al-conc", "un-conc") {
+	for my $i ("al", "un", "al-conc", "al-conc-disc", "un-conc") {
 		if(defined($read_fns{$i})) {
             my ($vol, $base_spec_dir, $base_fname) = File::Spec->splitpath($read_fns{$i});
             if (-d $read_fns{$i}) {
                 $base_spec_dir = $read_fns{$i};
                 $base_fname = undef;
             }
-			if($i =~ /-conc$/) {
+			if($i =~ /-conc$/ || $i =~ /-conc-disc$/) {
 				# Open 2 output files, one for mate 1, one for mate 2
 				my ($fn1, $fn2);
                 if ($base_fname) {
@@ -544,8 +544,9 @@ if(defined($cap_out)) {
 							print {$read_fhs{al}} $l if defined($read_fhs{al});
 						}
 					}
-					if((defined($read_fhs{"un-conc"}) || defined($read_fhs{"al-conc"})) && $pair && !$secondary) {
-						my $conc  = (($fl &   2) != 0);
+					if((defined($read_fhs{"un-conc"}) || defined($read_fhs{"al-conc"}) || defined($read_fhs{"al-conc-disc"})) && $pair && !$secondary) {
+						my $conc = (($fl &   2) != 0);
+						my $conc_disc = ($fl & 4) == 0 || ($fl & 8) == 0;
 						if($conc && $mate1) {
 							print {$read_fhs{"al-conc"}{1}} $l if defined($read_fhs{"al-conc"});
 						} elsif($conc && $mate2) {
@@ -554,6 +555,11 @@ if(defined($cap_out)) {
 							print {$read_fhs{"un-conc"}{1}} $l if defined($read_fhs{"un-conc"});
 						} elsif(!$conc && $mate2) {
 							print {$read_fhs{"un-conc"}{2}} $l if defined($read_fhs{"un-conc"});
+						}
+						if($conc_disc && $mate1) {
+							print {$read_fhs{"al-conc-disc"}{1}} $l if defined($read_fhs{"al-conc-disc"});
+						} elsif($conc_disc && $mate2) {
+							print {$read_fhs{"al-conc-disc"}{2}} $l if defined($read_fhs{"al-conc-disc"});
 						}
 					}
 				}
