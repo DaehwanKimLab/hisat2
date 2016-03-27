@@ -1,6 +1,6 @@
 #!/bin/sh
 
-DM6_BASE=ftp://hgdownload.cse.ucsc.edu/goldenPath/ce10/bigZips
+CE10_BASE=ftp://hgdownload.cse.ucsc.edu/goldenPath/ce10/bigZips
 F=chromFa.tar.gz
 
 get() {
@@ -29,7 +29,7 @@ if [ ! -x "$HISAT2_BUILD_EXE" ] ; then
 fi
 
 rm -f genome.fa
-get ${DM6_BASE}/$F || (echo "Error getting $F" && exit 1)
+get ${CE10_BASE}/$F || (echo "Error getting $F" && exit 1)
 tar xvzfO $F > genome.fa || (echo "Error unzipping $F" && exit 1)
 rm $F
 
