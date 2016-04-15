@@ -204,7 +204,24 @@ thread::thread(void (*aFunction)(void *), void * aArg)
 #if defined(_TTHREAD_WIN32_)
   mHandle = (HANDLE) _beginthreadex(0, 0, wrapper_function, (void *) ti, 0, &mWin32ThreadID);
 #elif defined(_TTHREAD_POSIX_)
-  if(pthread_create(&mHandle, NULL, wrapper_function, (void *) ti) != 0)
+    int 			err = 0;
+    pthread_attr_t 	stackSizeAttribute;
+    size_t			stackSize = 0;
+    
+    err = pthread_attr_init(&stackSizeAttribute);
+    if(err) throw "Error: pthread_attr_init";
+    
+    err = pthread_attr_getstacksize(&stackSizeAttribute, &stackSize);
+    if(err) throw "Error: pthread_attr_getstacksize";
+
+    size_t REQUIRED_STACK_SIZE = 4 * 1024 * 1024;
+    if(stackSize < REQUIRED_STACK_SIZE) {
+        err = pthread_attr_setstacksize(&stackSizeAttribute, REQUIRED_STACK_SIZE);
+        if(err) throw "Error: pthread_attr_setstacksize";
+    }    
+    err = pthread_attr_getstacksize(&stackSizeAttribute, &stackSize);
+    
+  if(pthread_create(&mHandle, &stackSizeAttribute, wrapper_function, (void *) ti) != 0)
     mHandle = 0;
 #endif
 
