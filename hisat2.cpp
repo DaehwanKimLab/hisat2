@@ -745,12 +745,12 @@ static void printUsage(ostream& out) {
 	}
 	out << "Usage: " << endl
 #ifdef USE_SRA
-	    << "  " << tool_name.c_str() << " [options]* -x <bt2-idx> {-1 <m1> -2 <m2> | -U <r> | --sra-acc <SRA accession number>} [-S <sam>]" << endl
+	    << "  " << tool_name.c_str() << " [options]* -x <ht2-idx> {-1 <m1> -2 <m2> | -U <r> | --sra-acc <SRA accession number>} [-S <sam>]" << endl
 #else
-    << "  " << tool_name.c_str() << " [options]* -x <bt2-idx> {-1 <m1> -2 <m2> | -U <r>} [-S <sam>]" << endl
+    << "  " << tool_name.c_str() << " [options]* -x <ht2-idx> {-1 <m1> -2 <m2> | -U <r>} [-S <sam>]" << endl
 #endif
 	    << endl
-		<<     "  <bt2-idx>  Index filename prefix (minus trailing .X." << gfm_ext << ")." << endl
+		<<     "  <ht2-idx>  Index filename prefix (minus trailing .X." << gfm_ext << ")." << endl
 	    <<     "  <m1>       Files with #1 mates, paired with files in <m2>." << endl;
 	if(wrapper == "basic-0") {
 		out << "             Could be gzip'ed (extension: .gz) or bzip2'ed (extension: .bz2)." << endl;
@@ -808,11 +808,11 @@ static void printUsage(ostream& out) {
 #endif
 	    << " Alignment:" << endl
 		<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
-		<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
-		<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
+		//<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
+		//<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
 		<< "  --n-ceil <func>    func for max # non-A/C/G/Ts permitted in aln (L,0,0.15)" << endl
-		<< "  --dpad <int>       include <int> extra ref chars on sides of DP table (15)" << endl
-		<< "  --gbar <int>       disallow gaps within <int> nucs of read extremes (4)" << endl
+		//<< "  --dpad <int>       include <int> extra ref chars on sides of DP table (15)" << endl
+		//<< "  --gbar <int>       disallow gaps within <int> nucs of read extremes (4)" << endl
 		<< "  --ignore-quals     treat all quality values as 30 on Phred scale (off)" << endl
 	    << "  --nofw             do not align forward (original) version of read (off)" << endl
 	    << "  --norc             do not align reverse-complement version of read (off)" << endl
