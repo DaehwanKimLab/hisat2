@@ -20,6 +20,13 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
+	  <h2>HISAT2 2.0.4 release 5/XX/2016</h2>
+	  Version 2.0.4 is a minor release with the following changes.
+	  <ul>
+	    <li>Fixed NH (number of hits) in the SAM output.</li>
+	  </ul>
+	  <br/>	  
+	  
 	  <h2>HISAT2 2.0.3-beta release 3/28/2016</h2>
 	  Version 2.0.3-beta is a minor release with the following changes.
 	  <ul>

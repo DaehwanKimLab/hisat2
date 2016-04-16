@@ -2121,6 +2121,7 @@ void AlnSinkWrap<index_t>::finishRead(
 				off = selectAlnsToReport(rs1u_, nunpair1, select1_, rnd);
 			}
             summ1.numAlns1(select1_.size());
+            summ2.numAlns1(select1_.size());
 			repRs1 = &rs1u_[off];
 		} else if(rd1_ != NULL) {
 			// Mate 1 failed to align - don't do anything yet.  First we want
@@ -2148,6 +2149,7 @@ void AlnSinkWrap<index_t>::finishRead(
 				off = selectAlnsToReport(rs2u_, nunpair2, select2_, rnd);
 			}
 			repRs2 = &rs2u_[off];
+            summ1.numAlns2(select2_.size());
             summ2.numAlns2(select2_.size());
 		} else if(rd2_ != NULL) {
 			// Mate 2 failed to align - don't do anything yet.  First we want

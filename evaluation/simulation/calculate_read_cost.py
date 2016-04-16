@@ -6,6 +6,8 @@ import string, re
 import platform
 from datetime import datetime, date, time
 import copy
+from argparse import ArgumentParser, FileType
+
 
 """
 """
@@ -294,9 +296,13 @@ def is_small_exon_junction_read(cigars, min_exon_len = 23):
     return False
 
 
-def extract_single(infilename, outfilename, chr_dic, aligner):
+def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
     infile = open(infilename)
     outfile = open(outfilename, "w")
+    prev_read_id = ""
+    debug_NH = "NH" in debug_dic and aligner == "hisat2"
+    if debug_NH:
+        prev_NH, NH_real = 0, 0
     for line in infile:
         if line[0] == '@':
             continue
@@ -319,14 +325,24 @@ def extract_single(infilename, outfilename, chr_dic, aligner):
         if flag & 0x4 != 0:
             continue
 
+        if debug_NH:
+            NH = ""
         NM = ""
         for i in range(11, len(cols)):
             col = cols[i]
             # "nM" from STAR
             if col[:2] == "NM" or col[:2] == "nM":
                 NM = col
+            if debug_NH:
+                if col[:2] == "NH":
+                    NH = col
         assert NM != ""
         NM = int(NM[5:])
+        if debug_NH:
+            assert NH != ""
+            NH = int(NH[5:])
+            if prev_read_id == read_id:
+                assert prev_NH == NH
 
         read_pos, right_pos = 0, pos - 1
         cigars = cigar_re.findall(cigar_str)
@@ -377,16 +393,35 @@ def extract_single(infilename, outfilename, chr_dic, aligner):
         
         print >> outfile, p_str
 
+        if debug_NH:
+            if prev_read_id != read_id:
+                if prev_read_id != "":
+                    assert prev_NH == NH_real
+                NH_real = 1
+            else:
+                NH_real += 1
+            prev_NH = NH
+        prev_read_id = read_id
+
+    if debug_NH:
+        if prev_read_id != "":
+            assert prev_NH == NH_real
+
     outfile.close()
     infile.close()
     
 
-def extract_pair(infilename, outfilename, chr_dic, aligner):
+def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
     read_dic = {}
     pair_reported = set()
 
     infile = open(infilename)
     outfile = open(outfilename, "w")
+    prev_read_id = ""
+    debug_NH = "NH" in debug_dic and aligner == "hisat2"
+    if debug_NH:
+        prev_NH1, prev_NH2 = 0, 0
+        NH1_real, NH2_real = 0, 0
     for line in infile:
         if line[0] == '@':
             continue
@@ -411,14 +446,29 @@ def extract_pair(infilename, outfilename, chr_dic, aligner):
         if flag & 0x4 != 0:
             continue
 
+        left_read = (flag & 0x40 != 0)
+        concordant = (flag & 0x2 != 0)
+        if debug_NH:
+            NH = ""
         NM1 = ""
         for i in range(11, len(cols)):
             col = cols[i]
             # "nM" from STAR
             if col[:2] == "NM" or col[:2] == "nM":
                 NM1 = col
+            if debug_NH:
+                if col[:2] == "NH":
+                    NH = col
         assert NM1 != ""
         NM1 = int(NM1[5:])
+        if debug_NH:
+            assert NH != ""
+            NH = int(NH[5:])
+            if prev_read_id == read_id:
+                if left_read:
+                    assert prev_NH1 == 0 or prev_NH1 == NH
+                else:
+                    assert prev_NH2 == 0 or prev_NH2 == NH
 
         read_pos, right_pos = 0, pos1 - 1
         cigars = cigar_re.findall(cigar1_str)
@@ -492,6 +542,38 @@ def extract_pair(infilename, outfilename, chr_dic, aligner):
             read_dic[me] = []
 
         read_dic[me].append([partner, cigar1_str, NM1, pos1])
+        if debug_NH:
+            if prev_read_id != read_id:
+                if prev_read_id != "":
+                    # daehwan - for debugging purposes
+                    if prev_NH1 != NH1_real or prev_NH2 != NH2_real:
+                        print prev_read_id, read_id
+                        print line,
+                        print prev_NH1, NH1_real
+                        print prev_NH2, NH2_real
+                    assert prev_NH1 == NH1_real
+                    assert prev_NH2 == NH2_real
+                    prev_NH1, prev_NH2 = 0, 0
+                if left_read:
+                    NH1_real, NH2_real = 1, 0
+                else:
+                    NH1_real, NH2_real = 0, 1
+            else:
+                if left_read:
+                    NH1_real += 1
+                else:
+                    NH2_real += 1
+            if left_read:
+                prev_NH1 = NH
+            else:
+                prev_NH2 = NH
+        prev_read_id = read_id
+
+    if debug_NH:
+        if prev_read_id != "":
+            assert prev_NH1 == NH1_real
+            assert prev_NH2 == NH2_real
+
 
     outfile.close()
     infile.close()
@@ -1090,7 +1172,8 @@ def write_analysis_data(sql_db, genome_name, database_name):
         database_file.close()
 
 
-def calculate_read_cost():
+def calculate_read_cost(test_NH,
+                        verbose):
     sql_db_name = "analysis.db"
     if not os.path.exists(sql_db_name):
         create_sql_db(sql_db_name)
@@ -1126,7 +1209,7 @@ def calculate_read_cost():
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
     aligners = [
-        ["hisat", "", "", ""],        
+        # ["hisat", "", "", ""],        
         # ["hisat2", "", "", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
@@ -1136,13 +1219,13 @@ def calculate_read_cost():
         # ["hisat2", "x1", "tran", "201b"],
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "snp", "201b"],
-        ["hisat2", "", "snp", ""],
+        # ["hisat2", "", "snp", ""],
         # ["hisat2", "x1", "snp_tran", "201b"],
         ["hisat2", "x1", "snp_tran", ""],
         # ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
-        ["star", "", "", ""],
+        # ["star", "", "", ""],
         # ["star", "x2", "", ""],
         # ["star", "gtf", "", ""],
         # ["bowtie", "", "", ""],
@@ -1174,8 +1257,8 @@ def calculate_read_cost():
     chr_dic = read_genome("../../data/" + genome + ".fa")
     gtf_junctions = extract_splice_sites("../../data/genome.gtf")
     align_stat = []
-    # for paired in [False, True]:
-    for paired in [False]:
+    for paired in [False, True]:
+    # for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
@@ -1594,10 +1677,13 @@ def calculate_read_cost():
                     continue
 
                 if not os.path.exists(out_fname2):
+                    debug_dic = {}
+                    if test_NH:
+                        debug_dic["NH"] = True
                     if paired:
-                        extract_pair(out_fname, out_fname2, chr_dic, aligner)
+                        extract_pair(out_fname, out_fname2, chr_dic, aligner, debug_dic)
                     else:
-                        extract_single(out_fname, out_fname2, chr_dic, aligner)
+                        extract_single(out_fname, out_fname2, chr_dic, aligner, debug_dic)
 
                 for readtype2 in readtypes:
                     if not two_step and readtype != readtype2:
@@ -1667,4 +1753,17 @@ def calculate_read_cost():
 
 
 if __name__ == "__main__":
-    calculate_read_cost()
+    parser = ArgumentParser(
+        description='test HISAT2')
+    parser.add_argument('--test-NH',
+                        dest='test_NH',
+                        action='store_true',
+                        help='check NH in the SAM output')
+    parser.add_argument('-v', '--verbose',
+                        dest='verbose',
+                        action='store_true',
+                        help='also print some statistics to stderr')
+
+    args = parser.parse_args()
+    calculate_read_cost(args.test_NH,
+                        args.verbose)
