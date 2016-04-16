@@ -156,7 +156,7 @@ possible in terms of alignment score.
 HISAT2 searches for up to N distinct, primary alignments for
 each read, where N equals the integer specified with the `-k` parameter.
 Primary alignments mean alignments whose alignment score is equal or higher than any other alignments.
-It is possible that multiple distinct alignments whave the same score.
+It is possible that multiple distinct alignments have the same score.
 That is, if `-k 2` is specified, HISAT2 will search for at most 2 distinct
 alignments. The alignment score for a paired-end alignment equals the sum of the
 alignment scores of the individual mates.  Each reported read or pair alignment
@@ -1220,6 +1220,7 @@ Launch `NTHREADS` parallel build threads (default: 1).
 Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).
    
    SNP ID `<tab>` chromosome name `<tab>` snp type (single, deletion, or insertion) `<tab>` zero-offset based genomic position of a SNP `<tab>` alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)
+   
    For example,
        rs58784443      single  13      18447947        T
 
@@ -1231,6 +1232,7 @@ or `hisat2_extract_snps_haplotypes_VCF.py` to extract SNPs and haplotypes from a
 Provide a list of haplotypes (in the HISAT2's own format) as follows (five columns).
    
    Haplotype ID `<tab>` chromosome name `<tab>` zero-offset based left coordinate of haplotype `<tab>` zero-offset based right coordinate of haplotype `<tab>` a comma separated list of SNP ids in the haplotype
+   
    For example,
        ht35    13      18446877        18446945        rs12381094,rs12381056,rs192016659,rs538569910
 

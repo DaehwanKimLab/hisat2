@@ -20,11 +20,18 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
-	  <h2>HISAT2 2.0.3-beta release 3/XX/2016</h2>
+	  <h2>HISAT2 2.0.4 release 5/XX/2016</h2>
+	  Version 2.0.4 is a minor release with the following changes.
+	  <ul>
+	    <li>Fixed NH (number of hits) in the SAM output.</li>
+	  </ul>
+	  <br/>	  
+	  
+	  <h2>HISAT2 2.0.3-beta release 3/28/2016</h2>
 	  Version 2.0.3-beta is a minor release with the following changes.
 	  <ul>
-	    <li>Fixed graph index building when using both SNPs and transcripts.</li>
-	    <li>Fixed the small test example that comes with the HISAT2 source and binary packages.</li>
+	    <li>Fixed graph index building when using both SNPs and transcripts.  As a result, genome_snp_tran indexes here on the HISAT2 website have been rebuilt.</li>
+	    <li>Included some missing files needed to follow the small test example (see the manual for details). </li>
 	  </ul>
 	  <br/>
 	  

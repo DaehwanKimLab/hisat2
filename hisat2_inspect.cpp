@@ -223,7 +223,7 @@ static void print_ref_sequence(
 		}
 		fout << "\n";
 	}
-	delete buf;
+	delete []buf;
 }
 
 /**

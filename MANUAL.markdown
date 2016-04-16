@@ -640,6 +640,7 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 
 <table>
 
+<!--
 <tr><td id="hisat2-options-ma">
 
 [`--ma`]: #hisat2-options-ma
@@ -653,6 +654,7 @@ score for each position where a read character aligns to a reference character
 and the characters match.  Not used in [`--end-to-end`] mode.  Default: 2.
 
 </td></tr>
+-->
 <tr><td id="hisat2-options-mp">
 
 [`--mp`]: #hisat2-options-mp
@@ -734,7 +736,7 @@ Sets a function governing the minimum alignment score needed for an alignment to
 be considered "valid" (i.e. good enough to report).  This is a function of read
 length. For instance, specifying `L,0,-0.6` sets the minimum-score function `f`
 to `f(x) = 0 + -0.6 * x`, where `x` is the read length.  See also: [setting
-function options].  The default is `C,-18,0`.
+function options].  The default is `L,0,-0.2`.
 
 </td></tr>
 </table>
