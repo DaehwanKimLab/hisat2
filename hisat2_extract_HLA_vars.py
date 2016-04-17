@@ -460,6 +460,46 @@ def extract_HLA_vars(base_fname,
 
         # Remap the backbone allele, which is sometimes slighly different from
         #   IMGTHLA/fasta version
+        ref_backbone_id = HLA_names[HLA_ref_gene]
+        ref_backbone_seq = HLA_seqs[ref_backbone_id]
+        hisat2 = os.path.join(ex_path, "hisat2")
+        aligner_cmd = [hisat2,
+                       "--score-min", "C,0",
+                       "--no-unal",
+                       "-x", "grch38/genome",
+                       "-f", 
+                       "-c", "%s" % ref_backbone_seq.replace('.', '')]
+        align_proc = subprocess.Popen(aligner_cmd,
+                                      stdout=subprocess.PIPE,
+                                      stderr=open("/dev/null", 'w'))
+        left, right = 0, 0
+        for line in align_proc.stdout:
+            if line.startswith('@'):
+                continue
+            line = line.strip()
+            cols = line.split()
+            allele_id, flag, chr, left, mapQ, cigar_str = cols[:6]
+            flag = int(flag)
+            assert flag & 0x10 == 0
+            left = int(left) - 1
+            AS = ""
+            for i in range(11, len(cols)):
+                col = cols[i]
+                if col.startswith("AS"):
+                    AS = col[5:]
+            assert int(AS) == 0
+            cigar_re = re.compile('\d+\w')
+            right = left
+            cigars = cigar_re.findall(cigar_str)
+            cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+            assert len(cigars) == 1
+            for cigar_op, length in cigars:
+                assert cigar_op == 'M'
+                right += (length - 1)
+            break            
+        align_proc.communicate()
+        assert left < right
+
         if reference_type == "gene":
             base_locus = 0
             backbone_seq_ = backbone_seq.replace('.', '')
@@ -469,50 +509,12 @@ def extract_HLA_vars(base_fname,
             exons = HLA_gene_exons[HLA_gene]
             exon_str = ""
             for exon in exons:
-                left, right = exon
                 if exon_str != "":
                     exon_str += ','
-                exon_str += ("%d-%d" % (ref_seq_map[left], ref_seq_map[right]))
+                exon_str += ("%d-%d" % (ref_seq_map[exon[0]], ref_seq_map[exon[1]]))
                 
-            print >> hla_ref_file, "%s\t6\t0\t%d\t%s" % (backbone_name, len(backbone_seq_) - 1, exon_str)
+            print >> hla_ref_file, "%s\t6\t%d\t%d\t%d\t%s" % (backbone_name, left, right, len(backbone_seq_), exon_str)
         else:
-            hisat2 = os.path.join(ex_path, "hisat2")
-            aligner_cmd = [hisat2,
-                           "--score-min", "C,0",
-                           "--no-unal",
-                           "-x", "grch38/genome",
-                           "-f", 
-                           "-c", "%s" % backbone_seq.replace('.', '')]
-            align_proc = subprocess.Popen(aligner_cmd,
-                                          stdout=subprocess.PIPE,
-                                          stderr=open("/dev/null", 'w'))
-            left, right = 0, 0
-            for line in align_proc.stdout:
-                if line.startswith('@'):
-                    continue
-                line = line.strip()
-                cols = line.split()
-                allele_id, flag, chr, left, mapQ, cigar_str = cols[:6]
-                flag = int(flag)
-                assert flag & 0x10 == 0
-                left = int(left) - 1
-                AS = ""
-                for i in range(11, len(cols)):
-                    col = cols[i]
-                    if col.startswith("AS"):
-                        AS = col[5:]
-                assert int(AS) == 0
-                cigar_re = re.compile('\d+\w')
-                right = left
-                cigars = cigar_re.findall(cigar_str)
-                cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
-                assert len(cigars) == 1
-                for cigar_op, length in cigars:
-                    assert cigar_op == 'M'
-                    right += (length - 1)
-                break            
-            align_proc.communicate()
-            assert left < right
             exons = HLA_gene_exons[HLA_gene]
             exon_str = ""
             for exon in exons:
@@ -520,7 +522,7 @@ def extract_HLA_vars(base_fname,
                     exon_str += ','
                 exon_str += ("%d-%d" % (left + exon[0], left + exon[1]))
 
-            print >> hla_ref_file, "%s\t6\t%d\t%d\t%s" % (backbone_name, left, right, exon_str)
+            print >> hla_ref_file, "%s\t6\t%d\t%d\t%d\t%s" % (backbone_name, left, right, right - left + 1, exon_str)
             base_locus = left
 
         # Write

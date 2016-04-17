@@ -72,20 +72,22 @@ def test_HLA_genotyping(reference_type,
     if os.path.exists("hla.ref"):
         left = 0
         HLA_genes = set()
+        BACKBONE = False
         for line in open("hla.ref"):
-            HLA_name, chr, left, _, exon_str = line.strip().split()
+            HLA_name = line.strip().split()[0]
+            if HLA_name.find("BACKBONE") != -1:
+                BACKBONE = True
             HLA_gene = HLA_name.split('*')[0]
             HLA_genes.add(HLA_gene)
-            left = int(left)
         delete_hla_files = False
         if reference_type == "gene":
-            if left > 0:
+            if not BACKBONE:
                 delete_hla_files = True
-        elif reference_type == "chromosome":
-            if left == 0:
+        elif reference_type in ["chromosome", "genome"]:
+            if BACKBONE:
                 delete_hla_files = True
         else:
-            assert reference_type == "genome"
+            assert False
         if not set(hla_list).issubset(HLA_genes):
             delete_hla_files = True
         if delete_hla_files:
@@ -108,7 +110,8 @@ def test_HLA_genotyping(reference_type,
             extract_cmd += ["--partial"]
         extract_cmd += ["--gap", "30",
                         "--split", "50"]
-        print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
+        if verbose:
+            print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         if not check_files(HLA_fnames):
@@ -125,7 +128,8 @@ def test_HLA_genotyping(reference_type,
                      "--haplotype", "hla.haplotype",
                      "hla_backbone.fa",
                      "hla.graph"]
-        print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
+        if verbose:
+            print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
         proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()        
         if not check_files(HLA_hisat2_graph_index_fnames):
@@ -171,7 +175,7 @@ def test_HLA_genotyping(reference_type,
     # Read HLA alleles (names and sequences)
     refHLAs, refHLA_loci = {}, {}
     for line in open("hla.ref"):
-        HLA_name, chr, left, right, exon_str = line.strip().split()
+        HLA_name, chr, left, right, length, exon_str = line.strip().split()
         HLA_gene = HLA_name.split('*')[0]
         assert not HLA_gene in refHLAs
         refHLAs[HLA_gene] = HLA_name
