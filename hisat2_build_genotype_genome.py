@@ -205,6 +205,7 @@ def build_genotype_genome(reference,
     var_out_file = open("%s.snp" % base_fname, 'w')
     haplotype_out_file = open("%s.haplotype" % base_fname, 'w')
     link_out_file = open("%s.link" % base_fname, 'w')
+    coord_out_file = open("%s.coord" % base_fname, 'w')
     for chr in chr_names:
         assert chr in chr_dic
         chr_seq = chr_dic[chr]
@@ -262,7 +263,12 @@ def build_genotype_genome(reference,
             assert prev_length <= length
 
             if prev_right < left:
+                # print >> coord_out_file, "%d\t%d\t%d" % \
+                #    (len(out_chr_seq), prev_right, left - prev_right)
                 out_chr_seq += chr_seq[prev_right:left]
+
+            print >> coord_out_file, "%d\t%d\t%d" % \
+                (len(out_chr_seq), left, right - left + 1)
             out_chr_seq += allele_seq
 
             # Output variants (genotype_genome.snp)
@@ -297,7 +303,8 @@ def build_genotype_genome(reference,
 
             prev_right = right + 1
             
-                
+        print >> coord_out_file, "%d\t%d\t%d" % \
+            (len(out_chr_seq), prev_right, len(chr_seq) - prev_right)
         out_chr_seq += chr_seq[prev_right:]
 
         assert len(out_chr_seq) == len(chr_seq) + off
@@ -312,6 +319,7 @@ def build_genotype_genome(reference,
     var_out_file.close()
     haplotype_out_file.close()
     link_out_file.close()
+    coord_out_file.close()
 
         
 """
