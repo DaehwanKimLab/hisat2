@@ -134,6 +134,7 @@ def build_genotype_genome(reference,
                           base_fname,                          
                           gap,
                           split,
+                          threads,
                           verbose):    
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(build_genotype_genome))
@@ -202,6 +203,7 @@ def build_genotype_genome(reference,
     # Write genotype genome
     var_num, haplotype_num = 0, 0
     genome_out_file = open("%s.fa" % base_fname, 'w')
+    gene_out_file = open("%s.gene" % base_fname, 'w')
     var_out_file = open("%s.snp" % base_fname, 'w')
     haplotype_out_file = open("%s.haplotype" % base_fname, 'w')
     link_out_file = open("%s.link" % base_fname, 'w')
@@ -234,13 +236,13 @@ def build_genotype_genome(reference,
             allele_seqs = read_sequences("%s_backbone.fa" % family)
 
             # Read HLA variants
-            allele_vars = read_variants("hla.snp")
+            allele_vars = read_variants("%s.snp" % family)
 
             # Read HLA haplotypes
-            allele_haplotypes = read_haplotypes("hla.haplotype")
+            allele_haplotypes = read_haplotypes("%s.haplotype" % family)
 
             # Read HLA link information between haplotypes and variants
-            links = read_links("hla.link")
+            links = read_links("%s.link" % family)
 
             if name not in allele_seqs or \
                     name not in allele_vars or \
@@ -267,6 +269,11 @@ def build_genotype_genome(reference,
                 #    (len(out_chr_seq), prev_right, left - prev_right)
                 out_chr_seq += chr_seq[prev_right:left]
 
+            # Output gene (genotype_genome.gene)
+            print >> gene_out_file, "%s\t%s\t%s\t%d\t%d" % \
+                (family.upper(), name, chr, len(out_chr_seq), len(out_chr_seq) + length - 1)
+
+            # Output coord (genotype_genome.coord)
             print >> coord_out_file, "%d\t%d\t%d" % \
                 (len(out_chr_seq), left, right - left + 1)
             out_chr_seq += allele_seq
@@ -276,19 +283,33 @@ def build_genotype_genome(reference,
                 var_left, var_type, var_data, var_id = var
                 new_var_id = "hv%d" % var_num
                 varID2htID[var_id] = new_var_id
+                new_var_left = var_left + left + off
+                assert var_type in ["single", "deletion"]
+                assert new_var_left < len(out_chr_seq)
+                if var_type == "single":                    
+                    assert out_chr_seq[new_var_left] != var_data
+                else:
+                    assert var_type == "deletion"
+                    assert new_var_left + var_data <= len(out_chr_seq)
+                    
                 print >> var_out_file, "%s\t%s\t%s\t%d\t%s" % \
-                    (new_var_id, var_type, chr, var_left + left + off, var_data)
+                    (new_var_id, var_type, chr, new_var_left, var_data)
                 var_num += 1
-
+                
             # Output haplotypes (genotype_genome.haplotype)
             for haplotype in haplotypes:
                 ht_left, ht_right, ht_vars = haplotype
+                new_ht_left = ht_left + left + off
+                assert new_ht_left < len(out_chr_seq)
+                new_ht_right = ht_right + left + off
+                assert new_ht_left <= new_ht_right
+                assert new_ht_right <= len(out_chr_seq)
                 new_ht_vars = []
                 for var_id in ht_vars:
                     assert var_id in varID2htID
                     new_ht_vars.append(varID2htID[var_id])
                 print >> haplotype_out_file, "ht%d\t%s\t%d\t%d\t%s" % \
-                    (haplotype_num, chr, ht_left + left + off, ht_right + left + off, ','.join(new_ht_vars))
+                    (haplotype_num, chr, new_ht_left, new_ht_right, ','.join(new_ht_vars))
                 haplotype_num += 1
 
             # Output link information between alleles and variants (genotype_genome.link)
@@ -316,10 +337,30 @@ def build_genotype_genome(reference,
             print >> genome_out_file, out_chr_seq[s:s+line_width]
 
     genome_out_file.close()
+    gene_out_file.close()
     var_out_file.close()
     haplotype_out_file.close()
     link_out_file.close()
     coord_out_file.close()
+
+    # Build HISAT2 graph indexes based on the above information
+    hisat2_index_fnames = ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
+    hisat2_build = os.path.join(ex_path, "hisat2-build")
+    build_cmd = [hisat2_build,
+                 "-p", str(threads),
+                 "--snp", "%s.snp" % base_fname,
+                 "--haplotype", "%s.haplotype" % base_fname,
+                 "%s.fa" % base_fname,
+                 "%s" % base_fname]
+    if verbose:
+        print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
+    proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+    proc.communicate()        
+    if not check_files(hisat2_index_fnames):
+        print >> sys.stderr, "Error: indexing failed!  Perhaps, you may have forgotten to build hisat2 executables?"
+        sys.exit(1)
+
+
 
         
 """
@@ -345,6 +386,11 @@ if __name__ == '__main__':
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes")
+    parser.add_argument("-p", "--threads",
+                        dest="threads",
+                        type=int,
+                        default=1,
+                        help="Number of threads") 
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -361,4 +407,5 @@ if __name__ == '__main__':
                           args.base_fname,
                           args.gap,
                           args.split,
+                          args.threads,
                           args.verbose)
