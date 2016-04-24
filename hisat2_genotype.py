@@ -258,8 +258,7 @@ def genotype(reference_type,
         test_HLA_list = test_list[test_i]
         for test_HLA_names in test_HLA_list:
             print >> sys.stderr, "\t%s" % (test_HLA_names)
-            for test_HLA_name in test_HLA_names:
-                gene = test_HLA_name
+            for gene in test_HLA_names:
                 ref_allele = genes[gene]
                 ref_seq = gene_seqs[gene]
                 # ref_exons = refHLA_loci[gene][-1]
@@ -406,7 +405,8 @@ def genotype(reference_type,
                             break
                     """
 
-                    if right_pos - base_locus > len(ref_seq):
+                    if left_pos < base_locus or \
+                            right_pos - base_locus > len(ref_seq):
                         continue
                 
                     def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, exon = True):
@@ -561,7 +561,6 @@ def genotype(reference_type,
                                         # else:
                                         #    add_count(var_id, -1)
                                 var_idx += 1
-
                             cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos-base_locus]))
                             MD_match_len = 0
                             cigar_match_len += 1

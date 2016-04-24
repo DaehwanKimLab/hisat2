@@ -86,6 +86,9 @@ def genotype_test(reference_type,
         else:
             basic_test, pair_test = False, True
 
+    # daehwan - for debugging purposes
+    basic_test, pair_test = False, True
+
     test_passed = {}
     test_list = []
     genes = HLAs.keys()
