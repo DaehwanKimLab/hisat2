@@ -103,6 +103,16 @@ def read_links(fname):
 
 
 """
+"""
+def read_clnsig(fname):
+    clnsig_dic = {}
+    for line in open(fname):
+        var_id, gene, clnsig = line.strip().split('\t')
+        clnsig_dic[var_id] = [gene, clnsig]
+    return clnsig_dic
+
+
+"""
 Compare two variants
 """
 def compare_vars(a, b):
@@ -132,8 +142,8 @@ def compare_vars(a, b):
 """
 def build_genotype_genome(reference,
                           base_fname,                          
-                          gap,
-                          split,
+                          inter_gap,
+                          intra_gap,
                           threads,
                           verbose):    
     # Current script directory
@@ -159,6 +169,35 @@ def build_genotype_genome(reference,
     # Load genomic sequences
     chr_dic, chr_names = read_genome(open(reference))
 
+    # Extract variants from the ClinVar database
+    CLINVAR_fnames = ["clinvar.snp",
+                      "clinvar.haplotype",
+                      "clinvar.clnsig"]
+
+    if not check_files(CLINVAR_fnames):
+        extract_clinvar_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes_VCF.py")
+        extract_cmd = [extract_clinvar_script]
+        extract_cmd += ["--inter-gap", str(inter_gap),
+                        "--intra-gap", str(intra_gap),
+                        "--genotype-vcf", "clinvar_20160203.vcf.gz",
+                        reference, "/dev/null", "clinvar"]
+        if verbose:
+            print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
+        proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+        proc.communicate()
+        if not check_files(CLINVAR_fnames):
+            print >> sys.stderr, "Error: extract variants from clinvar failed!"
+            sys.exit(1)
+
+    # Read variants to be genotyped
+    genotype_vars = read_variants("clinvar.snp")
+
+    # Read haplotypes
+    genotype_haplotypes = read_haplotypes("clinvar.haplotype")
+
+    # Read information about clinical significance
+    genotype_clnsig = read_clnsig("clinvar.clnsig")
+
     # Genes to be genotyped
     genotype_genes = {}
 
@@ -178,8 +217,8 @@ def build_genotype_genome(reference,
         extract_cmd = [extract_hla_script]
         # if partial:
         #    extract_cmd += ["--partial"]
-        extract_cmd += ["--gap", "30",
-                        "--split", "50"]
+        extract_cmd += ["--inter-gap", str(inter_gap),
+                        "--intra-gap", str(intra_gap)]
         if verbose:
             print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -208,6 +247,7 @@ def build_genotype_genome(reference,
     haplotype_out_file = open("%s.haplotype" % base_fname, 'w')
     link_out_file = open("%s.link" % base_fname, 'w')
     coord_out_file = open("%s.coord" % base_fname, 'w')
+    clnsig_out_file = open("%s.clnsig" % base_fname, 'w')
     for chr in chr_names:
         assert chr in chr_dic
         chr_seq = chr_dic[chr]
@@ -226,12 +266,59 @@ def build_genotype_genome(reference,
             return a_lenght - b_length
         chr_genes = sorted(chr_genes, cmp=gene_cmp)
 
+        chr_genotype_vars, chr_genotype_vari = [], 0
+        if chr in genotype_vars:
+            chr_genotype_vars = genotype_vars[chr]
+        chr_genotype_haplotypes, chr_genotype_hti = [], 0
+        if chr in genotype_haplotypes:
+            chr_genotype_haplotypes = genotype_haplotypes[chr]
+
+        def add_vars(left, right, chr_genotype_vari, chr_genotype_hti, haplotype_num):
+            # Output variants with clinical significance
+            while chr_genotype_vari < len(chr_genotype_vars):
+                var_left, var_type, var_data, var_id =  chr_genotype_vars[chr_genotype_vari]
+                var_right = var_left
+                if var_type == "deletion":
+                    var_right += var_data
+                if var_right > right:
+                    break
+                if var_right >= left:
+                    continue
+
+                print >> var_out_file, "%s\t%s\t%s\t%d\t%s" % \
+                    (var_id, var_type, chr, var_left + off, var_data)
+
+                assert var_id in genotype_clnsig
+                var_gene, clnsig = genotype_clnsig[var_id]
+                print >> clnsig_out_file, "%s\t%s\t%s" % \
+                    (var_id, var_gene, clnsig)
+                
+                chr_genotype_vari += 1
+
+            # Output haplotypes
+            while chr_genotype_hti < len(chr_genotype_haplotypes):
+                ht_left, ht_right, ht_vars =  chr_genotype_haplotypes[chr_genotype_hti]
+                if ht_right > right:
+                    break
+                if ht_right >= left:
+                    continue
+
+                print >> haplotype_out_file, "ht%d\t%s\t%d\t%d\t%s" % \
+                    (haplotype_num, chr, ht_left + off, ht_right + off, ','.join(ht_vars))
+                chr_genotype_hti += 1
+                haplotype_num += 1
+
+            return chr_genotype_vari, chr_genotype_hti, haplotype_num
+
         out_chr_seq = ""
         
         off = 0
         prev_right = 0
         for gene in chr_genes:
             left, right, length, name, family = gene
+
+            chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(left, right, chr_genotype_vari, chr_genotype_hti, haplotype_num)
+
             # Read HLA backbone sequences
             allele_seqs = read_sequences("%s_backbone.fa" % family)
 
@@ -323,6 +410,9 @@ def build_genotype_genome(reference,
             off += (length - prev_length)
 
             prev_right = right + 1
+
+        # Write the rest of the Vars
+        add_vars(10000000000, 10000000000, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
             
         print >> coord_out_file, "%d\t%d\t%d" % \
             (len(out_chr_seq), prev_right, len(chr_seq) - prev_right)
@@ -342,6 +432,7 @@ def build_genotype_genome(reference,
     haplotype_out_file.close()
     link_out_file.close()
     coord_out_file.close()
+    clnsig_out_file.close()
 
     # Build HISAT2 graph indexes based on the above information
     hisat2_index_fnames = ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
@@ -361,7 +452,6 @@ def build_genotype_genome(reference,
         sys.exit(1)
 
 
-
         
 """
 """
@@ -376,13 +466,13 @@ if __name__ == '__main__':
                         nargs='?',
                         type=str,
                         help="base filename for genotype genome")
-    parser.add_argument("-g", "--gap",
-                        dest="gap",
+    parser.add_argument("--inter-gap",
+                        dest="inter_gap",
                         type=int,
                         default=30,
                         help="Maximum distance for variants to be in the same haplotype")
-    parser.add_argument("-s", "--split",
-                        dest="split",
+    parser.add_argument("--intra-gap",
+                        dest="intra_gap",
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes")
@@ -400,12 +490,12 @@ if __name__ == '__main__':
     if not args.reference or not args.base_fname:
         parser.print_help()
         sys.exit(1)
-    if args.gap > args.split:
-        print >> sys.stderr, "Error: -g/--gap (%d) must be smaller than -s/--split (%d)" % (args.gap, args.split)
+    if args.inter_gap > args.intra_gap:
+        print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
     build_genotype_genome(args.reference,
                           args.base_fname,
-                          args.gap,
-                          args.split,
+                          args.inter_gap,
+                          args.intra_gap,
                           args.threads,
                           args.verbose)

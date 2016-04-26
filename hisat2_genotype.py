@@ -69,7 +69,8 @@ def genotype(reference_type,
                        "%s.snp" % base_fname,
                        "%s.haplotype" % base_fname,
                        "%s.link" % base_fname,
-                       "%s.coord" % base_fname]
+                       "%s.coord" % base_fname,
+                       "%s.clnsig" % base_fname]
     # hisat2 graph index files
     genotype_fnames += ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
 
@@ -193,6 +194,11 @@ def genotype(reference_type,
     for line in open("%s.snp" % base_fname):
         var_id, var_type, chr, pos, data = line.strip().split('\t')
         pos = int(pos)
+
+        # daehwan - for debugging purposes
+        if var_id not in var_genes:
+            continue
+        
         assert var_id in var_genes
         gene_name = var_genes[var_id]
         """
@@ -861,6 +867,125 @@ def genotype(reference_type,
                             break
                     print >> sys.stderr
                 """
+
+    # Read variants with clinical significance
+    clnsigs = {}
+    for line in open("%s.clnsig" % base_fname):
+        var_id, var_gene, var_clnsig = line.strip().split('\t')
+        clnsigs[var_id] = [var_gene, var_clnsig]
+
+    vars, Var_list = {}, {}
+    for line in open("%s.snp" % base_fname):
+        var_id, type, chr, left, data = line.strip().split()
+        if var_id not in clnsigs:
+            continue
+        left = int(left)
+        if type == "deletion":
+            data = int(data)
+        vars[var_id] = [chr, left, type, data]
+        if chr not in Var_list:
+            Var_list[chr] = []
+        Var_list[chr].append([left, var_id])
+
+    var_counts = {}
+
+    # Read alignments
+    alignview_cmd = ["samtools",
+                     "view",
+                     "hla_input.bam"]
+    bamview_proc = subprocess.Popen(alignview_cmd,
+                                    stdout=subprocess.PIPE,
+                                    stderr=open("/dev/null", 'w'))
+
+    for line in bamview_proc.stdout:
+        cols = line.strip().split()
+        read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
+        read_seq, qual = cols[9], cols[10]
+        num_reads += 1
+        total_read_len += len(read_seq)
+        flag, pos = int(flag), int(pos)
+        pos -= 1
+        if pos < 0:
+            continue
+
+        if flag & 0x4 != 0:
+            continue
+
+        NM, Zs, MD = "", "", ""
+        for i in range(11, len(cols)):
+            col = cols[i]
+            if col.startswith("Zs"):
+                Zs = col[5:]
+            elif col.startswith("MD"):
+                MD = col[5:]
+            elif col.startswith("NM"):
+                NM = int(col[5:])
+
+        # if NM > num_mismatch:
+        #    continue
+
+        read_vars = []
+        if Zs:
+            read_vars = Zs.split(',')
+        for read_var in read_vars:
+            _, _, var_id = read_var.split('|')
+            if var_id not in clnsigs:
+                continue
+            if var_id not in var_counts:
+                var_counts[var_id] = [1, 0]
+            else:
+                var_counts[var_id][0] += 1
+
+        assert MD != ""
+        MD_str_pos, MD_len = 0, 0
+        read_pos, left_pos = 0, pos
+        right_pos = left_pos
+        cigars = cigar_re.findall(cigar_str)
+        cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+        cmp_list = []
+        for i in range(len(cigars)):
+            cigar_op, length = cigars[i]
+            if cigar_op == 'M':
+                chr_var_list = Var_list[chr]
+                var_idx = lower_bound(chr_var_list, right_pos)
+                while var_idx < len(chr_var_list):
+                    var_pos, var_id = chr_var_list[var_idx]
+                    if var_pos >= right_pos + length:
+                        break
+                    if var_pos >= right_pos:
+                        assert var_id in vars
+                        _, _, var_type, var_data = vars[var_id]
+                        contradict = False
+                        if var_type == "single":
+                            contradict = (read_seq[read_pos + var_pos - right_pos] == chr_seq[var_pos])
+                        elif var_type == "insertion":
+                            contradict = (right_pos < var_pos)
+                        else:
+                            contradict = True
+                        if contradict:
+                            if var_id not in var_counts:
+                                var_counts[var_id] = [0, 1]
+                            else:
+                                var_counts[var_id][1] += 1
+                    
+                    var_idx += 1
+                    
+            if cigar_op in "MND":
+                right_pos += length
+
+            if cigar_op in "MIS":
+                read_pos += length
+
+    for var_id, counts in var_counts.items():
+        if counts[0] < 2: # or counts[0] * 3 < counts[1]:
+            continue
+        assert var_id in vars
+        var_chr, var_left, var_type, var_data = vars[var_id]
+        assert var_id in clnsigs
+        var_gene, var_clnsig = clnsigs[var_id]
+        print >> sys.stderr, "\t\t\t%s %s: %s:%d %s %s (%s): %d-%d" % \
+                (var_gene, var_id, var_chr, var_left, var_type, var_data, var_clnsig, counts[0], counts[1])
+
 
                 
 """

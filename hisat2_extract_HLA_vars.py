@@ -48,8 +48,8 @@ def extract_HLA_vars(base_fname,
                      reference_type,
                      hla_list,
                      partial,
-                     gap,
-                     split,
+                     inter_gap,
+                     intra_gap,
                      DRB1_REF,
                      verbose):
     # Current script directory
@@ -567,7 +567,7 @@ def extract_HLA_vars(base_fname,
                 key_j = keys[j]
                 locus2, type2, data2 = key_j.split('-')
                 locus2 = int(locus2)
-                if prev_locus + gap < locus2:
+                if prev_locus + inter_gap < locus2:
                     break
                 prev_locus = locus2
                 if type == 'D':
@@ -603,7 +603,7 @@ def extract_HLA_vars(base_fname,
                         prev_locus, locus = int(prev_locus), int(locus)
                         if prev_type == 'D':
                             prev_locus += (int(prev_data) - 1)
-                        if prev_locus + split < locus:
+                        if prev_locus + intra_gap < locus:
                             split_haplotypes.add('#'.join(haplotype[prev_s:s]))
                             prev_s = s
                         s += 1
@@ -671,7 +671,7 @@ def extract_HLA_vars(base_fname,
                     hc_end = hc_begin
                     if hc_type == 'D':
                         hc_end += (int(hc_data) - 1)
-                    if hc_end + gap < h_begin:
+                    if hc_end + inter_gap < h_begin:
                         break
                     if h_new_begin > hc_end:
                         h_new_begin = hc_end
@@ -736,13 +736,13 @@ if __name__ == '__main__':
                         dest="partial",
                         action="store_true",
                         help="Include partial alleles (e.g. A_nuc.fasta)")
-    parser.add_argument("-g", "--gap",
-                        dest="gap",
+    parser.add_argument("--inter-gap",
+                        dest="inter_gap",
                         type=int,
                         default=30,
                         help="Maximum distance for variants to be in the same haplotype")
-    parser.add_argument("-s", "--split",
-                        dest="split",
+    parser.add_argument("--intra-gap",
+                        dest="intra_gap",
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes")
@@ -757,8 +757,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     args.hla_list = args.hla_list.split(',')
-    if args.gap > args.split:
-        print >> sys.stderr, "Error: -g/--gap (%d) must be smaller than -s/--split (%d)" % (args.gap, args.split)
+    if args.inter_gap > args.intra_gap:
+        print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome" % (args.reference_type)
@@ -767,7 +767,7 @@ if __name__ == '__main__':
                      args.reference_type,
                      args.hla_list,
                      args.partial,
-                     args.gap,
-                     args.split,
+                     args.inter_gap,
+                     args.intra_gap,
                      args.DRB1_REF,
                      args.verbose)
