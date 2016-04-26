@@ -444,6 +444,8 @@ def main(genome_file,
 
             chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = line.strip().split()
             pos = int(pos) - 1
+            if chr not in chr_dic:
+                continue
 
             gene = None
             for g in genotype_gene_list:
@@ -485,6 +487,7 @@ def main(genome_file,
                 if var_str in var_set:
                     continue
                 var[4]["CLNSIG"] = CLNSIG
+                var[4]["gene"] = gene
                 genotype_var_list[chr].append(var)
                 if var_pos < genotype_ranges[chr][gene][0]:
                     genotype_ranges[chr][gene][0] = var_pos
@@ -504,13 +507,14 @@ def main(genome_file,
                 value = genotype_ranges[chr][gene]
                 print >> sys.stderr, "%s\t%s\t%d-%d" % (chr, gene, value[0], value[1])
 
-        if extra_files:
+        if extra_files or True:
             clnsig_file = open("%s.clnsig" % base_fname, 'w')
             for chr, vars in genotype_var_list.items():
                 for var in vars:
                     varID = var[4]["id2"]
                     CLNSIG = var[4]["CLNSIG"]
-                    print >> clnsig_file, "%s\t%s" % (varID, CLNSIG)
+                    gene = var[4]["gene"]
+                    print >> clnsig_file, "%s\t%s\t%s" % (varID, gene, CLNSIG)
             clnsig_file.close()
 
     SNP_file = open("%s.snp" % base_fname, 'w')
@@ -554,142 +558,168 @@ def main(genome_file,
     num_unassigned = 0
 
     for VCF_fname in VCF_fnames:
+        empty_VCF_file = False
+        if VCF_fname == "/dev/null" or \
+                not os.path.exists(VCF_fname):
+            empty_VCF_file = True
+        
         if reference_type != "genome" and \
-                len(genotype_gene_list) > 0 and \
-                chr not in genotype_var_list:
+                len(genotype_gene_list) > 0:
             continue
 
-        if VCF_fname.endswith(".gz"):
-            vcf_cmd = ["gzip", "-cd", VCF_fname]
-        else:
-            vcf_cmd = ["cat", VCF_fname]
-        vcf_proc = subprocess.Popen(vcf_cmd,
-                                    stdout=subprocess.PIPE,
-                                    stderr=open("/dev/null", 'w'))
-
-        chr_genotype_vars = []
-        chr_genotype_ranges = {}
-        if len(genotype_gene_list) > 0:
-            assert chr in genotype_var_list
-            chr_genotype_vars = genotype_var_list[chr]
-            assert chr in genotype_ranges
-            chr_genotype_ranges = genotype_ranges[chr]
-        
-        genomeIDs = []
-        vars, genotypes_list = [], []
-        curr_right = -1
-        prev_varID, prev_chr, prev_pos = "", "", -1
-        num_lines = 0
-        for line in vcf_proc.stdout:
-            num_lines += 1
-            if line.startswith("##"):
-                continue
-
-            fields = line.strip().split()
-            chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = fields[:8]
-
-            if len(fields) >= 9:
-                format = fields[8]
-            genotypes = []
-            if len(fields) >= 10:
-                genotypes = fields[9:]
-
-            if line.startswith("#"):
-                genomeIDs = genotypes
-                num_genomes = len(genomeIDs)
-                continue
-
-            assert len(genotypes) == len(genomeIDs)
-
-            if not varID.startswith("rs") or \
-                    ';' in varID:
-                continue
-
-            if varID == prev_varID:
-                continue
-
-            if chr not in chr_dic:
-                continue
-            
-            chr_seq = chr_dic[chr]
-
-            pos = int(pos) - 1
-            offset = 0
-            gene = None
-            if num_lines % 10000 == 1:
-                print >> sys.stderr, "\t%s:%d\r" % (chr, pos),
-
-            if chr_genotype_ranges:
-                skip = True
-                for gene_, range_ in chr_genotype_ranges.items():
-                    if pos > range_[0] and pos < range_[1]:
-                        skip = False
-                        break
-                if skip:
-                    continue
-                if len(vars) == 0:
-                    for var in chr_genotype_vars:
-                        var_chr, var_pos, var_type, var_data, var_dic = var
-                        if var_pos < range_[0]:
-                            continue
-                        if var_pos > range_[1]:
-                            break
-                        if reference_type == "gene":
-                            var_pos -= range_[0]
-                        vars.append([gene_, var_pos, var_type, var_data, var_dic])
-                    curr_right = range_[1]
-                if reference_type == "gene":
-                    offset = range_[0]
-                    gene = gene_
-
-            if pos == prev_pos:
-                continue
-
-            def add_vars(pos,
-                         offset,
-                         gene,
-                         varID,
-                         ref_allele,
-                         alt_alleles,
-                         genotypes):
-                tmp_vars = extract_vars(chr_dic, chr, pos, ref_allele, alt_alleles, varID)
-                max_right = -1
-                for v in range(len(tmp_vars)):
-                    var = tmp_vars[v]
-                    _, pos2, type, data = var[:4]
-                    cnv_genotypes = []
-                    for genotype in genotypes:
-                        P1, P2 = genotype[0], genotype[2]
-                        if P1 == digit2str[v + 1]:
-                            cnv_genotypes.append('1')
-                        else:
-                            cnv_genotypes.append('0')
-                        if P2 == digit2str[v + 1]:
-                            cnv_genotypes.append('1')
-                        else:
-                            cnv_genotypes.append('0')
-
-                    # Skip SNPs not present in a given population (e.g. 2,504 genomes in 1000 Genomes Project)
-                    if cnv_genotypes != [] and \
-                            '1' not in cnv_genotypes:
-                        continue
-
-                    tmp_varID = var[4]["id2"]
-                    var_dic = {"id":varID, "id2":tmp_varID, "genotype":''.join(cnv_genotypes)}
-                    if reference_type == "gene":
-                        vars.append([gene, pos2 - offset, type, data, var_dic])
+        def add_vars(pos,
+                     offset,
+                     gene,
+                     varID,
+                     ref_allele,
+                     alt_alleles,
+                     genotypes):
+            tmp_vars = extract_vars(chr_dic, chr, pos, ref_allele, alt_alleles, varID)
+            max_right = -1
+            for v in range(len(tmp_vars)):
+                var = tmp_vars[v]
+                _, pos2, type, data = var[:4]
+                cnv_genotypes = []
+                for genotype in genotypes:
+                    P1, P2 = genotype[0], genotype[2]
+                    if P1 == digit2str[v + 1]:
+                        cnv_genotypes.append('1')
                     else:
-                        vars.append([chr, pos2, type, data, var_dic])
-                    right = pos2
-                    if type == 'D':
-                        right += (int(data) - 1)
-                    if max_right < right:
-                        max_right = right
-                return max_right
+                        cnv_genotypes.append('0')
+                    if P2 == digit2str[v + 1]:
+                        cnv_genotypes.append('1')
+                    else:
+                        cnv_genotypes.append('0')
 
+                # Skip SNPs not present in a given population (e.g. 2,504 genomes in 1000 Genomes Project)
+                if cnv_genotypes != [] and \
+                        '1' not in cnv_genotypes:
+                    continue
 
-            if len(vars) > 0 and \
-                    (curr_right + inter_gap < pos or prev_chr != chr):                    
+                tmp_varID = var[4]["id2"]
+                var_dic = {"id":varID, "id2":tmp_varID, "genotype":''.join(cnv_genotypes)}
+                if reference_type == "gene":
+                    vars.append([gene, pos2 - offset, type, data, var_dic])
+                else:
+                    vars.append([chr, pos2, type, data, var_dic])
+                right = pos2
+                if type == 'D':
+                    right += (int(data) - 1)
+                if max_right < right:
+                    max_right = right
+            return max_right
+
+        if not empty_VCF_file:
+            if VCF_fname.endswith(".gz"):
+                vcf_cmd = ["gzip", "-cd", VCF_fname]
+            else:
+                vcf_cmd = ["cat", VCF_fname]
+            vcf_proc = subprocess.Popen(vcf_cmd,
+                                        stdout=subprocess.PIPE,
+                                        stderr=open("/dev/null", 'w'))
+
+            genomeIDs = []
+            vars, genotypes_list = [], []
+            curr_right = -1
+            prev_varID, prev_chr, prev_pos = "", "", -1
+            num_lines = 0
+            for line in vcf_proc.stdout:
+                num_lines += 1
+                if line.startswith("##"):
+                    continue
+
+                fields = line.strip().split()
+                chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = fields[:8]
+
+                if len(fields) >= 9:
+                    format = fields[8]
+                genotypes = []
+                if len(fields) >= 10:
+                    genotypes = fields[9:]
+
+                if line.startswith("#"):
+                    genomeIDs = genotypes
+                    num_genomes = len(genomeIDs)
+                    continue
+
+                assert len(genotypes) == len(genomeIDs)
+
+                if not varID.startswith("rs") or \
+                        ';' in varID:
+                    continue
+
+                if varID == prev_varID:
+                    continue
+
+                if chr not in chr_dic:
+                    continue
+
+                chr_seq = chr_dic[chr]
+                chr_genotype_vars = []
+                chr_genotype_ranges = {}
+                if len(genotype_gene_list) > 0:
+                    assert chr in genotype_var_list
+                    chr_genotype_vars = genotype_var_list[chr]
+                    assert chr in genotype_ranges
+                    chr_genotype_ranges = genotype_ranges[chr]
+
+                pos = int(pos) - 1
+                offset = 0
+                gene = None
+                if num_lines % 10000 == 1:
+                    print >> sys.stderr, "\t%s:%d\r" % (chr, pos),
+
+                if chr_genotype_ranges:
+                    skip = True
+                    for gene_, range_ in chr_genotype_ranges.items():
+                        if pos > range_[0] and pos < range_[1]:
+                            skip = False
+                            break
+                    if skip:
+                        continue
+                    if len(vars) == 0:
+                        for var in chr_genotype_vars:
+                            var_chr, var_pos, var_type, var_data, var_dic = var
+                            if var_pos < range_[0]:
+                                continue
+                            if var_pos > range_[1]:
+                                break
+                            if reference_type == "gene":
+                                var_pos -= range_[0]
+                            vars.append([gene_, var_pos, var_type, var_data, var_dic])
+                        curr_right = range_[1]
+                    if reference_type == "gene":
+                        offset = range_[0]
+                        gene = gene_
+
+                if pos == prev_pos:
+                    continue
+
+                if len(vars) > 0 and \
+                        (curr_right + inter_gap < pos or prev_chr != chr):                    
+                    num_haplotypes = generate_haplotypes(SNP_file,
+                                                         haplotype_file,
+                                                         vars,
+                                                         inter_gap,
+                                                         intra_gap,
+                                                         num_genomes,
+                                                         num_haplotypes)
+                    vars = []
+                right = add_vars(pos,
+                                 offset,
+                                 gene,
+                                 varID,
+                                 ref_allele,
+                                 alt_alleles,
+                                 genotypes)
+                if curr_right < right:
+                    curr_right = right
+
+                prev_varID = varID
+                prev_chr = chr
+                prev_pos = pos
+
+            if len(vars) > 0:
                 num_haplotypes = generate_haplotypes(SNP_file,
                                                      haplotype_file,
                                                      vars,
@@ -698,29 +728,53 @@ def main(genome_file,
                                                      num_genomes,
                                                      num_haplotypes)
                 vars = []
-            right = add_vars(pos,
-                             offset,
-                             gene,
-                             varID,
-                             ref_allele,
-                             alt_alleles,
-                             genotypes)
-            if curr_right < right:
-                curr_right = right
 
-            prev_varID = varID
-            prev_chr = chr
-            prev_pos = pos
+        else:
+            vars, genotypes_list = [], []
+            num_lines = 0
 
-        if len(vars) > 0:
-            num_haplotypes = generate_haplotypes(SNP_file,
-                                                 haplotype_file,
-                                                 vars,
-                                                 inter_gap,
-                                                 intra_gap,
-                                                 num_genomes,
-                                                 num_haplotypes)
-            vars = []
+            for chr in genotype_var_list.keys():
+                chr_seq = chr_dic[chr]
+                chr_genotype_vars = genotype_var_list[chr]
+                curr_right = -1
+                for var in chr_genotype_vars:
+                    var_chr, var_pos, var_type, var_data, var_dic = var
+                    vars.append([var_chr, var_pos, var_type, var_data, var_dic])
+
+                    # daehwan - for debugging purposes
+                    num_genomes, num_haplotypes = 0, 0
+                    genotypes = []
+                    if len(vars) > 0 and curr_right + inter_gap < pos:
+                            num_haplotypes = generate_haplotypes(SNP_file,
+                                                                 haplotype_file,
+                                                                 vars,
+                                                                 inter_gap,
+                                                                 intra_gap,
+                                                                 num_genomes,
+                                                                 num_haplotypes)
+                            vars = []
+                    offset = 0
+                    right = add_vars(pos,
+                                     offset,
+                                     gene,
+                                     varID,
+                                     ref_allele,
+                                     alt_alleles,
+                                     genotypes)
+                    if curr_right < right:
+                        curr_right = right
+
+                if len(vars) > 0:
+                    num_haplotypes = generate_haplotypes(SNP_file,
+                                                         haplotype_file,
+                                                         vars,
+                                                         inter_gap,
+                                                         intra_gap,
+                                                         num_genomes,
+                                                         num_haplotypes)
+                    vars = []
+                    
+
 
     SNP_file.close()
     haplotype_file.close()
@@ -789,9 +843,32 @@ if __name__ == '__main__':
 
     if args.genotype_vcf != "":
         if args.genotype_gene_list == "":
+            genes = set()
+            if args.genotype_vcf.endswith(".gz"):
+                vcf_cmd = ["gzip", "-cd", args.genotype_vcf]
+            else:
+                vcf_cmd = ["cat", args.genotype_vcf]
+            vcf_proc = subprocess.Popen(vcf_cmd,
+                                        stdout=subprocess.PIPE,
+                                        stderr=open("/dev/null", 'w'))
+            for line in vcf_proc.stdout:
+                if line.startswith("#"):
+                    continue
+
+                info = line.strip().split()[-1]
+                if info.find("GENEINFO=") == -1:
+                    continue
+                gene = info.split("GENEINFO=")[1]
+                gene = gene.split(':')[0]
+                genes.add(gene)
+            args.genotype_gene_list = list(genes)
+        else:
+            args.genotype_gene_list = args.genotype_gene_list.split(',')
+
+        if len(args.genotype_gene_list) == 0:
             print >> sys.stderr, "Error: please specify --genotype-gene-list."
             sys.exit(1)
-        args.genotype_gene_list = args.genotype_gene_list.split(',')
+
     else:
         args.genotype_gene_list = []
 
