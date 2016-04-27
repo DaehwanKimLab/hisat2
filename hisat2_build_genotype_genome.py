@@ -170,16 +170,21 @@ def build_genotype_genome(reference,
     chr_dic, chr_names = read_genome(open(reference))
 
     # Extract variants from the ClinVar database
-    CLINVAR_fnames = ["clinvar.snp",
+    CLINVAR_fnames = ["clinvar.vcf.gz",
+                      "clinvar.snp",
                       "clinvar.haplotype",
                       "clinvar.clnsig"]
 
     if not check_files(CLINVAR_fnames):
+        if not os.path.exists("clinvar.vcf.gz"):
+            os.system("wget ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz")
+        assert os.path.exists("clinvar.vcf.gz")
+            
         extract_clinvar_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes_VCF.py")
         extract_cmd = [extract_clinvar_script]
         extract_cmd += ["--inter-gap", str(inter_gap),
                         "--intra-gap", str(intra_gap),
-                        "--genotype-vcf", "clinvar_20160203.vcf.gz",
+                        "--genotype-vcf", "clinvar.vcf.gz",
                         reference, "/dev/null", "clinvar"]
         if verbose:
             print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
@@ -247,24 +252,24 @@ def build_genotype_genome(reference,
     haplotype_out_file = open("%s.haplotype" % base_fname, 'w')
     link_out_file = open("%s.link" % base_fname, 'w')
     coord_out_file = open("%s.coord" % base_fname, 'w')
-    clnsig_out_file = open("%s.clnsig" % base_fname, 'w')
+    clnsig_out_file = open("%s.clnsig" % base_fname, 'w')    
     for chr in chr_names:
         assert chr in chr_dic
         chr_seq = chr_dic[chr]
         chr_len = len(chr_seq)
-        if chr not in genotype_genes:
-            continue
-
-        chr_genes = genotype_genes[chr]
-        def gene_cmp(a, b):
-            a_left, a_right, a_length = a[:3]
-            b_left, b_right, b_length = b[:3]
-            if a_left != b_left:
-                return a_left - b_left
-            if a_right != b_right:
-                return a_right - b_right
-            return a_lenght - b_length
-        chr_genes = sorted(chr_genes, cmp=gene_cmp)
+        if chr in genotype_genes:
+            chr_genes = genotype_genes[chr]
+            def gene_cmp(a, b):
+                a_left, a_right, a_length = a[:3]
+                b_left, b_right, b_length = b[:3]
+                if a_left != b_left:
+                    return a_left - b_left
+                if a_right != b_right:
+                    return a_right - b_right
+                return a_lenght - b_length
+            chr_genes = sorted(chr_genes, cmp=gene_cmp)
+        else:
+            chr_genes = []
 
         chr_genotype_vars, chr_genotype_vari = [], 0
         if chr in genotype_vars:

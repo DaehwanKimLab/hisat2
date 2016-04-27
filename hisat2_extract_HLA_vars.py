@@ -62,8 +62,6 @@ def extract_HLA_vars(base_fname,
 
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
-    gene_to_fname = {"A" : "A", "B" : "B", "C" : "C",
-                     "DQA1" : "DQA", "DQB1" : "DQB", "DRB1" : "DRB1"}
     hla_ref_file = open("hla.ref", 'w')
     HLA_genes, HLA_gene_strand = {}, {}
     for gene in hla_list:
@@ -72,7 +70,7 @@ def extract_HLA_vars(base_fname,
                        "--score-min", "C,0",
                        "--no-unal",
                        "-x", "grch38/genome",
-                       "-f", "IMGTHLA/fasta/%s_gen.fasta" % gene_to_fname[gene]]
+                       "-f", "IMGTHLA/fasta/%s_gen.fasta" % gene]
         align_proc = subprocess.Popen(aligner_cmd,
                                       stdout=subprocess.PIPE,
                                       stderr=open("/dev/null", 'w'))
@@ -94,7 +92,7 @@ def extract_HLA_vars(base_fname,
         align_proc.communicate()
         assert allele_id != ""
         allele_name = ""
-        for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene_to_fname[gene]):
+        for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene):
             line = line.strip()
             if not line.startswith('>'):
                 continue
@@ -186,7 +184,7 @@ def extract_HLA_vars(base_fname,
                     HLA_seqs[id] += ''.join(fives)
             return HLA_names, HLA_seqs
 
-        HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % gene_to_fname[HLA_gene]
+        HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % HLA_gene
         if not os.path.exists(HLA_MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
             continue
