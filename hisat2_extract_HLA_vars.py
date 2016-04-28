@@ -192,12 +192,28 @@ def extract_HLA_vars(base_fname,
 
         # Identify a consensus sequence
         assert len(HLA_seqs) > 0
-        seq_len = len(HLA_seqs[0])
+
+        # Check sequences are of equal length
+        seq_lens = {}
+        for s in range(len(HLA_seqs)):
+            seq_len = len(HLA_seqs[s])
+            if seq_len not in seq_lens:
+                seq_lens[seq_len] = 1
+            else:
+                seq_lens[seq_len] += 1
+        max_seq_count = 0
+        for tmp_seq_len, tmp_seq_count in seq_lens.items():
+            if tmp_seq_count > max_seq_count:
+                seq_len = tmp_seq_len
+                max_seq_count = tmp_seq_count
+        
         if reference_type == "gene" and \
                 (not DRB1_REF or HLA_gene != "DRB1"):
             consensus_count = [[0, 0, 0, 0] for i in range(seq_len)]
-            for i in range(len(HLA_seqs)):
+            for i in range(len(HLA_seqs)):                
                 HLA_seq = HLA_seqs[i]
+                if len(HLA_seq) != seq_len:
+                    continue                    
                 for j in range(seq_len):
                     nt = HLA_seq[j]
                     if not nt in "ACGT":
@@ -278,11 +294,6 @@ def extract_HLA_vars(base_fname,
                 HLA_seqs[i] = reverse_complement(HLA_seqs[i])
             backbone_seq = reverse_complement(backbone_seq)
 
-        # sanity check -
-        #    Assert the input MSF are of the same length
-        for i in range(1, len(HLA_seqs)):
-            assert seq_len == len(HLA_seqs[i])
-
         print >> sys.stderr, "%s: number of HLA genes is %d." % (HLA_gene, len(HLA_names))
 
         Vars = {}
@@ -291,6 +302,11 @@ def extract_HLA_vars(base_fname,
                 continue
             assert id < len(HLA_seqs)
             cmp_seq = HLA_seqs[id]
+
+            if len(cmp_seq) != seq_len:
+                print >> sys.stderr, "Warning: the length of %s (%d) is different from %d" % \
+                    (cmp_name, len(cmp_seq), seq_len)
+                continue
 
             """
             for s in range(0, seq_len, 100):
@@ -406,6 +422,10 @@ def extract_HLA_vars(base_fname,
             constr_seq = backbone_seq.replace('.', '')
             constr_seq = list(constr_seq)
             locus_diff = 0
+
+            if cmp_name not in HLA_Vars:
+                continue
+            
             for var in HLA_Vars[cmp_name]:
                 try:
                     locus, type, data = var.split('-')
