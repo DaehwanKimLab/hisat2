@@ -422,7 +422,7 @@ def build_genotype_genome(reference,
             prev_right = right + 1
 
         # Write the rest of the Vars
-        add_vars(10000000000, 10000000000, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
+        chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(10000000000, 10000000000, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
             
         print >> coord_out_file, "%d\t%d\t%d" % \
             (len(out_chr_seq), prev_right, len(chr_seq) - prev_right)

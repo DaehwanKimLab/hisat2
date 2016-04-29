@@ -884,14 +884,14 @@ public:
 		if(!fout1.good()) {
 			cerr << "Could not open index file for writing: \"" << _in1Str.c_str() << "\"" << endl
 			     << "Please make sure the directory exists and that permissions allow writing by" << endl
-			     << "Bowtie." << endl;
+			     << "HISAT2." << endl;
 			throw 1;
 		}
 		ofstream fout2(_in2Str.c_str(), ios::binary);
 		if(!fout2.good()) {
 			cerr << "Could not open index file for writing: \"" << _in2Str.c_str() << "\"" << endl
 			     << "Please make sure the directory exists and that permissions allow writing by" << endl
-			     << "Bowtie." << endl;
+			     << "HISAT2." << endl;
 			throw 1;
 		}
 
