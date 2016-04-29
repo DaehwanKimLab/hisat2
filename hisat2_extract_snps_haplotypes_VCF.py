@@ -76,6 +76,7 @@ def compatible_vars(a, b):
     b_chr, b_pos, b_type, b_data = b[:4]
     assert a_chr == b_chr
     assert a_pos <= b_pos
+    
     if a_pos == b_pos:
         return False
     if a_type == 'D':
@@ -191,13 +192,16 @@ def generate_haplotypes(snp_file,
         for v2 in range(v + 1, len(vars)):
             if vars_cmpt[v2] >= 0:
                 continue
-            var2_chr, var2_pos = vars[v2][:2]
-            if var_chr != var2_chr:
-                break
-            if var_pos < var2_pos:
-                break
+            var2_chr, var2_pos, var2_type = vars[v2][:3]
+            assert var_chr == var2_chr
+            if var_type == 'D' and var2_type == 'D':
+                if var_pos + 1 < var2_pos:
+                    break
+            else:
+                if var_pos < var2_pos:
+                    break
             vars_cmpt[v2] = v
-
+            
     # Assign genotypes for those missing genotypes
     genotypes_list = []
     if num_genomes > 0:
@@ -741,9 +745,8 @@ def main(genome_file,
                 vars = []
                 for var in chr_genotype_vars:
                     var_chr, var_pos, var_type, var_data, var_dic = var
-                    vars.append([var_chr, var_pos, var_type, var_data, var_dic])
                     num_genomes = 0
-                    if len(vars) > 0 and curr_right + inter_gap < pos:
+                    if len(vars) > 0 and curr_right + inter_gap < var_pos:
                         num_haplotypes = generate_haplotypes(SNP_file,
                                                              haplotype_file,
                                                              vars,
@@ -752,7 +755,7 @@ def main(genome_file,
                                                              num_genomes,
                                                              num_haplotypes)
                         vars = []
-
+                    vars.append([var_chr, var_pos, var_type, var_data, var_dic])
                     curr_right = var_pos
                     if var_type == 'D':
                         curr_right += (var_data - 1)
