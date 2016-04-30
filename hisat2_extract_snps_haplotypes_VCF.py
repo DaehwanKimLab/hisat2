@@ -411,6 +411,7 @@ def main(genome_file,
          base_fname,
          inter_gap,
          intra_gap,
+         only_rs,
          reference_type,
          genotype_vcf,
          genotype_gene_list,
@@ -629,10 +630,12 @@ def main(genome_file,
                     continue
 
                 fields = line.strip().split()
+
                 chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = fields[:8]
 
                 if len(fields) >= 9:
                     format = fields[8]
+               
                 genotypes = []
                 if len(fields) >= 10:
                     genotypes = fields[9:]
@@ -644,8 +647,10 @@ def main(genome_file,
 
                 assert len(genotypes) == len(genomeIDs)
 
-                if not varID.startswith("rs") or \
-                        ';' in varID:
+                if only_rs and not varID.startswith("rs"):
+                    continue
+
+                if ';' in varID:
                     continue
 
                 if varID == prev_varID:
@@ -814,6 +819,10 @@ if __name__ == '__main__':
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes (default: 50)")
+    parser.add_argument('--non-rs',
+                        dest='only_rs',
+                        action='store_false',
+                        help='Allow SNP IDs not begining with rs')
     parser.add_argument('--genotype-vcf',
                         dest='genotype_vcf',
                         type=str,
@@ -877,6 +886,7 @@ if __name__ == '__main__':
          args.base_fname,
          args.inter_gap,
          args.intra_gap,
+         args.only_rs,
          args.reference_type,
          args.genotype_vcf,
          args.genotype_gene_list,
