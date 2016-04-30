@@ -584,7 +584,6 @@ def main(genome_file,
 
             genomeIDs = []
             vars, genotypes_list = [], []
-            curr_right = -1
             prev_varID, prev_chr, prev_pos = "", "", -1
             num_lines = 0
             for line in vcf_proc.stdout:
@@ -595,6 +594,8 @@ def main(genome_file,
                 fields = line.strip().split()
 
                 chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = fields[:8]
+                if prev_chr != chr:
+                    curr_right = -1
 
                 if len(fields) >= 9:
                     format = fields[8]

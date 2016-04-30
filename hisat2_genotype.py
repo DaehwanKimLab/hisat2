@@ -50,6 +50,7 @@ def read_genome(genome_file):
 """
 def genotype(reference_type,
              base_fname,
+             fastq,
              read_fnames,
              threads,
              simulate_interval,
@@ -87,18 +88,22 @@ def genotype(reference_type,
     # Align reads, and sort the alignments into a BAM file
     hisat2 = os.path.join(ex_path, "hisat2")
     aligner_cmd = [hisat2,
-                   "--no-unal",
-                   "--mm"]
+                   "--no-unal"]
+    # aligner_cmd += ["--mm"]
     aligner_cmd += ["-x", "%s" % base_fname]
 
     assert len(read_fnames) > 0
+    if not fastq:
+        aligner_cmd += ["-f"]
     single = len(read_fnames) == 1
     if single:
-        aligner_cmd += ["-f", read_fnames[0]]
+        aligner_cmd += [read_fnames[0]]
     else:
-        aligner_cmd += ["-f",
-                        "-1", read_fnames[0],
+        aligner_cmd += ["-1", read_fnames[0],
                         "-2", read_fnames[1]]
+
+    if verbose:
+        print >> sys.stderr, ' '.join(aligner_cmd)
 
     align_proc = subprocess.Popen(aligner_cmd,
                                   stdout=subprocess.PIPE,
@@ -1008,6 +1013,10 @@ if __name__ == '__main__':
                         type=str,
                         default="genotype_genome",
                         help="base filename for genotype genome")
+    parser.add_argument('-f',
+                        dest='fastq',
+                        action='store_false',
+                        help='FASTA file')    
     parser.add_argument("-U",
                         dest="read_fname_U",
                         type=str,
@@ -1072,6 +1081,7 @@ if __name__ == '__main__':
     random.seed(1)
     genotype(args.reference_type,
              args.base_fname,
+             args.fastq,
              read_fnames,
              args.threads,
              args.simulate_interval,

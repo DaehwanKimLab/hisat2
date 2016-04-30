@@ -248,6 +248,7 @@ def genotype_test(reference_type,
 
         hisat_genotype = os.path.join(ex_path, "hisat2_genotype.py")
         genotype_cmd = [hisat_genotype,
+                        "-f",
                         "--base-name", "genotype_genome",
                         "-1", "hla_input_1.fa",
                         "-2", "hla_input_2.fa"]
