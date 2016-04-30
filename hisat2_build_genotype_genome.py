@@ -28,21 +28,24 @@ from argparse import ArgumentParser, FileType
 """
 """
 def read_genome(genome_file):
-    chr_dic, chr_names = {}, []
-    chr_name, sequence = "", ""
+    chr_dic, chr_names, chr_full_names = {}, [], []
+    chr_name, chr_full_name, sequence = "", "", ""
     for line in genome_file:
         if line.startswith(">"):
             if chr_name and sequence:
                 chr_dic[chr_name] = sequence
                 chr_names.append(chr_name)
+            chr_full_name = line.strip()[1:]
             chr_name = line.strip().split()[0][1:]
+            chr_full_names.append(chr_full_name)
             sequence = ""
         else:
             sequence += line.strip()
     if chr_name and sequence:
         chr_dic[chr_name] = sequence
         chr_names.append(chr_name)
-    return chr_dic, chr_names
+        chr_full_names.append(chr_full_name)
+    return chr_dic, chr_names, chr_full_names
 
 
 """
@@ -167,7 +170,7 @@ def build_genotype_genome(reference,
         os.system("samtools faidx genome.fa")
 
     # Load genomic sequences
-    chr_dic, chr_names = read_genome(open(reference))
+    chr_dic, chr_names, chr_full_names = read_genome(open(reference))
 
     # Extract variants from the ClinVar database
     CLINVAR_fnames = ["clinvar.vcf.gz",
@@ -253,7 +256,9 @@ def build_genotype_genome(reference,
     link_out_file = open("%s.link" % base_fname, 'w')
     coord_out_file = open("%s.coord" % base_fname, 'w')
     clnsig_out_file = open("%s.clnsig" % base_fname, 'w')    
-    for chr in chr_names:
+    for c in range(len(chr_names)):
+        chr = chr_names[c]
+        chr_full_name = chr_full_names[c]
         assert chr in chr_dic
         chr_seq = chr_dic[chr]
         chr_len = len(chr_seq)
@@ -417,7 +422,7 @@ def build_genotype_genome(reference,
             prev_right = right + 1
 
         # Write the rest of the Vars
-        add_vars(10000000000, 10000000000, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
+        chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(10000000000, 10000000000, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
             
         print >> coord_out_file, "%d\t%d\t%d" % \
             (len(out_chr_seq), prev_right, len(chr_seq) - prev_right)
@@ -426,7 +431,7 @@ def build_genotype_genome(reference,
         assert len(out_chr_seq) == len(chr_seq) + off
 
         # Output chromosome sequence
-        print >> genome_out_file, ">%s" % (chr)
+        print >> genome_out_file, ">%s" % (chr_full_name)
         line_width = 60
         for s in range(0, len(out_chr_seq), line_width):
             print >> genome_out_file, out_chr_seq[s:s+line_width]

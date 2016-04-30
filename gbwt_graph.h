@@ -935,9 +935,16 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                         break;
                     }
                 } else if(snp.type == ALT_SNP_DEL) {
-                    if(snp.pos + snp.len - 1 >= snp2.pos) {
-                        pass = false;
-                        break;
+                    if(snp2.type == ALT_SNP_DEL) {
+                        if(snp.pos + snp.len >= snp2.pos) {
+                            pass = false;
+                            break;
+                        }
+                    } else {
+                        if(snp.pos + snp.len - 1 >= snp2.pos) {
+                            pass = false;
+                            break;
+                        }
                     }
                 } else {
                     if(snp.pos >= snp2.pos) {

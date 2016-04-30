@@ -115,9 +115,9 @@ def genotype(reference_type,
     sambam_proc.communicate()
     bamsort_cmd = ["samtools",
                    "sort",
-                   "hla_input_unsorted.bam",
-                   "hla_input"]
+                   "hla_input_unsorted.bam"]
     bamsort_proc = subprocess.Popen(bamsort_cmd,
+                                    stdout=open("hla_input.bam", 'w'),
                                     stderr=open("/dev/null", 'w'))
     bamsort_proc.communicate()
 
@@ -259,6 +259,9 @@ def genotype(reference_type,
             HLA_lengths[HLA_gene][allele_name] = len(seq)
     """
 
+    # Cigar regular expression
+    cigar_re = re.compile('\d+\w')
+
     test_list = [[sorted(genes.keys())]]
     for test_i in range(len(test_list)):
         test_HLA_list = test_list[test_i]
@@ -294,8 +297,6 @@ def genotype(reference_type,
                 num_reads, total_read_len = 0, 0
                 prev_read_id = None
                 prev_exon = False
-                # Cigar regular expression
-                cigar_re = re.compile('\d+\w')
                 for line in alignview_proc.stdout:
                     cols = line.strip().split()
                     read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
@@ -901,8 +902,6 @@ def genotype(reference_type,
         cols = line.strip().split()
         read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
         read_seq, qual = cols[9], cols[10]
-        num_reads += 1
-        total_read_len += len(read_seq)
         flag, pos = int(flag), int(pos)
         pos -= 1
         if pos < 0:
@@ -910,6 +909,12 @@ def genotype(reference_type,
 
         if flag & 0x4 != 0:
             continue
+
+        if chr not in Var_list:
+            continue
+
+        assert chr in chr_dic
+        chr_seq = chr_dic[chr]
 
         NM, Zs, MD = "", "", ""
         for i in range(11, len(cols)):

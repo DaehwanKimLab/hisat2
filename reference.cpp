@@ -603,7 +603,7 @@ BitPairReference::szsFromFasta(
 		if(!fout3.good()) {
 			cerr << "Could not open index file for writing: \"" << file3.c_str() << "\"" << endl
 				 << "Please make sure the directory exists and that permissions allow writing by" << endl
-				 << "Bowtie." << endl;
+				 << "HISAT2." << endl;
 			throw 1;
 		}
 		BitpairOutFileBuf bpout(file4.c_str());
