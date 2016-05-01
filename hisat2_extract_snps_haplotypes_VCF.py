@@ -96,6 +96,8 @@ def extract_vars(chr_dic, chr, pos, ref_allele, alt_alleles, varID):
     alt_alleles = alt_alleles.split(',')    
     for a in range(len(alt_alleles)):
         alt_allele = alt_alleles[a]
+        if 'N' in alt_allele:
+            continue
         ref_allele2, pos2 = ref_allele, pos
         min_len = min(len(ref_allele2), len(alt_allele))
         assert min_len >= 1

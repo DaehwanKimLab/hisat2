@@ -1359,7 +1359,7 @@ public:
                             }
                             if(failed) {
                                 _alts.pop_back();
-                                break;
+                                continue;
                             }
                         } else {
                             cerr << "Error: unknown snp type " << type << endl;
