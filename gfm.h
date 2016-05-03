@@ -1854,8 +1854,20 @@ public:
                     VMSG_NL("Converting suffix-array elements to index image");
                     buildToDisk(bsa, s, out1, out2);
                 } else {
-                    RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, _haplotypes, outfile, _nthreads, verbose);
-                    PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, outfile, _nthreads, verbose);
+                    RefGraph<index_t>* graph = new RefGraph<index_t>(
+                                                                     s,
+                                                                     szs,
+                                                                     _alts,
+                                                                     _haplotypes,
+                                                                     outfile,
+                                                                     _nthreads,
+                                                                     verbose);
+                    PathGraph<index_t>* pg = new PathGraph<index_t>(
+                                                                    *graph,
+                                                                    outfile,
+                                                                    std::numeric_limits<index_t>::max(),
+                                                                    _nthreads,
+                                                                    verbose);
 
                     if(verbose) { cerr << "Generating edges... " << endl; }
                     if(!pg->generateEdges(*graph)) { return; }
