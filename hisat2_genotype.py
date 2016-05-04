@@ -88,7 +88,8 @@ def genotype(reference_type,
     # Align reads, and sort the alignments into a BAM file
     hisat2 = os.path.join(ex_path, "hisat2")
     aligner_cmd = [hisat2,
-                   "--no-unal"]
+                   "--no-unal",
+                   "-p", str(threads)]
     # aligner_cmd += ["--mm"]
     aligner_cmd += ["-x", "%s" % base_fname]
 
@@ -120,6 +121,7 @@ def genotype(reference_type,
     sambam_proc.communicate()
     bamsort_cmd = ["samtools",
                    "sort",
+                   "--threads", str(threads),
                    "hla_input_unsorted.bam"]
     bamsort_proc = subprocess.Popen(bamsort_cmd,
                                     stdout=open("hla_input.bam", 'w'),
@@ -921,7 +923,7 @@ def genotype(reference_type,
         assert chr in chr_dic
         chr_seq = chr_dic[chr]
 
-        NM, Zs, MD = "", "", ""
+        NM, Zs, MD, NH = "", "", "", ""
         for i in range(11, len(cols)):
             col = cols[i]
             if col.startswith("Zs"):
@@ -930,9 +932,16 @@ def genotype(reference_type,
                 MD = col[5:]
             elif col.startswith("NM"):
                 NM = int(col[5:])
+            elif col.startswith("NH"):
+                NH = int(col[5:])
 
-        # if NM > num_mismatch:
-        #    continue
+        assert NH != ""
+        NH = int(NH)
+        if NH > 1:
+            continue
+
+        if NM > num_mismatch:
+            continue
 
         read_vars = []
         if Zs:
