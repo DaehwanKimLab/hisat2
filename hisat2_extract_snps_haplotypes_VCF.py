@@ -449,7 +449,7 @@ def main(genome_file,
             if line.startswith("#"):
                 continue
 
-            chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = line.strip().split()
+            chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = line.strip().split('\t')
             pos = int(pos) - 1
             if chr not in chr_dic:
                 continue
@@ -593,7 +593,7 @@ def main(genome_file,
                 if line.startswith("##"):
                     continue
 
-                fields = line.strip().split()
+                fields = line.strip().split('\t')
 
                 chr, pos, varID, ref_allele, alt_alleles, qual, filter, info = fields[:8]
                 if prev_chr != chr:
