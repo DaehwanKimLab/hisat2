@@ -905,13 +905,13 @@ const
     if(print_xs_a_) {
         if(rna_strandness_ == RNA_STRANDNESS_UNKNOWN) {
             uint8_t whichsense = res.spliced_whichsense_transcript();
-            if(whichsense != EDIT_SPL_UNKNOWN) {
+            if(whichsense != SPL_UNKNOWN) {
                 WRITE_SEP();
                 o.append("XS:A:");
-                if(whichsense == EDIT_SPL_FW || whichsense == EDIT_SPL_SEMI_FW) {
+                if(whichsense == SPL_FW || whichsense == SPL_SEMI_FW) {
                     o.append('+');
                 } else {
-                    assert(whichsense == EDIT_SPL_RC || whichsense == EDIT_SPL_SEMI_RC);
+                    assert(whichsense == SPL_RC || whichsense == SPL_SEMI_RC);
                     o.append('-');
                 }
             }

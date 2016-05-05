@@ -34,6 +34,14 @@
 #include "gfm.h"
 #include "alt.h"
 
+enum {
+    SPL_UNKNOWN = 1,
+    SPL_FW,
+    SPL_RC,
+    SPL_SEMI_FW,
+    SPL_SEMI_RC,
+};
+
 using namespace std;
 
 // #define NEW_PROB_MODEL
@@ -80,20 +88,19 @@ public:
     
 	SpliceSitePos(const SpliceSitePos& c) { init(c); }
 	
-	SpliceSitePos(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical, bool exon = false)
+	SpliceSitePos(uint32_t ref, uint32_t left, uint32_t right, uint8_t splDir, bool exon = false)
     {
-        init(ref, left, right, fw, canonical);
+        init(ref, left, right, splDir, exon);
     }
     
 	/**
 	 * Copy given fields into this Coord.
 	 */
-    void init(uint32_t ref, uint32_t left, uint32_t right, bool fw, bool canonical, bool exon = false) {
+    void init(uint32_t ref, uint32_t left, uint32_t right, uint8_t splDir, bool exon = false) {
 		_ref = ref;
 		_left = left;
         _right = right;
-		_fw = fw;
-        _canonical = canonical;
+		_splDir = splDir;
         _exon = exon;
 	}
     
@@ -104,8 +111,7 @@ public:
 		_ref = c._ref;
 		_left = c._left;
 		_right = c._right;
-        _fw = c._fw;
-        _canonical = c._canonical;
+        _splDir = c._splDir;
         _exon = c._exon;
 	}
 	
@@ -118,8 +124,7 @@ public:
 		return _ref == o._ref &&
         _left == o._left &&
         _right == o._right &&
-        _fw == o._fw &&
-        _canonical == o._canonical &&
+        _splDir == o._splDir &&
         _exon == o._exon;
         
 	}
@@ -136,8 +141,8 @@ public:
 		if(_left > o._left) return false;
         if(_right < o._right) return true;
 		if(_right > o._right) return false;
-        if(_fw != o._fw) return _fw;
-        if(_canonical != o._canonical) return _canonical;
+        if(_splDir < o._splDir) return true;
+        if(_splDir > o._splDir) return false;
         if(_exon != o._exon) return _exon;
 		return false;
 	}
@@ -161,8 +166,8 @@ public:
 		if(_left < o._left) return false;
         if(_right > o._right) return true;
 		if(_right < o._right) return false;
-        if(_fw != o._fw) return !_fw;
-        if(_canonical != o._canonical) return !_canonical;
+        if(_splDir > o._splDir) return true;
+        if(_splDir < o._splDir) return false;
         if(_exon != o._exon) return !_exon;
 		return false;
 	}
@@ -181,8 +186,7 @@ public:
 		_ref = std::numeric_limits<uint32_t>::max();
 		_left = std::numeric_limits<uint32_t>::max();
         _right = std::numeric_limits<uint32_t>::max();
-        _fw = true;
-        _canonical = true;
+        _splDir = SPL_UNKNOWN;
         _exon = false;
 	}
 	
@@ -228,8 +232,8 @@ public:
 	uint32_t ref()          const { return _ref; }
 	uint32_t left()         const { return _left; }
     uint32_t right()        const { return _right; }
-	bool     fw()           const { return _fw; }
-    bool     canonical()    const { return _canonical; }
+	uint8_t  splDir()       const { return _splDir; }
+    bool     canonical()    const { return _splDir == SPL_FW || _splDir == SPL_RC; }
     uint32_t intron_len()   const { return _right - _left - 1; }
     bool     exon() const { return _exon; }
     
@@ -238,8 +242,7 @@ protected:
 	uint32_t  _ref;             // which reference?
 	uint32_t  _left;            // 0-based offset of the right most base of the left flanking exon
     uint32_t  _right;           // 0-based offset of the left most base of the right flanking exon
-	bool      _fw;              // true -> Watson strand
-    bool      _canonical;
+    uint8_t   _splDir;
     bool      _exon;
 };
 
@@ -257,13 +260,12 @@ public:
 	SpliceSite(uint32_t ref,
                uint32_t left,
                uint32_t right,
-               bool fw,
-               bool canonical,
+               uint8_t splDir,
                bool exon = false,
                bool fromFile = false,
                bool known = false)
     {
-        init(ref, left, right, fw, canonical, exon, fromFile, known);
+        init(ref, left, right, splDir, exon, fromFile, known);
     }
 
 	/**
@@ -272,13 +274,12 @@ public:
 	void init(uint32_t ref,
               uint32_t left,
               uint32_t right,
-              bool fw,
-              bool canonical,
+              uint8_t splDir,
               bool exon = false,
               bool fromFile = false,
               bool known = false)
     {
-        SpliceSitePos::init(ref, left, right, fw, canonical, exon);
+        SpliceSitePos::init(ref, left, right, splDir, exon);
     
         // _donordint = 0;
         // _acceptordint = 0;
