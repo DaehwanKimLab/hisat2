@@ -1230,11 +1230,13 @@ public:
 	size_t             readLength()     const { return rdlen_;    }
     bool               spliced()        const { return num_spliced_ > 0;  }
     size_t             num_spliced()    const { return num_spliced_; }
-    uint8_t            spliced_whichsense_transcript() const {
+    uint8_t            spliced_whichsense_transcript() const
+    {
         uint8_t whichsense = EDIT_SPL_UNKNOWN;
         if(spliced()) {
             for(size_t i = 0; i < ned_->size(); i++) {
                 const Edit& ed = (*ned_)[i];
+                if(ed.type != EDIT_TYPE_SPL) continue;
                 if(whichsense == EDIT_SPL_UNKNOWN) {
                     whichsense = ed.splDir;
                 } else if(ed.splDir != EDIT_SPL_UNKNOWN) {
