@@ -24,6 +24,7 @@
 	  Version 2.0.4 is a minor release with the following changes.
 	  <ul>
 	    <li>Fixed NH (number of hits) in the SAM output.</li>
+	    <li>HISAT2 allows indels of any length pertaining to minimum alignment score (previously, the maximum length of indels was 3 bp) .</li>
 	  </ul>
 	  <br/>	  
 	  
