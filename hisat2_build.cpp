@@ -679,9 +679,9 @@ int hisat2_build(int argc, const char **argv) {
 			}
 		}
 		// Seed random number generator
-		srand(seed);
-		{
-			Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
+        srand(seed);
+        {
+            Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
                 driver<SString<char> >(infile, infiles, snp_fname, ht_fname, ss_fname, exon_fname, sv_fname, outfile, false, REF_READ_FORWARD);
             } catch(bad_alloc& e) {
@@ -692,9 +692,9 @@ int hisat2_build(int argc, const char **argv) {
                     throw e;
                 }
             }
-		}
-		return 0;
-	} catch(std::exception& e) {
+        }
+        return 0;
+    } catch(std::exception& e) {
 		cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
 		cerr << "Command: ";
 		for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
