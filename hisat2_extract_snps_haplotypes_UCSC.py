@@ -532,11 +532,11 @@ if __name__ == '__main__':
     parser.add_argument('genome_file',
                         nargs='?',
                         type=FileType('r'),
-                        help='input genome file')
+                        help='input genome file (e.g. genome.fa)')
     parser.add_argument('snp_fname',
                         nargs='?',
                         type=str,
-                        help='input snp file downloaded from UCSC')
+                        help='input snp file downloaded from UCSC (plain text or gzipped file is accepted: snp144Common.txt or snp144Common.txt.gz)')
     parser.add_argument("base_fname",
                         nargs='?',
                         type=str,

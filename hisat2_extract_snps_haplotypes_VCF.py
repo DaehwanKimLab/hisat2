@@ -789,15 +789,15 @@ def main(genome_file,
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Extract SNPs and haplotypes from VCF files (e.g., ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/ALL.chr22.phase3_shapeit2_mvncall_integrated_v3plus_nounphased.rsID.genotypes.GRCh38_dbSNP_no_SVs.vcf.gz)')
+        description='Extract SNPs and haplotypes from VCF files')
     parser.add_argument('genome_file',
                         nargs='?',
                         type=FileType('r'),
-                        help='input genome file')
+                        help='input genome file (e.g. genome.fa)')
     parser.add_argument('VCF_fnames',
                         nargs='?',
                         type=str,
-                        help='A comma-seperated VCF files (gz is also accepted)')
+                        help='A comma-seperated VCF files (plain text or gzipped file is accepted: GRCh38_dbSNP_no_SVs.vcf or GRCh38_dbSNP_no_SVs.vcf.gz')
     parser.add_argument("base_fname",
                         nargs='?',
                         type=str,
@@ -820,7 +820,7 @@ if __name__ == '__main__':
     parser.add_argument('--non-rs',
                         dest='only_rs',
                         action='store_false',
-                        help='Allow SNP IDs not begining with rs')
+                        help='Allow SNP IDs not beginning with rs')
     parser.add_argument('--genotype-vcf',
                         dest='genotype_vcf',
                         type=str,
