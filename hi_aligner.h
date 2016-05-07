@@ -43,11 +43,6 @@
 #include "group_walk.h"
 #include "tp.h"
 
-// Maximum insertion length
-static const uint32_t maxInsLen = 3;
-// Maximum deletion length
-static const uint32_t maxDelLen = 3;
-
 // Allow longer introns for long anchored reads involving canonical splice sites
 inline uint32_t MaxIntronLen(uint32_t anchor, uint32_t minAnchorLen) {
     uint32_t intronLen = 0;
@@ -1216,19 +1211,10 @@ bool GenomeHit<index_t>::compatibleWith(
     
     // check if there is a deletion, an insertion, or a potential intron
     // between the two partial alignments
-    if(rddif != refdif) {
-        if(rddif > refdif) {
-            if(rddif > refdif + maxInsLen) return false;
-        } else {
-            assert_geq(refdif, rddif);
-            if(refdif - rddif < minIntronLen) {
-                if(refdif - rddif > maxDelLen) return false;
-            } else {
-                if(no_spliced_alignment) return false;
-                if(refdif - rddif > maxIntronLen) {
-                    return false;
-                }
-            }
+    if(refdif >= rddif + minIntronLen) {
+        if(no_spliced_alignment) return false;
+        if(refdif > rddif + maxIntronLen) {
+            return false;
         }
     }
     return true;
@@ -1303,11 +1289,9 @@ bool GenomeHit<index_t>::combineWith(
                 assert_leq(refdif - rddif, maxIntronLen);
                 spliced = true;
             } else {
-                assert_leq(refdif - rddif, maxDelLen);
                 del = true;
             }
         } else {
-            assert_leq(rddif - refdif, maxInsLen);
             ins = true;
         }
     }
@@ -1354,9 +1338,18 @@ bool GenomeHit<index_t>::combineWith(
     int64_t remainsc = minsc - (_score - this_score) - (otherHit._score - other_score);
     if(remainsc > 0) remainsc = 0;
     int read_gaps = 0, ref_gaps = 0;
-    if(spliced) {
+    if(!spliced) {
         read_gaps = sc.maxReadGaps(remainsc + sc.canSpl(), rdlen);
         ref_gaps = sc.maxRefGaps(remainsc + sc.canSpl(), rdlen);
+    }
+    if(ins) {
+        if(refdif + ref_gaps < rddif) {
+            return false;
+        }
+    } else if(del) {
+        if(rddif + read_gaps < refdif) {
+            return false;
+        }
     }
     int this_ref_ext = read_gaps;
     if(spliced) this_ref_ext += (int)intronic_len;
@@ -1737,7 +1730,6 @@ bool GenomeHit<index_t>::combineWith(
                 if(del) {
                     assert_lt(left, right);
                     skipLen = right - left;
-                    assert_leq(skipLen, maxDelLen);
                     for(index_t j = 0; j < skipLen; j++) {
                         int temp_rfc;
                         if(i + 1 + j < len) temp_rfc = refbuf[i + 1 + j];
@@ -1750,7 +1742,6 @@ bool GenomeHit<index_t>::combineWith(
                     assert(ins);
                     assert_lt(right, left);
                     skipLen = left - right;
-                    assert_leq(skipLen, maxInsLen);
                     for(index_t j = 0; j < skipLen; j++) {
                         assert_lt(this_rdoff + i + 1 + j, seq.length());
                         int temp_rdc = seq[this_rdoff + i + 1 + j];

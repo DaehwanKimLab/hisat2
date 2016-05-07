@@ -1211,7 +1211,7 @@ def calculate_read_cost(test_NH,
     aligners = [
         # ["hisat", "", "", ""],        
         # ["hisat2", "", "", ""],
-        # ["hisat2", "x2", "", ""],
+        ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "tran", ""],
         # ["hisat2", "", "", "201b"],
