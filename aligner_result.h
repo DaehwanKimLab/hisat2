@@ -1235,6 +1235,7 @@ public:
         if(spliced()) {
             for(size_t i = 0; i < ned_->size(); i++) {
                 const Edit& ed = (*ned_)[i];
+		if(ed.type != EDIT_TYPE_SPL) continue;
                 if(whichsense == SPL_UNKNOWN) {
                     whichsense = ed.splDir;
                 } else if(ed.splDir != SPL_UNKNOWN) {
