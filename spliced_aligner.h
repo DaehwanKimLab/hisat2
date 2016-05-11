@@ -300,15 +300,56 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                         index_t frag2off = ss.left() -  (ss.right() - left);
                         if(frag2off + 1 < hitoff) continue;
                         GenomeHit<index_t> tempHit;
+                        if(fragoff + ss.right() < left + 1) continue;
+                        index_t readoff = fragoff + ss.right() - left - 1;
+                        index_t joinedOff = 0;
+                        bool success = gfm.textOffToJoined(hit.ref(), ss.left(), joinedOff);
+                        if(!success) {
+                            continue;
+                        }
+#ifndef NDEBUG
+                        index_t debug_tid = 0, debug_toff = 0, debug_tlen = 0;
+                        bool debug_straddled = false;
+                        gfm.joinedToTextOff(1, // qlen
+                                            joinedOff,
+                                            debug_tid,
+                                            debug_toff,
+                                            debug_tlen,
+                                            false,
+                                            debug_straddled);
+                        assert_eq(hit.ref(), debug_tid);
+                        assert_eq(ss.left(), debug_toff);
+#endif
                         tempHit.init(hit.fw(),
-                                     0,
-                                     hitoff,
+                                     readoff + 1, // rdoff
+                                     0, // len
                                      0, // trim5
                                      0, // trim3
                                      hit.ref(),
-                                     frag2off + 1,
-                                     (index_t)INDEX_MAX,
+                                     ss.left() + 1,
+                                     joinedOff + 1,
                                      this->_sharedVars);
+                        index_t leftext = readoff + 1, rightext = 0;
+                        tempHit.extend(rd,
+                                       gfm,
+                                       ref,
+                                       altdb,
+                                       ssdb,
+                                       swa,
+                                       swm,
+                                       prm,
+                                       sc,
+                                       this->_minsc[rdi],
+                                       rnd,
+                                       (index_t)this->_minK_local,
+                                       (index_t)this->_minIntronLen,
+                                       (index_t)this->_maxIntronLen,
+                                       this->_minAnchorLen,
+                                       this->_minAnchorLen_noncan,
+                                       leftext,
+                                       rightext);
+                        if(tempHit.len() <= 0)
+                            continue;
                         if(!tempHit.compatibleWith(
                                                    hit,
                                                    (index_t)this->_minIntronLen,
@@ -373,17 +414,58 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                             const SpliceSite& ss = spliceSites[si];
                             if(!ss._fromfile && ss._readid + this->_thread_rids_mindist > rd.rdid) continue;
                             if(right > ss.left()) continue;
-                            index_t frag2off = ss.right() - ss.left() + right + fraglen - 1;
                             GenomeHit<index_t> tempHit;
+                            index_t readoff = fragoff + ss.left() - right + 1;
+                            if(readoff >= rdlen)
+                                continue;
+                            index_t joinedOff = 0;
+                            bool success = gfm.textOffToJoined(canHit.ref(), ss.right(), joinedOff);
+                            if(!success) {
+                                continue;
+                            }
+#ifndef NDEBUG
+                            index_t debug_tid = 0, debug_toff = 0, debug_tlen = 0;
+                            bool debug_straddled = false;
+                            gfm.joinedToTextOff(1, // qlen
+                                                joinedOff,
+                                                debug_tid,
+                                                debug_toff,
+                                                debug_tlen,
+                                                false,
+                                                debug_straddled);
+                            assert_eq(canHit.ref(), debug_tid);
+                            assert_eq(ss.right(), debug_toff);
+#endif
                             tempHit.init(canHit.fw(),
-                                         fragoff + fraglen,
-                                         rdlen - fragoff - fraglen,
+                                         readoff,
+                                         0, // len
                                          0, // trim5
                                          0, // trim3
                                          canHit.ref(),
-                                         frag2off,
-                                         (index_t)INDEX_MAX,
+                                         ss.right(),
+                                         joinedOff,
                                          this->_sharedVars);
+                            index_t leftext = 0, rightext = rdlen - readoff;
+                            tempHit.extend(rd,
+                                           gfm,
+                                           ref,
+                                           altdb,
+                                           ssdb,
+                                           swa,
+                                           swm,
+                                           prm,
+                                           sc,
+                                           this->_minsc[rdi],
+                                           rnd,
+                                           (index_t)this->_minK_local,
+                                           (index_t)this->_minIntronLen,
+                                           (index_t)this->_maxIntronLen,
+                                           this->_minAnchorLen,
+                                           this->_minAnchorLen_noncan,
+                                           leftext,
+                                           rightext);
+                            if(tempHit.len() <= 0)
+                                continue;
                             if(!canHit.compatibleWith(tempHit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                             GenomeHit<index_t> combinedHit = canHit;
                             int64_t minsc = max<int64_t>(this->_minsc[rdi], best_score);
@@ -467,11 +549,10 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     const SpliceSite& ss = spliceSites[si];
                     if(!ss._fromfile && ss._readid + this->_thread_rids_mindist > rd.rdid) continue;
                     if(left + fraglen - 1 < ss.right()) continue;
-                    index_t frag2off = ss.left() -  (ss.right() - left);
-                    if(frag2off + 1 < hit.rdoff()) continue;
-                    index_t toff = frag2off + 1 - fragoff;
+                    if(fragoff + ss.right() < left + 1) continue;
+                    index_t readoff = fragoff + ss.right() - left - 1;
                     index_t joinedOff = 0;
-                    bool success = gfm.textOffToJoined(hit.ref(), toff, joinedOff);
+                    bool success = gfm.textOffToJoined(hit.ref(), ss.left(), joinedOff);
                     if(!success) {
                         continue;
                     }
@@ -486,18 +567,39 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                         false,
                                         debug_straddled);
                     assert_eq(hit.ref(), debug_tid);
-                    assert_eq(toff, debug_toff);
+                    assert_eq(ss.left(), debug_toff);
 #endif
                     GenomeHit<index_t> tempHit;
                     tempHit.init(hit.fw(),
-                                 0, // rdoff
-                                 fragoff, // len
+                                 readoff + 1, // rdoff
+                                 0, // len
                                  0, // trim5
                                  0, // trim3
                                  hit.ref(),
-                                 toff,
-                                 joinedOff,
+                                 ss.left() + 1,
+                                 joinedOff + 1,
                                  this->_sharedVars);
+                    index_t leftext = readoff + 1, rightext = 0;
+                    tempHit.extend(rd,
+                                   gfm,
+                                   ref,
+                                   altdb,
+                                   ssdb,
+                                   swa,
+                                   swm,
+                                   prm,
+                                   sc,
+                                   this->_minsc[rdi],
+                                   rnd,
+                                   (index_t)this->_minK_local,
+                                   (index_t)this->_minIntronLen,
+                                   (index_t)this->_maxIntronLen,
+                                   this->_minAnchorLen,
+                                   this->_minAnchorLen_noncan,
+                                   leftext,
+                                   rightext);
+                    if(tempHit.len() <= 0)
+                        continue;
                     if(!tempHit.compatibleWith(hit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                     int64_t minsc = this->_minsc[rdi];
                     bool combined = tempHit.combineWith(
@@ -1082,17 +1184,59 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     const SpliceSite& ss = spliceSites[si];
                     if(!ss._fromfile && ss._readid + this->_thread_rids_mindist > rd.rdid) continue;
                     if(right > ss.left()) continue;
-                    index_t frag2off = ss.right() - ss.left() + right + fraglen - 1;
                     GenomeHit<index_t> tempHit;
+                    assert_lt(right, ss.left());
+                    index_t readoff = fragoff + ss.left() - right + 1;
+                    if(readoff >= rdlen)
+                        continue;
+                    index_t joinedOff = 0;
+                    bool success = gfm.textOffToJoined(hit.ref(), ss.right(), joinedOff);
+                    if(!success) {
+                        continue;
+                    }
+#ifndef NDEBUG
+                    index_t debug_tid = 0, debug_toff = 0, debug_tlen = 0;
+                    bool debug_straddled = false;
+                    gfm.joinedToTextOff(1, // qlen
+                                        joinedOff,
+                                        debug_tid,
+                                        debug_toff,
+                                        debug_tlen,
+                                        false,
+                                        debug_straddled);
+                    assert_eq(hit.ref(), debug_tid);
+                    assert_eq(ss.right(), debug_toff);
+#endif
                     tempHit.init(hit.fw(),
-                                 fragoff + fraglen,
-                                 rdlen - fragoff - fraglen,
+                                 readoff,
+                                 0, // len
                                  0, // trim5
                                  0, // trim3
                                  hit.ref(),
-                                 frag2off,
-                                 (index_t)INDEX_MAX,
+                                 ss.right(),
+                                 joinedOff,
                                  this->_sharedVars);
+                    index_t leftext = 0, rightext = rdlen - readoff;
+                    tempHit.extend(rd,
+                                   gfm,
+                                   ref,
+                                   altdb,
+                                   ssdb,
+                                   swa,
+                                   swm,
+                                   prm,
+                                   sc,
+                                   this->_minsc[rdi],
+                                   rnd,
+                                   (index_t)this->_minK_local,
+                                   (index_t)this->_minIntronLen,
+                                   (index_t)this->_maxIntronLen,
+                                   this->_minAnchorLen,
+                                   this->_minAnchorLen_noncan,
+                                   leftext,
+                                   rightext);
+                    if(tempHit.len() <= 0)
+                        continue;
                     if(!hit.compatibleWith(tempHit, (index_t)this->_minIntronLen, (index_t)this->_maxIntronLen, this->_tpol.no_spliced_alignment())) continue;
                     GenomeHit<index_t> combinedHit = hit;
                     int64_t minsc = this->_minsc[rdi];
@@ -1122,7 +1266,6 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                        // soft-clipping might be better
                        combinedHit.score() + sc.sc(0) * (rdlen - hit.rdoff() - hit.len() - hit.trim5()) >= hit.score()) {
                         assert_leq(combinedHit.trim5(), combinedHit.rdoff());
-                        assert_eq(combinedHit.rdoff() + combinedHit.len(), rdlen);
                         int64_t tmp_maxsc = hybridSearch_recur(
                                                                sc,
                                                                gfm,

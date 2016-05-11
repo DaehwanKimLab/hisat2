@@ -1271,7 +1271,7 @@ bool GenomeHit<index_t>::combineWith(
     assert_leq(this_rdoff, other_rdoff);
     if(this_len != 0 &&
        other_len != 0 &&
-       this_rdoff + this_len >= other_rdoff + other_len) return false;
+       this_rdoff + this_len > other_rdoff + other_len) return false;
     assert_leq(this_rdoff + this_len, other_rdoff + other_len);
     index_t len = other_rdoff - this_rdoff + other_len;
     const index_t reflen = ref.approxLen(_tidx);
@@ -2967,6 +2967,7 @@ void GenomeHit<index_t>::leftAlign(const Read& rd)
 template <typename index_t>
 bool GenomeHit<index_t>::repOk(const Read& rd, const BitPairReference& ref)
 {
+    if(_len <= 0) return true;
     assert(_sharedVars != NULL);
     SStringExpandable<char>& raw_refbuf = _sharedVars->raw_refbuf;
     SStringExpandable<uint32_t>& destU32 = _sharedVars->destU32;
