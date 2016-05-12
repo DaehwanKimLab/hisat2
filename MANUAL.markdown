@@ -765,7 +765,7 @@ Sets the penalty for each pair of canonical splice sites (e.g. GT/AG). Default: 
 
 </td><td>
 
-Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 3.
+Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 12.
 
 </td></tr>
 <tr><td id="hisat2-options-pen-canintronlen">

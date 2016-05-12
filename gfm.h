@@ -5391,7 +5391,11 @@ void GFM<index_t>::readIntoMemory(
     if(major_program_version < major_index_version ||
        (major_program_version == major_index_version && minor_program_version < minor_index_version)) {
         cerr << "Warning: the current version of HISAT2 (" << HISAT2_VERSION << ") is older than the version (2."
-             << major_index_version << "." << minor_index_version << "-" << index_version_extra << ") used to build the index." << endl;
+        << major_index_version << "." << minor_index_version;
+        if(index_version_extra.length() > 0) {
+            cerr << "-" << index_version_extra;
+        }
+        cerr << ") used to build the index." << endl;
         cerr << "         Users are strongly recommended to update HISAT2 to the latest version." << endl;
     }
     
