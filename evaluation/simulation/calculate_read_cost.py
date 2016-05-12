@@ -1215,13 +1215,13 @@ def calculate_read_cost(test_NH,
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "tran", ""],
         # ["hisat2", "", "", "201b"],
-        ["hisat2", "", "", ""],
+        # ["hisat2", "", "", ""],
         # ["hisat2", "x1", "tran", "201b"],
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "snp", "201b"],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "x1", "snp_tran", "201b"],
-        ["hisat2", "x1", "snp_tran", ""],
+        # ["hisat2", "x1", "snp_tran", ""],
         # ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
@@ -1254,11 +1254,11 @@ def calculate_read_cost(test_NH,
     if just_runtime:
         verbose = True
 
-    chr_dic = read_genome("../../data/" + genome + ".fa")
-    gtf_junctions = extract_splice_sites("../../data/genome.gtf")
+    chr_dic = read_genome("../../data/%s.fa" % genome)
+    gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     align_stat = []
-    for paired in [False, True]:
-    # for paired in [False]:
+    # for paired in [False, True]:
+    for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
