@@ -200,14 +200,18 @@ struct Edit {
 	 */
 	int operator== (const Edit &rhs) const {
 		assert(inited());
-		return(pos  == rhs.pos &&
-			   pos2 == rhs.pos2 &&
-			   chr  == rhs.chr &&
-			   qchr == rhs.qchr &&
-			   type == rhs.type &&
-               splLen == rhs.splLen &&
-               splDir == rhs.splDir /* &&
-               knownSpl == rhs.knownSpl */);
+        if(type != rhs.type)
+            return false;
+        if(pos != rhs.pos)
+            return false;
+        if(type != EDIT_TYPE_SPL) {
+            return chr  == rhs.chr && qchr == rhs.qchr;
+        } else {
+            return pos2 == rhs.pos2 &&
+                    splLen == rhs.splLen &&
+                    splDir == rhs.splDir /* &&
+                    knownSpl == rhs.knownSpl */;
+        }
 	}
 
 	/**

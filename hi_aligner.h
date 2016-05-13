@@ -1085,10 +1085,19 @@ struct GenomeHit {
            _trim3 != other._trim3) {
             return false;
         }
-        
         if(_edits->size() != other._edits->size()) return false;
         for(index_t i = 0; i < _edits->size(); i++) {
-            if(!((*_edits)[i] == (*other._edits)[i])) return false;
+            const Edit& e = (*_edits)[i];
+            const Edit& oe = (*other._edits)[i];
+            if(e.isReadGap()) {
+                if(!oe.isReadGap()) return false;
+            } else if(e.isRefGap()) {
+                if(!oe.isRefGap()) return false;
+            } else {
+                if(!(e == oe)) {
+                    return false;
+                }
+            }
         }
         // daehwan - this may not be true when some splice sites are provided from outside
         // assert_eq(_score, other._score);
