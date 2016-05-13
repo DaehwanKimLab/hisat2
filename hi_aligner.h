@@ -4872,13 +4872,7 @@ bool HI_Aligner<index_t, local_index_t>::redundant(
                 }
                 // daehwan: this is a temporary solution to compare edits
                 for(; eidx < editsi.size(); eidx++) {
-                    Edit e = edits[eidx];
-                    if(hit.fw()) {
-                        e.pos -= hit.trim5();
-                    } else {
-                        e.pos -= hit.trim3();
-                    }
-                    if(!(editsi[eidx] == e)) {
+                    if(!(editsi[eidx] == edits[eidx])) {
                         break;
                     }
                 }

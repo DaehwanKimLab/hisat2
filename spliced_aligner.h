@@ -494,7 +494,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                             if(combined &&
                                combinedHit.score() >= minsc &&
                                nedits <= rightAnchorLen / 4) { // prevent (short) anchors from having many mismatches
-                                if(!this->redundant(sink, rdi, combinedHit)) {
+			        if(!this->redundant(sink, rdi, combinedHit)) {
                                     another_spliced = true;
                                     if(combinedHit.score() > best_score)
                                         best_score = tempHit.score();
@@ -522,6 +522,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     // if(this->_anchors_added[i] < this->_anchors_added.back()) continue;
                     
                     //}
+		    if(this->isSearched(canHit, rdi)) continue;
+		    this->addSearched(canHit, rdi);
                     if(!this->redundant(sink, rdi, canHit)) {
                         this->reportHit(sc, gfm, altdb, ref, ssdb, sink, rdi, canHit);
                         maxsc = max<int64_t>(maxsc, canHit.score());
