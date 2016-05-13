@@ -173,6 +173,8 @@ enum {
 #ifdef USE_SRA
     ARG_SRA_ACC,
 #endif
+    ARG_REMOVE_CHRNAME,
+    ARG_ADD_CHRNAME,
 };
 
 #endif

@@ -1351,6 +1351,28 @@ Spec][SAM].  Specify `--rg` multiple times to set multiple fields.  See the
 
 
 </td></tr>
+<tr><td id="hisat2-options-remove-chrname">
+
+[`--remove-chrname`]: #hisat2-remove-chrname
+
+    --remove-chrname
+
+</td><td>
+
+Remove 'chr' from reference names in alignment (e.g., chr18 to 18)
+
+</td></tr>
+<tr><td id="hisat2-options-add-chrname">
+
+[`--add-chrname`]: #hisat2-options-add-chrname
+
+    --add-chrname
+
+</td><td>
+
+Add 'chr' to reference names in alignment (e.g., 18 to chr18)
+
+</td></tr>
 <tr><td id="hisat2-options-omit-sec-seq">
 
 [`--omit-sec-seq`]: #hisat2-options-omit-sec-seq
@@ -1469,7 +1491,7 @@ Use `<int>` as the seed for pseudo-random number generator.  Default: 0.
 </td></tr>
 <tr><td id="hisat2-options-non-deterministic">
 
-[`--non-deterministic`]: #hisat-options-non-deterministic
+[`--non-deterministic`]: #hisat2-options-non-deterministic
 
     --non-deterministic
 

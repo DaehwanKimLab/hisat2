@@ -217,23 +217,23 @@ typedef int64_t THitInt;
 struct ReportingParams {
 
 	explicit ReportingParams(
-		THitInt khits_,
-		THitInt mhits_,
-		THitInt pengap_,
-		bool msample_,
-		bool discord_,
-		bool mixed_)
+                             THitInt khits_,
+                             THitInt mhits_,
+                             THitInt pengap_,
+                             bool msample_,
+                             bool discord_,
+                             bool mixed_)
 	{
 		init(khits_, mhits_, pengap_, msample_, discord_, mixed_);
 	}
 
 	void init(
-		THitInt khits_,
-		THitInt mhits_,
-		THitInt pengap_,
-		bool msample_,
-		bool discord_,
-		bool mixed_)
+              THitInt khits_,
+              THitInt mhits_,
+              THitInt pengap_,
+              bool msample_,
+              bool discord_,
+              bool mixed_)
 	{
 		khits   = khits_;     // -k (or high if -a)
 		mhits   = ((mhits_ == 0) ? std::numeric_limits<THitInt>::max() : mhits_);

@@ -272,6 +272,9 @@ static EList<uint64_t> thread_rids;
 static MUTEX_T         thread_rids_mutex;
 static uint64_t        thread_rids_mindist;
 
+static bool rmChrName;  // remove "chr" from reference names (e.g., chr18 to 18)
+static bool addChrName; // add "chr" to reference names (e.g., 18 to chr18)
+
 #define DMAX std::numeric_limits<double>::max()
 
 static void resetOptions() {
@@ -484,6 +487,9 @@ static void resetOptions() {
 #ifdef USE_SRA
     sra_accs.clear();
 #endif
+    
+    rmChrName = false;
+    addChrName = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -694,6 +700,8 @@ static struct option long_options[] = {
 #ifdef USE_SRA
     {(char*)"sra-acc",   required_argument, 0,        ARG_SRA_ACC},
 #endif
+    {(char*)"remove-chrname",   no_argument, 0,        ARG_REMOVE_CHRNAME},
+    {(char*)"add-chrname",   no_argument, 0,        ARG_ADD_CHRNAME},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -807,7 +815,7 @@ static void printUsage(ostream& out) {
 		<< endl
 #endif
 	    << " Alignment:" << endl
-		<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
+		//<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		//<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
 		//<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
 		<< "  --n-ceil <func>    func for max # non-A/C/G/Ts permitted in aln (L,0,0.15)" << endl
@@ -852,10 +860,10 @@ static void printUsage(ostream& out) {
 		<< "   OR" << endl
 	    << "  -a/--all           report all alignments; very slow, MAPQ not meaningful" << endl
 		<< endl
-	    << " Effort:" << endl
-	    << "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
-	    << "  -R <int>           for reads w/ repetitive seeds, try <int> sets of seeds (2)" << endl
-		<< endl
+	    //<< " Effort:" << endl
+	    //<< "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
+	    //<< "  -R <int>           for reads w/ repetitive seeds, try <int> sets of seeds (2)" << endl
+		//<< endl
 		<< " Paired-end:" << endl
 #if 0
 	    << "  -I/--minins <int>  minimum fragment length (0)" << endl
@@ -912,6 +920,8 @@ static void printUsage(ostream& out) {
 		<< "  --qc-filter        filter out reads that are bad according to QSEQ filter" << endl
 	    << "  --seed <int>       seed for random number generator (0)" << endl
 	    << "  --non-deterministic seed rand. gen. arbitrarily instead of using read attributes" << endl
+        << "  --remove-chrname   remove 'chr' from reference names in alignment" << endl
+        << "  --add-chrname      add 'chr' to reference names in alignment " << endl
 	//  << "  --verbose          verbose output for debugging" << endl
 	    << "  --version          print version information and quit" << endl
 	    << "  -h/--help          print this usage message" << endl
@@ -1630,6 +1640,14 @@ static void parseOption(int next_option, const char *arg) {
             break;
         }
 #endif
+        case ARG_REMOVE_CHRNAME: {
+            rmChrName = true;
+            break;
+        }
+        case ARG_ADD_CHRNAME: {
+            addChrName = true;
+            break;
+        }
 		default:
 			printUsage(cerr);
 			throw 1;
@@ -3654,6 +3672,26 @@ static void driver(
 		}
 		EList<string> refnames;
 		readEbwtRefnames<index_t>(adjIdxBase, refnames);
+        if(rmChrName && addChrName) {
+            cerr << "Error: --remove-chrname and --add-chrname cannot be used at the same time" << endl;
+            throw 1;
+        }
+        if(rmChrName) {
+            for(size_t i = 0; i < refnames.size(); i++) {
+                string& refname = refnames[i];
+                if(refname.find("chr") == 0) {
+                    refname = refname.substr(3);
+                }
+            }
+        } else if(addChrName) {
+            for(size_t i = 0; i < refnames.size(); i++) {
+                string& refname = refnames[i];
+                if(refname.find("chr") != 0) {
+                    refname = string("chr") + refname;
+                }
+            }
+        }
+        
 		SamConfig<index_t> samc(
 			refnames,               // reference sequence names
 			reflens,                // reference sequence lengths

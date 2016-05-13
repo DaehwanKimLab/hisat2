@@ -62,56 +62,56 @@ class SamConfig {
 public:
 
 	SamConfig(
-		const StrList& refnames,  // reference sequence names
-		const LenList& reflens,   // reference sequence lengths
-		bool truncQname,          // truncate read name to 255?
-		bool omitsec,             // omit secondary SEQ/QUAL
-		bool noUnal,              // omit unaligned reads
-		const std::string& pg_id, // id
-		const std::string& pg_pn, // name
-		const std::string& pg_vn, // version
-		const std::string& pg_cl, // command-line
-		const std::string& rgs,   // read groups string
-        int rna_strandness,
-		bool print_as,
-		bool print_xs,
-		bool print_xss,
-		bool print_yn,
-		bool print_xn,
-		bool print_cs,
-		bool print_cq,
-		bool print_x0,
-		bool print_x1,
-		bool print_xm,
-		bool print_xo,
-		bool print_xg,
-		bool print_nm,
-		bool print_md,
-		bool print_yf,
-		bool print_yi,
-		bool print_ym,
-		bool print_yp,
-		bool print_yt,
-		bool print_ys,
-		bool print_zs,
-		bool print_xr,
-		bool print_xt,
-		bool print_xd,
-		bool print_xu,
-		bool print_ye, // streak of failed DPs at end
-		bool print_yl, // longest streak of failed DPs
-		bool print_yu, // index of last succeeded DP
-		bool print_xp, // print seed hit information
-		bool print_yr, // # redundant seed hits
-		bool print_zb, // # Ftab lookups
-		bool print_zr, // # redundant path checks
-		bool print_zf, // # FM Index ops
-		bool print_zm, // FM Index op string for best-first search
-		bool print_zi, // # seed extend loop iters
-		bool print_zp,
-		bool print_zu,
-        bool print_xs_a,
-        bool print_nh) :
+              const StrList& refnames,  // reference sequence names
+              const LenList& reflens,   // reference sequence lengths
+              bool truncQname,          // truncate read name to 255?
+              bool omitsec,             // omit secondary SEQ/QUAL
+              bool noUnal,              // omit unaligned reads
+              const std::string& pg_id, // id
+              const std::string& pg_pn, // name
+              const std::string& pg_vn, // version
+              const std::string& pg_cl, // command-line
+              const std::string& rgs,   // read groups string
+              int rna_strandness,
+              bool print_as,
+              bool print_xs,
+              bool print_xss,
+              bool print_yn,
+              bool print_xn,
+              bool print_cs,
+              bool print_cq,
+              bool print_x0,
+              bool print_x1,
+              bool print_xm,
+              bool print_xo,
+              bool print_xg,
+              bool print_nm,
+              bool print_md,
+              bool print_yf,
+              bool print_yi,
+              bool print_ym,
+              bool print_yp,
+              bool print_yt,
+              bool print_ys,
+              bool print_zs,
+              bool print_xr,
+              bool print_xt,
+              bool print_xd,
+              bool print_xu,
+              bool print_ye, // streak of failed DPs at end
+              bool print_yl, // longest streak of failed DPs
+              bool print_yu, // index of last succeeded DP
+              bool print_xp, // print seed hit information
+              bool print_yr, // # redundant seed hits
+              bool print_zb, // # Ftab lookups
+              bool print_zr, // # redundant path checks
+              bool print_zf, // # FM Index ops
+              bool print_zm, // FM Index op string for best-first search
+              bool print_zi, // # seed extend loop iters
+              bool print_zp,
+              bool print_zu,
+              bool print_xs_a,
+              bool print_nh) :
 		truncQname_(truncQname),
 		omitsec_(omitsec),
 		noUnal_(noUnal),
