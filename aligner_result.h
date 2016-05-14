@@ -1082,13 +1082,19 @@ public:
 	 */
 	inline void getCoords(
 		Coord& st,  // out: install starting coordinate here
-		Coord& en)  // out: install ending coordinate here
+		Coord& en,  // out: install ending coordinate here
+        Coord& st2,
+        Coord& en2)
 		const
 	{
 		assert(shapeSet_);
 		st.init(refcoord_);
-		en.init(refcoord_);
-		en.adjustOff(refExtent() - 1);
+        en.init(refcoord_);
+        en.adjustOff(refExtent() - 1);
+        Coord right = refcoord_right();
+        st2.init(right);
+        st2.adjustOff(1 - refExtent());
+		en2.init(right);
 	}
 
 	/**
@@ -1100,17 +1106,21 @@ public:
 	 */
 	inline void getExtendedCoords(
 		Coord& st,  // out: install starting coordinate here
-		Coord& en)  // out: install ending coordinate here
+		Coord& en,  // out: install ending coordinate here
+        Coord& st2,
+        Coord& en2)
 		const
 	{
-		getCoords(st, en);
+		getCoords(st, en, st2, en2);
 		// Take trimming into account
 		int64_t trim_st  = (fw() ? trim5p_ : trim3p_);
 		int64_t trim_en  = (fw() ? trim3p_ : trim5p_);
 		trim_st += (fw() ? pretrim5p_ : pretrim3p_);
 		trim_en += (fw() ? pretrim3p_ : pretrim5p_);
 		st.adjustOff(-trim_st);
-		en.adjustOff( trim_st);
+		en.adjustOff( trim_en);
+        st2.adjustOff(-trim_st);
+        en2.adjustOff( trim_en);
 	}
 	
 	/**
@@ -1195,16 +1205,11 @@ public:
 	 */
     Coord refcoord_right() const {
         Coord coord_right = refcoord_;
-        TRefOff right = coord_right.off();
+        TRefOff right = coord_right.off() + rfextent_ - 1;
         for(size_t i = 0; i < ned_->size(); i++) {
             const Edit& ed = (*ned_)[i];
             if(ed.type == EDIT_TYPE_SPL) {
                 right += ed.splLen;
-            } else if(ed.type == EDIT_TYPE_READ_GAP) {
-                right += 1;
-            } else if(ed.type == EDIT_TYPE_REF_GAP) {
-                assert_gt(right, 0);
-                right -= 1;
             }
         }
         
@@ -1571,14 +1576,18 @@ public:
 	 * settings.
 	 */
 	int64_t setFragmentLength(const AlnRes& omate) {
-		Coord st, en;
-		Coord ost, oen;
+		Coord st, en, st2, en2;
+		Coord ost, oen, ost2, oen2;
 		assert_eq(refid(), omate.refid());
-		getExtendedCoords(st, en);
-		omate.getExtendedCoords(ost, oen);
+		getExtendedCoords(st, en, st2, en2);
+		omate.getExtendedCoords(ost, oen, ost2, oen2);
 		bool imUpstream = st.off() < ost.off();
-		TRefOff up = std::min(st.off(), ost.off());
-		TRefOff dn = std::max(en.off(), oen.off());
+        TRefOff up, dn;
+        if(imUpstream) {
+            up = std::min(st2.off(), ost.off()); dn = std::max(en2.off(), oen.off());
+        } else {
+            up = std::min(st.off(), ost2.off()); dn = std::max(en.off(), oen2.off());
+        }
 		assert_geq(dn, up);
 		fraglen_ = 1 + dn - up;
 		if(!imUpstream) {

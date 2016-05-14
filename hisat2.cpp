@@ -3018,7 +3018,9 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                    rp,            // reporting parameters
                                    *bmapq.get(),  // MAPQ calculator
                                    (size_t)tid,   // thread id
-                                   secondary);    // secondary alignments
+                                   secondary,     // secondary alignments
+                                   no_spliced_alignment ? NULL : ssdb,
+                                   thread_rids_mindist);
     
     SplicedAligner<index_t, local_index_t> splicedAligner(
                                                           gfm,

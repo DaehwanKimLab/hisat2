@@ -974,16 +974,20 @@ class AlnSinkWrap {
 public:
 
 	AlnSinkWrap(
-		AlnSink<index_t>& g,       // AlnSink being wrapped
-		const ReportingParams& rp, // Parameters governing reporting
-		Mapq& mapq,                // Mapq calculator
-		size_t threadId,           // Thread ID
-        bool secondary = false) :  // Secondary alignments
+                AlnSink<index_t>& g,       // AlnSink being wrapped
+                const ReportingParams& rp, // Parameters governing reporting
+                Mapq& mapq,                // Mapq calculator
+                size_t threadId,           // Thread ID
+                bool secondary = false,    // Secondary alignments
+                const SpliceSiteDB* ssdb = NULL, // splice sites
+                uint64_t threads_rids_mindist = 0) : // synchronization
 		g_(g),
 		rp_(rp),
         threadid_(threadId),
         mapq_(mapq),
     	secondary_(secondary),
+        ssdb_(ssdb),
+        threads_rids_mindist_(threads_rids_mindist),
 		init_(false),   
 		maxed1_(false),       // read is pair and we maxed out mate 1 unp alns
 		maxed2_(false),       // read is pair and we maxed out mate 2 unp alns
@@ -1300,6 +1304,8 @@ protected:
 	size_t            threadid_; // thread ID
 	Mapq&             mapq_;  // mapq calculator
     bool              secondary_; // allow for secondary alignments
+    const SpliceSiteDB* ssdb_; // splice sites
+    uint64_t threads_rids_mindist_; // synchronization
 	bool              init_;  // whether we're initialized w/ read pair
 	bool              maxed1_; // true iff # unpaired mate-1 alns reported so far exceeded -m/-M
 	bool              maxed2_; // true iff # unpaired mate-2 alns reported so far exceeded -m/-M
@@ -1778,7 +1784,7 @@ void AlnSinkWrap<index_t>::finishRead(
 									  const PerReadMetrics& prm,       // per-read metrics
 									  const Scoring& sc,               // scoring scheme
 									  bool suppressSeedSummary,        // = true
-									  bool suppressAlignments)         // = false
+                                      bool suppressAlignments)         // = false
 {
 	obuf_.clear();
 	OutputQueueMark qqm(g_.outq(), obuf_, rdid_, threadid_);
