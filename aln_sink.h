@@ -1337,7 +1337,7 @@ protected:
 	BTString obuf_;
 	StackedAln staln_;
     
-    ELList<SpliceSite> spliceSites_;
+    EList<SpliceSite> spliceSites_;
 };
 
 /**
@@ -1893,8 +1893,9 @@ void AlnSinkWrap<index_t>::finishRead(
                 sr2->toSeedAlSumm(ssm2);
             }
 			for(size_t i = 0; i < rs1_.size(); i++) {
-				rs1_[i].setMateParams(ALN_RES_TYPE_MATE1, &rs2_[i], flags1, ssdb_, threads_rids_mindist_);
-				rs2_[i].setMateParams(ALN_RES_TYPE_MATE2, &rs1_[i], flags2, ssdb_, threads_rids_mindist_);
+                spliceSites_.clear();
+				rs1_[i].setMateParams(ALN_RES_TYPE_MATE1, &rs2_[i], flags1, ssdb_, threads_rids_mindist_, &spliceSites_);
+				rs2_[i].setMateParams(ALN_RES_TYPE_MATE2, &rs1_[i], flags2, ssdb_, threads_rids_mindist_, &spliceSites_);
 				assert_eq(abs(rs1_[i].fragmentLength()), abs(rs2_[i].fragmentLength()));
 			}
 			assert(!select1_.empty());

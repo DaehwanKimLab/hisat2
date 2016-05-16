@@ -891,6 +891,7 @@ public:
     {
         shapeSet_ = other.shapeSet_;
         rdlen_ = other.rdlen_;
+        rdid_ = other.rdid_;
         rdrows_ = other.rdrows_;
         score_ = other.score_;
         oscore_ = other.oscore_;
@@ -936,6 +937,7 @@ public:
         if(this == &other) return *this;
         shapeSet_ = other.shapeSet_;
         rdlen_ = other.rdlen_;
+        rdid_ = other.rdid_;
         rdrows_ = other.rdrows_;
         score_ = other.score_;
         oscore_ = other.oscore_;
@@ -1134,6 +1136,7 @@ public:
 		TRefOff reflen,      // length of reference sequence aligned to
 		bool    fw,          // aligned to Watson strand?
 		size_t  rdlen,       // length of read after hard trimming, before soft
+        TReadId rdid,        // read ID          
 		bool    pretrimSoft, // whether trimming prior to alignment was soft
 		size_t  pretrim5p,   // # poss trimmed form 5p end before alignment
 		size_t  pretrim3p,   // # poss trimmed form 3p end before alignment
@@ -1564,7 +1567,7 @@ public:
 			if((sameChr && refcoord_.ref() == omate->refcoord_.ref()) ||
 			   flags.alignedConcordant())
 			{
-				setFragmentLength(*omate, ssdb, threads_rids_mindist);
+				setFragmentLength(*omate, ssdb, threads_rids_mindist, spliceSites);
 			} else {
 				assert(!isFraglenSet());
 			}
@@ -1589,25 +1592,34 @@ public:
 		getExtendedCoords(st, en, st2, en2);
 		omate.getExtendedCoords(ost, oen, ost2, oen2);
 		bool imUpstream = st.off() < ost.off();
-        TRefOff up, dn;
+        TRefOff up, dn, up_right, dn_left;
         if(imUpstream) {
-            up = std::min(st2.off(), ost.off()); dn = std::max(en2.off(), oen.off());
+            up = std::min(st2.off(), ost.off());
+            up_right = std::min(en2.off(), oen.off());
+            dn_left = std::max(st2.off(), ost.off());
+            dn = std::max(en2.off(), oen.off());
         } else {
-            up = std::min(st.off(), ost2.off()); dn = std::max(en.off(), oen2.off());
+            up = std::min(st.off(), ost2.off());
+            up_right = std::min(en.off(), oen2.off());
+            dn_left = std::max(st.off(), ost2.off());
+            dn = std::max(en.off(), oen2.off());
         }
 		assert_geq(dn, up);
         TRefOff intron_len = 0;
-        if(ssdb) {
-#if 0
-            spliceSites.clear();
-            ssdb.getLeftSpliceSites(hit.ref(), left + minMatchLen, minMatchLen, spliceSites);
-            for(size_t si = 0; si < spliceSites.size(); si++) {
-                const SpliceSite& ss = spliceSites[si];
-                if(!ss._fromfile && ss._readid + this->_thread_rids_mindist > rd.rdid) continue;
-                if(left + fraglen - 1 < ss.right()) continue;
-                index_t frag2off = ss.left() -  (ss.right() - left);
+        if(ssdb != NULL && up_right + 100 < dn_left) {
+            assert(spliceSites != NULL);
+            if(spliceSites->size() == 0) {
+                ssdb->getRightSpliceSites(refid(), up_right, dn_left - up_right, *spliceSites);
             }
-#endif
+            for(size_t si = 0; si < spliceSites->size(); si++) {
+                const SpliceSite& ss = (*spliceSites)[si];
+                if(!ss._fromfile && ss._readid + threads_rids_mindist > rdid_) continue;
+                if(ss.left() <= up || ss.right() >= dn) continue;
+                TRefOff tmp_intron_len = ss.intron_len();
+                if(intron_len < tmp_intron_len) {
+                    intron_len = tmp_intron_len;
+                }
+            }
         }
 		fraglen_ = 1 + dn - up;
         assert_geq(fraglen_, intron_len);
@@ -1634,6 +1646,7 @@ public:
 	 */
 	void init(
 		size_t             rdlen,           // # chars after hard trimming
+        TReadId            rdid,            // read ID
 		AlnScore           score,           // alignment score
 		const EList<Edit>* ned,             // nucleotide edits
 		size_t             ned_i,           // first position to copy
@@ -1740,6 +1753,7 @@ public:
 		return
 			shapeSet_     == o.shapeSet_ &&
 			rdlen_        == o.rdlen_ &&
+            rdid_         == o.rdid_ &&
 			rdrows_       == o.rdrows_ &&
 			score_        == o.score_ &&
 			//oscore_       == o.oscore_ &&
@@ -1807,6 +1821,7 @@ protected:
 
 	bool         shapeSet_;     // true iff setShape() has been called
 	size_t       rdlen_;        // length of the original read
+    TReadId      rdid_;         // read id
 	size_t       rdrows_;       // # rows in alignment problem
 	AlnScore     score_;        // best SW score found
 	AlnScore     oscore_;       // score of opposite mate

@@ -438,6 +438,7 @@ int SwAligner::ungappedAlign(
 		reflen,       // length of reference sequence aligned to
 		fw,           // aligned to Watson?
 		len,          // read length
+        0,            // read ID
 		true,         // pretrim soft?
 		0,            // pretrim 5' end
 		0,            // pretrim 3' end

@@ -2220,6 +2220,7 @@ bool SwAligner::backtraceNucleotidesLocalSseU8(
 		reflen_,                  // reference length
 		fw_,                      // aligned to Watson?
 		rdf_ - rdi_,              // read length
+        0,                        // read ID
 		true,                     // pretrim soft?
 		0,                        // pretrim 5' end
 		0,                        // pretrim 3' end

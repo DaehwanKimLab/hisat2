@@ -4696,6 +4696,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     AlnRes rs;
     rs.init(
             rdlen,                      // # chars after hard trimming
+            rd.rdid,                    // read ID
             asc,                        // alignment score
             &hit.edits(),               // nucleotide edits array
             0,                          // nucleotide edits first pos
@@ -4771,6 +4772,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     AlnRes ors;
     ors.init(
              ordlen,                     // # chars after hard trimming
+             ord.rdid,                   // read ID
              oasc,                       // alignment score
              &ohit->edits(),             // nucleotide edits array
              0,                          // nucleotide edits first pos

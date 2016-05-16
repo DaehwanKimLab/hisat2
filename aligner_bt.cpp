@@ -1611,6 +1611,7 @@ int BtBranchTracer::trySolution(
 		prob_.treflen(),                // ref length
 		prob_.fw_,                      // aligned to Watson?
 		prob_.qrylen_,                  // read length
+        0,                              // read id
 		true,                           // pretrim soft?
 		0,                              // pretrim 5' end
 		0,                              // pretrim 3' end

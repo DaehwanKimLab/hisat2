@@ -43,6 +43,7 @@ void AlnRes::reset() {
 	refival_.reset();
 	shapeSet_     = false;
 	rdlen_        = 0;
+    rdid_         = 0;
 	reflen_       = 0;
 	rdrows_       = 0;
 	rdextent_     = 0;
@@ -79,6 +80,7 @@ void AlnRes::setShape(
 	TRefOff reflen,      // length of reference sequence aligned to
 	bool    fw,          // aligned to Watson strand?
 	size_t  rdlen,       // length of read after hard trimming, before soft
+    TReadId rdid,        // read ID
 	bool    pretrimSoft, // whether trimming prior to alignment was soft
 	size_t  pretrim5p,   // # poss trimmed form 5p end before alignment
 	size_t  pretrim3p,   // # poss trimmed form 3p end before alignment
@@ -87,6 +89,7 @@ void AlnRes::setShape(
 	size_t  trim3p)      // # poss trimmed form 3p end during alignment
 {
 	rdlen_       = rdlen;
+    rdid_        = rdid;
 	rdrows_      = rdlen;
 	refcoord_.init(id, off, fw);
 	pretrimSoft_  = pretrimSoft;
@@ -133,6 +136,7 @@ void AlnRes::setShape(
  */
 void AlnRes::init(
 	size_t             rdlen,           // # chars after hard trimming
+    TReadId            rdid,            // read ID
 	AlnScore           score,           // alignment score
 	const EList<Edit>* ned,             // nucleotide edits
 	size_t             ned_i,           // first position to copy
@@ -174,6 +178,7 @@ void AlnRes::init(
     }    
     
 	rdlen_  = rdlen;
+    rdid_   = rdid;
 	rdrows_ = rdlen;
 	score_  = score;
 	ned_->clear();
@@ -217,6 +222,7 @@ void AlnRes::init(
 		reflen,         // length of reference sequence aligned to
 		refcoord.fw(),  // aligned to Watson strand?
 		rdlen,          // length of read after hard trimming, before soft
+        rdid,           // read ID
 		pretrimSoft,    // whether trimming prior to alignment was soft
 		pretrim5p,      // # poss trimmed form 5p end before alignment
 		pretrim3p,      // # poss trimmed form 3p end before alignment
