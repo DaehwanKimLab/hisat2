@@ -29,6 +29,7 @@
 #include "ds.h"
 #include "edit.h"
 #include "limit.h"
+#include "splice_site.h"
 
 typedef int64_t TAlScore;
 
@@ -1544,7 +1545,10 @@ public:
 	void setMateParams(
 		int type,
 		const AlnRes* omate,    // alignment result for the opposite mate
-		const AlnFlags& flags)  // flags for this mate
+		const AlnFlags& flags,  // flags for this mate
+        const SpliceSiteDB* ssdb = NULL, // splice sites
+        uint64_t threads_rids_mindist = 0,
+        EList<SpliceSite>* spliceSites = NULL)
 	{
 		assert_gt(type, 0);
 		type_ = type;
@@ -1560,7 +1564,7 @@ public:
 			if((sameChr && refcoord_.ref() == omate->refcoord_.ref()) ||
 			   flags.alignedConcordant())
 			{
-				setFragmentLength(*omate);
+				setFragmentLength(*omate, ssdb, threads_rids_mindist);
 			} else {
 				assert(!isFraglenSet());
 			}
@@ -1575,7 +1579,10 @@ public:
 	 * by the user in how they set the maximum and minimum fragment length
 	 * settings.
 	 */
-	int64_t setFragmentLength(const AlnRes& omate) {
+    int64_t setFragmentLength(const AlnRes& omate,
+                              const SpliceSiteDB* ssdb = NULL, // splice sites
+                              uint64_t threads_rids_mindist = 0,
+                              EList<SpliceSite>* spliceSites = NULL) {
 		Coord st, en, st2, en2;
 		Coord ost, oen, ost2, oen2;
 		assert_eq(refid(), omate.refid());
@@ -1589,7 +1596,22 @@ public:
             up = std::min(st.off(), ost2.off()); dn = std::max(en.off(), oen2.off());
         }
 		assert_geq(dn, up);
+        TRefOff intron_len = 0;
+        if(ssdb) {
+#if 0
+            spliceSites.clear();
+            ssdb.getLeftSpliceSites(hit.ref(), left + minMatchLen, minMatchLen, spliceSites);
+            for(size_t si = 0; si < spliceSites.size(); si++) {
+                const SpliceSite& ss = spliceSites[si];
+                if(!ss._fromfile && ss._readid + this->_thread_rids_mindist > rd.rdid) continue;
+                if(left + fraglen - 1 < ss.right()) continue;
+                index_t frag2off = ss.left() -  (ss.right() - left);
+            }
+#endif
+        }
 		fraglen_ = 1 + dn - up;
+        assert_geq(fraglen_, intron_len);
+        fraglen_ -= intron_len;
 		if(!imUpstream) {
 			fraglen_ = -fraglen_;
 		}
