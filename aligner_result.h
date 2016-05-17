@@ -1255,26 +1255,25 @@ public:
 	size_t             readLength()     const { return rdlen_;    }
     bool               spliced()        const { return num_spliced_ > 0;  }
     size_t             num_spliced()    const { return num_spliced_; }
-    uint8_t            spliced_whichsense_transcript() const
-    {
-        uint8_t whichsense = EDIT_SPL_UNKNOWN;
+    uint8_t            spliced_whichsense_transcript() const {
+        uint8_t whichsense = SPL_UNKNOWN;
         if(spliced()) {
             for(size_t i = 0; i < ned_->size(); i++) {
                 const Edit& ed = (*ned_)[i];
-                if(ed.type != EDIT_TYPE_SPL) continue;
-                if(whichsense == EDIT_SPL_UNKNOWN) {
+		if(ed.type != EDIT_TYPE_SPL) continue;
+                if(whichsense == SPL_UNKNOWN) {
                     whichsense = ed.splDir;
-                } else if(ed.splDir != EDIT_SPL_UNKNOWN) {
-                    assert_neq(whichsense, EDIT_SPL_UNKNOWN);
-                    if(whichsense == EDIT_SPL_FW || whichsense == EDIT_SPL_SEMI_FW) {
-                        if(ed.splDir != EDIT_SPL_FW && ed.splDir != EDIT_SPL_SEMI_FW) {
-                            whichsense = EDIT_SPL_UNKNOWN;
+                } else if(ed.splDir != SPL_UNKNOWN) {
+                    assert_neq(whichsense, SPL_UNKNOWN);
+                    if(whichsense == SPL_FW || whichsense == SPL_SEMI_FW) {
+                        if(ed.splDir != SPL_FW && ed.splDir != SPL_SEMI_FW) {
+                            whichsense = SPL_UNKNOWN;
                             break;
                         }
                     }
-                    if(whichsense == EDIT_SPL_RC || whichsense == EDIT_SPL_SEMI_RC) {
-                        if(ed.splDir != EDIT_SPL_RC && ed.splDir != EDIT_SPL_SEMI_RC) {
-                            whichsense = EDIT_SPL_UNKNOWN;
+                    if(whichsense == SPL_RC || whichsense == SPL_SEMI_RC) {
+                        if(ed.splDir != SPL_RC && ed.splDir != SPL_SEMI_RC) {
+                            whichsense = SPL_UNKNOWN;
                             break;
                         }
                     }

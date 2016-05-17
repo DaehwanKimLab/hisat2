@@ -27,6 +27,7 @@
 #include "filebuf.h"
 #include "sstring.h"
 #include "ds.h"
+#include "splice_site.h"
 
 /**
  * 3 types of edits; mismatch (substitution), insertion in the
@@ -38,14 +39,6 @@ enum {
 	EDIT_TYPE_MM,
 	EDIT_TYPE_SNP,
     EDIT_TYPE_SPL, // splicing of pre-messenger RNAs into messenger RNAs
-};
-
-enum {
-    EDIT_SPL_UNKNOWN = 1,
-    EDIT_SPL_FW,
-    EDIT_SPL_RC,
-    EDIT_SPL_SEMI_FW,
-    EDIT_SPL_SEMI_RC,
 };
 
 /**
@@ -99,7 +92,7 @@ struct Edit {
 		pos = pos2 = std::numeric_limits<uint32_t>::max();
 		chr = qchr = type = 0;
         splLen = 0;
-        splDir = EDIT_SPL_UNKNOWN;
+        splDir = SPL_UNKNOWN;
         knownSpl = false;
         snpID = std::numeric_limits<uint32_t>::max();
 	}
@@ -126,7 +119,7 @@ struct Edit {
 		qchr = qc;
 		type = ty;
         splLen = 0;
-        splDir = EDIT_SPL_UNKNOWN;
+        splDir = SPL_UNKNOWN;
 		pos = po;
 		if(qc == '-') {
 			// Read gap

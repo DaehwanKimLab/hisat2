@@ -38,6 +38,22 @@
 
 //--------------------------------------------------------------------------
 
+struct NongraphException : public exception
+{
+    const char* what () const throw ()
+    {
+        return "Nongraph exception";
+    }
+};
+
+struct ExplosionException : public exception
+{
+    const char* what () const throw ()
+    {
+        return "Explosion exception";
+    }
+};
+
 template <typename index_t> class PathGraph;
 
 // Note: I wrote the following codes based on Siren's work, gcsa (see the reference above).
@@ -570,6 +586,11 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                 assert_eq(nodes[lastNode].label, 'Z');
             }
         }
+        
+        if(s.length() + 2 == nodes.size() && nodes.size() == edges.size() + 1) {
+            cerr << "Warning: no variants or splice sites in this graph" << endl;
+            throw NongraphException();
+        }
 
         if(multipleHeadNodes) {
             if(!isReverseDeterministic(nodes, edges)) {
@@ -631,9 +652,16 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                         break;
                     }
                 } else if(snp.type == ALT_SNP_DEL) {
-                    if(snp.pos + snp.len - 1 >= snp2.pos) {
-                        pass = false;
-                        break;
+                    if(snp2.type == ALT_SNP_DEL) {
+                        if(snp.pos + snp.len >= snp2.pos) {
+                            pass = false;
+                            break;
+                        }
+                    } else {
+                        if(snp.pos + snp.len - 1 >= snp2.pos) {
+                            pass = false;
+                            break;
+                        }
                     }
                 } else {
                     if(snp.pos >= snp2.pos) {
@@ -642,6 +670,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     }
                 }
             }
+            
             if(!pass) continue;
             
             index_t prev_ALT_type = ALT_NONE;
@@ -751,6 +780,10 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             edges.expand();
             edges.back().from = alt.left;
             edges.back().to = alt.right + 2;
+        }
+        
+        if(s.length() + 2 == nodes.size() && nodes.size() == edges.size() + 1) {
+            throw NongraphException();
         }
 
         if(!isReverseDeterministic(nodes, edges)) {
@@ -935,9 +968,16 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
                         break;
                     }
                 } else if(snp.type == ALT_SNP_DEL) {
-                    if(snp.pos + snp.len - 1 >= snp2.pos) {
-                        pass = false;
-                        break;
+                    if(snp2.type == ALT_SNP_DEL) {
+                        if(snp.pos + snp.len >= snp2.pos) {
+                            pass = false;
+                            break;
+                        }
+                    } else {
+                        if(snp.pos + snp.len - 1 >= snp2.pos) {
+                            pass = false;
+                            break;
+                        }
                     }
                 } else {
                     if(snp.pos >= snp2.pos) {
@@ -1544,7 +1584,12 @@ public:
 
 public:
     // Create a new graph in which paths are represented using nodes
-    PathGraph(RefGraph<index_t>& parent, const string& base_fname, int nthreads_ = 1, bool verbose_ = false);
+    PathGraph(
+              RefGraph<index_t>& parent,
+              const string& base_fname,
+              size_t max_num_nodes_ = std::numeric_limits<size_t>::max(),
+              int nthreads_ = 1,
+              bool verbose_ = false);
 
     ~PathGraph() {}
 
@@ -1652,6 +1697,8 @@ private:
     // For reporting location in F corresponding to 1 bit in M
     index_t                report_F_node_idx;
     index_t                report_F_location;
+    
+    size_t          max_num_nodes;
 
     // following variables are for debugging purposes
 #ifndef NDEBUG
@@ -1704,11 +1751,17 @@ public: EList<pair<index_t, index_t> > ftab;
 //creates prefix-sorted PathGraph Nodes given a reverse determinized RefGraph
 //outputs nodes sorted by their from attribute
 template <typename index_t>
-PathGraph<index_t>::PathGraph(RefGraph<index_t>& base, const string& base_fname, int nthreads_, bool verbose_) :
+PathGraph<index_t>::PathGraph(
+                              RefGraph<index_t>& base,
+                              const string& base_fname,
+                              size_t max_num_nodes_,
+                              int nthreads_,
+                              bool verbose_) :
 nthreads(nthreads_), verbose(verbose_),
 ranks(0), temp_nodes(0), generation(0), sorted(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
-report_F_node_idx(0), report_F_location(0)
+report_F_node_idx(0), report_F_location(0),
+max_num_nodes(max_num_nodes_)
 {
 #ifndef NDEBUG
     debug = base.nodes.size() <= 20;
@@ -1934,6 +1987,10 @@ void PathGraph<index_t>::lateGeneration() {
 
     if(verbose) cerr << "MERGEUPDATERANK: " << time(0) - indiv << endl;
     if(verbose) cerr << "TOTAL TIME: " << time(0) - overall << endl;
+    
+    if(ranks >= (index_t)max_num_nodes) {
+        throw ExplosionException();
+    }
 
     printInfo();
     past_nodes.swap(nodes);
@@ -2233,7 +2290,7 @@ void PathGraph<index_t>::printInfo()
     if(verbose) {
         cerr << "Generation " << generation
         << " (" << temp_nodes << " -> " << nodes.size() << " nodes, "
-        << ranks << " ranks        int bin = ;)" << endl;
+        << ranks << " ranks" << endl;
     }
 }
 

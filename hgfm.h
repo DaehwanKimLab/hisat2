@@ -1829,25 +1829,40 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                     tParam.sa.push_back(bsa.nextSuffix());
                 }
             } else {
-                tParam.rg = new RefGraph<index_t>(
-                                                  tParam.s,
-                                                  tParam.conv_local_szs,
-                                                  tParam.alts,
-                                                  tParam.haplotypes,
-                                                  tParam.file,
-                                                  1,        /* num threads */
-                                                  false);   /* verbose? */
-                tParam.pg = new PathGraph<index_t>(
-                                                   *tParam.rg,
-                                                   tParam.file,
-                                                   1,         /* num threads */
-                                                   false);    /* verbose? */
-                
-                if(!tParam.pg->generateEdges(*tParam.rg)) {
-                    cerr << "An error occurred - generateEdges" << endl;
-                    throw 1;
+                tParam.rg = NULL, tParam.pg = NULL;
+                bool exploded = false;
+                try {
+                    tParam.rg = new RefGraph<index_t>(
+                                                      tParam.s,
+                                                      tParam.conv_local_szs,
+                                                      tParam.alts,
+                                                      tParam.haplotypes,
+                                                      tParam.file,
+                                                      1,        /* num threads */
+                                                      false);   /* verbose? */
+                    tParam.pg = new PathGraph<index_t>(
+                                                       *tParam.rg,
+                                                       tParam.file,
+                                                       local_max_gbwt,
+                                                       1,         /* num threads */
+                                                       false);    /* verbose? */
+                } catch (const NongraphException& err) {
+                    cerr << "Warning: no variants or splice sites in this graph (" << tParam.curr_sztot << ")" << endl;
+                    delete tParam.rg;
+                    delete tParam.pg;
+                    tParam.alts.clear();
+                    continue;
+                } catch (const ExplosionException& err) {
+                    exploded = true;
                 }
-                if(tParam.pg->getNumEdges() > local_max_gbwt) {
+                if(!exploded) {
+                    if(!tParam.pg->generateEdges(*tParam.rg)) {
+                        cerr << "An error occurred - generateEdges" << endl;
+                        throw 1;
+                    }
+                    exploded = tParam.pg->getNumEdges() > local_max_gbwt;
+                }
+                if(exploded) {
                     delete tParam.pg; tParam.pg = NULL;
                     delete tParam.rg; tParam.rg = NULL;
                     if(tParam.alts.size() <= 1) {
@@ -2275,10 +2290,9 @@ HGFM<index_t, local_index_t>::HGFM(
                 assert(tParam.rg == NULL);
                 assert(tParam.pg == NULL);
                 tParam.done = false;
-                
                 curr_sztot += local_sztot_interval;
                 local_offset += local_index_interval;
-                
+               
                 t++;
             }
             

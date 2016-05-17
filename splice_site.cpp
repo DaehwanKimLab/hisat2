@@ -108,8 +108,15 @@ ostream& operator<<(ostream& out, const SpliceSite& s)
 {
 	out << s.ref() << "\t"
         << s.left() << "\t"
-        << s.right() << "\t"
-        << (s.fw() ? "+" : "-") << endl;
+        << s.right() << "\t";
+    if(s.splDir() == SPL_FW || s.splDir() == SPL_SEMI_FW) {
+        out << "+";
+    } else if(s.splDir() == SPL_RC || s.splDir() == SPL_SEMI_RC) {
+        out << "-";
+    } else {
+        out << ".";
+    }
+    out << endl;
 	return out;
 }
 
@@ -225,12 +232,12 @@ bool SpliceSiteDB::addSpliceSite(
                     assert(edits[last_eidx].isSpliced());
                     assert_lt(edits[last_eidx].pos, edits[eidx].pos);
                     rightAnchorLen = edits[eidx].pos - edits[last_eidx].pos;
-                    uint32_t minLeftAnchorLen = minAnchorLen + mm * 2 + (edits[eidx].splDir == EDIT_SPL_UNKNOWN ? 6 : 0);
+                    uint32_t minLeftAnchorLen = minAnchorLen + mm * 2 + (edits[eidx].splDir == SPL_UNKNOWN ? 6 : 0);
                     uint32_t mm2 = 0;
                     for(size_t j = eidx + 1; j < edits.size(); j++) {
                         if(edits[j].isGap() || edits[j].isMismatch()) mm2++;
                     }
-                    uint32_t minRightAnchorLen = minAnchorLen + mm2 * 2 + (edits[eidx].splDir == EDIT_SPL_UNKNOWN ? 6 : 0);
+                    uint32_t minRightAnchorLen = minAnchorLen + mm2 * 2 + (edits[eidx].splDir == SPL_UNKNOWN ? 6 : 0);
                     if(leftAnchorLen >= minLeftAnchorLen && rightAnchorLen >= minRightAnchorLen) {
                         bool added = false;
                         assert_lt(ref, _mutex.size());
@@ -241,7 +248,7 @@ bool SpliceSiteDB::addSpliceSite(
                         if(added) {
                             assert_lt(ref, _spliceSites.size());
                             _spliceSites[ref].expand();
-                            _spliceSites[ref].back().init(ssp.ref(), ssp.left(), ssp.right(), ssp.fw(), ssp.canonical());
+                            _spliceSites[ref].back().init(ssp.ref(), ssp.left(), ssp.right(), ssp.splDir());
                             _spliceSites[ref].back()._readid = rd.rdid;
                             _spliceSites[ref].back()._leftext = leftAnchorLen;
                             _spliceSites[ref].back()._rightext = rightAnchorLen;
@@ -250,7 +257,7 @@ bool SpliceSiteDB::addSpliceSite(
                             assert(cur != NULL);
                             cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
                             
-                            SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.fw(), ssp.canonical());
+                            SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.splDir());
                             assert_lt(ref, _bwIndex.size());
                             assert(_bwIndex[ref] != NULL);
                             cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
@@ -276,9 +283,7 @@ bool SpliceSiteDB::addSpliceSite(
                 } else {
                     leftAnchorLen = edits[eidx].pos;
                 }
-                bool fw = (edits[eidx].splDir == EDIT_SPL_FW || edits[eidx].splDir == EDIT_SPL_SEMI_FW || edits[eidx].splDir == EDIT_SPL_UNKNOWN);
-                bool canonical = (edits[eidx].splDir == EDIT_SPL_FW || edits[eidx].splDir == EDIT_SPL_RC);
-                ssp.init((uint32_t)coord.ref(), refoff - 1, refoff + edits[eidx].splLen, fw, canonical);
+                ssp.init((uint32_t)coord.ref(), refoff - 1, refoff + edits[eidx].splLen, edits[eidx].splDir);
                 refoff += edits[eidx].splLen;
                 last_eidx = eidx;
             }
@@ -289,12 +294,12 @@ bool SpliceSiteDB::addSpliceSite(
         assert(edits[last_eidx].isSpliced());
         assert_lt(edits[last_eidx].pos, rd.length());
         rightAnchorLen = (uint32_t)(rd.length() - edits[last_eidx].pos);
-        uint32_t minLeftAnchorLen = minAnchorLen + mm * 2 + (edits[last_eidx].splDir == EDIT_SPL_UNKNOWN ? 6 : 0);
+        uint32_t minLeftAnchorLen = minAnchorLen + mm * 2 + (edits[last_eidx].splDir == SPL_UNKNOWN ? 6 : 0);
         uint32_t mm2 = 0;
         for(size_t j = last_eidx + 1; j < edits.size(); j++) {
             if(edits[j].isGap() || edits[j].isMismatch()) mm2++;
         }
-        uint32_t minRightAnchorLen = minAnchorLen + mm2 * 2 + (edits[last_eidx].splDir == EDIT_SPL_UNKNOWN ? 6 : 0);
+        uint32_t minRightAnchorLen = minAnchorLen + mm2 * 2 + (edits[last_eidx].splDir == SPL_UNKNOWN ? 6 : 0);
         if(leftAnchorLen >= minLeftAnchorLen && rightAnchorLen >= minRightAnchorLen) {
             bool added = false;
             assert_lt(ref, _mutex.size());
@@ -305,7 +310,7 @@ bool SpliceSiteDB::addSpliceSite(
             if(added) {
                 assert_lt(ref, _spliceSites.size());
                 _spliceSites[ref].expand();
-                _spliceSites[ref].back().init(ssp.ref(), ssp.left(), ssp.right(), ssp.fw(), ssp.canonical());
+                _spliceSites[ref].back().init(ssp.ref(), ssp.left(), ssp.right(), ssp.splDir());
                 _spliceSites[ref].back()._readid = rd.rdid;
                 _spliceSites[ref].back()._leftext = leftAnchorLen;
                 _spliceSites[ref].back()._rightext = rightAnchorLen;
@@ -314,7 +319,7 @@ bool SpliceSiteDB::addSpliceSite(
                 assert(cur != NULL);
                 cur->payload = (uint32_t)_spliceSites[ref].size() - 1;
                 
-                SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.fw(), ssp.canonical());
+                SpliceSitePos rssp(ssp.ref(), ssp.right(), ssp.left(), ssp.splDir());
                 assert_lt(ref, _bwIndex.size());
                 assert(_bwIndex[ref] != NULL);
                 cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
@@ -630,9 +635,15 @@ void SpliceSiteDB::print_impl(
         assert_lt(tmp_ss.ref(), _refnames.size());
         out << _refnames[tmp_ss.ref()] << "\t"
         << tmp_ss.left() << "\t"
-        << tmp_ss.right() << "\t"
-        << (tmp_ss.canonical() ? (tmp_ss.fw() ? "+" : "-") : ".") << endl;
-        
+        << tmp_ss.right() << "\t";
+        if(tmp_ss.splDir() == SPL_FW || tmp_ss.splDir() == SPL_SEMI_FW) {
+            out << "+";
+        } else if(tmp_ss.splDir() == SPL_RC || tmp_ss.splDir() == SPL_SEMI_RC) {
+            out << "-";
+        } else {
+            out << ".";
+        }
+        out << endl;
         ss_list.erase(i);
     }
     
@@ -667,8 +678,7 @@ void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> 
             _spliceSites[ref].back().init(ref,
                                           left,
                                           right,
-                                          fw == '+' || fw == '.',
-                                          fw != '.',
+                                          fw ? SPL_FW : SPL_RC,
                                           alt.exon(),
                                           true,   // from file?
                                           true);  // known splice site?
@@ -689,8 +699,7 @@ void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> 
             SpliceSitePos rssp(ref,
                                right,
                                left,
-                               fw == '+' || fw == '.',
-                               fw != '.');
+                               fw ? SPL_FW : SPL_RC);
             assert_lt(ref, _bwIndex.size());
             assert(_bwIndex[ref] != NULL);
             cur = _bwIndex[ref]->add(pool(ref), rssp, &added);
@@ -705,7 +714,7 @@ void SpliceSiteDB::read(const GFM<TIndexOffU>& gfm, const EList<ALT<TIndexOffU> 
             if(right + 10 < tlen) right += 10;
             else                  right = tlen - 1;
             exons.expand();
-            exons.back().init(ref, left, right, fw == '+' || fw == '.');
+            exons.back().init(ref, left, right, fw == '+' ? SPL_FW : SPL_RC);
         }
     }
     if(exons.size() > 0) {
@@ -734,8 +743,7 @@ void SpliceSiteDB::read(ifstream& in, bool known)
         _spliceSites[ref].back().init(ref,
                                       left,
                                       right,
-                                      fw == '+' || fw == '.',
-                                      fw != '.',
+                                      fw == '+' ? SPL_FW : SPL_RC,
                                       false,  // exon?
                                       true,   // from file?
                                       known); // known splice site?
@@ -756,8 +764,7 @@ void SpliceSiteDB::read(ifstream& in, bool known)
         SpliceSitePos rssp(ref,
                            right,
                            left,
-                           fw == '+' || fw == '.',
-                           fw != '.');
+                           fw == '+' ? SPL_FW : SPL_RC);
         assert_lt(ref, _bwIndex.size());
         assert(_bwIndex[ref] != NULL);
         cur = _bwIndex[ref]->add(pool(ref), rssp, &added);

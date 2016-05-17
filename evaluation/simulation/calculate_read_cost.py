@@ -1258,7 +1258,7 @@ def calculate_read_cost(test_NH,
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     align_stat = []
     # for paired in [False, True]:
-    for paired in [True]:
+    for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"

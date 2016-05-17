@@ -884,14 +884,14 @@ public:
 		if(!fout1.good()) {
 			cerr << "Could not open index file for writing: \"" << _in1Str.c_str() << "\"" << endl
 			     << "Please make sure the directory exists and that permissions allow writing by" << endl
-			     << "Bowtie." << endl;
+			     << "HISAT2." << endl;
 			throw 1;
 		}
 		ofstream fout2(_in2Str.c_str(), ios::binary);
 		if(!fout2.good()) {
 			cerr << "Could not open index file for writing: \"" << _in2Str.c_str() << "\"" << endl
 			     << "Please make sure the directory exists and that permissions allow writing by" << endl
-			     << "Bowtie." << endl;
+			     << "HISAT2." << endl;
 			throw 1;
 		}
 
@@ -1359,7 +1359,7 @@ public:
                             }
                             if(failed) {
                                 _alts.pop_back();
-                                break;
+                                continue;
                             }
                         } else {
                             cerr << "Error: unknown snp type " << type << endl;
@@ -1854,8 +1854,20 @@ public:
                     VMSG_NL("Converting suffix-array elements to index image");
                     buildToDisk(bsa, s, out1, out2);
                 } else {
-                    RefGraph<index_t>* graph = new RefGraph<index_t>(s, szs, _alts, _haplotypes, outfile, _nthreads, verbose);
-                    PathGraph<index_t>* pg = new PathGraph<index_t>(*graph, outfile, _nthreads, verbose);
+                    RefGraph<index_t>* graph = new RefGraph<index_t>(
+                                                                     s,
+                                                                     szs,
+                                                                     _alts,
+                                                                     _haplotypes,
+                                                                     outfile,
+                                                                     _nthreads,
+                                                                     verbose);
+                    PathGraph<index_t>* pg = new PathGraph<index_t>(
+                                                                    *graph,
+                                                                    outfile,
+                                                                    std::numeric_limits<index_t>::max(),
+                                                                    _nthreads,
+                                                                    verbose);
 
                     if(verbose) { cerr << "Generating edges... " << endl; }
                     if(!pg->generateEdges(*graph)) { return; }

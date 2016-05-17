@@ -1022,18 +1022,18 @@ struct GenomeHit {
      *
      */
     bool spliced_consistently() const {
-        int splDir = EDIT_SPL_UNKNOWN;
+        int splDir = SPL_UNKNOWN;
         for(index_t i = 0; i < _edits->size(); i++) {
             const Edit& edit = (*_edits)[i];
             if(edit.type != EDIT_TYPE_SPL) continue;
-            if(splDir != EDIT_SPL_UNKNOWN) {
-                if(edit.splDir != EDIT_SPL_UNKNOWN) {
-                    if(splDir == EDIT_SPL_FW || splDir == EDIT_SPL_SEMI_FW) {
-                        if(edit.splDir != EDIT_SPL_FW && edit.splDir != EDIT_SPL_SEMI_FW)
+            if(splDir != SPL_UNKNOWN) {
+                if(edit.splDir != SPL_UNKNOWN) {
+                    if(splDir == SPL_FW || splDir == SPL_SEMI_FW) {
+                        if(edit.splDir != SPL_FW && edit.splDir != SPL_SEMI_FW)
                             return false;
                     }
-                    if(splDir == EDIT_SPL_RC || splDir == EDIT_SPL_SEMI_RC) {
-                        if(edit.splDir != EDIT_SPL_RC && edit.splDir != EDIT_SPL_SEMI_RC)
+                    if(splDir == SPL_RC || splDir == SPL_SEMI_RC) {
+                        if(edit.splDir != SPL_RC && edit.splDir != SPL_SEMI_RC)
                             return false;
                     }
                 }
@@ -1048,31 +1048,31 @@ struct GenomeHit {
      * return one of EDIT_SPL_FW, EDIT_SPL_RC, EDIT_SPL_UNKNOWN
      */
     int splicing_dir() const {
-        int splDir = EDIT_SPL_UNKNOWN;
+        int splDir = SPL_UNKNOWN;
         for(index_t i = 0; i < _edits->size(); i++) {
             const Edit& edit = (*_edits)[i];
             if(edit.type != EDIT_TYPE_SPL) continue;
-            if(splDir != EDIT_SPL_UNKNOWN) {
-                if(edit.splDir != EDIT_SPL_UNKNOWN) {
-                    if(splDir == EDIT_SPL_FW || splDir == EDIT_SPL_SEMI_FW) {
-                        if(edit.splDir != EDIT_SPL_FW && edit.splDir != EDIT_SPL_SEMI_FW)
-                            return EDIT_SPL_UNKNOWN;
+            if(splDir != SPL_UNKNOWN) {
+                if(edit.splDir != SPL_UNKNOWN) {
+                    if(splDir == SPL_FW || splDir == SPL_SEMI_FW) {
+                        if(edit.splDir != SPL_FW && edit.splDir != SPL_SEMI_FW)
+                            return SPL_UNKNOWN;
                     }
-                    if(splDir == EDIT_SPL_RC || splDir == EDIT_SPL_SEMI_RC) {
-                        if(edit.splDir != EDIT_SPL_RC && edit.splDir != EDIT_SPL_SEMI_RC)
-                            return EDIT_SPL_UNKNOWN;
+                    if(splDir == SPL_RC || splDir == SPL_SEMI_RC) {
+                        if(edit.splDir != SPL_RC && edit.splDir != SPL_SEMI_RC)
+                            return SPL_UNKNOWN;
                     }
                 }
             } else {
                 splDir = edit.splDir;
             }
         }
-        if(splDir == EDIT_SPL_FW || splDir == EDIT_SPL_SEMI_FW)
-            return EDIT_SPL_FW;
-        else if(splDir == EDIT_SPL_RC || splDir == EDIT_SPL_SEMI_RC)
-            return EDIT_SPL_RC;
+        if(splDir == SPL_FW || splDir == SPL_SEMI_FW)
+            return SPL_FW;
+        else if(splDir == SPL_RC || splDir == SPL_SEMI_RC)
+            return SPL_RC;
         else
-            return EDIT_SPL_UNKNOWN;
+            return SPL_UNKNOWN;
     }
     
     bool operator== (const GenomeHit<index_t>& other) const {
@@ -1382,7 +1382,7 @@ bool GenomeHit<index_t>::combineWith(
     // discover a splice site, an insertion, or a deletion
     index_t maxscorei = (index_t)INDEX_MAX;
     int64_t maxscore = MIN_I64;
-    uint32_t maxspldir = EDIT_SPL_UNKNOWN;
+    uint32_t maxspldir = SPL_UNKNOWN;
     float maxsplscore = 0.0f;
     // allow an indel near a splice site
     index_t splice_gap_maxscorei = (index_t)INDEX_MAX;
@@ -1462,18 +1462,18 @@ bool GenomeHit<index_t>::combineWith(
                     acceptor = (acceptor << 4) | refbuf2[i2 - 1];
                 }
                 bool canonical = false, semi_canonical = false;
-                uint32_t spldir = EDIT_SPL_UNKNOWN;
+                uint32_t spldir = SPL_UNKNOWN;
                 if((donor == GT && acceptor == AG) /* || (donor == AT && acceptor == AC) */) {
-                    spldir = EDIT_SPL_FW;
+                    spldir = SPL_FW;
                     canonical = true;
                 } else if((donor == AGrc && acceptor == GTrc) /* || (donor == ACrc && acceptor == ATrc) */) {
-                    spldir = EDIT_SPL_RC;
+                    spldir = SPL_RC;
                     canonical = true;
                 } else if((donor == GC && acceptor == AG) || (donor == AT && acceptor == AC)) {
-                    spldir = EDIT_SPL_SEMI_FW;
+                    spldir = SPL_SEMI_FW;
                     semi_canonical = true;
                 } else if((donor == AGrc && acceptor == GCrc) || (donor == ACrc && acceptor == ATrc)) {
-                    spldir = EDIT_SPL_SEMI_RC;
+                    spldir = SPL_SEMI_RC;
                     semi_canonical = true;
                 }
                 tempscore -= (canonical ? sc.canSpl() : sc.noncanSpl());
@@ -1482,7 +1482,7 @@ bool GenomeHit<index_t>::combineWith(
                 if(canonical) {
                     // in case of canonical splice site, extract donor side sequence and acceptor side sequence
                     //    to calculate a score of the splicing event.
-                    if(spldir == EDIT_SPL_FW) {
+                    if(spldir == SPL_FW) {
                         if(i + 1 >= (int)donor_exonic_len &&
                            (int)(len + this_ref_ext) > i + (int)donor_intronic_len &&
                            i2 + (int)other_ref_ext >= (int)acceptor_intronic_len &&
@@ -1506,7 +1506,7 @@ bool GenomeHit<index_t>::combineWith(
                                 temp_acceptor_seq = temp_acceptor_seq << 2 | base;
                             }
                         }
-                    } else if(spldir == EDIT_SPL_RC) {
+                    } else if(spldir == SPL_RC) {
                         if(i + 1 >= (int)acceptor_exonic_len &&
                            (int)(len + this_ref_ext) > i + (int)acceptor_intronic_len &&
                            i2 + (int)other_ref_ext >= (int)donor_intronic_len &&
@@ -1536,15 +1536,15 @@ bool GenomeHit<index_t>::combineWith(
                 }
                 // daehwan - for debugging purposes
                 // choose a splice site with the better score
-                if((maxspldir == EDIT_SPL_UNKNOWN && spldir == EDIT_SPL_UNKNOWN && maxscore < tempscore) ||
-                   (maxspldir == EDIT_SPL_UNKNOWN && spldir == EDIT_SPL_UNKNOWN && maxscore == tempscore && semi_canonical) ||
-                   (maxspldir != EDIT_SPL_UNKNOWN && spldir != EDIT_SPL_UNKNOWN && (maxscore < tempscore || (maxscore == tempscore && maxsplscore < splscore))) ||
-                   (maxspldir == EDIT_SPL_UNKNOWN && spldir != EDIT_SPL_UNKNOWN)) {
+                if((maxspldir == SPL_UNKNOWN && spldir == SPL_UNKNOWN && maxscore < tempscore) ||
+                   (maxspldir == SPL_UNKNOWN && spldir == SPL_UNKNOWN && maxscore == tempscore && semi_canonical) ||
+                   (maxspldir != SPL_UNKNOWN && spldir != SPL_UNKNOWN && (maxscore < tempscore || (maxscore == tempscore && maxsplscore < splscore))) ||
+                   (maxspldir == SPL_UNKNOWN && spldir != SPL_UNKNOWN)) {
                     maxscore = tempscore;
                     maxscorei = i;
                     maxspldir = spldir;
                     maxsplscore = splscore;
-                    if(maxspldir != EDIT_SPL_UNKNOWN) {
+                    if(maxspldir != SPL_UNKNOWN) {
                         donor_seq = temp_donor_seq;
                         acceptor_seq = temp_acceptor_seq;
                     } else {
@@ -1613,7 +1613,7 @@ bool GenomeHit<index_t>::combineWith(
         if(spliced && spliceSite == NULL) {
             uint32_t shorter_anchor_len = min<uint32_t>(maxscorei + 1, len - maxscorei - 1);
             assert_leq(this_toff, other_toff);
-            if(maxspldir == EDIT_SPL_SEMI_FW || maxspldir == EDIT_SPL_SEMI_RC || maxspldir == EDIT_SPL_UNKNOWN) {
+            if(maxspldir == SPL_SEMI_FW || maxspldir == SPL_SEMI_RC || maxspldir == SPL_UNKNOWN) {
                 if(shorter_anchor_len < minAnchorLen_noncan) {
                     float intronLenProb = intronLen_prob_noncan(shorter_anchor_len, other_toff - this_toff, maxIntronLen);
                     if(intronLenProb > 0.01f)
@@ -2583,7 +2583,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                            0,
                            EDIT_TYPE_SPL,
                            intronLen,
-                           alt.fw ? EDIT_SPL_FW : EDIT_SPL_RC,
+                           alt.fw ? SPL_FW : SPL_RC,
                            true,   /* known splice site? */
                            false); /* chrs? */
                     tmp_edits.insert(e, 0);
@@ -2808,7 +2808,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                            0,
                            EDIT_TYPE_SPL,
                            intronLen,
-                           alt.fw ? EDIT_SPL_FW : EDIT_SPL_RC,
+                           alt.fw ? SPL_FW : SPL_RC,
                            true,   /* known splice site? */
                            false); /* chrs? */
                     tmp_edits.push_back(e);
@@ -3089,7 +3089,7 @@ int64_t GenomeHit<index_t>::calculateScore(
     index_t rdlen = (index_t)seq.length();
     int64_t toff_base = _toff;
     bool conflict_splicesites = false;
-    uint8_t whichsense = EDIT_SPL_UNKNOWN;
+    uint8_t whichsense = SPL_UNKNOWN;
     for(index_t i = 0; i < _edits->size(); i++) {
         const Edit& edit = (*_edits)[i];
         assert_lt(edit.pos, _len);
@@ -3124,7 +3124,7 @@ int64_t GenomeHit<index_t>::calculateScore(
                 int shorter_anchor_len = min<int>(left_anchor_len, right_anchor_len);
                 if(shorter_anchor_len <= 0) shorter_anchor_len = 1;
                 assert_gt(shorter_anchor_len, 0);
-                uint32_t intronLen_thresh = ((edit.splDir == EDIT_SPL_FW || edit.splDir == EDIT_SPL_RC) ?
+                uint32_t intronLen_thresh = ((edit.splDir == SPL_FW || edit.splDir == SPL_RC) ?
                                              MaxIntronLen(shorter_anchor_len, minAnchorLen) :
                                              MaxIntronLen_noncan(shorter_anchor_len, minAnchorLen_noncan));
                 if(intronLen_thresh < maxIntronLen) {
@@ -3132,7 +3132,7 @@ int64_t GenomeHit<index_t>::calculateScore(
                         score += MIN_I32;
                     }
                     
-                    if(edit.splDir == EDIT_SPL_FW || edit.splDir == EDIT_SPL_RC) {
+                    if(edit.splDir == SPL_FW || edit.splDir == SPL_RC) {
                         float probscore = ssdb.probscore(edit.donor_seq, edit.acceptor_seq);
                         
                         float probscore_thresh = 0.8f;
@@ -3163,7 +3163,7 @@ int64_t GenomeHit<index_t>::calculateScore(
                 }
 
                 if(edit.snpID == std::numeric_limits<uint32_t>::max()) {
-                    if(edit.splDir == EDIT_SPL_FW || edit.splDir == EDIT_SPL_RC) {
+                    if(edit.splDir == SPL_FW || edit.splDir == SPL_RC) {
                         score -= sc.canSpl((int)edit.splLen);
                     } else {
                         score -= sc.noncanSpl((int)edit.splLen);
@@ -3178,17 +3178,17 @@ int64_t GenomeHit<index_t>::calculateScore(
             }
             
             if(!conflict_splicesites) {
-                if(whichsense == EDIT_SPL_UNKNOWN) {
+                if(whichsense == SPL_UNKNOWN) {
                     whichsense = edit.splDir;
-                } else if(edit.splDir != EDIT_SPL_UNKNOWN) {
-                    assert_neq(whichsense, EDIT_SPL_UNKNOWN);
-                    if(edit.splDir == EDIT_SPL_FW || edit.splDir == EDIT_SPL_SEMI_FW) {
-                        if(whichsense != EDIT_SPL_FW && whichsense != EDIT_SPL_SEMI_FW) {
+                } else if(edit.splDir != SPL_UNKNOWN) {
+                    assert_neq(whichsense, SPL_UNKNOWN);
+                    if(edit.splDir == SPL_FW || edit.splDir == SPL_SEMI_FW) {
+                        if(whichsense != SPL_FW && whichsense != SPL_SEMI_FW) {
                             conflict_splicesites = true;
                         }
                     }
-                    if(edit.splDir == EDIT_SPL_RC || edit.splDir == EDIT_SPL_SEMI_RC) {
-                        if(whichsense != EDIT_SPL_RC && whichsense != EDIT_SPL_SEMI_RC) {
+                    if(edit.splDir == SPL_RC || edit.splDir == SPL_SEMI_RC) {
+                        if(whichsense != SPL_RC && whichsense != SPL_SEMI_RC) {
                             conflict_splicesites = true;
                         }
                     }
@@ -4658,7 +4658,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     // this helps eliminate cases of reads being mapped to pseudogenes
     pair<bool, bool> spliced = hit.spliced(); // pair<spliced, spliced_to_known>
     if(this->_tpol.xs_only() && spliced.first) {
-        if(hit.splicing_dir() == EDIT_SPL_UNKNOWN)
+        if(hit.splicing_dir() == SPL_UNKNOWN)
             return false;
     }
     if(!this->_tpol.no_spliced_alignment()) {
