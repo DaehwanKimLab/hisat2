@@ -81,6 +81,7 @@ public:
         nearSpliceSites_ = nearSpliceSites;
         leftTrim_ = leftTrim;
         rightTrim_ = rightTrim;
+        hisat2_score_ = calculate_hisat2_score();
 		assert(valid());
 	}
 	
@@ -88,7 +89,7 @@ public:
 	 * Reset the score.
 	 */
 	void reset() {
-		score_ = ns_ = gaps_ = 0;
+		score_ = hisat2_score_ = ns_ = gaps_ = 0;
         splicescore_ = 0;
         knownTranscripts_ = false;
         nearSpliceSites_ = false;
@@ -149,7 +150,7 @@ public:
 			// I'm invalid, other is valid
 			return false;
 		}
-		return score_ > o.score_;
+		return score_ > o.score_ || (score_ == o.score_ && hisat2_score_ > o.hisat2_score_);
 	}
 
 	/**
@@ -160,6 +161,7 @@ public:
 		gaps_  = o.gaps_;
 		ns_    = o.ns_;
 		score_ = o.score_;
+        hisat2_score_ = o.hisat2_score_;
         splicescore_ = o.splicescore_;
         knownTranscripts_ = o.knownTranscripts_;
         nearSpliceSites_ = o.nearSpliceSites_;
@@ -174,7 +176,7 @@ public:
 	 */
 	inline bool operator==(const AlnScore& o) const {
 		// Profiling shows cache misses on following line
-		return VALID_AL_SCORE(*this) && VALID_AL_SCORE(o) && score_ == o.score_;
+		return VALID_AL_SCORE(*this) && VALID_AL_SCORE(o) && score_ == o.score_ && hisat2_score_ == o.hisat2_score_;
 	}
 
 	/**
@@ -200,7 +202,7 @@ public:
 			// I'm invalid, other is valid
 			return false;
 		}
-		return score_ >= o.score_;
+		return score_ > o.score_ || (score_ == o.score_ && hisat2_score_ >= o.hisat2_score_);
 	}
 
 	/**
@@ -241,6 +243,11 @@ public:
 		s.ns_ = ns_;
 		s.score_ = score_ + o.score_;
         s.splicescore_ = splicescore_ + o.splicescore_;
+        s.hisat2_score_ = hisat2_score_ + o.hisat2_score_;
+        s.knownTranscripts_ = knownTranscripts_ | o.knownTranscripts_;
+        s.nearSpliceSites_ = nearSpliceSites_ | o.nearSpliceSites_;
+        s.leftTrim_ = leftTrim_ + o.leftTrim_;
+        s.rightTrim_ = rightTrim_ + o.rightTrim_;
 		assert_lt(s.ns_, 0x7fffffff);
 		return s;
 	}
@@ -253,6 +260,11 @@ public:
 			gaps_ += o.gaps_;
 			score_ += o.score_;
             splicescore_ += o.splicescore_;
+            hisat2_score_ += o.hisat2_score_;
+            knownTranscripts_ |= o.knownTranscripts_;
+            nearSpliceSites_ |= o.nearSpliceSites_;
+            leftTrim_ += o.leftTrim_;
+            rightTrim_ += o.rightTrim_;
 		}
 		return (*this);
 	}
@@ -264,7 +276,7 @@ public:
 		if(VALID_AL_SCORE(*this)) {
 			gaps_ -= o.gaps_;
 			score_ -= o.score_;
-            splicescore_ -= o.splicescore_;
+            // splicescore_ -= o.splicescore_;
 		}
 		return (*this);
 	}
@@ -285,12 +297,13 @@ public:
 		s.gaps_ = gaps_;
 		s.ns_ = ns_;
 		s.score_ = score_ + o;
-        s.splicescore_ = splicescore_;
+        // s.splicescore_ = splicescore_;
 		assert_lt(s.ns_, 0x7fffffff);
 		return s;
 	}
 
 	TAlScore score()            const { return  score_; }
+    TAlScore hisat2_score()     const { return  hisat2_score_; }
 	TAlScore penalty()          const { return -score_; }
 	TAlScore gaps()             const { return  gaps_;  }
 	TAlScore ns()               const { return  ns_;    }
@@ -299,7 +312,7 @@ public:
     bool     nearSpliceSites()  const { return nearSpliceSites_; }
     bool     trimed()           const { return leftTrim_ > 0 || rightTrim_ > 0; }
     
-    TAlScore hisat2_score() const
+    TAlScore calculate_hisat2_score() const
     {
         // TAlScore 32 bits used for score_
         TAlScore score = score_;
@@ -325,6 +338,9 @@ public:
 
 	// Score accumulated so far (penalties are subtracted starting at 0)
 	TAlScore score_;
+    
+    // HISAT2 score, which is used internally to distinguish the alignments of RNA-seq reads
+    TAlScore hisat2_score_;
 	
 	// Ns accumulated so far.  An N opposite a non-gap counts as 1 N
 	// (even if it's N-to-N)

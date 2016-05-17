@@ -214,7 +214,7 @@ public:
 		if(!flags.canMax() &&
            !s.exhausted(mate1) &&
            (!hasSecbest || !equalSecbest)) {
-			return 255;
+			return 60;
 		}
 		// scPer = score of a perfect match
 		TAlScore scPer = (TAlScore)sc_.perfectScore(rdlen);

@@ -971,6 +971,17 @@ Note: HISAT2 is not designed with large values for `-k` in mind, and when
 aligning reads to long, repetitive genomes large `-k` can be very, very slow.
 
 </td></tr>
+<tr><td id="hisat2-options-k">
+
+[`--secondary`]: #hisat2-options-secondary
+
+    --secondary
+
+</td><td>
+
+Report secondary alignments.
+
+</td></tr>
 
 </table>
 
