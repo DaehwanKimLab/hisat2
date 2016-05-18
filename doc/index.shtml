@@ -24,8 +24,8 @@
 	  Version 2.0.4 is a minor release with the following changes.
 	  <ul>
 	    <li>Improved template length estimation (the 9th column of the SAM format) of RNA-seq reads by taking introns into account.</li>
-	    <il>Introduced two options, --remove-chrname and --add-chrname, to remove "chr" from reference names or add "chr" to reference names in the alignment output, respectively (the 3rd column of the SAM format).
-	    <li>Changed the maximum of mapping quality (the 5th column of the SAM format) from 255 to 60.</li>
+	    <li>Introduced two options, --remove-chrname and --add-chrname, to remove "chr" from reference names or add "chr" to reference names in the alignment output, respectively (the 3rd column of the SAM format).</li>
+	    <li>Changed the maximum of mapping quality (the 5th column of the SAM format) from 255 to 60. Note that 255 is an undefined value according to the SAM manual and some programs would not work with this value (255) properly.</li>
 	    <li>Fixed NH (number of hits) in the alignment output.</li>
 	    <li>HISAT2 allows indels of any length pertaining to minimum alignment score (previously, the maximum length of indels was 3 bp).</li>
 	    <li>Fixed several cases that alignment goes beyond reference sequences.</li>

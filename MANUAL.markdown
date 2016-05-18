@@ -598,63 +598,12 @@ paired-end configurations corresponding to fragments from the reverse-complement
 
 </td></tr>
 
-<!--
-<tr><td id="hisat2-options-end-to-end">
-
-[`--end-to-end`]: #hisat2-options-end-to-end
-
-    --end-to-end
-
-</td><td>
-
-In this mode, HISAT2 requires that the entire read align from one end to the
-other, without any trimming (or "soft clipping") of characters from either end.
-The match bonus [`--ma`] always equals 0 in this mode, so all alignment scores
-are less than or equal to 0, and the greatest possible alignment score is 0.
-This is mutually exclusive with [`--local`].  `--end-to-end` is the default mode.
-
-</td></tr>
-<tr><td id="hisat2-options-local">
-
-[`--local`]: #hisat2-options-local
-
-    --local
-
-</td><td>
-
-In this mode, HISAT2 does not require that the entire read align from one end
-to the other.  Rather, some characters may be omitted ("soft clipped") from the
-ends in order to achieve the greatest possible alignment score.  The match bonus
-[`--ma`] is used in this mode, and the best possible alignment score is equal to
-the match bonus ([`--ma`]) times the length of the read.  Specifying `--local`
-and one of the presets (e.g. `--local --very-fast`) is equivalent to specifying
-the local version of the preset (`--very-fast-local`).  This is mutually
-exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
-
-</td></tr>
--->
-
 </table>
 
 #### Scoring options
 
 <table>
 
-<!--
-<tr><td id="hisat2-options-ma">
-
-[`--ma`]: #hisat2-options-ma
-
-    --ma <int>
-
-</td><td>
-
-Sets the match bonus.  In [`--local`] mode `<int>` is added to the alignment
-score for each position where a read character aligns to a reference character
-and the characters match.  Not used in [`--end-to-end`] mode.  Default: 2.
-
-</td></tr>
--->
 <tr><td id="hisat2-options-mp">
 
 [`--mp`]: #hisat2-options-mp

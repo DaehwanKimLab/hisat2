@@ -292,54 +292,11 @@ possible in terms of alignment score.
 <p>If <code>--nofw</code> is specified, <code>hisat2</code> will not attempt to align unpaired reads to the forward (Watson) reference strand. If <code>--norc</code> is specified, <code>hisat2</code> will not attempt to align unpaired reads against the reverse-complement (Crick) reference strand. In paired-end mode, <code>--nofw</code> and <code>--norc</code> pertain to the fragments; i.e. specifying <code>--nofw</code> causes <code>hisat2</code> to explore only those paired-end configurations corresponding to fragments from the reverse-complement (Crick) strand. Default: both strands enabled.</p>
 </td></tr>
 
-<!--
-<tr><td id="hisat2-options-end-to-end">
-
-[`--end-to-end`]: #hisat2-options-end-to-end
-
-    --end-to-end
-
-</td><td>
-
-In this mode, HISAT2 requires that the entire read align from one end to the
-other, without any trimming (or "soft clipping") of characters from either end.
-The match bonus [`--ma`] always equals 0 in this mode, so all alignment scores
-are less than or equal to 0, and the greatest possible alignment score is 0.
-This is mutually exclusive with [`--local`].  `--end-to-end` is the default mode.
-
-</td></tr>
-<tr><td id="hisat2-options-local">
-
-[`--local`]: #hisat2-options-local
-
-    --local
-
-</td><td>
-
-In this mode, HISAT2 does not require that the entire read align from one end
-to the other.  Rather, some characters may be omitted ("soft clipped") from the
-ends in order to achieve the greatest possible alignment score.  The match bonus
-[`--ma`] is used in this mode, and the best possible alignment score is equal to
-the match bonus ([`--ma`]) times the length of the read.  Specifying `--local`
-and one of the presets (e.g. `--local --very-fast`) is equivalent to specifying
-the local version of the preset (`--very-fast-local`).  This is mutually
-exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
-
-</td></tr>
--->
-
 </table>
 
 <h4 id="scoring-options">Scoring options</h4>
 <table>
 
-<tr><td id="hisat2-options-ma">
-
-<pre><code>--ma &lt;int&gt;</code></pre>
-</td><td>
-
-<p>Sets the match bonus. In [<code>--local</code>] mode <code>&lt;int&gt;</code> is added to the alignment score for each position where a read character aligns to a reference character and the characters match. Not used in [<code>--end-to-end</code>] mode. Default: 2.</p>
-</td></tr>
 <tr><td id="hisat2-options-mp">
 
 <pre><code>--mp MX,MN</code></pre>
@@ -380,7 +337,7 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 <pre><code>--score-min &lt;func&gt;</code></pre>
 </td><td>
 
-<p>Sets a function governing the minimum alignment score needed for an alignment to be considered &quot;valid&quot; (i.e. good enough to report). This is a function of read length. For instance, specifying <code>L,0,-0.6</code> sets the minimum-score function <code>f</code> to <code>f(x) = 0 + -0.6 * x</code>, where <code>x</code> is the read length. See also: [setting function options]. The default is <code>C,-18,0</code>.</p>
+<p>Sets a function governing the minimum alignment score needed for an alignment to be considered &quot;valid&quot; (i.e. good enough to report). This is a function of read length. For instance, specifying <code>L,0,-0.6</code> sets the minimum-score function <code>f</code> to <code>f(x) = 0 + -0.6 * x</code>, where <code>x</code> is the read length. See also: [setting function options]. The default is <code>L,0,-0.2</code>.</p>
 </td></tr>
 </table>
 
@@ -400,7 +357,7 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 <pre><code>--pen-noncansplice &lt;int&gt;</code></pre>
 </td><td>
 
-<p>Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 3.</p>
+<p>Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 12.</p>
 </td></tr>
 <tr><td id="hisat2-options-pen-canintronlen">
 
@@ -515,6 +472,13 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 
 <p>It searches for at most <code>&lt;int&gt;</code> distinct, primary alignments for each read. Primary alignments mean alignments whose alignment score is equal or higher than any other alignments. The search terminates when it can't find more distinct valid alignments, or when it finds <code>&lt;int&gt;</code>, whichever happens first. The alignment score for a paired-end alignment equals the sum of the alignment scores of the individual mates. Each reported read or pair alignment beyond the first has the SAM 'secondary' bit (which equals 256) set in its FLAGS field. For reads that have more than <code>&lt;int&gt;</code> distinct, valid alignments, <code>hisat2</code> does not gaurantee that the <code>&lt;int&gt;</code> alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)</p>
 <p>Note: HISAT2 is not designed with large values for <code>-k</code> in mind, and when aligning reads to long, repetitive genomes large <code>-k</code> can be very, very slow.</p>
+</td></tr>
+<tr><td id="hisat2-options-k">
+
+<pre><code>--secondary</code></pre>
+</td><td>
+
+<p>Report secondary alignments.</p>
 </td></tr>
 
 </table>
@@ -696,6 +660,20 @@ exclusive with [`--end-to-end`].  `--end-to-end` is the default mode.
 </td><td>
 
 <p>Add <code>&lt;text&gt;</code> (usually of the form <code>TAG:VAL</code>, e.g. <code>SM:Pool1</code>) as a field on the <code>@RG</code> header line. Note: in order for the <code>@RG</code> line to appear, <a href="#hisat2-options-rg-id"><code>--rg-id</code></a> must also be specified. This is because the <code>ID</code> tag is required by the <a href="http://samtools.sourceforge.net/SAM1.pdf">SAM Spec</a>. Specify <code>--rg</code> multiple times to set multiple fields. See the <a href="http://samtools.sourceforge.net/SAM1.pdf">SAM Spec</a> for details about what fields are legal.</p>
+</td></tr>
+<tr><td id="hisat2-options-remove-chrname">
+
+<pre><code>--remove-chrname</code></pre>
+</td><td>
+
+<p>Remove 'chr' from reference names in alignment (e.g., chr18 to 18)</p>
+</td></tr>
+<tr><td id="hisat2-options-add-chrname">
+
+<pre><code>--add-chrname</code></pre>
+</td><td>
+
+<p>Add 'chr' to reference names in alignment (e.g., 18 to chr18)</p>
 </td></tr>
 <tr><td id="hisat2-options-omit-sec-seq">
 
