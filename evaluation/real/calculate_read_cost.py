@@ -797,14 +797,15 @@ def calculate_read_cost():
         is_large_file = True
 
     aligners = [
-        ["hisat", "", "", ""],
-        ["hisat2", "", "", ""],
+        # ["hisat", "", "", ""],
+        # ["hisat2", "", "", ""],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "tran", ""],
         # ["hisat2", "x1", "snp", ""],
         # ["hisat2", "x1", "", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "", "tran", ""],
+        ["hisat2", "", "snp_tran", "203b"],
         ["hisat2", "", "snp_tran", ""],
         # ["hisat", "", "", ""],
         # ["tophat2", "", "", ""],
@@ -812,7 +813,7 @@ def calculate_read_cost():
         # ["bowtie2", "", "", ""],
         # ["bwa", "mem", "", ""],
         # ["bwa", "sw", "", ""],
-        ["star", "", "", ""],
+        # ["star", "", "", ""],
         # ["star", "x2", "", ""],        
         ]
 
@@ -835,8 +836,8 @@ def calculate_read_cost():
 
     print >> sys.stderr, "aligner\tuse_annotation\tend_type\tedit_distance\tmapped_reads\tjunction_reads\tgtf_junction_reads\tjunctions\tgtf_junctions\truntime"
     
-    for paired in [False, True]:
-    # for paired in [True]:
+    # for paired in [False, True]:
+    for paired in [False]:
         type_read1_fname = "1.fq"
         if paired:
             type_read2_fname = "2.fq"
@@ -882,7 +883,10 @@ def calculate_read_cost():
         def get_aligner_cmd(RNA, aligner, type, index_type, version, read1_fname, read2_fname, out_fname, cmd_idx = 0):
             cmd = []
             if aligner == "hisat2":
-                cmd = ["%s/hisat2" % (aligner_bin_base)]
+                if version:
+                    cmd = ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
+                else:
+                    cmd = ["%s/hisat2" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
                     
@@ -891,11 +895,6 @@ def calculate_read_cost():
 
                 # daehwan - for debugging purposes
                 # cmd += ["--score-min", "C,-50"]
-                    
-                if version != "":
-                    version = int(version)
-                else:
-                    version = sys.maxint
                 # cmd += ["--pen-cansplice", "0"]
                 # cmd += ["--pen-noncansplice", "12"]
                 # cmd += ["--pen-intronlen", "G,-8,1"]

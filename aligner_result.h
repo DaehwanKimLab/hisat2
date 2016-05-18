@@ -1253,6 +1253,7 @@ public:
 	size_t             readExtent()     const { return rdextent_; }
 	size_t             readExtentRows() const { return rdexrows_; }
 	size_t             readLength()     const { return rdlen_;    }
+    TReadId            readID()         const { return rdid_;     }
     bool               spliced()        const { return num_spliced_ > 0;  }
     size_t             num_spliced()    const { return num_spliced_; }
     uint8_t            spliced_whichsense_transcript() const {
@@ -1606,7 +1607,7 @@ public:
 		assert_eq(refid(), omate.refid());
 		getExtendedCoords(st, en, st2, en2);
 		omate.getExtendedCoords(ost, oen, ost2, oen2);
-		bool imUpstream = st.off() < ost.off();
+		bool imUpstream = st.off() < ost.off() || (st.off() == ost.off() && en2.off() < oen2.off());
         TRefOff up, dn, up_right, dn_left;
         if(imUpstream) {
             up = std::min(st2.off(), ost.off());

@@ -1339,7 +1339,7 @@ bool GenomeHit<index_t>::combineWith(
         assert(repOk(rd, ref));
         return true;
     }
-   
+    
     // calculate the maximum gap lengths based on the current score and the mimumimu alignment score to be reported
     const BTDnaString& seq = this->_fw ? rd.patFw : rd.patRc;
     const BTString& qual = this->_fw ? rd.qual : rd.qualRev;
@@ -1891,6 +1891,11 @@ bool GenomeHit<index_t>::extend(
                                           NULL,
                                           mm,
                                           &numNs);
+        // Do not allow for any edits including known snps and splice sites when extending zero-length hit
+        if(_len == 0 && _edits->size() > 0) {
+            _edits->clear();
+            return false;
+        }
         if(best_ext > 0) {
             leftext = best_ext;
             assert_leq(num_prev_edits, _edits->size());
@@ -1960,6 +1965,11 @@ bool GenomeHit<index_t>::extend(
                                              *this->_edits,
                                              NULL,
                                              mm);
+            // Do not allow for any edits including known snps and splice sites when extending zero-length hit
+            if(_len == 0 && _edits->size() > 0) {
+                _edits->clear();
+                return false;
+            }
             if(best_ext > 0) {
                 rightext = best_ext;
                 _len += best_ext;

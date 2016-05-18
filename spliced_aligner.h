@@ -1190,7 +1190,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     if(!ss._fromfile && ss._readid + this->_thread_rids_mindist > rd.rdid) continue;
                     if(right > ss.left()) continue;
                     GenomeHit<index_t> tempHit;
-                    assert_lt(right, ss.left());
+                    assert_leq(right, ss.left());
                     index_t readoff = fragoff + ss.left() - right + 1;
                     if(readoff >= rdlen)
                         continue;
