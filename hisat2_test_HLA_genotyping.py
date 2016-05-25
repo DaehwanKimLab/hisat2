@@ -417,6 +417,8 @@ def test_HLA_genotyping(reference_type,
                         aligner_cmd += ["-1", "%s" % read_fname[0],
                                         "-2", "%s" % read_fname[1]]
 
+                if verbose:
+                    print >> sys.stderr, ' '.join(aligner_cmd)
                 align_proc = subprocess.Popen(aligner_cmd,
                                               stdout=subprocess.PIPE,
                                               stderr=open("/dev/null", 'w'))
@@ -434,7 +436,7 @@ def test_HLA_genotyping(reference_type,
                     bamsort_cmd = ["samtools",
                                    "sort",
                                    "hla_input_unsorted.bam",
-                                   "hla_input"]
+                                   "-o", "hla_input.bam"]
                     bamsort_proc = subprocess.Popen(bamsort_cmd,
                                                     stderr=open("/dev/null", 'w'))
                     bamsort_proc.communicate()
@@ -1302,8 +1304,8 @@ if __name__ == '__main__':
                         dest='verbose',
                         action='store_true',
                         help='also print some statistics to stderr')
-    parser.add_argument("--daehwan-debug",
-                        dest="daehwan_debug",
+    parser.add_argument("--debug",
+                        dest="debug",
                         type=str,
                         default="",
                         help="e.g., test_id:10,read_id:10000,basic_test")
@@ -1328,14 +1330,14 @@ if __name__ == '__main__':
         print >> sys.stderr, "Error: %s doesn't exist." % args.alignment_fname
         sys.exit(1)
     args.exclude_allele_list = args.exclude_allele_list.split(',')
-    daehwan_debug = {}
-    if args.daehwan_debug != "":
-        for item in args.daehwan_debug.split(','):
+    debug = {}
+    if args.debug != "":
+        for item in args.debug.split(','):
             if ':' in item:
                 key, value = item.split(':')
-                daehwan_debug[key] = value
+                debug[key] = value
             else:
-                daehwan_debug[item] = 1
+                debug[item] = 1
 
     random.seed(1)
     test_HLA_genotyping(args.reference_type,
@@ -1351,4 +1353,4 @@ if __name__ == '__main__':
                         args.exclude_allele_list,
                         args.num_mismatch,
                         args.verbose,
-                        daehwan_debug)
+                        debug)
