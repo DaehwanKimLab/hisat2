@@ -108,8 +108,8 @@ def test_HLA_genotyping(reference_type,
                        "--hla-list", ','.join(hla_list)]
         if partial:
             extract_cmd += ["--partial"]
-        extract_cmd += ["--gap", "30",
-                        "--split", "50"]
+        extract_cmd += ["--inter-gap", "30",
+                        "--intra-gap", "50"]
         if verbose:
             print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))

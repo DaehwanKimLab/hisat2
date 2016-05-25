@@ -45,6 +45,9 @@
        <tr>
 	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.4-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
        </tr>
+       <tr>
+	 <td><a href="http://www.di.fc.ul.pt/~afalcao/hisat2_windows.html" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Windowns binary</a></td>
+       </tr>
    </tbody></table>
  </ul>
 <font size="-1">Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html"><b>HISAT: a fast spliced aligner with low memory requirements</b></a>. <i><a href="http://www.nature.com/nmeth">Nature Methods</a></i></font> 2015</p>
