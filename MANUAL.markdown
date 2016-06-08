@@ -2396,9 +2396,9 @@ binary format corresponding to the SAM text format.  Run:
 
     samtools view -bS eg2.sam > eg2.bam
 
-Use `samtools sort` to convert the BAM file to a sorted BAM file.
+Use `samtools sort` to convert the BAM file to a sorted BAM file. The following command requires samtools version 1.2 or higher.
 
-    samtools sort eg2.bam eg2.sorted
+    samtools sort eg2.bam -o eg2.sorted.bam
 
 We now have a sorted BAM file called `eg2.sorted.bam`. Sorted BAM is a useful
 format because the alignments are (a) compressed, which is convenient for

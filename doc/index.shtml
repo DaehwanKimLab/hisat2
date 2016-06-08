@@ -7,7 +7,7 @@
   <div id="subheader">
     <table width="100%"><tbody><tr>
 	  <td>
-<strong>HISAT2</strong> is a fast and sensitive alignment program for mapping next-generation sequencing reads (both DNA and RNA) against the general human population (as well as against a single reference genome). Based on an extension of BWT for graphs <a href="http://dl.acm.org/citation.cfm?id=2674828">[Sir&eacute;n et al. 2014]</a>, we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that represents the general population, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover the human population). These small indexes (called local indexes), combined with several alignment strategies, enable rapid and accurate alignment of sequencing reads. This new indexing scheme is called a Hierarchical Graph FM index (HGFM).
+<strong>HISAT2</strong> is a fast and sensitive alignment program for mapping next-generation sequencing reads (both DNA and RNA) to a population of human genomes (as well as against a single reference genome). Based on an extension of BWT for graphs <a href="http://dl.acm.org/citation.cfm?id=2674828">[Sir&eacute;n et al. 2014]</a>, we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that represents a population of human genomes, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover the human population). These small indexes (called local indexes), combined with several alignment strategies, enable rapid and accurate alignment of sequencing reads. This new indexing scheme is called a Hierarchical Graph FM index (HGFM).
 	    <br>
 	  </td>
 	  <td valign="middle" align="right">
@@ -97,7 +97,7 @@ Osório Falcão</a> 5/24/2016</h2>
 	      </ol>
 	    </li>
 	    <li>
-	      When reads contain SNPs, the SNP information is provided as an optional field in the SAM output of HISAT2 (e.g., <strong>Zs:Z:1|S|rs3747203,97|S|rs16990981</strong> - see <a href="manual.shtml">the manual</a> for details).  This feature enables fast and sensitive genotyping in downstream analyses. Note that there is no alignment penalty for mismatches, insertions, and deletions that correspond to SNPs.
+	      When reads contain SNPs, the SNP information is provided as an optional field in the SAM output of HISAT2 (e.g., <strong>Zs:Z:1|S|rs3747203,97|S|rs16990981</strong> - see <a href="manual.shtml">the manual</a> for details).  This feature enables fast and sensitive genotyping in downstream analyses. Note that there is no alignment penalty for mismatches, insertions, and deletions if they correspond to known SNPs.
 	    </li>
 	    <li>
 	      HISAT2 provides options for transcript assemblers (e.g., StringTie and Cufflinks) to work better with the alignment from HISAT2 (see options such as --dta and --dta-cufflinks).
