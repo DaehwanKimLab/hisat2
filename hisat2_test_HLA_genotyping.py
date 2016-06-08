@@ -25,6 +25,48 @@ import inspect, random
 import math
 from argparse import ArgumentParser, FileType
 
+"""
+"""
+def simulate_reads(HLAs, test_HLA_list, simulate_interval):
+    HLA_reads_1, HLA_reads_2 = [], []
+    for test_HLA_names in test_HLA_list:
+        gene = test_HLA_names[0].split('*')[0]
+        # ref_allele = refHLAs[gene]
+        # ref_seq = HLAs[gene][ref_allele]
+
+        # Simulate reads from two HLA alleles
+        def simulate_reads_impl(seq, simulate_interval = 1, frag_len = 250, read_len = 100):
+            comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
+            reads_1, reads_2 = [], []
+            for i in range(0, len(seq) - frag_len + 1, simulate_interval):
+                reads_1.append(seq[i:i+read_len])
+                tmp_read_2 = reversed(seq[i+frag_len-read_len:i+frag_len])
+                read_2 = ""
+                for s in tmp_read_2:
+                    if s in comp_table:
+                        read_2 += comp_table[s]
+                    else:
+                        read_2 += s
+                reads_2.append(read_2)
+            return reads_1, reads_2
+
+        for test_HLA_name in test_HLA_names:
+            HLA_seq = HLAs[gene][test_HLA_name]
+            tmp_reads_1, tmp_reads_2 = simulate_reads_impl(HLA_seq, simulate_interval)
+            HLA_reads_1 += tmp_reads_1
+            HLA_reads_2 += tmp_reads_2
+
+    # Write reads into a fasta read file
+    def write_reads(reads, idx):
+        read_file = open('hla_input_%d.fa' % idx, 'w')
+        for read_i in range(len(reads)):
+            print >> read_file, ">%d" % (read_i + 1)
+            print >> read_file, reads[read_i]
+        read_file.close()
+    write_reads(HLA_reads_1, 1)
+    write_reads(HLA_reads_2, 2)
+
+
 
 """
 """
@@ -340,43 +382,7 @@ def test_HLA_genotyping(reference_type,
                 
             
         if simulation:
-            HLA_reads_1, HLA_reads_2 = [], []
-            for test_HLA_names in test_HLA_list:
-                gene = test_HLA_names[0].split('*')[0]
-                ref_allele = refHLAs[gene]
-                ref_seq = HLAs[gene][ref_allele]
-
-                # Simulate reads from two HLA alleles
-                def simulate_reads(seq, simulate_interval = 1, frag_len = 250, read_len = 100):
-                    comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
-                    reads_1, reads_2 = [], []
-                    for i in range(0, len(seq) - frag_len + 1, simulate_interval):
-                        reads_1.append(seq[i:i+read_len])
-                        tmp_read_2 = reversed(seq[i+frag_len-read_len:i+frag_len])
-                        read_2 = ""
-                        for s in tmp_read_2:
-                            if s in comp_table:
-                                read_2 += comp_table[s]
-                            else:
-                                read_2 += s
-                        reads_2.append(read_2)
-                    return reads_1, reads_2
-
-                for test_HLA_name in test_HLA_names:
-                    HLA_seq = HLAs[gene][test_HLA_name]
-                    tmp_reads_1, tmp_reads_2 = simulate_reads(HLA_seq, simulate_interval)
-                    HLA_reads_1 += tmp_reads_1
-                    HLA_reads_2 += tmp_reads_2
-
-            # Write reads into a fasta read file
-            def write_reads(reads, idx):
-                read_file = open('hla_input_%d.fa' % idx, 'w')
-                for read_i in range(len(reads)):
-                    print >> read_file, ">%d" % (read_i + 1)
-                    print >> read_file, reads[read_i]
-                read_file.close()
-            write_reads(HLA_reads_1, 1)
-            write_reads(HLA_reads_2, 2)
+            simulate_reads(HLAs, test_HLA_list, simulate_interval)
 
         for aligner, index_type in aligners:
             if index_type == "graph":
@@ -1198,6 +1204,7 @@ def test_HLA_genotyping(reference_type,
                     print >> sys.stderr
                     
                     # Li's method
+                    """
                     li_hla = os.path.join(ex_path, "li_hla/hla")
                     if os.path.exists(li_hla):
                         li_hla_cmd = [li_hla,
@@ -1221,6 +1228,7 @@ def test_HLA_genotyping(reference_type,
                             if best_alleles:
                                 print >> sys.stdout, "LiModel %s-%s (score: %.2f)" % (allele1, allele2, score)
                         li_hla_proc.communicate()
+                    """
 
                 if simulation and not False in success:
                     aligner_type = "%s %s" % (aligner, index_type)
