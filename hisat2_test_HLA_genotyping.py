@@ -27,7 +27,9 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def simulate_reads(HLAs, test_HLA_list, simulate_interval):
+def simulate_reads(HLAs,
+                   test_HLA_list,
+                   simulate_interval):
     HLA_reads_1, HLA_reads_2 = [], []
     for test_HLA_names in test_HLA_list:
         gene = test_HLA_names[0].split('*')[0]
@@ -65,6 +67,237 @@ def simulate_reads(HLAs, test_HLA_list, simulate_interval):
         read_file.close()
     write_reads(HLA_reads_1, 1)
     write_reads(HLA_reads_2, 2)
+
+
+"""
+Align reads, and sort the alignments into a BAM file
+"""
+def align_reads(ex_path,
+                aligner,
+                index_type,
+                read_fname,
+                fastq,
+                threads,
+                verbose):
+    if aligner == "hisat2":
+        hisat2 = os.path.join(ex_path, "hisat2")
+        aligner_cmd = [hisat2,
+                       "--no-unal",
+                       "--mm"]
+        if index_type == "linear":
+            aligner_cmd += ["-k", "10"]
+        aligner_cmd += ["-x", "hla.%s" % index_type]
+    elif aligner == "bowtie2":
+        aligner_cmd = [aligner,
+                       "--no-unal",
+                       "-k", "10",
+                       "-x", "hla"]
+    else:
+        assert False
+    assert len(read_fname) in [1,2]
+    aligner_cmd += ["-p", str(threads)]
+    if not fastq:
+        aligner_cmd += ["-f"]
+    if len(read_fname) == 1:
+        aligner_cmd += ["-U", read_fname[0]]
+    else:
+        aligner_cmd += ["-1", "%s" % read_fname[0],
+                        "-2", "%s" % read_fname[1]]
+
+    if verbose:
+        print >> sys.stderr, ' '.join(aligner_cmd)
+    align_proc = subprocess.Popen(aligner_cmd,
+                                  stdout=subprocess.PIPE,
+                                  stderr=open("/dev/null", 'w'))
+
+    sambam_cmd = ["samtools",
+                  "view",
+                  "-bS",
+                  "-"]
+    sambam_proc = subprocess.Popen(sambam_cmd,
+                                   stdin=align_proc.stdout,
+                                   stdout=open("hla_input_unsorted.bam", 'w'),
+                                   stderr=open("/dev/null", 'w'))
+    sambam_proc.communicate()
+    if index_type == "graph":
+        bamsort_cmd = ["samtools",
+                       "sort",
+                       "hla_input_unsorted.bam",
+                       "-o", "hla_input.bam"]
+        bamsort_proc = subprocess.Popen(bamsort_cmd,
+                                        stderr=open("/dev/null", 'w'))
+        bamsort_proc.communicate()
+
+        bamindex_cmd = ["samtools",
+                        "index",
+                        "hla_input.bam"]
+        bamindex_proc = subprocess.Popen(bamindex_cmd,
+                                         stderr=open("/dev/null", 'w'))
+        bamindex_proc.communicate()
+
+        os.system("rm hla_input_unsorted.bam")            
+    else:
+        os.system("mv hla_input_unsorted.bam hla_input.bam")
+
+
+"""
+""" 
+def normalize(prob):
+    total = sum(prob.values())
+    for allele, mass in prob.items():
+        prob[allele] = mass / total
+
+        
+"""
+"""
+def prob_diff(prob1, prob2):
+    diff = 0.0
+    for allele in prob1.keys():
+        if allele in prob2:
+            diff += abs(prob1[allele] - prob2[allele])
+        else:
+            diff += prob1[allele]
+    return diff
+
+
+"""
+"""
+def HLA_prob_cmp(a, b):
+    if a[1] != b[1]:
+        if a[1] < b[1]:
+            return 1
+        else:
+            return -1
+    assert a[0] != b[0]
+    if a[0] < b[0]:
+        return -1
+    else:
+        return 1
+
+
+"""
+"""
+def single_abundance(HLA_cmpt,
+                     HLA_length):
+    def normalize2(prob, length):
+        total = 0
+        for allele, mass in prob.items():
+            assert allele in length
+            total += (mass / length[allele])
+        for allele, mass in prob.items():
+            assert allele in length
+            prob[allele] = mass / length[allele] / total
+
+    HLA_prob, HLA_prob_next = {}, {}
+    for cmpt, count in HLA_cmpt.items():
+        alleles = cmpt.split('-')
+        for allele in alleles:
+            if allele not in HLA_prob:
+                HLA_prob[allele] = 0.0
+            HLA_prob[allele] += (float(count) / len(alleles))
+
+    # normalize2(HLA_prob, HLA_length)
+    normalize(HLA_prob)
+    def next_prob(HLA_cmpt, HLA_prob, HLA_length):
+        HLA_prob_next = {}
+        for cmpt, count in HLA_cmpt.items():
+            alleles = cmpt.split('-')
+            alleles_prob = 0.0
+            for allele in alleles:
+                assert allele in HLA_prob
+                alleles_prob += HLA_prob[allele]
+            for allele in alleles:
+                if allele not in HLA_prob_next:
+                    HLA_prob_next[allele] = 0.0
+                HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
+        # normalize2(HLA_prob_next, HLA_length)
+        normalize(HLA_prob_next)
+        return HLA_prob_next
+
+    diff, iter = 1.0, 0
+    while diff > 0.0001 and iter < 1000:
+        HLA_prob_next = next_prob(HLA_cmpt, HLA_prob, HLA_length)
+        diff = prob_diff(HLA_prob, HLA_prob_next)
+        HLA_prob = HLA_prob_next
+        iter += 1
+    for allele, prob in HLA_prob.items():
+        allele_len = HLA_length[allele]
+        HLA_prob[allele] /= float(allele_len)
+    normalize(HLA_prob)
+    HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
+    HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
+    return HLA_prob
+
+    
+"""
+"""
+def joint_abundance(HLA_cmpt,
+                    HLA_length):
+    allele_names = set()
+    for cmpt in HLA_cmpt.keys():
+        allele_names |= set(cmpt.split('-'))
+    
+    HLA_prob, HLA_prob_next = {}, {}
+    for cmpt, count in HLA_cmpt.items():
+        alleles = cmpt.split('-')
+        for allele1 in alleles:
+            for allele2 in allele_names:
+                if allele1 < allele2:
+                    allele_pair = "%s-%s" % (allele1, allele2)
+                else:
+                    allele_pair = "%s-%s" % (allele2, allele1)
+                if not allele_pair in HLA_prob:
+                    HLA_prob[allele_pair] = 0.0
+                HLA_prob[allele_pair] += (float(count) / len(alleles))
+
+    if len(HLA_prob) <= 0:
+        return HLA_prob
+
+    # Choose top allele pairs
+    def choose_top_alleles(HLA_prob):
+        HLA_prob_list = [[allele_pair, prob] for allele_pair, prob in HLA_prob.items()]
+        HLA_prob_list = sorted(HLA_prob_list, cmp=HLA_prob_cmp)
+        HLA_prob = {}
+        best_prob = HLA_prob_list[0][1]
+        for i in range(len(HLA_prob_list)):
+            allele_pair, prob = HLA_prob_list[i]
+            if prob * 2 <= best_prob:
+                break                        
+            HLA_prob[allele_pair] = prob
+        normalize(HLA_prob)
+        return HLA_prob
+    HLA_prob = choose_top_alleles(HLA_prob)
+
+    def next_prob(HLA_cmpt, HLA_prob):
+        HLA_prob_next = {}
+        for cmpt, count in HLA_cmpt.items():
+            alleles = cmpt.split('-')
+            prob = 0.0
+            for allele in alleles:
+                for allele_pair in HLA_prob.keys():
+                    if allele in allele_pair:
+                        prob += HLA_prob[allele_pair]
+            for allele in alleles:
+                for allele_pair in HLA_prob.keys():
+                    if not allele in allele_pair:
+                        continue
+                    if allele_pair not in HLA_prob_next:
+                        HLA_prob_next[allele_pair] = 0.0
+                    HLA_prob_next[allele_pair] += (float(count) * HLA_prob[allele_pair] / prob)
+        normalize(HLA_prob_next)
+        return HLA_prob_next
+
+    diff, iter = 1.0, 0
+    while diff > 0.0001 and iter < 1000:
+        HLA_prob_next = next_prob(HLA_cmpt, HLA_prob)
+        diff = prob_diff(HLA_prob, HLA_prob_next)
+        HLA_prob = HLA_prob_next
+        HLA_prob = choose_top_alleles(HLA_prob)
+        iter += 1
+
+    HLA_prob = [[allele_pair, prob] for allele_pair, prob in HLA_prob.items()]
+    HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
+    return HLA_prob
 
 
 """
@@ -121,66 +354,14 @@ def HLA_typing(ex_path,
 
         if alignment_fname == "":
             # Align reads, and sort the alignments into a BAM file
-            if aligner == "hisat2":
-                hisat2 = os.path.join(ex_path, "hisat2")
-                aligner_cmd = [hisat2,
-                               "--no-unal",
-                               "--mm"]
-                if index_type == "linear":
-                    aligner_cmd += ["-k", "10"]
-                aligner_cmd += ["-x", "hla.%s" % index_type]
-            elif aligner == "bowtie2":
-                aligner_cmd = [aligner,
-                               "--no-unal",
-                               "-k", "10",
-                               "-x", "hla"]
-            else:
-                assert False
-            assert len(read_fname) in [1,2]
-            aligner_cmd += ["-p", str(threads)]
-            if not fastq:
-                aligner_cmd += ["-f"]
-            if len(read_fname) == 1:
-                aligner_cmd += ["-U", read_fname[0]]
-            else:
-                aligner_cmd += ["-1", "%s" % read_fname[0],
-                                "-2", "%s" % read_fname[1]]
-
-            if verbose:
-                print >> sys.stderr, ' '.join(aligner_cmd)
-            align_proc = subprocess.Popen(aligner_cmd,
-                                          stdout=subprocess.PIPE,
-                                          stderr=open("/dev/null", 'w'))
-
-            sambam_cmd = ["samtools",
-                          "view",
-                          "-bS",
-                          "-"]
-            sambam_proc = subprocess.Popen(sambam_cmd,
-                                           stdin=align_proc.stdout,
-                                           stdout=open("hla_input_unsorted.bam", 'w'),
-                                           stderr=open("/dev/null", 'w'))
-            sambam_proc.communicate()
-            if index_type == "graph":
-                bamsort_cmd = ["samtools",
-                               "sort",
-                               "hla_input_unsorted.bam",
-                               "-o", "hla_input.bam"]
-                bamsort_proc = subprocess.Popen(bamsort_cmd,
-                                                stderr=open("/dev/null", 'w'))
-                bamsort_proc.communicate()
-
-                bamindex_cmd = ["samtools",
-                                "index",
-                                "hla_input.bam"]
-                bamindex_proc = subprocess.Popen(bamindex_cmd,
-                                                 stderr=open("/dev/null", 'w'))
-                bamindex_proc.communicate()
-
-                os.system("rm hla_input_unsorted.bam")            
-            else:
-                os.system("mv hla_input_unsorted.bam hla_input.bam")
-
+            align_reads(ex_path,
+                        aligner,
+                        index_type,
+                        read_fname,
+                        fastq,
+                        threads,
+                        verbose)
+            
         for test_HLA_names in hla_list:
             if simulation:
                 gene = test_HLA_names[0].split('*')[0]
@@ -735,82 +916,8 @@ def HLA_typing(ex_path,
                         break
             print >> sys.stderr
 
-            def normalize(prob):
-                total = sum(prob.values())
-                for allele, mass in prob.items():
-                    prob[allele] = mass / total
+            HLA_prob = single_abundance(HLA_cmpt, HLA_lengths[gene])
 
-            def normalize2(prob, length):
-                total = 0
-                for allele, mass in prob.items():
-                    assert allele in length
-                    total += (mass / length[allele])
-                for allele, mass in prob.items():
-                    assert allele in length
-                    prob[allele] = mass / length[allele] / total
-
-            def prob_diff(prob1, prob2):
-                diff = 0.0
-                for allele in prob1.keys():
-                    if allele in prob2:
-                        diff += abs(prob1[allele] - prob2[allele])
-                    else:
-                        diff += prob1[allele]
-                return diff
-
-            def HLA_prob_cmp(a, b):
-                if a[1] != b[1]:
-                    if a[1] < b[1]:
-                        return 1
-                    else:
-                        return -1
-                assert a[0] != b[0]
-                if a[0] < b[0]:
-                    return -1
-                else:
-                    return 1
-
-            HLA_prob, HLA_prob_next = {}, {}
-            for cmpt, count in HLA_cmpt.items():
-                alleles = cmpt.split('-')
-                for allele in alleles:
-                    if allele not in HLA_prob:
-                        HLA_prob[allele] = 0.0
-                    HLA_prob[allele] += (float(count) / len(alleles))
-
-            assert gene in HLA_lengths
-            HLA_length = HLA_lengths[gene]
-            # normalize2(HLA_prob, HLA_length)
-            normalize(HLA_prob)
-            def next_prob(HLA_cmpt, HLA_prob, HLA_length):
-                HLA_prob_next = {}
-                for cmpt, count in HLA_cmpt.items():
-                    alleles = cmpt.split('-')
-                    alleles_prob = 0.0
-                    for allele in alleles:
-                        assert allele in HLA_prob
-                        alleles_prob += HLA_prob[allele]
-                    for allele in alleles:
-                        if allele not in HLA_prob_next:
-                            HLA_prob_next[allele] = 0.0
-                        HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
-                # normalize2(HLA_prob_next, HLA_length)
-                normalize(HLA_prob_next)
-                return HLA_prob_next
-
-            diff, iter = 1.0, 0
-            while diff > 0.0001 and iter < 1000:
-                HLA_prob_next = next_prob(HLA_cmpt, HLA_prob, HLA_length)
-                diff = prob_diff(HLA_prob, HLA_prob_next)
-                HLA_prob = HLA_prob_next
-                iter += 1
-            for allele, prob in HLA_prob.items():
-                allele_len = len(HLAs[gene][allele])
-                HLA_prob[allele] /= float(allele_len)
-            normalize(HLA_prob)
-            HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
-
-            HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
             success = [False for i in range(len(test_HLA_names))]
             found_list = [False for i in range(len(test_HLA_names))]
             for prob_i in range(len(HLA_prob)):
@@ -842,67 +949,9 @@ def HLA_typing(ex_path,
             print >> sys.stderr
 
             if len(test_HLA_names) == 2 or not simulation:
-                HLA_prob, HLA_prob_next = {}, {}
-                for cmpt, count in HLA_cmpt.items():
-                    alleles = cmpt.split('-')
-                    for allele1 in alleles:
-                        for allele2 in HLA_names[gene]:
-                            if allele1 < allele2:
-                                allele_pair = "%s-%s" % (allele1, allele2)
-                            else:
-                                allele_pair = "%s-%s" % (allele2, allele1)
-                            if not allele_pair in HLA_prob:
-                                HLA_prob[allele_pair] = 0.0
-                            HLA_prob[allele_pair] += (float(count) / len(alleles))
-
+                HLA_prob = joint_abundance(HLA_cmpt, HLA_lengths[gene])
                 if len(HLA_prob) <= 0:
                     continue
-
-                # Choose top allele pairs
-                def choose_top_alleles(HLA_prob):
-                    HLA_prob_list = [[allele_pair, prob] for allele_pair, prob in HLA_prob.items()]
-                    HLA_prob_list = sorted(HLA_prob_list, cmp=HLA_prob_cmp)
-                    HLA_prob = {}
-                    best_prob = HLA_prob_list[0][1]
-                    for i in range(len(HLA_prob_list)):
-                        allele_pair, prob = HLA_prob_list[i]
-                        if prob * 2 <= best_prob:
-                            break                        
-                        HLA_prob[allele_pair] = prob
-                    normalize(HLA_prob)
-                    return HLA_prob
-                HLA_prob = choose_top_alleles(HLA_prob)
-
-                def next_prob(HLA_cmpt, HLA_prob):
-                    HLA_prob_next = {}
-                    for cmpt, count in HLA_cmpt.items():
-                        alleles = cmpt.split('-')
-                        prob = 0.0
-                        for allele in alleles:
-                            for allele_pair in HLA_prob.keys():
-                                if allele in allele_pair:
-                                    prob += HLA_prob[allele_pair]
-                        for allele in alleles:
-                            for allele_pair in HLA_prob.keys():
-                                if not allele in allele_pair:
-                                    continue
-                                if allele_pair not in HLA_prob_next:
-                                    HLA_prob_next[allele_pair] = 0.0
-                                HLA_prob_next[allele_pair] += (float(count) * HLA_prob[allele_pair] / prob)
-                    normalize(HLA_prob_next)
-                    return HLA_prob_next
-
-                diff, iter = 1.0, 0
-                while diff > 0.0001 and iter < 1000:
-                    HLA_prob_next = next_prob(HLA_cmpt, HLA_prob)
-                    diff = prob_diff(HLA_prob, HLA_prob_next)
-                    HLA_prob = HLA_prob_next
-                    HLA_prob = choose_top_alleles(HLA_prob)
-                    iter += 1
-
-                HLA_prob = [[allele_pair, prob] for allele_pair, prob in HLA_prob.items()]
-                HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
-
                 success = [False]
                 for prob_i in range(len(HLA_prob)):
                     allele_pair, prob = HLA_prob[prob_i]
