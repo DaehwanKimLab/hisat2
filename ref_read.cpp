@@ -319,6 +319,20 @@ fastaRefReadSizes(
 		assert(!in[i]->eof());
 #endif
 	}
+    
+    // Remove empty reference sequences
+    for(int64_t i = 0; (size_t)i < recs.size(); i++) {
+        const RefRecord& rec = recs[i];
+        if(rec.first && rec.len == 0) {
+            if(i + 1 >= recs.size() || recs[i+1].first) {
+                bothTot -= rec.len;
+                bothTot -= rec.off;
+                recs.erase(i);
+                i -= 1;
+            }
+        }
+    }
+    
 	assert_geq(bothTot, 0);
 	assert_geq(unambigTot, 0);
 	return make_pair(

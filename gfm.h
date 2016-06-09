@@ -4117,15 +4117,15 @@ void GFM<index_t>::joinToDisk(
 				//assert_eq(0, _refnames.back().length());
 				_refnames.pop_back();
 			}
-			assert_lt(szsi, szs.size());
-			assert_eq(rec.off, szs[szsi].off);
-			assert_eq(rec.len, szs[szsi].len);
-			assert_eq(rec.first, szs[szsi].first);
-			assert(rec.first || rec.off > 0);
-			ASSERT_ONLY(szsi++);
 			// Increment seqsRead if this is the first fragment
 			if(rec.first && rec.len > 0) seqsRead++;
 			if(bases == 0) continue;
+            assert_lt(szsi, szs.size());
+            assert_eq(rec.off, szs[szsi].off);
+            assert_eq(rec.len, szs[szsi].len);
+            assert_eq(rec.first, szs[szsi].first);
+            assert(rec.first || rec.off > 0);
+            ASSERT_ONLY(szsi++);
 			assert_leq(bases, this->plen()[seqsRead-1]);
 			// Reset the patoff if this is the first fragment
 			if(rec.first) patoff = 0;
