@@ -735,6 +735,11 @@ def extract_HLA_vars(base_fname,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description="Extract HLA variants from HLA multiple sequence alignments")
+    parser.add_argument("--exclude-allele-list",
+                        dest="exclude_allele_list",
+                        type=str,
+                        default="",
+                        help="A comma-separated list of alleles to be excluded")
     parser.add_argument("-b", "--base",
                         dest="base_fname",
                         type=str,

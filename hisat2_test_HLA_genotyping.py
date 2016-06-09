@@ -1294,7 +1294,7 @@ if __name__ == '__main__':
                         dest="exclude_allele_list",
                         type=str,
                         default="",
-                        help="A comma-separated list of allleles to be excluded")
+                        help="A comma-separated list of alleles to be excluded")
     parser.add_argument("--num-mismatch",
                         dest="num_mismatch",
                         type=int,
