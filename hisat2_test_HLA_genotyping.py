@@ -412,7 +412,7 @@ def test_HLA_genotyping(reference_type,
                     assert len(read_fname) in [1,2]
                     aligner_cmd += ["-p", str(threads)]
                     if len(read_fname) == 1:
-                        aligner_cmd += [read_fname[0]]
+                        aligner_cmd += ["-U", read_fname[0]]
                     else:
                         aligner_cmd += ["-1", "%s" % read_fname[0],
                                         "-2", "%s" % read_fname[1]]
@@ -427,30 +427,38 @@ def test_HLA_genotyping(reference_type,
                               "view",
                               "-bS",
                               "-"]
+                if simulation:
+                    output_fname_base = "hla_input"
+                else:
+                    output_fname_base = read_fname[0].split('/')[1]
+                    output_fname_base = output_fname_base.split('.')[0]                    
+                    
                 sambam_proc = subprocess.Popen(sambam_cmd,
                                                stdin=align_proc.stdout,
-                                               stdout=open("hla_input_unsorted.bam", 'w'),
+                                               stdout=open("%s_unsorted.bam" % output_fname_base, 'w'),
                                                stderr=open("/dev/null", 'w'))
                 sambam_proc.communicate()
                 if index_type == "graph":
                     bamsort_cmd = ["samtools",
                                    "sort",
-                                   "hla_input_unsorted.bam",
-                                   "-o", "hla_input.bam"]
+                                   "%s_unsorted.bam" % output_fname_base,
+                                   "-o", "%s.bam" % output_fname_base]
                     bamsort_proc = subprocess.Popen(bamsort_cmd,
                                                     stderr=open("/dev/null", 'w'))
                     bamsort_proc.communicate()
 
                     bamindex_cmd = ["samtools",
                                     "index",
-                                    "hla_input.bam"]
+                                    "%s.bam" % output_fname_base]
                     bamindex_proc = subprocess.Popen(bamindex_cmd,
                                                      stderr=open("/dev/null", 'w'))
                     bamindex_proc.communicate()
 
-                    os.system("rm hla_input_unsorted.bam")            
+                    os.system("rm %s_unsorted.bam" % output_fname_base)            
                 else:
-                    os.system("mv hla_input_unsorted.bam hla_input.bam")
+                    os.system("mv %s.bam %s.bam" % (output_fname_base, output_fname_base))
+
+                alignment_fname = "%s.bam" % output_fname_base
 
             for test_HLA_names in test_HLA_list:
                 if simulation:
@@ -465,7 +473,7 @@ def test_HLA_genotyping(reference_type,
                 alignview_cmd = ["samtools",
                                  "view"]
                 if alignment_fname == "":
-                    alignview_cmd += ["hla_input.bam"]
+                    alignview_cmd += [alignment_fname]
                 else:
                     if not os.path.exists(alignment_fname + ".bai"):
                         os.system("samtools index %s" % alignment_fname)
@@ -583,7 +591,7 @@ def test_HLA_genotyping(reference_type,
                                     read_base = read_seq[read_pos + MD_len]
                                     MD_ref_base = MD[MD_str_pos]
                                     MD_str_pos += 1
-                                    assert MD_ref_base in "ACGT"
+                                    # assert MD_ref_base in "ACGT"
                                     cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
                                     cmp_list.append(["mismatch", right_pos + MD_len, 1])
                                     MD_len_used = MD_len + 1
@@ -1112,7 +1120,8 @@ def test_HLA_genotyping(reference_type,
                         break
                 print >> sys.stderr
 
-                if len(test_HLA_names) == 2 or not simulation:
+                # daehwan - for debugging purposes
+                if False and (len(test_HLA_names) == 2 or not simulation):
                     HLA_prob, HLA_prob_next = {}, {}
                     for cmpt, count in HLA_cmpt.items():
                         alleles = cmpt.split('-')
@@ -1202,7 +1211,7 @@ def test_HLA_genotyping(reference_type,
                     if os.path.exists(li_hla):
                         li_hla_cmd = [li_hla,
                                       "hla",
-                                      "hla_input.bam",
+                                      alignment_fname,
                                       "-b", "%s*BACKBONE" % gene]
                         li_hla_proc = subprocess.Popen(li_hla_cmd,
                                                        stdout=subprocess.PIPE,
@@ -1231,6 +1240,7 @@ def test_HLA_genotyping(reference_type,
 
                 if simulation:
                     print >> sys.stderr, "\t\tPassed so far: %d/%d (abundance: %.2f%%)" % (test_passed[aligner_type], test_i + 1, (test_passed[aligner_type] * 100.0 / (test_i + 1)))
+            os.system("rm %s %s.bai" % (alignment_fname, alignment_fname))
 
 
     if simulation:

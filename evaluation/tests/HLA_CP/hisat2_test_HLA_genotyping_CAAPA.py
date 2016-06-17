@@ -20,11 +20,107 @@
 #
 
 
-import sys, os, subprocess, re
+import sys, os, subprocess, re, threading
 import inspect
 import random
 import glob
 from argparse import ArgumentParser, FileType
+
+class myThread(threading.Thread):
+    def __init__(self,
+                 ex_path,
+                 lock, 
+                 paths,
+                 reference_type,
+                 hla_list,
+                 aligners,
+                 exclude_allele_list,
+                 num_mismatch,
+                 sample_frac,                       
+                 verbose):
+        threading.Thread.__init__(self)
+        self.ex_path = ex_path
+        self.lock = lock
+        self.paths = paths
+        self.reference_type = reference_type
+        self.hla_list = hla_list
+        self.aligners = aligners
+        self.exclude_allele_list = exclude_allele_list
+        self.num_mismatch = num_mismatch
+        self.sample_frac = sample_frac
+        self.verbose = verbose
+
+    def run(self):
+        global work_idx
+        while True:
+            self.lock.acquire()
+            my_work_idx = work_idx
+            work_idx += 1
+            self.lock.release()
+            if my_work_idx >= len(self.paths):
+                return
+            worker(self.ex_path,
+                   self.lock,
+                   self.paths[my_work_idx],
+                   self.reference_type,
+                   self.hla_list,
+                   self.aligners,
+                   self.exclude_allele_list,
+                   self.num_mismatch,
+                   self.sample_frac,
+                   self.verbose)
+
+work_idx = 0
+def worker(ex_path,
+           lock,
+           path,
+           reference_type,
+           hla_list,
+           aligners,
+           exclude_allele_list,
+           num_mismatch,
+           sample_frac,                 
+           verbose):
+    fq_name = path.split('/')[-1]
+    genome = fq_name.split('.')[0]
+    read_fname_1, read_fname_2 = "CP/%s.extracted.fq.1.gz" % genome, "CP/%s.extracted.fq.2.gz" % genome
+    if not os.path.exists(read_fname_1) or not os.path.exists(read_fname_2):
+        return
+    lock.acquire()
+    print >> sys.stderr, genome
+    lock.release()
+    cmd_aligners = ['.'.join(aligners[i]) for i in range(len(aligners))]
+    test_hla_script = os.path.join(ex_path, "hisat2_test_HLA_genotyping.py")
+    test_hla_cmd = [test_hla_script,
+                    "--reference-type", reference_type,
+                    "--hla-list", ','.join(hla_list),
+                    "--aligner-list", ','.join(cmd_aligners),
+                    "--reads", "%s,%s" % (read_fname_1, read_fname_2),
+                    # "--exclude-allele-list", ','.join(exclude_allele_list),
+                    "--num-mismatch", str(num_mismatch)]
+
+    if verbose:
+        lock.acquire()
+        print >> sys.stderr, ' '.join(test_hla_cmd)
+        lock.release()
+
+    proc = subprocess.Popen(test_hla_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    test_alleles = set()
+    output_list = []
+    for line in proc.stdout:
+        line = line.strip()
+        if line.find("abundance") == -1:
+            continue
+        rank, _, allele, _, abundance = line.split()
+        output_list.append([allele, abundance[:-2]])
+
+    lock.acquire()
+    for output in output_list:
+        allele, abundance = output
+        print >> sys.stdout, "%s\t%s\t%s" % (genome, allele, abundance)
+    sys.stdout.flush()
+    lock.release()
+
 
 """
 """
@@ -33,6 +129,7 @@ def test_HLA_genotyping(reference_type,
                         aligners,
                         exclude_allele_list,
                         num_mismatch,
+                        nthreads,
                         sample_frac,
                         verbose):
     # Current script directory
@@ -45,30 +142,25 @@ def test_HLA_genotyping(reference_type,
 
     # fastq files
     fq_fnames = glob.glob("CP/*.1.gz")
-    for fq_name in fq_fnames:
-        fq_name = fq_name.split('/')[-1]
-        genome = fq_name.split('.')[0]
-        read_fname_1, read_fname_2 = "CP/%s.extracted.fq.1.gz" % genome, "CP/%s.extracted.fq.2.gz" % genome
-        if not os.path.exists(read_fname_1) or not os.path.exists(read_fname_2):
-            continue
-        print >> sys.stderr, genome
-        cmd_aligners = ['.'.join(aligners[i]) for i in range(len(aligners))]
-        test_hla_script = os.path.join(ex_path, "hisat2_test_HLA_genotyping.py")
-        test_hla_cmd = [test_hla_script,
-                        "--reference-type", reference_type,
-                        "--hla-list", ','.join(hla_list),
-                        "--aligner-list", ','.join(cmd_aligners),
-                        "--reads", "%s,%s" % (read_fname_1, read_fname_2),
-                        # "--exclude-allele-list", ','.join(exclude_allele_list),
-                        "--num-mismatch", str(num_mismatch)]
-        
-        if verbose:
-            print >> sys.stderr, ' '.join(test_hla_cmd)
-            
-        proc = subprocess.Popen(test_hla_cmd, stdout=subprocess.PIPE, stderr=open("/dev/null", 'w'))
-        test_alleles = set()
-        for line in proc.stdout:
-            print "\t\t", line,
+
+    lock = threading.Lock()
+    threads = []
+    for t in range(nthreads):
+        thread = myThread(ex_path,
+                          lock,
+                          fq_fnames,
+                          reference_type,
+                          hla_list,
+                          aligners,
+                          exclude_allele_list,
+                          num_mismatch,
+                          sample_frac,
+                          verbose)
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()
 
 
 """
@@ -101,6 +193,11 @@ if __name__ == '__main__':
                         type=int,
                         default=0,
                         help="Maximum number of mismatches per read alignment to be considered (default: 0)")
+    parser.add_argument("-p", "--threads",
+                        dest="threads",
+                        type=int,
+                        default=1,
+                        help="Number of threads")
     parser.add_argument("--sample",
                         dest="sample_frac",
                         type=float,
@@ -130,5 +227,6 @@ if __name__ == '__main__':
                         args.aligners,
                         args.exclude_allele_list,
                         args.num_mismatch,
+                        args.threads,
                         args.sample_frac,
                         args.verbose)
