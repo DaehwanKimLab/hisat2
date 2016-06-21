@@ -24,6 +24,8 @@ import os, sys, subprocess, re
 import inspect
 from argparse import ArgumentParser, FileType
 
+"""
+"""
 def get_html(url):
     download_cmd = ["wget",
                     "-O", "-",
