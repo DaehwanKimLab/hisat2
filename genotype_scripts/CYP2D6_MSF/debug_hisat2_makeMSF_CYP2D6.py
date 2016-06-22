@@ -43,6 +43,8 @@ def main():
     cyp2d6_var_file = open("cyp2d6.web.output",'r')
     cyp2d6_var_dict = makeVarDict(cyp2d6_var_file)
 
+    msfTable = []
+
 ##    for item in cyp2d6_var_dict.items():
 ##        print(item)
 
@@ -51,21 +53,60 @@ def main():
 
     for allele,varList in cyp2d6_var_dict.items():
         for var in varList:
-            if not ">" in var:
-                continue # @Daehwan - just look at snp for debugging (checking fasta sequence)
+            isSnp = False
+            isDel = False
+            isIns = False
+        
+            if ">" in var:
+                isSnp = True
+            elif "del" in var:
+                isDel = True
+            elif "ins" in var:
+                isIns = True
+            else:
+                assert("None" in var)
 
-            pos = int(var[:-3])
-            ntChange = var[-3:].replace('>','')
+            if isSnp:
+                pos = int(var[:-3])
+                ntChange = var[-3:].replace('>','')
+                assert len(ntChange) == 2
+                for nt in ntChange:
+                    assert nt in "ACGT"
 
-            assert re.compile('[ACGT][ACGT]', re.IGNORECASE).search(ntChange)
+                # @Daehwan - checking to make sure nt changes are compatible with seq (shows database errors in nt positions)
+                try:
+                    if pos > 0:
+                            assert(cyp2d6_seq[pos + 1618] == ntChange[0]) # nt at pos in seq must match database
+                    else:
+                            assert(cyp2d6_seq[pos + 1619] == ntChange[0])
+                except:
+                    print >> sys.stdout, "Warning: position %d in sequence contains %s, but expected %s from database" % (pos, cyp2d6_seq[pos + 1618] if pos > 0 else cyp2d6_seq[pos + 1619], ntChange[0])
+                    print >> sys.stdout, "\tError occured on variation %s on allele %s" % (var, allele)
+                    
+            elif isDel:
+                pos = var.split('del')[0].split('_')
+                pos = [int(p) for p in pos]
+                ntDel = var.split('del')[1]
+                for nt in ntChange:
+                    assert nt in "ACGT"
 
-            # @Daehwan - checking to make sure nt changes are compatible with seq (shows database errors in nt positions)
-            try:
-		if pos > 0:
-                	assert(cyp2d6_seq[pos + 1618] == ntChange[0]) # nt at pos in seq must match database
-		else:
-			assert(cyp2d6_seq[pos + 1619] == ntChange[0])
-            except:
-                print >> sys.stdout, "Warning: position %d in sequence contains %s, but expected %s from database" % (pos, cyp2d6_seq[pos + 1618], ntChange[0])
+                if len(pos) > 1:
+                    assert len(pos) == 2
+                    try:
+                        assert pos[1] - pos[0] + 1 == len(ntDel)
+                    except:
+                        print >> sys.stdout, "Incorrect deletion data with %s on allele %s" % (var, allele)
+                
+                try:
+                    if pos[0] > 0:
+                            assert(cyp2d6_seq[pos[0] + 1618] == ntDel[0])
+                    else:
+                            assert(cyp2d6_seq[pos[0] + 1619] == ntDel[0])
+                except:
+                    print >> sys.stdout, "Warning: position %d in sequence contains %s, but expected %s from database" % (pos[0], cyp2d6_seq[pos[0] + 1618] if pos > 0 else cyp2d6_seq[pos[0] + 1619], ntDel[0])
+                    print >> sys.stdout, "\tError occured on variation %s on allele %s" % (var, allele)
+            else:
+                continue                 
+                    
 
 main()
