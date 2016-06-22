@@ -71,6 +71,7 @@ def download_CYP(verbose):
 
         # Raymon - future work - CYP2A6        
         print >> sys.stderr, "\n\n", cyp_url, cyp_gene_name
+        print >> cyp_file, "\n\n", cyp_url, cyp_gene_name
 
         cyp_output = get_html(cyp_url)
         if cyp_output == "":
@@ -102,7 +103,7 @@ def download_CYP(verbose):
                 tabRow[ind] = tabRow[ind].replace("\r\n","")
 
             allele_name_re = re.compile(cyp_gene_name.upper() + '\*[\w\d]+')
-            snpInfo_re = re.compile('-?\d+[ACGT]\&gt;[ACGT]|-?\d+_?-?\d+?del[ACGT]+|-?\d+_?-?\d+?ins[ACGT]+')
+            varInfo_re = re.compile('-?\d+[ACGT]\&gt;[ACGT]|-?\d+_?-?\d+?del[ACGT]+|-?\d+_?-?\d+?ins[ACGT]+')
 
             alleleName = allele_name_re.findall(tabRow[0])
             if len(alleleName) > 0:
@@ -113,11 +114,16 @@ def download_CYP(verbose):
             #            have 2 rows of Nucleotide changes (cDNA and Gene), might need
             #            to look at all rows for snps
             try:
-                snpInfo = snpInfo_re.findall(tabRow[2])
+                varInfo = varInfo_re.findall(tabRow[2])
             except IndexError:
                 continue
+
+            for varInd in range(len(varInfo)):
+                varInfo[varInd] = varInfo[varInd].replace('&gt;','>')
+                
         
-            print >> cyp_file, (str(alleleName) + "\t" + ','.join(snpInfo))
+            if isinstance(alleleName, basestring):
+                print >> cyp_file, (str(alleleName) + "\t" + ','.join(varInfo))
             
     cyp_file.close()
             
