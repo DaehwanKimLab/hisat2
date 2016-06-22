@@ -87,26 +87,40 @@ def main():
                 pos = var.split('del')[0].split('_')
                 pos = [int(p) for p in pos]
                 ntDel = var.split('del')[1]
-                for nt in ntChange:
+                for nt in ntDel:
                     assert nt in "ACGT"
 
-                if len(pos) > 1:
+                if len(pos) > 1: # Multiple Deletions
                     assert len(pos) == 2
                     try:
                         assert pos[1] - pos[0] + 1 == len(ntDel)
                     except:
                         print >> sys.stdout, "Incorrect deletion data with %s on allele %s" % (var, allele)
-                
-                try:
-                    if pos[0] > 0:
-                            assert(cyp2d6_seq[pos[0] + 1618] == ntDel[0])
-                    else:
-                            assert(cyp2d6_seq[pos[0] + 1619] == ntDel[0])
-                except:
-                    print >> sys.stdout, "Warning: position %d in sequence contains %s, but expected %s from database" % (pos[0], cyp2d6_seq[pos[0] + 1618] if pos > 0 else cyp2d6_seq[pos[0] + 1619], ntDel[0])
-                    print >> sys.stdout, "\tError occured on variation %s on allele %s" % (var, allele)
+
+                    try:
+                        if pos[0] > 0:
+                                assert(cyp2d6_seq[pos[0] + 1618 : pos[1] + 1618 + 1] == ntDel)
+                        else:
+                                assert(cyp2d6_seq[pos[0] + 1619 : pos[1] + 1619 + 1] == ntDel)
+                    except:
+                        print >> sys.stdout, "Warning, positions %d to %d in sequence contains %s, but expected %s from database" % \
+                              (pos[0], pos[1], cyp2d6_seq[pos[0] + 1618 : pos[1] + 1618 + 1] if pos[0] > 0 else cyp2d6_seq[pos[0] + 1619 : pos[1] + 1619 + 1], ntDel)
+                        print >> sys.stdout, "\tError occured on variation %s on allele %s" % (var, allele)
+
+                else: # Single Deletion
+                    assert len(ntDel) == 1
+                    try:
+                        if pos[0] > 0:
+                                assert(cyp2d6_seq[pos[0] + 1618] == ntDel)
+                        else:
+                                assert(cyp2d6_seq[pos[0] + 1619] == ntDel)
+                    except:
+                        print >> sys.stdout, "Warning: position %d in sequence contains %s, but expected %s from database" % \
+                              (pos[0], cyp2d6_seq[pos[0] + 1618] if pos[0] > 0 else cyp2d6_seq[pos[0] + 1619], ntDel)
+                        print >> sys.stdout, "\tError occured on variation %s on allele %s" % (var, allele)
+                        
             else:
                 continue                 
-                    
+                # Ignore insertions for now
 
 main()
