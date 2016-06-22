@@ -61,8 +61,8 @@ def main():
 
             # @Daehwan - checking to make sure nt changes are compatible with seq (shows database errors in nt positions)
             try:
-                assert(cyp2d6_seq[pos - 1] == ntChange[0]) # nt at pos in seq must match database
+                assert(cyp2d6_seq[pos + 1618] == ntChange[0]) # nt at pos in seq must match database
             except:
-                print >> sys.stdout, "Warning: position %d in sequence contains %s, but expected %s from database" % (pos, cyp2d6_seq[pos - 1], ntChange[0])
+                print >> sys.stdout, "Warning: position %d in sequence contains %s, but expected %s from database" % (pos, cyp2d6_seq[pos + 1618], ntChange[0])
 
 main()
