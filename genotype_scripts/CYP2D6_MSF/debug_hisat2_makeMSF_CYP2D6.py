@@ -88,10 +88,14 @@ def main():
             pos = var.split('ins')[0].split('_')
             pos = [int(p) for p in pos]
             ntIns = var.split('ins')[1]
+            correctFormat = len(pos) == 2 and pos[1] - pos[0] == 1
+            if not correctFormat:
+                correctFormat = len(pos) == 1
             try:
-                assert (len(pos) == 1) or (len(pos == 2) and pos[1] - pos[0] == 1)
+                assert correctFormat
             except:
                 print >> sys.stdout, "Incorrect format for insertion: variation %s on allele %s" % (var, allele)
+                continue
 
             # convert to position in string
             if pos[0] > 0:
