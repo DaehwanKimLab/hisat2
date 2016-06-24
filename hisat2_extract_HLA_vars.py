@@ -51,7 +51,8 @@ def extract_HLA_vars(base_fname,
                      inter_gap,
                      intra_gap,
                      DRB1_REF,
-                     verbose):
+                     verbose,
+                     exclude_allele_list):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(extract_HLA_vars))
     ex_path = os.path.dirname(curr_script)
@@ -62,7 +63,7 @@ def extract_HLA_vars(base_fname,
 
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
-    hla_ref_file = open("hla.ref", 'w')
+    hla_ref_file = open(base_fname +".ref", 'w')
     HLA_genes, HLA_gene_strand = {}, {}
     for gene in hla_list:
         hisat2 = os.path.join(ex_path, "hisat2")
@@ -74,13 +75,21 @@ def extract_HLA_vars(base_fname,
         align_proc = subprocess.Popen(aligner_cmd,
                                       stdout=subprocess.PIPE,
                                       stderr=open("/dev/null", 'w'))
+        print aligner_cmd
         allele_id, strand = "", ''
         for line in align_proc.stdout:
+            #print line
             if line.startswith('@'):
                 continue
             line = line.strip()
             cols = line.split()
-            allele_id, flag = cols[:2]
+            t_allele_id, flag = cols[:2]
+            #print t_allele_id
+            #HOWARD: Avoid selection of excluded allele as backbone
+            if t_allele_id in exclude_allele_list:
+                continue
+            allele_id = t_allele_id
+            
             flag = int(flag)
             strand = '-' if flag & 0x10 else '+'
             AS = ""
@@ -89,6 +98,7 @@ def extract_HLA_vars(base_fname,
                 if col.startswith("AS"):
                     AS = col[5:]
             assert int(AS) == 0
+            
         align_proc.communicate()
         assert allele_id != ""
         allele_name = ""
@@ -114,7 +124,8 @@ def extract_HLA_vars(base_fname,
             gene = allele_name.split('*')[0]
             if line.find("partial") != -1 or \
                     not gene in HLA_genes or \
-                    allele_name != HLA_genes[gene]:
+                    allele_name != HLA_genes[gene] or \
+                    allele_name in exclude_allele_list :
                 skip = True
                 continue
             skip = False
@@ -157,6 +168,9 @@ def extract_HLA_vars(base_fname,
                     try:
                         name = line.split('\t')[0]
                         name = name.split()[1]
+                        if name in exclude_allele_list:
+                            continue
+                        
                     except ValueError:
                         continue
 
@@ -785,7 +799,14 @@ if __name__ == '__main__':
         sys.exit(1)
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome" % (args.reference_type)
-        sys.exit(1)        
+        sys.exit(1)
+             
+    if len(args.exclude_allele_list) > 0:
+        args.exclude_allele_list = args.exclude_allele_list.split(',')
+    else:
+        args.exclude_allele_list = []
+        
+    print args.exclude_allele_list
     extract_HLA_vars(args.base_fname,
                      args.reference_type,
                      args.hla_list,
@@ -793,4 +814,5 @@ if __name__ == '__main__':
                      args.inter_gap,
                      args.intra_gap,
                      args.DRB1_REF,
-                     args.verbose)
+                     args.verbose,
+                     args.exclude_allele_list)
