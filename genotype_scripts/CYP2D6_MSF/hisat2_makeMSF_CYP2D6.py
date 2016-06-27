@@ -1,8 +1,131 @@
 #!/usr/bin/env python
 
 import os, sys, subprocess, re
-import inspect
+import inspect, operator
 from argparse import ArgumentParser, FileType
+
+def checkNTloc(fasta_fileName,var_fileName):
+    seq = ""
+    for line in open(fasta_fileName,'r'):
+        if line[0] == '>':
+            continue
+        seq += line.strip()
+
+    cyp_var_file = open(var_fileName,'r')
+    cyp_var_dict = makeVarDict(cyp_var_file)
+    cyp_var_file.close()
+
+    print "len:", len(seq)
+    varsPos = set()
+    varsNeg = set()
+
+    for varList in cyp_var_dict.values():
+        for var in varList:
+            if ">" in var: # is SNP
+                posNt = int(var[:-3])
+                ntChange = var[-3:].replace('>','')
+                assert len(ntChange) == 2
+                for nt in ntChange:
+                    assert nt in "ACGT"
+
+                if posNt > 0:
+                    varsPos.add(str(posNt) + '->' + ntChange[0])
+                else:
+                    assert posNt < 0
+                    varsNeg.add(str(posNt) + '->' + ntChange[0])
+                    
+            elif "del" in var: # is deletion
+                posNt = var.split('del')[0].split('_')
+                posNt = [int(p) for p in posNt]
+                ntDel = var.split('del')[1]
+                for nt in ntDel:
+                    assert nt in "ACGT"
+
+                if len(posNt) == 1: # single nt deletion
+                    assert len(ntDel) == 1
+                    if posNt[0] > 0:
+                        varsPos.add(str(posNt[0]) + '->' + ntDel)
+                    else:
+                        assert posNt[0] < 0
+                        varsNeg.add(str(posNt[0]) + '->' + ntDel)
+
+                else: # mutliple nt deletion
+                    assert len(posNt) == 2
+                    assert posNt[1] - posNt[0] + 1 == len(ntDel)
+                    ntDelList = list(ntDel)
+                    for i in range(posNt[0],posNt[1] + 1):
+                        if i > 0:
+                            varsPos.add(str(i) + '->' + ntDelList.pop(0))
+                        else:
+                            assert i < 0
+                            varsNeg.add(str(i) + '->' + ntDelList.pop(0))
+                    assert len(ntDelList) == 0
+                    
+            else:
+                assert ("ins" in var) or ("None" in var)
+                continue
+            
+    '''varsPos = set(["310-G", "746-C", "843-T", "997-C", "1039-C", "1513-C", "1661-G", "1724-C", "1869-T", "1978-C", "2470-T", "2575-C", "2850-C", "3828-G", "4115-C", "4180-G"])'''
+    
+    scorePos = {} # { position offset : number of alignments } for positive positions
+    for i in range(-len(seq), len(seq)):
+        align_score = 0
+        for var in varsPos:
+            pos, base = var.split('->')
+            pos = int(pos)
+            
+            try:
+                seq[pos-i]
+            except IndexError:
+                continue
+            
+            if seq[pos-i] == base:
+                align_score += 1
+
+        scorePos[i] = align_score
+
+    print "Positive postitions offset: %d" % \
+          (len(seq) - max(scorePos.iteritems(), key=operator.itemgetter(1))[0])
+    
+
+    scoreNeg = {} # { position offset : number of alignments } for negative positions
+    for i in range(-len(seq), len(seq)):
+        align_score = 0
+        for var in varsNeg:
+            pos, base = var.split('->')
+            pos = int(pos)
+            
+            try:
+                seq[pos-i]
+            except IndexError:
+                continue
+            
+            if seq[pos-i] == base:
+                align_score += 1
+
+        scoreNeg[i] = align_score
+
+    print "Negative postitions offset: %d" % \
+          (len(seq) - max(scoreNeg.iteritems(), key=operator.itemgetter(1))[0])
+
+
+'''
+    for i in range(-len(seq), len(seq)):
+        Pass = True
+        for var in varsNeg:
+            pos, base = var.split('->')
+            pos = int(pos)
+            if pos < i or pos - i >= len(seq):
+                Pass = False
+                break
+
+            if seq[pos-i] != base:
+                Pass = False
+                break
+
+        if Pass:
+            print "Negative positions offset: %d" % -i
+'''
 
 def create_map(seq):
     seq_map = {}
@@ -86,7 +209,7 @@ def makeIns(oldSeq,left,right,toIns):
     
 
 def main():
-    cyp_var_file = open("cyp2d6.web.output",'r')
+    cyp_var_file = open("cyp2d6.var",'r')
     cyp_var_dict = makeVarDict(cyp_var_file)
     cyp_var_file.close()
              
@@ -299,4 +422,4 @@ def main():
 
     msfFile.close()
 
-main()
+checkNTloc("cyp2d6.fasta","cyp2d6.var")
