@@ -56,7 +56,10 @@ def download_CYP(verbose):
     # Original list had duplicate urls, removes duplicates
     cyp_urls = set(cyp_urls)
 
-    cyp_file = open("cyp.web.output", 'w')    
+    '''
+    cyp_file = open("newCYP.web.output", 'w')
+    '''
+    
     for cyp_url in cyp_urls:
         cyp_gene_name = cyp_url.split('/')[-1]
         cyp_gene_name = cyp_gene_name.split('.')[0]
@@ -69,9 +72,11 @@ def download_CYP(verbose):
         if not re.compile("cyp[\d\w]+", re.IGNORECASE).search(cyp_gene_name):
             continue
 
-        # Raymon - future work - CYP2A6        
-        print >> sys.stderr, "\n\n", cyp_url, cyp_gene_name
-        print >> cyp_file, "\n\n", cyp_url, cyp_gene_name
+        # Open file to write on
+        cyp_file = open("%s.var" % (cyp_gene_name), 'w')
+        
+        print >> sys.stderr, cyp_url, cyp_gene_name
+        print >> cyp_file, cyp_url, cyp_gene_name
 
         cyp_output = get_html(cyp_url)
         if cyp_output == "":
@@ -113,8 +118,13 @@ def download_CYP(verbose):
             # @Daehwan - some databases (e.g. http://www.cypalleles.ki.se/cyp3a4.htm)
             #            have 2 rows of Nucleotide changes (cDNA and Gene), might need
             #            to look at all rows for snps
+            #
+            # @RaymonFix - look in 4th column for "Gene" nt changes first, then consider cDNA if applicable; updated re to remove "<>" formating expressions 
+
             try:
-                varInfo = varInfo_re.findall(tabRow[2])
+                varInfo = varInfo_re.findall(re.sub('<[^>]+>', '',tabRow[3]))
+                if len(varInfo) == 0:
+                    varInfo = varInfo_re.findall(re.sub('<[^>]+>', '',tabRow[2]))
             except IndexError:
                 continue
 
@@ -125,7 +135,7 @@ def download_CYP(verbose):
             if isinstance(alleleName, basestring):
                 print >> cyp_file, (str(alleleName) + "\t" + ','.join(varInfo))
             
-    cyp_file.close()
+        cyp_file.close()
             
 """
 """
@@ -135,7 +145,7 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--base",
                         dest="base_fname",
                         type=str,
-                        default="hla",
+                        default="cyp",
                         help="base filename")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
