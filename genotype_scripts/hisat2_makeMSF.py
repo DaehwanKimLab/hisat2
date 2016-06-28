@@ -4,7 +4,8 @@ import os, sys, subprocess, re
 import inspect, operator
 from argparse import ArgumentParser, FileType
 
-def checkNTloc(fasta_fileName,var_fileName):
+def checkNTloc(fasta_fileName,var_fileName,gene_name):
+    print "Gene: %s" % gene_name
     seq = ""
     for line in open(fasta_fileName,'r'):
         if line[0] == '>':
@@ -51,7 +52,11 @@ def checkNTloc(fasta_fileName,var_fileName):
 
                 else: # mutliple nt deletion
                     assert len(posNt) == 2
-                    assert posNt[1] - posNt[0] + 1 == len(ntDel)
+                    try:
+                        assert posNt[1] - posNt[0] + 1 == len(ntDel)
+                    except AssertionError:
+                        print "Incorrect deletion format: %s" % (var)
+                        sys.exit(1)
                     ntDelList = list(ntDel)
                     for i in range(posNt[0],posNt[1] + 1):
                         if i > 0:
@@ -75,17 +80,17 @@ def checkNTloc(fasta_fileName,var_fileName):
             pos = int(pos)
             
             try:
-                seq[pos-i]
+                seq[pos+i]
             except IndexError:
                 continue
             
-            if seq[pos-i] == base:
+            if seq[pos+i] == base:
                 align_score += 1
 
         scorePos[i] = align_score
-
-    print "Positive postitions offset: %d" % \
-          (len(seq) - max(scorePos.iteritems(), key=operator.itemgetter(1))[0])
+    oSetPos = max(scorePos.iteritems(), key=operator.itemgetter(1))[0]
+    print "Positive postitions offset: %d" % oSetPos
+    print "Score: %d out of %d\n" % (scorePos[oSetPos], len(varsPos))
     
 
     scoreNeg = {} # { position offset : number of alignments } for negative positions
@@ -96,17 +101,17 @@ def checkNTloc(fasta_fileName,var_fileName):
             pos = int(pos)
             
             try:
-                seq[pos-i]
+                seq[pos+i]
             except IndexError:
                 continue
             
-            if seq[pos-i] == base:
+            if seq[pos+i] == base:
                 align_score += 1
 
         scoreNeg[i] = align_score
-
-    print "Negative postitions offset: %d" % \
-          (len(seq) - max(scoreNeg.iteritems(), key=operator.itemgetter(1))[0])
+    oSetNeg = max(scoreNeg.iteritems(), key=operator.itemgetter(1))[0]
+    print "Negative postitions offset: %d" % oSetNeg
+    print "Score: %d out of %d\n\n" % (scoreNeg[oSetNeg], len(varsNeg))
 
 
 '''
@@ -164,10 +169,10 @@ def makeVarDict(fname):
     alleleVarDict = {}
 
     allLines = [line.strip() for line in fname]
-    assert allLines[1].upper().startswith("CYP")
-    alleleVarDict[allLines[1]] = ["None"] # first allele is reference allele
+    '''assert allLines[1].upper().startswith("CYP")
+    alleleVarDict[allLines[1]] = ["None"] # first allele is reference allele'''
     
-    for line in allLines[2:]:
+    for line in allLines[1:]:
         assert line.upper().startswith("CYP")
         alleleName = line.split("\t")[0]
         
@@ -208,7 +213,7 @@ def makeIns(oldSeq,left,right,toIns):
     return newSeq
     
 
-def main():
+def makeMSF():
     cyp_var_file = open("cyp2d6.var",'r')
     cyp_var_dict = makeVarDict(cyp_var_file)
     cyp_var_file.close()
@@ -422,4 +427,14 @@ def main():
 
     msfFile.close()
 
-checkNTloc("cyp2d6.fasta","cyp2d6.var")
+cyp_gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
+                  'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
+                  'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
+                  'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
+                  'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
+                  'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
+                  'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
+                  'cyp26a1']
+
+for gene_name in cyp_gene_names:
+    checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)

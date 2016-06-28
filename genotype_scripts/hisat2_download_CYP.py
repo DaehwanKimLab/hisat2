@@ -108,7 +108,7 @@ def download_CYP(verbose):
                 tabRow[ind] = tabRow[ind].replace("\r\n","")
 
             allele_name_re = re.compile(cyp_gene_name.upper() + '\*[\w\d]+')
-            varInfo_re = re.compile('-?\d+[ACGT]\&gt;[ACGT]|-?\d+_?-?\d+?del[ACGT]+|-?\d+_?-?\d+?ins[ACGT]+')
+            varInfo_re = re.compile('-?\d+[ACGT]\&gt;[ACGT]|-?\d+_?-?\d+?del[ACGT]+|-?\d+_?-?\d+?ins[ACGT]+|None')
 
             alleleName = allele_name_re.findall(tabRow[0])
             if len(alleleName) > 0:
@@ -121,15 +121,28 @@ def download_CYP(verbose):
             #
             # @RaymonFix - look in 4th column for "Gene" nt changes first, then consider cDNA if applicable; updated re to remove "<>" formating expressions 
 
-            try:
-                varInfo = varInfo_re.findall(re.sub('<[^>]+>', '',tabRow[3]))
-                if len(varInfo) == 0:
-                    varInfo = varInfo_re.findall(re.sub('<[^>]+>', '',tabRow[2]))
-            except IndexError:
-                continue
+            if cyp_url == 'http://www.cypalleles.ki.se/cyp21.htm': # Hardcoded for special format for cyp21a2
+                try:
+                    varInfo = varInfo_re.findall(re.sub('<[^>]+>', '',tabRow[1]))
+                except IndexError:
+                    continue
+                
+            else:
+                try:
+                    varInfo = varInfo_re.findall(re.sub('<[^>]+>', '',tabRow[3]))
+                    if len(varInfo) == 0:
+                        varInfo = varInfo_re.findall(re.sub('<[^>]+>', '',tabRow[2]))
+                except IndexError:
+                    continue
 
             for varInd in range(len(varInfo)):
                 varInfo[varInd] = varInfo[varInd].replace('&gt;','>')
+
+            if 'None' in varInfo:
+                try:
+                    assert len(varInfo) == 1
+                except:
+                    varInfo = filter(lambda a: a != 'None', varInfo)
                 
         
             if isinstance(alleleName, basestring):
