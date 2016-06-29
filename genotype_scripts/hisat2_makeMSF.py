@@ -5,7 +5,7 @@ import inspect, operator
 from argparse import ArgumentParser, FileType
 
 def checkNTloc(fasta_fileName,var_fileName,gene_name):
-    print "Gene: %s" % gene_name
+    print "\nGene: %s" % gene_name
     seq = ""
     for line in open(fasta_fileName,'r'):
         if line[0] == '>':
@@ -93,6 +93,23 @@ def checkNTloc(fasta_fileName,var_fileName,gene_name):
     print "Score: %d out of %d\n" % (scorePos[oSetPos], len(varsPos))
     
 
+    print "Checking negative position offset: %d" % (oSetPos + 1)
+    align_score = 0
+    oSetNeg = oSetPos + 1
+    for var in varsNeg:
+        pos, base = var.split('->')
+        pos = int(pos)
+        
+        try:
+            seq[pos + oSetNeg]
+        except IndexError:
+            continue
+        
+        if seq[pos + oSetNeg] == base:
+            align_score += 1
+    print "Score: %d out of %d\n\n" % (align_score, len(varsNeg))
+
+    '''
     scoreNeg = {} # { position offset : number of alignments } for negative positions
     for i in range(-len(seq), len(seq)):
         align_score = 0
@@ -112,25 +129,18 @@ def checkNTloc(fasta_fileName,var_fileName,gene_name):
     oSetNeg = max(scoreNeg.iteritems(), key=operator.itemgetter(1))[0]
     print "Negative postitions offset: %d" % oSetNeg
     print "Score: %d out of %d\n\n" % (scoreNeg[oSetNeg], len(varsNeg))
+    '''
 
-
-'''
-    for i in range(-len(seq), len(seq)):
-        Pass = True
-        for var in varsNeg:
-            pos, base = var.split('->')
-            pos = int(pos)
-            if pos < i or pos - i >= len(seq):
-                Pass = False
-                break
-
-            if seq[pos-i] != base:
-                Pass = False
-                break
-
-        if Pass:
-            print "Negative positions offset: %d" % -i
-'''
+    if len(varsNeg) == 0 and len(varsPos) != 0:
+        return oSetPos, oSetNeg, float(scorePos[oSetPos])/float(len(varsPos)), 1.0
+    elif len(varsNeg) != 0 and len(varsPos) == 0:
+        return oSetPos, oSetNeg, 1.0, float(align_score)/float(len(varsNeg))
+    elif len(varsNeg) == 0 and len(varsPos) == 0:
+        return oSetPos, oSetNeg, 1.0, 1.0
+    else:
+        assert len(varsNeg) != 0 and len(varsPos) != 0
+        return oSetPos, oSetNeg, float(scorePos[oSetPos])/float(len(varsPos)), float(align_score)/float(len(varsNeg))
+        
 
 def create_map(seq):
     seq_map = {}
@@ -213,8 +223,8 @@ def makeIns(oldSeq,left,right,toIns):
     return newSeq
     
 
-def makeMSF():
-    cyp_var_file = open("cyp2d6.var",'r')
+def makeMSF(gene_name, oSetPos, oSetNeg):
+    cyp_var_file = open("cyp_var_files/%s.var" % gene_name,'r')
     cyp_var_dict = makeVarDict(cyp_var_file)
     cyp_var_file.close()
              
@@ -223,7 +233,7 @@ def makeMSF():
         print(item)
     '''
     
-    cyp_faFile = open("cyp2d6.fasta",'r')
+    cyp_faFile = open("cyp_fasta/%s.fasta" % gene_name,'r')
     cyp_seq = extractSeq(cyp_faFile)
     cyp_faFile.close()
     preBackbone_seq = ''
@@ -246,14 +256,14 @@ def makeMSF():
             try:
                 assert correctFormat
             except:
-                print >> sys.stdout, "Incorrect format for insertion: variation %s on allele %s" % (var, allele)
+                print >> sys.stdout, "\tIncorrect format for insertion: variation %s on allele %s" % (var, allele)
                 continue
 
             # convert to position in string
             if pos[0] > 0:
-                pos = pos[0] + 1618
+                pos = pos[0] + oSetPos
             else:
-                pos = pos[0] + 1619
+                pos = pos[0] + oSetNeg
                 
             # Make dictionary of longest insertions
             if not pos in longestIns:
@@ -261,10 +271,10 @@ def makeMSF():
             else:
                 if len(ntIns) > longestIns[pos]:
                     longestIns[pos] = len(ntIns)
-
-    print(longestIns)
+    
+    '''print(longestIns)'''
     posInsList = sorted(longestIns.keys())
-    print(posInsList)
+    '''print(posInsList)'''
     
     splitSeq = splitString(cyp_seq,posInsList)
     posInsList = posInsList[1:-1]
@@ -281,9 +291,9 @@ def makeMSF():
             continue
     # pre-backbone built
 
-    print(len(cyp_seq))
+    '''print(len(cyp_seq))
     print(len(preBackbone_seq))
-    print('\n\n')
+    print('\n\n')'''
     '''print >> open("preBackbone_seq.fasta",'w'), preBackbone_seq'''
     map_cyp = create_map(preBackbone_seq) # { Index of bp in original seq : Actual index in string }
     
@@ -315,20 +325,20 @@ def makeMSF():
                     assert nt in "ACGT"
 
                 if pos > 0:
-                    pos = pos + 1618
+                    pos = pos + oSetPos
                 else:
-                    pos = pos + 1619
+                    pos = pos + oSetNeg
 
-                if pos < 0:
-                    print >> sys.stdout, "Warning: position %d out of bounds" % (dbPos)
-                    print >> sys.stdout, "\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
+                if pos < 0 or pos > len(cyp_seq) - 1:
+                    print >> sys.stdout, "\tWarning: position %d out of bounds" % (dbPos)
+                    print >> sys.stdout, "\t\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
                     continue
                     
                 try:
                     assert(preBackbone_seq[map_cyp[pos]] == ntChange[0]) # nt at pos in seq must match database
                 except:
-                    print >> sys.stdout, "Warning: position %d in sequence contains %s, but expected %s from database" % (dbPos, preBackbone_seq[map_cyp[pos]], ntChange[0])
-                    print >> sys.stdout, "\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
+                    print >> sys.stdout, "\tWarning: position %d in sequence contains %s, but expected %s from database" % (dbPos, preBackbone_seq[map_cyp[pos]], ntChange[0])
+                    print >> sys.stdout, "\t\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
                     continue
                 
                 # Adding to msf table
@@ -350,29 +360,33 @@ def makeMSF():
 
                 for i in range(len(pos)):
                     if pos[i] > 0:
-                        pos[i] = pos[i] + 1618
+                        pos[i] = pos[i] + oSetPos
                     else:
-                        pos[i] = pos[i] + 1619
+                        pos[i] = pos[i] + oSetNeg
 
+                skipDel = False
                 for i in range(len(pos)):
-                    if pos[i] < 0:
-                        print >> sys.stdout, "Warning: position %d out of bounds" % (dbPos[i])
-                        print >> sys.stdout, "\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
-                        continue
+                    if pos[i] < 0 or pos[i] > len(cyp_seq) - 1:
+                        print >> sys.stdout, "\tWarning: position %d out of bounds" % (dbPos[i])
+                        print >> sys.stdout, "\t\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
+                        skipDel = True
+
+                if skipDel:
+                    continue
                         
             
                 try:
                     assert pos[1] - pos[0] + 1 == len(ntDel)
                 except:
-                    print >> sys.stdout, "Incorrect deletion data with %s on allele %s. Skipping variation." % (var, allele)
+                    print >> sys.stdout, "\tIncorrect deletion data with %s on allele %s. Skipping variation." % (var, allele)
                     continue
                             
                 try:
                     assert preBackbone_seq[ map_cyp[pos[0]] : map_cyp[pos[1]] + 1 ] == ntDel
                 except:
-                    print >> sys.stdout, "Warning, positions %d to %d in sequence contains %s, but expected %s from database" % \
+                    print >> sys.stdout, "\tWarning, positions %d to %d in sequence contains %s, but expected %s from database" % \
                           (dbPos[0], dbPos[1], preBackbone_seq[ map_cyp[pos[0]] : map_cyp[pos[1]] + 1 ], ntDel)
-                    print >> sys.stdout, "\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
+                    print >> sys.stdout, "\t\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
                     continue
 
 
@@ -397,15 +411,19 @@ def makeMSF():
 
                 for i in range(len(pos)):
                     if pos[i] > 0:
-                        pos[i] = pos[i] + 1618
+                        pos[i] = pos[i] + oSetPos
                     else:
-                        pos[i] = pos[i] + 1619
+                        pos[i] = pos[i] + oSetNeg
 
+                skipIns = False
                 for i in range(len(pos)):
-                    if pos[i] < 0:
+                    if pos[i] < 0 or pos[i] > len(cyp_seq) - 1:
                         print >> sys.stdout, "Warning: position %d out of bounds" % (dbPos[i])
                         print >> sys.stdout, "\tError occured on variation %s on allele %s. Skipping variation." % (var, allele)
-                        continue
+                        skipIns = True
+
+                if skipIns:
+                    continue
 
 
                 # Adding to msf table
@@ -420,21 +438,38 @@ def makeMSF():
                 assert not allele in msfTable
                 msfTable[allele] = preBackbone_seq
 
-
-    msfFile = open('cyp2d6.msf','w')
+    msfFile = open('cyp_msf/%s.msf' % gene_name,'w')
     for allele,msf_seq in msfTable.items():
         print >> msfFile, "%s\t%s" % (allele, msf_seq)
 
     msfFile.close()
 
-cyp_gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
-                  'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
-                  'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
-                  'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
-                  'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
-                  'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
-                  'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
-                  'cyp26a1']
 
-for gene_name in cyp_gene_names:
-    checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)
+def main():
+    os.system('mkdir cyp_msf')
+
+    cyp_gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
+                      'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
+                      'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
+                      'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
+                      'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
+                      'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
+                      'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
+                      'cyp26a1']
+
+    oSetPos = 0
+    oSetNeg = 0
+    oSetScorePos = 0.0
+    oSetScoreNeg = 0.0
+        
+
+    for gene_name in cyp_gene_names:
+        oSetPos, oSetNeg, oSetScorePos, oSetScoreNeg = checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)
+        try:
+            oSetScorePos > 0.8 and oSetScoreNeg > 0.8
+        except:
+            print "Less than 80% bp match, skipping gene."
+            continue
+        makeMSF(gene_name, oSetPos, oSetNeg)
+
+main()
