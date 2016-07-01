@@ -465,11 +465,10 @@ def main():
 
     for gene_name in cyp_gene_names:
         oSetPos, oSetNeg, oSetScorePos, oSetScoreNeg = checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)
-        try:
-            oSetScorePos > 0.8 and oSetScoreNeg > 0.8
-        except:
-            print "Less than 80% bp match, skipping gene."
+        if not (oSetScorePos > 0.95 and oSetScoreNeg > 0.95):
+            print "Less than 95% bp match, skipping gene."
             continue
+        
         makeMSF(gene_name, oSetPos, oSetNeg)
 
 main()
