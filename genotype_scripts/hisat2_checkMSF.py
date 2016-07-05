@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
-## Work in progress, does not run yet!
-
 import os, sys, subprocess, re
 import inspect, operator
 from argparse import ArgumentParser, FileType
 
+incorrect_msf_entries = []
+
 def checkNTloc(fasta_fileName,var_fileName,gene_name):
-    print "\nGene: %s" % gene_name
+    print("\n\nGene: %s" % gene_name)
     seq = ""
     for line in open(fasta_fileName,'r'):
         if line[0] == '>':
@@ -235,6 +235,9 @@ def msfToVarList(ref_seq, al_seq):
     for tup in ins_pos_length:
         ins_pos, ins_length = tup[0], tup[1]
         ins_seq = al_seq[ins_pos + 1: ins_pos + ins_length  + 1]
+        ins_seq = ins_seq.replace('.','')
+        if len(ins_seq) == 0:
+            continue
         ins_str_data = str(inv_map[tup[0]]) + '_' + str(inv_map[tup[0]] + 1) + 'ins' + ins_seq
         var_list.append(ins_str_data)
 
@@ -293,8 +296,8 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
 
     # Check if ref allele seq in msf matches fasta
     assert ref_allele in msf_dict
-    print(len(oriSeq))
-    print(len(msf_dict[ref_allele].replace('.','')))
+    '''print(len(oriSeq))
+    print(len(msf_dict[ref_allele].replace('.','')))'''
 
     '''print >> open('oriSeq.txt','w'), oriSeq
     print >> open('msfSeq.txt','w'), msf_dict[ref_allele].replace('.','')'''
@@ -334,20 +337,82 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
 
                 if pos < 0 or pos > len(oriSeq) - 1: # out of bounds
                     continue
+                if oriSeq[pos] != ntSnp[0]: # mismatch
+                    print('\tMismatch on variation %s' % var)
+                    continue
 
                 oSet_var = str(pos) + ntSnp[0] + '>' + ntSnp[1]
                 oSet_var_list.append(oSet_var)
 
             elif 'del' in var: # deletion
-                
-                ## CURRENTLY WORKING ON
+                pos = var.split('del')[0].split('_')
+                pos = [int(p) for p in pos]
+                if len(pos) == 1: # Handle single deletion with format for multi deletion with one location (e.g. [1707] -> [1707,1707])  
+                    pos.append(pos[0])
+                assert len(pos) == 2
+                ntDel = var.split('del')[1]
+                for nt in ntDel:
+                    assert nt in "ACGT"
+
+                skipDel = False
+                for i in range(len(pos)):
+                    if pos[i] > 0:
+                        pos[i] = pos[i] + oSetPos
+                    else:
+                        pos[i] = pos[i] + oSetNeg
+                    if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
+                        continue
+                if (oriSeq[ pos[0] : pos[1] + 1 ] != ntDel): # mismatch
+                    print('\tMismatch on variation %s' % var)
+                    continue
+
+                if skipDel:
+                    continue
+
+                assert pos[1] - pos[0] + 1 == len(ntDel)
+
+                oSet_var = 'del' + ntDel
+                if pos[0] == pos[1]:
+                    oSet_var = str(pos[0]) + oSet_var
+                else:
+                    oSet_var = str(pos[0]) + '_' + str(pos[1]) + oSet_var
+
+                oSet_var_list.append(oSet_var)                        
 
             elif 'ins' in var: # insertion
+                pos = var.split('ins')[0].split('_')
+                pos = [int(p) for p in pos]
+                if len(pos) == 1:
+                    pos.append(pos[0] + 1)
+                assert len(pos) == 2
+                assert pos[1] - pos[0] == 1
+                ntIns = var.split('ins')[1]
+                for nt in ntIns:
+                    assert nt in "ACGT"
+
+                skipIns = False
+                for i in range(len(pos)):
+                    if pos[i] > 0:
+                        pos[i] = pos[i] + oSetPos
+                    else:
+                        pos[i] = pos[i] + oSetNeg
+                    if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
+                        skipIns = True
+
+                if skipIns:
+                    continue
+
+                oSet_var = str(pos[0]) + '_' + str(pos[1]) + 'ins' + ntIns
+                oSet_var_list.append(oSet_var)
 
             else:
                 assert allele == ref_allele
-                assert var == set(['None'])
-                
+                assert var == 'None'
+                assert len(oSet_var_list) == 0
+                oSet_var_list.append('None')
+
+        var_dict[allele] = set(oSet_var_list)
+
 
 
     # Check variants created from MSF file against variants list
@@ -355,25 +420,34 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
         if allele == ref_allele:
             continue
         msf_var_list = msfToVarList(msf_dict[ref_allele], msf_seq)
-    
+        print('\t' + str(var_dict[allele] == set(msf_var_list)) + '\t' + str(allele) + '\t' + str(msf_var_list))
 
-    
+        try:
+            assert var_dict[allele] == set(msf_var_list)
+        except AssertionError:
+            incorrect_msf_entries.append(allele)
+            print('\n')
+            print('\t\tVar File:\t' + str(var_dict[allele]))
+            print('\t\tMSF File:\t' + str(set(msf_var_list)))
+            print('\t\tDifference:\t' + str(var_dict[allele] - set(msf_var_list)) + '\n')
+            '''sys.exit(1)'''
 
 def main():
-    gene_names = ['cyp3a7']
-    
-##    gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
-##                  'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
-##                  'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
-##                  'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
-##                  'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
-##                  'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
-##                  'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
-##                  'cyp26a1']
+  
+    gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
+                  'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
+                  'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
+                  'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
+                  'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
+                  'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
+                  'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
+                  'cyp26a1']
 
     for gene_name in gene_names:
         checkMSFfile(gene_name, 'cyp_msf/%s.msf' % gene_name, 'cyp_var_files/%s.var' % gene_name, 'cyp_fasta/%s.fasta' % gene_name)
-        
-   
 
-# main()
+    print('\n\n%d incorrect msf entries on alleles %s' % (len(incorrect_msf_entries), str(incorrect_msf_entries)))
+
+
+main()
+
