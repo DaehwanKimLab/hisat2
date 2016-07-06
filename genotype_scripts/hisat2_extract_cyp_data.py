@@ -260,14 +260,14 @@ def checkNTloc(fasta_fileName,var_fileName,gene_name):
     print "Score: %d out of %d\n\n" % (align_score, len(varsNeg))
 
     if len(varsNeg) == 0 and len(varsPos) != 0:
-        return oSetPos, oSetNeg, float(scorePos[oSetPos])/float(len(varsPos)), 1.0
+        return oSetPos, oSetNeg, float(scorePos[oSetPos])/float(len(varsPos)), 1.0, float(scorePos[oSetPos] + align_score)/float(len(varsPos) + len(varsNeg))
     elif len(varsNeg) != 0 and len(varsPos) == 0:
-        return oSetPos, oSetNeg, 1.0, float(align_score)/float(len(varsNeg))
+        return oSetPos, oSetNeg, 1.0, float(align_score)/float(len(varsNeg)), float(scorePos[oSetPos] + align_score)/float(len(varsPos) + len(varsNeg))
     elif len(varsNeg) == 0 and len(varsPos) == 0:
-        return oSetPos, oSetNeg, 1.0, 1.0
+        return oSetPos, oSetNeg, 1.0, 1.0, 1.0
     else:
         assert len(varsNeg) != 0 and len(varsPos) != 0
-        return oSetPos, oSetNeg, float(scorePos[oSetPos])/float(len(varsPos)), float(align_score)/float(len(varsNeg))
+        return oSetPos, oSetNeg, float(scorePos[oSetPos])/float(len(varsPos)), float(align_score)/float(len(varsNeg)), float(scorePos[oSetPos] + align_score)/float(len(varsPos) + len(varsNeg))
         
 
 def create_map(seq):
@@ -517,7 +517,11 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                     pos.append(pos[0] + 1)
                 assert len(pos) == 2
                 dbPos = pos
-                assert pos[1] - pos[0] == 1
+                try:
+                    assert pos[1] - pos[0] == 1
+                except AssertionError:
+                    print >> sys.stdout, "\tIncorrect insertion data with %s on allele %s. Skipping variation." % (var, allele)
+                    continue 
                 ntIns = var.split('ins')[1]
                 for nt in ntIns:
                     assert nt in "ACGT"
@@ -577,8 +581,8 @@ def build_msf_files():
         
     print('\nBuilding MSF files:')
     for gene_name in cyp_gene_names:
-        oSetPos, oSetNeg, oSetScorePos, oSetScoreNeg = checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)
-        if not (oSetScorePos > 0.95 and oSetScoreNeg > 0.95):
+        oSetPos, oSetNeg, oSetScorePos, oSetScoreNeg, tot_score = checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)
+        if not (tot_score >= 0.95):
             print "\tLess than 95% bp match, skipping gene."
             continue
         
@@ -680,7 +684,7 @@ def msfToVarList(ref_seq, al_seq):
     return var_list
 
 def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
-    oSetPos, oSetNeg, oSet_pos_score, oSet_neg_score = checkNTloc(fasta_filename, var_fname, gene_name)
+    oSetPos, oSetNeg, oSet_pos_score, oSet_neg_score, tot_score = checkNTloc(fasta_filename, var_fname, gene_name)
     
     try:
         msf_file = open(msf_fname,'r')
@@ -794,7 +798,11 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
                 if len(pos) == 1:
                     pos.append(pos[0] + 1)
                 assert len(pos) == 2
-                assert pos[1] - pos[0] == 1
+                try:
+                    assert pos[1] - pos[0] == 1
+                except AssertionError:
+                    print('\tIncorrect insertion format on variation %s' % var)
+                    continue
                 ntIns = var.split('ins')[1]
                 for nt in ntIns:
                     assert nt in "ACGT"
