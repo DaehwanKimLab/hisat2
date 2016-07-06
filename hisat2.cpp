@@ -872,11 +872,6 @@ static void printUsage(ostream& out) {
 	    << "  --fr/--rf/--ff     -1, -2 mates align fw/rev, rev/fw, fw/fw (--fr)" << endl
 		<< "  --no-mixed         suppress unpaired alignments for paired reads" << endl
 		<< "  --no-discordant    suppress discordant alignments for paired reads" << endl
-#if 0
-		<< "  --no-dovetail      not concordant when mates extend past each other" << endl
-		<< "  --no-contain       not concordant when one mate alignment contains other" << endl
-		<< "  --no-overlap       not concordant when mates overlap at all" << endl
-#endif
 		<< endl
 	    << " Output:" << endl;
 	//if(wrapper == "basic-0") {
@@ -1345,12 +1340,12 @@ static void parseOption(int next_option, const char *arg) {
 		case ARG_SSE8_NO: enable8 = false; break;
 		case ARG_UNGAPPED: doUngapped = true; break;
 		case ARG_UNGAPPED_NO: doUngapped = false; break;
-		case ARG_NO_DOVETAIL: gDovetailMatesOK = false; break;
-		case ARG_NO_CONTAIN:  gContainMatesOK  = false; break;
-		case ARG_NO_OVERLAP:  gOlapMatesOK     = false; break;
-		case ARG_DOVETAIL:    gDovetailMatesOK = true;  break;
-		case ARG_CONTAIN:     gContainMatesOK  = true;  break;
-		case ARG_OVERLAP:     gOlapMatesOK     = true;  break;
+		// case ARG_NO_DOVETAIL: gDovetailMatesOK = false; break;
+		// case ARG_NO_CONTAIN:  gContainMatesOK  = false; break;
+		// case ARG_NO_OVERLAP:  gOlapMatesOK     = false; break;
+		// case ARG_DOVETAIL:    gDovetailMatesOK = true;  break;
+		// case ARG_CONTAIN:     gContainMatesOK  = true;  break;
+		// case ARG_OVERLAP:     gOlapMatesOK     = true;  break;
 		case ARG_QC_FILTER: qcFilter = true; break;
 		case ARG_NO_SCORE_PRIORITY: sortByScore = false; break;
 		case ARG_IGNORE_QUALS: ignoreQuals = true; break;

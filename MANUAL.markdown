@@ -147,20 +147,6 @@ Two alignments for the same pair are distinct if either the mate 1s in the two
 paired-end alignments are distinct or the mate 2s in the two alignments are
 distinct or both.
 
-<!--
-### Default mode: search for multiple alignments, report the best one
-
-By default, HISAT2 searches for distinct, valid alignments for each read. When
-it finds a valid alignment, it generally will continue to look for alignments
-that are nearly as good or better.  It will eventually stop looking, either
-because it exceeded a limit placed on search effort (see [`-D`] and [`-R`]) or
-because it already knows all it needs to know to report an alignment.
-Information from the best alignments are used to estimate mapping quality (the
-`MAPQ` [SAM] field) and to set SAM optional fields, such as [`AS:i`] and
-[`XS:i`].  HISAT2 does not gaurantee that the alignment reported is the best
-possible in terms of alignment score.
--->
-
 ### Default mode: search for one or more alignments, report each
 
 HISAT2 searches for up to N distinct, primary alignments for
@@ -1037,48 +1023,6 @@ By default, `hisat2` looks for discordant alignments if it cannot find any
 concordant alignments.  A discordant alignment is an alignment where both mates
 align uniquely, but that does not satisfy the paired-end constraints
 ([`--fr`/`--rf`/`--ff`], [`-I`], [`-X`]).  This option disables that behavior.
-
-</td></tr>
-<tr><td id="hisat2-options-dovetail">
-
-[`--dovetail`]: #hisat2-options-dovetail
-
-    --dovetail
-
-</td><td>
-
-If the mates "dovetail", that is if one mate alignment extends past the
-beginning of the other such that the wrong mate begins upstream, consider that
-to be concordant.  See also: [Mates can overlap, contain or dovetail each
-other].  Default: mates cannot dovetail in a concordant alignment.
-
-[Mates can overlap, contain or dovetail each other]: #mates-can-overlap-contain-or-dovetail-each-other
-
-</td></tr>
-<tr><td id="hisat2-options-no-contain">
-
-[`--no-contain`]: #hisat2-options-no-contain
-
-    --no-contain
-
-</td><td>
-
-If one mate alignment contains the other, consider that to be non-concordant.
-See also: [Mates can overlap, contain or dovetail each other].  Default: a mate
-can contain the other in a concordant alignment.
-
-</td></tr>
-<tr><td id="hisat2-options-no-overlap">
-
-[`--no-overlap`]: #hisat2-options-no-overlap
-
-    --no-overlap
-
-</td><td>
-
-If one mate alignment overlaps the other at all, consider that to be
-non-concordant.  See also: [Mates can overlap, contain or dovetail each other]. 
-Default: mates can overlap in a concordant alignment.
 
 </td></tr></table>
 
