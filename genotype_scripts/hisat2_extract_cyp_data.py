@@ -555,9 +555,30 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 assert not allele in msfTable
                 msfTable[allele] = preBackbone_seq
 
-    msfFile = open('cyp_msf/%s.msf' % gene_name,'w')
-    for allele,msf_seq in msfTable.items():
-        print >> msfFile, "%s\t%s" % (allele, msf_seq)
+    # Sanity checking
+    seq_len = 0
+    for allele, msf_seq in msfTable.items():
+        if seq_len == 0:
+            seq_len = len(msf_seq)
+        else:
+            assert seq_len == len(msf_seq)
+    assert seq_len > 0
+
+    # Follow MSF style of IMGT/HLA database
+    msfFile = open('cyp_msf/%s_gen.msf' % gene_name,'w')
+    for i in range(0, seq_len, 50):
+        for allele, msf_seq in msfTable.items():
+            output = "%12s" % allele
+            for j in range(i, i+50, 10):
+                if j >= seq_len:
+                    break
+                if j == i:
+                    output += "\t"
+                else:
+                    output += " "
+                output += msf_seq[j:j+10]
+            print >> msfFile, output
+        print >> msfFile
 
     msfFile.close()
 

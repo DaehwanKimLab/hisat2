@@ -1028,29 +1028,33 @@ def read_HLA_alleles(fname, HLAs):
 
 """
 """
-def test_HLA_genotyping(base_fname,
-                        reference_type,
-                        hla_list,
-                        partial,
-                        aligners,
-                        read_fname,
-                        alignment_fname,
-                        threads,
-                        simulate_interval,
-                        enable_coverage,
-                        best_alleles,
-                        exclude_allele_list,
-                        default_allele_list,
-                        num_mismatch,
-                        verbose,
-                        daehwan_debug):
+def genotyping(base_fname,
+               reference_type,
+               hla_list,
+               partial,
+               aligners,
+               read_fname,
+               alignment_fname,
+               threads,
+               simulate_interval,
+               enable_coverage,
+               best_alleles,
+               exclude_allele_list,
+               default_allele_list,
+               num_mismatch,
+               verbose,
+               daehwan_debug):
     # Current script directory
-    curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
+    curr_script = os.path.realpath(inspect.getsourcefile(genotyping))
     ex_path = os.path.dirname(curr_script)
 
     # Clone a git repository, IMGTHLA
     if not os.path.exists("IMGTHLA"):
         os.system("git clone https://github.com/jrob119/IMGTHLA.git")
+
+    # Clone hisat2 genotype database, hisat_genotype_db
+    if not os.path.exists("hisat_genotype_db"):
+        os.system("git clone https://github.com/infphilo/hisat_genotype_db.git")
 
     simulation = (read_fname == [] and alignment_fname == "")
 
@@ -1136,7 +1140,7 @@ def test_HLA_genotyping(base_fname,
     print HLA_fnames
     
     if (not check_files(HLA_fnames)) or (not excluded_alleles_match) :
-        extract_hla_script = os.path.join(ex_path, "hisat2_extract_HLA_vars.py")
+        extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
         extract_cmd = [extract_hla_script,
                        "--reference-type", reference_type,
                        "--hla-list", ','.join(hla_list)]
@@ -1508,7 +1512,7 @@ def test_HLA_genotyping(base_fname,
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='test HLA genotyping')
+        description='genotyping')
     parser.add_argument("--base",
                         dest="base_fname",
                         type=str,
@@ -1666,19 +1670,19 @@ if __name__ == '__main__':
                 debug[item] = 1
 
     random.seed(1)
-    test_HLA_genotyping(args.base_fname,
-                        args.reference_type,
-                        args.hla_list,
-                        args.partial,
-                        args.aligners,
-                        args.read_fname,
-                        args.alignment_fname,
-                        args.threads,
-                        args.simulate_interval,
-                        args.coverage,
-                        args.best_alleles,
-                        args.exclude_allele_list,
-                        args.default_allele_list,
-                        args.num_mismatch,
-                        args.verbose,
-                        debug)
+    genotyping(args.base_fname,
+               args.reference_type,
+               args.hla_list,
+               args.partial,
+               args.aligners,
+               args.read_fname,
+               args.alignment_fname,
+               args.threads,
+               args.simulate_interval,
+               args.coverage,
+               args.best_alleles,
+               args.exclude_allele_list,
+               args.default_allele_list,
+               args.num_mismatch,
+               args.verbose,
+               debug)

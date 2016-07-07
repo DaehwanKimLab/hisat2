@@ -22,6 +22,7 @@
 
 import os, sys, subprocess, re
 import inspect
+import glob
 from argparse import ArgumentParser, FileType
 
 
@@ -44,17 +45,17 @@ def create_map(seq):
 
 """
 """
-def extract_HLA_vars(base_fname,
-                     reference_type,
-                     hla_list,
-                     partial,
-                     inter_gap,
-                     intra_gap,
-                     DRB1_REF,
-                     verbose,
-                     exclude_allele_list):
+def extract_vars(base_fname,
+                 reference_type,
+                 hla_list,
+                 partial,
+                 inter_gap,
+                 intra_gap,
+                 DRB1_REF,
+                 verbose,
+                 exclude_allele_list):
     # Current script directory
-    curr_script = os.path.realpath(inspect.getsourcefile(extract_HLA_vars))
+    curr_script = os.path.realpath(inspect.getsourcefile(extract_vars))
     ex_path = os.path.dirname(curr_script)
 
     # Samples of HLA_MSA_file are found in
@@ -63,80 +64,105 @@ def extract_HLA_vars(base_fname,
 
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
-    hla_ref_file = open(base_fname +".ref", 'w')
-    HLA_genes, HLA_gene_strand = {}, {}
-    for gene in hla_list:
-        hisat2 = os.path.join(ex_path, "hisat2")
-        aligner_cmd = [hisat2,
-                       "--score-min", "C,0",
-                       "--no-unal",
-                       "-x", "grch38/genome",
-                       "-f", "IMGTHLA/fasta/%s_gen.fasta" % gene]
-        align_proc = subprocess.Popen(aligner_cmd,
-                                      stdout=subprocess.PIPE,
-                                      stderr=open("/dev/null", 'w'))
-        print aligner_cmd
-        allele_id, strand = "", ''
-        for line in align_proc.stdout:
-            #print line
-            if line.startswith('@'):
-                continue
-            line = line.strip()
-            cols = line.split()
-            t_allele_id, flag = cols[:2]
-            #print t_allele_id
-            #HOWARD: Avoid selection of excluded allele as backbone
-            if t_allele_id in exclude_allele_list:
-                continue
-            allele_id = t_allele_id
-            
-            flag = int(flag)
-            strand = '-' if flag & 0x10 else '+'
-            AS = ""
-            for i in range(11, len(cols)):
-                col = cols[i]
-                if col.startswith("AS"):
-                    AS = col[5:]
-            assert int(AS) == 0
-            
-        align_proc.communicate()
-        assert allele_id != ""
-        allele_name = ""
-        for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene):
-            line = line.strip()
-            if not line.startswith('>'):
-                continue
-            tmp_allele_id, tmp_allele_name = line[1:].split()[:2]
-            if allele_id == tmp_allele_id:
-                allele_name = tmp_allele_name
-                break
-        assert allele_name != "" and strand != ''
-        HLA_genes[gene] = allele_name
-        HLA_gene_strand[gene] = strand
-        print "HLA-%s's backbone allele is %s on '%s' strand" % (gene, allele_name, strand)
+    if base_fname in ["hla"]:
+        hla_ref_file = open(base_fname +".ref", 'w')
+        HLA_genes, HLA_gene_strand = {}, {}
+        for gene in hla_list:
+            hisat2 = os.path.join(ex_path, "hisat2")
+            aligner_cmd = [hisat2,
+                           "--score-min", "C,0",
+                           "--no-unal",
+                           "-x", "grch38/genome",
+                           "-f", "IMGTHLA/fasta/%s_gen.fasta" % gene]
+            align_proc = subprocess.Popen(aligner_cmd,
+                                          stdout=subprocess.PIPE,
+                                          stderr=open("/dev/null", 'w'))
+            print aligner_cmd
+            allele_id, strand = "", ''
+            for line in align_proc.stdout:
+                #print line
+                if line.startswith('@'):
+                    continue
+                line = line.strip()
+                cols = line.split()
+                t_allele_id, flag = cols[:2]
+                #print t_allele_id
+                #HOWARD: Avoid selection of excluded allele as backbone
+                if t_allele_id in exclude_allele_list:
+                    continue
+                allele_id = t_allele_id
 
-    # Extract exon information from hla.data
-    HLA_gene_exons = {}
-    skip = False
-    for line in open("IMGTHLA/hla.dat"):
-        if line.startswith("DE"):
-            allele_name = line.split()[1][4:-1]
-            gene = allele_name.split('*')[0]
-            if line.find("partial") != -1 or \
-                    not gene in HLA_genes or \
-                    allele_name != HLA_genes[gene] or \
-                    allele_name in exclude_allele_list :
-                skip = True
-                continue
-            skip = False
-        elif not skip:
-            if not line.startswith("FT") or \
-                    line.find("exon") == -1:
-                continue
-            exon_range = line.split()[2].split("..")
-            if not gene in HLA_gene_exons:
-                HLA_gene_exons[gene] = []
-            HLA_gene_exons[gene].append([int(exon_range[0]) - 1, int(exon_range[1]) - 1])
+                flag = int(flag)
+                strand = '-' if flag & 0x10 else '+'
+                AS = ""
+                for i in range(11, len(cols)):
+                    col = cols[i]
+                    if col.startswith("AS"):
+                        AS = col[5:]
+                assert int(AS) == 0
+
+            align_proc.communicate()
+            assert allele_id != ""
+            allele_name = ""
+            for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene):
+                line = line.strip()
+                if not line.startswith('>'):
+                    continue
+                tmp_allele_id, tmp_allele_name = line[1:].split()[:2]
+                if allele_id == tmp_allele_id:
+                    allele_name = tmp_allele_name
+                    break
+            assert allele_name != "" and strand != ''
+            HLA_genes[gene] = allele_name
+            HLA_gene_strand[gene] = strand
+            print "HLA-%s's backbone allele is %s on '%s' strand" % (gene, allele_name, strand)
+
+        # Extract exon information from hla.data
+        HLA_gene_exons = {}
+        skip = False
+        for line in open("IMGTHLA/hla.dat"):
+            if line.startswith("DE"):
+                allele_name = line.split()[1][4:-1]
+                gene = allele_name.split('*')[0]
+                if line.find("partial") != -1 or \
+                        not gene in HLA_genes or \
+                        allele_name != HLA_genes[gene] or \
+                        allele_name in exclude_allele_list :
+                    skip = True
+                    continue
+                skip = False
+            elif not skip:
+                if not line.startswith("FT") or \
+                        line.find("exon") == -1:
+                    continue
+                exon_range = line.split()[2].split("..")
+                if not gene in HLA_gene_exons:
+                    HLA_gene_exons[gene] = []
+                HLA_gene_exons[gene].append([int(exon_range[0]) - 1, int(exon_range[1]) - 1])
+    else:
+        assert base_fname == "cyp"
+        
+        HLA_genes, HLA_gene_strand = {}, {}        
+        fasta_dirname = "hisat_genotype_db/%s/fasta" % base_fname.upper()
+        assert os.path.exists(fasta_dirname)
+        fasta_fnames = glob.glob("%s/*.fasta" % fasta_dirname)
+        for fasta_fname in fasta_fnames:
+            gene_name = fasta_fname.split('/')[-1]
+            gene_name = gene_name.split('_')[0]
+            ref_allele_name = ""
+            for line in open(fasta_fname):
+                assert line[0] == '>'
+                ref_allele_name = line.split(' ')[0][1:]
+                break
+
+            assert ref_allele_name != ""
+            assert gene_name not in HLA_genes
+            HLA_genes[gene_name] = ref_allele_name
+            # DK - temporary solution
+            HLA_gene_strand[gene_name] = '+'
+
+        HLA_gene_exons = {}
+        assert reference_type == "gene"
         
     # Write the backbone sequences into a fasta file
     if reference_type == "gene":
@@ -191,18 +217,30 @@ def extract_HLA_vars(base_fname,
                         continue
 
                     if name not in HLA_names:
-                        print >> sys.stderr, "Warning: %s is not present in Names" % (name)
-                        continue
+                        HLA_names[name] = len(HLA_names)
 
                     id = HLA_names[name]
+                    if id >= len(HLA_seqs):
+                        assert id == len(HLA_seqs)
+                        HLA_seqs.append("")
+                        
                     HLA_seqs[id] += ''.join(fives)
             return HLA_names, HLA_seqs
 
-        HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % HLA_gene
+        if base_fname == "hla":
+            HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % HLA_gene
+        else:
+            HLA_MSA_fname = "hisat_genotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), HLA_gene)
+            
         if not os.path.exists(HLA_MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
             continue
+        
         HLA_names, HLA_seqs = read_MSF_file(HLA_MSA_fname)
+        
+        # DK - debugging purposes
+        print HLA_names
+        # sys.exit(1)        
 
         # Identify a consensus sequence
         assert len(HLA_seqs) > 0
@@ -748,12 +786,7 @@ def extract_HLA_vars(base_fname,
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description="Extract HLA variants from HLA multiple sequence alignments")
-    parser.add_argument("--exclude-allele-list",
-                        dest="exclude_allele_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of alleles to be excluded")
+        description="Extract variants from multiple sequence alignments")
     parser.add_argument("-b", "--base",
                         dest="base_fname",
                         type=str,
@@ -787,6 +820,11 @@ if __name__ == '__main__':
                         dest="DRB1_REF",
                         action="store_true",
                         help="Some DRB1 alleles seem to include vector sequences, so use this option to avoid including them")
+    parser.add_argument("--exclude-allele-list",
+                        dest="exclude_allele_list",
+                        type=str,
+                        default="",
+                        help="A comma-separated list of alleles to be excluded")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -806,13 +844,13 @@ if __name__ == '__main__':
     else:
         args.exclude_allele_list = []
         
-    print args.exclude_allele_list
-    extract_HLA_vars(args.base_fname,
-                     args.reference_type,
-                     args.hla_list,
-                     args.partial,
-                     args.inter_gap,
-                     args.intra_gap,
-                     args.DRB1_REF,
-                     args.verbose,
-                     args.exclude_allele_list)
+    # print args.exclude_allele_list
+    extract_vars(args.base_fname,
+                 args.reference_type,
+                 args.hla_list,
+                 args.partial,
+                 args.inter_gap,
+                 args.intra_gap,
+                 args.DRB1_REF,
+                 args.verbose,
+                 args.exclude_allele_list)
