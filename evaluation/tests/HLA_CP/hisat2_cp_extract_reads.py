@@ -29,7 +29,27 @@ from argparse import ArgumentParser, FileType
 
 """
 """
-def parallel_work(pids, work, cmd):
+def reverse_complement(seq):
+    comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
+    rc_seq = ""
+    for s in reversed(seq):
+        if s in comp_table:
+            rc_seq += comp_table[s]
+        else:
+            rc_seq += s
+    return rc_seq
+            
+
+"""
+"""
+def parallel_work(pids, 
+                  work, 
+                  ex_path,
+                  fq_fname_base, 
+                  fq_fname, 
+                  fq_fname2, 
+                  reference_type, 
+                  ranges):
     child = -1
     for i in range(len(pids)):
         if pids[i] == 0:
@@ -46,7 +66,12 @@ def parallel_work(pids, work, cmd):
 
     child_id = os.fork()
     if child_id == 0:
-        work(cmd)
+        work(ex_path,
+             fq_fname_base, 
+             fq_fname, 
+             fq_fname2, 
+             reference_type, 
+             ranges)
         os._exit(os.EX_OK)
     else:
         # print >> sys.stderr, '\t\t>> thread %d: %d' % (child, child_id)
@@ -63,7 +88,8 @@ def wait_pids(pids):
 
 """
 """
-def extract_reads(reference_type,
+def extract_reads(base_fname,
+                  reference_type,
                   hla_list,
                   partial,
                   DRB1_ref,
@@ -94,48 +120,80 @@ def extract_reads(reference_type,
         os.system("%s grch38/genome > genome.fa" % hisat2_inspect)
         os.system("samtools faidx genome.fa")
 
-    # Extract HLA variants, backbone sequence, and other sequeces
-    HLA_fnames = ["hla_backbone.fa",
-                  "hla_sequences.fa",
-                  "hla.ref",
-                  "hla.snp",
-                  "hla.haplotype",
-                  "hla.link"]
+    if reference_type == "gene":
+        # Extract HLA variants, backbone sequence, and other sequeces
+        HLA_fnames = ["hla_backbone.fa",
+                      "hla_sequences.fa",
+                      "hla.ref",
+                      "hla.snp",
+                      "hla.haplotype",
+                      "hla.link"]
 
-    if not check_files(HLA_fnames):
-        extract_hla_script = os.path.join(ex_path, "hisat2_extract_HLA_vars.py")
-        extract_cmd = [extract_hla_script,
-                       "--reference-type", reference_type,
-                       "--hla-list", ','.join(hla_list)]
-        if DRB1_ref:
-            extract_cmd += ["--DRB1-REF"]
-        if partial:
-            extract_cmd += ["--partial"]
-        extract_cmd += ["--inter-gap", "30",
-                        "--intra-gap", "50"]
-        print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-        proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-        proc.communicate()
         if not check_files(HLA_fnames):
-            print >> sys.stderr, "Error: extract_HLA_vars failed!"
-            sys.exit(1)
+            extract_hla_script = os.path.join(ex_path, "hisat2_extract_HLA_vars.py")
+            extract_cmd = [extract_hla_script]
+            extract_cmd += ["--reference-type", reference_type,
+                                "--hla-list", ','.join(hla_list)]
+            if DRB1_ref:
+                extract_cmd += ["--DRB1-REF"]
+            if partial:
+                extract_cmd += ["--partial"]
+            extract_cmd += ["--inter-gap", "30",
+                            "--intra-gap", "50"]
+            print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
+            proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+            proc.communicate()
+            if not check_files(HLA_fnames):
+                print >> sys.stderr, "Error: extract_HLA_vars failed!"
+                sys.exit(1)
 
-    # Build HISAT2 graph indexes based on the above information
-    HLA_hisat2_graph_index_fnames = ["hla.graph.%d.ht2" % (i+1) for i in range(8)]
-    if not check_files(HLA_hisat2_graph_index_fnames):
-        hisat2_build = os.path.join(ex_path, "hisat2-build")
-        build_cmd = [hisat2_build,
-                     # "-p", str(threads),
-                     "--snp", "hla.snp",
-                     "--haplotype", "hla.haplotype",
-                     "hla_backbone.fa",
-                     "hla.graph"]
-        print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
-        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-        proc.communicate()        
+        # Build HISAT2 graph indexes based on the above information
+        HLA_hisat2_graph_index_fnames = ["hla.graph.%d.ht2" % (i+1) for i in range(8)]
         if not check_files(HLA_hisat2_graph_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
-            sys.exit(1)
+            hisat2_build = os.path.join(ex_path, "hisat2-build")
+            build_cmd = [hisat2_build,
+                         "--snp", "hla.snp",
+                         "--haplotype", "hla.haplotype",
+                         "hla_backbone.fa",
+                         "hla.graph"]
+            print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
+            proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+            proc.communicate()        
+            if not check_files(HLA_hisat2_graph_index_fnames):
+                print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
+                sys.exit(1)
+    else:
+        assert reference_type == "genome"
+        genotype_fnames = ["%s.fa" % base_fname,
+                           "%s.gene" % base_fname,
+                           "%s.snp" % base_fname,
+                           "%s.haplotype" % base_fname,
+                           "%s.link" % base_fname,
+                           "%s.coord" % base_fname,
+                           "%s.clnsig" % base_fname]
+        # hisat2 graph index files
+        genotype_fnames += ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
+        if not check_files(genotype_fnames):        
+            build_script = os.path.join(ex_path, "hisat2_build_genotype_genome.py")
+            build_cmd = [build_script]
+            if partial:
+                build_cmd += ["--partial"]
+            build_cmd += ["--inter-gap", "30",
+                          "--intra-gap", "50"]
+            build_cmd += ["--threads", "4"]
+            build_cmd += ["--no-clinvar"]
+            build_cmd += ["genome.fa", "genotype_genome"]
+            print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
+            proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+            proc.communicate()
+            if not check_files(genotype_fnames):
+                print >> sys.stderr, "Error: indexing genotype genome failed!  Perhaps, you may have forgotten to build hisat2 executables?"
+                sys.exit(1)
+
+    # DK - testing purposes
+    sys.exit(1)
+
+    ranges = []
 
     # Extract reads
     fq_fnames = glob.glob("genomes/*.1.fq.gz")
@@ -159,24 +217,61 @@ def extract_reads(reference_type,
         count += 1
 
         print >> sys.stderr, "\t%d: Extracting reads from %s" % (count, fq_fname_base)
-        hisat2 = os.path.join(ex_path, "hisat2")
-        aligner_cmd = [hisat2,
-                       "--al-conc-disc-gz", "CP/%s.extracted.fq.gz" % fq_fname_base,
-                       "-x", "hla.graph",
-                       "-1", fq_fname,
-                       "-2", fq_fname2]
-        print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)            
-            
-        def work(aligner_cmd):
-            align_proc = subprocess.Popen(aligner_cmd,
-                                          stdout=open("/dev/null", 'w'),
-                                          stderr=open("/dev/null", 'w'))
-            align_proc.communicate()
+        def work(ex_path,
+                 fq_fname_base,
+                 fq_fname, 
+                 fq_fname2, 
+                 reference_type, 
+                 ranges):
+            hisat2 = os.path.join(ex_path, "hisat2")
+            aligner_cmd = [hisat2]
+            if reference_type == "gene":
+                aligner_cmd += ["--al-conc-disc-gz", "CP/%s.extracted.fq.gz" % fq_fname_base]
+            aligner_cmd += ["-x", "hla.graph",
+                            "-1", fq_fname,
+                            "-2", fq_fname2]
+            print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)
+            if reference_type == "gene": 
+                align_proc = subprocess.Popen(aligner_cmd,
+                                              stdout=open("/dev/null", 'w'),
+                                              stderr=open("/dev/null", 'w'))
+                align_proc.communicate()
+            else:
+                assert reference_type == "genome"
+                align_proc = subprocess.Popen(aligner_cmd,
+                                              stdout=subprocess.PIPE,
+                                              stderr=open("/dev/null", 'w'))
+                prev_read_name = ""
+                for line in align_proc.stdout:
+                    if line.startswith('@'):
+                        continue
+                    line = line.strip()
+                    cols = line.split()
+                    read_name, flag, chr, pos, mapQ, cigar, _, _, _, read, qual = cols[:11]
+                    flag, pos = int(flag), int(pos)
+                    strand = '-' if flag & 0x10 else '+'
+                    AS = ""
+                    for i in range(11, len(cols)):
+                        col = cols[i]
+                        if col.startswith("AS"):
+                            AS = int(col[5:])
 
         if threads <= 1:
-            work(aligner_cmd)
+            work(ex_path, 
+                 fq_fname_base, 
+                 fq_fname, 
+                 fq_fname2, 
+                 reference_type, 
+                 ranges)
         else:
-            parallel_work(pids, work, aligner_cmd)
+            parallel_work(pids, 
+                          work, 
+                          ex_path, 
+                          fq_fname_base, 
+                          fq_fname, 
+                          fq_fname2, 
+                          reference_type, 
+                          ranges)
 
     if threads > 1:
         wait_pids(pids)
@@ -187,10 +282,15 @@ def extract_reads(reference_type,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='test HLA genotyping for Platinum Genomes')
+    parser.add_argument("--base_fname",
+                        dest="base_fname",
+                        type=str,
+                        default="genotype_genome",
+                        help="base filename for genotype genome")
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
-                        default="gene",
+                        default="genome",
                         help="Reference type: gene, chromosome, and genome (default: gene)")
     parser.add_argument("--hla-list",
                         dest="hla_list",
@@ -229,7 +329,8 @@ if __name__ == '__main__':
     job_range = []
     for num in args.job_range.split(','):
         job_range.append(int(num))
-    extract_reads(args.reference_type,
+    extract_reads(args.base_fname,
+                  args.reference_type,
                   args.hla_list,
                   args.partial,
                   args.DRB1_ref,
