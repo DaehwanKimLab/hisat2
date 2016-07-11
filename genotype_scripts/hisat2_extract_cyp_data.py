@@ -24,9 +24,20 @@ import os, sys, subprocess, re
 import inspect, operator
 from argparse import ArgumentParser, FileType
 
+
+global gene_names
+gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
+              'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
+              'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
+              'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
+              'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
+              'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
+              'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
+              'cyp26a1']
+
 """
+Download variant information from website database
 """
-## Download variant information from website database
 
 def get_html(url):
     download_cmd = ["wget",
@@ -150,10 +161,11 @@ def download_CYP(verbose):
                 print >> cyp_file, (str(alleleName) + "\t" + ','.join(varInfo))
             
         cyp_file.close()
-            
+
+         
 """
+Make MSF files from variants
 """
-## Make MSF files from variants
 
 def checkNTloc(fasta_fileName,var_fileName,gene_name):
     print "\nGene: %s" % gene_name
@@ -586,22 +598,13 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
 def build_msf_files():
     os.system('mkdir cyp_msf')
 
-    cyp_gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
-                      'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
-                      'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
-                      'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
-                      'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
-                      'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
-                      'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
-                      'cyp26a1']
-
     oSetPos = 0
     oSetNeg = 0
     oSetScorePos = 0.0
     oSetScoreNeg = 0.0
         
     print('\nBuilding MSF files:')
-    for gene_name in cyp_gene_names:
+    for gene_name in gene_names:
         oSetPos, oSetNeg, oSetScorePos, oSetScoreNeg, tot_score = checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)
         if not (tot_score >= 0.95):
             print "\tLess than 95% bp match, skipping gene."
@@ -609,10 +612,12 @@ def build_msf_files():
         
         makeMSF(gene_name, oSetPos, oSetNeg)
 
-'''
-'''
-## Check MSF files against variants files
 
+'''
+Check MSF files against variants files
+'''
+
+global incorrect_msf_entries
 incorrect_msf_entries = []
 
 def create_inv_map(seq):
@@ -627,14 +632,18 @@ def create_inv_map(seq):
         count += 1
     return seq_map
 
-def readMSF(msf_fname):
+def readMSF(msf_fname): # { Allele name : MSF sequence }
     msf_dict = {}
-    for line in msf_fname:
-        line = line.strip()
+    all_lines = [line for line in msf_fname]
+    for line in all_lines:
+        line = line.strip().replace(' ','')
+        if len(line) == 0 : continue
         allele_name = line.split('\t')[0]
         msf_seq = line.split('\t')[1]
-        assert not allele_name in msf_dict
-        msf_dict[allele_name] = msf_seq
+        if not allele_name in msf_dict:
+            msf_dict[allele_name] = msf_seq
+        else:
+            msf_dict[allele_name] = msf_dict[allele_name] + msf_seq
 
     return msf_dict
 
@@ -712,7 +721,7 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
         msf_dict = readMSF(msf_file) # { Allele name : MSF sequence }
         msf_file.close()
     except IOError:
-        print("%s msf file was skipped." % (gene_name))
+        print("\t%s msf file was skipped.\n" % (gene_name))
         return
 
     var_file = open(var_fname,'r')
@@ -852,14 +861,17 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
         var_dict[allele] = set(oSet_var_list)
 
     # Check variants created from MSF file against variants list
+    num_correct_alleles = 0
     for allele, msf_seq in msf_dict.items():
         if allele == ref_allele:
+            num_correct_alleles += 1
             continue
         msf_var_list = msfToVarList(msf_dict[ref_allele], msf_seq)
-        print('\t' + str(var_dict[allele] == set(msf_var_list)) + '\t' + str(allele) + '\t' + str(msf_var_list))
+        '''print('\t' + str(var_dict[allele] == set(msf_var_list)) + '\t' + str(allele) + '\t' + str(msf_var_list))'''
 
         try:
             assert var_dict[allele] == set(msf_var_list)
+            num_correct_alleles += 1
         except AssertionError:
             incorrect_msf_entries.append(allele)
             print('\n')
@@ -868,25 +880,20 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
             print('\t\tDifference:\t' + str(var_dict[allele] - set(msf_var_list)) + '\n')
             '''sys.exit(1)'''
 
+    print("\t%d out of %d alleles have correct msf sequences\n" % (num_correct_alleles, len(msf_dict)))
+
 def check_msf_files():
     print("\nChecking MSF files:")
-    gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
-                  'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
-                  'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
-                  'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
-                  'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
-                  'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
-                  'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
-                  'cyp26a1']
 
     for gene_name in gene_names:
-        checkMSFfile(gene_name, 'cyp_msf/%s.msf' % gene_name, 'cyp_var_files/%s.var' % gene_name, 'cyp_fasta/%s.fasta' % gene_name)
+        checkMSFfile(gene_name, 'cyp_msf/%s_gen.msf' % gene_name, 'cyp_var_files/%s.var' % gene_name, 'cyp_fasta/%s.fasta' % gene_name)
 
-    print('\n\n%d incorrect msf entries on alleles %s' % (len(incorrect_msf_entries), str(incorrect_msf_entries)))
+    print('\n\n%d incorrect msf entries on alleles %s\n' % (len(incorrect_msf_entries), str(incorrect_msf_entries)))
 
-'''
-'''
-## Write allele sequences to fasta for each gene
+
+"""
+Write allele sequences to fasta for each gene
+"""
 
 def writeGenFasta(gene_name, msf_fname, line_length):
     try:
@@ -894,7 +901,7 @@ def writeGenFasta(gene_name, msf_fname, line_length):
         msf_seq_dict = readMSF(msf_file)
         msf_file.close()
     except IOError:
-        print("%s msf file was skipped." % (gene_name))
+        print("\t%s msf file was skipped." % (gene_name))
         return
 
     gen_fasta_file = open('gen_fasta/%s_gen.fasta' % gene_name, 'w')
@@ -910,22 +917,15 @@ def writeGenFasta(gene_name, msf_fname, line_length):
 
 def build_gen_fasta_files():
     os.system('mkdir gen_fasta')
-    gene_names = ['cyp1a1','cyp1a2','cyp1b1','cyp2a6',
-                  'cyp2a13','cyp2b6','cyp2c8','cyp2c9',
-                  'cyp2c19','cyp2d6','cyp2e1','cyp2f1',
-                  'cyp2j2','cyp2r1','cyp2S1','cyp2w1',
-                  'cyp3a4','cyp3a5','cyp3a7','cyp3a43',
-                  'cyp4a11','cyp4a22','cyp4b1','cyp4f2',
-                  'cyp5a1','cyp8a1','cyp19a1','cyp21a2',
-                  'cyp26a1']
 
     print("\nBuilding alleles sequence fasta files:")
     for gene_name in gene_names:
-        writeGenFasta(gene_name, 'cyp_msf/%s.msf' % gene_name, 60)
+        writeGenFasta(gene_name, 'cyp_msf/%s_gen.msf' % gene_name, 60)
 
-'''
-'''
-## Run script
+
+"""
+Run script
+"""
 
 def extract_cyp_data():
     download_CYP(True)
