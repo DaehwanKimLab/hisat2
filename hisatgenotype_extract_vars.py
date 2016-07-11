@@ -149,6 +149,7 @@ def extract_vars(base_fname,
         for fasta_fname in fasta_fnames:
             gene_name = fasta_fname.split('/')[-1]
             gene_name = gene_name.split('_')[0]
+            gene_name = gene_name.upper()
             ref_allele_name = ""
             for line in open(fasta_fname):
                 assert line[0] == '>'
@@ -158,6 +159,7 @@ def extract_vars(base_fname,
             assert ref_allele_name != ""
             assert gene_name not in HLA_genes
             HLA_genes[gene_name] = ref_allele_name
+            
             # DK - temporary solution
             HLA_gene_strand[gene_name] = '+'
 
@@ -593,6 +595,7 @@ def extract_vars(base_fname,
                 base_locus = left
         else:
             base_locus = 0
+            print >> hla_ref_file, "%s\t22\t%d\t%d\t%d\t%s" % (backbone_name, 0, len(backbone_seq_), len(backbone_seq_), "0-%d" % len(backbone_seq_))
 
         # Write
         #       (1) variants w.r.t the backbone sequences into a SNP file
