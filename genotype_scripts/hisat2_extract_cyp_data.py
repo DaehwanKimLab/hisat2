@@ -322,7 +322,7 @@ def makeVarDict(fname):
     
     for line in allLines[1:]:
         assert line.upper().startswith("CYP")
-        alleleName = line.split("\t")[0]
+        alleleName = line.split("\t")[0].upper()
         
         try:
             varList = line.split("\t")[1].split(',')
@@ -577,10 +577,10 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
     assert seq_len > 0
 
     # Follow MSF style of IMGT/HLA database
-    msfFile = open('cyp_msf/%s_gen.msf' % gene_name,'w')
+    msfFile = open('cyp_msf/%s_gen.msf' % gene_name[3:].upper(),'w')
     for i in range(0, seq_len, 50):
         for allele, msf_seq in msfTable.items():
-            output = "%12s" % allele
+            output = "%12s" % allele[3:].upper()
             for j in range(i, i+50, 10):
                 if j >= seq_len:
                     break
@@ -602,6 +602,7 @@ def build_msf_files():
     oSetNeg = 0
     oSetScorePos = 0.0
     oSetScoreNeg = 0.0
+    tot_score = 0.0
         
     print('\nBuilding MSF files:')
     for gene_name in gene_names:
@@ -638,7 +639,7 @@ def readMSF(msf_fname): # { Allele name : MSF sequence }
     for line in all_lines:
         line = line.strip().replace(' ','')
         if len(line) == 0 : continue
-        allele_name = line.split('\t')[0]
+        allele_name = 'CYP' + line.split('\t')[0]
         msf_seq = line.split('\t')[1]
         if not allele_name in msf_dict:
             msf_dict[allele_name] = msf_seq
@@ -755,7 +756,7 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
 
     # Check all alleles are included
     try:
-        assert set(msf_dict.keys()).issubset(set(var_dict.keys()))
+        assert set([k.upper() for k in msf_dict.keys()]).issubset(set([k.upper() for k in var_dict.keys()]))
     except AssertionError:
         print("Extra alleles in MSF!\n")
         print(sorted(msf_dict.keys()))
@@ -886,7 +887,7 @@ def check_msf_files():
     print("\nChecking MSF files:")
 
     for gene_name in gene_names:
-        checkMSFfile(gene_name, 'cyp_msf/%s_gen.msf' % gene_name, 'cyp_var_files/%s.var' % gene_name, 'cyp_fasta/%s.fasta' % gene_name)
+        checkMSFfile(gene_name, 'cyp_msf/%s_gen.msf' % gene_name[3:].upper(), 'cyp_var_files/%s.var' % gene_name, 'cyp_fasta/%s.fasta' % gene_name)
 
     print('\n\n%d incorrect msf entries on alleles %s\n' % (len(incorrect_msf_entries), str(incorrect_msf_entries)))
 
@@ -904,11 +905,11 @@ def writeGenFasta(gene_name, msf_fname, line_length):
         print("\t%s msf file was skipped." % (gene_name))
         return
 
-    gen_fasta_file = open('gen_fasta/%s_gen.fasta' % gene_name, 'w')
+    gen_fasta_file = open('gen_fasta/%s_gen.fasta' % gene_name[3:].upper(), 'w')
     
     for allele, seq in msf_seq_dict.items():
         seq = seq.replace('.','')
-        print >> gen_fasta_file, ('>' + allele + ' ' + str(len(seq)) + ' bp')
+        print >> gen_fasta_file, ('>' + allele[3:].upper() + ' ' + str(len(seq)) + ' bp')
         seq_lines = [seq[i:i+line_length] for i in range(0, len(seq), line_length)]
         print >> gen_fasta_file, ('\n'.join(seq_lines))
 
@@ -920,7 +921,7 @@ def build_gen_fasta_files():
 
     print("\nBuilding alleles sequence fasta files:")
     for gene_name in gene_names:
-        writeGenFasta(gene_name, 'cyp_msf/%s_gen.msf' % gene_name, 60)
+        writeGenFasta(gene_name, 'cyp_msf/%s_gen.msf' % gene_name[3:].upper(), 60)
 
 
 """
