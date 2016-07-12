@@ -149,7 +149,6 @@ def extract_vars(base_fname,
         for fasta_fname in fasta_fnames:
             gene_name = fasta_fname.split('/')[-1]
             gene_name = gene_name.split('_')[0]
-            gene_name = gene_name.upper()
             ref_allele_name = ""
             for line in open(fasta_fname):
                 assert line[0] == '>'

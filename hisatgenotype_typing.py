@@ -370,7 +370,7 @@ def HLA_typing(ex_path,
                 gene = test_HLA_names[0].split('*')[0]
             else:
                 gene = test_HLA_names
-                
+            
             ref_allele = refHLAs[gene]
             ref_seq = HLAs[gene][ref_allele]
             ref_exons = refHLA_loci[gene][-1]
@@ -1348,7 +1348,7 @@ def genotyping(base_fname,
         Var_list[gene] = sorted(in_var_list)
         
     Links = {}
-    for line in open(HLA_fnames[5]):
+    for line in open("%s.link" % base_fname):
         var_id, alleles = line.strip().split('\t')
         alleles = alleles.split()
         assert not var_id in Links
@@ -1380,6 +1380,7 @@ def genotyping(base_fname,
             genes = list(set(hla_list) & set(HLA_names.keys()))
         else:
             genes = HLA_names.keys()
+            
         if basic_test:
             for gene in genes:
                 HLA_gene_alleles = HLA_names[gene]
