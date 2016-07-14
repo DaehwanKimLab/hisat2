@@ -65,46 +65,66 @@ def extract_vars(base_fname,
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
     hla_ref_file = open(base_fname +".ref", 'w')
-    if base_fname in ["hla"]:
-        HLA_genes, HLA_gene_strand = {}, {}
-        for gene in hla_list:
-            hisat2 = os.path.join(ex_path, "hisat2")
-            aligner_cmd = [hisat2,
-                           "--score-min", "C,0",
-                           "--no-unal",
-                           "-x", "grch38/genome",
-                           "-f", "IMGTHLA/fasta/%s_gen.fasta" % gene]
-            align_proc = subprocess.Popen(aligner_cmd,
-                                          stdout=subprocess.PIPE,
-                                          stderr=open("/dev/null", 'w'))
-            print aligner_cmd
-            allele_id, strand = "", ''
-            for line in align_proc.stdout:
-                #print line
-                if line.startswith('@'):
-                    continue
-                line = line.strip()
-                cols = line.split()
-                t_allele_id, flag = cols[:2]
-                #print t_allele_id
-                #HOWARD: Avoid selection of excluded allele as backbone
-                if t_allele_id in exclude_allele_list:
-                    continue
+
+    if base_fname != "hla":
+        hla_list = []
+        fasta_dirname = "hisat_genotype_db/%s/fasta" % base_fname.upper()
+        assert os.path.exists(fasta_dirname)
+        fasta_fnames = glob.glob("%s/*.fasta" % fasta_dirname)
+        for fasta_fname in fasta_fnames:
+            gene_name = fasta_fname.split('/')[-1]
+            gene_name = gene_name.split('_')[0]
+            hla_list.append(gene_name)
+
+    HLA_genes, HLA_gene_strand = {}, {}
+    for gene in hla_list:
+        hisat2 = os.path.join(ex_path, "hisat2")
+        aligner_cmd = [hisat2]
+        if base_fname == "hla":
+            aligner_cmd += ["--score-min", "C,0"]
+            
+        aligner_cmd += ["--no-unal",
+                       "-x", "grch38/genome"]
+
+        if base_fname == "hla":
+            fasta_fname = "IMGTHLA/fasta/%s_gen.fasta" % gene
+        else:
+            fasta_fname = "hisat_genotype_db/%s/fasta/%s_gen.fasta" % (base_fname.upper(), gene)
+        aligner_cmd += ["-f", fasta_fname]
+            
+        align_proc = subprocess.Popen(aligner_cmd,
+                                      stdout=subprocess.PIPE,
+                                      stderr=open("/dev/null", 'w'))
+        if verbose:
+            print >> sys.stderr, aligner_cmd
+        allele_id, strand = "", ''
+        max_AS = -sys.maxint
+        for line in align_proc.stdout:
+            if line.startswith('@'):
+                continue
+            line = line.strip()
+            cols = line.split()
+            t_allele_id, flag = cols[:2]
+            if t_allele_id in exclude_allele_list:
+                continue
+
+            flag = int(flag)
+            strand = '-' if flag & 0x10 else '+'
+            AS = ""
+            for i in range(11, len(cols)):
+                col = cols[i]
+                if col.startswith("AS"):
+                    AS = int(col[5:])
+            if AS > max_AS:
+                max_AS = AS
                 allele_id = t_allele_id
 
-                flag = int(flag)
-                strand = '-' if flag & 0x10 else '+'
-                AS = ""
-                for i in range(11, len(cols)):
-                    col = cols[i]
-                    if col.startswith("AS"):
-                        AS = col[5:]
-                assert int(AS) == 0
-
-            align_proc.communicate()
-            assert allele_id != ""
+        align_proc.communicate()
+        if allele_id == "":
+            continue
+        if base_fname == "hla":
             allele_name = ""
-            for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene):
+            for line in open(fasta_fname):
                 line = line.strip()
                 if not line.startswith('>'):
                     continue
@@ -112,13 +132,16 @@ def extract_vars(base_fname,
                 if allele_id == tmp_allele_id:
                     allele_name = tmp_allele_name
                     break
-            assert allele_name != "" and strand != ''
-            HLA_genes[gene] = allele_name
-            HLA_gene_strand[gene] = strand
-            print "HLA-%s's backbone allele is %s on '%s' strand" % (gene, allele_name, strand)
+        else:
+            allele_name = allele_id
+        assert allele_name != "" and strand != ''
+        HLA_genes[gene] = allele_name
+        HLA_gene_strand[gene] = strand
+        print "%s-%s's backbone allele is %s on '%s' strand (AS: %d)" % (base_fname.upper(), gene, allele_name, strand, max_AS)
 
-        # Extract exon information from hla.data
-        HLA_gene_exons = {}
+    # Extract exon information from hla.data
+    HLA_gene_exons = {}
+    if base_fname == "hla":
         skip = False
         for line in open("IMGTHLA/hla.dat"):
             if line.startswith("DE"):
@@ -139,32 +162,7 @@ def extract_vars(base_fname,
                 if not gene in HLA_gene_exons:
                     HLA_gene_exons[gene] = []
                 HLA_gene_exons[gene].append([int(exon_range[0]) - 1, int(exon_range[1]) - 1])
-    else:
-        assert base_fname == "cyp"
-        
-        HLA_genes, HLA_gene_strand = {}, {}        
-        fasta_dirname = "hisat_genotype_db/%s/fasta" % base_fname.upper()
-        assert os.path.exists(fasta_dirname)
-        fasta_fnames = glob.glob("%s/*.fasta" % fasta_dirname)
-        for fasta_fname in fasta_fnames:
-            gene_name = fasta_fname.split('/')[-1]
-            gene_name = gene_name.split('_')[0]
-            ref_allele_name = ""
-            for line in open(fasta_fname):
-                assert line[0] == '>'
-                ref_allele_name = line.split(' ')[0][1:]
-                break
-
-            assert ref_allele_name != ""
-            assert gene_name not in HLA_genes
-            HLA_genes[gene_name] = ref_allele_name
-            
-            # DK - temporary solution
-            HLA_gene_strand[gene_name] = '+'
-
-        HLA_gene_exons = {}
-        assert reference_type == "gene"
-        
+                
     # Write the backbone sequences into a fasta file
     if reference_type == "gene":
         backbone_file = open(base_fname + "_backbone.fa", 'w')        
