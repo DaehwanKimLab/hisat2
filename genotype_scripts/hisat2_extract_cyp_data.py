@@ -319,15 +319,25 @@ def makeVarDict(fname):
     alleleVarDict = {}
 
     allLines = [line.strip() for line in fname]
-    
+
+    ref_al_id_present = False
     for line in allLines[1:]:
+        if 'None' in line:
+            ref_al_id_present = True
+
+    line_num = 0
+    for line in allLines[1:]:
+        line_num += 1
         assert line.upper().startswith("CYP")
         alleleName = line.split("\t")[0].upper()
-        
-        try:
-            varList = line.split("\t")[1].split(',')
-        except IndexError:
-            continue
+
+        if (not ref_al_id_present) and line_num == 1:
+            varList = ['None']            
+        else:
+            try:
+                varList = line.split("\t")[1].split(',')
+            except IndexError:
+                continue
         
         try:
             assert not alleleName in alleleVarDict
@@ -365,6 +375,10 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
     cyp_var_file = open("cyp_var_files/%s.var" % gene_name,'r')
     cyp_var_dict = makeVarDict(cyp_var_file)
     cyp_var_file.close()
+
+    if len(cyp_var_dict) < 2:
+        print('\tOnly reference allele included, skipping gene')
+        return
     
     cyp_faFile = open("cyp_fasta/%s.fasta" % gene_name,'r')
     cyp_seq = extractSeq(cyp_faFile)
@@ -608,7 +622,7 @@ def build_msf_files():
     for gene_name in gene_names:
         oSetPos, oSetNeg, oSetScorePos, oSetScoreNeg, tot_score = checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)
         if not (tot_score >= 0.95):
-            print "\tLess than 95% bp match, skipping gene."
+            print "\tLess than 95% match, skipping gene."
             continue
         
         makeMSF(gene_name, oSetPos, oSetNeg)
