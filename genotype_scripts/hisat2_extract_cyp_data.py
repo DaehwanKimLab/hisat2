@@ -22,6 +22,7 @@
 
 import os, sys, subprocess, re
 import inspect, operator
+import glob
 from argparse import ArgumentParser, FileType
 
 
@@ -319,15 +320,25 @@ def makeVarDict(fname):
     alleleVarDict = {}
 
     allLines = [line.strip() for line in fname]
-    
+
+    ref_al_id_present = False
     for line in allLines[1:]:
+        if 'None' in line:
+            ref_al_id_present = True
+
+    line_num = 0
+    for line in allLines[1:]:
+        line_num += 1
         assert line.upper().startswith("CYP")
         alleleName = line.split("\t")[0].upper()
-        
-        try:
-            varList = line.split("\t")[1].split(',')
-        except IndexError:
-            continue
+
+        if (not ref_al_id_present) and line_num == 1:
+            varList = ['None']            
+        else:
+            try:
+                varList = line.split("\t")[1].split(',')
+            except IndexError:
+                continue
         
         try:
             assert not alleleName in alleleVarDict
@@ -365,7 +376,18 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
     cyp_var_file = open("cyp_var_files/%s.var" % gene_name,'r')
     cyp_var_dict = makeVarDict(cyp_var_file)
     cyp_var_file.close()
-    
+
+    if len(cyp_var_dict) < 2:
+        print('\tOnly reference allele included, skipping gene')
+        return
+
+    try:
+        blast_allele_var = extract_var_from_blast('cyp_blast_alignment/%s_blast.align' % gene_name)
+        if len(blast_allele_var) > 0:
+            cyp_var_dict[gene_name.upper() + '*REFGRCH38P7'] = set(blast_allele_var)
+    except IOError:
+        print('\t%s blast file was skipped.' % gene_name)
+
     cyp_faFile = open("cyp_fasta/%s.fasta" % gene_name,'r')
     cyp_seq = extractSeq(cyp_faFile)
     cyp_faFile.close()
@@ -393,10 +415,13 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 continue
 
             # convert to position in string
-            if pos[0] > 0:
-                pos = pos[0] + oSetPos
+            if not 'GRCH38' in allele:
+                if pos[0] > 0:
+                    pos = pos[0] + oSetPos
+                else:
+                    pos = pos[0] + oSetNeg
             else:
-                pos = pos[0] + oSetNeg
+                pos = pos[0]
                 
             # Make dictionary of longest insertions
             if not pos in longestIns:
@@ -449,10 +474,11 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 for nt in ntChange:
                     assert nt in "ACGT"
 
-                if pos > 0:
-                    pos = pos + oSetPos
-                else:
-                    pos = pos + oSetNeg
+                if not 'GRCH38' in allele:
+                    if pos > 0:
+                        pos = pos + oSetPos
+                    else:
+                        pos = pos + oSetNeg
 
                 if pos < 0 or pos > len(cyp_seq) - 1:
                     print >> sys.stdout, "\tWarning: position %d out of bounds" % (dbPos)
@@ -483,11 +509,12 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 for nt in ntDel:
                     assert nt in "ACGT"
 
-                for i in range(len(pos)):
-                    if pos[i] > 0:
-                        pos[i] = pos[i] + oSetPos
-                    else:
-                        pos[i] = pos[i] + oSetNeg
+                if not 'GRCH38' in allele:
+                    for i in range(len(pos)):
+                        if pos[i] > 0:
+                            pos[i] = pos[i] + oSetPos
+                        else:
+                            pos[i] = pos[i] + oSetNeg
 
                 skipDel = False
                 for i in range(len(pos)):
@@ -538,11 +565,12 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 for nt in ntIns:
                     assert nt in "ACGT"
 
-                for i in range(len(pos)):
-                    if pos[i] > 0:
-                        pos[i] = pos[i] + oSetPos
-                    else:
-                        pos[i] = pos[i] + oSetNeg
+                if not 'GRCH38' in allele:
+                    for i in range(len(pos)):
+                        if pos[i] > 0:
+                            pos[i] = pos[i] + oSetPos
+                        else:
+                            pos[i] = pos[i] + oSetNeg
 
                 skipIns = False
                 for i in range(len(pos)):
@@ -608,7 +636,7 @@ def build_msf_files():
     for gene_name in gene_names:
         oSetPos, oSetNeg, oSetScorePos, oSetScoreNeg, tot_score = checkNTloc("cyp_fasta/%s.fasta" % gene_name,"cyp_var_files/%s.var" % gene_name,gene_name)
         if not (tot_score >= 0.95):
-            print "\tLess than 95% bp match, skipping gene."
+            print "\tLess than 95% match, skipping gene."
             continue
         
         makeMSF(gene_name, oSetPos, oSetNeg)
@@ -728,6 +756,13 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
     var_file = open(var_fname,'r')
     var_dict = makeVarDict(var_file)
     var_file.close()
+
+    try:
+        blast_allele_var = extract_var_from_blast('cyp_blast_alignment/%s_blast.align' % gene_name)
+        if len(blast_allele_var) > 0:
+            var_dict[gene_name.upper() + '*REFGRCH38P7'] = set(blast_allele_var)
+    except IOError:
+        print('\t%s blast file was skipped.' % gene_name)
     
     fa_file = open(fasta_filename,'r')
     oriSeq = extractSeq(fa_file)
@@ -774,10 +809,11 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
                 ntSnp = [var.split('>')[0][-1]]
                 ntSnp.append(var.split('>')[1])
                 assert len(ntSnp) == 2
-                if pos > 0:
-                    pos = pos + oSetPos
-                else:
-                    pos = pos + oSetNeg
+                if not 'GRCH38' in allele:
+                    if pos > 0:
+                        pos = pos + oSetPos
+                    else:
+                        pos = pos + oSetNeg
 
                 if pos < 0 or pos > len(oriSeq) - 1: # out of bounds
                     continue
@@ -799,13 +835,14 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
                     assert nt in "ACGT"
 
                 skipDel = False
-                for i in range(len(pos)):
-                    if pos[i] > 0:
-                        pos[i] = pos[i] + oSetPos
-                    else:
-                        pos[i] = pos[i] + oSetNeg
-                    if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
-                        continue
+                if not 'GRCH38' in allele:
+                    for i in range(len(pos)):
+                        if pos[i] > 0:
+                            pos[i] = pos[i] + oSetPos
+                        else:
+                            pos[i] = pos[i] + oSetNeg
+                        if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
+                            skipDel = True
                 if (oriSeq[ pos[0] : pos[1] + 1 ] != ntDel): # mismatch
                     print('\tMismatch on variation %s' % var)
                     continue
@@ -839,13 +876,14 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
                     assert nt in "ACGT"
 
                 skipIns = False
-                for i in range(len(pos)):
-                    if pos[i] > 0:
-                        pos[i] = pos[i] + oSetPos
-                    else:
-                        pos[i] = pos[i] + oSetNeg
-                    if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
-                        skipIns = True
+                if not 'GRCH38' in allele:
+                    for i in range(len(pos)):
+                        if pos[i] > 0:
+                            pos[i] = pos[i] + oSetPos
+                        else:
+                            pos[i] = pos[i] + oSetNeg
+                        if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
+                            skipIns = True
 
                 if skipIns:
                     continue
@@ -933,5 +971,91 @@ def extract_cyp_data():
     build_msf_files()
     check_msf_files()
     build_gen_fasta_files()
+
+####################################################################################################
+## Debuging BLASTN alignment ref alleles
+
+def adjust_blast_vars(blast_vars_list,qry_pos):
+    if len(blast_vars_list) == 0:
+        return []
+
+    qry_pos = qry_pos - 1
+    adj_blst_var_list = []
+
+    for var in blast_vars_list:
+        if '>' in var: # SNP
+            old_pos = int(var[:-3])
+            adj_var = str(old_pos + qry_pos) + var[-3:]
+            adj_blst_var_list.append(adj_var)
+        elif 'del' in var: # deletion
+            old_pos = var.split('del')[0].split('_')
+            old_pos = [int(i) for i in old_pos]
+            old_pos = [i + qry_pos for i in old_pos]
+            if len(old_pos) == 1:
+                adj_var = str(old_pos[0]) + 'del' + var.split('del')[1]
+            else:
+                assert len(old_pos) == 2
+                adj_var = str(old_pos[0]) + '_' + str(old_pos[1]) + 'del' + var.split('del')[1]
+            adj_blst_var_list.append(adj_var)
+        else: # insertion
+            assert 'ins' in var
+            old_pos = var.split('ins')[0].split('_')
+            old_pos = [int(i) for i in old_pos]
+            old_pos = [i + qry_pos for i in old_pos]
+            assert len(old_pos) == 2 and (old_pos[1] - old_pos[0] == 1)
+            adj_var = str(old_pos[0]) + '_' + str(old_pos[1]) + 'ins' + var.split('ins')[1]
+            adj_blst_var_list.append(adj_var)
+
+    return adj_blst_var_list
+
+def extract_var_from_blast(cyp_blast_fname):
+    blastn_file = open(cyp_blast_fname,'r')
+    all_lines = [line.strip() for line in blastn_file if not (len(line.strip()) == 0 or line.strip().startswith('|'))]
+    blastn_file.close()
+
+    id_match = [m.group(0) for l in all_lines[0:25] for m in [re.compile('.*(Identities.*).*').search(l)] if m][0]
+    id_match = id_match.split('%')[0].split(' (')[0].split('= ')[1].split('/')
+    id_match = [int(i) for i in id_match]
+
+    # print(id_match)    
+    assert len(id_match) == 2 and id_match[1] - id_match[0] >= 0
+    if id_match[1] - id_match[0] == 0:
+        print('\tPerfect match using blastn')
+        return []
+    
+    
+    start = -1
+    end = -1
+    for i in range(len(all_lines)): # Get rid of headers and footers
+        if all_lines[i].startswith('Score ='):
+            assert start == -1
+            start = i
+
+        if all_lines[i].startswith('Lambda'):
+            assert start != -1 and end == -1
+            end = i
+            break
+
+    all_lines = all_lines[start + 3 : end]
+    # print('\n'.join(all_lines))
+
+    blastn_var_list = []
+    for i in range(0,len(all_lines),2):
+        qry_seq = '\t'.join(all_lines[i].split())
+        qry_seq_pos = int(qry_seq.split('\t')[1])
+        sbj_seq = '\t'.join(all_lines[i + 1].split())
+        qry_seq = qry_seq.split('\t')[2].replace('-','.').upper()
+        sbj_seq = sbj_seq.split('\t')[2].replace('-','.').upper()
+        #print(qry_seq)
+        #print(sbj_seq)
+
+        temp_var_list = msfToVarList(qry_seq, sbj_seq)
+        #print(str(qry_seq_pos) + '\t' + str(temp_var_list) +  '\t' + str(adjust_blast_vars(temp_var_list,qry_seq_pos)))
+        temp_var_list = adjust_blast_vars(temp_var_list,qry_seq_pos)
+        blastn_var_list = blastn_var_list + temp_var_list
+        
+    return blastn_var_list
+
+# extract_var_from_blast('cyp_blast_alignment/cyp2d6_blast.align')
 
 extract_cyp_data()
