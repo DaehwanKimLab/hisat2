@@ -2346,7 +2346,7 @@ Use `samtools sort` to convert the BAM file to a sorted BAM file. The following 
 
 We now have a sorted BAM file called `eg2.sorted.bam`. Sorted BAM is a useful
 format because the alignments are (a) compressed, which is convenient for
-long-term storage, and (b) sorted, which is conveneint for variant discovery.
+long-term storage, and (b) sorted, which is convenient for variant discovery.
 To generate variant calls in VCF format, run:
 
     samtools mpileup -uf $HISAT2_HOME/example/reference/22_20-21M.fa eg2.sorted.bam | bcftools view -bvcg - > eg2.raw.bcf
