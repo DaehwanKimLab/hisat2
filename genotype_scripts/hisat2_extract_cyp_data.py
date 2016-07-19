@@ -415,10 +415,13 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 continue
 
             # convert to position in string
-            if pos[0] > 0:
-                pos = pos[0] + oSetPos
+            if not 'GRCH38' in allele:
+                if pos[0] > 0:
+                    pos = pos[0] + oSetPos
+                else:
+                    pos = pos[0] + oSetNeg
             else:
-                pos = pos[0] + oSetNeg
+                pos = pos[0]
                 
             # Make dictionary of longest insertions
             if not pos in longestIns:
@@ -471,10 +474,11 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 for nt in ntChange:
                     assert nt in "ACGT"
 
-                if pos > 0:
-                    pos = pos + oSetPos
-                else:
-                    pos = pos + oSetNeg
+                if not 'GRCH38' in allele:
+                    if pos > 0:
+                        pos = pos + oSetPos
+                    else:
+                        pos = pos + oSetNeg
 
                 if pos < 0 or pos > len(cyp_seq) - 1:
                     print >> sys.stdout, "\tWarning: position %d out of bounds" % (dbPos)
@@ -505,11 +509,12 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 for nt in ntDel:
                     assert nt in "ACGT"
 
-                for i in range(len(pos)):
-                    if pos[i] > 0:
-                        pos[i] = pos[i] + oSetPos
-                    else:
-                        pos[i] = pos[i] + oSetNeg
+                if not 'GRCH38' in allele:
+                    for i in range(len(pos)):
+                        if pos[i] > 0:
+                            pos[i] = pos[i] + oSetPos
+                        else:
+                            pos[i] = pos[i] + oSetNeg
 
                 skipDel = False
                 for i in range(len(pos)):
@@ -560,11 +565,12 @@ def makeMSF(gene_name, oSetPos, oSetNeg):
                 for nt in ntIns:
                     assert nt in "ACGT"
 
-                for i in range(len(pos)):
-                    if pos[i] > 0:
-                        pos[i] = pos[i] + oSetPos
-                    else:
-                        pos[i] = pos[i] + oSetNeg
+                if not 'GRCH38' in allele:
+                    for i in range(len(pos)):
+                        if pos[i] > 0:
+                            pos[i] = pos[i] + oSetPos
+                        else:
+                            pos[i] = pos[i] + oSetNeg
 
                 skipIns = False
                 for i in range(len(pos)):
@@ -803,10 +809,11 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
                 ntSnp = [var.split('>')[0][-1]]
                 ntSnp.append(var.split('>')[1])
                 assert len(ntSnp) == 2
-                if pos > 0:
-                    pos = pos + oSetPos
-                else:
-                    pos = pos + oSetNeg
+                if not 'GRCH38' in allele:
+                    if pos > 0:
+                        pos = pos + oSetPos
+                    else:
+                        pos = pos + oSetNeg
 
                 if pos < 0 or pos > len(oriSeq) - 1: # out of bounds
                     continue
@@ -828,13 +835,14 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
                     assert nt in "ACGT"
 
                 skipDel = False
-                for i in range(len(pos)):
-                    if pos[i] > 0:
-                        pos[i] = pos[i] + oSetPos
-                    else:
-                        pos[i] = pos[i] + oSetNeg
-                    if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
-                        continue
+                if not 'GRCH38' in allele:
+                    for i in range(len(pos)):
+                        if pos[i] > 0:
+                            pos[i] = pos[i] + oSetPos
+                        else:
+                            pos[i] = pos[i] + oSetNeg
+                        if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
+                            skipDel = True
                 if (oriSeq[ pos[0] : pos[1] + 1 ] != ntDel): # mismatch
                     print('\tMismatch on variation %s' % var)
                     continue
@@ -868,13 +876,14 @@ def checkMSFfile(gene_name, msf_fname, var_fname, fasta_filename):
                     assert nt in "ACGT"
 
                 skipIns = False
-                for i in range(len(pos)):
-                    if pos[i] > 0:
-                        pos[i] = pos[i] + oSetPos
-                    else:
-                        pos[i] = pos[i] + oSetNeg
-                    if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
-                        skipIns = True
+                if not 'GRCH38' in allele:
+                    for i in range(len(pos)):
+                        if pos[i] > 0:
+                            pos[i] = pos[i] + oSetPos
+                        else:
+                            pos[i] = pos[i] + oSetNeg
+                        if pos[i] < 0 or pos[i] > len(oriSeq) - 1: # out of bounds
+                            skipIns = True
 
                 if skipIns:
                     continue
