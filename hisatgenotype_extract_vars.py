@@ -81,7 +81,8 @@ def extract_vars(base_fname,
         hisat2 = os.path.join(ex_path, "hisat2")
         aligner_cmd = [hisat2]
         aligner_cmd += ["--no-unal",
-                       "-x", "grch38/genome"]
+                        "--score-min", "C,-300",
+                        "-x", "grch38/genome"]
 
         if base_fname == "hla":
             fasta_fname = "IMGTHLA/fasta/%s_gen.fasta" % gene
@@ -94,14 +95,14 @@ def extract_vars(base_fname,
                                       stderr=open("/dev/null", 'w'))
         if verbose:
             print >> sys.stderr, aligner_cmd
-        allele_id, strand = "", ''
+        allele_id, chr, left, strand = "", "", "", ''
         max_AS = -sys.maxint
         for line in align_proc.stdout:
             if line.startswith('@'):
                 continue
             line = line.strip()
             cols = line.split()
-            t_allele_id, flag = cols[:2]
+            t_allele_id, flag, t_chr, t_left = cols[:4]
             if t_allele_id in exclude_allele_list:
                 continue
 
@@ -114,8 +115,7 @@ def extract_vars(base_fname,
                     AS = int(col[5:])
             if AS > max_AS:
                 max_AS = AS
-                allele_id = t_allele_id
-
+                allele_id, chr, left = t_allele_id, t_chr, t_left
         align_proc.communicate()
         if allele_id == "":
             continue
@@ -131,14 +131,13 @@ def extract_vars(base_fname,
                     break
         else:
             allele_name = allele_id
-        assert allele_name != "" and strand != ''
+        assert allele_name != "" and \
+            chr != "" and \
+            left != "" and \
+            strand != ''
         HLA_genes[gene] = allele_name
         HLA_gene_strand[gene] = strand
-
-        # DK - for debugging purposes
-        print base_fname, gene, allele_name, strand, max_AS
-        
-        print "%s-%s's backbone allele is %s on '%s' strand (AS: %d)" % (base_fname.upper(), gene, allele_name, strand, max_AS)
+        print "%s-%s's backbone allele is %s on '%s' strand of chromosome %s at %s (AS: %d)" % (base_fname.upper(), gene, allele_name, strand, chr, left, max_AS)
 
     # Extract exon information from hla.data
     HLA_gene_exons = {}
@@ -530,7 +529,7 @@ def extract_vars(base_fname,
         ref_backbone_seq = HLA_seqs[ref_backbone_id]
         hisat2 = os.path.join(ex_path, "hisat2")
         aligner_cmd = [hisat2,
-                       # "--score-min", "C,0",
+                       "--score-min", "C,-300",
                        "--no-unal",
                        "-x", "grch38/genome",
                        "-f", 
