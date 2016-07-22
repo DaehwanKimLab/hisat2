@@ -1462,6 +1462,7 @@ def genotyping(base_fname,
                 read_fname = ["hla_input_1.fa", "hla_input_2.fa"]
 
             fastq = False
+            
             tmp_test_passed = HLA_typing(ex_path,
                                          base_fname,
                                          simulation,
@@ -1500,12 +1501,18 @@ def genotyping(base_fname,
             print >> sys.stderr, "%s:\t%d/%d passed (%.2f%%)" % (aligner_type, passed, len(test_list), passed * 100.0 / len(test_list))
     
     else: # With real reads or BAMs
-        print >> sys.stderr, "\t", ' '.join(hla_list)
+        if base_fname == "hla":
+            gene_list = hla_list
+        else:
+            gene_list = Vars.keys()
+        print >> sys.stderr, "\t", ' '.join(gene_list)
+
         fastq = True
         HLA_typing(ex_path,
+                   base_fname,
                    simulation,
                    reference_type,
-                   hla_list,
+                   gene_list,
                    partial,
                    refHLAs,
                    HLAs,                       
