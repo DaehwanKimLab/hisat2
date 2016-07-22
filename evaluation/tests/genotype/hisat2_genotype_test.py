@@ -153,6 +153,9 @@ def genotype_test(reference_type,
                 test_pairs.append(sorted([HLA_gene_alleles[nums[i]] for i in range(allele_count)]))
             test_list.append(test_pairs)
 
+    # DK - QC measures are necessary - see the Omixon paper (2013) at http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0078410
+    # (1) read length of at least 75 bp
+    # (2) exons 2 and 3 covered by 70% or higher as these exons of HLA-A,B,C are highly polymorphic
     for test_i in range(len(test_list)):
         if "test_id" in daehwan_debug:
             daehwan_test_ids = daehwan_debug["test_id"].split('-')

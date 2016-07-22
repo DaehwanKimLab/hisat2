@@ -190,10 +190,24 @@ def extract_reads(base_fname,
                 print >> sys.stderr, "Error: indexing genotype genome failed!  Perhaps, you may have forgotten to build hisat2 executables?"
                 sys.exit(1)
 
-    # DK - testing purposes
-    sys.exit(1)
-
     ranges = []
+    genes, gene_loci = {}, {}
+    for line in open("%s.gene" % base_fname):
+        family, allele_name, chr, left, right = line.strip().split()
+        gene_name = "%s-%s" % (family, allele_name.split('*')[0])
+        assert gene_name not in genes
+        genes[gene_name] = allele_name
+        left, right = int(left), int(right)
+        """
+        exons = []
+        for exon in exon_str.split(','):
+            exon_left, exon_right = exon.split('-')
+            exons.append([int(exon_left), int(exon_right)])
+        """
+        gene_loci[gene_name] = [allele_name, chr, left, right]
+
+    if not os.path.exists("CP"):
+        os.mkdir("CP")
 
     # Extract reads
     fq_fnames = glob.glob("genomes/*.1.fq.gz")
@@ -227,10 +241,12 @@ def extract_reads(base_fname,
             aligner_cmd = [hisat2]
             if reference_type == "gene":
                 aligner_cmd += ["--al-conc-disc-gz", "CP/%s.extracted.fq.gz" % fq_fname_base]
-            aligner_cmd += ["-x", "hla.graph",
-                            "-1", fq_fname,
+                aligner_cmd += ["-x", "hla.graph"]
+            else:
+                aligner_cmd += ["-x", "genotype_genome"]
+            aligner_cmd += ["-1", fq_fname,
                             "-2", fq_fname2]
-            print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)
+            # print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)
             if reference_type == "gene": 
                 align_proc = subprocess.Popen(aligner_cmd,
                                               stdout=open("/dev/null", 'w'),
@@ -241,7 +257,18 @@ def extract_reads(base_fname,
                 align_proc = subprocess.Popen(aligner_cmd,
                                               stdout=subprocess.PIPE,
                                               stderr=open("/dev/null", 'w'))
-                prev_read_name = ""
+                # LP6005041-DNA_A01.extracted.fq.1.gz
+                gzip1_proc = subprocess.Popen(["gzip"],
+                                              stdin=subprocess.PIPE,
+                                              stdout=open("CP/%s.extracted.fq.1.gz" % fq_fname_base, 'w'),
+                                              stderr=open("/dev/null", 'w'))
+
+                # LP6005041-DNA_A01.extracted.fq.2.gz
+                gzip2_proc = subprocess.Popen(["gzip"],
+                                              stdin=subprocess.PIPE,
+                                              stdout=open("CP/%s.extracted.fq.2.gz" % fq_fname_base, 'w'),
+                                              stderr=open("/dev/null", 'w'))
+                prev_read_name, extract_read, read1, read2 = "", False, [], []
                 for line in align_proc.stdout:
                     if line.startswith('@'):
                         continue
@@ -249,12 +276,60 @@ def extract_reads(base_fname,
                     cols = line.split()
                     read_name, flag, chr, pos, mapQ, cigar, _, _, _, read, qual = cols[:11]
                     flag, pos = int(flag), int(pos)
-                    strand = '-' if flag & 0x10 else '+'
+                    """
+                    strand = '-' if flag & 0x10 else '+'                   
                     AS = ""
                     for i in range(11, len(cols)):
                         col = cols[i]
                         if col.startswith("AS"):
                             AS = int(col[5:])
+                    """
+
+                    if read_name != prev_read_name:
+                        if extract_read:
+                            gzip1_proc.stdin.write("@%s\n" % prev_read_name)
+                            gzip1_proc.stdin.write("%s\n" % read1[0])
+                            gzip1_proc.stdin.write("+\n")
+                            gzip1_proc.stdin.write("%s\n" % read1[1])
+                            gzip2_proc.stdin.write("@%s\n" % prev_read_name)
+                            gzip2_proc.stdin.write("%s\n" % read2[0])
+                            gzip2_proc.stdin.write("+\n")
+                            gzip2_proc.stdin.write("%s\n" % read2[1])
+
+                        prev_read_name, extract_read, read1, read2 = read_name, False, [], []
+                        
+                    if flag & 0x4 == 0:
+                        for loci in gene_loci.values():
+                            _, loci_chr, loci_left, loci_right = loci
+                            if chr == loci_chr and pos >= loci_left and pos < loci_right:
+                                extract_read = True
+                                break
+
+                    if flag & 0x40: # left read
+                        if not read1:
+                            if flag & 0x10: # reverse complement
+                                read1 = [reverse_complement(read), qual[::-1]]
+                            else:
+                                read1 = [read, qual]
+                    else:
+                        assert flag & 0x80 # right read
+                        if flag & 0x10: # reverse complement
+                            read2 = [reverse_complement(read), qual[::-1]]
+                        else:
+                            read2 = [read, qual]
+
+                if extract_read:
+                    gzip1_proc.stdin.write("@%s\n" % prev_read_name)
+                    gzip1_proc.stdin.write("%s\n" % read1[0])
+                    gzip1_proc.stdin.write("+\n")
+                    gzip1_proc.stdin.write("%s\n" % read1[1])
+                    gzip2_proc.stdin.write("@%s\n" % prev_read_name)
+                    gzip2_proc.stdin.write("%s\n" % read2[0])
+                    gzip2_proc.stdin.write("+\n")
+                    gzip2_proc.stdin.write("%s\n" % read2[1])                            
+                        
+                gzip1_proc.stdin.close()
+                gzip2_proc.stdin.close()                        
 
         if threads <= 1:
             work(ex_path, 
