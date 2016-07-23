@@ -74,6 +74,9 @@ if __name__ == '__main__':
     print >> sys.stderr, "Omixon"
     for gene, alleles in omixon_alleles.items():
         print >> sys.stderr, "\t%s: %d alleles" % (gene, len(alleles))
+        for allele in alleles:
+            if allele not in nuc_alleles[gene]:
+                print >> sys.stderr, "\t\t%s missing" % allele
 
 
             
