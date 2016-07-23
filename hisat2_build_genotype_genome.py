@@ -145,9 +145,11 @@ def compare_vars(a, b):
 """
 def build_genotype_genome(reference,
                           base_fname,                          
+                          partial,
                           inter_gap,
                           intra_gap,
                           threads,
+                          use_clinvar,
                           verbose):    
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(build_genotype_genome))
@@ -172,39 +174,42 @@ def build_genotype_genome(reference,
     # Load genomic sequences
     chr_dic, chr_names, chr_full_names = read_genome(open(reference))
 
-    # Extract variants from the ClinVar database
-    CLINVAR_fnames = ["clinvar.vcf.gz",
-                      "clinvar.snp",
-                      "clinvar.haplotype",
-                      "clinvar.clnsig"]
+    if use_clinvar:
+        # Extract variants from the ClinVar database
+        CLINVAR_fnames = ["clinvar.vcf.gz",
+                          "clinvar.snp",
+                          "clinvar.haplotype",
+                          "clinvar.clnsig"]
 
-    if not check_files(CLINVAR_fnames):
-        if not os.path.exists("clinvar.vcf.gz"):
-            os.system("wget ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz")
-        assert os.path.exists("clinvar.vcf.gz")
-            
-        extract_clinvar_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes_VCF.py")
-        extract_cmd = [extract_clinvar_script]
-        extract_cmd += ["--inter-gap", str(inter_gap),
-                        "--intra-gap", str(intra_gap),
-                        "--genotype-vcf", "clinvar.vcf.gz",
-                        reference, "/dev/null", "clinvar"]
-        if verbose:
-            print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-        proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-        proc.communicate()
         if not check_files(CLINVAR_fnames):
-            print >> sys.stderr, "Error: extract variants from clinvar failed!"
-            sys.exit(1)
+            if not os.path.exists("clinvar.vcf.gz"):
+                os.system("wget ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz")
+            assert os.path.exists("clinvar.vcf.gz")
 
-    # Read variants to be genotyped
-    genotype_vars = read_variants("clinvar.snp")
+            extract_clinvar_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes_VCF.py")
+            extract_cmd = [extract_clinvar_script]
+            extract_cmd += ["--inter-gap", str(inter_gap),
+                            "--intra-gap", str(intra_gap),
+                            "--genotype-vcf", "clinvar.vcf.gz",
+                            reference, "/dev/null", "clinvar"]
+            if verbose:
+                print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
+            proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+            proc.communicate()
+            if not check_files(CLINVAR_fnames):
+                print >> sys.stderr, "Error: extract variants from clinvar failed!"
+                sys.exit(1)
 
-    # Read haplotypes
-    genotype_haplotypes = read_haplotypes("clinvar.haplotype")
+        # Read variants to be genotyped
+        genotype_vars = read_variants("clinvar.snp")
 
-    # Read information about clinical significance
-    genotype_clnsig = read_clnsig("clinvar.clnsig")
+        # Read haplotypes
+        genotype_haplotypes = read_haplotypes("clinvar.haplotype")
+
+        # Read information about clinical significance
+        genotype_clnsig = read_clnsig("clinvar.clnsig")
+    else:
+        genotype_vars, genotype_haplotypes, genotype_clnsig = {}, {}, {}
 
     # Genes to be genotyped
     genotype_genes = {}
@@ -223,8 +228,8 @@ def build_genotype_genome(reference,
     if not check_files(HLA_fnames):
         extract_hla_script = os.path.join(ex_path, "hisat2_extract_HLA_vars.py")
         extract_cmd = [extract_hla_script]
-        # if partial:
-        #    extract_cmd += ["--partial"]
+        if partial:
+            extract_cmd += ["--partial"]
         extract_cmd += ["--inter-gap", str(inter_gap),
                         "--intra-gap", str(intra_gap)]
         if verbose:
@@ -371,8 +376,8 @@ def build_genotype_genome(reference,
                 (family.upper(), name, chr, len(out_chr_seq), len(out_chr_seq) + length - 1)
 
             # Output coord (genotype_genome.coord)
-            print >> coord_out_file, "%d\t%d\t%d" % \
-                (len(out_chr_seq), left, right - left + 1)
+            print >> coord_out_file, "%s\t%d\t%d\t%d" % \
+                (chr, len(out_chr_seq), left, right - left + 1)
             out_chr_seq += allele_seq
 
             # Output variants (genotype_genome.snp)
@@ -424,8 +429,8 @@ def build_genotype_genome(reference,
         # Write the rest of the Vars
         chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(10000000000, 10000000000, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
             
-        print >> coord_out_file, "%d\t%d\t%d" % \
-            (len(out_chr_seq), prev_right, len(chr_seq) - prev_right)
+        print >> coord_out_file, "%s\t%d\t%d\t%d" % \
+            (chr, len(out_chr_seq), prev_right, len(chr_seq) - prev_right)
         out_chr_seq += chr_seq[prev_right:]
 
         assert len(out_chr_seq) == len(chr_seq) + off
@@ -476,6 +481,10 @@ if __name__ == '__main__':
                         nargs='?',
                         type=str,
                         help="base filename for genotype genome")
+    parser.add_argument('--partial',
+                        dest='partial',
+                        action='store_true',
+                        help='Include partial alleles (e.g. A_nuc.fasta)')
     parser.add_argument("--inter-gap",
                         dest="inter_gap",
                         type=int,
@@ -491,6 +500,10 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Number of threads") 
+    parser.add_argument("--no-clinvar",
+                        dest="use_clinvar",
+                        action="store_false",
+                        help="")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -505,7 +518,9 @@ if __name__ == '__main__':
         sys.exit(1)
     build_genotype_genome(args.reference,
                           args.base_fname,
+                          args.partial,
                           args.inter_gap,
                           args.intra_gap,
                           args.threads,
+                          args.use_clinvar,
                           args.verbose)
