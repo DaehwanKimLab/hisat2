@@ -71,20 +71,6 @@
 <h3 id="distinct-alignments-map-a-read-to-different-places">Distinct alignments map a read to different places</h3>
 <p>Two alignments for the same individual read are &quot;distinct&quot; if they map the same read to different places. Specifically, we say that two alignments are distinct if there are no alignment positions where a particular read offset is aligned opposite a particular reference offset in both alignments with the same orientation. E.g. if the first alignment is in the forward orientation and aligns the read character at read offset 10 to the reference character at chromosome 3, offset 3,445,245, and the second alignment is also in the forward orientation and also aligns the read character at read offset 10 to the reference character at chromosome 3, offset 3,445,245, they are not distinct alignments.</p>
 <p>Two alignments for the same pair are distinct if either the mate 1s in the two paired-end alignments are distinct or the mate 2s in the two alignments are distinct or both.</p>
-<!--
-### Default mode: search for multiple alignments, report the best one
-
-By default, HISAT2 searches for distinct, valid alignments for each read. When
-it finds a valid alignment, it generally will continue to look for alignments
-that are nearly as good or better.  It will eventually stop looking, either
-because it exceeded a limit placed on search effort (see [`-D`] and [`-R`]) or
-because it already knows all it needs to know to report an alignment.
-Information from the best alignments are used to estimate mapping quality (the
-`MAPQ` [SAM] field) and to set SAM optional fields, such as [`AS:i`] and
-[`XS:i`].  HISAT2 does not gaurantee that the alignment reported is the best
-possible in terms of alignment score.
--->
-
 <h3 id="default-mode-search-for-one-or-more-alignments-report-each">Default mode: search for one or more alignments, report each</h3>
 <p>HISAT2 searches for up to N distinct, primary alignments for each read, where N equals the integer specified with the <code>-k</code> parameter. Primary alignments mean alignments whose alignment score is equal or higher than any other alignments. It is possible that multiple distinct alignments have the same score. That is, if <code>-k 2</code> is specified, HISAT2 will search for at most 2 distinct alignments. The alignment score for a paired-end alignment equals the sum of the alignment scores of the individual mates. Each reported read or pair alignment beyond the first has the SAM 'secondary' bit (which equals 256) set in its FLAGS field. See the <a href="http://samtools.sourceforge.net/SAM1.pdf">SAM specification</a> for details.</p>
 <p>HISAT2 does not &quot;find&quot; alignments in any specific order, so for reads that have more than N distinct, valid alignments, HISAT2 does not gaurantee that the N alignments reported are the best possible in terms of alignment score. Still, this mode can be effective and fast in situations where the user cares more about whether a read aligns (or aligns a certain number of times) than where exactly it originated.</p>
@@ -524,27 +510,6 @@ possible in terms of alignment score.
 </td><td>
 
 <p>By default, <code>hisat2</code> looks for discordant alignments if it cannot find any concordant alignments. A discordant alignment is an alignment where both mates align uniquely, but that does not satisfy the paired-end constraints (<a href="#hisat2-options-fr"><code>--fr</code>/<code>--rf</code>/<code>--ff</code></a>, <a href="#hisat2-options-I"><code>-I</code></a>, <a href="#hisat2-options-X"><code>-X</code></a>). This option disables that behavior.</p>
-</td></tr>
-<tr><td id="hisat2-options-dovetail">
-
-<pre><code>--dovetail</code></pre>
-</td><td>
-
-<p>If the mates &quot;dovetail&quot;, that is if one mate alignment extends past the beginning of the other such that the wrong mate begins upstream, consider that to be concordant. See also: <a href="#mates-can-overlap-contain-or-dovetail-each-other">Mates can overlap, contain or dovetail each other</a>. Default: mates cannot dovetail in a concordant alignment.</p>
-</td></tr>
-<tr><td id="hisat2-options-no-contain">
-
-<pre><code>--no-contain</code></pre>
-</td><td>
-
-<p>If one mate alignment contains the other, consider that to be non-concordant. See also: <a href="#mates-can-overlap-contain-or-dovetail-each-other">Mates can overlap, contain or dovetail each other</a>. Default: a mate can contain the other in a concordant alignment.</p>
-</td></tr>
-<tr><td id="hisat2-options-no-overlap">
-
-<pre><code>--no-overlap</code></pre>
-</td><td>
-
-<p>If one mate alignment overlaps the other at all, consider that to be non-concordant. See also: <a href="#mates-can-overlap-contain-or-dovetail-each-other">Mates can overlap, contain or dovetail each other</a>. Default: mates can overlap in a concordant alignment.</p>
 </td></tr></table>
 
 <h4 id="output-options">Output options</h4>
