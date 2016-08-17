@@ -12,6 +12,10 @@ if __name__ == "__main__":
     for line in open("hisat_caapa_hla.txt"):
         line = line.strip()
         sample, allele, abundance = line.split('\t')
+        abundance = float(abundance)
+        # DK - for debugging purposes
+        if abundance < 5.0:
+            continue
         if sample not in hisat_hla:
             hisat_hla[sample] = {}
         gene, allele = allele.split('*')
@@ -80,15 +84,18 @@ if __name__ == "__main__":
                         num_match_10 += 1
                         break
             # DK - for debugging purposes
+            # """
             if num_match == 1 and num_match_10 == 2:
                 print sample
                 print "\t", omixon_gene
                 print "\t", hisat_gene
-                # sys.exit(1)
+                sys.exit(1)
+            # """
                 
             assert num_match < len(count)
             count[num_match] += 1
             count_10[num_match_10] += 1
+            
         print >> sys.stderr, "\tTop two\t0: %d, 1: %d, 2: %d (%.2f%%)" % (count[0], count[1], count[2], (count[1] + count[2] * 2) / float(sum(count) * 2) * 100.0)
         print >> sys.stderr, "\tTop ten\t0: %d, 1: %d, 2: %d (%.2f%%)" % (count_10[0], count_10[1], count_10[2], (count_10[1] + count_10[2] * 2) / float(sum(count_10) * 2) * 100.0)
         
