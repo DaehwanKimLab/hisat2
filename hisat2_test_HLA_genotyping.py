@@ -384,7 +384,7 @@ def test_HLA_genotyping(reference_type,
             else:
                 print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
 
-            if alignment_fname == "":
+            if alignment_fname == "" or simulation:
                 # Align reads, and sort the alignments into a BAM file
                 if aligner == "hisat2":
                     hisat2 = os.path.join(ex_path, "hisat2")
@@ -492,7 +492,7 @@ def test_HLA_genotyping(reference_type,
                                                     stdout=subprocess.PIPE,
                                                     stderr=open("/dev/null", 'w'))
 
-                    sort_read_cmd = ["sort", "-k", "1", "-n"]
+                    sort_read_cmd = ["sort", "-k", "1,1", "-s"]
                     alignview_proc = subprocess.Popen(sort_read_cmd,
                                                       stdin=bamview_proc.stdout,
                                                       stdout=subprocess.PIPE,
