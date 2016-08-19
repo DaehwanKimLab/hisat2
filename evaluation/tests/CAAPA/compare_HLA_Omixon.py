@@ -89,7 +89,7 @@ if __name__ == "__main__":
                 print sample
                 print "\t", omixon_gene
                 print "\t", hisat_gene
-                sys.exit(1)
+                # sys.exit(1)
             # """
                 
             assert num_match < len(count)
