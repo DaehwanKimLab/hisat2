@@ -84,13 +84,13 @@ if __name__ == "__main__":
                         num_match_10 += 1
                         break
             # DK - for debugging purposes
-            # """
+            """
             if num_match == 1 and num_match_10 == 2:
                 print sample
                 print "\t", omixon_gene
                 print "\t", hisat_gene
                 # sys.exit(1)
-            # """
+            """
                 
             assert num_match < len(count)
             count[num_match] += 1
