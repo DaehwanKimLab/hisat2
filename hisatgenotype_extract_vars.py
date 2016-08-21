@@ -53,8 +53,8 @@ def extract_vars(base_fname,
                  inter_gap,
                  intra_gap,
                  DRB1_REF,
-                 verbose,
-                 exclude_allele_list):
+                 exclude_allele_list,
+                 verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(extract_vars))
     ex_path = os.path.dirname(curr_script)
@@ -174,7 +174,7 @@ def extract_vars(base_fname,
     if reference_type == "gene":
         backbone_file = open(base_fullpath_name + "_backbone.fa", 'w')        
     # variants w.r.t the backbone sequences into a SNP file
-    var_file = open(base_fname + ".snp", 'w')
+    var_file = open(base_fullpath_name + ".snp", 'w')
     # haplotypes
     haplotype_file = open(base_fullpath_name + ".haplotype", 'w')
     # pairs of a variant and the corresponding HLA allels into a LINK file    
@@ -866,5 +866,5 @@ if __name__ == '__main__':
                  args.inter_gap,
                  args.intra_gap,
                  args.DRB1_REF,
-                 args.verbose,
-                 args.exclude_allele_list)
+                 args.exclude_allele_list
+                 args.verbose)
