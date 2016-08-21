@@ -33,6 +33,7 @@ class myThread(threading.Thread):
                  paths,
                  reference_type,
                  hla_list,
+                 partial,
                  aligners,
                  exclude_allele_list,
                  num_mismatch,
@@ -44,6 +45,7 @@ class myThread(threading.Thread):
         self.paths = paths
         self.reference_type = reference_type
         self.hla_list = hla_list
+        self.partial = partial
         self.aligners = aligners
         self.exclude_allele_list = exclude_allele_list
         self.num_mismatch = num_mismatch
@@ -64,6 +66,7 @@ class myThread(threading.Thread):
                    self.paths[my_work_idx],
                    self.reference_type,
                    self.hla_list,
+                   self.partial,
                    self.aligners,
                    self.exclude_allele_list,
                    self.num_mismatch,
@@ -76,6 +79,7 @@ def worker(ex_path,
            path,
            reference_type,
            hla_list,
+           partial,
            aligners,
            exclude_allele_list,
            num_mismatch,
@@ -98,6 +102,9 @@ def worker(ex_path,
                     "--reads", "%s,%s" % (read_fname_1, read_fname_2),
                     # "--exclude-allele-list", ','.join(exclude_allele_list),
                     "--num-mismatch", str(num_mismatch)]
+
+    if partial:
+        test_hla_cmd += ["--partial"]
 
     if verbose:
         lock.acquire()
@@ -126,6 +133,7 @@ def worker(ex_path,
 """
 def test_HLA_genotyping(reference_type,
                         hla_list,
+                        partial,
                         aligners,
                         exclude_allele_list,
                         num_mismatch,
@@ -151,6 +159,7 @@ def test_HLA_genotyping(reference_type,
                           fq_fnames,
                           reference_type,
                           hla_list,
+                          partial,
                           aligners,
                           exclude_allele_list,
                           num_mismatch,
@@ -178,6 +187,10 @@ if __name__ == '__main__':
                         type=str,
                         default="A,B,C,DQA1,DQB1,DRB1",
                         help="A comma-separated list of HLA genes (default: A,B,C,DQA1,DQB1,DRB1)")
+    parser.add_argument('--partial',
+                        dest='partial',
+                        action='store_true',
+                        help='Include partial alleles (e.g. A_nuc.fasta)')
     parser.add_argument("--aligner-list",
                         dest="aligners",
                         type=str,
@@ -224,6 +237,7 @@ if __name__ == '__main__':
 
     test_HLA_genotyping(args.reference_type,
                         args.hla_list,
+                        args.partial,
                         args.aligners,
                         args.exclude_allele_list,
                         args.num_mismatch,
