@@ -493,6 +493,7 @@ def test_HLA_genotyping(reference_type,
                                                     stderr=open("/dev/null", 'w'))
 
                     sort_read_cmd = ["sort", "-k", "1,1", "-s"]
+                    # sort_read_cmd = ["sort", "-k", "1,1", "-k", "4,4", "-n"]
                     alignview_proc = subprocess.Popen(sort_read_cmd,
                                                       stdin=bamview_proc.stdout,
                                                       stdout=subprocess.PIPE,
