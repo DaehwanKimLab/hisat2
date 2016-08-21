@@ -754,6 +754,30 @@ def HLA_typing(ex_path,
             ref_seq = HLAs[gene][ref_allele]
             ref_exons = refHLA_loci[gene][-1]
 
+            allele_reps = {} # allele representatives
+            if partial:
+                _allele_groups = {}
+                _alleles = HLAs[gene].keys()
+                for _allele in _alleles:
+                    _fields = _allele.split(':')
+                    if len(_fields) <= 3:
+                        assert _allele not in _allele_groups
+                        _allele_groups[_allele] = [_allele]
+                    else:
+                        assert len(_fields) == 4
+                        _allele_rep = ':'.join(_fields[:-1])
+                        if _allele_rep not in _allele_groups:
+                            _allele_groups[_allele_rep] = []
+                        assert _allele not in _allele_groups[_allele_rep]
+                        _allele_groups[_allele_rep].append(_allele)
+                    
+                for _allele_members in _allele_groups.values():
+                    assert len(_allele_members) > 0
+                    _allele_rep = _allele_members[0]
+                    for _allele_member in _allele_members:
+                        assert _allele_member not in allele_reps
+                        allele_reps[_allele_member] = _allele_rep
+
             # Read alignments
             alignview_cmd = ["samtools",
                              "view"]
@@ -1052,6 +1076,10 @@ def HLA_typing(ex_path,
                         for allele in alleles:
                             if allele.find("BACKBONE") != -1:
                                 continue
+                            if partial:
+                                assert allele in allele_reps
+                                if allele != allele_reps[allele]:
+                                    continue
                             HLA_count_per_read[allele] += add
                             # DK - for debugging purposes
                             if debug:
@@ -1570,9 +1598,14 @@ def HLA_typing(ex_path,
                 if not found:
                     allele_haplotype = get_allele(gene, prob[0], Vars_default, Var_list_default, Links_default)
                     covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, verbose >= 3)
-                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%, vars_covered: %d/%d)" % (prob_i + 1, prob[0], prob[1] * 100.0, covered, total)
+                    _allele_rep = prob[0]
+                    if partial:
+                        _fields = _allele_rep.split(':')
+                        if len(_fields) == 4:
+                            _allele_rep = ':'.join(_fields[:-1])
+                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%, vars_covered: %d/%d)" % (prob_i + 1, _allele_rep, prob[1] * 100.0, covered, total)
                     if best_alleles and prob_i < 2:
-                        print >> sys.stdout, "SingleModel %s (abundance: %.2f%%)" % (prob[0], prob[1] * 100.0)
+                        print >> sys.stdout, "SingleModel %s (abundance: %.2f%%)" % (_allele_rep, prob[1] * 100.0)
                 if not simulation and prob_i >= 9:
                     break
                 if prob_i >= 19:
