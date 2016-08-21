@@ -623,6 +623,8 @@ def get_allele(gene_name, allele_name, Vars, Var_list, Links):
 """
 def calculate_allele_coverage(allele_haplotype,
                               N_haplotypes,
+                              exons,
+                              partial,
                               output):
     _var_count = {}
     for read_haplotypes in N_haplotypes.values():
@@ -643,15 +645,36 @@ def calculate_allele_coverage(allele_haplotype,
     total_var, covered_var = 0, 0
     for allele_var in allele_haplotype.split(',')[1:-1]:
         _type, _left, _data, _id = allele_var.split('-')
+        _left = int(_left)
         _count = 0
+
+        if partial and not var_in_exon([_type, _left, _data], exons):
+            continue
+        
         total_var += 1
         if _id in _var_count:
             _count = _var_count[_id]
             covered_var += 1
         if output:
-            print "\t %s %s %s (%s - %d)" % (_left, _type, _data, _id, _count)
+            print "\t %d %s %s (%s - %d)" % (_left, _type, _data, _id, _count)
             
     return covered_var, total_var
+
+
+"""
+   var: ['single', 3300, 'G']
+   exons: [[301, 373], [504, 822], [1084, 1417], [2019, 2301], [2404, 2520], [2965, 2997], [3140, 3187], [3357, 3361]]
+"""
+def var_in_exon(var, exons):
+    exonic = False
+    var_type, var_left, var_data = var
+    var_right = var_left
+    if var_type == "deletion":
+        var_right = var_left + int(var_data) - 1
+    for exon_left, exon_right in exons:
+        if var_left >= exon_left and var_right <= exon_right:
+            return True
+    return False
     
 
 """
@@ -975,8 +998,6 @@ def HLA_typing(ex_path,
                         cur_cmpt = sorted(list(cur_cmpt))
                         cur_cmpt = '-'.join(cur_cmpt)
                         add = 1
-                        if partial and not exon:
-                            add *= 0.2
                         if not cur_cmpt in HLA_cmpt:
                             HLA_cmpt[cur_cmpt] = add
                         else:
@@ -1024,6 +1045,8 @@ def HLA_typing(ex_path,
                             HLA_count_per_read[HLA_name] = 0
 
                     def add_count(var_id, add):
+                        if partial and not var_in_exon(Vars[gene][var_id], ref_exons):
+                            return
                         assert var_id in Links
                         alleles = Links[var_id]
                         for allele in alleles:
@@ -1546,7 +1569,7 @@ def HLA_typing(ex_path,
                         break
                 if not found:
                     allele_haplotype = get_allele(gene, prob[0], Vars_default, Var_list_default, Links_default)
-                    covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, verbose >= 3)
+                    covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, verbose >= 3)
                     print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%, vars_covered: %d/%d)" % (prob_i + 1, prob[0], prob[1] * 100.0, covered, total)
                     if best_alleles and prob_i < 2:
                         print >> sys.stdout, "SingleModel %s (abundance: %.2f%%)" % (prob[0], prob[1] * 100.0)
