@@ -46,6 +46,7 @@ def create_map(seq):
 """
 """
 def extract_vars(base_fname,
+                 base_dname,
                  reference_type,
                  hla_list,
                  partial,
@@ -58,13 +59,18 @@ def extract_vars(base_fname,
     curr_script = os.path.realpath(inspect.getsourcefile(extract_vars))
     ex_path = os.path.dirname(curr_script)
 
+    base_fullpath_name = base_fname
+    if base_dname != "" and not os.path.exists(base_dname):
+        os.mkdir(base_dname)
+        base_fullpath_name = "%s/%s" % (base_dname, base_fname)
+
     # Samples of HLA_MSA_file are found in
     #    ftp://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/msf/
     #    git clone https://github.com/jrob119/IMGTHLA.git
 
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
-    hla_ref_file = open(base_fname +".ref", 'w')
+    hla_ref_file = open(base_fullpath_name + ".ref", 'w')
     if base_fname in ["hla"]:
         HLA_genes, HLA_gene_strand = {}, {}
         for gene in hla_list:
@@ -166,15 +172,15 @@ def extract_vars(base_fname,
         
     # Write the backbone sequences into a fasta file
     if reference_type == "gene":
-        backbone_file = open(base_fname + "_backbone.fa", 'w')        
+        backbone_file = open(base_fullpath_name + "_backbone.fa", 'w')        
     # variants w.r.t the backbone sequences into a SNP file
     var_file = open(base_fname + ".snp", 'w')
     # haplotypes
-    haplotype_file = open(base_fname + ".haplotype", 'w')
+    haplotype_file = open(base_fullpath_name + ".haplotype", 'w')
     # pairs of a variant and the corresponding HLA allels into a LINK file    
-    link_file = open(base_fname + ".link", 'w')
+    link_file = open(base_fullpath_name + ".link", 'w')
     # Write all the sequences with dots removed into a file
-    input_file = open(base_fname + "_sequences.fa", 'w')
+    input_file = open(base_fullpath_name + "_sequences.fa", 'w')
     num_vars, num_haplotypes = 0, 0
     for HLA_gene, HLA_ref_gene in HLA_genes.items():
         strand = HLA_gene_strand[HLA_gene]        
@@ -842,9 +848,18 @@ if __name__ == '__main__':
         args.exclude_allele_list = args.exclude_allele_list.split(',')
     else:
         args.exclude_allele_list = []
+
+    if args.base_fname.find('/') != -1:
+        elems = args.base_fname.split('/')
+        base_fname = elems[-1]
+        base_dname = '/'.join(elems[:-1])
+    else:
+        base_fname = args.base_fname
+        base_dname = ""
         
     # print args.exclude_allele_list
-    extract_vars(args.base_fname,
+    extract_vars(base_fname,
+                 base_dname,
                  args.reference_type,
                  args.hla_list,
                  args.partial,
