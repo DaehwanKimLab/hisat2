@@ -77,6 +77,7 @@ def align_reads(ex_path,
                 read_fname,
                 fastq,
                 threads,
+                out_fname,
                 verbose):
     if aligner == "hisat2":
         hisat2 = os.path.join(ex_path, "hisat2")
@@ -115,28 +116,26 @@ def align_reads(ex_path,
                   "-"]
     sambam_proc = subprocess.Popen(sambam_cmd,
                                    stdin=align_proc.stdout,
-                                   stdout=open("hla_input_unsorted.bam", 'w'),
+                                   stdout=open(out_fname + ".unsorted", 'w'),
                                    stderr=open("/dev/null", 'w'))
     sambam_proc.communicate()
     if index_type == "graph":
         bamsort_cmd = ["samtools",
                        "sort",
-                       "hla_input_unsorted.bam",
-                       "-o", "hla_input.bam"]
+                       out_fname + ".unsorted",
+                       "-o", out_fname]
         bamsort_proc = subprocess.Popen(bamsort_cmd,
                                         stderr=open("/dev/null", 'w'))
         bamsort_proc.communicate()
 
         bamindex_cmd = ["samtools",
                         "index",
-                        "hla_input.bam"]
+                        out_fname]
         bamindex_proc = subprocess.Popen(bamindex_cmd,
                                          stderr=open("/dev/null", 'w'))
         bamindex_proc.communicate()
 
-        os.system("rm hla_input_unsorted.bam")            
-    else:
-        os.system("mv hla_input_unsorted.bam hla_input.bam")
+    os.system("rm %s" % (out_fname + ".unsorted"))            
 
 
 """
@@ -735,14 +734,23 @@ def HLA_typing(ex_path,
         else:
             print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
 
+        remove_alignment_file = False
         if alignment_fname == "":
             # Align reads, and sort the alignments into a BAM file
+            remove_alignment_file = True
+            if simulation:
+                alignment_fname = "hla_output.bam"
+            else:
+                alignment_fname = read_fname[0].split('/')[-1]
+                alignment_fname = alignment_fname.split('.')[0] + ".bam"
+                
             align_reads(ex_path,
                         aligner,
                         index_type,
                         read_fname,
                         fastq,
                         threads,
+                        alignment_fname,
                         verbose)
             
         for test_HLA_names in hla_list:
@@ -778,15 +786,12 @@ def HLA_typing(ex_path,
                         assert _allele_member not in allele_reps
                         allele_reps[_allele_member] = _allele_rep
 
+            if not os.path.exists(alignment_fname + ".bai"):
+                os.system("samtools index %s" % alignment_fname)
             # Read alignments
             alignview_cmd = ["samtools",
-                             "view"]
-            if alignment_fname == "":
-                alignview_cmd += ["hla_input.bam"]
-            else:
-                if not os.path.exists(alignment_fname + ".bai"):
-                    os.system("samtools index %s" % alignment_fname)
-                alignview_cmd += [alignment_fname]
+                             "view",
+                             alignment_fname]
             base_locus = 0
             if index_type == "graph":
                 if reference_type == "gene":
@@ -1814,6 +1819,9 @@ def HLA_typing(ex_path,
                     test_passed[aligner_type] = 1
                 else:
                     test_passed[aligner_type] += 1
+
+        if remove_alignment_file:
+            os.system("rm %s*" % (alignment_fname))
 
     if simulation:
         return test_passed
