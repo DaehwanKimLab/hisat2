@@ -866,5 +866,5 @@ if __name__ == '__main__':
                  args.inter_gap,
                  args.intra_gap,
                  args.DRB1_REF,
-                 args.exclude_allele_list
+                 args.exclude_allele_list,
                  args.verbose)

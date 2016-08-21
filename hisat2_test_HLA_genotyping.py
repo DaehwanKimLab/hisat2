@@ -579,6 +579,80 @@ def assemble_alleles(N_haplotype_list, max_allele = 2):
     return N_alleles
 
 
+"""
+Example:
+   a: left-2925-2925-left,unknown-3015-3161-unknown,single-3166-A-hv1696,single-3240-G-hv1705,right-3251-3251-right
+   b: left-1572-1572-left,deletion-1625-1-hv1345,unknown-1663-1754-unknown,right-1844-1844-right
+"""
+def haplotype_cmp(a, b):
+    a_vars = a.split(',')
+    assert len(a_vars) > 0
+    a_first_var, a_last_var = a_vars[0], a_vars[-1]
+    a_left = int(a_first_var.split('-')[1])
+    a_right = int(a_last_var.split('-')[1])
+
+    b_vars = b.split(',')
+    assert len(b_vars) > 0
+    b_first_var, b_last_var = b_vars[0], b_vars[-1]
+
+    b_left = int(b_first_var.split('-')[1])
+    b_right = int(b_last_var.split('-')[1])
+
+    if a_left != b_left:
+        return a_left - b_left
+    else:
+        return a_right - b_right                    
+
+
+"""
+Example,
+   gene_name, allele_name (input): A, A*32:01:01
+   allele (output): single-136-G-hv47,deletion-285-1-hv57, ... ,single-3473-T-hv1756,deletion-3495-1-hv1763,single-3613-C-hv1799 
+"""
+def get_allele(gene_name, allele_name, Vars, Var_list, Links):    
+    allele_haplotype = []
+    for _var_pos, _var_id in Var_list[gene_name]:
+        if allele_name in Links[_var_id]:
+            _var = Vars[gene_name][_var_id]
+            allele_haplotype.append("%s-%d-%s-%s" % (_var[0], _var[1], _var[2], _var_id))                                
+    allele_haplotype = ','.join(allele_haplotype)
+    return allele_haplotype
+
+
+"""
+"""
+def calculate_allele_coverage(allele_haplotype,
+                              N_haplotypes,
+                              output):
+    _var_count = {}
+    for read_haplotypes in N_haplotypes.values():
+        for read_haplotype in read_haplotypes:
+            if haplotype_cmp(allele_haplotype, read_haplotype) <= 0:
+                _, assembled = assemble_two_haplotypes(allele_haplotype.split(','), read_haplotype.split(','))
+            else:
+                _, assembled = assemble_two_haplotypes(read_haplotype.split(','), allele_haplotype.split(','))
+            read_vars = read_haplotype.split(',')
+            for read_var in read_vars:
+                _type, _left, _data, _id = read_var.split('-')
+                if _type in ["left", "right", "unknown"]:
+                    continue
+                if _id not in _var_count:
+                    _var_count[_id] = 1
+                else:
+                    _var_count[_id] += 1
+    total_var, covered_var = 0, 0
+    for allele_var in allele_haplotype.split(',')[1:-1]:
+        _type, _left, _data, _id = allele_var.split('-')
+        _count = 0
+        total_var += 1
+        if _id in _var_count:
+            _count = _var_count[_id]
+            covered_var += 1
+        if output:
+            print "\t %s %s %s (%s - %d)" % (_left, _type, _data, _id, _count)
+            
+    return covered_var, total_var
+    
 
 """
 """
@@ -815,7 +889,8 @@ def HLA_typing(ex_path,
                                 read_base = read_seq[read_pos + MD_len]
                                 MD_ref_base = MD[MD_str_pos]
                                 MD_str_pos += 1
-                                assert MD_ref_base in "ACGT"
+                                # DK - for debugging purposes
+                                # assert MD_ref_base in "ACGT"
                                 cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
                                 cmp_list.append(["mismatch", right_pos + MD_len, 1])
                                 MD_len_used = MD_len + 1
@@ -1290,25 +1365,6 @@ def HLA_typing(ex_path,
                     for N_var in N_var_list:
                         print "%s: %d (removed: %s)" % (N_var, N_vars[N_var], N_var in N_ignored_vars)
                         
-                def haplotype_cmp(a, b):
-                    a_vars = a.split(',')
-                    assert len(a_vars) > 0
-                    a_first_var, a_last_var = a_vars[0], a_vars[-1]
-                    a_left = int(a_first_var.split('-')[1])
-                    a_right = int(a_last_var.split('-')[1])
-                    
-                    b_vars = b.split(',')
-                    assert len(b_vars) > 0
-                    b_first_var, b_last_var = b_vars[0], b_vars[-1]
-                    
-                    b_left = int(b_first_var.split('-')[1])
-                    b_right = int(b_last_var.split('-')[1])
-
-                    if a_left != b_left:
-                        return a_left - b_left
-                    else:
-                        return a_right - b_right                    
-                
                 N_haplotype_list = set()
                 for _haplotypes in N_haplotypes.values():
                     for _haplotype in _haplotypes:
@@ -1489,7 +1545,9 @@ def HLA_typing(ex_path,
                     if not False in found_list:
                         break
                 if not found:
-                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, prob[0], prob[1] * 100.0)
+                    allele_haplotype = get_allele(gene, prob[0], Vars_default, Var_list_default, Links_default)
+                    covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, verbose >= 3)
+                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%, vars_covered: %d/%d)" % (prob_i + 1, prob[0], prob[1] * 100.0, covered, total)
                     if best_alleles and prob_i < 2:
                         print >> sys.stdout, "SingleModel %s (abundance: %.2f%%)" % (prob[0], prob[1] * 100.0)
                 if not simulation and prob_i >= 9:
@@ -1503,37 +1561,7 @@ def HLA_typing(ex_path,
                     allele_haplotypes = []
                     for HLA_name, abundance in HLA_prob:
                         if abundance >= 0.03:
-                            print HLA_name
-                            allele_haplotype = []
-                            for _var_pos, _var_id in Var_list_default[gene]:
-                                if HLA_name in Links_default[_var_id]:
-                                    _var = Vars_default[gene][_var_id]
-                                    allele_haplotype.append("%s-%d-%s-%s" % (_var[0], _var[1], _var[2], _var_id))                                
-                            allele_haplotype = ','.join(allele_haplotype)
-                            allele_haplotypes.append(allele_haplotype)
-
-                            _var_count = {}
-                            for read_haplotypes in N_haplotypes.values():
-                                for read_haplotype in read_haplotypes:
-                                    if haplotype_cmp(allele_haplotype, read_haplotype) <= 0:
-                                        _, assembled = assemble_two_haplotypes(allele_haplotype.split(','), read_haplotype.split(','))
-                                    else:
-                                        _, assembled = assemble_two_haplotypes(read_haplotype.split(','), allele_haplotype.split(','))
-                                    read_vars = read_haplotype.split(',')
-                                    for read_var in read_vars:
-                                        _type, _left, _data, _id = read_var.split('-')
-                                        if _type in ["left", "right", "unknown"]:
-                                            continue
-                                        if _id not in _var_count:
-                                            _var_count[_id] = 1
-                                        else:
-                                            _var_count[_id] += 1
-                            for allele_var in allele_haplotype.split(','):
-                                _type, _left, _data, _id = allele_var.split('-')
-                                _count = 0
-                                if _id in _var_count:
-                                    _count = _var_count[_id]
-                                print "\t %s %s %s (%s - %d)" % (_left, _type, _data, _id, _count)
+                            allele_haplotypes.append(get_allele(gene, HLA_name, Vars_default, Var_list_default, Links_default))
 
                     for read_haplotype in v_N_haplotype_list:
                         for read_haplotype in N_haplotypes[read_haplotype]:
@@ -1962,49 +1990,54 @@ def test_HLA_genotyping(base_fname,
             print >> sys.stderr, "Error: extract_HLA_vars failed!"
             sys.exit(1)
 
-    # Build HISAT2 graph indexes based on the above information
-    HLA_hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base_fname, i+1) for i in range(8)]
-    if not check_files(HLA_hisat2_graph_index_fnames) or (not excluded_alleles_match):
-        hisat2_build = os.path.join(ex_path, "hisat2-build")
-        build_cmd = [hisat2_build,
-                     "-p", str(threads),
-                     "--snp", "%s.snp" % base_fname,
-                     "--haplotype", "%s.haplotype" % base_fname,
-                     "%s_backbone.fa" % base_fname,
-                     "%s.graph" % base_fname]
-        if verbose >= 1:
-            print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
-        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-        proc.communicate()        
-        if not check_files(HLA_hisat2_graph_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
-            sys.exit(1)
-        
-    # Build HISAT2 linear indexes based on the above information
-    HLA_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
-    if reference_type == "gene" and (not check_files(HLA_hisat2_linear_index_fnames) or (not excluded_alleles_match)):
-        hisat2_build = os.path.join(ex_path, "hisat2-build")
-        build_cmd = [hisat2_build,
-                     "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
-                     "%s.linear" % base_fname]
-        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-        proc.communicate()        
-        if not check_files(HLA_hisat2_linear_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!"
-            sys.exit(1)
-        
-    # Build Bowtie2 indexes based on the above information
-    HLA_bowtie2_index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
-    HLA_bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
-    if reference_type == "gene" and (not check_files(HLA_bowtie2_index_fnames) or (not excluded_alleles_match)):
-        build_cmd = ["bowtie2-build",
-                     "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
-                     base_fname]
-        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
-        proc.communicate()        
-        if not check_files(HLA_bowtie2_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!"
-            sys.exit(1)
+    for aligner, index_type in aligners:
+        if aligner == "hisat2":
+            # Build HISAT2 graph indexes based on the above information
+            if index_type == "graph":
+                HLA_hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base_fname, i+1) for i in range(8)]
+                if not check_files(HLA_hisat2_graph_index_fnames) or (not excluded_alleles_match):
+                    hisat2_build = os.path.join(ex_path, "hisat2-build")
+                    build_cmd = [hisat2_build,
+                                 "-p", str(threads),
+                                 "--snp", "%s.snp" % base_fname,
+                                 "--haplotype", "%s.haplotype" % base_fname,
+                                 "%s_backbone.fa" % base_fname,
+                                 "%s.graph" % base_fname]
+                    if verbose >= 1:
+                        print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
+                    proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+                    proc.communicate()        
+                    if not check_files(HLA_hisat2_graph_index_fnames):
+                        print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
+                        sys.exit(1)
+            # Build HISAT2 linear indexes based on the above information
+            else:
+                assert index_type == "linear"
+                HLA_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
+                if reference_type == "gene" and (not check_files(HLA_hisat2_linear_index_fnames) or (not excluded_alleles_match)):
+                    hisat2_build = os.path.join(ex_path, "hisat2-build")
+                    build_cmd = [hisat2_build,
+                                 "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
+                                 "%s.linear" % base_fname]
+                    proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+                    proc.communicate()        
+                    if not check_files(HLA_hisat2_linear_index_fnames):
+                        print >> sys.stderr, "Error: indexing HLA failed!"
+                        sys.exit(1)
+        else:
+            assert aligner == "bowtie2" and index_type == "linear"
+            # Build Bowtie2 indexes based on the above information
+            HLA_bowtie2_index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
+            HLA_bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
+            if reference_type == "gene" and (not check_files(HLA_bowtie2_index_fnames) or (not excluded_alleles_match)):
+                build_cmd = ["bowtie2-build",
+                             "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
+                             base_fname]
+                proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
+                proc.communicate()        
+                if not check_files(HLA_bowtie2_index_fnames):
+                    print >> sys.stderr, "Error: indexing HLA failed!"
+                    sys.exit(1)
 
     # Read partial alleles from hla.data (temporary)
     partial_alleles = set()
