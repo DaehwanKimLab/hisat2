@@ -11,11 +11,17 @@ if __name__ == "__main__":
     hisat_hla = {}
     for line in open("hisat_caapa_hla.txt"):
         line = line.strip()
-        sample, allele, abundance = line.split('\t')
+        fields = line.split('\t')
+        if len(fields) == 3:
+            sample, allele, abundance = fields
+            vars_covered = ""
+        else:
+            assert len(fields) == 4
+            sample, allele, abundance, vars_covered = fields
         abundance = float(abundance)
         # DK - for debugging purposes
-        if abundance < 5.0:
-            continue
+        # if abundance < 5.0:
+        #    continue
         if sample not in hisat_hla:
             hisat_hla[sample] = {}
         gene, allele = allele.split('*')

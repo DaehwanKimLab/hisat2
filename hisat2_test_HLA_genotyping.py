@@ -624,6 +624,7 @@ def calculate_allele_coverage(allele_haplotype,
                               N_haplotypes,
                               exons,
                               partial,
+                              exonic_only,
                               output):
     _var_count = {}
     for read_haplotypes in N_haplotypes.values():
@@ -647,7 +648,9 @@ def calculate_allele_coverage(allele_haplotype,
         _left = int(_left)
         _count = 0
 
-        if partial and not var_in_exon([_type, _left, _data], exons):
+        if partial and \
+                exonic_only and \
+                not var_in_exon([_type, _left, _data], exons):
             continue
         
         total_var += 1
@@ -700,6 +703,7 @@ def HLA_typing(ex_path,
                num_mismatch,
                assembly,
                concordant_assembly,
+               exonic_only,
                fastq,
                read_fname,
                alignment_fname,
@@ -763,7 +767,7 @@ def HLA_typing(ex_path,
             ref_exons = refHLA_loci[gene][-1]
 
             allele_reps = {} # allele representatives
-            if partial:
+            if partial and exonic_only:
                 _allele_groups = {}
                 _alleles = HLAs[gene].keys()
                 for _allele in _alleles:
@@ -1074,14 +1078,16 @@ def HLA_typing(ex_path,
                             HLA_count_per_read[HLA_name] = 0
 
                     def add_count(var_id, add):
-                        if partial and not var_in_exon(Vars[gene][var_id], ref_exons):
+                        if partial and \
+                                exonic_only and \
+                                not var_in_exon(Vars[gene][var_id], ref_exons):
                             return
                         assert var_id in Links
                         alleles = Links[var_id]
                         for allele in alleles:
                             if allele.find("BACKBONE") != -1:
                                 continue
-                            if partial:
+                            if partial and exonic_only:
                                 assert allele in allele_reps
                                 if allele != allele_reps[allele]:
                                     continue
@@ -1602,9 +1608,9 @@ def HLA_typing(ex_path,
                         break
                 if not found:
                     allele_haplotype = get_allele(gene, prob[0], Vars_default, Var_list_default, Links_default)
-                    covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, verbose >= 3)
+                    covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, exonic_only, verbose >= 3)
                     _allele_rep = prob[0]
-                    if partial:
+                    if partial and exonic_only:
                         _fields = _allele_rep.split(':')
                         if len(_fields) == 4:
                             _allele_rep = ':'.join(_fields[:-1])
@@ -1935,6 +1941,7 @@ def test_HLA_genotyping(base_fname,
                         num_mismatch,
                         assembly,
                         concordant_assembly,
+                        exonic_only,
                         verbose,
                         daehwan_debug):
     # Current script directory
@@ -2322,6 +2329,7 @@ def test_HLA_genotyping(base_fname,
                                          num_mismatch,
                                          assembly,
                                          concordant_assembly,
+                                         exonic_only,
                                          fastq,
                                          read_fname,
                                          alignment_fname,
@@ -2367,6 +2375,7 @@ def test_HLA_genotyping(base_fname,
                    num_mismatch,
                    assembly,
                    concordant_assembly,
+                   exonic_only,
                    fastq,
                    read_fname,
                    alignment_fname,
@@ -2475,6 +2484,10 @@ if __name__ == '__main__':
                         dest="concordant_assembly",
                         action="store_false",
                         help="")
+    parser.add_argument("--exonic-only",
+                        dest="exonic_only",
+                        action="store_true",
+                        help="Consider exonic regions only")
     parser.add_argument("--novel_allele_detection",
                         dest="novel_allele_detection",
                         action='store_true',
@@ -2577,5 +2590,6 @@ if __name__ == '__main__':
                         args.num_mismatch,
                         args.assembly,
                         args.concordant_assembly,
+                        args.exonic_only,
                         args.verbose_level,
                         debug)
