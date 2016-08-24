@@ -1215,6 +1215,7 @@ def test_HLA_genotyping(reference_type,
                 if simulation:
                     print >> sys.stderr, "\t\tPassed so far: %d/%d (abundance: %.2f%%)" % (test_passed[aligner_type], test_i + 1, (test_passed[aligner_type] * 100.0 / (test_i + 1)))
             os.system("rm %s %s.bai" % (alignment_fname, alignment_fname))
+            alignment_fname = ""
 
 
     if simulation:
