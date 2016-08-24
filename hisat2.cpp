@@ -854,11 +854,7 @@ static void printUsage(ostream& out) {
 		<< "                     (L,0.0,-0.2)" << endl
 		<< endl
 	    << " Reporting:" << endl
-	    << "  (default)          look for multiple alignments, report best, with MAPQ" << endl
-		<< "   OR" << endl
-	    << "  -k <int>           report up to <int> alns per read; MAPQ not meaningful" << endl
-		<< "   OR" << endl
-	    << "  -a/--all           report all alignments; very slow, MAPQ not meaningful" << endl
+	    << "  -k <int> (default: 5) report up to <int> alns per read; MAPQ not meaningful" << endl
 		<< endl
 	    //<< " Effort:" << endl
 	    //<< "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
