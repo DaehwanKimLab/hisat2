@@ -94,7 +94,7 @@ def worker(ex_path,
     print >> sys.stderr, genome
     lock.release()
     cmd_aligners = ['.'.join(aligners[i]) for i in range(len(aligners))]
-    test_hla_script = os.path.join(ex_path, "hisat2_test_HLA_genotyping.py")
+    test_hla_script = os.path.join(ex_path, "old_hisat2_test_HLA_genotyping.py")
     test_hla_cmd = [test_hla_script,
                     "--reference-type", reference_type,
                     "--hla-list", ','.join(hla_list),
