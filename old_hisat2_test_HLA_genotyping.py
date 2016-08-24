@@ -102,7 +102,7 @@ def test_HLA_genotyping(reference_type,
                   "hla.link"]
 
     if not check_files(HLA_fnames):
-        extract_hla_script = os.path.join(ex_path, "hisat2_extract_HLA_vars.py")
+        extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
         extract_cmd = [extract_hla_script,
                        "--reference-type", reference_type,
                        "--hla-list", ','.join(hla_list)]
@@ -134,32 +134,6 @@ def test_HLA_genotyping(reference_type,
         proc.communicate()        
         if not check_files(HLA_hisat2_graph_index_fnames):
             print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
-            sys.exit(1)
-
-    # Build HISAT2 linear indexes based on the above information
-    HLA_hisat2_linear_index_fnames = ["hla.linear.%d.ht2" % (i+1) for i in range(8)]
-    if reference_type == "gene" and not check_files(HLA_hisat2_linear_index_fnames):
-        hisat2_build = os.path.join(ex_path, "hisat2-build")
-        build_cmd = [hisat2_build,
-                     "hla_backbone.fa,hla_sequences.fa",
-                     "hla.linear"]
-        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-        proc.communicate()        
-        if not check_files(HLA_hisat2_graph_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!"
-            sys.exit(1)
-
-    # Build Bowtie2 indexes based on the above information
-    HLA_bowtie2_index_fnames = ["hla.%d.bt2" % (i+1) for i in range(4)]
-    HLA_bowtie2_index_fnames += ["hla.rev.%d.bt2" % (i+1) for i in range(2)]
-    if reference_type == "gene" and not check_files(HLA_bowtie2_index_fnames):
-        build_cmd = ["bowtie2-build",
-                     "hla_backbone.fa,hla_sequences.fa",
-                     "hla"]
-        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
-        proc.communicate()        
-        if not check_files(HLA_bowtie2_index_fnames):
-            print >> sys.stderr, "Error: indexing HLA failed!"
             sys.exit(1)
 
     # Read partial alleles from hla.data (temporary)
