@@ -1608,7 +1608,10 @@ def HLA_typing(ex_path,
                         break
                 if not found:
                     allele_haplotype = get_allele(gene, prob[0], Vars_default, Var_list_default, Links_default)
-                    covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, exonic_only, verbose >= 3)
+                    if allele_haplotype != "":
+                        covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, exonic_only, verbose >= 3)
+                    else:
+                        covered, total = 0, 0
                     _allele_rep = prob[0]
                     if partial and exonic_only:
                         _fields = _allele_rep.split(':')
