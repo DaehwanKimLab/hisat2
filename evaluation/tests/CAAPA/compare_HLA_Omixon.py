@@ -9,7 +9,10 @@ if __name__ == "__main__":
     
     # Read HISAT-genotype predicted HLA alleles for the CAAPA genomes
     hisat_hla = {}
-    for line in open("hisat_caapa_hla.txt"):
+    # hisat_fname = "hisat_old_caapa_hla_partial_Aug25.txt"
+    # hisat_fname = "hisat_caapa_hla_Jul22.txt"
+    hisat_fname = "caapa_hla_partial_exonic_Aug31.txt"
+    for line in open(hisat_fname):
         line = line.strip()
         fields = line.split('\t')
         if len(fields) == 3:
