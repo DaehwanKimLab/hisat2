@@ -4675,15 +4675,17 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
         if(!spliced.first) {
             assert(!spliced.second);
             const index_t max_exon_size = 10000;
-            index_t left1 = 0, right1 = hit.refoff();
-            if(right1 > max_exon_size) left1 = right1 - max_exon_size;
-            index_t left2 = hit.refoff() + hit.len() - 1, right2 = left2 + max_exon_size;
+            index_t left = 0;
+            if(hit.refoff() > max_exon_size) {
+                left = hit.refoff() - max_exon_size;
+            }
+            index_t right = hit.refoff() + hit.len() + max_exon_size;
             spliced.first = ssdb.hasSpliceSites(
                                                 hit.ref(),
-                                                left1,
-                                                right1,
-                                                left2,
-                                                right2,
+                                                left,
+                                                right,
+                                                left,
+                                                right,
                                                 true); // include novel splice sites
             if(altdb.hasExons()) {
                 spliced.second = ssdb.insideExon(hit.ref(), hit.refoff(), hit.refoff() + hit.len() - 1);

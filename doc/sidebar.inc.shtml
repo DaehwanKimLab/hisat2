@@ -24,7 +24,7 @@
      <tbody><tr><td>
 	   <!-- 
 		Questions and comments about HISAT2 can be posted on the 
-		<a href="https://groups.google.com/forum/#!forum/hisat-tools-users"><b>HISAT Tools Users Google Group</b></a>.
+		<a href="https://groups.google.com/forum/#!forum/hisat-tools-users"><b>HISAT2 Tools Users Google Group</b></a>.
 		-->
 		Please use <a href="mailto:hisat@gmail.com">hisat2.genomics@gmail.com</a> for 
 		private communications only. Please do not email technical questions to HISAT2 contributors directly.</td></tr>
@@ -93,6 +93,7 @@
 	  <b>4.6 GB</b>
         </td>
       </tr>
+      
       <tr>
 	<td colspan="2">
           <i>H. sapiens</i>, UCSC hg38
@@ -107,7 +108,21 @@
         </td>
       </tr>
 
-            <tr>
+      <tr>
+	<td colspan="2">
+          <i>H. sapiens</i>, UCSC hg38 and gene annotations referred to in <a href="">the Nature Protocol paper</a>
+        </td>
+      </tr>
+      <tr>
+        <td>
+	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38_tran.tar.gz"><i>genome_tran</i></a>
+        </td>
+	<td align="right" style="font-size: x-small">
+	  <b>4.2 GB</b>
+        </td>
+      </tr>
+
+      <tr>
         <td colspan="2">
          <i>H. sapiens</i>, Ensembl GRCh37
         </td>
@@ -369,6 +384,7 @@
 <div class="box">
  <ul>
    <li><p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html"><b>HISAT: a fast spliced aligner with low memory requirements</b></a>. <i><a href="http://www.nature.com/nmeth">Nature Methods</a></i> 2015</p></li>
+   <li><p>Pertea M, Kim D, Pertea G, Leek JT and Salzberg SL. <a href="http://www.nature.com/nprot/journal/v11/n9/full/nprot.2016.095.html"><b>Transcript-level expression analysis of RNA-seq experiments with HISAT, StringTie and Ballgown</b></a>. <i><a href="http://www.nature.com/nprot">Nature Protocols</a></i> 2016</p></li>
  </ul>
 </div>
 
