@@ -86,14 +86,12 @@ def extract_vars(base_fname,
             print aligner_cmd
             allele_id, strand = "", ''
             for line in align_proc.stdout:
-                #print line
                 if line.startswith('@'):
                     continue
                 line = line.strip()
                 cols = line.split()
                 t_allele_id, flag = cols[:2]
-                #print t_allele_id
-                #HOWARD: Avoid selection of excluded allele as backbone
+                # Avoid selection of excluded allele as backbone
                 if t_allele_id in exclude_allele_list:
                     continue
                 allele_id = t_allele_id
@@ -236,7 +234,7 @@ def extract_vars(base_fname,
         if base_fname == "hla":
             HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % HLA_gene
         else:
-            HLA_MSA_fname = "hisat_genotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), HLA_gene)
+            HLA_MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), HLA_gene)
             
         if not os.path.exists(HLA_MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
@@ -248,28 +246,30 @@ def extract_vars(base_fname,
         assert len(HLA_seqs) > 0
 
         # Check sequences are of equal length
-        seq_lens = {}
-        for s in range(len(HLA_seqs)):
-            seq_len = len(HLA_seqs[s])
-            if seq_len not in seq_lens:
-                seq_lens[seq_len] = 1
-            else:
-                seq_lens[seq_len] += 1
-        max_seq_count = 0
-        for tmp_seq_len, tmp_seq_count in seq_lens.items():
-            if tmp_seq_count > max_seq_count:
-                seq_len = tmp_seq_len
-                max_seq_count = tmp_seq_count
-        
-        if reference_type == "gene" and \
-                (not DRB1_REF or HLA_gene != "DRB1"):
+        def find_seq_len(seqs):
+            seq_lens = {}
+            for s in range(len(seqs)):
+                seq_len = len(seqs[s])
+                if seq_len not in seq_lens:
+                    seq_lens[seq_len] = 1
+                else:
+                    seq_lens[seq_len] += 1
+
+            max_seq_count = 0
+            for tmp_seq_len, tmp_seq_count in seq_lens.items():
+                if tmp_seq_count > max_seq_count:
+                    seq_len = tmp_seq_len
+                    max_seq_count = tmp_seq_count
+            return seq_len
+
+        def create_consensus_seq(seqs, seq_len, partial):
             consensus_count = [[0, 0, 0, 0] for i in range(seq_len)]
-            for i in range(len(HLA_seqs)):                
-                HLA_seq = HLA_seqs[i]
-                if len(HLA_seq) != seq_len:
+            for i in range(len(seqs)):                
+                seq = seqs[i]
+                if len(seq) != seq_len:
                     continue                    
                 for j in range(seq_len):
-                    nt = HLA_seq[j]
+                    nt = seq[j]
                     if not nt in "ACGT":
                         continue
                     if nt == 'A':
@@ -281,17 +281,58 @@ def extract_vars(base_fname,
                     else:
                         assert nt == 'T'
                         consensus_count[j][3] += 1
-            backbone_name = "%s*BACKBONE" % HLA_gene
-            backbone_seq = ""
+            consensus_seq = ""
+            has_empty = False
             for count in consensus_count:
-                assert sum(consensus_count[j]) > 0
+                # No alleles have bases at this particular location
+                if sum(count) <= 0:
+                    has_empty = True
+                    consensus_seq += 'E'
+                    continue
                 idx = count.index(max(count))
                 assert idx < 4
-                backbone_seq += "ACGT"[idx]
+                consensus_seq += "ACGT"[idx]
+            consensus_seq = ''.join(consensus_seq)
+
+            # Remove dots (deletions)
+            if has_empty and not partial:
+                for seq_i in range(len(seqs)):
+                    seqs[seq_i] = list(seqs[seq_i])
+                for i in range(len(consensus_seq)):
+                    if consensus_seq[i] != 'E':
+                        continue
+                    for seq_i in range(len(seqs)):
+                        if i >= len(seqs[seq_i]):
+                            continue
+                        seqs[seq_i][i] = 'E'
+                for seq_i in range(len(seqs)):
+                    seqs[seq_i] = ''.join(seqs[seq_i])
+                    seqs[seq_i] = seqs[seq_i].replace('E', '')
+                consensus_seq = consensus_seq.replace('E', '')
+                
+            return consensus_seq
+
+        seq_len = find_seq_len(HLA_seqs)        
+        if reference_type == "gene" and \
+                (not DRB1_REF or HLA_gene != "DRB1"):
+            backbone_name = "%s*BACKBONE" % HLA_gene
+            backbone_seq = create_consensus_seq(HLA_seqs, seq_len, partial)
+            # Allele sequences can shrink, so readjust the sequence length
+            if not partial:
+                seq_len = find_seq_len(HLA_seqs)
         else:
             backbone_name = HLA_ref_gene
             backbone_id = HLA_names[backbone_name]
             backbone_seq = HLA_seqs[backbone_id]
+
+        # DK - for debugging purposes
+        """
+        print 500, backbone_seq[500:600], backbone_seq[600:650]
+        for cmp_name2, id2 in HLA_names.items():
+            cmp_seq2 = HLA_seqs[id2]
+            print 500, cmp_seq2[500:600], cmp_name2
+        sys.exit(1)
+        """
 
         if partial:
             HLA_partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % HLA_gene
@@ -333,6 +374,8 @@ def extract_vars(base_fname,
                 HLA_names[HLA_name] = len(HLA_seqs)
                 HLA_seqs.append(new_seq)
 
+            backbone_seq = create_consensus_seq(HLA_seqs, seq_len, partial)
+
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
             def reverse_complement(seq):
@@ -362,10 +405,19 @@ def extract_vars(base_fname,
                     (cmp_name, len(cmp_seq), seq_len)
                 continue
 
+            # DK - for debugging purposes
             """
-            for s in range(0, seq_len, 100):
-                print s, backbone_seq[s:s+100]
-                print s, cmp_seq[s:s+100]
+            if cmp_name == "A*24:08":
+                print cmp_name
+                cmp_seq2 = HLA_seqs[HLA_names["A*25:21"]]
+                for s in range(0, seq_len, 100):
+                    print s, backbone_seq[s:s+100]
+                    print s, cmp_seq2[s:s+100]
+                    print s, cmp_seq[s:s+100]
+                for cmp_name2, id2 in HLA_names.items():
+                    cmp_seq2 = HLA_seqs[id2]
+                    print 500, cmp_seq2[500:600], cmp_name2
+                sys.exit(1)
             """
 
             def insertVar(indel, type):
