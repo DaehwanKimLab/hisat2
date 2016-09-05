@@ -325,15 +325,6 @@ def extract_vars(base_fname,
             backbone_id = HLA_names[backbone_name]
             backbone_seq = HLA_seqs[backbone_id]
 
-        # DK - for debugging purposes
-        """
-        print 500, backbone_seq[500:600], backbone_seq[600:650]
-        for cmp_name2, id2 in HLA_names.items():
-            cmp_seq2 = HLA_seqs[id2]
-            print 500, cmp_seq2[500:600], cmp_name2
-        sys.exit(1)
-        """
-
         if partial:
             HLA_partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % HLA_gene
             if not os.path.exists(HLA_partial_MSA_fname):
@@ -376,6 +367,62 @@ def extract_vars(base_fname,
 
             backbone_seq = create_consensus_seq(HLA_seqs, seq_len, partial)
 
+        """
+        # Left-shift deletions if poissble
+        def leftshift_deletions(backbone_seq, seq):
+            if len(seq) != len(backbone_seq):
+                return seq
+            seq = list(seq)
+            seq_len = len(seq)
+            bp_i = 0
+            # Remove the first deletion
+            while bp_i < seq_len:
+                if seq[bp_i] in "ACGT":
+                    break
+                bp_i += 1
+
+            while bp_i < seq_len:
+                bp = seq[bp_i]
+                if bp != '.':
+                    bp_i += 1
+                    continue
+                bp_j = bp_i + 1
+                while bp_j < seq_len:
+                    bp2 = seq[bp_j]
+                    if bp2 != '.':
+                        break
+                    else:
+                        bp_j += 1
+
+                # DK - for debugging purposes
+                # print bp_i, bp_j, backbone_seq[bp_i-10:bp_i], backbone_seq[bp_i:bp_j], backbone_seq[bp_j:bp_j+10]
+                # print bp_i, bp_j, ''.join(seq[bp_i-10:bp_i]), ''.join(seq[bp_i:bp_j]), ''.join(seq[bp_j:bp_j+10])
+                prev_i, prev_j = bp_i, bp_j
+
+                while bp_j < seq_len and seq[bp_j] in "ACGT":
+                    assert backbone_seq[bp_i] in "ACGT" and backbone_seq[bp_j] in "ACGT"
+                    if backbone_seq[bp_i] != seq[bp_j]:
+                        break
+                    seq[bp_i] = seq[bp_j]
+                    seq[bp_j] = '.'
+                    bp_i += 1
+                    bp_j += 1
+                bp_i = bp_j
+                while bp_i < seq_len:
+                    if seq[bp_i] in "ACGT":
+                        break
+                    bp_i += 1
+
+                # DK - for debugging purposes
+                # print prev_i, prev_j, ''.join(seq[prev_i-10:prev_i]), ''.join(seq[prev_i:prev_j]), ''.join(seq[prev_j:prev_j+10])
+                # sys.exit(1)
+                  
+            return ''.join(seq)
+                
+        for seq_i in range(len(HLA_seqs)):
+            HLA_seqs[seq_i] = leftshift_deletions(backbone_seq, HLA_seqs[seq_i])
+        """
+
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
             def reverse_complement(seq):
@@ -407,17 +454,14 @@ def extract_vars(base_fname,
 
             # DK - for debugging purposes
             """
-            if cmp_name == "A*24:08":
+            if cmp_name == "A*03:01:07":
                 print cmp_name
-                cmp_seq2 = HLA_seqs[HLA_names["A*25:21"]]
+                cmp_seq2 = HLA_seqs[HLA_names["A*32:29"]]
                 for s in range(0, seq_len, 100):
                     print s, backbone_seq[s:s+100]
                     print s, cmp_seq2[s:s+100]
                     print s, cmp_seq[s:s+100]
-                for cmp_name2, id2 in HLA_names.items():
-                    cmp_seq2 = HLA_seqs[id2]
-                    print 500, cmp_seq2[500:600], cmp_name2
-                sys.exit(1)
+                # sys.exit(1)
             """
 
             def insertVar(indel, type):

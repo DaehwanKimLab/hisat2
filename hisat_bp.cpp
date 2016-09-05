@@ -828,10 +828,10 @@ static void printUsage(ostream& out) {
 	    << "  -p/--threads <int> number of alignment threads to launch (1)" << endl
 	    << "  --reorder          force SAM output order to match order of input reads" << endl
 #ifdef BOWTIE_MM
-	    << "  --mm               use memory-mapped I/O for index; many 'bowtie's can share" << endl
+	    << "  --mm               use memory-mapped I/O for index; many 'hisat2's can share" << endl
 #endif
 #ifdef BOWTIE_SHARED_MEM
-		//<< "  --shmem            use shared mem for index; many 'bowtie's can share" << endl
+		//<< "  --shmem            use shared mem for index; many 'hisat2's can share" << endl
 #endif
 		<< endl
 	    << " Other:" << endl

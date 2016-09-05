@@ -2236,7 +2236,7 @@ bool GenomeHit<index_t>::adjustWithALT(
 }
 
 /*
- * Find offset differences due to deletions
+ * Find offset differences due to splice sites
  */
 template <typename index_t>
 void GenomeHit<index_t>::findSSOffs(
@@ -2299,7 +2299,7 @@ void GenomeHit<index_t>::findSSOffs(
 
 
 /*
- *
+ * Find offset differences due to indels
  */
 template <typename index_t>
 void GenomeHit<index_t>::findOffDiffs(
@@ -2770,20 +2770,50 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     alt_compatible = true;
                 }
             } else if(alt.type == ALT_SNP_DEL) {
-                if(rf_i + alt.len <= rflen && rd_i > 0) {
-                    for(index_t i = 0; i < alt.len; i++) {
-                        rf_bp = rfseq[rf_i + i];
-                        Edit e(
-                               rd_i + rdoff_add,
-                               "ACGTN"[rf_bp],
-                               '-',
-                               EDIT_TYPE_READ_GAP,
-                               true, /* chars? */
-                               alt_range.first);
-                        tmp_edits.push_back(e);
+                if(rd_i >0) {
+                    if(rf_i + alt.len <= rflen) {
+                        for(index_t i = 0; i < alt.len; i++) {
+                            rf_bp = rfseq[rf_i + i];
+                            Edit e(
+                                   rd_i + rdoff_add,
+                                   "ACGTN"[rf_bp],
+                                   '-',
+                                   EDIT_TYPE_READ_GAP,
+                                   true, /* chars? */
+                                   alt_range.first);
+                            tmp_edits.push_back(e);
+                        }
+                        rf_i += alt.len;
+                        alt_compatible = true;
+                    } else {
+                        // long deletions
+                        if(raw_refbufs.size() <= dep + 1) raw_refbufs.expand();
+                        SStringExpandable<char>& raw_refbuf = raw_refbufs[dep + 1];
+                        raw_refbuf.resize(rflen + 16 + 16);
+                        raw_refbuf.fill(0x4);
+                        index_t new_rflen = rf_i + alt.len + 10;
+                        int off = ref.getStretch(
+                                                 reinterpret_cast<uint32_t*>(raw_refbuf.wbuf() + 16),
+                                                 tidx,
+                                                 max<int>(rfoff, 0),
+                                                 rfoff > 0 ? new_rflen : new_rflen + rfoff
+                                                 ASSERT_ONLY(, destU32));
+                        assert_lt(off, 16);
+                        const char* new_rfseq = raw_refbuf.wbuf() + 16 + off + min<int>(rfoff, 0);
+                        for(index_t i = 0; i < alt.len; i++) {
+                            rf_bp = new_rfseq[rf_i + i];
+                            Edit e(
+                                   rd_i + rdoff_add,
+                                   "ACGTN"[rf_bp],
+                                   '-',
+                                   EDIT_TYPE_READ_GAP,
+                                   true, /* chars? */
+                                   alt_range.first);
+                            tmp_edits.push_back(e);
+                        }
+                        rf_i += alt.len;
+                        alt_compatible = true;
                     }
-                    rf_i += alt.len;
-                    alt_compatible = true;
                 }
             } else if(alt.type == ALT_SNP_INS) {
                 if(rd_i + alt.len <= rdlen && rf_i > 0) {
@@ -2848,6 +2878,9 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     next_joinedOff = alt.pos + 1;
                 } else if(alt.type == ALT_SNP_DEL) {
                     next_joinedOff = alt.pos + alt.len;
+                    if(rflen <= rf_i) {
+                        next_rflen = 0; // Will reset next_rfseq and next_rflen below
+                    }
                 } else if(alt.type == ALT_SNP_INS) {
                     next_joinedOff = alt.pos;
                 } else if(alt.type == ALT_SPLICESITE) {

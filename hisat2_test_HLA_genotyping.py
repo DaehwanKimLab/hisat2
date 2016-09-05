@@ -217,6 +217,14 @@ def single_abundance(HLA_cmpt,
         HLA_prob_next = next_prob(HLA_cmpt, HLA_prob, HLA_length)
         diff = prob_diff(HLA_prob, HLA_prob_next)
         HLA_prob = HLA_prob_next
+
+        # DK - for debugging purposes
+        if iter % 10 == 0 and False:
+            print "iter", iter
+            for allele, prob in HLA_prob.items():
+                if prob >= 0.01:
+                    print "\t", allele, prob
+        
         iter += 1
     for allele, prob in HLA_prob.items():
         allele_len = HLA_length[allele]
@@ -1008,9 +1016,9 @@ def HLA_typing(ex_path,
                         if len(cur_cmpt) == 0:
                             return
 
-                        # daehwan - for debugging purposes                            
-                        alleles = ["", ""]
-                        # alleles = ["B*40:304", "B*40:02:01"]
+                        # DK - for debugging purposes                            
+                        # alleles = ["", ""]
+                        alleles = ["A*32:29", "A*03:01:07"]
                         allele1_found, allele2_found = False, False
                         for allele, count in HLA_count_per_read.items():
                             if count < max_count:
@@ -1019,7 +1027,7 @@ def HLA_typing(ex_path,
                                 allele1_found = True
                             elif allele == alleles[1]:
                                 allele2_found = True
-                        if allele1_found != allele2_found:
+                        if allele1_found != allele2_found and allele2_found:
                             print alleles[0], HLA_count_per_read[alleles[0]]
                             print alleles[1], HLA_count_per_read[alleles[1]]
                             if allele1_found:
@@ -1027,6 +1035,7 @@ def HLA_typing(ex_path,
                             else:
                                 print ("%s\tread_id %s - %d vs. %d]" % (alleles[1], prev_read_id, max_count, HLA_count_per_read[alleles[0]]))
                             print read_seq
+                            print line,
 
                         cur_cmpt = sorted(list(cur_cmpt))
                         cur_cmpt = '-'.join(cur_cmpt)
@@ -1093,8 +1102,8 @@ def HLA_typing(ex_path,
                                     continue
                             HLA_count_per_read[allele] += add
                             # DK - for debugging purposes
-                            if debug:
-                                if allele in ["DQA1*05:05:01:01", "DQA1*05:05:01:02"]:
+                            if debug or True:
+                                if allele in ["A*32:29", "A*03:01:07"]:
                                     print allele, add, var_id
 
                     def add_N_var(N_read_vars, N_read_var):
@@ -1262,8 +1271,39 @@ def HLA_typing(ex_path,
                             read_pos += length
                             cmp_cigar_str += ("%dI" % length)
                         elif type == "deletion":
+                            alt_match = False
                             del_len = length
-                            # Deletions can be shifted bidirectionally
+                            # Check if this deletion can be removed
+                            if (cmp_i == 1 and cmp_list[0][0] == "match") or \
+                                    (cmp_i == 2 and cmp_list[0][0] == "soft" and cmp_list[0][1] == "match"):
+                                _match_len = cmp_list[cmp_i-1][2]
+                                temp_ref_pos = ref_pos
+                                while _match_len > 0:
+                                    last_bp = ref_seq[temp_ref_pos + del_len - 1]
+                                    prev_bp = ref_seq[temp_ref_pos - 1]
+                                    if last_bp != prev_bp:
+                                        break
+                                    temp_ref_pos -= 1
+                                    _match_len -= 1
+                                if _match_len == 0:
+                                    alt_match = True
+                            if (cmp_i + 2 == len(cmp_list) and cmp_list[-1][0] == "match") or \
+                                    (cmp_i + 3 == len(cmp_list) and cmp_list[-1][0] == "soft" and cmp_list[-2][0] == "match"):
+                                _match_len = cmp_list[cmp_i+1][2]
+                                temp_ref_pos = ref_pos
+                                """
+                                while _match_len > 0:
+                                    last_bp = ref_seq[temp_ref_pos + del_len - 1]
+                                    prev_bp = ref_seq[temp_ref_pos - 1]
+                                    if last_bp != prev_bp:
+                                        break
+                                    temp_ref_pos -= 1
+                                    _match_len -= 1
+                                if _match_len == 0:
+                                    by_chance = True
+                                """
+                                
+                            # Deletions can be shifted bidirectionally by HISAT2
                             temp_ref_pos = ref_pos
                             while temp_ref_pos > 0:
                                 last_bp = ref_seq[temp_ref_pos + del_len - 1]
@@ -1291,7 +1331,8 @@ def HLA_typing(ex_path,
                                             if debug:
                                                 print cmp, var_id, 1, Links[var_id]
                                                 print ref_seq[var_pos - 10:var_pos], ref_seq[var_pos:var_pos+int(var_data)], ref_seq[var_pos+int(var_data):var_pos+int(var_data)+10]
-                                            add_count(var_id, 1)
+                                            if not alt_match:
+                                                add_count(var_id, 1)
                                             known_var = True
                                             add_N_var(N_read_vars, [var_type, ref_pos, del_len, var_id])
                                 var_idx += 1
@@ -1589,6 +1630,17 @@ def HLA_typing(ex_path,
             for prob_i in range(len(HLA_prob)):
                 prob = HLA_prob[prob_i]
                 found = False
+                allele_haplotype = get_allele(gene, prob[0], Vars_default, Var_list_default, Links_default)
+                if allele_haplotype != "":
+                    covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, exonic_only, verbose >= 3)
+                else:
+                    covered, total = 0, 0
+                _allele_rep = prob[0]
+                if partial and exonic_only:
+                    _fields = _allele_rep.split(':')
+                    if len(_fields) == 4:
+                        _allele_rep = ':'.join(_fields[:-1])
+
                 if simulation:
                     for name_i in range(len(test_HLA_names)):
                         test_HLA_name = test_HLA_names[name_i]
@@ -1599,24 +1651,15 @@ def HLA_typing(ex_path,
                                     rank_i -= 1
                                 else:
                                     break
-                            print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (rank_i + 1, test_HLA_name, prob[1] * 100.0)
+                            print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%, vars_covered: %d/%d)" % (rank_i + 1, test_HLA_name, prob[1] * 100.0, covered, total)
                             if rank_i < len(success):
                                 success[rank_i] = True
                             found_list[name_i] = True
-                            found = True                        
-                    if not False in found_list:
+                            found = True
+                    # DK - for debugging purposes
+                    if not False in found_list and prob_i >= 10:
                         break
                 if not found:
-                    allele_haplotype = get_allele(gene, prob[0], Vars_default, Var_list_default, Links_default)
-                    if allele_haplotype != "":
-                        covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, exonic_only, verbose >= 3)
-                    else:
-                        covered, total = 0, 0
-                    _allele_rep = prob[0]
-                    if partial and exonic_only:
-                        _fields = _allele_rep.split(':')
-                        if len(_fields) == 4:
-                            _allele_rep = ':'.join(_fields[:-1])
                     print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%, vars_covered: %d/%d)" % (prob_i + 1, _allele_rep, prob[1] * 100.0, covered, total)
                     if best_alleles and prob_i < 2:
                         print >> sys.stdout, "SingleModel %s (abundance: %.2f%%)" % (_allele_rep, prob[1] * 100.0)
@@ -2213,6 +2256,16 @@ def test_HLA_genotyping(base_fname,
     else:
         Vars_default, Var_list_default = Vars, Var_list
         Links_default = Links
+
+    # DK - for debugging purposes
+    """
+    print "Links:", len(Links)
+    DK_set = set(Links["hv252"])
+    for var_id in ["hv252", "hv254", "hv265", "hv269", "hv272", "hv273", "hv274", "hv275", "hv276", "hv277", "hv278", "hv279", "hv280", "hv281", "hv282", "hv283", "hv284", "hv285", "hv286", "hv287", "hv288", "hv289", "hv290", "hv291", "hv292"]:
+        print var_id,  set(Links[var_id])
+        # print var_id, DK_set
+    sys.exit(1)
+    """
         
     # Scoring schemes from Sangtae Kim (Illumina)'s implementation
     # Currently not used.
@@ -2285,7 +2338,7 @@ def test_HLA_genotyping(base_fname,
             test_HLA_list = test_list[test_i]
            
             # DK - for debugging purposes
-            # test_HLA_list = [["A*11:50Q", "A*11:01:01:01", "A*01:01:01:01"]]
+            test_HLA_list = [["A*32:29"]]
             for test_HLA_names in test_HLA_list:
                 for test_HLA_name in test_HLA_names:
                     if custom_allele_check:
