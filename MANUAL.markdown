@@ -160,7 +160,7 @@ beyond the first has the SAM 'secondary' bit (which equals 256) set in its FLAGS
 field.  See the [SAM specification] for details.
 
 HISAT2 does not "find" alignments in any specific order, so for reads that
-have more than N distinct, valid alignments, HISAT2 does not gaurantee that
+have more than N distinct, valid alignments, HISAT2 does not guarantee that
 the N alignments reported are the best possible in terms of alignment score.
 Still, this mode can be effective and fast in situations where the user cares
 more about whether a read aligns (or aligns a certain number of times) than
@@ -211,7 +211,7 @@ wrapper scripts that call binary programs as appropriate.  The wrappers shield
 users from having to distinguish between "small" and "large" index formats,
 discussed briefly in the following section.  Also, the `hisat2` wrapper
 provides some key functionality, like the ability to handle compressed inputs,
-and the fucntionality for [`--un`], [`--al`] and related options.
+and the functionality for [`--un`], [`--al`] and related options.
 
 It is recommended that you always run the hisat2 wrappers and not run the
 binaries directly.
@@ -899,7 +899,7 @@ finds `<int>`, whichever happens first. The alignment score for a paired-end
 alignment equals the sum of the alignment scores of the individual mates. Each
 reported read or pair alignment beyond the first has the SAM 'secondary' bit
 (which equals 256) set in its FLAGS field.  For reads that have more than
-`<int>` distinct, valid alignments, `hisat2` does not gaurantee that the
+`<int>` distinct, valid alignments, `hisat2` does not guarantee that the
 `<int>` alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)
 
 Note: HISAT2 is not designed with large values for `-k` in mind, and when
@@ -2346,7 +2346,7 @@ Use `samtools sort` to convert the BAM file to a sorted BAM file. The following 
 
 We now have a sorted BAM file called `eg2.sorted.bam`. Sorted BAM is a useful
 format because the alignments are (a) compressed, which is convenient for
-long-term storage, and (b) sorted, which is conveneint for variant discovery.
+long-term storage, and (b) sorted, which is convenient for variant discovery.
 To generate variant calls in VCF format, run:
 
     samtools mpileup -uf $HISAT2_HOME/example/reference/22_20-21M.fa eg2.sorted.bam | bcftools view -bvcg - > eg2.raw.bcf
