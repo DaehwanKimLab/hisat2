@@ -736,8 +736,8 @@ def HLA_typing(ex_path,
                         break
                     m -= 1
                 return m
-        return low        
-            
+        return low
+           
     if simulation:
         test_passed = {}
     for aligner, index_type in aligners:
@@ -828,6 +828,55 @@ def HLA_typing(ex_path,
                 alignview_proc = subprocess.Popen(alignview_cmd,
                                              stdout=subprocess.PIPE,
                                              stderr=open("/dev/null", 'w'))
+
+            # Check deletions' alternatives
+            for _var_i, _var_id in Var_list[gene]:
+                _var_type, _var_pos, _var_data = Vars[gene][_var_id]
+                if _var_type != "deletion" or _var_pos == 0:
+                    continue
+                _var_del_len = int(_var_data)
+                debug = (_var_id == "hv1341")
+                if debug:
+                    print Vars[gene][_var_id]
+                _var_j = lower_bound(Var_list[gene], _var_pos)
+                while _var_j < len(Var_list[gene]):
+                    _j_pos, _j_id = Var_list[gene][_var_j]
+                    if _j_pos > _var_pos + _var_del_len - 1:
+                        break
+                    if _j_pos >= _var_pos:
+                        _j_type, _, _j_data = Vars[gene][_j_id]
+                        if _j_type == "single":
+                            if debug:
+                                print Vars[gene][_j_id]
+                                _off = _j_pos - _var_pos
+                                print _var_pos + _off, ref_seq[_var_pos + _off]
+                                print _var_pos + _var_del_len + _off, ref_seq[_var_pos + _var_del_len + _off]
+                                if _j_data != ref_seq[_var_pos + _var_del_len + _off]:
+                                    break
+                    _var_j += 1
+                _var_j = lower_bound(Var_list[gene], _var_pos + _var_del_len - 1)
+                while _var_j >= 0:
+                    _j_pos, _j_id = Var_list[gene][_var_j]
+                    if _j_pos < _var_pos:
+                        break
+                    """
+                    if _j_pos >= _var_pos:
+                        _j_type, _, _j_data = Vars[gene][_j_id]
+                        if _j_type == "single":
+                            if debug:
+                                print Vars[gene][_j_id]
+                                _off = _j_pos - _var_pos
+                                print _var_pos + _off, ref_seq[_var_pos + _off]
+                                print _var_pos + _var_del_len + _off, ref_seq[_var_pos + _var_del_len + _off]
+                                if _j_data != ref_seq[_var_pos + _var_del_len + _off]:
+                                    break
+                    """
+                    _var_j -= 1
+                
+
+                if debug:
+                    sys.exit(1)
+
 
             # Count alleles
             HLA_counts, HLA_cmpt = {}, {}
