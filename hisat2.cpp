@@ -856,7 +856,7 @@ static void printUsage(ostream& out) {
 		<< "                     (L,0.0,-0.2)" << endl
 		<< endl
 	    << " Reporting:" << endl
-	    << "  -k <int> (default: 5) report up to <int> alns per read; MAPQ not meaningful" << endl
+	    << "  -k <int> (default: 5) report up to <int> alns per read" << endl
 		<< endl
 	    //<< " Effort:" << endl
 	    //<< "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
@@ -901,7 +901,7 @@ static void printUsage(ostream& out) {
 	    << "  -p/--threads <int> number of alignment threads to launch (1)" << endl
 	    << "  --reorder          force SAM output order to match order of input reads" << endl
 #ifdef BOWTIE_MM
-	    << "  --mm               use memory-mapped I/O for index; many 'bowtie's can share" << endl
+	    << "  --mm               use memory-mapped I/O for index; many 'hisat2's can share" << endl
 #endif
 #ifdef BOWTIE_SHARED_MEM
 		//<< "  --shmem            use shared mem for index; many 'bowtie's can share" << endl
@@ -1496,8 +1496,12 @@ static void parseOption(int next_option, const char *arg) {
             break;
         }
         case ARG_NO_SOFTCLIP: {
-            penScMax = std::numeric_limits<typeof(penScMax)>::max();
-            penScMin = std::numeric_limits<typeof(penScMin)>::max();
+            ostringstream convert;
+            convert << std::numeric_limits<typeof(penScMax)>::max();
+            polstr += ";SCP=Q,";
+            polstr += convert.str();
+            polstr += ",";
+            polstr += convert.str();
             break;
         }
 		case ARG_SCORE_NP:  polstr += ";NP=C";   polstr += arg; break;

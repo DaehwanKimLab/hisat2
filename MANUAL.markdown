@@ -130,6 +130,8 @@ that it has multiple alignments that are valid and distinct from one another.
 
 [valid alignment]: #valid-alignments-meet-or-exceed-the-minimum-score-threshold
 
+By default, HISAT2 may soft-clip reads near their 5' and 3' ends.  Users can control this behavior by setting different penalties for soft-clipping ([`--sp`]) or by disallowing soft-clipping ([`--no-softclip`]).
+
 ### Distinct alignments map a read to different places
 
 Two alignments for the same individual read are "distinct" if they map the same
@@ -622,6 +624,18 @@ The number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
 where Q is the Phred quality value.  Default: `MX` = 2, `MN` = 1.
 
 </td></tr>
+<tr><td id="hisat2-options-no-softclip">
+
+[`--sp`]: #hisat2-options-no-softclip
+
+    --no-softclip
+
+</td><td>
+
+Disallow soft-clipping.
+
+</td></tr>
+
 <tr><td id="hisat2-options-np">
 
 [`--np`]: #hisat2-options-np

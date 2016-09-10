@@ -284,7 +284,7 @@ void SeedAlignmentPolicy::parseString(
 	penN              = DEFAULT_N_PENALTY;
     
     penScMax          = DEFAULT_SC_PENALTY_MAX;
-    penScMax          = DEFAULT_SC_PENALTY_MIN;
+    penScMin          = DEFAULT_SC_PENALTY_MIN;
 	
 	const double DMAX = std::numeric_limits<double>::max();
     costMin.init(

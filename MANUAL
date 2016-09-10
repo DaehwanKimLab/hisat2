@@ -122,6 +122,8 @@ In general, when we say that a read has an alignment, we mean that it has a
 [valid alignment].  When we say that a read has multiple alignments, we mean
 that it has multiple alignments that are valid and distinct from one another. 
 
+By default, HISAT2 may soft-clip reads near their 5' and 3' ends.  Users can control this behavior by setting different penalties for soft-clipping (`--sp`) or by disallowing soft-clipping (`--no-softclip`).
+
 ### Distinct alignments map a read to different places
 
 Two alignments for the same individual read are "distinct" if they map the same
@@ -139,18 +141,6 @@ Two alignments for the same pair are distinct if either the mate 1s in the two
 paired-end alignments are distinct or the mate 2s in the two alignments are
 distinct or both.
 
-### Default mode: search for multiple alignments, report the best one
-
-By default, HISAT2 searches for distinct, valid alignments for each read. When
-it finds a valid alignment, it generally will continue to look for alignments
-that are nearly as good or better.  It will eventually stop looking, either
-because it exceeded a limit placed on search effort (see `-D` and `-R`) or
-because it already knows all it needs to know to report an alignment.
-Information from the best alignments are used to estimate mapping quality (the
-`MAPQ` [SAM] field) and to set SAM optional fields, such as `AS:i` and
-`XS:i`.  HISAT2 does not gaurantee that the alignment reported is the best
-possible in terms of alignment score.
-
 ### Default mode: search for one or more alignments, report each
 
 HISAT2 searches for up to N distinct, primary alignments for
@@ -164,7 +154,7 @@ beyond the first has the SAM 'secondary' bit (which equals 256) set in its FLAGS
 field.  See the [SAM specification] for details.
 
 HISAT2 does not "find" alignments in any specific order, so for reads that
-have more than N distinct, valid alignments, HISAT2 does not gaurantee that
+have more than N distinct, valid alignments, HISAT2 does not guarantee that
 the N alignments reported are the best possible in terms of alignment score.
 Still, this mode can be effective and fast in situations where the user cares
 more about whether a read aligns (or aligns a certain number of times) than
@@ -214,7 +204,7 @@ wrapper scripts that call binary programs as appropriate.  The wrappers shield
 users from having to distinguish between "small" and "large" index formats,
 discussed briefly in the following section.  Also, the `hisat2` wrapper
 provides some key functionality, like the ability to handle compressed inputs,
-and the fucntionality for `--un`, `--al` and related options.
+and the functionality for `--un`, `--al` and related options.
 
 It is recommended that you always run the hisat2 wrappers and not run the
 binaries directly.
@@ -446,6 +436,10 @@ subtracted from the alignment score for each position.
 The number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
 where Q is the Phred quality value.  Default: `MX` = 2, `MN` = 1.
 
+    --no-softclip
+
+Disallow soft-clipping.
+
     --np <int>
 
 Sets penalty for positions where the read, reference, or both, contain an
@@ -560,13 +554,14 @@ HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
 
     -k <int>
 
-It searches for at most `<int>` distinct, primary alignments for each read.  Primary alignments mean alignments whose alignment score is equal or higher than any other alignments.
+It searches for at most `<int>` distinct, primary alignments for each read.
+Primary alignments mean alignments whose alignment score is equal or higher than any other alignments.
 The search terminates when it can't find more distinct valid alignments, or when it
 finds `<int>`, whichever happens first. The alignment score for a paired-end
 alignment equals the sum of the alignment scores of the individual mates. Each
 reported read or pair alignment beyond the first has the SAM 'secondary' bit
 (which equals 256) set in its FLAGS field.  For reads that have more than
-`<int>` distinct, valid alignments, `hisat2` does not gaurantee that the
+`<int>` distinct, valid alignments, `hisat2` does not guarantee that the
 `<int>` alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)
 
 Note: HISAT2 is not designed with large values for `-k` in mind, and when
@@ -580,8 +575,8 @@ Report secondary alignments.
 
     -I/--minins <int>
 
-The minimum fragment length for valid paired-end alignments.  E.g. if `-I 60` is
-specified and a paired-end alignment consists of two 20-bp alignments in the
+The minimum fragment length for valid paired-end alignments.This option is valid only with --no-spliced-alignment.
+E.g. if `-I 60` is specified and a paired-end alignment consists of two 20-bp alignments in the
 appropriate orientation with a 20-bp gap between them, that alignment is
 considered valid (as long as `-X` is also satisfied).  A 19-bp gap would not
 be valid in that case.  If trimming options `-3` or `-5` are also used, the
@@ -597,8 +592,8 @@ Default: 0 (essentially imposing no minimum)
 
     -X/--maxins <int>
 
-The maximum fragment length for valid paired-end alignments.  E.g. if `-X 100`
-is specified and a paired-end alignment consists of two 20-bp alignments in the
+The maximum fragment length for valid paired-end alignments.  This option is valid only with --no-spliced-alignment.
+E.g. if `-X 100` is specified and a paired-end alignment consists of two 20-bp alignments in the
 proper orientation with a 60-bp gap between them, that alignment is considered
 valid (as long as `-I` is also satisfied).  A 61-bp gap would not be valid in
 that case.  If trimming options `-3` or `-5` are also used, the `-X`
@@ -638,25 +633,6 @@ By default, `hisat2` looks for discordant alignments if it cannot find any
 concordant alignments.  A discordant alignment is an alignment where both mates
 align uniquely, but that does not satisfy the paired-end constraints
 (`--fr`/`--rf`/`--ff`, `-I`, `-X`).  This option disables that behavior.
-
-    --dovetail
-
-If the mates "dovetail", that is if one mate alignment extends past the
-beginning of the other such that the wrong mate begins upstream, consider that
-to be concordant.  See also: [Mates can overlap, contain or dovetail each
-other].  Default: mates cannot dovetail in a concordant alignment.
-
-    --no-contain
-
-If one mate alignment contains the other, consider that to be non-concordant.
-See also: [Mates can overlap, contain or dovetail each other].  Default: a mate
-can contain the other in a concordant alignment.
-
-    --no-overlap
-
-If one mate alignment overlaps the other at all, consider that to be
-non-concordant.  See also: [Mates can overlap, contain or dovetail each other]. 
-Default: mates can overlap in a concordant alignment.
 
 #### Output options
 
@@ -1458,7 +1434,7 @@ Use `samtools sort` to convert the BAM file to a sorted BAM file. The following 
 
 We now have a sorted BAM file called `eg2.sorted.bam`. Sorted BAM is a useful
 format because the alignments are (a) compressed, which is convenient for
-long-term storage, and (b) sorted, which is conveneint for variant discovery.
+long-term storage, and (b) sorted, which is convenient for variant discovery.
 To generate variant calls in VCF format, run:
 
     samtools mpileup -uf $HISAT2_HOME/example/reference/22_20-21M.fa eg2.sorted.bam | bcftools view -bvcg - > eg2.raw.bcf
