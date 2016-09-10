@@ -1210,7 +1210,7 @@ def calculate_read_cost(test_NH,
      
     aligners = [
         # ["hisat", "", "", ""],
-        ["hisat2", "", "", "203b"],
+        ["hisat2", "", "", "204"],
         ["hisat2", "", "", ""],        
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
@@ -1221,7 +1221,7 @@ def calculate_read_cost(test_NH,
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "snp", "201b"],
         # ["hisat2", "", "snp", ""],
-        ["hisat2", "x1", "snp_tran", "203b"],
+        # ["hisat2", "x1", "snp_tran", "203b"],
         ["hisat2", "x1", "snp_tran", ""],
         # ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
@@ -1258,8 +1258,8 @@ def calculate_read_cost(test_NH,
     chr_dic = read_genome("../../data/%s.fa" % genome)
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     align_stat = []
-    for paired in [False, True]:
-    # for paired in [False]:
+    # for paired in [False, True]:
+    for paired in [True]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"

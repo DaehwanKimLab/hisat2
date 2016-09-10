@@ -83,6 +83,7 @@ enum {
 	ARG_SCORE_MA,               // --ma
 	ARG_SCORE_MMP,              // --mp
     ARG_SCORE_SCP,              // --sp
+    ARG_NO_SOFTCLIP,            // --no-softclip
 	ARG_SCORE_NP,               // --nm
 	ARG_SCORE_RDG,              // --rdg
 	ARG_SCORE_RFG,              // --rfg
