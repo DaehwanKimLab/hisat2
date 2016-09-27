@@ -56,7 +56,7 @@ def get_aligners():
             cmd = "wget %s/%s; tar xvzf %s; cd %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, installs)
         elif program == "STAR":
-            dir = "STAR_2.4.2a"
+            dir = "2.5.2b"
             if os.path.exists("STAR-" + dir):
                 continue
             fname = dir + ".tar.gz"
