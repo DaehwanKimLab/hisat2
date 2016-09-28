@@ -830,51 +830,90 @@ def HLA_typing(ex_path,
                                              stderr=open("/dev/null", 'w'))
 
             # Check deletions' alternatives
+            Del_alts = {}
             for _var_i, _var_id in Var_list[gene]:
                 _var_type, _var_pos, _var_data = Vars[gene][_var_id]
                 if _var_type != "deletion" or _var_pos == 0:
                     continue
                 _var_del_len = int(_var_data)
-                debug = (_var_id == "hv1341")
+                Del_alts[_var_id] = [[], []]
+                debug = (_var_id == "hv93ee0")
                 if debug:
                     print Vars[gene][_var_id]
                 _var_j = lower_bound(Var_list[gene], _var_pos)
+                _latest_pos = _var_pos - 1
                 while _var_j < len(Var_list[gene]):
                     _j_pos, _j_id = Var_list[gene][_var_j]
                     if _j_pos > _var_pos + _var_del_len - 1:
                         break
-                    if _j_pos >= _var_pos:
-                        _j_type, _, _j_data = Vars[gene][_j_id]
-                        if _j_type == "single":
-                            if debug:
-                                print Vars[gene][_j_id]
-                                _off = _j_pos - _var_pos
-                                print _var_pos + _off, ref_seq[_var_pos + _off]
-                                print _var_pos + _var_del_len + _off, ref_seq[_var_pos + _var_del_len + _off]
-                                if _j_data != ref_seq[_var_pos + _var_del_len + _off]:
-                                    break
+                    if _j_pos < _var_pos:
+                        _var_j += 1
+                        continue
+                    # Check bases between SNPs
+                    while _latest_pos < _j_pos:
+                        if ref_seq[_latest_pos + 1] != ref_seq[_var_pos + _var_del_len - 1 - (_latest_pos - _var_pos)]:
+                            break
+                        _latest_pos += 1
+                        Del_alts[_var_id][0].append(["ref", _latest_pos])
+                    if _latest_pos + 1 < _j_pos:
+                        break
+                    if _j_pos == _latest_pos:
+                        _var_j += 1
+                        continue
+                    _j_type, _, _j_data = Vars[gene][_j_id]
+                    if _j_type == "single":
+                        if debug: print Vars[gene][_j_id]
+                        _off = _j_pos - _var_pos
+                        if debug: print _var_pos + _off, ref_seq[_var_pos + _off]
+                        if debug: print _var_pos + _var_del_len + _off, ref_seq[_var_pos + _var_del_len + _off]
+                        if _j_data == ref_seq[_var_pos + _var_del_len + _off]:
+                            Del_alts[_var_id][0].append([_j_id, _j_pos])
+                            _latest_pos = _j_pos
+                        else:
+                            # Not having single at the same position?
+                            if _var_j + 1 >= len(Var_list[gene]) or Var_list[gene][_var_j+1][0] != _j_pos:
+                                break
                     _var_j += 1
                 _var_j = lower_bound(Var_list[gene], _var_pos + _var_del_len - 1)
+                _latest_pos = _var_pos + _var_del_len
                 while _var_j >= 0:
                     _j_pos, _j_id = Var_list[gene][_var_j]
-                    if _j_pos < _var_pos:
+                    if _j_pos <= _var_pos:
                         break
-                    """
-                    if _j_pos >= _var_pos:
-                        _j_type, _, _j_data = Vars[gene][_j_id]
-                        if _j_type == "single":
-                            if debug:
-                                print Vars[gene][_j_id]
-                                _off = _j_pos - _var_pos
-                                print _var_pos + _off, ref_seq[_var_pos + _off]
-                                print _var_pos + _var_del_len + _off, ref_seq[_var_pos + _var_del_len + _off]
-                                if _j_data != ref_seq[_var_pos + _var_del_len + _off]:
-                                    break
-                    """
+                    if _j_pos >= _var_pos + _var_del_len:
+                        _var_j -= 1
+                        continue
+                    # Check bases between SNPs
+                    while _latest_pos > _j_pos:
+                        if debug: print _latest_pos - 1, ref_seq[_latest_pos - 1], _latest_pos - 1 - _var_del_len, ref_seq[_latest_pos - 1 - _var_del_len]
+                        if ref_seq[_latest_pos - 1] != ref_seq[_latest_pos - 1 - _var_del_len]:
+                            break
+                        _latest_pos -= 1
+                        Del_alts[_var_id][1].append(["ref", _latest_pos])
+                    if _latest_pos - 1 > _j_pos:
+                        break
+                    if _j_pos == _latest_pos:
+                        _var_j -= 1
+                        continue
+                    _j_type, _, _j_data = Vars[gene][_j_id]
+                    if _j_type == "single":
+                        if debug: print Vars[gene][_j_id]
+                        _off = _var_pos + _var_del_len - _j_pos
+                        if debug: print _var_pos - _off, ref_seq[_var_pos - _off]
+                        if debug: print _j_pos, ref_seq[_j_pos]
+                        if _j_data == ref_seq[_var_pos - _off]:
+                            Del_alts[_var_id][1].append([_j_id, _j_pos])
+                            _latest_pos = _j_pos
+                        else:
+                            # Not having single at the same position?
+                            if _var_j >= 0 or Var_list[gene][_var_j-1][0] != _j_pos:
+                                break
                     _var_j -= 1
                 
 
                 if debug:
+                    print Del_alts
+                    print "DK :-)"
                     sys.exit(1)
 
 

@@ -1,0 +1,3 @@
+To run HISAT-genotype
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --partial
+
