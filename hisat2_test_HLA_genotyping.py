@@ -103,7 +103,6 @@ def align_reads(ex_path,
     else:
         aligner_cmd += ["-1", "%s" % read_fname[0],
                         "-2", "%s" % read_fname[1]]
-
     if verbose >= 1:
         print >> sys.stderr, ' '.join(aligner_cmd)
     align_proc = subprocess.Popen(aligner_cmd,
@@ -836,8 +835,11 @@ def HLA_typing(ex_path,
                 if _var_type != "deletion" or _var_pos == 0:
                     continue
                 _var_del_len = int(_var_data)
+                if _var_pos + _var_del_len >= len(ref_seq):
+                    assert _var_pos + _var_del_len == len(ref_seq)
+                    continue
                 Del_alts[_var_id] = [[], []]
-                debug = (_var_id == "hv93ee0")
+                debug = (_var_id == "hv1341aa")
                 if debug:
                     print Vars[gene][_var_id]
                 _var_j = lower_bound(Var_list[gene], _var_pos)
@@ -1302,14 +1304,9 @@ def HLA_typing(ex_path,
                                             if debug:
                                                 print cmp, var_id, 1, var_data, read_base, Links[var_id]
 
-                                            # DK - for debugging purposes
-                                            if False:
-                                                read_qual = ord(qual[read_pos])
-                                                add_count(var_id, (read_qual - 60) / 60.0)
-                                            else:
-                                                add_count(var_id, 1)
-                                                known_var = True
-                                                add_N_var(N_read_vars, [var_type, ref_pos, read_base, var_id])
+                                            add_count(var_id, 1)
+                                            known_var = True
+                                            add_N_var(N_read_vars, [var_type, ref_pos, read_base, var_id])
                                         # DK - check out if this routine is appropriate
                                         # else:
                                         #    add_count(var_id, -1)
@@ -2355,16 +2352,6 @@ def test_HLA_genotyping(base_fname,
     sys.exit(1)
     """
         
-    # Scoring schemes from Sangtae Kim (Illumina)'s implementation
-    # Currently not used.
-    """
-    max_qual_value = 100
-    match_score, mismatch_score = [0] * max_qual_value, [0] * max_qual_value
-    for qual in range(max_qual_value):
-        error_rate = 0.1 ** (qual / 10.0)
-        match_score[qual] = math.log(1.000000000001 - error_rate);
-        mismatch_score[qual] = math.log(error_rate / 3.0);
-    """
     # Test HLA typing
     test_list = []
     if simulation:
