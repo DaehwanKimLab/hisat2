@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 #
 # Copyright 2015, Daehwan Kim <infphilo@gmail.com>
 #
@@ -24,6 +23,7 @@ import sys, os, subprocess, re
 import inspect, random
 import math
 from argparse import ArgumentParser, FileType
+from hisat2_modules import assembly_graph
 
 
 """
@@ -84,6 +84,9 @@ def align_reads(ex_path,
         aligner_cmd = [hisat2,
                        "--no-unal",
                        "--mm"]
+        # No detection of novel insertions and deletions
+        aligner_cmd += ["--rdg", "10000,10000"] # deletion
+        aligner_cmd += ["--rfg", "10000,10000"] # insertion
         if index_type == "linear":
             aligner_cmd += ["-k", "10"]
         aligner_cmd += ["-x", "hla.%s" % index_type]
@@ -306,311 +309,6 @@ def joint_abundance(HLA_cmpt,
 
 
 """
-"""
-def assemble_two_haplotypes(a_vars, b_vars, debug = False):
-    const_deletion_relax = 10
-    def get_var_info(var):
-        var_type, var_left, var_data = var.split('-')[:3]
-        var_left = int(var_left)
-        if var_type == "unknown":
-            var_right = int(var_data)
-        elif var_type == "deletion":
-            var_right = var_left + int(var_data) - 1
-        else:
-            var_right = var_left
-        assert var_left <= var_right
-        if var_type in ["left", "right"]:
-            assert var_left == var_right
-        return var_type, var_left, var_right
-
-    a_vars, b_vars = a_vars[:], b_vars[:]
-    c_vars = []
-    a_i, b_i = 0, 0
-    while a_i < len(a_vars) or b_i < len(b_vars):
-        if a_i == len(a_vars):
-            c_vars += b_vars[b_i:]
-            break
-        elif b_i == len(b_vars):
-            c_vars += a_vars[a_i:]
-            break
-        else:
-            a_var = a_vars[a_i]
-            b_var = b_vars[b_i]
-            if a_var == b_var:
-                a_i += 1
-                b_i += 1
-                c_vars.append(a_var)
-                continue
-
-            a_type, a_left, a_right = get_var_info(a_var)
-            b_type, b_left, b_right = get_var_info(b_var)
-
-            if debug:
-                print >> sys.stderr, "a_var:", a_i, a_var
-                print >> sys.stderr, "b_var:", b_i, b_var
-                print >> sys.stderr, "c_vars:", c_vars
-
-            if a_type == "left":
-                assert a_i == 0
-            elif a_type == "right":
-                assert a_i + 1 == len(a_vars)
-            if b_type == "left":
-                assert b_i == 0
-            elif b_type == "right":
-                assert b_i + 1 == len(b_vars)
-
-            if a_type in ["left", "right"]:
-                if a_type == "left":
-                    assert a_left <= b_left
-                    c_vars.append("left-%d-%d-left" % (a_left, a_left))
-                    a_i += 1
-                    while a_i < len(a_vars):
-                        a_var = a_vars[a_i]
-                        a_type, a_left, a_right = get_var_info(a_var)
-                        if a_right < b_left:
-                            if a_i + 1 == len(a_vars):
-                                if b_type in ["left", "right"]:
-                                    b_i += 1
-                                    break
-                                break
-                            else:
-                                c_vars.append(a_var)
-                        else:
-                            if b_type == "left":
-                                if a_type == "unknown":
-                                    if a_left < b_left and a_right > b_left:
-                                        a_vars[a_i] = "unknown-%d-%d-unknown" % (b_left, a_right)
-                                        assert b_left <= a_right
-                                elif a_type == "deletion":
-                                    relax = const_deletion_relax if b_type == "deletion" else 0
-                                    if a_right < b_left + relax:
-                                        c_vars.append(a_var)
-                                        a_i += 1
-                                b_i += 1
-                            break
-                        a_i += 1
-                else:
-                    assert a_type == "right"
-                    a_i += 1
-                    while b_i < len(b_vars):
-                        b_var = b_vars[b_i]
-                        b_type, b_left, b_right = get_var_info(b_var)
-                        if b_type in ["left", "right"]:
-                            if b_type == "left":
-                                if a_right < b_left:
-                                    return c_vars, False
-                            else:
-                                c_vars.append("right-%d-%d-right" % (b_right, b_right))
-                        elif b_type == "unknown":
-                            if b_left < a_right and b_right > a_right:
-                                c_vars.append("unknown-%d-%d-unknown" % (a_right + 1, b_right))
-                        else:
-                            relax = const_deletion_relax if b_type == "deletion" else 0
-                            if b_left + relax < a_right:
-                                return c_vars, False
-                            else:
-                                break
-                        b_i += 1
-            elif b_type in ["left", "right"]:
-                if b_type == "left":
-                    if a_left <= b_left:
-                        a_i += 1
-                        c_vars.append(a_var)
-                    else:
-                        b_i += 1
-                else:
-                    assert b_type == "right"
-                    b_i += 1
-                    while a_i < len(a_vars):
-                        a_var = a_vars[a_i]
-                        a_type, a_left, a_right = get_var_info(a_var)
-                        relax = 1
-                        if a_left > b_right + relax:
-                            break
-                        else:
-                            if a_type == "unknown":
-                                if a_right > b_right:
-                                    c_vars.append("unknown-%d-%d-unknown" % (b_right + 1, a_right))
-                                    a_i += 1
-                            elif a_type == "deletion":
-                                relax = const_deletion_relax if b_type == "deletion" else 0
-                                if a_right < b_right + relax:
-                                    c_vars.append(a_var)
-                                    a_i += 1
-                            else:
-                                return c_vars, False
-                            break
-                        a_i += 1
-
-            else:
-                assert a_type not in ["left", "right"] and b_type not in ["left", "right"]
-                if a_type == "unknown" and b_type == "unknown":
-                    if (a_left <= b_left and a_right >= b_left) or \
-                            (b_left <= a_left and b_right >= a_left):
-                        c_vars.append("unknown-%d-%d-unknown" % (max(a_left, b_left), min(a_right, b_right)))
-                    a_i += 1
-                    b_i += 1
-                    if a_right < b_right:
-                        while a_i < len(a_vars):
-                            a_var = a_vars[a_i]
-                            a_type, a_left, a_right = get_var_info(a_var)
-                            if (a_type == "deletion" and a_right < b_right + 1) or \
-                                    (a_type != "deletion" and a_right < b_right):
-                                a_i += 1
-                                if a_type == "right":
-                                    assert a_i == len(a_vars)
-                                    c_vars.append("unknown-%d-%d-unknown" % (a_right + 1, b_right))
-                                else:
-                                    c_vars.append(a_var)
-                            else:
-                                break                                            
-                    else:
-                        while b_i < len(b_vars):
-                            b_var = b_vars[b_i]
-                            b_type, b_left, b_right = get_var_info(b_var)
-                            if (b_type == "deletion" and b_right < a_right + 1) or \
-                                    (b_type != "deletion" and b_right < a_right):
-                                b_i += 1
-                                if b_type == "right":
-                                    assert b_i == len(b_vars)
-                                    c_vars.append("unknown-%d-%d-unknown" % (b_right + 1, a_right))
-                                else:
-                                    c_vars.append(b_var)
-                            else:
-                                break
-                elif a_type == "unknown" or b_type == "unknown":
-                    if a_right < b_right:
-                        if b_type == "unknown":
-                            # DK - for debugging purposes
-                            """
-                            if a_type == "deletion":
-                                if a_right + const_deletion_relax < b_left:
-                                    return c_vars, False
-                            else:
-                                if a_right < b_left:
-                                    return c_vars, False
-                            """
-                            if a_right < b_left:
-                                return c_vars, False
-                            
-                            a_i += 1
-                            b_vars[b_i] = "unknown-%d-%d-unknown" % (a_right + 1, b_right)
-                            c_vars.append(a_var)
-                        else:
-                            assert a_type == "unknown"
-                            a_i += 1
-                    else:
-                        if a_type == "unknown":
-                            if b_i == 0 or b_i + 1 == len(b_vars):
-                                return c_vars, False                                            
-                            b_i += 1
-                            if b_right  < a_right:
-                                a_vars[a_i] = "unknown-%d-%d-unknown" % (b_right + 1, a_right)
-                            else:
-                                a_i += 1
-                            c_vars.append(b_var)                                            
-                        else:
-                            assert b_type == "unknown"
-                            b_i += 1
-                            if b_right > a_right:
-                                c_vars.append("unknown-%d-%d-unknown" % (max(a_right + 1, b_left), b_right))
-                else:
-                    if a_left == b_left:
-                        return c_vars, False
-                    if a_left < b_left and b_i == 0:
-                        c_vars.append(a_var)
-                        a_i += 1
-                    else:
-                        return c_vars, False
-
-    return c_vars, True
-
-
-"""
-"""
-def assemble_alleles(N_haplotype_list, max_allele = 2):
-    N_alleles = set()
-    alleles = [[N_haplotype_list[0], 1]]
-    while len(alleles) > 0:
-        a, i = alleles.pop()
-        if i == len(N_haplotype_list):
-            N_alleles.add(a)
-            if len(N_alleles) >= max_allele:
-                # print >> sys.stderr, "Warning: too many alleles have been assembled (>= %d)" % len(N_alleles)
-                break
-        else:
-            b = N_haplotype_list[i]
-            a_vars = a.split(',')
-            assert len(a_vars) > 0
-            b_vars = b.split(',')
-            assert len(b_vars) > 0
-
-            c_vars, success = assemble_two_haplotypes(a_vars, b_vars)
-            c = ','.join(c_vars)
-
-            # DK - for debugging purposes
-            if c.find("single-1154-C-hv880,single-1158-T-hv889") != -1 and False:
-                print "a:", a
-                print "b:", b
-                print "c:", ','.join(c_vars), success
-                sys.exit(1)
-            # if len(c_vars) >= 10:
-            #    sys.exit(1)
-
-            # Sanity check
-            for c_var in c_vars[1:-1]:
-                if c_var.find("left") != -1 or \
-                        c_var.find("right") != -1:
-                    print >> sys.stderr, "Error containing left or right in intermediate elements!"
-                    print >> sys.stderr, "a:", a
-                    print >> sys.stderr, "b:", b
-                    print >> sys.stderr, "c:", c
-                    sys.exit(1)
-
-            if success:
-                alleles.append([c, i + 1])
-            else:
-                # DK - temporary
-                if len(alleles) == 0:
-                    # DK - for debugging purposes
-                    """
-                    print "a:", a
-                    print "b:", b
-                    print "c:", c, success
-                    sys.exit(1)
-                    """
-
-                    alleles.append([b, i + 1])
-                alleles.append([a, i + 1])                                        
-    return N_alleles
-
-
-"""
-Example:
-   a: left-2925-2925-left,unknown-3015-3161-unknown,single-3166-A-hv1696,single-3240-G-hv1705,right-3251-3251-right
-   b: left-1572-1572-left,deletion-1625-1-hv1345,unknown-1663-1754-unknown,right-1844-1844-right
-"""
-def haplotype_cmp(a, b):
-    a_vars = a.split(',')
-    assert len(a_vars) > 0
-    a_first_var, a_last_var = a_vars[0], a_vars[-1]
-    a_left = int(a_first_var.split('-')[1])
-    a_right = int(a_last_var.split('-')[1])
-
-    b_vars = b.split(',')
-    assert len(b_vars) > 0
-    b_first_var, b_last_var = b_vars[0], b_vars[-1]
-
-    b_left = int(b_first_var.split('-')[1])
-    b_right = int(b_last_var.split('-')[1])
-
-    if a_left != b_left:
-        return a_left - b_left
-    else:
-        return a_right - b_right                    
-
-
-"""
 Example,
    gene_name, allele_name (input): A, A*32:01:01
    allele (output): single-136-G-hv47,deletion-285-1-hv57, ... ,single-3473-T-hv1756,deletion-3495-1-hv1763,single-3613-C-hv1799 
@@ -818,7 +516,6 @@ def HLA_typing(ex_path,
                                                 stderr=open("/dev/null", 'w'))
 
                 sort_read_cmd = ["sort", "-k", "1,1", "-s"] # -s for stable sorting
-                # sort_read_cmd = ["sort", "-k", "1,1", "-k", "4,4", "-n"]
                 alignview_proc = subprocess.Popen(sort_read_cmd,
                                                   stdin=bamview_proc.stdout,
                                                   stdout=subprocess.PIPE,
@@ -827,6 +524,41 @@ def HLA_typing(ex_path,
                 alignview_proc = subprocess.Popen(alignview_cmd,
                                              stdout=subprocess.PIPE,
                                              stderr=open("/dev/null", 'w'))
+
+            # Assembly graph
+            asm_graph = assembly_graph.Graph(ref_seq)
+
+            # List of nodes that represent alleles
+            allele_vars = {}
+            for var_id, allele_list in Links_default.items():
+                for allele_id in allele_list:
+                    if allele_id not in HLAs[gene]:
+                        continue
+                    if allele_id not in allele_vars:
+                        allele_vars[allele_id] = [var_id]
+                    else:
+                        allele_vars[allele_id].append(var_id)
+
+            allele_nodes = {}
+            for allele_id, var_ids in allele_vars.items():
+                seq = list(ref_seq)  # sequence that node represents
+                var = ["" for i in range(len(ref_seq))]  # how sequence is related to backbone
+                for var_id in var_ids:
+                    assert var_id in Vars[gene]
+                    var_type, var_pos, var_data = Vars[gene][var_id]
+                    assert var_pos >= 0 and var_pos < len(ref_seq)
+                    if var_type == "single":
+                        seq[var_pos] = var_data
+                        var[var_pos] = var_id
+                    else:
+                        assert var_type == "deletion"
+                        del_len = int(var_data)
+                        assert var_pos + del_len <= len(ref_seq)
+                        seq[var_pos:var_pos + del_len] = ['D'] * del_len
+                        var[var_pos:var_pos + del_len] = [var_id] * del_len
+
+                seq = ''.join(seq)
+                allele_nodes[allele_id] = assembly_graph.Node(0, seq, var)
 
             # Check deletions' alternatives
             Del_alts = {}
@@ -947,6 +679,10 @@ def HLA_typing(ex_path,
             prev_exon = False
             prev_right_pos = 0
             if index_type == "graph":
+                # nodes for reads
+                read_nodes = []
+                read_vars_list = []
+                
                 # Cigar regular expression
                 cigar_re = re.compile('\d+\w')
                 for line in alignview_proc.stdout:
@@ -1008,6 +744,7 @@ def HLA_typing(ex_path,
                     cmp_list = []
 
                     # Extract variants w.r.t backbone from CIGAR string
+                    softclip = [0, 0]
                     for i in range(len(cigars)):
                         cigar_op, length = cigars[i]
                         if cigar_op == 'M':
@@ -1066,7 +803,11 @@ def HLA_typing(ex_path,
                                 MD_str_pos += 1
                             cmp_list.append(["deletion", right_pos, length])
                         elif cigar_op == 'S':
-                            cmp_list.append(["soft", right_pos, length])
+                            if i == 0:
+                                softclip[0] = length
+                            else:
+                                assert i + 1 == len(cigars)
+                                softclip[1] = length
                         else:                    
                             assert cigar_op == 'N'
                             cmp_list.append(["intron", right_pos, length])
@@ -1077,13 +818,29 @@ def HLA_typing(ex_path,
                         if cigar_op in "MIS":
                             read_pos += length
 
-                    exon = False
+                    # Remove softclip in cigar and modify read_seq and read_qual accordingly
+                    if sum(softclip) > 0:
+                        if softclip[0] > 0:
+                            cigars = cigars[1:]
+                            read_seq = read_seq[softclip[0]:]
+                            qual = qual[softclip[0]:]
+                        if softclip[1] > 0:
+                            cigars = cigars[:-1]
+                            read_seq = read_seq[:-softclip[1]]
+                            qual = qual[:-softclip[1]]
+
+                        cigar_str = ""
+                        for type, length in cigars:
+                            cigar_str += str(length)
+                            cigar_str += type
+
+                    is_exon = False
                     for exon in ref_exons:
                         exon_left, exon_right = exon
                         if right_pos <= exon_left or pos > exon_right:
                             continue
                         else:
-                            exon = True
+                            is_exon = True
                             break
 
                     if right_pos > len(ref_seq):
@@ -1106,9 +863,9 @@ def HLA_typing(ex_path,
                         if len(cur_cmpt) == 0:
                             return
 
-                        # DK - for debugging purposes                            
-                        # alleles = ["", ""]
-                        alleles = ["A*32:29", "A*03:01:07"]
+                        # daehwan - for debugging purposes                            
+                        alleles = ["", ""]
+                        # alleles = ["B*40:304", "B*40:02:01"]
                         allele1_found, allele2_found = False, False
                         for allele, count in HLA_count_per_read.items():
                             if count < max_count:
@@ -1117,7 +874,7 @@ def HLA_typing(ex_path,
                                 allele1_found = True
                             elif allele == alleles[1]:
                                 allele2_found = True
-                        if allele1_found != allele2_found and allele2_found:
+                        if allele1_found != allele2_found:
                             print alleles[0], HLA_count_per_read[alleles[0]]
                             print alleles[1], HLA_count_per_read[alleles[1]]
                             if allele1_found:
@@ -1125,50 +882,21 @@ def HLA_typing(ex_path,
                             else:
                                 print ("%s\tread_id %s - %d vs. %d]" % (alleles[1], prev_read_id, max_count, HLA_count_per_read[alleles[0]]))
                             print read_seq
-                            print line,
 
                         cur_cmpt = sorted(list(cur_cmpt))
                         cur_cmpt = '-'.join(cur_cmpt)
                         add = 1
+                        if partial and not exon:
+                            add *= 0.2
                         if not cur_cmpt in HLA_cmpt:
                             HLA_cmpt[cur_cmpt] = add
                         else:
                             HLA_cmpt[cur_cmpt] += add
 
-                    def add_N_stat(N_vars, N_haplotypes, N_read_vars):
-                        haplotype_str, haplotype_canonical_str = "", ""
-                        # Sanity check
-                        for i in range(len(N_read_vars)):
-                            N_read_var = N_read_vars[i]
-                            if N_read_var[0] in ["left", "right"]:
-                                assert i == 0 or i + 1 == len(N_read_vars)
-                            if N_read_var[0] in ["unknown", "left", "right"]:
-                                var_str = "%s-%d-%d-%s" % (N_read_var[0], N_read_var[1], N_read_var[2], N_read_var[3])
-                            else:
-                                var_type, var_pos, var_data, var_id = N_read_var
-                                var_str = "%s-%d-%s-%s" % (var_type, var_pos, var_data, var_id)
-                                if var_str not in N_vars:
-                                    N_vars[var_str] = 1
-                                else:
-                                    N_vars[var_str] += 1
-                            if var_str.find("unknown") == -1 and var_str.find("left") == -1 and var_str.find("right") == -1:
-                                if haplotype_canonical_str != "":
-                                    haplotype_canonical_str += ","
-                                haplotype_canonical_str += var_str                                    
-                            if haplotype_str != "":
-                                haplotype_str += ","
-                            haplotype_str += var_str
-                        if len(N_read_vars) >= 1:
-                            if haplotype_canonical_str not in N_haplotypes:
-                                N_haplotypes[haplotype_canonical_str] = [haplotype_str]
-                            else:
-                                N_haplotypes[haplotype_canonical_str].append(haplotype_str)
-
                     if read_id != prev_read_id:
                         if prev_read_id != None:
-                            add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, prev_exon)
-                            add_N_stat(N_vars, N_haplotypes, N_read_vars)
-                            N_read_vars = []
+                            add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
+                            read_nodes, read_var_list = [], []
 
                         HLA_count_per_read = {}
                         for HLA_name in HLA_names[gene]:
@@ -1196,46 +924,38 @@ def HLA_typing(ex_path,
                                 if allele in ["A*32:29", "A*03:01:07"]:
                                     print allele, add, var_id
 
-                    def add_N_var(N_read_vars, N_read_var):
-                        if len(N_read_vars) == 0:
-                            N_read_vars.append(N_read_var)
-                        else:
-                            var_type, var_pos, var_data, var_id = N_read_vars[-1]
-                            var_type2, var_pos2, var_data, var_id2 = N_read_var
-                            if var_pos < var_pos2:
-                                N_read_vars.append(N_read_var)
-
                     # Decide which allele(s) a read most likely came from
                     # also sanity check - read length, cigar string, and MD string
+                    """
                     for var_id, data in Vars[gene].items():
                         var_type, var_pos, var_data = data
                         if var_type != "deletion":
                             continue
                         if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
                             add_count(var_id, -1)
+                    """
 
-                    if concordant and concordant_assembly:
-                        concordant_second_read = (len(N_read_vars) > 0)
-                    else:
-                        concordant_second_read = False
-                        add_N_stat(N_vars, N_haplotypes, N_read_vars)
-                        N_read_vars = []
+                    # Node
+                    read_node_pos, read_node_seq, read_node_var = -1, "", []
+                    read_vars = []
                          
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
-                    first_diff = True
                     for cmp_i in range(len(cmp_list)):
                         cmp = cmp_list[cmp_i]
                         type = cmp[0]
                         length = cmp[2]
-                        unknown_in_pair = []
-                        if type in ["match", "mismatch", "deletion", "insertion"]:
-                            if concordant_second_read and first_diff:
-                                if prev_right_pos < left_pos - 1:
-                                    add_N_var(N_read_vars, ["unknown", prev_right_pos, left_pos - 1, "unknown"])
-                            first_diff = False
+
+                        # Node
+                        if type in ["match", "mismatch"]:
+                            if read_node_pos < 0:
+                                read_node_pos = ref_pos
 
                         if type == "match":
+                            # Node
+                            read_node_seq += read_seq[read_pos:read_pos+length]
+                            read_node_var += ([''] * length)
+                            
                             var_idx = lower_bound(Var_list[gene], ref_pos)
                             while var_idx < len(Var_list[gene]):
                                 var_pos, var_id = Var_list[gene][var_idx]
@@ -1271,25 +991,16 @@ def HLA_typing(ex_path,
                                             print cmp, var_id, Links[var_id], -1
                                         add_count(var_id, -1)
                                 var_idx += 1
-                            if cmp_i == 0 or (cmp_i == 1 and cmp_list[0][0] == "soft"):
-                                if not concordant or not concordant_second_read:
-                                    if ref_pos > ref_pos + length - 1:
-                                        # DK - should fix the following
-                                        None
-                                    else:
-                                        if length > 20:
-                                            add_N_var(N_read_vars, ["left", ref_pos + 10, ref_pos + 10, "left"])                                            
-                            if cmp_i + 1 == len(cmp_list) or (cmp_i + 2 == len(cmp_list) and cmp_list[-1][0] == "soft"):
-                                if not concordant or concordant_second_read:
-                                    if length > 20:
-                                        add_N_var(N_read_vars, ["right", ref_pos + length - 1 - 10, ref_pos + length - 1 - 10, "right"])
-
                             read_pos += length
                             ref_pos += length
                             cigar_match_len += length
                             MD_match_len += length
                         elif type == "mismatch":
                             read_base = read_seq[read_pos]
+
+                            # Node
+                            read_node_seq += read_base
+                            
                             var_idx = lower_bound(Var_list[gene], ref_pos)
                             known_var = False
                             while var_idx < len(Var_list[gene]):
@@ -1300,28 +1011,32 @@ def HLA_typing(ex_path,
                                     var_type, _, var_data = Vars[gene][var_id]
                                     if var_type == "single":
                                         if var_data == read_base:
+                                            # Node
+                                            read_node_var.append(var_id)
+                                            
                                             # DK - for debugging purposes
                                             if debug:
                                                 print cmp, var_id, 1, var_data, read_base, Links[var_id]
 
                                             add_count(var_id, 1)
                                             known_var = True
-                                            add_N_var(N_read_vars, [var_type, ref_pos, read_base, var_id])
                                         # DK - check out if this routine is appropriate
                                         # else:
                                         #    add_count(var_id, -1)
                                 var_idx += 1
 
-                            if not known_var:
-                                novel_var_id = add_novel_var(Novel_vars, ["single", ref_pos, read_base])
-                                add_N_var(N_read_vars, ["single", ref_pos, read_base, novel_var_id])
-                                
+                            # Node
+                            if len(read_node_seq) > len(read_node_var):
+                                assert len(read_node_seq) == len(read_node_var) + 1
+                                read_node_var.append("unknown")
+
                             cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
                             MD_match_len = 0
                             cigar_match_len += 1
                             read_pos += 1
                             ref_pos += 1
                         elif type == "insertion":
+                            assert False                            
                             ins_seq = read_seq[read_pos:read_pos+length]
                             var_idx = lower_bound(Var_list[gene], ref_pos)
                             # DK - for debugging purposes
@@ -1343,13 +1058,7 @@ def HLA_typing(ex_path,
                                                 print cmp, var_id, 1, Links[var_id]
                                             add_count(var_id, 1)
                                             known_var = True
-                                            add_N_var(N_read_vars, [var_type, ref_pos, ins_seq, var_id])
                                 var_idx += 1
-
-                            if not known_var:
-                                novel_var_id = add_novel_var(Novel_vars, ["insertion", ref_pos, ins_seq])
-                                add_N_var(N_read_vars, ["insertion", ref_pos, ins_seq, novel_var_id])
-
                             if cigar_match_len > 0:
                                 cmp_cigar_str += ("%dM" % cigar_match_len)
                                 cigar_match_len = 0
@@ -1358,6 +1067,10 @@ def HLA_typing(ex_path,
                         elif type == "deletion":
                             alt_match = False
                             del_len = length
+
+                            # Node
+                            read_node_seq += ('D' * length)
+                            
                             # Check if this deletion can be removed
                             if (cmp_i == 1 and cmp_list[0][0] == "match") or \
                                     (cmp_i == 2 and cmp_list[0][0] == "soft" and cmp_list[0][1] == "match"):
@@ -1418,13 +1131,14 @@ def HLA_typing(ex_path,
                                                 print ref_seq[var_pos - 10:var_pos], ref_seq[var_pos:var_pos+int(var_data)], ref_seq[var_pos+int(var_data):var_pos+int(var_data)+10]
                                             if not alt_match:
                                                 add_count(var_id, 1)
-                                            known_var = True
-                                            add_N_var(N_read_vars, [var_type, ref_pos, del_len, var_id])
-                                var_idx += 1
 
-                            if not known_var:
-                                novel_var_id = add_novel_var(Novel_vars, ["deletion", ref_pos, str(del_len)])
-                                add_N_var(N_read_vars, ["deleltion", ref_pos, del_len, novel_var_id])
+                                            # Node
+                                            read_node_var += ([var_id] * del_len)
+                                var_idx += 1
+                            # Node
+                            if len(read_node_seq) > len(read_node_var):
+                                assert len(read_node_seq) == len(read_node_var) + del_len
+                                read_node_var += (["unknown"] * del_len)
 
                             if cigar_match_len > 0:
                                 cmp_cigar_str += ("%dM" % cigar_match_len)
@@ -1434,12 +1148,6 @@ def HLA_typing(ex_path,
                             cmp_cigar_str += ("%dD" % length)
                             cmp_MD += ("^%s" % ref_seq[ref_pos:ref_pos+length])
                             ref_pos += length
-                        elif type == "soft":
-                            if cigar_match_len > 0:
-                                cmp_cigar_str += ("%dM" % cigar_match_len)
-                                cigar_match_len = 0
-                            read_pos += length
-                            cmp_cigar_str += ("%dS" % length)
                         else:
                             assert type == "intron"
                             if cigar_match_len > 0:
@@ -1459,6 +1167,9 @@ def HLA_typing(ex_path,
                         print >> sys.stderr, "\tcmp list:", cmp_list
                         assert False
 
+                    # Node
+                    read_nodes.append(assembly_graph.Node(read_node_pos, read_node_seq, read_node_var))
+
                     prev_read_id = read_id
                     prev_exon = exon
                     prev_right_pos = right_pos
@@ -1468,163 +1179,8 @@ def HLA_typing(ex_path,
 
                 if prev_read_id != None:
                     add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
-                    add_N_stat(N_vars, N_haplotypes, N_read_vars)
-                    N_read_vars = []
+                    read_nodes, read_var_list = [], []
 
-                # Delete N vars with low evidence
-                var_count_avg = sum(N_vars.values()) / float(len(N_vars))
-                N_ignored_vars = set()
-                for N_var, count in N_vars.items():
-                    _var_type, _, _, _var_id = N_var.split('-')
-                    if _var_id.find("novel"):
-                        if _var_type in ["deleltion", "insertion"]:
-                            if count < var_count_avg / 8.0:
-                                N_ignored_vars.add(N_var)
-                        else:
-                            if count < var_count_avg / 6.0:
-                                N_ignored_vars.add(N_var)
-                    else:
-                        if _var_type in ["deleltion", "insertion"]:
-                            if count < var_count_avg / 10.0:
-                                N_ignored_vars.add(N_var)
-                        else:
-                            if count < var_count_avg / 8.0:
-                                N_ignored_vars.add(N_var)
-
-                    # DK - for debugging purposes
-                    if count <= 3:
-                        N_ignored_vars.add(N_var)
-
-                if verbose >= 1:
-                    print "Number of N haplotypes: %d (before cleaning)" % len(N_haplotypes)
-
-                cleaned_N_haplotypes = {}
-                for _haplotypes in N_haplotypes.values():
-                    for _haplotype in _haplotypes:
-                        _vars = _haplotype.split(',')
-                        cleaned_vars = []
-                        cleaned_canonical_vars = []
-                        filtered = False
-                        for _var in _vars:
-                            if _var.find("unknown") != -1 or \
-                                    _var.find("left") != -1 or \
-                                    _var.find("right") != -1:
-                                cleaned_vars.append(_var)
-                            elif _var not in N_ignored_vars:
-                                cleaned_vars.append(_var)
-                                cleaned_canonical_vars.append(_var)
-                            else:
-                                filtered = True
-                                break
-
-                        # DK - for debugging purposes
-                        if filtered:
-                            continue
-
-                        if len(cleaned_vars) > 0:
-                            if cleaned_vars[0].find("unknown") != -1:
-                                cleaned_vars = cleaned_vars[1:]
-                            elif cleaned_vars[-1].find("unknown") != -1:
-                                cleaned_vars = cleaned_vars[:1]
-
-                        if len(cleaned_vars) > 0:
-                            assert cleaned_vars[0].find("unknown") == -1 and cleaned_vars[-1].find("unknown") == -1
-                            cleaned_haplotype = ','.join(cleaned_vars)
-                            cleaned_canonical_haplotype = ','.join(cleaned_canonical_vars)
-                            if cleaned_canonical_haplotype == "":
-                                cleaned_canonical_haplotype = "nothing-0-0"
-                            if cleaned_canonical_haplotype not in cleaned_N_haplotypes:
-                                cleaned_N_haplotypes[cleaned_canonical_haplotype] = [cleaned_haplotype]
-                            else:
-                                cleaned_N_haplotypes[cleaned_canonical_haplotype].append(cleaned_haplotype)
-
-                N_haplotypes = cleaned_N_haplotypes
-
-                def var_cmp(a, b):
-                    a_left = int(a.split('-')[1])
-                    b_left = int(b.split('-')[1])
-                    return a_left - b_left
-
-                N_var_list = list(N_vars.keys())
-                N_var_list = sorted(N_var_list, cmp=var_cmp)
-
-                if verbose:
-                    print "Number of vars: %d (filtered: %d)" % (len(N_vars), len(N_ignored_vars))
-                    for N_var in N_var_list:
-                        print "%s: %d (removed: %s)" % (N_var, N_vars[N_var], N_var in N_ignored_vars)
-                        
-                N_haplotype_list = set()
-                for _haplotypes in N_haplotypes.values():
-                    for _haplotype in _haplotypes:
-                        N_haplotype_list.add(_haplotype)
-                N_haplotype_list = list(N_haplotype_list)
-                N_haplotype_list = sorted(N_haplotype_list, cmp=haplotype_cmp)
-
-                if verbose >= 2:
-                    v_N_haplotype_list = list(N_haplotypes.keys())
-                    v_N_haplotype_list = sorted(v_N_haplotype_list, cmp=haplotype_cmp)
-                    print "Number of haplotypes: %d" % len(N_haplotypes)
-                    for N_haplotype in v_N_haplotype_list:
-                        print N_haplotype, len(N_haplotypes[N_haplotype])
-                        if verbose >= 3:
-                            for read_haplotype in N_haplotypes[N_haplotype]:
-                                print "\t\t", read_haplotype
-
-                if assembly:
-                    if simulation:
-                        num_assemblies = len(test_HLA_names)
-                    else:
-                        # DK - for debugging purposes
-                        num_assemblies = 10
-                    N_alleles = assemble_alleles(N_haplotype_list, num_assemblies)
-                    if verbose >= 2:
-                        print "Number of N alleles: %d" % len(N_alleles)
-                        for N_allele in N_alleles:
-                            print "\t", N_allele
-                else:
-                    N_alleles = []
-
-                # Coverage
-                # it is not used by the default
-                if enable_coverage:
-                    assert num_reads > 0
-                    read_len = int(total_read_len / float(num_reads))
-                    coverage_sum = 0
-                    for i in range(len(coverage)):
-                        if i > 0:
-                            coverage[i] += coverage[i-1]
-                        coverage_sum += coverage[i]
-                    coverage_avg = coverage_sum / float(len(coverage))
-                    assert len(ref_seq) < len(coverage)
-                    for i in range(len(ref_seq)):
-                        coverage_threshold = 1.0 * coverage_avg
-                        if i < read_len:
-                            coverage_threshold *= ((i+1) / float(read_len))
-                        elif i + read_len > len(ref_seq):
-                            coverage_threshold *= ((len(ref_seq) - i) / float(read_len))
-                        if coverage[i] >= coverage_threshold:
-                            continue
-                        pseudo_num_reads = (coverage_threshold - coverage[i]) / read_len
-                        var_idx = lower_bound(Var_list[gene], i + 1)
-                        if var_idx >= len(Var_list[gene]):
-                            var_idx = len(Var_list[gene]) - 1
-                        cur_cmpt = set()
-                        while var_idx >= 0:
-                            var_pos, var_id = Var_list[gene][var_idx]
-                            var_type, _, var_data = Vars[gene][var_id]
-                            if var_type == "deletion":
-                                del_len = int(var_data)
-                                if i < var_pos:
-                                    break
-                                if i + read_len < var_pos + int(var_data):
-                                    assert var_id in Links
-                                    cur_cmpt = cur_cmpt.union(set(Links[var_id]))
-                            var_idx -= 1
-                        if cur_cmpt:
-                            cur_cmpt = '-'.join(list(cur_cmpt))
-                            if not cur_cmpt in HLA_cmpt:
-                                HLA_cmpt[cur_cmpt] = 0
-                            HLA_cmpt[cur_cmpt] += pseudo_num_reads
             else:
                 assert index_type == "linear"
                 def add_alleles(alleles):
@@ -2413,7 +1969,7 @@ def test_HLA_genotyping(base_fname,
             test_HLA_list = test_list[test_i]
            
             # DK - for debugging purposes
-            test_HLA_list = [["A*32:29"]]
+            # test_HLA_list = [["A*32:29"]]
             for test_HLA_names in test_HLA_list:
                 for test_HLA_name in test_HLA_names:
                     if custom_allele_check:
