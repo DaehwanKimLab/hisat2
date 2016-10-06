@@ -67,12 +67,15 @@ def simulate_reads(HLAs,
     write_reads(HLA_reads_1, 1)
     write_reads(HLA_reads_2, 2)
 
+    return len(HLA_reads_1)
+
 
 """
 Align reads, and sort the alignments into a BAM file
 """
 def align_reads(ex_path,
                 aligner,
+                simulation,
                 index_type,
                 read_fname,
                 fastq,
@@ -81,9 +84,9 @@ def align_reads(ex_path,
                 verbose):
     if aligner == "hisat2":
         hisat2 = os.path.join(ex_path, "hisat2")
-        aligner_cmd = [hisat2,
-                       "--no-unal",
-                       "--mm"]
+        aligner_cmd = [hisat2, "--mm"]
+        if not simulation:
+            aligner_cmd += ["--no-unal"]            
         # No detection of novel insertions and deletions
         aligner_cmd += ["--rdg", "10000,10000"] # deletion
         aligner_cmd += ["--rfg", "10000,10000"] # insertion
@@ -309,6 +312,168 @@ def joint_abundance(HLA_cmpt,
 
 
 """
+"""
+def lower_bound(Var_list, pos):
+    low, high = 0, len(Var_list)
+    while low < high:
+        m = (low + high) / 2
+        m_pos = Var_list[m][0]
+        if m_pos < pos:
+            low = m + 1
+        elif m_pos > pos:
+            high = m
+        else:
+            assert m_pos == pos
+            while m > 0:
+                if Var_list[m-1][0] < pos:
+                    break
+                m -= 1
+            return m
+    return low
+    
+
+"""
+Identify alternative alignments
+"""
+def get_alternatives(ref_seq, Vars, Var_list):
+    # Check deletions' alternatives
+    def get_alternatives_recur(ref_seq, Vars, Var_list, Alts, var, left, debug = False):
+        var_type, var_pos, var_data = var        
+        if left: # Look in left direction
+            alt_list = []
+            var_j = lower_bound(Var_list, var_pos + del_len - 1)
+            latest_pos = var_pos + del_len
+            while var_j >= 0:
+                j_pos, j_id = Var_list[var_j]
+                if j_pos < var_pos:
+                    break
+                if j_pos >= var_pos + del_len:
+                    var_j -= 1
+                    continue
+                # Check bases between SNPs
+                while latest_pos > j_pos:
+                    if debug: print latest_pos - 1, ref_seq[latest_pos - 1], latest_pos - 1 - del_len, ref_seq[latest_pos - 1 - del_len]
+                    if ref_seq[latest_pos - 1] != ref_seq[latest_pos - 1 - del_len]:
+                        break
+                    latest_pos -= 1
+                if latest_pos - 1 > j_pos:
+                    break
+                if j_pos == latest_pos:
+                    var_j -= 1
+                    continue
+                j_type, _, j_data = Vars[j_id]
+                if j_type == "single":
+                    if debug: print Vars[j_id]
+                    off = var_pos + del_len - j_pos
+                    if debug: print var_pos - off, ref_seq[var_pos - off]
+                    if debug: print j_pos, ref_seq[j_pos]
+                    if j_data == ref_seq[var_pos - off]:
+                        if var_id not in Alts:
+                            Alts[var_id] = [j_id]
+                        else:
+                            Alts[var_id].append(j_id)
+                        alt_list.append(j_id)
+                        alts = '-'.join(alt_list)
+                        if alts not in Alts:
+                            Alts[alts] = [var_id]
+                        else:
+                            Alts[alts].append(var_id)
+
+                        latest_pos = j_pos
+                    else:
+                        # Not having single at the same position?
+                        if var_j <= 0 or Var_list[var_j-1][0] != j_pos:
+                            if debug: print "break at", Var_list[var_j-1]
+                            break
+                elif j_type == "deletion":
+                    # DK - to be implemented
+                    None
+                var_j -= 1
+              
+        else: # Look in right direction
+            alt_list = []
+            var_j = lower_bound(Var_list, var_pos)
+            latest_pos = var_pos - 1
+            while var_j < len(Var_list):
+                j_pos, j_id = Var_list[var_j]
+                if j_pos > var_pos + del_len - 1:
+                    break
+                if j_pos < var_pos:
+                    var_j += 1
+                    continue
+                # Check bases between SNPs
+                while latest_pos < j_pos:
+                    if ref_seq[latest_pos + 1] != ref_seq[var_pos + del_len - 1 - (latest_pos - var_pos)]:
+                        break
+                    latest_pos += 1
+                    # Del_alts[var_id][0].append(["ref", latest_pos])
+                if latest_pos + 1 < j_pos:
+                    break
+                if j_pos == latest_pos:
+                    var_j += 1
+                    continue
+                j_type, _, j_data = Vars[j_id]
+                if j_type == "single":
+                    if debug: print Vars[j_id]
+                    off = j_pos - var_pos
+                    if debug: print var_pos + off, ref_seq[var_pos + off]
+                    if debug: print var_pos + del_len + off, ref_seq[var_pos + del_len + off]
+                    if j_data == ref_seq[var_pos + del_len + off]:
+                        if var_id not in Alts:
+                            Alts_right[var_id] = [j_id]
+                        else:
+                            Alts[var_id].append(j_id)
+                        alt_list.append(j_id)
+                        alts = '-'.join(alt_list)
+                        if alts not in Alts:
+                            Alts[alts] = [var_id]
+                        else:
+                            Alts[alts].append(var_id)
+                        latest_pos = j_pos
+                    else:
+                        # Not having single at the same position?
+                        if var_j + 1 >= len(Var_list) or Var_list[var_j+1][0] != j_pos:
+                            break
+                elif j_type == "deletion":
+                    # DK - to be implemented
+                    None                            
+                var_j += 1
+
+        if debug:
+            print Del_alts
+            print "DK :-)"
+            sys.exit(1)
+
+
+    # Check deletions' alternatives
+    Alts_left, Alts_right = {}, {}
+    for var_i, var_id in Var_list:
+        var_type, var_pos, var_data = var = Vars[var_id]
+        if var_type != "deletion" or var_pos == 0:
+            continue
+        del_len = int(var_data)
+        if var_pos + del_len >= len(ref_seq):
+            assert var_pos + del_len == len(ref_seq)
+            continue
+        debug = (var_id == "hv205a")
+        if debug:
+            print Vars[var_id]
+
+        left, right = True, False
+        get_alternatives_recur(ref_seq, Vars, Var_list, Alts_left, var, left, debug)
+        get_alternatives_recur(ref_seq, Vars, Var_list, Alts_right, var, right, debug)            
+
+    # DK - for debugging purposes
+    for alts, alt_list in Alts_left.items():
+        print "\tleft :", alts, alt_list
+
+    for alts, alt_list in Alts_right.items():
+        print "\tright:", alts, alt_list
+
+    return Alts_left, Alts_right
+
+
+"""
 Example,
    gene_name, allele_name (input): A, A*32:01:01
    allele (output): single-136-G-hv47,deletion-285-1-hv57, ... ,single-3473-T-hv1756,deletion-3495-1-hv1763,single-3613-C-hv1799 
@@ -415,26 +580,7 @@ def HLA_typing(ex_path,
                threads,
                enable_coverage,
                best_alleles,
-               verbose):
-    
-    def lower_bound(Var_list, pos):
-        low, high = 0, len(Var_list)
-        while low < high:
-            m = (low + high) / 2
-            m_pos = Var_list[m][0]
-            if m_pos < pos:
-                low = m + 1
-            elif m_pos > pos:
-                high = m
-            else:
-                assert m_pos == pos
-                while m > 0:
-                    if Var_list[m-1][0] < pos:
-                        break
-                    m -= 1
-                return m
-        return low
-           
+               verbose):    
     if simulation:
         test_passed = {}
     for aligner, index_type in aligners:
@@ -455,6 +601,7 @@ def HLA_typing(ex_path,
                 
             align_reads(ex_path,
                         aligner,
+                        simulation,
                         index_type,
                         read_fname,
                         fastq,
@@ -560,124 +707,20 @@ def HLA_typing(ex_path,
                 seq = ''.join(seq)
                 allele_nodes[allele_id] = assembly_graph.Node(0, seq, var)
 
-            # Check deletions' alternatives
-            Del_alts = {}
-            for _var_i, _var_id in Var_list[gene]:
-                _var_type, _var_pos, _var_data = Vars[gene][_var_id]
-                if _var_type != "deletion" or _var_pos == 0:
-                    continue
-                _var_del_len = int(_var_data)
-                if _var_pos + _var_del_len >= len(ref_seq):
-                    assert _var_pos + _var_del_len == len(ref_seq)
-                    continue
-                Del_alts[_var_id] = [[], []]
-                debug = (_var_id == "hv1341aa")
-                if debug:
-                    print Vars[gene][_var_id]
-                _var_j = lower_bound(Var_list[gene], _var_pos)
-                _latest_pos = _var_pos - 1
-                while _var_j < len(Var_list[gene]):
-                    _j_pos, _j_id = Var_list[gene][_var_j]
-                    if _j_pos > _var_pos + _var_del_len - 1:
-                        break
-                    if _j_pos < _var_pos:
-                        _var_j += 1
-                        continue
-                    # Check bases between SNPs
-                    while _latest_pos < _j_pos:
-                        if ref_seq[_latest_pos + 1] != ref_seq[_var_pos + _var_del_len - 1 - (_latest_pos - _var_pos)]:
-                            break
-                        _latest_pos += 1
-                        Del_alts[_var_id][0].append(["ref", _latest_pos])
-                    if _latest_pos + 1 < _j_pos:
-                        break
-                    if _j_pos == _latest_pos:
-                        _var_j += 1
-                        continue
-                    _j_type, _, _j_data = Vars[gene][_j_id]
-                    if _j_type == "single":
-                        if debug: print Vars[gene][_j_id]
-                        _off = _j_pos - _var_pos
-                        if debug: print _var_pos + _off, ref_seq[_var_pos + _off]
-                        if debug: print _var_pos + _var_del_len + _off, ref_seq[_var_pos + _var_del_len + _off]
-                        if _j_data == ref_seq[_var_pos + _var_del_len + _off]:
-                            Del_alts[_var_id][0].append([_j_id, _j_pos])
-                            _latest_pos = _j_pos
-                        else:
-                            # Not having single at the same position?
-                            if _var_j + 1 >= len(Var_list[gene]) or Var_list[gene][_var_j+1][0] != _j_pos:
-                                break
-                    _var_j += 1
-                _var_j = lower_bound(Var_list[gene], _var_pos + _var_del_len - 1)
-                _latest_pos = _var_pos + _var_del_len
-                while _var_j >= 0:
-                    _j_pos, _j_id = Var_list[gene][_var_j]
-                    if _j_pos <= _var_pos:
-                        break
-                    if _j_pos >= _var_pos + _var_del_len:
-                        _var_j -= 1
-                        continue
-                    # Check bases between SNPs
-                    while _latest_pos > _j_pos:
-                        if debug: print _latest_pos - 1, ref_seq[_latest_pos - 1], _latest_pos - 1 - _var_del_len, ref_seq[_latest_pos - 1 - _var_del_len]
-                        if ref_seq[_latest_pos - 1] != ref_seq[_latest_pos - 1 - _var_del_len]:
-                            break
-                        _latest_pos -= 1
-                        Del_alts[_var_id][1].append(["ref", _latest_pos])
-                    if _latest_pos - 1 > _j_pos:
-                        break
-                    if _j_pos == _latest_pos:
-                        _var_j -= 1
-                        continue
-                    _j_type, _, _j_data = Vars[gene][_j_id]
-                    if _j_type == "single":
-                        if debug: print Vars[gene][_j_id]
-                        _off = _var_pos + _var_del_len - _j_pos
-                        if debug: print _var_pos - _off, ref_seq[_var_pos - _off]
-                        if debug: print _j_pos, ref_seq[_j_pos]
-                        if _j_data == ref_seq[_var_pos - _off]:
-                            Del_alts[_var_id][1].append([_j_id, _j_pos])
-                            _latest_pos = _j_pos
-                        else:
-                            # Not having single at the same position?
-                            if _var_j >= 0 or Var_list[gene][_var_j-1][0] != _j_pos:
-                                break
-                    _var_j -= 1
-                
-
-                if debug:
-                    print Del_alts
-                    print "DK :-)"
-                    sys.exit(1)
-
+            Alts_left, Alts_right = get_alternatives(ref_seq, Vars[gene], Var_list[gene])
 
             # Count alleles
             HLA_counts, HLA_cmpt = {}, {}
-            coverage = [0 for i in range(len(ref_seq) + 1)]
             num_reads, total_read_len = 0, 0
 
-            # Novel alleles
-            N_vars, N_haplotypes = {}, {}
-            # Variants to idenity novel alleles
-            N_read_vars = []
-
-            # Novel variants used to construct novel alleles
-            Novel_vars, Novel_var_ids = {}, {}
-            def add_novel_var(Novel_vars, var):
-                var_str = "%s-%d-%s" % (var[0], var[1], var[2])
-                if var_str in Novel_var_ids:
-                    return Novel_var_ids[var_str]
-                    
-                var_id = "novel%d" % len(Novel_vars)
-                Novel_var_ids[var_str] = var_id
-                Novel_vars[var_id] = var
-                assert len(Novel_var_ids) == len(Novel_vars)
-                return var_id
+            # Debugging
+            debug_allele_names = test_HLA_names if simulation and verbose >= 2 else []
 
             # Read information
             prev_read_id = None
             prev_exon = False
             prev_right_pos = 0
+            prev_lines = []
             if index_type == "graph":
                 # nodes for reads
                 read_nodes = []
@@ -686,7 +729,8 @@ def HLA_typing(ex_path,
                 # Cigar regular expression
                 cigar_re = re.compile('\d+\w')
                 for line in alignview_proc.stdout:
-                    cols = line.strip().split()
+                    line = line.strip()
+                    cols = line.split()
                     read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
                     read_seq, qual = cols[9], cols[10]
                     num_reads += 1
@@ -698,6 +742,9 @@ def HLA_typing(ex_path,
 
                     # Unalined?
                     if flag & 0x4 != 0:
+                        if simulation and verbose >= 2:
+                            print "Unaligned"
+                            print "\t", line                            
                         continue
 
                     # Concordantly mapped?
@@ -724,19 +771,16 @@ def HLA_typing(ex_path,
                     if NH > 1:
                         concordant = False
 
-                    # DK - for debugging purposes
-                    debug = False
-                    if read_id in ["2339"] and False:
-                        debug = True
-                        print "read_id: %s)" % read_id, pos, cigar_str, "NM:", NM, MD, Zs
-                        print "            ", read_seq
-
-                    vars = []
                     if Zs:
-                        vars = Zs.split(',')
+                        Zs = Zs.split(',')
 
                     assert MD != ""
                     MD_str_pos, MD_len = 0, 0
+                    Zs_pos, Zs_i = 0, 0
+                    for _i in range(len(Zs)):
+                        Zs[_i] = Zs[_i].split('|')
+                    if Zs_i < len(Zs):
+                        Zs_pos += int(Zs[Zs_i][0])
                     read_pos, left_pos = 0, pos
                     right_pos = left_pos
                     cigars = cigar_re.findall(cigar_str)
@@ -780,10 +824,19 @@ def HLA_typing(ex_path,
                                 read_base = read_seq[read_pos + MD_len]
                                 MD_ref_base = MD[MD_str_pos]
                                 MD_str_pos += 1
-                                # DK - for debugging purposes
-                                # assert MD_ref_base in "ACGT"
+                                assert MD_ref_base in "ACGT"
                                 cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
-                                cmp_list.append(["mismatch", right_pos + MD_len, 1])
+
+                                _var_id = "unknown"
+                                if read_pos + MD_len == Zs_pos and Zs_i < len(Zs):
+                                    assert Zs[Zs_i][1] == 'S'
+                                    _var_id = Zs[Zs_i][2]
+                                    Zs_i += 1
+                                    Zs_pos += 1
+                                    if Zs_i < len(Zs):
+                                        Zs_pos += int(Zs[Zs_i][0])
+
+                                cmp_list.append(["mismatch", right_pos + MD_len, 1, _var_id])
                                 MD_len_used = MD_len + 1
                                 MD_len += 1
                                 # Full match
@@ -801,10 +854,19 @@ def HLA_typing(ex_path,
                                 if not MD[MD_str_pos] in "ACGT":
                                     break
                                 MD_str_pos += 1
-                            cmp_list.append(["deletion", right_pos, length])
+                            _var_id = "unknown"
+                            if read_pos == Zs_pos and Zs_i < len(Zs):
+                                assert Zs[Zs_i][1] == 'D'
+                                _var_id = Zs[Zs_i][2]
+                                Zs_i += 1
+                                if Zs_i < len(Zs):
+                                    Zs_pos += int(Zs[Zs_i][0])
+
+                            cmp_list.append(["deletion", right_pos, length, _var_id])
                         elif cigar_op == 'S':
                             if i == 0:
                                 softclip[0] = length
+                                Zs_pos += length
                             else:
                                 assert i + 1 == len(cigars)
                                 softclip[1] = length
@@ -893,16 +955,29 @@ def HLA_typing(ex_path,
                         else:
                             HLA_cmpt[cur_cmpt] += add
 
+                        return cur_cmpt
+
                     if read_id != prev_read_id:
                         if prev_read_id != None:
-                            add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
+                            cur_cmpt = add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
                             read_nodes, read_var_list = [], []
+
+                            if verbose >= 2:
+                                cur_cmpt = cur_cmpt.split('-')
+                                if not(set(cur_cmpt) & set(test_HLA_names)):
+                                    print "%s are chosen instead of %s" % ('-'.join(cur_cmpt), '-'.join(test_HLA_names))
+                                    for prev_line in prev_lines:
+                                        print "\t", prev_line
+
+                            prev_lines = []
 
                         HLA_count_per_read = {}
                         for HLA_name in HLA_names[gene]:
                             if HLA_name.find("BACKBONE") != -1:
                                 continue
                             HLA_count_per_read[HLA_name] = 0
+
+                    prev_lines.append(line)
 
                     def add_count(var_id, add):
                         if partial and \
@@ -911,6 +986,16 @@ def HLA_typing(ex_path,
                             return
                         assert var_id in Links
                         alleles = Links[var_id]
+
+                        if verbose >= 2:
+                            if add > 0 and not(set(alleles) & set(debug_allele_names)):
+                                print "Add:", add, debug_allele_names, "-", var_id
+                                print "\t", line
+                                print "\t", alleles
+                            if add < 0 and set(alleles) & set(debug_allele_names):
+                                print "Add:", add, debug_allele_names, "-", var_id
+                                print "\t", line
+
                         for allele in alleles:
                             if allele.find("BACKBONE") != -1:
                                 continue
@@ -920,20 +1005,18 @@ def HLA_typing(ex_path,
                                     continue
                             HLA_count_per_read[allele] += add
                             # DK - for debugging purposes
-                            if debug or True:
+                            if debug:
                                 if allele in ["A*32:29", "A*03:01:07"]:
                                     print allele, add, var_id
 
                     # Decide which allele(s) a read most likely came from
                     # also sanity check - read length, cigar string, and MD string
-                    """
                     for var_id, data in Vars[gene].items():
                         var_type, var_pos, var_data = data
                         if var_type != "deletion":
                             continue
                         if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
                             add_count(var_id, -1)
-                    """
 
                     # Node
                     read_node_pos, read_node_seq, read_node_var = -1, "", []
@@ -941,10 +1024,14 @@ def HLA_typing(ex_path,
                          
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
-                    for cmp_i in range(len(cmp_list)):
+                    cmp_i = 0
+                    while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
                         type = cmp[0]
                         length = cmp[2]
+
+                        if num_mismatch == 0 and type in ["mismatch", "deletion", "insertion"]:
+                            assert cmp[3] != "unknown"
 
                         # Node
                         if type in ["match", "mismatch"]:
@@ -966,15 +1053,9 @@ def HLA_typing(ex_path,
                                     if var_type == "insertion":
                                         if ref_pos < var_pos and ref_pos + length > var_pos + len(var_data):
                                             add_count(var_id, -1)
-                                            # DK - for debugging purposes
-                                            if debug:
-                                                print cmp, var_id, Links[var_id]
                                     elif var_type == "deletion":
                                         del_len = int(var_data)
                                         if ref_pos < var_pos and ref_pos + length > var_pos + del_len:
-                                            # DK - for debugging purposes
-                                            if debug:
-                                                print cmp, var_id, Links[var_id], -1, Vars[gene][var_id]
                                             # Check if this might be one of the two tandem repeats (the same left coordinate)
                                             cmp_left, cmp_right = cmp[1], cmp[1] + cmp[2]
                                             test1_seq1 = ref_seq[cmp_left:cmp_right]
@@ -987,8 +1068,6 @@ def HLA_typing(ex_path,
                                             if test1_seq1 != test1_seq2 and test2_seq1 != test2_seq2:
                                                 add_count(var_id, -1)
                                     else:
-                                        if debug:
-                                            print cmp, var_id, Links[var_id], -1
                                         add_count(var_id, -1)
                                 var_idx += 1
                             read_pos += length
@@ -997,12 +1076,9 @@ def HLA_typing(ex_path,
                             MD_match_len += length
                         elif type == "mismatch":
                             read_base = read_seq[read_pos]
-
                             # Node
                             read_node_seq += read_base
-                            
                             var_idx = lower_bound(Var_list[gene], ref_pos)
-                            known_var = False
                             while var_idx < len(Var_list[gene]):
                                 var_pos, var_id = Var_list[gene][var_idx]
                                 if ref_pos < var_pos:
@@ -1013,18 +1089,8 @@ def HLA_typing(ex_path,
                                         if var_data == read_base:
                                             # Node
                                             read_node_var.append(var_id)
-                                            
-                                            # DK - for debugging purposes
-                                            if debug:
-                                                print cmp, var_id, 1, var_data, read_base, Links[var_id]
-
-                                            add_count(var_id, 1)
-                                            known_var = True
-                                        # DK - check out if this routine is appropriate
-                                        # else:
-                                        #    add_count(var_id, -1)
+                                            add_count(var_id, 1)                                            
                                 var_idx += 1
-
                             # Node
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + 1
@@ -1039,12 +1105,6 @@ def HLA_typing(ex_path,
                             assert False                            
                             ins_seq = read_seq[read_pos:read_pos+length]
                             var_idx = lower_bound(Var_list[gene], ref_pos)
-                            # DK - for debugging purposes
-                            if debug:
-                                print left_pos, cigar_str, MD, vars
-                                print ref_pos, ins_seq, Var_list[gene][var_idx], Vars[gene][Var_list[gene][var_idx][1]]
-                                # sys.exit(1)
-                            known_var = False
                             while var_idx < len(Var_list[gene]):
                                 var_pos, var_id = Var_list[gene][var_idx]
                                 if ref_pos < var_pos:
@@ -1053,11 +1113,7 @@ def HLA_typing(ex_path,
                                     var_type, _, var_data = Vars[gene][var_id]
                                     if var_type == "insertion":                                
                                         if var_data == ins_seq:
-                                            # DK - for debugging purposes
-                                            if debug:
-                                                print cmp, var_id, 1, Links[var_id]
                                             add_count(var_id, 1)
-                                            known_var = True
                                 var_idx += 1
                             if cigar_match_len > 0:
                                 cmp_cigar_str += ("%dM" % cigar_match_len)
@@ -1070,10 +1126,9 @@ def HLA_typing(ex_path,
 
                             # Node
                             read_node_seq += ('D' * length)
-                            
+                                                        
                             # Check if this deletion can be removed
-                            if (cmp_i == 1 and cmp_list[0][0] == "match") or \
-                                    (cmp_i == 2 and cmp_list[0][0] == "soft" and cmp_list[0][1] == "match"):
+                            if cmp_i == 1 and cmp_list[0][0] == "match":
                                 _match_len = cmp_list[cmp_i-1][2]
                                 temp_ref_pos = ref_pos
                                 while _match_len > 0:
@@ -1085,8 +1140,7 @@ def HLA_typing(ex_path,
                                     _match_len -= 1
                                 if _match_len == 0:
                                     alt_match = True
-                            if (cmp_i + 2 == len(cmp_list) and cmp_list[-1][0] == "match") or \
-                                    (cmp_i + 3 == len(cmp_list) and cmp_list[-1][0] == "soft" and cmp_list[-2][0] == "match"):
+                            if cmp_i + 2 == len(cmp_list) and cmp_list[-1][0] == "match":
                                 _match_len = cmp_list[cmp_i+1][2]
                                 temp_ref_pos = ref_pos
                                 """
@@ -1100,7 +1154,10 @@ def HLA_typing(ex_path,
                                 if _match_len == 0:
                                     by_chance = True
                                 """
-                                
+
+                            # DK - for debugging purposes
+                            """
+                            
                             # Deletions can be shifted bidirectionally by HISAT2
                             temp_ref_pos = ref_pos
                             while temp_ref_pos > 0:
@@ -1135,6 +1192,8 @@ def HLA_typing(ex_path,
                                             # Node
                                             read_node_var += ([var_id] * del_len)
                                 var_idx += 1
+                            """
+                                
                             # Node
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + del_len
@@ -1154,7 +1213,10 @@ def HLA_typing(ex_path,
                                 cmp_cigar_str += ("%dM" % cigar_match_len)
                                 cigar_match_len = 0
                             cmp_cigar_str += ("%dN" % length)
-                            ref_pos += length                    
+                            ref_pos += length
+
+                        cmp_i += 1
+                        
                     if cigar_match_len > 0:
                         cmp_cigar_str += ("%dM" % cigar_match_len)
                     cmp_MD += ("%d" % MD_match_len)
@@ -1271,11 +1333,6 @@ def HLA_typing(ex_path,
             for prob_i in range(len(HLA_prob)):
                 prob = HLA_prob[prob_i]
                 found = False
-                allele_haplotype = get_allele(gene, prob[0], Vars_default, Var_list_default, Links_default)
-                if allele_haplotype != "":
-                    covered, total = calculate_allele_coverage(allele_haplotype, N_haplotypes, ref_exons, partial, exonic_only, verbose >= 3)
-                else:
-                    covered, total = 0, 0
                 _allele_rep = prob[0]
                 if partial and exonic_only:
                     _fields = _allele_rep.split(':')
@@ -1292,7 +1349,7 @@ def HLA_typing(ex_path,
                                     rank_i -= 1
                                 else:
                                     break
-                            print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%, vars_covered: %d/%d)" % (rank_i + 1, test_HLA_name, prob[1] * 100.0, covered, total)
+                            print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (rank_i + 1, test_HLA_name, prob[1] * 100.0)
                             if rank_i < len(success):
                                 success[rank_i] = True
                             found_list[name_i] = True
@@ -1301,7 +1358,7 @@ def HLA_typing(ex_path,
                     if not False in found_list and prob_i >= 10:
                         break
                 if not found:
-                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%, vars_covered: %d/%d)" % (prob_i + 1, _allele_rep, prob[1] * 100.0, covered, total)
+                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, _allele_rep, prob[1] * 100.0)
                     if best_alleles and prob_i < 2:
                         print >> sys.stdout, "SingleModel %s (abundance: %.2f%%)" % (_allele_rep, prob[1] * 100.0)
                 if not simulation and prob_i >= 9:
@@ -1309,147 +1366,6 @@ def HLA_typing(ex_path,
                 if prob_i >= 19:
                     break
             print >> sys.stderr
-
-            if verbose >= 2 and index_type == "graph":
-                if verbose >= 3:
-                    allele_haplotypes = []
-                    for HLA_name, abundance in HLA_prob:
-                        if abundance >= 0.03:
-                            allele_haplotypes.append(get_allele(gene, HLA_name, Vars_default, Var_list_default, Links_default))
-
-                    for read_haplotype in v_N_haplotype_list:
-                        for read_haplotype in N_haplotypes[read_haplotype]:
-                            assembled = False
-                            for allele_haplotype in allele_haplotypes:
-                                # DK - for debugging purposes
-                                debug = (read_haplotype == "left-199-199-left,single-245-T-hv54,unknown-289-429-unknown,single-448-G-hv99,single-452-G-hv100,single-478-A-hv108,single-492-G-hv112,right-519-519-right") and \
-                                    (allele_haplotype.find("single-452-G-hv100,single-478-A-hv108,single-492-G-hv112") != -1)
-                                debug = False
-                                if haplotype_cmp(allele_haplotype, read_haplotype) <= 0:
-                                    _, assembled = assemble_two_haplotypes(allele_haplotype.split(','), read_haplotype.split(','), debug)
-                                else:
-                                    _, assembled = assemble_two_haplotypes(read_haplotype.split(','), allele_haplotype.split(','), debug)
-                                if assembled:
-                                    break
-                            # DK - for debugging purposes
-                            if not assembled:
-                                print "Not compatible", read_haplotype
-
-                N_alleles = list(N_alleles)
-                for N_allele_i in range(len(N_alleles)):
-                    N_allele = N_alleles[N_allele_i]
-                    same = True
-                    _vars = N_allele.split(',')
-
-                    backbone_seq = HLAs[gene][ref_allele]
-                    backbone_seq_default = HLAs_default[gene][ref_allele]
-                    assert backbone_seq == backbone_seq_default
-                    if backbone_seq == backbone_seq_default:
-                        calculated_var_ids = []
-                        calculated_vars = set()
-                        for _var in _vars:
-                            if _var.find("unknown") != -1 or \
-                                    _var.find("left") != -1 or \
-                                    _var.find("right") != -1:
-                                continue
-                            _var_type, _var_pos, _var_data, _var_id = _var.split('-')
-                            calculated_var_ids.append(_var_id)
-                            calculated_vars.add("%s-%s" % (_var_type, _var_pos))
-
-                        cmp_allele_name = ""
-                        num_common = 0
-                        if simulation:
-                            cmp_HLA_names = test_HLA_names
-                        else:
-                            cmp_HLA_names = []
-                            for HLA_name, abundance in HLA_prob:
-                                if abundance >= 0.03:
-                                    cmp_HLA_names.append(HLA_name)
-
-                        for test_allele_name in cmp_HLA_names:
-                            cmp_vars = set()
-                            for _var_id in Var_list_default[gene]:
-                                _var_pos, _var_id = _var_id
-                                if test_allele_name in Links_default[_var_id]:
-                                    _var_type, _var_pos, _= Vars_default[gene][_var_id]
-                                    cmp_vars.add("%s-%d" % (_var_type, _var_pos))
-                            tmp_num_common = len(calculated_vars.intersection(cmp_vars))
-                            if num_common < tmp_num_common:
-                                num_common = tmp_num_common
-                                cmp_allele_name = test_allele_name
-
-                        # DK - for debugging purposes
-                        # cmp_allele_name = "A*32:01:01"
-                        assert cmp_allele_name != ""
-
-                        print "\t%d) vs. %s" % (N_allele_i + 1, cmp_allele_name)
-                        
-                        true_var_ids = []
-                        for _var_id in Var_list_default[gene]:
-                            _var_pos, _var_id = _var_id
-                            if cmp_allele_name in Links_default[_var_id]:
-                                true_var_ids.append(_var_id)
-
-                        _i, _j, _k = 0, 0, 0
-                        while _i < len(calculated_var_ids) or _j < len(true_var_ids):
-                            if _i == len(calculated_var_ids):
-                                t_var_id = true_var_ids[_j]
-                                t_var = Vars_default[gene][t_var_id]
-                                print "%4d\t<> %d %s %s (%s)" % (_k, t_var[1], t_var[0], t_var[2], t_var_id)
-                                _j += 1
-                                _k += 1
-                            elif _j == len(true_var_ids):
-                                c_var_id = calculated_var_ids[_i]
-                                if c_var_id.find("novel") != -1:
-                                    c_var = Novel_vars[c_var_id]
-                                else:
-                                    c_var = Vars[gene][c_var_id]
-                                print "%4d\t%d %s %s (%s) <>" % (_k, c_var[1], c_var[0], c_var[2], c_var_id)
-                                _i += 1
-                                _k += 1
-                            else:
-                                c_var_id = calculated_var_ids[_i]
-                                if c_var_id.find("novel") != -1:
-                                    c_var = Novel_vars[c_var_id]
-                                else:
-                                    c_var = Vars[gene][c_var_id]
-                                t_var_id = true_var_ids[_j]
-                                t_var = Vars_default[gene][t_var_id]
-
-                                if c_var == t_var:
-                                    print "%4d\tsame: %d %s %s (%s)" % (_k, c_var[1], c_var[0], c_var[2], c_var_id)
-                                    _i += 1
-                                    _j += 1
-                                else:
-                                    if _i > 0 and _j > 0:
-                                        same = False
-                                    if c_var[1] <= t_var[1]:
-                                        _i += 1
-                                        print "%4d\t%d %s %s (%s) <>" % (_k, c_var[1], c_var[0], c_var[2], c_var_id)
-                                    else:
-                                        _j += 1
-                                        print "%4d\t<> %d %s %s (%s)" % (_k, t_var[1], t_var[0], t_var[2], t_var_id)
-                                _k += 1
-                    else:
-                        _var_ids = []
-                        for _var in _vars:
-                            _var_id = _var.split('-')[2]
-                            _var_ids.append(_var_id)
-                        calculated_allele_seq = construct_allele_seq(backbone_seq, _var_ids, Vars[gene])
-                        true_allele_seq = HLAs_default[gene][test_allele_name]
-
-                        print "calculated allele: %d bp" % len(calculated_allele_seq)
-                        print "true allele: %d bp" % len(true_allele_seq)
-                        if calculated_allele_seq != true_allele_seq:
-                            if calculated_allele_seq.find(true_allele_seq) == -1 and \
-                                    true_allele_seq.find(calculated_allele_seq) == -1:
-                                same = False
-
-                    if same:
-                        print "Same as %s!!" % cmp_allele_name
-                    else:
-                        print "Different!!"
-
 
             # DK - for debugging purposes
             if False and (len(test_HLA_names) == 2 or not simulation):
@@ -1968,25 +1884,25 @@ def test_HLA_genotyping(base_fname,
             print >> sys.stderr, "Test %d" % (test_i + 1)
             test_HLA_list = test_list[test_i]
            
+            if custom_allele_check:
+                num_frags = simulate_reads(HLAs_default, test_HLA_list, simulate_interval)
+            else:
+                num_frags = simulate_reads(HLAs, test_HLA_list, simulate_interval)
+
             # DK - for debugging purposes
-            # test_HLA_list = [["A*32:29"]]
+            test_HLA_list = [["A*32:29"]]
             for test_HLA_names in test_HLA_list:
                 for test_HLA_name in test_HLA_names:
                     if custom_allele_check:
                         gene = test_HLA_name.split('*')[0]
                         test_HLA_seq = HLAs_default[gene][test_HLA_name]
                         seq_type = "partial" if test_HLA_name in partial_alleles else "full"
-                        print >> sys.stderr, "\t%s - %d bp (%s sequence)" % (test_HLA_name, len(test_HLA_seq), seq_type)
+                        print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_HLA_name, len(test_HLA_seq), seq_type, num_frags)
                         continue
                     gene = test_HLA_name.split('*')[0]
                     test_HLA_seq = HLAs[gene][test_HLA_name]
                     seq_type = "partial" if test_HLA_name in partial_alleles else "full"
-                    print >> sys.stderr, "\t%s - %d bp (%s sequence)" % (test_HLA_name, len(test_HLA_seq), seq_type)
-                    
-            if custom_allele_check:
-                simulate_reads(HLAs_default, test_HLA_list, simulate_interval)
-            else:
-                simulate_reads(HLAs, test_HLA_list, simulate_interval)
+                    print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_HLA_name, len(test_HLA_seq), seq_type, num_frags)
 
             if "single-end" in daehwan_debug:
                 read_fname = ["hla_input_1.fa"]
