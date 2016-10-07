@@ -1752,6 +1752,22 @@ void SRAPatternSource::open() {
         try {            
             // open requested accession using SRA implementation of the API
             sra_run_ = new ngs::ReadCollection(ncbi::NGS::openReadCollection(sra_accs_[sra_acc_cur_]));
+            
+#if 0
+            string run_name = sra_run_->getName();
+            cerr << " ReadGroups for " << run_name << endl;
+            
+            ngs::ReadGroupIterator it = sra_run_->getReadGroups();
+            do {
+                ngs::Statistics s = it.getStatistics();
+                cerr << "Statistics for group <" << it.getName() << ">" << endl;
+
+                // for(string p = s.nextPath(""); p != ""; p = s.nextPath(p)){
+                //    System.out.println("\t"+p+": "+s.getAsString(p));
+            } while(it.nextReadGroup());
+            exit(1);
+#endif
+            
             // compute window to iterate through
             size_t MAX_ROW = sra_run_->getReadCount();
             sra_it_ = new ngs::ReadIterator(sra_run_->getReadRange(1, MAX_ROW, ngs::Read::all));

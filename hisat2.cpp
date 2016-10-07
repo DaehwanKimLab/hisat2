@@ -609,6 +609,7 @@ static struct option long_options[] = {
 	{(char*)"ma",               required_argument, 0,        ARG_SCORE_MA},
 	{(char*)"mp",               required_argument, 0,        ARG_SCORE_MMP},
     {(char*)"sp",               required_argument, 0,        ARG_SCORE_SCP},
+    {(char*)"no-softclip",      no_argument,       0,        ARG_NO_SOFTCLIP},
 	{(char*)"np",               required_argument, 0,        ARG_SCORE_NP},
 	{(char*)"rdg",              required_argument, 0,        ARG_SCORE_RDG},
 	{(char*)"rfg",              required_argument, 0,        ARG_SCORE_RFG},
@@ -852,6 +853,7 @@ static void printUsage(ostream& out) {
 		<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
 		<< "  --mp <int>,<int>   max and min penalties for mismatch; lower qual = lower penalty <2,6>" << endl
         << "  --sp <int>,<int>   max and min penalties for soft-clipping; lower qual = lower penalty <1,2>" << endl
+        << "  --no-softclip      no soft-clipping" << endl
 		<< "  --np <int>         penalty for non-A/C/G/Ts in read/ref (1)" << endl
 		<< "  --rdg <int>,<int>  read gap open, extend penalties (5,3)" << endl
 		<< "  --rfg <int>,<int>  reference gap open, extend penalties (5,3)" << endl
@@ -859,17 +861,15 @@ static void printUsage(ostream& out) {
 		<< "                     (L,0.0,-0.2)" << endl
 		<< endl
 	    << " Reporting:" << endl
-	    << "  -k <int> (default: 5) report up to <int> alns per read; MAPQ not meaningful" << endl
+	    << "  -k <int> (default: 5) report up to <int> alns per read" << endl
 		<< endl
 	    //<< " Effort:" << endl
 	    //<< "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
 	    //<< "  -R <int>           for reads w/ repetitive seeds, try <int> sets of seeds (2)" << endl
 		//<< endl
 		<< " Paired-end:" << endl
-#if 0
-	    << "  -I/--minins <int>  minimum fragment length (0)" << endl
-	    << "  -X/--maxins <int>  maximum fragment length (500)" << endl
-#endif
+	    << "  -I/--minins <int>  minimum fragment length (0), only valid with --no-spliced-alignment" << endl
+	    << "  -X/--maxins <int>  maximum fragment length (500), only valid with --no-spliced-alignment" << endl
 	    << "  --fr/--rf/--ff     -1, -2 mates align fw/rev, rev/fw, fw/fw (--fr)" << endl
 		<< "  --no-mixed         suppress unpaired alignments for paired reads" << endl
 		<< "  --no-discordant    suppress discordant alignments for paired reads" << endl
@@ -1498,6 +1498,15 @@ static void parseOption(int next_option, const char *arg) {
                     polstr += args[1];
                 }
             }
+            break;
+        }
+        case ARG_NO_SOFTCLIP: {
+            ostringstream convert;
+            convert << std::numeric_limits<typeof(penScMax)>::max();
+            polstr += ";SCP=Q,";
+            polstr += convert.str();
+            polstr += ",";
+            polstr += convert.str();
             break;
         }
 		case ARG_SCORE_NP:  polstr += ";NP=C";   polstr += arg; break;
@@ -3024,10 +3033,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     
     SplicedAligner<index_t, local_index_t> splicedAligner(
                                                           gfm,
-                                                          *multiseed_tpol,
                                                           anchorStop,
-                                                          minIntronLen,
-                                                          maxIntronLen,
                                                           secondary,
                                                           localAlign,
                                                           thread_rids_mindist);
@@ -3363,7 +3369,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     splicedAligner.initRead(rds[1], nofw[1], norc[1], minsc[1], maxpen[1], true);
                 }
                 if(filt[0] || filt[1]) {
-                    int ret = splicedAligner.go(sc, gfm, *altdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
+                    int ret = splicedAligner.go(sc, pepol, *multiseed_tpol, gfm, *altdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
                     MERGE_SW(sw);
                     // daehwan
                     size_t mate = 0;
@@ -3768,7 +3774,11 @@ static void driver(
         if(!refs->loaded()) throw 1;
         
         bool xsOnly = (tranAssm_program == "cufflinks");
-        TranscriptomePolicy tpol(no_spliced_alignment,
+        TranscriptomePolicy tpol(minIntronLen,
+                                 maxIntronLen,
+                                 tranAssm ? 15 : 7,
+                                 tranAssm ? 20 : 14,
+                                 no_spliced_alignment,
                                  tranMapOnly,
                                  tranAssm,
                                  xsOnly);

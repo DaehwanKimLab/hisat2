@@ -38,12 +38,19 @@ public:
 	TranscriptomePolicy() { reset(); }
 	
 	TranscriptomePolicy(
+                        size_t minIntronLen,
+                        size_t maxIntronLen,
+                        uint32_t minAnchorLen = 7,
+                        uint32_t minAnchorLen_noncan = 14,
                         bool no_spliced_alignment = false,
                         bool transcriptome_mapping_only = false,
                         bool transcriptome_assembly = false,
                         bool xs_only = false)
 	{
-		init(
+		init(minIntronLen,
+             maxIntronLen,
+             minAnchorLen,
+             minAnchorLen_noncan,
              no_spliced_alignment,
              transcriptome_mapping_only,
              transcriptome_assembly,
@@ -59,23 +66,43 @@ public:
 	/**
 	 */
 	void init(
+              size_t minIntronLen,
+              size_t maxIntronLen,
+              uint32_t minAnchorLen = 7,
+              uint32_t minAnchorLen_noncan = 14,
               bool no_spliced_alignment = false,
               bool transcriptome_mapping_only = false,
               bool transcriptome_assembly = false,
               bool xs_only = false)
 	{
+        minIntronLen_ = minIntronLen;
+        maxIntronLen_ = maxIntronLen;
+        minAnchorLen_ = minAnchorLen;
+        minAnchorLen_noncan_ = minAnchorLen_noncan;
         no_spliced_alignment_ = no_spliced_alignment;
         transcriptome_mapping_only_ = transcriptome_mapping_only;
         transcriptome_assembly_ = transcriptome_assembly;
         xs_only_ = xs_only;
 	}
     
+    size_t minIntronLen() const { return minIntronLen_; }
+    size_t maxIntronLen() const { return maxIntronLen_; }
+    uint32_t minAnchorLen() const { return minAnchorLen_; }
+    uint32_t minAnchorLen_noncan() const { return minAnchorLen_noncan_; }
     bool no_spliced_alignment() const { return no_spliced_alignment_; }
     bool transcriptome_mapping_only() const { return transcriptome_mapping_only_; }
     bool transcriptome_assembly() const { return transcriptome_assembly_; }
     bool xs_only() const { return xs_only_; }
 
 private:
+    size_t   minIntronLen_;
+    size_t   maxIntronLen_;
+    
+    // Minimum anchor length required for canonical splice sites
+    uint32_t minAnchorLen_;
+    // Minimum anchor length required for non-canonical splice sites
+    uint32_t minAnchorLen_noncan_;
+    
     bool no_spliced_alignment_;
     bool transcriptome_mapping_only_;
     bool transcriptome_assembly_;

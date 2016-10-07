@@ -7,7 +7,7 @@
   <div id="subheader">
     <table width="100%"><tbody><tr>
 	  <td>
-<strong>HISAT2</strong> is a fast and sensitive alignment program for mapping next-generation sequencing reads (both DNA and RNA) to a population of human genomes (as well as against a single reference genome). Based on an extension of BWT for graphs <a href="http://dl.acm.org/citation.cfm?id=2674828">[Sir&eacute;n et al. 2014]</a>, we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that represents a population of human genomes, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover the human population). These small indexes (called local indexes), combined with several alignment strategies, enable rapid and accurate alignment of sequencing reads. This new indexing scheme is called a Hierarchical Graph FM index (HGFM).
+<strong>HISAT2</strong> is a fast and sensitive alignment program for mapping next-generation sequencing reads (both DNA and RNA) to a population of human genomes (as well as to a single reference genome). Based on an extension of BWT for graphs <a href="http://dl.acm.org/citation.cfm?id=2674828">[Sir&eacute;n et al. 2014]</a>, we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that represents a population of human genomes, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover the human population). These small indexes (called local indexes), combined with several alignment strategies, enable rapid and accurate alignment of sequencing reads. This new indexing scheme is called a Hierarchical Graph FM index (HGFM).
 	    <br>
 	  </td>
 	  <td valign="middle" align="right">
@@ -20,6 +20,14 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
+	  <h2>HISAT2 2.0.5 release 9/2X/2016</h2>
+	  Version 2.0.5 is a minor release with the following changes.
+	  <ul>
+	    <li>Options, -I and -X, for specifiying minimum and maximum fragment lengths are implemented.  The options are valid only with --no-spliced-alignment, which is used for the alignment of DNA-seq reads.</li>
+	    <li>Implemented --no-softclip option to disable soft-clipping near 5' and 3' ends.</li>
+	  </ul>
+	  <br/>	  
+	  
 	  <h2><a href="http://www.nature.com/nprot/journal/v11/n9/full/nprot.2016.095.html">HISAT, StringTie and Ballgown protocol</a> published at Nature Protocols 8/11/2016</h2>
 	  
 	  <h2>HISAT2 2.0.4 Windows binary available <a href="http://www.di.fc.ul.pt/~afalcao/hisat2_windows.html">here</a>, thanks to <a href="http://www.di.fc.ul.pt/~afalcao/">André
