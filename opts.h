@@ -175,6 +175,7 @@ enum {
 #endif
     ARG_REMOVE_CHRNAME,
     ARG_ADD_CHRNAME,
+    ARG_MAX_ALTSTRIED,
 };
 
 #endif

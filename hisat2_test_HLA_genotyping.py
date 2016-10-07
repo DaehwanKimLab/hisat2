@@ -90,6 +90,7 @@ def align_reads(ex_path,
         # No detection of novel insertions and deletions
         aligner_cmd += ["--rdg", "10000,10000"] # deletion
         aligner_cmd += ["--rfg", "10000,10000"] # insertion
+        aligner_cmd += ["--no-spliced-alignment"] # no spliced alignment
         if index_type == "linear":
             aligner_cmd += ["-k", "10"]
         aligner_cmd += ["-x", "hla.%s" % index_type]
@@ -335,115 +336,186 @@ def lower_bound(Var_list, pos):
 """
 Identify alternative alignments
 """
-def get_alternatives(ref_seq, Vars, Var_list):
+def get_alternatives(ref_seq, Vars, Var_list, verbose):
     # Check deletions' alternatives
-    def get_alternatives_recur(ref_seq, Vars, Var_list, Alts, var, left, debug = False):
-        var_type, var_pos, var_data = var        
+    def get_alternatives_recur(ref_seq,
+                               Vars,
+                               Var_list,
+                               Alts,
+                               var_id,
+                               left,
+                               alt_list,
+                               var_j,
+                               latest_pos,
+                               debug = False):
+        def add_alt(Alts, alt_list, var_id, j_id):
+            if j_id.isdigit():
+                if var_id not in Alts:
+                    Alts[var_id] = [["1"]]
+                else:
+                    if Alts[var_id][-1][-1].isdigit():
+                        Alts[var_id][-1][-1] = str(int(Alts[var_id][-1][-1]) + 1)
+                    else:
+                        Alts[var_id][-1].append("1")
+            else:
+                if var_id not in Alts:
+                    Alts[var_id] = [[j_id]]
+                else:
+                    if Alts[var_id][-1][-1].isdigit():
+                        Alts[var_id][-1][-1] = j_id
+                    else:
+                        Alts[var_id][-1].append(j_id)
+                        
+            if not j_id.isdigit():
+                alt_list.append(j_id)
+                alts = '-'.join(alt_list)
+                if alts not in Alts:
+                    Alts[alts] = [[var_id]]
+                else:
+                    Alts[alts][-1].append(var_id)
+                
+        var_type, var_pos, var_data = Vars[var_id]
         if left: # Look in left direction
-            alt_list = []
-            var_j = lower_bound(Var_list, var_pos + del_len - 1)
-            latest_pos = var_pos + del_len
-            while var_j >= 0:
-                j_pos, j_id = Var_list[var_j]
-                if j_pos < var_pos:
-                    break
-                if j_pos >= var_pos + del_len:
-                    var_j -= 1
-                    continue
+            if var_j < 0:
+                return
+            j_pos, j_id = Var_list[var_j]
+            if j_pos < var_pos:
+                return
+            alt_del = []
+            if var_id != j_id and j_pos < var_pos + del_len:
                 # Check bases between SNPs
                 while latest_pos > j_pos:
                     if debug: print latest_pos - 1, ref_seq[latest_pos - 1], latest_pos - 1 - del_len, ref_seq[latest_pos - 1 - del_len]
                     if ref_seq[latest_pos - 1] != ref_seq[latest_pos - 1 - del_len]:
                         break
                     latest_pos -= 1
+                    add_alt(Alts, alt_list, var_id, str(latest_pos))
                 if latest_pos - 1 > j_pos:
-                    break
-                if j_pos == latest_pos:
-                    var_j -= 1
-                    continue
-                j_type, _, j_data = Vars[j_id]
-                if j_type == "single":
-                    if debug: print Vars[j_id]
-                    off = var_pos + del_len - j_pos
-                    if debug: print var_pos - off, ref_seq[var_pos - off]
-                    if debug: print j_pos, ref_seq[j_pos]
-                    if j_data == ref_seq[var_pos - off]:
-                        if var_id not in Alts:
-                            Alts[var_id] = [j_id]
-                        else:
-                            Alts[var_id].append(j_id)
-                        alt_list.append(j_id)
-                        alts = '-'.join(alt_list)
-                        if alts not in Alts:
-                            Alts[alts] = [var_id]
-                        else:
-                            Alts[alts].append(var_id)
+                    return
+                if j_pos == latest_pos - 1:
+                    j_type, _, j_data = Vars[j_id]
+                    if j_type == "single":
+                        if debug: print Vars[j_id]
+                        off = var_pos + del_len - j_pos
+                        if debug: print var_pos - off, ref_seq[var_pos - off]
+                        if debug: print j_pos, ref_seq[j_pos]
+                        if j_data == ref_seq[var_pos - off]:
+                            add_alt(Alts, alt_list, var_id, j_id)
+                            latest_pos = j_pos
+                    elif j_type == "deletion":
+                        j_del_len = int(j_data)
+                        if var_pos < j_pos and var_pos + del_len >= j_pos + j_del_len:
+                            alt_list2 = alt_list[:] + [j_id]
+                            latest_pos2 = j_pos
+                            alt_del = [alt_list2, latest_pos2]
+                
+            get_alternatives_recur(ref_seq,
+                                   Vars,
+                                   Var_list,
+                                   Alts,
+                                   var_id,
+                                   left,
+                                   alt_list,
+                                   var_j - 1,
+                                   latest_pos,
+                                   debug)
 
-                        latest_pos = j_pos
-                    else:
-                        # Not having single at the same position?
-                        if var_j <= 0 or Var_list[var_j-1][0] != j_pos:
-                            if debug: print "break at", Var_list[var_j-1]
-                            break
-                elif j_type == "deletion":
-                    # DK - to be implemented
-                    None
-                var_j -= 1
+            if alt_del:
+                alt_list2, latest_pos2 = alt_del
+                if var_id not in Alts:
+                    Alts[var_id] = [alt_list2[:]]
+                else:
+                    Alts[var_id].append(alt_list2[:])
+                alt_idx = len(Alts[var_id]) - 1
+                get_alternatives_recur(ref_seq,
+                                       Vars,
+                                       Var_list,
+                                       Alts,
+                                       var_id,
+                                       left,
+                                       alt_list2,
+                                       var_j - 1,
+                                       latest_pos2,
+                                       debug)
+                # Remove this Deletion if not supported by additional bases?
+                assert alt_idx < len(Alts[var_id])
+                # DK - for debugging purposes
+                if Alts[var_id][alt_idx][-1] == j_id:
+                    Alts[var_id] = Alts[var_id][:alt_idx] + Alts[var_id][alt_idx+1:]
               
         else: # Look in right direction
-            alt_list = []
-            var_j = lower_bound(Var_list, var_pos)
-            latest_pos = var_pos - 1
-            while var_j < len(Var_list):
-                j_pos, j_id = Var_list[var_j]
-                if j_pos > var_pos + del_len - 1:
-                    break
-                if j_pos < var_pos:
-                    var_j += 1
-                    continue
+            if var_j >= len(Var_list):
+                return
+            j_pos, j_id = Var_list[var_j]
+            if j_pos > var_pos + del_len - 1:
+                return
+            alt_del = []
+            if var_id != j_id and j_pos >= var_pos:
                 # Check bases between SNPs
                 while latest_pos < j_pos:
                     if ref_seq[latest_pos + 1] != ref_seq[var_pos + del_len - 1 - (latest_pos - var_pos)]:
                         break
                     latest_pos += 1
-                    # Del_alts[var_id][0].append(["ref", latest_pos])
+                    add_alt(Alts, alt_list, var_id, str(latest_pos))
                 if latest_pos + 1 < j_pos:
-                    break
-                if j_pos == latest_pos:
-                    var_j += 1
-                    continue
-                j_type, _, j_data = Vars[j_id]
-                if j_type == "single":
-                    if debug: print Vars[j_id]
-                    off = j_pos - var_pos
-                    if debug: print var_pos + off, ref_seq[var_pos + off]
-                    if debug: print var_pos + del_len + off, ref_seq[var_pos + del_len + off]
-                    if j_data == ref_seq[var_pos + del_len + off]:
-                        if var_id not in Alts:
-                            Alts_right[var_id] = [j_id]
-                        else:
-                            Alts[var_id].append(j_id)
-                        alt_list.append(j_id)
-                        alts = '-'.join(alt_list)
-                        if alts not in Alts:
-                            Alts[alts] = [var_id]
-                        else:
-                            Alts[alts].append(var_id)
-                        latest_pos = j_pos
-                    else:
-                        # Not having single at the same position?
-                        if var_j + 1 >= len(Var_list) or Var_list[var_j+1][0] != j_pos:
-                            break
-                elif j_type == "deletion":
-                    # DK - to be implemented
-                    None                            
-                var_j += 1
+                    return
+                if j_pos == latest_pos + 1:
+                    j_type, _, j_data = Vars[j_id]
+                    if j_type == "single":
+                        if debug: print Vars[j_id]
+                        off = j_pos - var_pos
+                        if debug: print var_pos + off, ref_seq[var_pos + off]
+                        if debug: print var_pos + del_len + off, ref_seq[var_pos + del_len + off]
 
-        if debug:
-            print Del_alts
-            print "DK :-)"
-            sys.exit(1)
+                        # DK - for debugging purposes
+                        if var_pos + del_len + off >= len(ref_seq):
+                            print >> sys.stderr, var_id, var
+                            print >> sys.stderr, "var_pos: %d, del_len: %d, off: %d" % (var_pos, del_len, off)
+                            print >> sys.stderr, "ref_seq: %d, %d" % (len(ref_seq), var_pos + del_len + off)
+                            sys.exit(1)
+                        
+                        if j_data == ref_seq[var_pos + del_len + off]:
+                            add_alt(Alts, alt_list, var_id, j_id)
+                            latest_pos = j_pos
+                    elif j_type == "deletion":
+                        j_del_len = int(j_data)
+                        if j_pos + j_del_len < var_pos + del_len:
+                            alt_list2 = alt_list[:] + [j_id]
+                            latest_pos2 = j_pos + j_del_len - 1
+                            alt_del = [alt_list2, latest_pos2]
 
+            get_alternatives_recur(ref_seq,
+                                   Vars,
+                                   Var_list,
+                                   Alts,
+                                   var_id,
+                                   left,
+                                   alt_list,
+                                   var_j + 1,
+                                   latest_pos,
+                                   debug)
+
+            if alt_del:
+                alt_list2, latest_pos2 = alt_del
+                if var_id not in Alts:
+                    Alts[var_id] = [alt_list2[:]]
+                else:
+                    Alts[var_id].append(alt_list2[:])
+                alt_idx = len(Alts[var_id]) - 1
+                get_alternatives_recur(ref_seq,
+                                       Vars,
+                                       Var_list,
+                                       Alts,
+                                       var_id,
+                                       left,
+                                       alt_list2,
+                                       var_j + 1,
+                                       latest_pos2,
+                                       debug)
+                # Remove this Deletion if not supported by additional bases?
+                assert alt_idx < len(Alts[var_id])
+                if Alts[var_id][alt_idx][-1] == j_id:
+                    Alts[var_id] = Alts[var_id][:alt_idx] + Alts[var_id][alt_idx+1:]
 
     # Check deletions' alternatives
     Alts_left, Alts_right = {}, {}
@@ -455,20 +527,70 @@ def get_alternatives(ref_seq, Vars, Var_list):
         if var_pos + del_len >= len(ref_seq):
             assert var_pos + del_len == len(ref_seq)
             continue
-        debug = (var_id == "hv205a")
+        debug = (var_id == "hv1769a")
         if debug:
             print Vars[var_id]
 
-        left, right = True, False
-        get_alternatives_recur(ref_seq, Vars, Var_list, Alts_left, var, left, debug)
-        get_alternatives_recur(ref_seq, Vars, Var_list, Alts_right, var, right, debug)            
+        alt_list = []
+        var_j = lower_bound(Var_list, var_pos + del_len - 1)
+        latest_pos = var_pos + del_len
+        if var_j < len(Var_list):
+            get_alternatives_recur(ref_seq,
+                                   Vars,
+                                   Var_list,
+                                   Alts_left,
+                                   var_id,
+                                   True, # left
+                                   alt_list,
+                                   var_j,
+                                   latest_pos,
+                                   debug)
+        alt_list = []
+        var_j = lower_bound(Var_list, var_pos)
+        latest_pos = var_pos - 1
+        assert var_j >= 0
+        get_alternatives_recur(ref_seq,
+                               Vars,
+                               Var_list,
+                               Alts_right,
+                               var_id,
+                               False, # right
+                               alt_list,
+                               var_j,
+                               latest_pos,
+                               debug)
 
-    # DK - for debugging purposes
-    for alts, alt_list in Alts_left.items():
-        print "\tleft :", alts, alt_list
+        if debug:
+            print "DK :-)"
+            sys.exit(1)
 
-    for alts, alt_list in Alts_right.items():
-        print "\tright:", alts, alt_list
+    def debug_print_alts(Alts, dir):
+        for alt_list1, alt_list2 in Alts.items():
+            print "\t", dir, ":", alt_list1, alt_list2
+            out_str = "\t\t"
+            alt_list1 = alt_list1.split('-')
+            for i in range(len(alt_list1)):
+                alt = alt_list1[i]
+                var_type, var_pos, var_data = Vars[alt]
+                out_str += ("%s-%d-%s" % (var_type, var_pos, var_data))
+                if i + 1 < len(alt_list1):
+                    out_str += " "
+            for i in range(len(alt_list2)):
+                alt_list3 = alt_list2[i]
+                out_str += "\t["
+                for j in range(len(alt_list3)):
+                    alt = alt_list3[j]
+                    if alt.isdigit():
+                        out_str += alt
+                    else:
+                        var_type, var_pos, var_data = Vars[alt]
+                        out_str += ("%s-%d-%s" % (var_type, var_pos, var_data))
+                    if j + 1 < len(alt_list3):
+                        out_str += ", "
+                out_str += "]"
+            print out_str
+    if verbose >= 2: debug_print_alts(Alts_left, "left")
+    if verbose >= 2: debug_print_alts(Alts_right, "right")
 
     return Alts_left, Alts_right
 
@@ -707,7 +829,7 @@ def HLA_typing(ex_path,
                 seq = ''.join(seq)
                 allele_nodes[allele_id] = assembly_graph.Node(0, seq, var)
 
-            Alts_left, Alts_right = get_alternatives(ref_seq, Vars[gene], Var_list[gene])
+            Alts_left, Alts_right = get_alternatives(ref_seq, Vars[gene], Var_list[gene], verbose)
 
             # Count alleles
             HLA_counts, HLA_cmpt = {}, {}
@@ -1025,11 +1147,10 @@ def HLA_typing(ex_path,
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
                     cmp_i = 0
+                    no_add_count = False
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
-                        type = cmp[0]
-                        length = cmp[2]
-
+                        type, length = cmp[0], cmp[2]
                         if num_mismatch == 0 and type in ["mismatch", "deletion", "insertion"]:
                             assert cmp[3] != "unknown"
 
@@ -1075,27 +1196,30 @@ def HLA_typing(ex_path,
                             cigar_match_len += length
                             MD_match_len += length
                         elif type == "mismatch":
+                            var_id = cmp[3]
                             read_base = read_seq[read_pos]
-                            # Node
                             read_node_seq += read_base
-                            var_idx = lower_bound(Var_list[gene], ref_pos)
-                            while var_idx < len(Var_list[gene]):
-                                var_pos, var_id = Var_list[gene][var_idx]
-                                if ref_pos < var_pos:
-                                    break
-                                if ref_pos == var_pos:
-                                    var_type, _, var_data = Vars[gene][var_id]
-                                    if var_type == "single":
-                                        if var_data == read_base:
-                                            # Node
-                                            read_node_var.append(var_id)
-                                            add_count(var_id, 1)                                            
-                                var_idx += 1
-                            # Node
-                            if len(read_node_seq) > len(read_node_var):
-                                assert len(read_node_seq) == len(read_node_var) + 1
-                                read_node_var.append("unknown")
+                            read_node_var.append(var_id)
 
+                            # Check alternative alignments
+                            id_str = var_id
+                            right_anchor = 0
+                            for cmp_j in range(cmp_i + 1, len(cmp_list)):
+                                j_type, j_pos, j_len = cmp_list[cmp_j][:3]
+                                if j_type == "match":
+                                    right_anchor = j_len
+                                else:
+                                    if len(cmp_list[cmp_j]) < 4:
+                                        continue
+                                    j_var_id = cmp_list[cmp_j][3]
+                                    id_str += ("-%s" % j_var_id)
+
+                            if id_str in Alts_right:
+                                print >> sys.stderr, id_str, ":", Alts_right[id_str], "right anchor:", right_anchor
+                                no_add_count = True                                    
+                            
+                            if var_id != "unknown":
+                                if not no_add_count: add_count(var_id, 1)                             
                             cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
                             MD_match_len = 0
                             cigar_match_len += 1
@@ -1651,8 +1775,8 @@ def test_HLA_genotyping(base_fname,
         if len(base_fname) > 3:
             extract_cmd += ["--base", base_fname]
 
-        if partial:
-            extract_cmd += ["--partial"]
+        if not partial:
+            extract_cmd += ["--no-partial"]
         extract_cmd += ["--inter-gap", "30",
                         "--intra-gap", "50"]
         if verbose >= 1:
@@ -1737,8 +1861,8 @@ def test_HLA_genotyping(base_fname,
                            "--hla-list", ','.join(hla_list),
                            "--base", "Default-HLA/hla"]
 
-            if partial:
-                extract_cmd += ["--partial"]
+            if not partial:
+                extract_cmd += ["--no-partial"]
             extract_cmd += ["--inter-gap", "30",
                             "--intra-gap", "50"]
             if verbose >= 1:
@@ -2013,9 +2137,9 @@ if __name__ == '__main__':
                         type=str,
                         default="A,B,C,DQA1,DQB1,DRB1",
                         help="A comma-separated list of HLA genes (default: A,B,C,DQA1,DQB1,DRB1)")
-    parser.add_argument('--partial',
+    parser.add_argument('--no-partial',
                         dest='partial',
-                        action='store_true',
+                        action='store_false',
                         help='Include partial alleles (e.g. A_nuc.fasta)')
     parser.add_argument("--aligner-list",
                         dest="aligners",
@@ -2135,8 +2259,8 @@ if __name__ == '__main__':
                                "--reference-type", args.reference_type,
                                "--hla-list", ','.join(args.hla_list),
                                "--base", "Default-HLA/hla"]
-                if args.partial:
-                    extract_cmd += ["--partial"]
+                if not args.partial:
+                    extract_cmd += ["--no-partial"]
                 extract_cmd += ["--inter-gap", "30",
                                 "--intra-gap", "50"]
                 if args.verbose_level >= 1:
@@ -2196,3 +2320,4 @@ if __name__ == '__main__':
                         args.exonic_only,
                         args.verbose_level,
                         debug)
+

@@ -275,6 +275,8 @@ static uint64_t        thread_rids_mindist;
 static bool rmChrName;  // remove "chr" from reference names (e.g., chr18 to 18)
 static bool addChrName; // add "chr" to reference names (e.g., 18 to chr18)
 
+static size_t max_alts_tried;
+
 #define DMAX std::numeric_limits<double>::max()
 
 static void resetOptions() {
@@ -490,6 +492,8 @@ static void resetOptions() {
     
     rmChrName = false;
     addChrName = false;
+    
+    max_alts_tried = 16;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -675,33 +679,34 @@ static struct option long_options[] = {
 	{(char*)"desc-landing",     required_argument, 0,        ARG_DESC_LANDING},
 	{(char*)"desc-exp",         required_argument, 0,        ARG_DESC_EXP},
 	{(char*)"desc-fmops",       required_argument, 0,        ARG_DESC_FMOPS},
-    {(char*)"no-temp-splicesite",  no_argument, 0,     ARG_NO_TEMPSPLICESITE},
-    {(char*)"pen-cansplice",  required_argument, 0,        ARG_PEN_CANSPLICE},
-    {(char*)"pen-noncansplice",  required_argument, 0,     ARG_PEN_NONCANSPLICE},
+    {(char*)"no-temp-splicesite",  no_argument,    0,        ARG_NO_TEMPSPLICESITE},
+    {(char*)"pen-cansplice",  required_argument,   0,        ARG_PEN_CANSPLICE},
+    {(char*)"pen-noncansplice",  required_argument, 0,       ARG_PEN_NONCANSPLICE},
     {(char*)"pen-conflictsplice",  required_argument, 0,     ARG_PEN_CONFLICTSPLICE},
-    {(char*)"pen-intronlen",  required_argument, 0,     ARG_PEN_CANINTRONLEN},
-    {(char*)"pen-canintronlen",  required_argument, 0,     ARG_PEN_CANINTRONLEN},
-    {(char*)"pen-noncanintronlen",  required_argument, 0,     ARG_PEN_NONCANINTRONLEN},
-    {(char*)"min-intronlen",  required_argument, 0,     ARG_MIN_INTRONLEN},
-    {(char*)"max-intronlen",  required_argument, 0,     ARG_MAX_INTRONLEN},
+    {(char*)"pen-intronlen",  required_argument,   0,        ARG_PEN_CANINTRONLEN},
+    {(char*)"pen-canintronlen",  required_argument, 0,       ARG_PEN_CANINTRONLEN},
+    {(char*)"pen-noncanintronlen",  required_argument, 0,    ARG_PEN_NONCANINTRONLEN},
+    {(char*)"min-intronlen",  required_argument,   0,        ARG_MIN_INTRONLEN},
+    {(char*)"max-intronlen",  required_argument,   0,        ARG_MAX_INTRONLEN},
     {(char*)"known-splicesite-infile",       required_argument, 0,        ARG_KNOWN_SPLICESITE_INFILE},
     {(char*)"novel-splicesite-infile",       required_argument, 0,        ARG_NOVEL_SPLICESITE_INFILE},
     {(char*)"novel-splicesite-outfile",      required_argument, 0,        ARG_NOVEL_SPLICESITE_OUTFILE},
-    {(char*)"secondary",   no_argument, 0,        ARG_SECONDARY},
+    {(char*)"secondary",        no_argument,       0,        ARG_SECONDARY},
     {(char*)"no-spliced-alignment",   no_argument, 0,        ARG_NO_SPLICED_ALIGNMENT},
     {(char*)"rna-strandness",   required_argument, 0,        ARG_RNA_STRANDNESS},
-    {(char*)"splicesite-db-only",   no_argument, 0,        ARG_SPLICESITE_DB_ONLY},
-    {(char*)"no-anchorstop",   no_argument, 0,        ARG_NO_ANCHORSTOP},
-    {(char*)"transcriptome-mapping-only",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
-    {(char*)"tmo",   no_argument, 0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
+    {(char*)"splicesite-db-only",   no_argument,   0,        ARG_SPLICESITE_DB_ONLY},
+    {(char*)"no-anchorstop",   no_argument,        0,        ARG_NO_ANCHORSTOP},
+    {(char*)"transcriptome-mapping-only", no_argument, 0,    ARG_TRANSCRIPTOME_MAPPING_ONLY},
+    {(char*)"tmo",             no_argument,        0,        ARG_TRANSCRIPTOME_MAPPING_ONLY},
     {(char*)"downstream-transcriptome-assembly",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
-    {(char*)"dta",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
-    {(char*)"dta-cufflinks",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS},
+    {(char*)"dta",             no_argument,        0,        ARG_TRANSCRIPTOME_ASSEMBLY},
+    {(char*)"dta-cufflinks",   no_argument,        0,        ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS},
 #ifdef USE_SRA
-    {(char*)"sra-acc",   required_argument, 0,        ARG_SRA_ACC},
+    {(char*)"sra-acc",         required_argument,  0,        ARG_SRA_ACC},
 #endif
-    {(char*)"remove-chrname",   no_argument, 0,        ARG_REMOVE_CHRNAME},
-    {(char*)"add-chrname",   no_argument, 0,        ARG_ADD_CHRNAME},
+    {(char*)"remove-chrname",  no_argument,        0,        ARG_REMOVE_CHRNAME},
+    {(char*)"add-chrname",     no_argument,        0,        ARG_ADD_CHRNAME},
+    {(char*)"max-altstried",   required_argument,  0,        ARG_MAX_ALTSTRIED},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -1637,6 +1642,10 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_ADD_CHRNAME: {
             addChrName = true;
+            break;
+        }
+        case ARG_MAX_ALTSTRIED: {
+            max_alts_tried = parseInt(8, "--max-altstried arg must be at least 8", arg);
             break;
         }
 		default:

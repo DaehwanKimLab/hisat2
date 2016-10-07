@@ -54,6 +54,7 @@ def extract_vars(base_fname,
                  intra_gap,
                  DRB1_REF,
                  exclude_allele_list,
+                 leftshift,
                  verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(extract_vars))
@@ -180,6 +181,7 @@ def extract_vars(base_fname,
     # Write all the sequences with dots removed into a file
     input_file = open(base_fullpath_name + "_sequences.fa", 'w')
     num_vars, num_haplotypes = 0, 0
+    HLA_full_alleles = {}
     for HLA_gene, HLA_ref_gene in HLA_genes.items():
         strand = HLA_gene_strand[HLA_gene]        
         def read_MSF_file(fname):
@@ -229,6 +231,18 @@ def extract_vars(base_fname,
                         HLA_seqs.append("")
                         
                     HLA_seqs[id] += ''.join(fives)
+
+                    # Add sub-names of the allele
+                    sub_name = ""
+                    for group in name.split(':')[:-1]:
+                        if sub_name != "":
+                            sub_name += ":"
+                        sub_name += group
+                        if sub_name not in HLA_full_alleles:
+                            HLA_full_alleles[sub_name] = [name]
+                        else:
+                            HLA_full_alleles[sub_name].append(name)                        
+                    
             return HLA_names, HLA_seqs
 
         if base_fname == "hla":
@@ -241,7 +255,7 @@ def extract_vars(base_fname,
             continue
         
         HLA_names, HLA_seqs = read_MSF_file(HLA_MSA_fname)
-        
+
         # Identify a consensus sequence
         assert len(HLA_seqs) > 0
 
@@ -331,6 +345,29 @@ def extract_vars(base_fname,
                 print >> sys.stderr, "Warning: %s does not exist" % HLA_partial_MSA_fname
                 continue
             HLA_partial_names, HLA_partial_seqs = read_MSF_file(HLA_partial_MSA_fname)
+
+            # DK - for debugging purposes
+            # Partial alleles vs. Full alleles
+            """
+            counts = [0, 0, 0, 0]
+            for partial_name in HLA_partial_names.keys():
+                if partial_name in HLA_names:
+                    continue
+                name_group = partial_name.split(':')
+                for group_i in [3, 2, 1, 0]:
+                    if group_i == 0:
+                        counts[group_i] += 1
+                    if group_i > len(name_group):
+                        continue
+                    sub_name = ':'.join(name_group[:group_i])
+                    if sub_name in HLA_full_alleles:
+                        print partial_name, sub_name, HLA_full_alleles[sub_name][:5]
+                        counts[group_i] += 1
+                        break
+            print "DK: counts:", counts
+            sys.exit(1)
+            """
+                
             ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
             ref_seq_map = create_map(ref_seq)
             ref_partial_seq = HLA_partial_seqs[HLA_partial_names[HLA_ref_gene]]
@@ -368,13 +405,13 @@ def extract_vars(base_fname,
             backbone_seq = create_consensus_seq(HLA_seqs, seq_len, partial)
 
         # Left-shift deletions if poissble
-        def leftshift_deletions(backbone_seq, seq):
+        def leftshift_deletions(backbone_seq, seq, debug = False):
             if len(seq) != len(backbone_seq):
                 return seq
             seq = list(seq)
             seq_len = len(seq)
             bp_i = 0
-            # Remove the first deletion
+            # Skip the first deletion
             while bp_i < seq_len:
                 if seq[bp_i] in "ACGT":
                     break
@@ -393,19 +430,24 @@ def extract_vars(base_fname,
                     else:
                         bp_j += 1
 
+                if bp_j >= seq_len:
+                    bp_i = bp_j
+                    break
+                
                 # DK - for debugging purposes
-                # print bp_i, bp_j, backbone_seq[bp_i-10:bp_i], backbone_seq[bp_i:bp_j], backbone_seq[bp_j:bp_j+10]
-                # print bp_i, bp_j, ''.join(seq[bp_i-10:bp_i]), ''.join(seq[bp_i:bp_j]), ''.join(seq[bp_j:bp_j+10])
+                if debug:
+                    print bp_i, bp_j, backbone_seq[bp_i-10:bp_i], backbone_seq[bp_i:bp_j], backbone_seq[bp_j:bp_j+10]
+                    print bp_i, bp_j, ''.join(seq[bp_i-10:bp_i]), ''.join(seq[bp_i:bp_j]), ''.join(seq[bp_j:bp_j+10])
                 prev_i, prev_j = bp_i, bp_j
 
-                while bp_j < seq_len and seq[bp_j] in "ACGT":
-                    assert backbone_seq[bp_i] in "ACGT" and backbone_seq[bp_j] in "ACGT"
-                    if backbone_seq[bp_i] != seq[bp_j]:
+                while bp_i > 0 and seq[bp_i-1] in "ACGT":
+                    assert backbone_seq[bp_j-1] in "ACGT"
+                    if seq[bp_i-1] != backbone_seq[bp_j-1]:
                         break
-                    seq[bp_i] = seq[bp_j]
-                    seq[bp_j] = '.'
-                    bp_i += 1
-                    bp_j += 1
+                    seq[bp_j-1] = seq[bp_i-1]
+                    seq[bp_i-1] = '.'
+                    bp_i -= 1
+                    bp_j -= 1
                 bp_i = bp_j
                 while bp_i < seq_len:
                     if seq[bp_i] in "ACGT":
@@ -413,13 +455,15 @@ def extract_vars(base_fname,
                     bp_i += 1
 
                 # DK - for debugging purposes
-                # print prev_i, prev_j, ''.join(seq[prev_i-10:prev_i]), ''.join(seq[prev_i:prev_j]), ''.join(seq[prev_j:prev_j+10])
-                # sys.exit(1)
+                if debug:
+                    print prev_i, prev_j, ''.join(seq[prev_i-10:prev_i]), ''.join(seq[prev_i:prev_j]), ''.join(seq[prev_j:prev_j+10])
+                    # sys.exit(1)
                   
             return ''.join(seq)
-                
-        for seq_i in range(len(HLA_seqs)):
-            HLA_seqs[seq_i] = leftshift_deletions(backbone_seq, HLA_seqs[seq_i])
+
+        if leftshift:
+            for seq_i in range(len(HLA_seqs)):
+                HLA_seqs[seq_i] = leftshift_deletions(backbone_seq, HLA_seqs[seq_i], seq_i == HLA_names["A*68:02:02"] and False)
 
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
@@ -802,7 +846,7 @@ def extract_vars(base_fname,
             haplotypes = sorted(list(haplotypes), cmp=cmp_haplotype)
             haplotypes2 = sorted(list(haplotypes2), cmp=cmp_haplotype)
             
-            # daehwan - for debugging purposes
+            # DK - for debugging purposes
             """
             dis = prev_locus - locus
             print "\n[%d, %d]: %d haplotypes" % (i, j, len(haplotypes)), dis
@@ -829,7 +873,7 @@ def extract_vars(base_fname,
                 varIDs = []
                 for var in h:
                     varIDs.append("hv%s" % var2ID[var])
-                    # daehwan - for debugging purposes
+                    # DK - for debugging purposes
                     # varIDs.append(var)
                     sanity_vars.add(var2ID[var])
                 h_new_begin = h_begin
@@ -901,9 +945,9 @@ if __name__ == '__main__':
                         type=str,
                         default="A,B,C,DQA1,DQB1,DRB1",
                         help="A comma-separated list of HLA genes")
-    parser.add_argument("--partial",
+    parser.add_argument("--no-partial",
                         dest="partial",
-                        action="store_true",
+                        action="store_false",
                         help="Include partial alleles (e.g. A_nuc.fasta)")
     parser.add_argument("--inter-gap",
                         dest="inter_gap",
@@ -924,6 +968,10 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of alleles to be excluded")
+    parser.add_argument("--leftshift",
+                        dest="leftshift",
+                        action="store_true",
+                        help="Shift deletions to the leftmost")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -961,4 +1009,5 @@ if __name__ == '__main__':
                  args.intra_gap,
                  args.DRB1_REF,
                  args.exclude_allele_list,
+                 args.leftshift,
                  args.verbose)
