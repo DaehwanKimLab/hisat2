@@ -32,12 +32,12 @@
  * Encapsulates alignment policy for transcriptome
  */
 class TranscriptomePolicy {
-
+    
 public:
-
-	TranscriptomePolicy() { reset(); }
-	
-	TranscriptomePolicy(
+    
+    TranscriptomePolicy() { reset(); }
+    
+    TranscriptomePolicy(
                         size_t minIntronLen,
                         size_t maxIntronLen,
                         uint32_t minAnchorLen = 7,
@@ -46,8 +46,8 @@ public:
                         bool transcriptome_mapping_only = false,
                         bool transcriptome_assembly = false,
                         bool xs_only = false)
-	{
-		init(minIntronLen,
+    {
+        init(minIntronLen,
              maxIntronLen,
              minAnchorLen,
              minAnchorLen_noncan,
@@ -55,17 +55,17 @@ public:
              transcriptome_mapping_only,
              transcriptome_assembly,
              xs_only);
-	}
-
-	/** 
-	 */
-	void reset() {
-		init(false, false, false);
-	}
-
-	/**
-	 */
-	void init(
+    }
+    
+    /**
+     */
+    void reset() {
+        init(false, false, false);
+    }
+    
+    /**
+     */
+    void init(
               size_t minIntronLen,
               size_t maxIntronLen,
               uint32_t minAnchorLen = 7,
@@ -74,7 +74,7 @@ public:
               bool transcriptome_mapping_only = false,
               bool transcriptome_assembly = false,
               bool xs_only = false)
-	{
+    {
         minIntronLen_ = minIntronLen;
         maxIntronLen_ = maxIntronLen;
         minAnchorLen_ = minAnchorLen;
@@ -83,7 +83,7 @@ public:
         transcriptome_mapping_only_ = transcriptome_mapping_only;
         transcriptome_assembly_ = transcriptome_assembly;
         xs_only_ = xs_only;
-	}
+    }
     
     size_t minIntronLen() const { return minIntronLen_; }
     size_t maxIntronLen() const { return maxIntronLen_; }
@@ -93,7 +93,7 @@ public:
     bool transcriptome_mapping_only() const { return transcriptome_mapping_only_; }
     bool transcriptome_assembly() const { return transcriptome_assembly_; }
     bool xs_only() const { return xs_only_; }
-
+    
 private:
     size_t   minIntronLen_;
     size_t   maxIntronLen_;

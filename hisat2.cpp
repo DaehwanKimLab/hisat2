@@ -50,6 +50,7 @@
 #include "util.h"
 #include "pe.h"
 #include "tp.h"
+#include "gp.h"
 #include "simple_func.h"
 #include "presets.h"
 #include "opts.h"
@@ -1860,6 +1861,7 @@ static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
 static ALTDB<index_t>*                   altdb;
 static TranscriptomePolicy*              multiseed_tpol;
+static GraphPolicy*                      gpol;
 
 /**
  * Metrics for measuring the work done by the outer read alignment
@@ -3369,7 +3371,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     splicedAligner.initRead(rds[1], nofw[1], norc[1], minsc[1], maxpen[1], true);
                 }
                 if(filt[0] || filt[1]) {
-                    int ret = splicedAligner.go(sc, pepol, *multiseed_tpol, gfm, *altdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
+                    int ret = splicedAligner.go(sc, pepol, *multiseed_tpol, *gpol, gfm, *altdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
                     MERGE_SW(sw);
                     // daehwan
                     size_t mate = 0;
@@ -3467,19 +3469,21 @@ static void multiseedSearchWorker_hisat2(void *vp) {
  * enters the search loop.
  */
 static void multiseedSearch(
-	Scoring& sc,
-    TranscriptomePolicy& tpol,
-	PairedPatternSource& patsrc,  // pattern source
-	AlnSink<index_t>& msink,      // hit sink
-	HGFM<index_t>& gfm,           // index of original text
-    BitPairReference* refs,
-	OutFileBuf *metricsOfb)
+                            Scoring& sc,
+                            TranscriptomePolicy& tpol,
+                            GraphPolicy& gp,
+                            PairedPatternSource& patsrc,  // pattern source
+                            AlnSink<index_t>& msink,      // hit sink
+                            HGFM<index_t>& gfm,           // index of original text
+                            BitPairReference* refs,
+                            OutFileBuf *metricsOfb)
 {
     multiseed_patsrc       = &patsrc;
 	multiseed_msink        = &msink;
 	multiseed_gfm          = &gfm;
 	multiseed_sc           = &sc;
     multiseed_tpol         = &tpol;
+    gpol                   = &gp;
 	multiseed_metricsOfb   = metricsOfb;
 	multiseed_refs = refs;
 	AutoArray<tthread::thread*> threads(nthreads);
@@ -3783,6 +3787,8 @@ static void driver(
                                  tranAssm,
                                  xsOnly);
         
+        GraphPolicy gpol(max_alts_tried);
+        
         init_junction_prob();
         bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;
         bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite || altdb->hasSpliceSites();
@@ -3842,13 +3848,14 @@ static void driver(
 		assert(patsrc != NULL);
 		assert(mssink != NULL);
 		multiseedSearch(
-			sc,      // scoring scheme
-            tpol,
-			*patsrc, // pattern source
-			*mssink, // hit sink
-			gfm,     // BWT
-            refs.get(),
-			metricsOfb);
+                        sc,      // scoring scheme
+                        tpol,
+                        gpol,
+                        *patsrc, // pattern source
+                        *mssink, // hit sink
+                        gfm,     // BWT
+                        refs.get(),
+                        metricsOfb);
 		// Evict any loaded indexes from memory
 		if(gfm.isInMemory()) {
 			gfm.evictFromMemory();

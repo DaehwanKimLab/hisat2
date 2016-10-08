@@ -42,6 +42,7 @@
 #include "aligner_sw_driver.h"
 #include "group_walk.h"
 #include "tp.h"
+#include "gp.h"
 
 // Allow longer introns for long anchored reads involving canonical splice sites
 inline uint32_t MaxIntronLen(uint32_t anchor, uint32_t minAnchorLen) {
@@ -565,6 +566,7 @@ struct GenomeHit {
                      index_t                    maxIntronLen,
                      index_t                    minAnchorLen,         // minimum anchor length for canonical splice site
                      index_t                    minAnchorLen_noncan,  // minimum anchor length for non-canonical splice site
+                     const index_t              maxAltsTried,
                      const SpliceSite*          spliceSite = NULL,    // penalty for splice site
                      bool                       no_spliced_alignment = false);
     
@@ -588,6 +590,7 @@ struct GenomeHit {
                 index_t                 maxIntronLen,
                 index_t                 minAnchorLen,
                 index_t                 minAnchorLen_noncan,
+                const index_t           maxAltsTried,
                 index_t&                leftext,
                 index_t&                rightext,
                 index_t                 mm = 0);
@@ -605,7 +608,8 @@ struct GenomeHit {
                               const Read&                 rd,
                               const GFM<index_t>&         gfm,
                               const ALTDB<index_t>&       altdb,
-                              const BitPairReference&     ref);
+                              const BitPairReference&     ref,
+                              const index_t               maxAltsTried);
     
     /**
      * Adjust alignment with respect to SNPs, usually updating Edits
@@ -615,7 +619,8 @@ struct GenomeHit {
                        const Read&             rd,
                        const GFM<index_t>&     gfm,
                        const ALTDB<index_t>&   altdb,
-                       const BitPairReference& ref);
+                       const BitPairReference& ref,
+                       const index_t           maxAltsTried);
    
     /*
      *
@@ -1254,6 +1259,7 @@ bool GenomeHit<index_t>::combineWith(
                                      index_t                    maxIntronLen,
                                      index_t                    minAnchorLen,           // minimum anchor length for canonical splice site
                                      index_t                    minAnchorLen_noncan,    // minimum anchor length for non-canonical splice site
+                                     const index_t              maxAltsTried,
                                      const SpliceSite*          spliceSite,             // penalty for splice site
                                      bool                       no_spliced_alignment)
 {
@@ -1845,6 +1851,7 @@ bool GenomeHit<index_t>::extend(
                                 index_t                 maxIntronLen,
                                 index_t                 minAnchorLen,
                                 index_t                 minAnchorLen_noncan,
+                                const index_t           maxAltsTried,
                                 index_t&                leftext,
                                 index_t&                rightext,
                                 index_t                 mm)
@@ -1890,7 +1897,7 @@ bool GenomeHit<index_t>::extend(
                                           rl,
                                           reflen,
                                           true, /* left? */
-                                          16 /* max_numALTsTried */,
+                                          maxAltsTried,
                                           *this->_edits,
                                           NULL,
                                           mm,
@@ -1966,7 +1973,7 @@ bool GenomeHit<index_t>::extend(
                                              (int)rl,
                                              reflen,
                                              false,
-                                             16 /* max_numALTsTried */,
+                                             maxAltsTried,
                                              *this->_edits,
                                              NULL,
                                              mm);
@@ -2029,7 +2036,8 @@ bool GenomeHit<index_t>::adjustWithALT(
                                        const Read&                 rd,
                                        const GFM<index_t>&         gfm,
                                        const ALTDB<index_t>&       altdb,
-                                       const BitPairReference&     ref)
+                                       const BitPairReference&     ref,
+                                       const index_t               maxAltsTried)
 {
     if(gfm.gh().linearFM()) {
         genomeHits.expand();
@@ -2126,7 +2134,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                                (int)genomeHit._toff,
                                                reflen,
                                                false, /* left? */
-                                               16 /* max_numALTsTried */,
+                                               maxAltsTried,
                                                *genomeHit._edits,
                                                &candidate_edits);
             if(alignedLen == genomeHit._len) {
@@ -2170,7 +2178,8 @@ bool GenomeHit<index_t>::adjustWithALT(
                                        const Read&             rd,
                                        const GFM<index_t>&     gfm,
                                        const ALTDB<index_t>&   altdb,
-                                       const BitPairReference& ref)
+                                       const BitPairReference& ref,
+                                       const index_t           maxAltsTried)
 {
     if(gfm.gh().linearFM()) return true;
     assert_lt(this->_tidx, ref.numRefs());
@@ -2225,7 +2234,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            (int)this->_toff,
                                            reflen,
                                            false, /* left? */
-                                           16 /* max_numALTsTried */,
+                                           maxAltsTried,
                                            *this->_edits,
                                            &_sharedVars->candidate_edits);
         if(alignedLen == this->_len) {
@@ -3464,6 +3473,7 @@ public:
            const Scoring&             sc,
            const PairedEndPolicy&     pepol, // paired-end policy
            const TranscriptomePolicy& tpol,
+           const GraphPolicy&         gpol,
            const GFM<index_t>&        gfm,
            const ALTDB<index_t>&      altdb,
            const BitPairReference&    ref,
@@ -3482,9 +3492,9 @@ public:
         // given read and its reverse complement
         //  (and mate and the reverse complement of mate in case of pair alignment),
         // pick up one with best partial alignment
-        while(nextBWT(sc, pepol, tpol, gfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
+        while(nextBWT(sc, pepol, tpol, gpol, gfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
             // given the partial alignment, try to extend it to full alignments
-        	found[rdi] = align(sc, pepol, tpol, gfm, altdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
+        	found[rdi] = align(sc, pepol, tpol, gpol, gfm, altdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
             if(!found[0] && !found[1]) {
                 break;
             }
@@ -3492,7 +3502,7 @@ public:
             // try to combine this alignment with some of mate alignments
             // to produce pair alignment
             if(this->_paired) {
-                pairReads(sc, pepol, tpol, gfm, altdb, ref, wlm, prm, him, rnd, sink);
+                pairReads(sc, pepol, tpol, gpol, gfm, altdb, ref, wlm, prm, him, rnd, sink);
                 // if(sink.bestPair() >= _minsc[0] + _minsc[1]) break;
             }
         }
@@ -3515,6 +3525,7 @@ public:
                                                 sc,
                                                 pepol,
                                                 tpol,
+                                                gpol,
                                                 gfm,
                                                 altdb,
                                                 ref,
@@ -3534,7 +3545,7 @@ public:
                 }
                 
                 if(mate_found) {
-                    pairReads(sc, pepol, tpol, gfm, altdb, ref, wlm, prm, him, rnd, sink);
+                    pairReads(sc, pepol, tpol, gpol, gfm, altdb, ref, wlm, prm, him, rnd, sink);
                 }
             }
         }
@@ -3551,6 +3562,7 @@ public:
                  const Scoring&             sc,
                  const PairedEndPolicy&     pepol, // paired-end policy
                  const TranscriptomePolicy& tpol,
+                 const GraphPolicy&         gpol,
                  const GFM<index_t>&        gfm,
                  const ALTDB<index_t>&      altdb,
                  const BitPairReference&    ref,
@@ -3663,6 +3675,7 @@ public:
                const Scoring&                   sc,
                const PairedEndPolicy&           pepol, // paired-end policy
                const TranscriptomePolicy&       tpol,
+               const GraphPolicy&               gpol,
                const GFM<index_t>&              gfm,
                const ALTDB<index_t>&            altdb,
                const BitPairReference&          ref,
@@ -3686,6 +3699,7 @@ public:
                    const Scoring&                   sc,
                    const PairedEndPolicy&           pepol, // paired-end policy
                    const TranscriptomePolicy&       tpol,
+                   const GraphPolicy&               gpol,
                    const GFM<index_t>&              gfm,
                    const ALTDB<index_t>&            altdb,
                    const BitPairReference&          ref,
@@ -3712,6 +3726,7 @@ public:
                       const Scoring&                     sc,
                       const PairedEndPolicy&             pepol, // paired-end policy
                       const TranscriptomePolicy&         tpol,
+                      const GraphPolicy&                 gpol,
                       const GFM<index_t>&                gfm,
                       const ALTDB<index_t>&              altdb,
                       const BitPairReference&            ref,
@@ -3737,6 +3752,7 @@ public:
                                const Scoring&                   sc,
                                const PairedEndPolicy&           pepol, // paired-end policy
                                const TranscriptomePolicy&       tpol,
+                               const GraphPolicy&               gpol,
                                const GFM<index_t>&              gfm,
                                const ALTDB<index_t>&            altdb,
                                const BitPairReference&          ref,
@@ -3900,6 +3916,7 @@ public:
                           const GFM<index_t>&               gfm,
                           const PairedEndPolicy&            pepol, // paired-end policy
                           const TranscriptomePolicy&        tpol,
+                          const GraphPolicy&                gpol,
                           const ALTDB<index_t>&             altdb,
                           const BitPairReference&           ref,
                           RandomSource&                     rnd,
@@ -4009,7 +4026,8 @@ public:
                                                       *_rds[rdi],
                                                       gfm,
                                                       altdb,
-                                                      ref);
+                                                      ref,
+                                                      gpol.maxAltsTried());
                 }
                 if(partialHit._hit_type == CANDIDATE_HIT && genomeHits.size() >= maxGenomeHitSize) break;
             }
@@ -4022,6 +4040,7 @@ public:
                    const Scoring&             sc,
                    const PairedEndPolicy&     pepol, // paired-end policy
                    const TranscriptomePolicy& tpol,
+                   const GraphPolicy&         gpol,
                    const GFM<index_t>&        gfm,
                    const ALTDB<index_t>&      altdb,
                    const BitPairReference&    ref,
@@ -4038,6 +4057,7 @@ public:
                    const Scoring&                   sc,
                    const PairedEndPolicy&           pepol, // paired-end policy
                    const TranscriptomePolicy&       tpol,
+                   const GraphPolicy&               gpol,
                    const GFM<index_t>&              gfm,
                    const ALTDB<index_t>&            altdb,
                    const BitPairReference&          ref,
@@ -4185,6 +4205,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
                                                const Scoring&                   sc,
                                                const PairedEndPolicy&           pepol, // paired-end policy
                                                const TranscriptomePolicy&       tpol,
+                                               const GraphPolicy&               gpol,
                                                const GFM<index_t>&              gfm,
                                                const ALTDB<index_t>&            altdb,
                                                const BitPairReference&          ref,
@@ -4223,6 +4244,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
                                     gfm,
                                     pepol,
                                     tpol,
+                                    gpol,
                                     altdb,
                                     ref,
                                     rnd,
@@ -4247,6 +4269,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
                  sc,
                  pepol,
                  tpol,
+                 gpol,
                  gfm,
                  altdb,
                  ref,
@@ -4274,6 +4297,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                    const Scoring&                   sc,
                                                    const PairedEndPolicy&           pepol, // paired-end policy
                                                    const TranscriptomePolicy&       tpol,
+                                                   const GraphPolicy&               gpol,
                                                    const GFM<index_t>&              gfm,
                                                    const ALTDB<index_t>&            altdb,
                                                    const BitPairReference&          ref,
@@ -4378,7 +4402,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                       *this->_rds[ordi],
                                                       gfm,
                                                       altdb,
-                                                      ref);
+                                                      ref,
+                                                      gpol.maxAltsTried());
                 }
                 max_hitlen = hitlen;
             }
@@ -4420,12 +4445,14 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                          (index_t)tpol.maxIntronLen(),
                          tpol.minAnchorLen(),
                          tpol.minAnchorLen_noncan(),
+                         gpol.maxAltsTried(),
                          leftext,
                          rightext);
         hybridSearch_recur(
                            sc,
                            pepol,
                            tpol,
+                           gpol,
                            gfm,
                            altdb,
                            ref,
@@ -4627,6 +4654,7 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
                                                    const Scoring&             sc,
                                                    const PairedEndPolicy&     pepol, // paired-end policy
                                                    const TranscriptomePolicy& tpol,
+                                                   const GraphPolicy&         gpol,
                                                    const GFM<index_t>&        gfm,
                                                    const ALTDB<index_t>&      altdb,
                                                    const BitPairReference&    ref,
@@ -4722,6 +4750,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                                                    const Scoring&                   sc,
                                                    const PairedEndPolicy&           pepol, // paired-end policy
                                                    const TranscriptomePolicy&       tpol,
+                                                   const GraphPolicy&               gpol,
                                                    const GFM<index_t>&              gfm,
                                                    const ALTDB<index_t>&            altdb,
                                                    const BitPairReference&          ref,

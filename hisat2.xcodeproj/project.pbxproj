@@ -187,6 +187,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E80538341DA83933008894D0 /* gp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gp.h; sourceTree = "<group>"; };
 		E8C30C5A1C20A5DD00C03464 /* hisat2x */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = hisat2x; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8C30C6A1C20A64A00C03464 /* hisat2-buildx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-buildx"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8C30C751C20A65400C03464 /* hisat2-inspectx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-inspectx"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -428,6 +429,7 @@
 				E8C30C9C1C20B2B600C03464 /* formats.h */,
 				E8C30C9D1C20B2B600C03464 /* gbwt_graph.h */,
 				E8C30C9E1C20B2B600C03464 /* gfm.h */,
+				E80538341DA83933008894D0 /* gp.h */,
 				E8C30C9F1C20B2B600C03464 /* group_walk.h */,
 				E8C30CA01C20B2B600C03464 /* hgfm.h */,
 				E8C30CA11C20B2B600C03464 /* hi_aligner.h */,

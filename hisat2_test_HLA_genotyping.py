@@ -93,6 +93,8 @@ def align_reads(ex_path,
         aligner_cmd += ["--no-spliced-alignment"] # no spliced alignment
         if index_type == "linear":
             aligner_cmd += ["-k", "10"]
+        else:
+            aligner_cmd += ["--max-altstried", "64"]
         aligner_cmd += ["-x", "hla.%s" % index_type]
     elif aligner == "bowtie2":
         aligner_cmd = [aligner,
