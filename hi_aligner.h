@@ -2094,7 +2094,10 @@ bool GenomeHit<index_t>::adjustWithALT(
         index_t orig_joinedOff = genomeHit._joinedOff;
         index_t orig_toff = genomeHit._toff;
         bool found2 = false;
-        if(offDiffs.size() > 4) offDiffs.resize(4);
+        // maxAltsTried is not directly related to the size of offDiffs,
+        // but let's make the size of offDiffs is determined by maxAltsTried
+        const index_t max_offDiffs_size = max<index_t>(4, maxAltsTried / 4);
+        if(offDiffs.size() > max_offDiffs_size) offDiffs.resize(max_offDiffs_size);
         for(index_t o = 0; o < offDiffs.size() && !found2; o++) {
             const pair<index_t, int>& offDiff = offDiffs[o];
 #ifndef NDEBUG
@@ -2195,9 +2198,10 @@ bool GenomeHit<index_t>::adjustWithALT(
     index_t orig_joinedOff = this->_joinedOff;
     index_t orig_toff = this->_toff;
     bool found = false;
-    // daehwan - for debugging purposes
-    if(offDiffs.size() > 16) offDiffs.resize(16);
-    // if(offDiffs.size() > 4) offDiffs.resize(4);
+    // maxAltsTried is not directly related to the size of offDiffs,
+    // but let's make the size of offDiffs is determined by maxAltsTried
+    const index_t max_offDiffs_size = max<index_t>(4, maxAltsTried / 4);
+    if(offDiffs.size() > max_offDiffs_size) offDiffs.resize(max_offDiffs_size);
     for(index_t o = 0; o < offDiffs.size() && !found; o++) {
         const pair<index_t, int>& offDiff = offDiffs[o];
 #ifndef NDEBUG
