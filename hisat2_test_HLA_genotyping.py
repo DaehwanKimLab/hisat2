@@ -90,7 +90,10 @@ def align_reads(ex_path,
         # No detection of novel insertions and deletions
         aligner_cmd += ["--rdg", "10000,10000"] # deletion
         aligner_cmd += ["--rfg", "10000,10000"] # insertion
-        aligner_cmd += ["--no-spliced-alignment"] # no spliced alignment
+        DNA = True
+        if DNA:
+            aligner_cmd += ["--no-spliced-alignment"] # no spliced alignment
+            # aligner_cmd += ["--min-intronlen", "100000"]
         if index_type == "linear":
             aligner_cmd += ["-k", "10"]
         else:
@@ -381,8 +384,6 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
             if var_j < 0:
                 return
             j_pos, j_id = Var_list[var_j]
-            if j_pos < var_pos:
-                return
             alt_del = []
             if var_id != j_id and j_pos < var_pos + del_len:
                 # Check bases between SNPs
@@ -449,8 +450,6 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
             if var_j >= len(Var_list):
                 return
             j_pos, j_id = Var_list[var_j]
-            if j_pos > var_pos + del_len - 1:
-                return
             alt_del = []
             if var_id != j_id and j_pos >= var_pos:
                 # Check bases between SNPs
@@ -529,7 +528,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
         if var_pos + del_len >= len(ref_seq):
             assert var_pos + del_len == len(ref_seq)
             continue
-        debug = (var_id == "hv1769a")
+        debug = (var_id == "hv266a")
         if debug:
             print Vars[var_id]
 
@@ -1145,6 +1144,9 @@ def HLA_typing(ex_path,
                     # Node
                     read_node_pos, read_node_seq, read_node_var = -1, "", []
                     read_vars = []
+
+                    # Positive and negative evidence
+                    positive_vars, negative_vars = set(), set()
                          
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
@@ -1175,7 +1177,7 @@ def HLA_typing(ex_path,
                                     var_type, _, var_data = Vars[gene][var_id]
                                     if var_type == "insertion":
                                         if ref_pos < var_pos and ref_pos + length > var_pos + len(var_data):
-                                            add_count(var_id, -1)
+                                            negative_vars.add(var_id)
                                     elif var_type == "deletion":
                                         del_len = int(var_data)
                                         if ref_pos < var_pos and ref_pos + length > var_pos + del_len:
@@ -1189,9 +1191,10 @@ def HLA_typing(ex_path,
                                             test2_seq1 = ref_seq[cmp_left+int(var_data):cmp_right]
                                             test2_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos+int(var_data):cmp_right]
                                             if test1_seq1 != test1_seq2 and test2_seq1 != test2_seq2:
-                                                add_count(var_id, -1)
+                                                negative_vars.add(var_id)
                                     else:
-                                        add_count(var_id, -1)
+                                        negative_vars.add(var_id)
+                                                                                        
                                 var_idx += 1
                             read_pos += length
                             ref_pos += length
@@ -1204,6 +1207,8 @@ def HLA_typing(ex_path,
                             read_node_var.append(var_id)
 
                             # Check alternative alignments
+
+                            #   Right direction
                             id_str = var_id
                             right_anchor = 0
                             for cmp_j in range(cmp_i + 1, len(cmp_list)):
@@ -1217,11 +1222,30 @@ def HLA_typing(ex_path,
                                     id_str += ("-%s" % j_var_id)
 
                             if id_str in Alts_right:
-                                print >> sys.stderr, id_str, ":", Alts_right[id_str], "right anchor:", right_anchor
+                                print >> sys.stderr, "mismatch right:\t", id_str, ":", Alts_right[id_str], "right anchor:", right_anchor
                                 no_add_count = True                                    
                             
                             if var_id != "unknown":
-                                if not no_add_count: add_count(var_id, 1)                             
+                                if not no_add_count: positive_vars.add(var_id)
+                            
+                            #   Left direction
+                            id_str = var_id
+                            left_anchor = 0
+                            for cmp_j in reversed(range(0, cmp_i)):
+                                j_type, j_pos, j_len = cmp_list[cmp_j][:3]
+                                if j_type == "match":
+                                    left_anchor = j_len
+                                else:
+                                    if len(cmp_list[cmp_j]) < 4:
+                                        continue
+                                    j_var_id = cmp_list[cmp_j][3]
+                                    id_str += ("-%s" % j_var_id)
+
+                            if id_str in Alts_left:
+                                print >> sys.stderr, "mismatch left:\t", id_str, ":", Alts_left[id_str], "left anchor:", left_anchor
+                                positive_vars = set()
+                            
+                            
                             cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
                             MD_match_len = 0
                             cigar_match_len += 1
@@ -1239,7 +1263,7 @@ def HLA_typing(ex_path,
                                     var_type, _, var_data = Vars[gene][var_id]
                                     if var_type == "insertion":                                
                                         if var_data == ins_seq:
-                                            add_count(var_id, 1)
+                                            positive_vars.add(var_id)
                                 var_idx += 1
                             if cigar_match_len > 0:
                                 cmp_cigar_str += ("%dM" % cigar_match_len)
@@ -1252,74 +1276,27 @@ def HLA_typing(ex_path,
 
                             # Node
                             read_node_seq += ('D' * length)
-                                                        
-                            # Check if this deletion can be removed
-                            if cmp_i == 1 and cmp_list[0][0] == "match":
-                                _match_len = cmp_list[cmp_i-1][2]
-                                temp_ref_pos = ref_pos
-                                while _match_len > 0:
-                                    last_bp = ref_seq[temp_ref_pos + del_len - 1]
-                                    prev_bp = ref_seq[temp_ref_pos - 1]
-                                    if last_bp != prev_bp:
-                                        break
-                                    temp_ref_pos -= 1
-                                    _match_len -= 1
-                                if _match_len == 0:
-                                    alt_match = True
-                            if cmp_i + 2 == len(cmp_list) and cmp_list[-1][0] == "match":
-                                _match_len = cmp_list[cmp_i+1][2]
-                                temp_ref_pos = ref_pos
-                                """
-                                while _match_len > 0:
-                                    last_bp = ref_seq[temp_ref_pos + del_len - 1]
-                                    prev_bp = ref_seq[temp_ref_pos - 1]
-                                    if last_bp != prev_bp:
-                                        break
-                                    temp_ref_pos -= 1
-                                    _match_len -= 1
-                                if _match_len == 0:
-                                    by_chance = True
-                                """
 
-                            # DK - for debugging purposes
-                            """
-                            
-                            # Deletions can be shifted bidirectionally by HISAT2
-                            temp_ref_pos = ref_pos
-                            while temp_ref_pos > 0:
-                                last_bp = ref_seq[temp_ref_pos + del_len - 1]
-                                prev_bp = ref_seq[temp_ref_pos - 1]
-                                if last_bp != prev_bp:
-                                    break
-                                temp_ref_pos -= 1
-                            known_var = False
-                            var_idx = lower_bound(Var_list[gene], temp_ref_pos)
-                            while var_idx < len(Var_list[gene]):
-                                var_pos, var_id = Var_list[gene][var_idx]
-                                if temp_ref_pos < var_pos:
-                                    first_bp = ref_seq[temp_ref_pos]
-                                    next_bp = ref_seq[temp_ref_pos + del_len]
-                                    if first_bp == next_bp:
-                                        temp_ref_pos += 1
+                            # Check alternative alignments
+                            id_str = var_id
+                            right_anchor = 0
+                            for cmp_j in range(cmp_i + 1, len(cmp_list)):
+                                j_type, j_pos, j_len = cmp_list[cmp_j][:3]
+                                if j_type == "match":
+                                    right_anchor = j_len
+                                else:
+                                    if len(cmp_list[cmp_j]) < 4:
                                         continue
-                                    else:
-                                        break
-                                if temp_ref_pos == var_pos:
-                                    var_type, _, var_data = Vars[gene][var_id]
-                                    if var_type == "deletion":
-                                        var_len = int(var_data)
-                                        if var_len == length:
-                                            if debug:
-                                                print cmp, var_id, 1, Links[var_id]
-                                                print ref_seq[var_pos - 10:var_pos], ref_seq[var_pos:var_pos+int(var_data)], ref_seq[var_pos+int(var_data):var_pos+int(var_data)+10]
-                                            if not alt_match:
-                                                add_count(var_id, 1)
+                                    j_var_id = cmp_list[cmp_j][3]
+                                    id_str += ("-%s" % j_var_id)
 
-                                            # Node
-                                            read_node_var += ([var_id] * del_len)
-                                var_idx += 1
-                            """
-                                
+                            if id_str in Alts_right:
+                                # DK - debugging purposes
+                                # if right_anchor <= Alts_right[id_str][0][-1]:
+                                if id_str == "hv61-hv77":
+                                    print >> sys.stderr, "deletion:\t", id_str, ":", Alts_right[id_str], "right anchor:", right_anchor
+                                    no_add_count = True
+                                    
                             # Node
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + del_len
@@ -1357,6 +1334,11 @@ def HLA_typing(ex_path,
 
                     # Node
                     read_nodes.append(assembly_graph.Node(read_node_pos, read_node_seq, read_node_var))
+
+                    for positive_var in positive_vars:
+                        add_count(positive_var, 1)
+                    for negative_var in negative_vars:
+                        add_count(negative_var, -1)
 
                     prev_read_id = read_id
                     prev_exon = exon

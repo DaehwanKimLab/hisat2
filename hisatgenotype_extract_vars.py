@@ -457,7 +457,6 @@ def extract_vars(base_fname,
                 # DK - for debugging purposes
                 if debug:
                     print prev_i, prev_j, ''.join(seq[prev_i-10:prev_i]), ''.join(seq[prev_i:prev_j]), ''.join(seq[prev_j:prev_j+10])
-                    # sys.exit(1)
                   
             return ''.join(seq)
 

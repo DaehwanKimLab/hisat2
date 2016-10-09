@@ -386,7 +386,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             1,
                                                             1,
                                                             gpol.maxAltsTried(),
-                                                            &ss);
+                                                            &ss,
+                                                            tpol.no_spliced_alignment());
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
                         index_t leftAnchorLen = 0, nedits = 0;
@@ -501,7 +502,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                     1,
                                                                     1,
                                                                     gpol.maxAltsTried(),
-                                                                    &ss);
+                                                                    &ss,
+                                                                    tpol.no_spliced_alignment());
                             if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                             else         minsc = max(minsc, sink.bestUnp2());
                             index_t rightAnchorLen = 0, nedits = 0;
@@ -640,7 +642,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                         1,
                                                         1,
                                                         gpol.maxAltsTried(),
-                                                        &ss);
+                                                        &ss,
+                                                        tpol.no_spliced_alignment());
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
@@ -860,7 +863,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                         (index_t)tpol.maxIntronLen(),
                                                         tpol.minAnchorLen(),
                                                         tpol.minAnchorLen_noncan(),
-                                                        gpol.maxAltsTried());
+                                                        gpol.maxAltsTried(),
+                                                        NULL, // splice sites
+                                                        tpol.no_spliced_alignment());
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
@@ -1042,7 +1047,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             (index_t)tpol.maxIntronLen(),
                                                             tpol.minAnchorLen(),
                                                             tpol.minAnchorLen_noncan(),
-                                                            gpol.maxAltsTried());
+                                                            gpol.maxAltsTried(),
+                                                            NULL, // splice sites
+                                                            tpol.no_spliced_alignment());
                         if(!this->_secondary) {
                             if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                             else         minsc = max(minsc, sink.bestUnp2());
@@ -1306,7 +1313,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             1,
                                                             1,
                                                             gpol.maxAltsTried(),
-                                                            &ss);
+                                                            &ss,
+                                                            tpol.no_spliced_alignment());
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
@@ -1529,7 +1537,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             (index_t)tpol.maxIntronLen(),
                                                             tpol.minAnchorLen(),
                                                             tpol.minAnchorLen_noncan(),
-                                                            gpol.maxAltsTried());
+                                                            gpol.maxAltsTried(),
+                                                            NULL, // splice sites
+                                                            tpol.no_spliced_alignment());
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                         else         minsc = max(minsc, sink.bestUnp2());
@@ -1709,7 +1719,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                 (index_t)tpol.maxIntronLen(),
                                                                 tpol.minAnchorLen(),
                                                                 tpol.minAnchorLen_noncan(),
-                                                                gpol.maxAltsTried());
+                                                                gpol.maxAltsTried(),
+                                                                NULL, // splice sites
+                                                                tpol.no_spliced_alignment());
                         if(!this->_secondary) {
                             if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
                             else         minsc = max(minsc, sink.bestUnp2());

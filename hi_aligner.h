@@ -1228,8 +1228,7 @@ bool GenomeHit<index_t>::compatibleWith(
     
     // check if there is a deletion, an insertion, or a potential intron
     // between the two partial alignments
-    if(refdif >= rddif + minIntronLen) {
-        if(no_spliced_alignment) return false;
+    if(!no_spliced_alignment) {
         if(refdif > rddif + maxIntronLen) {
             return false;
         }
@@ -1247,7 +1246,7 @@ bool GenomeHit<index_t>::combineWith(
                                      const Read&                rd,
                                      const GFM<index_t>&        gfm,
                                      const BitPairReference&    ref,
-                                     const ALTDB<index_t>&      snpdb,
+                                     const ALTDB<index_t>&      altdb,
                                      SpliceSiteDB&              ssdb,
                                      SwAligner&                 swa,
                                      SwMetrics&                 swm,
@@ -1303,7 +1302,7 @@ bool GenomeHit<index_t>::combineWith(
     bool spliced = false, ins = false, del = false;
     if(refdif != rddif) {
         if(refdif > rddif) {
-            if(refdif - rddif >= minIntronLen) {
+            if(!no_spliced_alignment && refdif - rddif >= minIntronLen) {
                 assert_leq(refdif - rddif, maxIntronLen);
                 spliced = true;
             } else {
@@ -1884,24 +1883,24 @@ bool GenomeHit<index_t>::extend(
         }
         index_t numNs = 0;
         index_t num_prev_edits = (index_t)_edits->size();
-        index_t best_ext =  alignWithALTs(
-                                          altdb.alts(),
-                                          this->_joinedOff,
-                                          seq,
-                                          this->_rdoff - 1,
-                                          this->_rdoff - 1,
-                                          this->_rdoff,
-                                          ref,
-                                          *_sharedVars,
-                                          _tidx,
-                                          rl,
-                                          reflen,
-                                          true, /* left? */
-                                          maxAltsTried,
-                                          *this->_edits,
-                                          NULL,
-                                          mm,
-                                          &numNs);
+        index_t best_ext = alignWithALTs(
+                                         altdb.alts(),
+                                         this->_joinedOff,
+                                         seq,
+                                         this->_rdoff - 1,
+                                         this->_rdoff - 1,
+                                         this->_rdoff,
+                                         ref,
+                                         *_sharedVars,
+                                         _tidx,
+                                         rl,
+                                         reflen,
+                                         true, /* left? */
+                                         maxAltsTried,
+                                         *this->_edits,
+                                         NULL,
+                                         mm,
+                                         &numNs);
         // Do not allow for any edits including known snps and splice sites when extending zero-length hit
         if(_len == 0 && _edits->size() > 0) {
             _edits->clear();
@@ -2561,17 +2560,47 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     alt_compatible = true;
                 }
             } else if(alt.type == ALT_SNP_DEL) {
-                if(rf_i > (int)alt.len) {
-                    for(index_t i = 0; i < alt.len; i++) {
-                        int rf_bp = rfseq[rf_i - i];
-                        Edit e(
-                               rd_i + 1,
-                               "ACGTN"[rf_bp],
-                               '-',
-                               EDIT_TYPE_READ_GAP,
-                               true, /* chars? */
-                               alt_range.second);
-                        tmp_edits.insert(e, 0);
+                if(rfoff + rf_i > (int)alt.len) {
+                    if(rf_i > (int)alt.len) {
+                        for(index_t i = 0; i < alt.len; i++) {
+                            int rf_bp = rfseq[rf_i - i];
+                            Edit e(
+                                   rd_i + 1,
+                                   "ACGTN"[rf_bp],
+                                   '-',
+                                   EDIT_TYPE_READ_GAP,
+                                   true, /* chars? */
+                                   alt_range.second);
+                            tmp_edits.insert(e, 0);
+                        }
+                        
+                    } else {
+                        // long deletions
+                        int new_rfoff = rfoff - alt.len;
+                        index_t new_rflen = rf_i + alt.len + 10;
+                        if(raw_refbufs.size() <= dep + 1) raw_refbufs.expand();
+                        SStringExpandable<char>& raw_refbuf = raw_refbufs[dep + 1];
+                        raw_refbuf.resize(new_rflen + 16 + 16);
+                        raw_refbuf.fill(0x4);
+                        int off = ref.getStretch(
+                                                 reinterpret_cast<uint32_t*>(raw_refbuf.wbuf() + 16),
+                                                 tidx,
+                                                 max<int>(new_rfoff, 0),
+                                                 new_rfoff > 0 ? new_rflen : new_rflen + new_rfoff
+                                                 ASSERT_ONLY(, destU32));
+                        assert_lt(off, 16);
+                        const char* new_rfseq = raw_refbuf.wbuf() + 16 + off + min<int>(new_rfoff, 0);
+                        for(int i = 0; i < alt.len; i++) {
+                            int rf_bp = new_rfseq[rf_i - i + alt.len];
+                            Edit e(
+                                   rd_i + 1,
+                                   "ACGTN"[rf_bp],
+                                   '-',
+                                   EDIT_TYPE_READ_GAP,
+                                   true, /* chars? */
+                                   alt_range.second);
+                            tmp_edits.insert(e, 0);
+                        }
                     }
                     rf_i -= (int)alt.len;
                     alt_compatible = true;
@@ -2632,7 +2661,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 index_t next_joinedOff = alt.pos;
                 int next_rfoff = rfoff, next_rdoff = rd_i;
                 const char* next_rfseq = rfseq;
-                index_t next_rflen = rf_i + 1, next_rdlen = rd_i + 1;
+                int next_rflen = rf_i + 1, next_rdlen = rd_i + 1;
                 if(alt.splicesite()) {
                     assert_lt(alt.left, alt.right);
                     next_joinedOff = alt.left;
@@ -2642,7 +2671,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     next_rfseq = NULL;
                 }
                 if(next_rflen < next_rdlen) {
-                    index_t add_len = next_rdlen + 10 - next_rflen;
+                    int add_len = next_rdlen + 10 - next_rflen;
                     if(next_rfoff < add_len) add_len = next_rfoff;
                     next_rfoff -= add_len;
                     next_rflen += add_len;
@@ -2792,7 +2821,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     alt_compatible = true;
                 }
             } else if(alt.type == ALT_SNP_DEL) {
-                if(rd_i >0) {
+                if(rd_i > 0) {
                     if(rf_i + alt.len <= rflen) {
                         for(index_t i = 0; i < alt.len; i++) {
                             rf_bp = rfseq[rf_i + i];
@@ -2809,11 +2838,11 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                         alt_compatible = true;
                     } else {
                         // long deletions
+                        index_t new_rflen = rf_i + alt.len + 10;
                         if(raw_refbufs.size() <= dep + 1) raw_refbufs.expand();
                         SStringExpandable<char>& raw_refbuf = raw_refbufs[dep + 1];
-                        raw_refbuf.resize(rflen + 16 + 16);
+                        raw_refbuf.resize(new_rflen + 16 + 16);
                         raw_refbuf.fill(0x4);
-                        index_t new_rflen = rf_i + alt.len + 10;
                         int off = ref.getStretch(
                                                  reinterpret_cast<uint32_t*>(raw_refbuf.wbuf() + 16),
                                                  tidx,
