@@ -30,30 +30,123 @@ from hisat2_modules import assembly_graph
 """
 def simulate_reads(HLAs,
                    test_HLA_list,
-                   simulate_interval):
+                   Vars,
+                   Links,
+                   simulate_interval = 1,
+                   perbase_errorrate = 0.0):
     HLA_reads_1, HLA_reads_2 = [], []
     for test_HLA_names in test_HLA_list:
         gene = test_HLA_names[0].split('*')[0]
 
         # Simulate reads from two HLA alleles
-        def simulate_reads_impl(seq, simulate_interval = 1, frag_len = 250, read_len = 100):
+        def simulate_reads_impl(seq,
+                                seq_map,
+                                ex_seq,
+                                ex_desc,
+                                simulate_interval = 1,
+                                perbase_errorrate = 0.0,
+                                frag_len = 250,
+                                read_len = 100):
+            # Get read alignment (e.g., >214L_214_88M73D12M)
+            def get_info(pos):
+                info = "%d_" % (seq_map[pos] + 1)
+                total_match, match, sub_match = 0, 0, 0
+                var_str = ""
+                for i in range(pos, pos + read_len):
+                    map_i = seq_map[i]
+                    assert ex_seq[map_i] != 'D'
+                    total_match += 1
+                    match += 1
+                    if ex_desc[map_i] != "":
+                        if var_str != "":
+                            var_str += ','
+                        var_str += ("%d|S|%s" % (sub_match, ex_desc[map_i]))
+                        sub_match = 0
+                    else:
+                        sub_match += 1
+                    if i + 1 < pos + read_len and ex_seq[map_i+1] == 'D':
+                        assert match > 0
+                        info += ("%dM" % match)
+                        match = 0
+                        del_len = 1
+                        while map_i + 1 + del_len < len(ex_seq):
+                            if ex_seq[map_i + 1 + del_len] != 'D':
+                                break
+                            del_len += 1
+                        info += ("%dD" % del_len)
+                        if var_str != "":
+                            var_str += ','
+                        var_str += ("%s|D|%s" % (sub_match, ex_desc[map_i + 1]))
+                        sub_match = 0
+                assert match > 0
+                info += ("%dM" % match)
+                assert total_match == read_len
+                if var_str:
+                    info += "_"
+                    info += var_str                
+                return info
+                
             comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
             reads_1, reads_2 = [], []
             for i in range(0, len(seq) - frag_len + 1, simulate_interval):
-                reads_1.append(seq[i:i+read_len])
-                tmp_read_2 = reversed(seq[i+frag_len-read_len:i+frag_len])
+                pos1 = i
+                info1 = get_info(pos1)
+                reads_1.append([seq[pos1:pos1+read_len], info1])
+                
+                pos2 = i + frag_len - read_len
+                info2 = get_info(pos2)
+                tmp_read_2 = reversed(seq[pos2:pos2+read_len])
                 read_2 = ""
                 for s in tmp_read_2:
                     if s in comp_table:
                         read_2 += comp_table[s]
                     else:
                         read_2 += s
-                reads_2.append(read_2)
+                reads_2.append([read_2, info2])
             return reads_1, reads_2
 
+        # for each allele in a list of alleles such as ['A*32:29', 'B*07:02:01']
         for test_HLA_name in test_HLA_names:
             HLA_seq = HLAs[gene][test_HLA_name]
-            tmp_reads_1, tmp_reads_2 = simulate_reads_impl(HLA_seq, simulate_interval)
+            HLA_ex_seq = list(HLAs[gene]["%s*BACKBONE" % gene])
+            HLA_ex_desc = [''] * len(HLA_ex_seq)
+            HLA_seq_map = [i for i in range(len(HLA_seq))]
+
+            # Extract variants included in the allele
+            vars = []
+            for var, allele_list in Links.items():
+                if test_HLA_name in allele_list:
+                    vars.append(var)
+
+            # Build annotated sequence for the allele w.r.t backbone sequence
+            for var in vars:
+                var_type, var_pos, var_data = Vars[gene][var]
+                if var_type == "single":
+                    HLA_ex_seq[var_pos] = var_data
+                    HLA_ex_desc[var_pos] = var
+                else:
+                    assert var_type == "deletion"
+                    del_len = int(var_data)
+                    assert var_pos + del_len <= len(HLA_ex_seq)
+                    HLA_ex_seq[var_pos:var_pos+del_len] = ['D'] * del_len
+                    HLA_ex_desc[var_pos:var_pos+del_len] = [var] * del_len
+            HLA_ex_seq = ''.join(HLA_ex_seq)
+
+            # Build mapping from the allele to the annotated sequence
+            prev_j = 0
+            for i in range(len(HLA_seq)):
+                for j in range(prev_j, len(HLA_ex_seq)):
+                    if HLA_ex_seq[j] != 'D':
+                        break
+                HLA_seq_map[i] = j
+                prev_j = j + 1
+            
+            tmp_reads_1, tmp_reads_2 = simulate_reads_impl(HLA_seq,
+                                                           HLA_seq_map,
+                                                           HLA_ex_seq,
+                                                           HLA_ex_desc,                                                           
+                                                           simulate_interval,
+                                                           perbase_errorrate)
             HLA_reads_1 += tmp_reads_1
             HLA_reads_2 += tmp_reads_2
 
@@ -61,8 +154,8 @@ def simulate_reads(HLAs,
     def write_reads(reads, idx):
         read_file = open('hla_input_%d.fa' % idx, 'w')
         for read_i in range(len(reads)):
-            print >> read_file, ">%d" % (read_i + 1)
-            print >> read_file, reads[read_i]
+            print >> read_file, ">%d%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
+            print >> read_file, reads[read_i][0]
         read_file.close()
     write_reads(HLA_reads_1, 1)
     write_reads(HLA_reads_2, 2)
@@ -1650,6 +1743,7 @@ def test_HLA_genotyping(base_fname,
                         exclude_allele_list,
                         default_allele_list,
                         num_mismatch,
+                        perbase_errorrate,
                         assembly,
                         concordant_assembly,
                         exonic_only,
@@ -1991,11 +2085,12 @@ def test_HLA_genotyping(base_fname,
 
             print >> sys.stderr, "Test %d" % (test_i + 1)
             test_HLA_list = test_list[test_i]
-           
-            if custom_allele_check:
-                num_frags = simulate_reads(HLAs_default, test_HLA_list, simulate_interval)
-            else:
-                num_frags = simulate_reads(HLAs, test_HLA_list, simulate_interval)
+            num_frags = simulate_reads(HLAs_default if custom_allele_check else HLAs,
+                                       test_HLA_list,
+                                       Vars,
+                                       Links,
+                                       simulate_interval,
+                                       perbase_errorrate)
 
             # DK - for debugging purposes
             test_HLA_list = [["A*32:29"]]
@@ -2173,6 +2268,11 @@ if __name__ == '__main__':
                         type=int,
                         default=0,
                         help="Maximum number of mismatches per read alignment to be considered (default: 0)")
+    parser.add_argument("--perbase-errorrate",
+                        dest="perbase_errorrate",
+                        type=float,
+                        default=0.0,
+                        help="Per basepair error rate when simulating reads (default: 0.0)")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -2299,6 +2399,7 @@ if __name__ == '__main__':
                         args.exclude_allele_list,
                         args.default_allele_list,
                         args.num_mismatch,
+                        args.perbase_errorrate,
                         args.assembly,
                         args.concordant_assembly,
                         args.exonic_only,
