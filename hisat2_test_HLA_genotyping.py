@@ -47,8 +47,31 @@ def simulate_reads(HLAs,
                                 perbase_errorrate = 0.0,
                                 frag_len = 250,
                                 read_len = 100):
+            # Introduce sequencing errors
+            def introduce_seq_err(read_seq, pos):
+                read_seq = list(read_seq)
+                for i in range(read_len):
+                    map_pos = seq_map[pos + i]
+                    if ex_desc[map_pos] != "":
+                        continue
+                    if random.random() * 100 < perbase_errorrate:
+                        if read_seq[i] == 'A':
+                            alt_bases = ['C', 'G', 'T']
+                        elif read_seq[i] == 'C':
+                            alt_bases = ['A', 'G', 'T']
+                        elif read_seq[i] == 'G':
+                            alt_bases = ['A', 'C', 'T']
+                        else:
+                            assert read_seq[i] == 'T'
+                            alt_bases = ['A', 'C', 'G']
+                        random.shuffle(alt_bases)
+                        alt_base = alt_bases[0]
+                        read_seq[i] = alt_base
+                read_seq = ''.join(read_seq)
+                return read_seq                            
+                            
             # Get read alignment (e.g., >214L_214_88M73D12M)
-            def get_info(pos):
+            def get_info(read_seq, pos):
                 info = "%d_" % (seq_map[pos] + 1)
                 total_match, match, sub_match = 0, 0, 0
                 var_str = ""
@@ -57,10 +80,10 @@ def simulate_reads(HLAs,
                     assert ex_seq[map_i] != 'D'
                     total_match += 1
                     match += 1
-                    if ex_desc[map_i] != "":
+                    if ex_desc[map_i] != "" or read_seq[i-pos] != ex_seq[map_i]:
                         if var_str != "":
                             var_str += ','
-                        var_str += ("%d|S|%s" % (sub_match, ex_desc[map_i]))
+                        var_str += ("%d|S|%s" % (sub_match, ex_desc[map_i] if ex_desc[map_i] != "" else "unknown"))
                         sub_match = 0
                     else:
                         sub_match += 1
@@ -90,12 +113,18 @@ def simulate_reads(HLAs,
             reads_1, reads_2 = [], []
             for i in range(0, len(seq) - frag_len + 1, simulate_interval):
                 pos1 = i
-                info1 = get_info(pos1)
-                reads_1.append([seq[pos1:pos1+read_len], info1])
+                seq1 = seq[pos1:pos1+read_len]
+                if perbase_errorrate > 0.0:
+                    seq1 = introduce_seq_err(seq1, pos1)
+                info1 = get_info(seq1, pos1)
+                reads_1.append([seq1, info1])
                 
                 pos2 = i + frag_len - read_len
-                info2 = get_info(pos2)
-                tmp_read_2 = reversed(seq[pos2:pos2+read_len])
+                seq2 = seq[pos2:pos2+read_len]
+                if perbase_errorrate > 0.0:
+                    seq2 = introduce_seq_err(seq2, pos2)                
+                info2 = get_info(seq2, pos2)
+                tmp_read_2 = reversed(seq2)
                 read_2 = ""
                 for s in tmp_read_2:
                     if s in comp_table:
@@ -154,7 +183,7 @@ def simulate_reads(HLAs,
     def write_reads(reads, idx):
         read_file = open('hla_input_%d.fa' % idx, 'w')
         for read_i in range(len(reads)):
-            print >> read_file, ">%d%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
+            print >> read_file, ">%d|%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
             print >> read_file, reads[read_i][0]
         read_file.close()
     write_reads(HLA_reads_1, 1)
@@ -948,6 +977,8 @@ def HLA_typing(ex_path,
                     line = line.strip()
                     cols = line.split()
                     read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
+                    if simulation:
+                        read_id = read_id.split('|')[0]
                     read_seq, qual = cols[9], cols[10]
                     num_reads += 1
                     total_read_len += len(read_seq)
