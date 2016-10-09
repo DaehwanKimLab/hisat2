@@ -2007,7 +2007,7 @@ Launch `NTHREADS` parallel build threads (default: 1).
 
 Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).
    
-   SNP ID `<tab>` chromosome name `<tab>` snp type (single, deletion, or insertion) `<tab>` zero-offset based genomic position of a SNP `<tab>` alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)
+   SNP ID `<tab>` snp type (single, deletion, or insertion) `<tab>` chromosome name `<tab>` zero-offset based genomic position of a SNP `<tab>` alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)
    
    For example,
        rs58784443      single  13      18447947        T
