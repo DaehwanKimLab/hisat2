@@ -70,7 +70,7 @@ def simulate_reads(HLAs,
                 read_seq = ''.join(read_seq)
                 return read_seq                            
                             
-            # Get read alignment (e.g., >214L_214_88M73D12M)
+            # Get read alignment, e.g., 260|R_483_61M5D38M23D1M_46|S|hv154,3|S|hv162,10|D|hv185,38|D|hv266
             def get_info(read_seq, pos):
                 info = "%d_" % (seq_map[pos] + 1)
                 total_match, match, sub_match = 0, 0, 0
@@ -492,6 +492,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                         Alts[var_id][-1][-1] = j_id
                     else:
                         Alts[var_id][-1].append(j_id)
+                Alts[var_id][-1].append("0")
                         
             if not j_id.isdigit():
                 alt_list.append(j_id)
@@ -499,7 +500,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                 if alts not in Alts:
                     Alts[alts] = [[var_id]]
                 else:
-                    Alts[alts][-1].append(var_id)
+                    Alts[alts].append([var_id])
                 
         var_type, var_pos, var_data = Vars[var_id]
         if left: # Look in left direction
@@ -716,6 +717,123 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
     if verbose >= 2: debug_print_alts(Alts_right, "right")
 
     return Alts_left, Alts_right
+
+
+"""
+Identify ambigious differences that may account for other alleles,
+  given a list of differences (cmp_list) between a read and a potential allele   
+"""
+def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
+    cmp_left, cmp_right = 0, len(cmp_list) - 1
+    i = 0
+    while i < len(cmp_list):
+        cmp_i = cmp_list[i]
+        type, length = cmp_i[0], cmp_i[2]
+        # Check alternative alignments
+        if type in ["mismatch", "deletion"]:
+            var_id = cmp_i[3]
+            if var_id == "unknown":
+                continue
+            
+            # Left direction
+            id_str = var_id
+            for j in reversed(range(0, i)):
+                cmp_j = cmp_list[j]
+                j_type, j_pos, j_len = cmp_j[:3]
+                if j_type != "match":
+                    if len(cmp_j) < 4:
+                        continue
+                    j_var_id = cmp_j[3]
+                    id_str += ("-%s" % j_var_id)
+            left_pos = cmp_list[0][1]
+
+            if id_str in Alts_left:
+                orig_alts = id_str.split('-')
+                alts_list = Alts_left[id_str]
+                for alts in alts_list:
+                    if alts[-1].isdigit():
+                        alts_id_str = '-'.join(alts[:-1])
+                        alt_left_pos = sys.maxint
+                    else:
+                        alts_id_str = '-'.join(alts)
+                        assert alts_id_str in Alts_left
+                        for back_alts in Alts_left[alts_id_str]:
+                            back_id_str = '-'.join(back_alts)
+                            if back_id_str.find(id_str) != 0:
+                                continue
+                            if len(orig_alts) == len(back_alts):
+                                alt_left_pos = left_pos
+                            else:
+                                next_var_id = back_alts[len(orig_alts)]
+                                if next_var_id.isdigit():
+                                    alt_left_pos = left_pos - int(next_var_id)
+                                else:
+                                    assert next_var_id in Vars
+                                    alt_left_pos = Vars[next_var_id][1] + 1
+                if left_pos >= alt_left_pos:
+                    print >> sys.stderr, "LEFT:", cmp_list
+                    print >> sys.stderr, "\t", type, "id_str:", id_str, "=>", alts_id_str, "=>", back_alts, "left_pos:", left_pos, "alt_left_pos:", alt_left_pos
+                    cmp_left = i + 1
+                    break
+    
+            # Right direction
+            if cmp_right + 1 == len(cmp_list):
+                id_str = var_id
+                for j in range(i + 1, len(cmp_list)):
+                    cmp_j = cmp_list[j]
+                    j_type, j_pos, j_len = cmp_j[:3]
+                    if j_type != "match":
+                        if len(cmp_j) < 4:
+                            continue
+                        j_var_id = cmp_j[3]
+                        id_str += ("-%s" % j_var_id)
+                        
+                last_type, last_pos, last_len = cmp_list[-1][:3]
+                assert last_type in ["match", "mismatch"]
+                right_pos = last_pos + last_len - 1
+
+                if id_str in Alts_right:
+                    orig_alts = id_str.split('-')
+                    alts_list = Alts_right[id_str]
+                    for alts in alts_list:
+                        if alts[-1].isdigit():
+                            alts_id_str = '-'.join(alts[:-1])
+                            if len(alts) == 1:
+                                alt_right_pos = -1
+                            else:
+                                next_var_id = alts[-2]
+                                assert next_var_id in Vars
+                                next_type, next_pos, next_data = Vars[next_var_id]
+                                if next_type == "single":
+                                    alt_right_pos = next_pos
+                                else:
+                                    assert next_type == "deletion"
+                                    alt_right_pos = next_pos + int(next_data) - 1
+                                alt_right_pos += int(alts[-1])
+                        else:
+                            alts_id_str = '-'.join(alts)
+                            assert alts_id_str in Alts_right
+                            for back_alts in Alts_right[alts_id_str]:
+                                back_id_str = '-'.join(back_alts)
+                                if back_id_str.find(id_str) != 0:
+                                    continue
+                                if len(orig_alts) == len(back_alts):
+                                    alt_right_pos = right_pos
+                                else:
+                                    next_var_id = back_alts[len(orig_alts)]
+                                    if next_var_id.isdigit():
+                                        alt_right_pos = right_pos + int(next_var_id)
+                                    else:
+                                        assert next_var_id in Vars
+                                        alt_right_pos = Vars[next_var_id][1] - 1
+                    if right_pos <= alt_right_pos:
+                        print >> sys.stderr, "RIGHT:", cmp_list
+                        print >> sys.stderr, "\t", type, "id_str:", id_str, "=>", alts_id_str, "right_pos:", right_pos, "alt_right_pos:", alt_right_pos
+                        cmp_right = i - 1
+                        break
+        i += 1
+
+    return cmp_left, cmp_right
 
 
 """
@@ -1274,21 +1392,23 @@ def HLA_typing(ex_path,
                          
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
+                    
+                    cmp_list_left, cmp_list_right = identify_ambigious_diffs(Vars[gene],
+                                                                             Alts_left,
+                                                                             Alts_right,
+                                                                             cmp_list)
                     cmp_i = 0
-                    no_add_count = False
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
                         type, length = cmp[0], cmp[2]
                         if num_mismatch == 0 and type in ["mismatch", "deletion", "insertion"]:
                             assert cmp[3] != "unknown"
 
-                        # Node
                         if type in ["match", "mismatch"]:
                             if read_node_pos < 0:
                                 read_node_pos = ref_pos
 
                         if type == "match":
-                            # Node
                             read_node_seq += read_seq[read_pos:read_pos+length]
                             read_node_var += ([''] * length)
                             
@@ -1318,7 +1438,6 @@ def HLA_typing(ex_path,
                                                 negative_vars.add(var_id)
                                     else:
                                         negative_vars.add(var_id)
-                                                                                        
                                 var_idx += 1
                             read_pos += length
                             ref_pos += length
@@ -1330,45 +1449,9 @@ def HLA_typing(ex_path,
                             read_node_seq += read_base
                             read_node_var.append(var_id)
 
-                            # Check alternative alignments
-
-                            #   Right direction
-                            id_str = var_id
-                            right_anchor = 0
-                            for cmp_j in range(cmp_i + 1, len(cmp_list)):
-                                j_type, j_pos, j_len = cmp_list[cmp_j][:3]
-                                if j_type == "match":
-                                    right_anchor = j_len
-                                else:
-                                    if len(cmp_list[cmp_j]) < 4:
-                                        continue
-                                    j_var_id = cmp_list[cmp_j][3]
-                                    id_str += ("-%s" % j_var_id)
-
-                            if id_str in Alts_right:
-                                print >> sys.stderr, "mismatch right:\t", id_str, ":", Alts_right[id_str], "right anchor:", right_anchor
-                                no_add_count = True                                    
-                            
                             if var_id != "unknown":
-                                if not no_add_count: positive_vars.add(var_id)
-                            
-                            #   Left direction
-                            id_str = var_id
-                            left_anchor = 0
-                            for cmp_j in reversed(range(0, cmp_i)):
-                                j_type, j_pos, j_len = cmp_list[cmp_j][:3]
-                                if j_type == "match":
-                                    left_anchor = j_len
-                                else:
-                                    if len(cmp_list[cmp_j]) < 4:
-                                        continue
-                                    j_var_id = cmp_list[cmp_j][3]
-                                    id_str += ("-%s" % j_var_id)
-
-                            if id_str in Alts_left:
-                                print >> sys.stderr, "mismatch left:\t", id_str, ":", Alts_left[id_str], "left anchor:", left_anchor
-                                positive_vars = set()
-                            
+                                if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
+                                    positive_vars.add(var_id)
                             
                             cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
                             MD_match_len = 0
@@ -1376,7 +1459,8 @@ def HLA_typing(ex_path,
                             read_pos += 1
                             ref_pos += 1
                         elif type == "insertion":
-                            assert False                            
+                            assert False
+                            """
                             ins_seq = read_seq[read_pos:read_pos+length]
                             var_idx = lower_bound(Var_list[gene], ref_pos)
                             while var_idx < len(Var_list[gene]):
@@ -1394,34 +1478,16 @@ def HLA_typing(ex_path,
                                 cigar_match_len = 0
                             read_pos += length
                             cmp_cigar_str += ("%dI" % length)
+                            """
                         elif type == "deletion":
+                            var_id = cmp[3]
                             alt_match = False
                             del_len = length
+                            read_node_seq += ('D' * del_len)
+                            if var_id != "unknown":
+                                if cmp_i >= cmp_left and cmp_i <= cmp_right:
+                                    positive_vars.add(var_id)
 
-                            # Node
-                            read_node_seq += ('D' * length)
-
-                            # Check alternative alignments
-                            id_str = var_id
-                            right_anchor = 0
-                            for cmp_j in range(cmp_i + 1, len(cmp_list)):
-                                j_type, j_pos, j_len = cmp_list[cmp_j][:3]
-                                if j_type == "match":
-                                    right_anchor = j_len
-                                else:
-                                    if len(cmp_list[cmp_j]) < 4:
-                                        continue
-                                    j_var_id = cmp_list[cmp_j][3]
-                                    id_str += ("-%s" % j_var_id)
-
-                            if id_str in Alts_right:
-                                # DK - debugging purposes
-                                # if right_anchor <= Alts_right[id_str][0][-1]:
-                                if id_str == "hv61-hv77":
-                                    print >> sys.stderr, "deletion:\t", id_str, ":", Alts_right[id_str], "right anchor:", right_anchor
-                                    no_add_count = True
-                                    
-                            # Node
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + del_len
                                 read_node_var += (["unknown"] * del_len)
