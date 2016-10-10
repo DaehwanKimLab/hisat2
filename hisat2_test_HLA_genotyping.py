@@ -728,7 +728,7 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
     i = 0
     while i < len(cmp_list):
         cmp_i = cmp_list[i]
-        type, length = cmp_i[0], cmp_i[2]
+        type, pos, length = cmp_i[:3]
         # Check alternative alignments
         if type in ["mismatch", "deletion"]:
             var_id = cmp_i[3]
@@ -737,6 +737,7 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
             
             # Left direction
             id_str = var_id
+            total_del_len = length if type == "deletion" else 0
             for j in reversed(range(0, i)):
                 cmp_j = cmp_list[j]
                 j_type, j_pos, j_len = cmp_j[:3]
@@ -745,15 +746,28 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
                         continue
                     j_var_id = cmp_j[3]
                     id_str += ("-%s" % j_var_id)
-            left_pos = cmp_list[0][1]
-
+                    if j_type == "deletion":
+                        total_del_len += j_len
+            last_type, last_pos, last_len = cmp_list[0][:3]
+            assert last_type in ["match", "mismatch"]
+            left_pos = last_pos + total_del_len
             if id_str in Alts_left:
                 orig_alts = id_str.split('-')
                 alts_list = Alts_left[id_str]
                 for alts in alts_list:
                     if alts[-1].isdigit():
+                        assert type == "deletion"
+                        assert len(orig_alts) == 1
                         alts_id_str = '-'.join(alts[:-1])
-                        alt_left_pos = sys.maxint
+                        alt_left_pos = pos
+                        alt_total_del_len = 0
+                        for alt in alts[:-1]:
+                            assert alt in Vars
+                            alt_type, alt_pos, alt_data = Vars[alt]
+                            alt_left_pos = alt_pos - 1
+                            if alt_type == "deletion":
+                                alt_total_del_len += int(alt_data)
+                        alt_left_pos = alt_left_pos + alt_total_del_len - int(alts[-1]) + 1
                     else:
                         alts_id_str = '-'.join(alts)
                         assert alts_id_str in Alts_left
@@ -761,24 +775,30 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
                             back_id_str = '-'.join(back_alts)
                             if back_id_str.find(id_str) != 0:
                                 continue
-                            if len(orig_alts) == len(back_alts):
-                                alt_left_pos = left_pos
-                            else:
-                                next_var_id = back_alts[len(orig_alts)]
-                                if next_var_id.isdigit():
-                                    alt_left_pos = left_pos - int(next_var_id)
+                            assert len(orig_alts) < len(back_alts)
+                            assert back_alts[-1].isdigit()
+                            alt_left_pos = pos
+                            alt_total_del_len = 0
+                            for alt in back_alts[:len(orig_alts) + 1]:
+                                if alt.isdigit():
+                                    alt_left_pos = alt_left_pos - int(alt) + 1
                                 else:
-                                    assert next_var_id in Vars
-                                    alt_left_pos = Vars[next_var_id][1] + 1
-                if left_pos >= alt_left_pos:
-                    print >> sys.stderr, "LEFT:", cmp_list
-                    print >> sys.stderr, "\t", type, "id_str:", id_str, "=>", alts_id_str, "=>", back_alts, "left_pos:", left_pos, "alt_left_pos:", alt_left_pos
-                    cmp_left = i + 1
-                    break
+                                    assert alt in Vars
+                                    alt_type, alt_pos, alt_data = Vars[alt]
+                                    alt_left_pos = alt_pos - 1
+                                    if alt_type == "deletion":
+                                        alt_total_del_len += int(alt_data)
+                            alt_left_pos += alt_total_del_len
+                        if left_pos >= alt_left_pos:
+                            print >> sys.stderr, "LEFT:", cmp_list
+                            print >> sys.stderr, "\t", type, "id_str:", id_str, "=>", alts_id_str, "=>", back_alts, "left_pos:", left_pos, "alt_left_pos:", alt_left_pos
+                            cmp_left = i + 1
+                            break
     
             # Right direction
             if cmp_right + 1 == len(cmp_list):
                 id_str = var_id
+                total_del_len = length if type == "deletion" else 0
                 for j in range(i + 1, len(cmp_list)):
                     cmp_j = cmp_list[j]
                     j_type, j_pos, j_len = cmp_j[:3]
@@ -787,29 +807,33 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
                             continue
                         j_var_id = cmp_j[3]
                         id_str += ("-%s" % j_var_id)
-                        
+                        if j_type == "deletion":
+                            total_del_len += j_len                        
                 last_type, last_pos, last_len = cmp_list[-1][:3]
                 assert last_type in ["match", "mismatch"]
-                right_pos = last_pos + last_len - 1
-
+                right_pos = last_pos + last_len - 1 - total_del_len
                 if id_str in Alts_right:
                     orig_alts = id_str.split('-')
                     alts_list = Alts_right[id_str]
                     for alts in alts_list:
                         if alts[-1].isdigit():
+                            assert type == "deletion"
+                            assert len(orig_alts) == 1
                             alts_id_str = '-'.join(alts[:-1])
-                            if len(alts) == 1:
-                                alt_right_pos = -1
-                            else:
-                                next_var_id = alts[-2]
-                                assert next_var_id in Vars
-                                next_type, next_pos, next_data = Vars[next_var_id]
-                                if next_type == "single":
-                                    alt_right_pos = next_pos
+                            alt_right_pos = pos
+                            alt_total_del_len = 0
+                            for alt in alts[:-1]:
+                                assert alt in Vars
+                                alt_type, alt_pos, alt_data = Vars[alt]
+                                alt_right_pos = alt_pos
+                                if alt_type == "single":
+                                    alt_right_pos += 1
                                 else:
-                                    assert next_type == "deletion"
-                                    alt_right_pos = next_pos + int(next_data) - 1
-                                alt_right_pos += int(alts[-1])
+                                    assert alt_type == "deletion"
+                                    alt_del_len = int(alt_data)
+                                    alt_right_pos += alt_del_len
+                                    alt_total_del_len += alt_del_len
+                            alt_right_pos = alt_right_pos - alt_total_del_len + int(alts[-1]) - 1
                         else:
                             alts_id_str = '-'.join(alts)
                             assert alts_id_str in Alts_right
@@ -817,20 +841,31 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
                                 back_id_str = '-'.join(back_alts)
                                 if back_id_str.find(id_str) != 0:
                                     continue
-                                if len(orig_alts) == len(back_alts):
-                                    alt_right_pos = right_pos
-                                else:
-                                    next_var_id = back_alts[len(orig_alts)]
-                                    if next_var_id.isdigit():
-                                        alt_right_pos = right_pos + int(next_var_id)
+                                assert len(orig_alts) < len(back_alts)
+                                assert back_alts[-1].isdigit()
+                                alt_right_pos = pos
+                                alt_total_del_len = 0
+                                for alt in back_alts[:len(orig_alts) + 1]:
+                                    if alt.isdigit():
+                                        alt_right_pos = alt_right_pos + int(alt) - 1
                                     else:
-                                        assert next_var_id in Vars
-                                        alt_right_pos = Vars[next_var_id][1] - 1
-                    if right_pos <= alt_right_pos:
-                        print >> sys.stderr, "RIGHT:", cmp_list
-                        print >> sys.stderr, "\t", type, "id_str:", id_str, "=>", alts_id_str, "right_pos:", right_pos, "alt_right_pos:", alt_right_pos
-                        cmp_right = i - 1
-                        break
+                                        assert alt in Vars
+                                        alt_type, alt_pos, alt_data = Vars[alt]
+                                        alt_right_pos = alt_pos
+                                        if alt_type == "single":
+                                            alt_right_pos += 1
+                                        else:
+                                            assert alt_type == "deletion"
+                                            alt_del_len = int(alt_data)
+                                            alt_right_pos += alt_del_len
+                                            alt_total_del_len += alt_del_len
+                                alt_right_pos -= alt_total_del_len
+                                    
+                        if right_pos <= alt_right_pos:
+                            # print >> sys.stderr, "RIGHT:", cmp_list
+                            # print >> sys.stderr, "\t", type, "id_str:", id_str, "=>", alts_id_str, "right_pos:", right_pos, "alt_right_pos:", alt_right_pos
+                            cmp_right = i - 1
+                            break
         i += 1
 
     return cmp_left, cmp_right
