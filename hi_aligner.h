@@ -2456,7 +2456,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             tmp_mm = 0;
         }
         // Find SNPs included in this region
-        pair<index_t, index_t> alt_range;
+        pair<int, int> alt_range;
         {
             ALT<index_t> cmp_alt;
             const index_t minK = 16;
@@ -2470,11 +2470,11 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             }
             alt_range.first = alt_range.second = (index_t)alts.bsearchLoBound(cmp_alt);
             if(alt_range.first >= alts.size()) return 0;
-            for(; alt_range.first > 0; alt_range.first--) {
+            for(; alt_range.first >= 0; alt_range.first--) {
                 const ALT<index_t>& alt = alts[alt_range.first];
                 if(alt.snp()) {
                     if(alt.deletion() && !alt.reversed) continue;
-                    if(alt.pos + rdlen - 1 < joinedOff) break;
+                    if(alt.pos + rdlen < joinedOff) break;
                 } else if(alt.splicesite()) {
                     if(alt.left < alt.right) continue;
                     if(alt.left + rdlen - 1 < joinedOff) break;
