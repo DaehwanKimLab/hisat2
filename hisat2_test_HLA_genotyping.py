@@ -458,6 +458,38 @@ def lower_bound(Var_list, pos):
                 m -= 1
             return m
     return low
+
+
+"""
+   var: ['single', 3300, 'G']
+   exons: [[301, 373], [504, 822], [1084, 1417], [2019, 2301], [2404, 2520], [2965, 2997], [3140, 3187], [3357, 3361]]
+"""
+def var_in_exon(var, exons):
+    exonic = False
+    var_type, var_left, var_data = var
+    var_right = var_left
+    if var_type == "deletion":
+        var_right = var_left + int(var_data) - 1
+    for exon_left, exon_right in exons:
+        if var_left >= exon_left and var_right <= exon_right:
+            return True
+    return False
+
+
+"""
+Report variant IDs whose var is within exonic regions
+"""
+def get_exonic_vars(Vars, exons):
+    vars = set()
+    for var_id, var in Vars.items():
+        var_type, var_left, var_data = var
+        var_right = var_left
+        if var_type == "deletion":
+            var_right = var_left + int(var_data) - 1
+        for exon_left, exon_right in exons:
+            if var_left >= exon_left and var_right <= exon_right:
+                vars.add(var_id)
+    return vars
     
 
 """
@@ -723,7 +755,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
 Identify ambigious differences that may account for other alleles,
   given a list of differences (cmp_list) between a read and a potential allele   
 """
-def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
+def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list, verbose):
     cmp_left, cmp_right = 0, len(cmp_list) - 1
     i = 0
     while i < len(cmp_list):
@@ -790,8 +822,9 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
                                         alt_total_del_len += int(alt_data)
                             alt_left_pos += alt_total_del_len
                         if left_pos >= alt_left_pos:
-                            print >> sys.stderr, "LEFT:", cmp_list
-                            print >> sys.stderr, "\t", type, "id_str:", id_str, "=>", alts_id_str, "=>", back_alts, "left_pos:", left_pos, "alt_left_pos:", alt_left_pos
+                            if verbose >= 2:
+                                print "LEFT:", cmp_list
+                                print "\t", type, "id_str:", id_str, "=>", alts_id_str, "=>", back_alts, "left_pos:", left_pos, "alt_left_pos:", alt_left_pos
                             cmp_left = i + 1
                             break
     
@@ -862,8 +895,9 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list):
                                 alt_right_pos -= alt_total_del_len
                                     
                         if right_pos <= alt_right_pos:
-                            # print >> sys.stderr, "RIGHT:", cmp_list
-                            # print >> sys.stderr, "\t", type, "id_str:", id_str, "=>", alts_id_str, "right_pos:", right_pos, "alt_right_pos:", alt_right_pos
+                            if verbose >= 2:
+                                print "RIGHT:", cmp_list
+                                print "\t", type, "id_str:", id_str, "=>", alts_id_str, "right_pos:", right_pos, "alt_right_pos:", alt_right_pos
                             cmp_right = i - 1
                             break
         i += 1
@@ -930,22 +964,6 @@ def calculate_allele_coverage(allele_haplotype,
             
     return covered_var, total_var
 
-
-"""
-   var: ['single', 3300, 'G']
-   exons: [[301, 373], [504, 822], [1084, 1417], [2019, 2301], [2404, 2520], [2965, 2997], [3140, 3187], [3357, 3361]]
-"""
-def var_in_exon(var, exons):
-    exonic = False
-    var_type, var_left, var_data = var
-    var_right = var_left
-    if var_type == "deletion":
-        var_right = var_left + int(var_data) - 1
-    for exon_left, exon_right in exons:
-        if var_left >= exon_left and var_right <= exon_right:
-            return True
-    return False
-    
 
 """
 """
@@ -1105,13 +1123,18 @@ def HLA_typing(ex_path,
                 seq = ''.join(seq)
                 allele_nodes[allele_id] = assembly_graph.Node(0, seq, var)
 
+            # Extract variants that are within exons
+            exon_vars = get_exonic_vars(Vars[gene], ref_exons)
+
+            # For checking alternative alignments near the ends of alignments
             Alts_left, Alts_right = get_alternatives(ref_seq, Vars[gene], Var_list[gene], verbose)
 
             # Count alleles
             HLA_counts, HLA_cmpt = {}, {}
+            HLA_gen_counts, HLA_gen_cmpt = {}, {}
             num_reads, total_read_len = 0, 0
 
-            # Debugging
+            # For debugging purposes
             debug_allele_names = test_HLA_names if simulation and verbose >= 2 else []
 
             # Read information
@@ -1308,7 +1331,7 @@ def HLA_typing(ex_path,
                     if right_pos > len(ref_seq):
                         continue
 
-                    def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, exon = True):
+                    def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read):
                         max_count = max(HLA_count_per_read.values())
                         cur_cmpt = set()
                         for allele, count in HLA_count_per_read.items():
@@ -1325,7 +1348,7 @@ def HLA_typing(ex_path,
                         if len(cur_cmpt) == 0:
                             return
 
-                        # daehwan - for debugging purposes                            
+                        # DK - for debugging purposes                            
                         alleles = ["", ""]
                         # alleles = ["B*40:304", "B*40:02:01"]
                         allele1_found, allele2_found = False, False
@@ -1360,6 +1383,7 @@ def HLA_typing(ex_path,
                     if read_id != prev_read_id:
                         if prev_read_id != None:
                             cur_cmpt = add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
+                            add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                             read_nodes, read_var_list = [], []
 
                             if verbose >= 2:
@@ -1371,22 +1395,18 @@ def HLA_typing(ex_path,
 
                             prev_lines = []
 
-                        HLA_count_per_read = {}
+                        HLA_count_per_read, HLA_gen_count_per_read = {}, {}
                         for HLA_name in HLA_names[gene]:
                             if HLA_name.find("BACKBONE") != -1:
                                 continue
                             HLA_count_per_read[HLA_name] = 0
+                            HLA_gen_count_per_read[HLA_name] = 0
 
                     prev_lines.append(line)
 
-                    def add_count(var_id, add):
-                        if partial and \
-                                exonic_only and \
-                                not var_in_exon(Vars[gene][var_id], ref_exons):
-                            return
+                    def add_count(count_per_read, var_id, add):
                         assert var_id in Links
                         alleles = Links[var_id]
-
                         if verbose >= 2:
                             if add > 0 and not(set(alleles) & set(debug_allele_names)):
                                 print "Add:", add, debug_allele_names, "-", var_id
@@ -1403,7 +1423,7 @@ def HLA_typing(ex_path,
                                 assert allele in allele_reps
                                 if allele != allele_reps[allele]:
                                     continue
-                            HLA_count_per_read[allele] += add
+                            count_per_read[allele] += add
                             # DK - for debugging purposes
                             if debug:
                                 if allele in ["A*32:29", "A*03:01:07"]:
@@ -1416,7 +1436,9 @@ def HLA_typing(ex_path,
                         if var_type != "deletion":
                             continue
                         if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
-                            add_count(var_id, -1)
+                            if var_id in exon_vars:
+                                add_count(HLA_count_per_read, var_id, -1)
+                            add_count(HLA_gen_count_per_read, var_id, -1)
 
                     # Node
                     read_node_pos, read_node_seq, read_node_var = -1, "", []
@@ -1431,7 +1453,8 @@ def HLA_typing(ex_path,
                     cmp_list_left, cmp_list_right = identify_ambigious_diffs(Vars[gene],
                                                                              Alts_left,
                                                                              Alts_right,
-                                                                             cmp_list)
+                                                                             cmp_list,
+                                                                             verbose)
                     cmp_i = 0
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
@@ -1561,9 +1584,13 @@ def HLA_typing(ex_path,
                     read_nodes.append(assembly_graph.Node(read_node_pos, read_node_seq, read_node_var))
 
                     for positive_var in positive_vars:
-                        add_count(positive_var, 1)
+                        if positive_var in exon_vars:
+                            add_count(HLA_count_per_read, positive_var, 1)
+                        add_count(HLA_gen_count_per_read, positive_var, 1)
                     for negative_var in negative_vars:
-                        add_count(negative_var, -1)
+                        if negative_var in exon_vars:
+                            add_count(HLA_count_per_read, negative_var, -1)
+                        add_count(HLA_gen_count_per_read, negative_var, -1)
 
                     prev_read_id = read_id
                     prev_exon = exon
@@ -1574,6 +1601,7 @@ def HLA_typing(ex_path,
 
                 if prev_read_id != None:
                     add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
+                    add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                     read_nodes, read_var_list = [], []
 
             else:
@@ -1625,6 +1653,12 @@ def HLA_typing(ex_path,
 
                 if alleles:
                     add_alleles(alleles)
+
+            # DK - for debugging purposes
+            print >> sys.stderr, "DK: HLA_cmpt:", len(HLA_cmpt), "vs.", len(HLA_gen_cmpt)
+            print >> sys.stderr, "DK: HLA_counts:", len(HLA_counts), "vs.", len(HLA_gen_counts)
+            HLA_cmpt, HLA_counts = HLA_gen_cmpt, HLA_gen_couts
+            # sys.exit(1)
 
             HLA_counts = [[allele, count] for allele, count in HLA_counts.items()]
             def HLA_count_cmp(a, b):
@@ -2515,6 +2549,10 @@ if __name__ == '__main__':
                 debug[key] = value
             else:
                 debug[item] = 1
+
+    if not args.partial:
+        print >> sys.stderr, "Error: --no-partial is not supported!"
+        sys.exit(1)
 
     random.seed(1)
     test_HLA_genotyping(args.base_fname,
