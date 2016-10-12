@@ -2468,8 +2468,11 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             } else {
                 cmp_alt.pos = joinedOff - rd_diff;
             }
-            alt_range.first = alt_range.second = (index_t)alts.bsearchLoBound(cmp_alt);
-            if(alt_range.first >= alts.size()) return 0;
+            alt_range.first = alt_range.second = (int)alts.bsearchLoBound(cmp_alt);
+            if(alt_range.first >= alts.size()) {
+                assert_gt(alts.size(), 0);
+                alt_range.first = alt_range.second = alt_range.second - 1;
+            }
             for(; alt_range.first >= 0; alt_range.first--) {
                 const ALT<index_t>& alt = alts[alt_range.first];
                 if(alt.snp()) {
