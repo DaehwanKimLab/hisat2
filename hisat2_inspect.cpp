@@ -743,7 +743,7 @@ int main(int argc, char **argv) {
 
 		// Optionally summarize
 		if(verbose) {
-			cout << "Input ebwt file: \"" << ebwtFile.c_str() << "\"" << endl;
+			cout << "Input ht2 file: \"" << ebwtFile.c_str() << "\"" << endl;
 			cout << "Output file: \"" << outfile.c_str() << "\"" << endl;
 			cout << "Local endianness: " << (currentlyBigEndian()? "big":"little") << endl;
 #ifdef NDEBUG
@@ -770,3 +770,4 @@ int main(int argc, char **argv) {
 		return e;
 	}
 }
+
