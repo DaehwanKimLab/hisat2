@@ -490,6 +490,39 @@ def get_exonic_vars(Vars, exons):
             if var_left >= exon_left and var_right <= exon_right:
                 vars.add(var_id)
     return vars
+
+
+"""
+Get representative alleles among those that share the same exonic sequences
+"""
+def get_rep_alleles(Links, exon_vars):
+    allele_vars = {}
+    for var, alleles in Links.items():
+        if var not in exon_vars:
+            continue
+        for allele in alleles:
+            if allele not in allele_vars:
+                allele_vars[allele] = set()
+            allele_vars[allele].add(var)
+
+    allele_groups = {}
+    for allele, vars in allele_vars.items():
+        vars = '-'.join(vars)
+        if vars not in allele_groups:
+            allele_groups[vars] = []
+        allele_groups[vars].append(allele)
+
+    allele_reps = {} # allele representatives
+    allele_rep_groups = {} # allele groups by allele representatives
+    for allele_members in allele_groups.values():
+        assert len(allele_members) > 0
+        allele_rep = allele_members[0]
+        allele_rep_groups[allele_rep] = allele_members
+        for allele_member in allele_members:
+            assert allele_member not in allele_reps
+            allele_reps[allele_member] = allele_rep
+
+    return allele_reps
     
 
 """
@@ -1035,28 +1068,26 @@ def HLA_typing(ex_path,
             ref_exons = refHLA_loci[gene][-1]
 
             allele_reps = {} # allele representatives
-            if partial and exonic_only:
-                _allele_groups = {}
-                _alleles = HLAs[gene].keys()
-                for _allele in _alleles:
-                    _fields = _allele.split(':')
-                    if len(_fields) <= 3:
-                        assert _allele not in _allele_groups
-                        _allele_groups[_allele] = [_allele]
-                    else:
-                        assert len(_fields) == 4
-                        _allele_rep = ':'.join(_fields[:-1])
-                        if _allele_rep not in _allele_groups:
-                            _allele_groups[_allele_rep] = []
-                        assert _allele not in _allele_groups[_allele_rep]
-                        _allele_groups[_allele_rep].append(_allele)
-                    
-                for _allele_members in _allele_groups.values():
-                    assert len(_allele_members) > 0
-                    _allele_rep = _allele_members[0]
-                    for _allele_member in _allele_members:
-                        assert _allele_member not in allele_reps
-                        allele_reps[_allele_member] = _allele_rep
+            _allele_groups = {}
+            for _allele in HLAs[gene].keys():
+                _fields = _allele.split(':')
+                if len(_fields) <= 3:
+                    assert _allele not in _allele_groups
+                    _allele_groups[_allele] = [_allele]
+                else:
+                    assert len(_fields) == 4
+                    _allele_rep = ':'.join(_fields[:-1])
+                    if _allele_rep not in _allele_groups:
+                        _allele_groups[_allele_rep] = []
+                    assert _allele not in _allele_groups[_allele_rep]
+                    _allele_groups[_allele_rep].append(_allele)
+
+            for _allele_members in _allele_groups.values():
+                assert len(_allele_members) > 0
+                _allele_rep = _allele_members[0]
+                for _allele_member in _allele_members:
+                    assert _allele_member not in allele_reps
+                    allele_reps[_allele_member] = _allele_rep
 
             if not os.path.exists(alignment_fname + ".bai"):
                 os.system("samtools index %s" % alignment_fname)
@@ -1125,6 +1156,24 @@ def HLA_typing(ex_path,
 
             # Extract variants that are within exons
             exon_vars = get_exonic_vars(Vars[gene], ref_exons)
+
+            # DK - debugging purposes
+            allele_reps2 = get_rep_alleles(Links, exon_vars)
+            # allele_reps = allele_reps2
+
+            for allele in ["A*01:01:01:01", "A*01:04N", "A*01:16N"]:
+                print >> sys.stderr, allele, allele_reps[allele], allele_reps2[allele]
+            sys.exit(1)
+
+            """
+            for allele in allele_reps.keys() + allele_reps2.keys():
+                alleles1 = allele_reps[allele] if allele in allele_reps else []
+                alleles2 = allele_reps2[allele] if allele in allele_reps2 else []
+                if alleles1 == alleles2:
+                    continue
+                print >> sys.stderr, allele, alleles1, alleles2
+            sys.exit(1)
+            """
 
             # For checking alternative alignments near the ends of alignments
             Alts_left, Alts_right = get_alternatives(ref_seq, Vars[gene], Var_list[gene], verbose)
@@ -1603,6 +1652,12 @@ def HLA_typing(ex_path,
                     add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read)
                     add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                     read_nodes, read_var_list = [], []
+
+                # Exclude alleles that share the same exonic sequences, but one representative allele
+                for allele, count in HLA_counts.items():
+                    assert allele in allele_reps
+                    if allele != allele_reps[allele]:
+                        HLA_counts[allele] = 0
 
             else:
                 assert index_type == "linear"
