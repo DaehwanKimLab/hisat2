@@ -1654,12 +1654,6 @@ def HLA_typing(ex_path,
                 if alleles:
                     add_alleles(alleles)
 
-            # DK - for debugging purposes
-            print >> sys.stderr, "DK: HLA_cmpt:", len(HLA_cmpt), "vs.", len(HLA_gen_cmpt)
-            print >> sys.stderr, "DK: HLA_counts:", len(HLA_counts), "vs.", len(HLA_gen_counts)
-            HLA_cmpt, HLA_counts = HLA_gen_cmpt, HLA_gen_couts
-            # sys.exit(1)
-
             HLA_counts = [[allele, count] for allele, count in HLA_counts.items()]
             def HLA_count_cmp(a, b):
                 if a[1] != b[1]:
@@ -2243,6 +2237,15 @@ def test_HLA_genotyping(base_fname,
                         test_pairs.append(sorted([HLA_gene_alleles[nums[i]] for i in range(allele_count)]))
                     test_list.append(test_pairs)
 
+        # DK - for debugging purposes
+        test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
+        """
+        test_list = []
+        for allele_name in HLA_names["A"]:
+            if allele_name not in partial_alleles:
+                test_list.append([[allele_name]])
+        """
+        
         for test_i in range(len(test_list)):
             if "test_id" in daehwan_debug:
                 daehwan_test_ids = daehwan_debug["test_id"].split('-')
@@ -2258,8 +2261,6 @@ def test_HLA_genotyping(base_fname,
                                        simulate_interval,
                                        perbase_errorrate)
 
-            # DK - for debugging purposes
-            test_HLA_list = [["A*32:29"]]
             for test_HLA_names in test_HLA_list:
                 for test_HLA_name in test_HLA_names:
                     if custom_allele_check:
