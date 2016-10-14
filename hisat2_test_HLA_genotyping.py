@@ -328,7 +328,6 @@ def single_abundance(HLA_cmpt,
                 HLA_prob[allele] = 0.0
             HLA_prob[allele] += (float(count) / len(alleles))
 
-    # normalize2(HLA_prob, HLA_length)
     normalize(HLA_prob)
     def next_prob(HLA_cmpt, HLA_prob, HLA_length):
         HLA_prob_next = {}
@@ -336,13 +335,17 @@ def single_abundance(HLA_cmpt,
             alleles = cmpt.split('-')
             alleles_prob = 0.0
             for allele in alleles:
-                assert allele in HLA_prob
+                if allele not in HLA_prob:
+                    continue
                 alleles_prob += HLA_prob[allele]
+            if alleles_prob <= 0.0:
+                continue
             for allele in alleles:
+                if allele not in HLA_prob:
+                    continue
                 if allele not in HLA_prob_next:
                     HLA_prob_next[allele] = 0.0
                 HLA_prob_next[allele] += (float(count) * HLA_prob[allele] / alleles_prob)
-        # normalize2(HLA_prob_next, HLA_length)
         normalize(HLA_prob_next)
         return HLA_prob_next
 
@@ -352,17 +355,28 @@ def single_abundance(HLA_cmpt,
         diff = prob_diff(HLA_prob, HLA_prob_next)
         HLA_prob = HLA_prob_next
 
-        # DK - for debugging purposes
+        if iter >= 10:
+            HLA_prob2 = {}
+            for allele, prob in HLA_prob.items():
+                if prob >= 0.005:
+                    HLA_prob2[allele] = prob
+            HLA_prob = HLA_prob2
+
+        # DK - debugging purposes
         if iter % 10 == 0 and False:
             print "iter", iter
             for allele, prob in HLA_prob.items():
                 if prob >= 0.01:
-                    print "\t", allele, prob
+                    print >> sys.stderr, "\t", iter, allele, prob, str(datetime.now())
         
         iter += 1
+        
+    """
     for allele, prob in HLA_prob.items():
         allele_len = HLA_length[allele]
         HLA_prob[allele] /= float(allele_len)
+    """
+    
     normalize(HLA_prob)
     HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
     HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
@@ -1102,6 +1116,9 @@ def HLA_typing(ex_path,
             # Assembly graph
             asm_graph = assembly_graph.Graph(ref_seq)
 
+            # DK - debugging purposes
+            # asm_graph.draw()
+
             # List of nodes that represent alleles
             allele_vars = {}
             for var_id, allele_list in Links_default.items():
@@ -1139,6 +1156,7 @@ def HLA_typing(ex_path,
 
             # Choose allele representives from those that share the same exonic sequences
             allele_reps, allele_rep_groups = get_rep_alleles(Links, exon_vars)
+            allele_rep_set = set(allele_reps.values())
 
             # For checking alternative alignments near the ends of alignments
             Alts_left, Alts_right = get_alternatives(ref_seq, Vars[gene], Var_list[gene], verbose)
@@ -1149,11 +1167,10 @@ def HLA_typing(ex_path,
             num_reads, total_read_len = 0, 0
 
             # For debugging purposes
-            debug_allele_names = test_HLA_names if simulation and verbose >= 2 else []
+            debug_allele_names = set(test_HLA_names) if simulation and verbose >= 2 else set()
 
             # Read information
             prev_read_id = None
-            prev_exon = False
             prev_right_pos = 0
             prev_lines = []
             if index_type == "graph":
@@ -1332,16 +1349,7 @@ def HLA_typing(ex_path,
                         for type, length in cigars:
                             cigar_str += str(length)
                             cigar_str += type
-
-                    is_exon = False
-                    for exon in ref_exons:
-                        exon_left, exon_right = exon
-                        if right_pos <= exon_left or pos > exon_right:
-                            continue
-                        else:
-                            is_exon = True
-                            break
-
+                    
                     if right_pos > len(ref_seq):
                         continue
 
@@ -1351,52 +1359,52 @@ def HLA_typing(ex_path,
                         for allele, count in HLA_count_per_read.items():
                             if count < max_count:
                                 continue
+
                             if len(include_alleles) > 0 and allele not in include_alleles:
                                 continue
+                            
                             cur_cmpt.add(allele)                    
-                            if not allele in HLA_counts:
+                            if allele not in HLA_counts:
                                 HLA_counts[allele] = 1
                             else:
                                 HLA_counts[allele] += 1
 
                         if len(cur_cmpt) == 0:
-                            return
+                            return ""
 
                         # DK - for debugging purposes                            
                         alleles = ["", ""]
                         # alleles = ["B*40:304", "B*40:02:01"]
                         allele1_found, allele2_found = False, False
-                        for allele, count in HLA_count_per_read.items():
-                            if count < max_count:
-                                continue
-                            if allele == alleles[0]:
-                                allele1_found = True
-                            elif allele == alleles[1]:
-                                allele2_found = True
-                        if allele1_found != allele2_found:
-                            print alleles[0], HLA_count_per_read[alleles[0]]
-                            print alleles[1], HLA_count_per_read[alleles[1]]
-                            if allele1_found:
-                                print ("%s\tread_id %s - %d vs. %d]" % (alleles[0], prev_read_id, max_count, HLA_count_per_read[alleles[1]]))
-                            else:
-                                print ("%s\tread_id %s - %d vs. %d]" % (alleles[1], prev_read_id, max_count, HLA_count_per_read[alleles[0]]))
-                            print read_seq
+                        if alleles[0] != "":
+                            for allele, count in HLA_count_per_read.items():
+                                if count < max_count:
+                                    continue
+                                if allele == alleles[0]:
+                                    allele1_found = True
+                                elif allele == alleles[1]:
+                                    allele2_found = True
+                            if allele1_found != allele2_found:
+                                print alleles[0], HLA_count_per_read[alleles[0]]
+                                print alleles[1], HLA_count_per_read[alleles[1]]
+                                if allele1_found:
+                                    print ("%s\tread_id %s - %d vs. %d]" % (alleles[0], prev_read_id, max_count, HLA_count_per_read[alleles[1]]))
+                                else:
+                                    print ("%s\tread_id %s - %d vs. %d]" % (alleles[1], prev_read_id, max_count, HLA_count_per_read[alleles[0]]))
+                                print read_seq
 
                         cur_cmpt = sorted(list(cur_cmpt))
                         cur_cmpt = '-'.join(cur_cmpt)
-                        add = 1
-                        if partial and not exon:
-                            add *= 0.2
                         if not cur_cmpt in HLA_cmpt:
-                            HLA_cmpt[cur_cmpt] = add
+                            HLA_cmpt[cur_cmpt] = 1
                         else:
-                            HLA_cmpt[cur_cmpt] += add
+                            HLA_cmpt[cur_cmpt] += 1
 
                         return cur_cmpt
 
                     if read_id != prev_read_id:
                         if prev_read_id != None:
-                            cur_cmpt = add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_reps.values())
+                            cur_cmpt = add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                             add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                             read_nodes, read_var_list = [], []
 
@@ -1419,32 +1427,20 @@ def HLA_typing(ex_path,
                     prev_lines.append(line)
 
                     def add_count(count_per_read, var_id, add):
-                        assert var_id in Links
                         alleles = Links[var_id]
                         if verbose >= 2:
-                            if add > 0 and not(set(alleles) & set(debug_allele_names)):
+                            if add > 0 and not (set(alleles) & debug_allele_names):
                                 print "Add:", add, debug_allele_names, "-", var_id
                                 print "\t", line
                                 print "\t", alleles
-                            if add < 0 and set(alleles) & set(debug_allele_names):
+                            if add < 0 and set(alleles) & debug_allele_names:
                                 print "Add:", add, debug_allele_names, "-", var_id
                                 print "\t", line
 
                         for allele in alleles:
-                            if allele.find("BACKBONE") != -1:
-                                continue
-                            if partial and exonic_only:
-                                assert allele in allele_reps
-                                if allele != allele_reps[allele]:
-                                    continue
                             count_per_read[allele] += add
-                            # DK - for debugging purposes
-                            if debug:
-                                if allele in ["A*32:29", "A*03:01:07"]:
-                                    print allele, add, var_id
 
                     # Decide which allele(s) a read most likely came from
-                    # also sanity check - read length, cigar string, and MD string
                     for var_id, data in Vars[gene].items():
                         var_type, var_pos, var_data = data
                         if var_type != "deletion":
@@ -1460,10 +1456,11 @@ def HLA_typing(ex_path,
 
                     # Positive and negative evidence
                     positive_vars, negative_vars = set(), set()
-                         
+
+                    # Sanity check - read length, cigar string, and MD string
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
-                    
+
                     cmp_list_left, cmp_list_right = identify_ambigious_diffs(Vars[gene],
                                                                              Alts_left,
                                                                              Alts_right,
@@ -1532,7 +1529,6 @@ def HLA_typing(ex_path,
                             ref_pos += 1
                         elif type == "insertion":
                             assert False
-                            """
                             ins_seq = read_seq[read_pos:read_pos+length]
                             var_idx = lower_bound(Var_list[gene], ref_pos)
                             while var_idx < len(Var_list[gene]):
@@ -1550,7 +1546,6 @@ def HLA_typing(ex_path,
                                 cigar_match_len = 0
                             read_pos += length
                             cmp_cigar_str += ("%dI" % length)
-                            """
                         elif type == "deletion":
                             var_id = cmp[3]
                             alt_match = False
@@ -1581,7 +1576,7 @@ def HLA_typing(ex_path,
                             ref_pos += length
 
                         cmp_i += 1
-                        
+                
                     if cigar_match_len > 0:
                         cmp_cigar_str += ("%dM" % cigar_match_len)
                     cmp_MD += ("%d" % MD_match_len)
@@ -1607,14 +1602,13 @@ def HLA_typing(ex_path,
                         add_count(HLA_gen_count_per_read, negative_var, -1)
 
                     prev_read_id = read_id
-                    prev_exon = exon
                     prev_right_pos = right_pos
 
                 if num_reads <= 0:
                     continue
 
                 if prev_read_id != None:
-                    add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_reps.values())
+                    add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                     add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                     read_nodes, read_var_list = [], []
 
@@ -1701,14 +1695,8 @@ def HLA_typing(ex_path,
                         break
             print >> sys.stderr
 
-            # DK - debugging purposes
-            print >> sys.stderr, str(datetime.now())
-            
             # Calculate the abundance of representative alleles on exonic sequences
             HLA_prob = single_abundance(HLA_cmpt, HLA_lengths[gene])
-
-            # DK - debugging purposes
-            print >> sys.stderr, str(datetime.now())
 
             # Incorporate non representative alleles (full length alleles)
             gen_alleles = set()

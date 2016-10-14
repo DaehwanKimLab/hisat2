@@ -3,6 +3,11 @@
 import sys
 import math
 
+try:
+    from pyx import *
+except ImportError:
+    print >> sys.stderr, "pyx module is not available on the system"
+
 class Node:
     # Initialize
     def __init__(self, pos, seq, var):
@@ -45,5 +50,11 @@ class Graph:
 
     # Draw graph
     def draw(self):
-        None
+        c = canvas.canvas()
+        c.text(0, 0, "Hello, world!")
+        c.stroke(path.line(0, 0, 2, 0))
+        c.stroke(path.line(0, 0, 3, 0))
+        c.stroke(path.rect(0, 1, 1, 1))
+        c.fill(path.circle(2.5, 1.5, 0.5))
+        c.writePDFfile("temp.pdf")
     
