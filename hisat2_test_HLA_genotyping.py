@@ -22,6 +22,7 @@
 import sys, os, subprocess, re
 import inspect, random
 import math
+from datetime import datetime, date, time
 from argparse import ArgumentParser, FileType
 from hisat2_modules import assembly_graph
 
@@ -1005,6 +1006,7 @@ def HLA_typing(ex_path,
                reference_type,
                hla_list,
                partial,
+               partial_alleles,
                refHLAs,
                HLAs,
                HLA_names,
@@ -1699,34 +1701,56 @@ def HLA_typing(ex_path,
                         break
             print >> sys.stderr
 
+            # DK - debugging purposes
+            print >> sys.stderr, str(datetime.now())
+            
             # Calculate the abundance of representative alleles on exonic sequences
             HLA_prob = single_abundance(HLA_cmpt, HLA_lengths[gene])
 
-            # Incorporate non representative alleles
+            # DK - debugging purposes
+            print >> sys.stderr, str(datetime.now())
+
+            # Incorporate non representative alleles (full length alleles)
             gen_alleles = set()
+            gen_prob_sum = 0.0
             for prob_i in range(len(HLA_prob)):
                 allele, prob = HLA_prob[prob_i][:2]
                 if prob_i >= 10 and prob < 0.03:
                     break
+                if allele in partial_alleles:
+                    continue
+                
+                gen_prob_sum += prob
                 for allele2 in allele_rep_groups[allele]:
                     gen_alleles.add(allele2)
-            HLA_gen_cmpt2 = {}
-            for cmpt, value in HLA_gen_cmpt.items():
-                cmpt2 = []
-                for allele in cmpt.split('-'):
+            if len(gen_alleles) > 0:
+                HLA_gen_cmpt2 = {}
+                for cmpt, value in HLA_gen_cmpt.items():
+                    cmpt2 = []
+                    for allele in cmpt.split('-'):
+                        if allele in gen_alleles:
+                            cmpt2.append(allele)
+                    if len(cmpt2) == 0:
+                        continue
+                    cmpt2 = '-'.join(cmpt2)
+                    if cmpt2 not in HLA_gen_cmpt2:
+                        HLA_gen_cmpt2[cmpt2] = value
+                    else:
+                        HLA_gen_cmpt2[cmpt2] += value
+                HLA_gen_cmpt = HLA_gen_cmpt2
+                HLA_gen_prob = single_abundance(HLA_gen_cmpt, HLA_lengths[gene])
+
+                HLA_combined_prob = {}
+                for allele, prob in HLA_prob:
+                    assert allele not in HLA_combined_prob
                     if allele in gen_alleles:
-                        cmpt2.append(allele)
-                if cmpt2 == "":
-                    continue
-                cmpt2 = '-'.join(cmpt2)
-                if cmpt2 not in HLA_gen_cmpt2:
-                    HLA_gen_cmpt2[cmpt2] = value
-                else:
-                    HLA_gen_cmpt2[cmpt2] += value
-            HLA_gen_cmpt = HLA_gen_cmpt2
-            HLA_gen_prob = single_abundance(HLA_gen_cmpt, HLA_lengths[gene])
-            for prob in HLA_gen_prob:
-                print >> sys.stderr, prob
+                        HLA_combined_prob[allele] = 0.0
+                    else:
+                        HLA_combined_prob[allele] = prob
+                for allele, prob in HLA_gen_prob:
+                    HLA_combined_prob[allele] = prob * gen_prob_sum
+                HLA_prob = [[allele, prob] for allele, prob in HLA_combined_prob.items()]
+                HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
 
             success = [False for i in range(len(test_HLA_names))]
             found_list = [False for i in range(len(test_HLA_names))]
@@ -2277,13 +2301,13 @@ def test_HLA_genotyping(base_fname,
                     test_list.append(test_pairs)
 
         # DK - for debugging purposes
-        test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
-        # """
+        # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
+        """
         test_list = []
         for allele_name in HLA_names["A"]:
             if allele_name not in partial_alleles:
                 test_list.append([[allele_name]])
-        # """
+        """
         
         for test_i in range(len(test_list)):
             if "test_id" in daehwan_debug:
@@ -2291,7 +2315,7 @@ def test_HLA_genotyping(base_fname,
                 if str(test_i + 1) not in daehwan_test_ids:
                     continue
 
-            print >> sys.stderr, "Test %d" % (test_i + 1)
+            print >> sys.stderr, "Test %d" % (test_i + 1), str(datetime.now())
             test_HLA_list = test_list[test_i]
             num_frags = simulate_reads(HLAs_default if custom_allele_check else HLAs,
                                        test_HLA_list,
@@ -2324,6 +2348,7 @@ def test_HLA_genotyping(base_fname,
                                          reference_type,
                                          test_HLA_list,
                                          partial,
+                                         partial_alleles,
                                          refHLAs,
                                          HLAs,                       
                                          HLA_names,
@@ -2370,6 +2395,7 @@ def test_HLA_genotyping(base_fname,
                    reference_type,
                    hla_list,
                    partial,
+                   partial_alleles,
                    refHLAs,
                    HLAs,                       
                    HLA_names,
