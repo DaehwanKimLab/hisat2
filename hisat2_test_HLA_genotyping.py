@@ -1116,9 +1116,6 @@ def HLA_typing(ex_path,
             # Assembly graph
             asm_graph = assembly_graph.Graph(ref_seq)
 
-            # Draw assembly graph
-            asm_graph.draw()
-
             # List of nodes that represent alleles
             allele_vars = {}
             for var_id, allele_list in Links_default.items():
@@ -1184,6 +1181,7 @@ def HLA_typing(ex_path,
                     line = line.strip()
                     cols = line.split()
                     read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
+                    orig_read_id = read_id
                     if simulation:
                         read_id = read_id.split('|')[0]
                     read_seq, qual = cols[9], cols[10]
@@ -1406,6 +1404,8 @@ def HLA_typing(ex_path,
                         if prev_read_id != None:
                             cur_cmpt = add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                             add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
+                            for read_id_, read_node in read_nodes:
+                                asm_graph.add_node(read_id_, read_node)
                             read_nodes, read_var_list = [], []
 
                             if verbose >= 2:
@@ -1590,7 +1590,7 @@ def HLA_typing(ex_path,
                         assert False
 
                     # Node
-                    read_nodes.append(assembly_graph.Node(read_node_pos, read_node_seq, read_node_var))
+                    read_nodes.append([orig_read_id, assembly_graph.Node(read_node_pos, read_node_seq, read_node_var)])
 
                     for positive_var in positive_vars:
                         if positive_var in exon_vars:
@@ -1610,6 +1610,8 @@ def HLA_typing(ex_path,
                 if prev_read_id != None:
                     add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                     add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
+                    for read_id_, read_node in read_nodes:
+                        asm_graph.add_node(read_id_, read_node)
                     read_nodes, read_var_list = [], []
 
                 # Draw assembly graph
@@ -2230,16 +2232,6 @@ def test_HLA_genotyping(base_fname,
         Vars_default, Var_list_default = Vars, Var_list
         Links_default = Links
 
-    # DK - for debugging purposes
-    """
-    print "Links:", len(Links)
-    DK_set = set(Links["hv252"])
-    for var_id in ["hv252", "hv254", "hv265", "hv269", "hv272", "hv273", "hv274", "hv275", "hv276", "hv277", "hv278", "hv279", "hv280", "hv281", "hv282", "hv283", "hv284", "hv285", "hv286", "hv287", "hv288", "hv289", "hv290", "hv291", "hv292"]:
-        print var_id,  set(Links[var_id])
-        # print var_id, DK_set
-    sys.exit(1)
-    """
-        
     # Test HLA typing
     test_list = []
     if simulation:
@@ -2293,6 +2285,7 @@ def test_HLA_genotyping(base_fname,
 
         # DK - for debugging purposes
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
+        test_list = [[["A*01:01:01:01"]]]
         """
         test_list = []
         for allele_name in HLA_names["A"]:
