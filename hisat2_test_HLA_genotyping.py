@@ -1116,8 +1116,8 @@ def HLA_typing(ex_path,
             # Assembly graph
             asm_graph = assembly_graph.Graph(ref_seq)
 
-            # DK - debugging purposes
-            # asm_graph.draw()
+            # Draw assembly graph
+            asm_graph.draw()
 
             # List of nodes that represent alleles
             allele_vars = {}
@@ -1611,6 +1611,9 @@ def HLA_typing(ex_path,
                     add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                     add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                     read_nodes, read_var_list = [], []
+
+                # Draw assembly graph
+                asm_graph.draw()
 
             else:
                 assert index_type == "linear"
