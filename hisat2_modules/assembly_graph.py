@@ -52,6 +52,9 @@ class Graph:
         self.height = 1000 * self.scale
 
     def add_node(self, id, node):
+        if id in self.nodes:
+            # print >> sys.stderr, "Warning) multi-mapped read:", id
+            return
         assert id not in self.nodes
         self.nodes[id] = node
 
@@ -111,7 +114,7 @@ class HtmlDraw:
         print >> html_file, r'<!DOCTYPE html>'
         print >> html_file, r'<html>'
         print >> html_file, r'<head>'
-        print >> html_file, r'<title>Smiley Face</title>'
+        print >> html_file, r'<title>HISAT-genotyping HLA</title>'
         print >> html_file, r'<link rel="stylesheet" type="text/css" href="%s.css"/>' % base_fname
         print >> html_file, r'</head>'
         print >> html_file, r'<body>'

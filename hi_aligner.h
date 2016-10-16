@@ -4276,8 +4276,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     
     // choose candidate partial alignments for further alignment
     const index_t maxsize = (index_t)rp.khits;
-    index_t numHits = getAnchorHits(
-                                    gfm,
+    index_t numHits = getAnchorHits(gfm,
                                     pepol,
                                     tpol,
                                     gpol,
@@ -4301,8 +4300,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     max_localindexatts = him.localindexatts + max<uint64_t>(10, add);
     // extend the partial alignments bidirectionally using
     // local search, extension, and (less often) global search
-    hybridSearch(
-                 sc,
+    hybridSearch(sc,
                  pepol,
                  tpol,
                  gpol,

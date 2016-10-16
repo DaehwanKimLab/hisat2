@@ -36,8 +36,10 @@ def simulate_reads(HLAs,
                    simulate_interval = 1,
                    perbase_errorrate = 0.0):
     HLA_reads_1, HLA_reads_2 = [], []
+    num_pairs = []
     for test_HLA_names in test_HLA_list:
         gene = test_HLA_names[0].split('*')[0]
+        num_pairs.append([])
 
         # Simulate reads from two HLA alleles
         def simulate_reads_impl(seq,
@@ -179,6 +181,7 @@ def simulate_reads(HLAs,
                                                            perbase_errorrate)
             HLA_reads_1 += tmp_reads_1
             HLA_reads_2 += tmp_reads_2
+            num_pairs[-1].append(len(tmp_reads_1))
 
     # Write reads into a fasta read file
     def write_reads(reads, idx):
@@ -190,7 +193,7 @@ def simulate_reads(HLAs,
     write_reads(HLA_reads_1, 1)
     write_reads(HLA_reads_2, 2)
 
-    return len(HLA_reads_1)
+    return num_pairs
 
 
 """
@@ -731,7 +734,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
         if var_pos + del_len >= len(ref_seq):
             assert var_pos + del_len == len(ref_seq)
             continue
-        debug = (var_id == "hv266a")
+        debug = (var_id == "hv1096a")
         if debug:
             print Vars[var_id]
 
@@ -813,6 +816,7 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list, verbose):
         if type in ["mismatch", "deletion"]:
             var_id = cmp_i[3]
             if var_id == "unknown":
+                i += 1
                 continue
             
             # Left direction
@@ -1220,8 +1224,9 @@ def HLA_typing(ex_path,
                     if NM > num_mismatch:
                         continue
 
+                    # Only consider unique alignment
                     if NH > 1:
-                        concordant = False
+                        continue
 
                     if Zs:
                         Zs = Zs.split(',')
@@ -1460,12 +1465,12 @@ def HLA_typing(ex_path,
                     # Sanity check - read length, cigar string, and MD string
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
-
                     cmp_list_left, cmp_list_right = identify_ambigious_diffs(Vars[gene],
                                                                              Alts_left,
                                                                              Alts_right,
                                                                              cmp_list,
                                                                              verbose)
+
                     cmp_i = 0
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
@@ -1553,7 +1558,9 @@ def HLA_typing(ex_path,
                             read_node_seq += ('D' * del_len)
                             if var_id != "unknown":
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
-                                    positive_vars.add(var_id)
+                                    # Require at least 5bp match before and after a deletion
+                                    if read_pos >= 5 and read_pos + 5 <= len(read_seq):
+                                        positive_vars.add(var_id)
 
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + del_len
@@ -2285,14 +2292,7 @@ def test_HLA_genotyping(base_fname,
 
         # DK - for debugging purposes
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
-        test_list = [[["A*01:01:01:01"]]]
-        """
-        test_list = []
-        for allele_name in HLA_names["A"]:
-            if allele_name not in partial_alleles:
-                test_list.append([[allele_name]])
-        """
-        
+        # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):
             if "test_id" in daehwan_debug:
                 daehwan_test_ids = daehwan_debug["test_id"].split('-')
@@ -2301,25 +2301,30 @@ def test_HLA_genotyping(base_fname,
 
             print >> sys.stderr, "Test %d" % (test_i + 1), str(datetime.now())
             test_HLA_list = test_list[test_i]
-            num_frags = simulate_reads(HLAs_default if custom_allele_check else HLAs,
-                                       test_HLA_list,
-                                       Vars,
-                                       Links,
-                                       simulate_interval,
-                                       perbase_errorrate)
+            num_frag_list = simulate_reads(HLAs_default if custom_allele_check else HLAs,
+                                           test_HLA_list,
+                                           Vars,
+                                           Links,
+                                           simulate_interval,
+                                           perbase_errorrate)
 
-            for test_HLA_names in test_HLA_list:
-                for test_HLA_name in test_HLA_names:
+            assert len(num_frag_list) == len(test_HLA_list)
+            for i_ in range(len(test_HLA_list)):
+                test_HLA_names = test_HLA_list[i_]
+                num_frag_list_i = num_frag_list[i_]
+                assert len(num_frag_list_i) == len(test_HLA_names)
+                for j_ in range(len(test_HLA_names)):
+                    test_HLA_name = test_HLA_names[j_]
                     if custom_allele_check:
                         gene = test_HLA_name.split('*')[0]
                         test_HLA_seq = HLAs_default[gene][test_HLA_name]
                         seq_type = "partial" if test_HLA_name in partial_alleles else "full"
-                        print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_HLA_name, len(test_HLA_seq), seq_type, num_frags)
+                        print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_HLA_name, len(test_HLA_seq), seq_type, num_frag_list_i[j_])
                         continue
                     gene = test_HLA_name.split('*')[0]
                     test_HLA_seq = HLAs[gene][test_HLA_name]
                     seq_type = "partial" if test_HLA_name in partial_alleles else "full"
-                    print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_HLA_name, len(test_HLA_seq), seq_type, num_frags)
+                    print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_HLA_name, len(test_HLA_seq), seq_type, num_frag_list_i[j_])
 
             if "single-end" in daehwan_debug:
                 read_fname = ["hla_input_1.fa"]
