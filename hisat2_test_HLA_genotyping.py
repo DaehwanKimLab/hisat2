@@ -1522,7 +1522,6 @@ def HLA_typing(ex_path,
                             read_base = read_seq[read_pos]
                             read_node_seq += read_base
                             read_node_var.append(var_id)
-
                             if var_id != "unknown":
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
                                     positive_vars.add(var_id)
@@ -1564,7 +1563,7 @@ def HLA_typing(ex_path,
 
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + del_len
-                                read_node_var += (["unknown"] * del_len)
+                                read_node_var += ([var_id] * del_len)
 
                             if cigar_match_len > 0:
                                 cmp_cigar_str += ("%dM" % cigar_match_len)
@@ -1622,6 +1621,7 @@ def HLA_typing(ex_path,
                     read_nodes, read_var_list = [], []
 
                 # Draw assembly graph
+                asm_graph.assemble()
                 asm_graph.draw()
 
             else:

@@ -5,33 +5,97 @@ import math
 
 class Node:
     # Initialize
-    def __init__(self, pos, seq, var):
+    def __init__(self, left, seq, var):
         self.next = [] # list of next nodes
 
         self.nodeID = 0 # Node ID
 
-        self.pos = pos # starting position
+        self.left = left # starting position
         
         self.seq = seq # sequence that node represents
         self.var = var # how sequence is related to backbone
         self.cov = []  # coverage along the sequence by reads
+
+        assert 'I' not in seq
+        self.right = self.left + len(seq) - 1
+
         
     # Check how compatible allele is in regard to read or pair
     def compatible_with_rnode(self, rnode):
-        assert rnode.pos + len(rnode.seq) <= len(self.seq)
+        assert rnode.left + len(rnode.seq) <= len(self.seq)
         score = 0
         for i in range(len(rnode.seq)):
-            allele_bp = self.seq[rnode.pos + i]
+            allele_bp = self.seq[rnode.left + i]
             read_bp = rnode.seq[i]
             if allele_bp == read_bp:
                 score += 1
         return float(score) / len(rnode.seq)
- 
+
+    
+    # Check how nodes overlap with each other
+    def overlap_with(self, other):
+        assert self.left <= other.left
+        if self.right < other.left:
+            return -1, -1
+        
+        seq = self.seq.replace('D', '')
+        other_seq = other.seq.replace('D', '')
+        assert 'I' not in seq and 'I' not in other_seq
+
+        # Currently slow
+        max_mm = 2
+        for i in range(len(seq)):
+            temp_mm = 0
+            for j in range(len(other_seq)):
+                if i + j >= len(seq):
+                    break
+                if seq[i+j] != other_seq[j]:
+                    temp_mm += 1
+                    if temp_mm > max_mm:
+                        break
+            if temp_mm <= max_mm:
+                return i, len(seq) - i
+
+        return -1, -1
+
+    
+    # Combine two nodes
+    def combine_with(self, other, at):
+        seq = self.seq.replace('D', '')
+        overlap = len(seq) - at
+        assert overlap > 0
+        assert self.left <= other.left
+        if self.right >= other.right:
+            return
+
+        for i in range(len(other.seq)):
+            if overlap <= 0:
+                break
+            c = other.seq[i]
+            if c == 'D':
+                continue
+            assert c in "ACGT"
+            overlap -= 1
+
+        assert i < len(other.seq)
+        self.seq += other.seq[i:]
+        self.var += other.var[i:]
+        assert len(self.seq) == len(self.var)
+
+        self.right = self.left + len(self.seq) - 1
+
+        
     # Display node information
-    def help(self):
-        print >> sys.stderr, "Pos: %d" % self.pos
-        # print >> sys.stderr, "\t", self.seq
-        print >> sys.stderr, "\t", self.var
+    def print_info(self):
+        print >> sys.stderr, "Pos: [%d, %d]" % (self.left, self.right)
+        print >> sys.stderr, "\t", self.seq
+        prev_var = ""
+        for var_i in range(len(self.var)):
+            var = self.var[var_i]
+            if var != "" and var != "unknown" and var != prev_var:
+                print >> sys.stderr, "\t%d: %s" % (var_i, var),
+            prev_var = var
+        print >> sys.stderr
 
                 
 class Graph:
@@ -62,10 +126,66 @@ class Graph:
         None
 
     # Display graph information
-    def help(self): 
+    def print_info(self): 
         print >> sys.stderr, "Backbone len: %d" % len(self.backbone)
         print >> sys.stderr, "\t%s" % self.backbone
 
+    def assemble(self):
+        if len(self.nodes) <= 0:
+            return
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        def node_cmp(a, b):
+            return a[1] - b[1]
+        nodes = sorted(nodes, cmp=node_cmp)
+
+        # DK - debugging purposes
+        queue = [nodes[0]]; nodes.pop(0)
+        while len(queue) > 0:
+            node_id, node_left, node_right = queue.pop()
+            node = self.nodes[node_id]
+
+            node_i = 0
+            del_nodes = []
+            while node_i < len(nodes):
+                node2_id, node2_left, node2_right = nodes[node_i]
+                node2 = self.nodes[node2_id]
+                at, overlap = node.overlap_with(node2)
+                if overlap >= 80:
+                    # DK - debugging purposes
+                    print >> sys.stderr, node_id; node.print_info()
+                    print >> sys.stderr, node2_id; node2.print_info()
+
+                    node.combine_with(node2, at)
+                    del_nodes.append(node_i)
+
+                    print >> sys.stderr, "at %d, overlap with %d" % (at, overlap)
+                    print >> sys.stderr, "combined:", node_id; node.print_info()
+                else:
+                    # DK - debugging purposes
+                    print >> sys.stderr, node_id; node.print_info()
+                    print >> sys.stderr, node2_id; node2.print_info()
+                    print >> sys.stderr, "at %d, overlap with %d" % (at, overlap)
+                    sys.exit(1)
+                    
+                    node_i += 1
+                    continue
+
+                node_i += 1
+
+            # DK - debugging purposes
+            print >> sys.stderr, node_id; node.print_info()
+            # sys.exit(1)
+            
+            new_nodes = []
+            for node_i in range(len(nodes)):
+                if node_i not in del_nodes:
+                    new_nodes.append(nodes[node_i])
+            nodes = new_nodes
+            if len(nodes) <= 0:
+                break
+            queue.append(nodes[0]); nodes.pop(0)
+        
+        
     # Draw graph
     def draw(self):
         htmlDraw = HtmlDraw("assembly_graph")
@@ -74,7 +194,7 @@ class Graph:
         htmlDraw.draw_smile()
 
         # DK - debugging purposes
-        nodes = [[id, node.pos] for id, node in self.nodes.items()]
+        nodes = [[id, node.left] for id, node in self.nodes.items()]
         def node_cmp(a, b):
             return a[1] - b[1]
         nodes = sorted(nodes, cmp=node_cmp)
