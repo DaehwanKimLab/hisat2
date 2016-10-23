@@ -5,6 +5,18 @@ import math
 
 
 #
+def get_major_nt(nt_dic):
+    nt = ''
+    max_count = 0
+    for tmp_nt, tmp_count in nt_dic.items():
+        assert nt in "ACGTD"
+        if tmp_count > max_count:
+            max_count = tmp_count
+            nt = tmp_nt
+    assert nt in "ACGTD"
+    return nt                
+
+#
 def match_score(nt_dic1, nt_dic2):
     total1, total2 = sum(nt_dic1.values()) * 2.0, sum(nt_dic2.values()) * 2.0
     best = 0.0
@@ -54,7 +66,7 @@ class Node:
         return float(score) / len(rnode.seq)
 
 
-    # Check how nodes overlap with each other
+    # Check how nodes overlap with each other without considering deletions
     def overlap_with(self, other):
         assert self.left <= other.left
         if self.right < other.left:
@@ -62,11 +74,11 @@ class Node:
 
         seq, other_seq = [], []
         for nt_dic in self.seq:
-            if nt_dic.keys() == ['D']:
+            if get_major_nt(nt_dic) == 'D':
                 continue
             seq.append(nt_dic)
         for nt_dic in other.seq:
-            if nt_dic.keys() == ['D']:
+            if get_major_nt(nt_dic) == 'D':
                 continue
             other_seq.append(nt_dic)
 
@@ -88,66 +100,29 @@ class Node:
         return -1, -1
 
     
-    # Combine two nodes
-    def combine_with(self, other, at):
+    # Combine two nodes with considering deletions
+    def combine_with(self, other):
         assert self.left <= other.left
         if self.right >= other.right:
             return
 
-        # Identify i-th position corresponding to 'at'
-        for i in range(len(self.seq)):
-            if at == 0:
-                break
-            if self.seq[i].keys() == ['D']:
-                continue
-            at -= 1
-        assert at == 0
-        new_seq, new_var = self.seq[:i], self.var[:i]
-
-        # DK - debugging purposes
-        init_i = i
-
         # Merge two sequences
         assert len(other.seq) > 0 and 'D' not in other.seq[0].keys()
-        j = 0
+        i, j = other.left - self.left, 0
+        new_seq, new_var = self.seq[:i], self.var[:i]
         while i < len(self.seq) and j < len(other.seq):
             nt_dic, nt_var = self.seq[i], self.var[i]
             nt_dic2, nt_var2 = other.seq[j], other.var[j]
-            if nt_dic.keys() != ['D'] and nt_dic2.keys() != ['D']:
-                new_seq.append(nt_dic)
-                new_var.append(nt_var | nt_var2)
-                for nt, count in nt_dic2.items():
-                    if nt in nt_dic:
-                        nt_dic[nt] += count
-                    else:
-                        nt_dic[nt] = count
-                i += 1
-                j += 1
-            else:
-                if nt_dic.keys() == ['D'] and nt_dic2.keys() == ['D']:
-                    nt_dic['D'] += nt_dic2['D']
-                    new_seq.append(nt_dic)
-                    new_var.append(nt_var | nt_var2)
-                    i += 1
-                    j += 1
-                elif nt_dic.keys() == ['D']:
-                    new_seq.append(nt_dic)
-                    new_var.append(nt_var)
-                    i += 1
+            new_seq.append(nt_dic)
+            new_var.append(nt_var | nt_var2)
+            for nt, count in nt_dic2.items():
+                if nt in nt_dic:
+                    nt_dic[nt] += count
                 else:
-                    assert nt_dic2.keys() == ['D']
-
-                    # DK - debugging purposes
-                    if "hv725" in nt_var2:
-                        print >> sys.stderr, nt_var2
-                        print >> sys.stderr, "init_i: %d, i: %d, j: %d" % (init_i, i, j)
-                        print >> sys.stderr, "new_seq:", len(new_seq)
-                        sys.exit(1)
-                    
-                    new_seq.append(nt_dic2)
-                    new_var.append(nt_var2)
-                    j += 1                    
-
+                    nt_dic[nt] = count
+            i += 1
+            j += 1
+            
         # Append the rest of the other sequence
         assert i == len(self.seq)
         new_seq += other.seq[j:]
@@ -163,18 +138,7 @@ class Node:
         print "Pos: [%d, %d]" % (self.left, self.right)
         seq = ""
         for nt_dic in self.seq:
-            if nt_dic.keys() == ['D']:
-                seq += 'D'
-            else:
-                nt = ''
-                max_count = 0
-                for tmp_nt, tmp_count in nt_dic.items():
-                    assert tmp_nt in "ACGT"
-                    if tmp_count > max_count:
-                        max_count = tmp_count
-                        nt = tmp_nt
-                assert nt in "ACGT"
-                seq += nt
+            seq += get_major_nt(nt_dic)
         print "\t", seq
         prev_var = ""
         for var_i in range(len(self.var)):
@@ -242,7 +206,7 @@ class Graph:
                     print node_id; node.print_info()
                     print node2_id; node2.print_info()
 
-                    node.combine_with(node2, at)
+                    node.combine_with(node2)
                     del_nodes.append(node_i)
 
                     print "at %d, overlap with %d" % (at, overlap)
