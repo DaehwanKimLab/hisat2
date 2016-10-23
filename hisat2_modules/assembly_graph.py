@@ -3,6 +3,20 @@
 import sys
 import math
 
+
+#
+def match_score(nt_dic1, nt_dic2):
+    total1, total2 = sum(nt_dic1.values()) * 2.0, sum(nt_dic2.values()) * 2.0
+    best = 0.0
+    for nt in "ACGT":
+        if nt not in nt_dic1 or nt not in nt_dic2:
+            continue
+        tmp_best = nt_dic1[nt] / total1 + nt_dic2[nt] / total2
+        if tmp_best > best:
+            best = tmp_best
+    return best
+    
+
 class Node:
     # Initialize
     def __init__(self, left, seq, var):
@@ -11,12 +25,20 @@ class Node:
         self.nodeID = 0 # Node ID
 
         self.left = left # starting position
-        
-        self.seq = seq # sequence that node represents
-        self.var = var # how sequence is related to backbone
-        self.cov = []  # coverage along the sequence by reads
 
+        # sequence that node represents
         assert 'I' not in seq
+        self.seq = []
+        for nt in seq:
+            assert nt in "ACGTD"
+            self.seq.append({nt : 1})
+
+        # how sequence is related to backbone
+        self.var = []
+        for v in var:
+            self.var.append(set([v]) if v != '' else set())
+
+        assert len(self.seq) == len(self.var)
         self.right = self.left + len(seq) - 1
 
         
@@ -31,29 +53,36 @@ class Node:
                 score += 1
         return float(score) / len(rnode.seq)
 
-    
+
     # Check how nodes overlap with each other
     def overlap_with(self, other):
         assert self.left <= other.left
         if self.right < other.left:
             return -1, -1
-        
-        seq = self.seq.replace('D', '')
-        other_seq = other.seq.replace('D', '')
-        assert 'I' not in seq and 'I' not in other_seq
 
-        # Currently slow
-        max_mm = 2
+        seq, other_seq = [], []
+        for nt_dic in self.seq:
+            if nt_dic.keys() == ['D']:
+                continue
+            seq.append(nt_dic)
+        for nt_dic in other.seq:
+            if nt_dic.keys() == ['D']:
+                continue
+            other_seq.append(nt_dic)
+
+        max_mm = 2.0
         for i in range(len(seq)):
-            temp_mm = 0
+            tmp_mm = 0.0
             for j in range(len(other_seq)):
                 if i + j >= len(seq):
                     break
-                if seq[i+j] != other_seq[j]:
-                    temp_mm += 1
-                    if temp_mm > max_mm:
-                        break
-            if temp_mm <= max_mm:
+                other_nt_dic = other.seq[j]
+                mismatch = 1.0 - match_score(seq[i+j], other_seq[j])
+                assert mismatch >= 0.0
+                tmp_mm += mismatch
+                if tmp_mm > max_mm:
+                    break
+            if tmp_mm <= max_mm:
                 return i, len(seq) - i
 
         return -1, -1
@@ -61,41 +90,100 @@ class Node:
     
     # Combine two nodes
     def combine_with(self, other, at):
-        seq = self.seq.replace('D', '')
-        overlap = len(seq) - at
-        assert overlap > 0
         assert self.left <= other.left
         if self.right >= other.right:
             return
 
-        for i in range(len(other.seq)):
-            if overlap <= 0:
+        # Identify i-th position corresponding to 'at'
+        for i in range(len(self.seq)):
+            if at == 0:
                 break
-            c = other.seq[i]
-            if c == 'D':
+            if self.seq[i].keys() == ['D']:
                 continue
-            assert c in "ACGT"
-            overlap -= 1
+            at -= 1
+        assert at == 0
+        new_seq, new_var = self.seq[:i], self.var[:i]
 
-        assert i < len(other.seq)
-        self.seq += other.seq[i:]
-        self.var += other.var[i:]
+        # DK - debugging purposes
+        init_i = i
+
+        # Merge two sequences
+        assert len(other.seq) > 0 and 'D' not in other.seq[0].keys()
+        j = 0
+        while i < len(self.seq) and j < len(other.seq):
+            nt_dic, nt_var = self.seq[i], self.var[i]
+            nt_dic2, nt_var2 = other.seq[j], other.var[j]
+            if nt_dic.keys() != ['D'] and nt_dic2.keys() != ['D']:
+                new_seq.append(nt_dic)
+                new_var.append(nt_var | nt_var2)
+                for nt, count in nt_dic2.items():
+                    if nt in nt_dic:
+                        nt_dic[nt] += count
+                    else:
+                        nt_dic[nt] = count
+                i += 1
+                j += 1
+            else:
+                if nt_dic.keys() == ['D'] and nt_dic2.keys() == ['D']:
+                    nt_dic['D'] += nt_dic2['D']
+                    new_seq.append(nt_dic)
+                    new_var.append(nt_var | nt_var2)
+                    i += 1
+                    j += 1
+                elif nt_dic.keys() == ['D']:
+                    new_seq.append(nt_dic)
+                    new_var.append(nt_var)
+                    i += 1
+                else:
+                    assert nt_dic2.keys() == ['D']
+
+                    # DK - debugging purposes
+                    if "hv725" in nt_var2:
+                        print >> sys.stderr, nt_var2
+                        print >> sys.stderr, "init_i: %d, i: %d, j: %d" % (init_i, i, j)
+                        print >> sys.stderr, "new_seq:", len(new_seq)
+                        sys.exit(1)
+                    
+                    new_seq.append(nt_dic2)
+                    new_var.append(nt_var2)
+                    j += 1                    
+
+        # Append the rest of the other sequence
+        assert i == len(self.seq)
+        new_seq += other.seq[j:]
+        new_var += other.var[j:]
+
+        self.seq, self.var = new_seq, new_var
         assert len(self.seq) == len(self.var)
-
         self.right = self.left + len(self.seq) - 1
 
         
     # Display node information
     def print_info(self):
-        print >> sys.stderr, "Pos: [%d, %d]" % (self.left, self.right)
-        print >> sys.stderr, "\t", self.seq
+        print "Pos: [%d, %d]" % (self.left, self.right)
+        seq = ""
+        for nt_dic in self.seq:
+            if nt_dic.keys() == ['D']:
+                seq += 'D'
+            else:
+                nt = ''
+                max_count = 0
+                for tmp_nt, tmp_count in nt_dic.items():
+                    assert tmp_nt in "ACGT"
+                    if tmp_count > max_count:
+                        max_count = tmp_count
+                        nt = tmp_nt
+                assert nt in "ACGT"
+                seq += nt
+        print "\t", seq
         prev_var = ""
         for var_i in range(len(self.var)):
             var = self.var[var_i]
-            if var != "" and var != "unknown" and var != prev_var:
-                print >> sys.stderr, "\t%d: %s" % (var_i, var),
+            var = '-'.join(list(var))
+            if var != "" and var != prev_var:
+                print "\t%d: %s" % (var_i, var), self.seq[var_i],
             prev_var = var
-        print >> sys.stderr
+        print
 
                 
 class Graph:
@@ -138,7 +226,6 @@ class Graph:
             return a[1] - b[1]
         nodes = sorted(nodes, cmp=node_cmp)
 
-        # DK - debugging purposes
         queue = [nodes[0]]; nodes.pop(0)
         while len(queue) > 0:
             node_id, node_left, node_right = queue.pop()
@@ -152,19 +239,19 @@ class Graph:
                 at, overlap = node.overlap_with(node2)
                 if overlap >= 80:
                     # DK - debugging purposes
-                    print >> sys.stderr, node_id; node.print_info()
-                    print >> sys.stderr, node2_id; node2.print_info()
+                    print node_id; node.print_info()
+                    print node2_id; node2.print_info()
 
                     node.combine_with(node2, at)
                     del_nodes.append(node_i)
 
-                    print >> sys.stderr, "at %d, overlap with %d" % (at, overlap)
-                    print >> sys.stderr, "combined:", node_id; node.print_info()
+                    print "at %d, overlap with %d" % (at, overlap)
+                    print "combined:", node_id; node.print_info()
                 else:
                     # DK - debugging purposes
-                    print >> sys.stderr, node_id; node.print_info()
-                    print >> sys.stderr, node2_id; node2.print_info()
-                    print >> sys.stderr, "at %d, overlap with %d" % (at, overlap)
+                    print node_id; node.print_info()
+                    print node2_id; node2.print_info()
+                    print "at %d, overlap with %d" % (at, overlap)
                     sys.exit(1)
                     
                     node_i += 1
@@ -173,7 +260,7 @@ class Graph:
                 node_i += 1
 
             # DK - debugging purposes
-            print >> sys.stderr, node_id; node.print_info()
+            print node_id; node.print_info()
             # sys.exit(1)
             
             new_nodes = []
