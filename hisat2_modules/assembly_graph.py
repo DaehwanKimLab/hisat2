@@ -2,7 +2,7 @@
 
 import sys
 import math
-
+import random
 
 #
 def get_major_nt(nt_dic):
@@ -163,10 +163,12 @@ class Graph:
         self.top_margin = 20
         self.bottom_margin = 20
 
-        self.scale = 5
-        self.width = len(self.backbone) * self.scale + self.left_margin + self.right_margin
-        self.height = 1000 * self.scale
+        self.scalex, self.scaley = 5, 2
+        self.width = len(self.backbone) * self.scalex + self.left_margin + self.right_margin
+        self.height = 2000 * self.scaley
 
+
+    # Add node, which is an alignment w.r.t. the reference
     def add_node(self, id, node):
         if id in self.nodes:
             # print >> sys.stderr, "Warning) multi-mapped read:", id
@@ -174,13 +176,47 @@ class Graph:
         assert id not in self.nodes
         self.nodes[id] = node
 
-    def add_edge(self):
-        None
 
+    # Generate edges based on the overlapping information between nodes
+    def generate_edges(self):
+        assert len(self.nodes) > 0
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        def node_cmp(a, b):
+            return a[1] - b[1]
+        nodes = sorted(nodes, cmp=node_cmp)
+
+        self.from_node, self.to_node = {}, {}
+        for i in range(len(nodes)):
+            id1, left1, right1 = nodes[i]
+            node1 = self.nodes[id1]
+            for j in range(i + 1, len(nodes)):
+                id2, left2, right2 = nodes[j]
+                if right1 < left2:
+                    break
+                node2 = self.nodes[id2]
+                at, overlap = node1.overlap_with(node2)
+                if overlap < 80:
+                    continue
+                if id1 not in self.to_node:
+                    self.to_node[id1] = [id2]
+                else:
+                    self.to_node[id1].append(id2)
+                if id2 not in self.from_node:
+                    self.from_node[id2] = [id1]
+                else:
+                    self.from_node[id2].append(id1)
+
+        
     # Display graph information
     def print_info(self): 
         print >> sys.stderr, "Backbone len: %d" % len(self.backbone)
         print >> sys.stderr, "\t%s" % self.backbone
+
+
+    # Reduce graph
+    def reduce(self):
+        None
+    
 
     def assemble(self):
         if len(self.nodes) <= 0:
@@ -238,38 +274,143 @@ class Graph:
         
         
     # Draw graph
-    def draw(self):
-        htmlDraw = HtmlDraw("assembly_graph")
-        htmlDraw.write_html_css(self.width, self.height)
-        htmlDraw.start_js()
-        htmlDraw.draw_smile()
-
-        # DK - debugging purposes
-        nodes = [[id, node.left] for id, node in self.nodes.items()]
+    #   Top left as (0, 0) and Bottom right as (width, height)
+    def draw(self, second_allele = sys.maxint):
+        assert len(self.nodes) > 0
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
             return a[1] - b[1]
         nodes = sorted(nodes, cmp=node_cmp)
-        # Choose font
+
+        # display space
+        dspace = [[[0, 1000]]] * (nodes[-1][2] + 1)
+        def get_dspace(left, right, height):
+            assert left < len(dspace) and right < len(dspace)
+            range1 = dspace[left]
+            for range2 in dspace[left + 1:right + 1]:
+                new_range = []
+                # sub range
+                for t1, b1 in range1:
+                    for t2, b2 in range2:
+                        if b1 < t2:
+                            break
+                        if b2 < t1:
+                            continue
+                        t, b = max(t1, t2), min(b1, b2)
+                        if b - t >= height:
+                            new_range.append([t, b])
+
+                range1 = new_range
+            if len(range1) <= 0:
+                return 0
+
+            t, b = range1[0]
+            assert b - t >= height
+            b = t + height
+            for i in range(left, right+1):
+                range1 = dspace[i]
+                range2 = []
+                found = False
+                for j in range(len(range1)):
+                    t2, b2 = range1[j]
+                    if t2 <= t and b <= b2:
+                        found = True
+                        if t2 < t:
+                            range2.append([t2, t])
+                        if b < b2:
+                            range2.append([b, b2])
+                    else:
+                        range2.append([t2, b2])
+                dspace[i] = range2
+                assert found
+            return t
+
+        def get_x(x):
+            return self.left_margin + x * self.scalex
+
+        def get_y(y):
+            return self.top_margin + y * self.scaley
+
+        # Get scalar
+        def get_sx(x):
+            return x * self.scalex
+
+        def get_sy(y):
+            return y * self.scaley
+
+        htmlDraw = HtmlDraw("assembly_graph")
+        htmlDraw.write_html_css(self.width, self.height)
+        htmlDraw.start_js()
+        # htmlDraw.draw_smile()
         js_file = htmlDraw.js_file
-        print >> js_file, r'context.font = "10px Serif";'
-        for id, pos in nodes:
+
+        # Draw vertical lines at every 500nt
+        print >> js_file, r'ctx.lineWidth = 0.2;'
+        print >> js_file, r'ctx.fillStyle = "gray";'
+        print >> js_file, r'ctx.setLineDash([5, 15]);'
+        for pos in range(500, nodes[-1][2], 500):
+            print >> js_file, r'ctx.beginPath();'
+            print >> js_file, r'ctx.moveTo(%d, %d);' % \
+                (get_x(pos), self.top_margin)
+            print >> js_file, r'ctx.lineTo(%d, %d);' % \
+                (get_x(pos), self.height)
+            print >> js_file, r'ctx.stroke();'
+        print >> js_file, r'ctx.setLineDash([]);'
+
+        # Choose font
+        print >> js_file, r'ctx.font = "12px Serif";'
+
+        # Draw nodes
+        node_to_y = {}
+        for id, left, right in nodes:
             read_id, mate = id.split('|')[:2]
             mate = mate.split('_')[0]
 
+            # Get y position
+            y = get_dspace(left, right, 14)
+            node_to_y[id] = y
+
+            if int(read_id) < second_allele:
+                color = "yellow"
+            else:
+                color = "green"
+
             # Draw node
-            print >> js_file, r'context.fillStyle = "yellow";'
-            print >> js_file, r'context.beginPath();'
-            print >> js_file, r'context.arc(%d, %d, %d, 0, 2*Math.PI);' % \
-                (self.left_margin + pos * self.scale, self.top_margin + pos * self.scale / 4, 2 * self.scale)
-            print >> js_file, r'context.closePath();'
-            print >> js_file, r'context.fill();'
-            print >> js_file, r'context.lineWidth = 2;'
-            print >> js_file, r'context.stroke();'
-            print >> js_file, r'context.fillStyle = "black";'
+            print >> js_file, r'ctx.beginPath();'
+            print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
+                (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
+            print >> js_file, r'ctx.fillStyle = "%s";' % color
+            print >> js_file, r'ctx.fill();'
+            print >> js_file, r'ctx.lineWidth = 2;'
+            print >> js_file, r'ctx.strokeStyle = "black";'
+            print >> js_file, r'ctx.stroke();'
 
             # Draw label
-            print >> js_file, r'context.fillText("%s %s", %d, %d);' % \
-                (read_id, mate, self.left_margin + pos * self.scale, self.top_margin + pos * self.scale / 4)
+            print >> js_file, r'ctx.fillStyle = "blue";'
+            print >> js_file, r'ctx.fillText("%s %s", %d, %d);' % \
+                (read_id, mate, get_x(left + 2), get_y(y + 7))
+
+        # Draw edges
+        print >> js_file, r'ctx.lineWidth = 1;'
+        line_colors = ["red", "black", "blue"]
+        for node_id, to_node_ids in self.to_node.items():
+            node = self.nodes[node_id]
+            node_x = (get_x(node.left) + get_x(node.right)) / 2
+            node_y = get_y(node_to_y[node_id] + 5)
+            print >> js_file, r'ctx.strokeStyle = "%s";' % \
+                line_colors[random.randrange(len(line_colors))]
+            for to_node_id in to_node_ids:
+                to_node = self.nodes[to_node_id]
+                to_node_x = (get_x(to_node.left) + get_x(to_node.right) + (random.random() * 10 - 5)) / 2
+                to_node_y = get_y(node_to_y[to_node_id] + 5)
+
+                jitter1, jitter2 = (random.random() * 10 - 5), (random.random() * 10 - 5)
+                jitter1, jitter2 = get_sx(jitter1), get_sx(jitter2)
+
+                print >> js_file, r'ctx.beginPath();'
+                print >> js_file, r'ctx.moveTo(%d, %d);' % (node_x + jitter1, node_y)
+                print >> js_file, r'ctx.lineTo(%d, %d);' % (to_node_x + jitter2, to_node_y)
+                print >> js_file, r'ctx.stroke();'
                
         htmlDraw.end_js()
 
@@ -307,7 +448,7 @@ class HtmlDraw:
     def start_js(self):
         self.js_file = open("%s.js" % self.base_fname, 'w')
         print >> self.js_file, r'var a_canvas = document.getElementById("a");'
-        print >> self.js_file, r'var context = a_canvas.getContext("2d");'
+        print >> self.js_file, r'var ctx = a_canvas.getContext("2d");'
 
         
     def end_js(self):
@@ -318,34 +459,34 @@ class HtmlDraw:
         js_file = self.js_file
         
         # Draw the face
-        print >> js_file, r'context.fillStyle = "yellow";'
-        print >> js_file, r'context.beginPath();'
-        print >> js_file, r'context.arc(95, 85, 40, 0, 2*Math.PI);'
-        print >> js_file, r'context.closePath();'
-        print >> js_file, r'context.fill();'
-        print >> js_file, r'context.lineWidth = 2;'
-        print >> js_file, r'context.stroke();'
-        print >> js_file, r'context.fillStyle = "black";'
+        print >> js_file, r'ctx.fillStyle = "yellow";'
+        print >> js_file, r'ctx.beginPath();'
+        print >> js_file, r'ctx.arc(95, 85, 40, 0, 2*Math.PI);'
+        print >> js_file, r'ctx.closePath();'
+        print >> js_file, r'ctx.fill();'
+        print >> js_file, r'ctx.lineWidth = 2;'
+        print >> js_file, r'ctx.stroke();'
+        print >> js_file, r'ctx.fillStyle = "black";'
         
         # Draw the left eye
-        print >> js_file, r'context.beginPath();'
-        print >> js_file, r'context.arc(75, 75, 5, 0, 2*Math.PI);'
-        print >> js_file, r'context.closePath();'
-        print >> js_file, r'context.fill();'
+        print >> js_file, r'ctx.beginPath();'
+        print >> js_file, r'ctx.arc(75, 75, 5, 0, 2*Math.PI);'
+        print >> js_file, r'ctx.closePath();'
+        print >> js_file, r'ctx.fill();'
 
         # Draw the right eye
-        print >> js_file, r'context.beginPath();'
-        print >> js_file, r'context.arc(114, 75, 5, 0, 2*Math.PI);'
-        print >> js_file, r'context.closePath();'
-        print >> js_file, r'context.fill();'
+        print >> js_file, r'ctx.beginPath();'
+        print >> js_file, r'ctx.arc(114, 75, 5, 0, 2*Math.PI);'
+        print >> js_file, r'ctx.closePath();'
+        print >> js_file, r'ctx.fill();'
 
         # Draw the mouth
-        print >> js_file, r'context.beginPath();'
-        print >> js_file, r'context.arc(95, 90, 26, Math.PI, 2*Math.PI, true);'
-        print >> js_file, r'context.closePath();'
-        print >> js_file, r'context.fill();'
+        print >> js_file, r'ctx.beginPath();'
+        print >> js_file, r'ctx.arc(95, 90, 26, Math.PI, 2*Math.PI, true);'
+        print >> js_file, r'ctx.closePath();'
+        print >> js_file, r'ctx.fill();'
 
         # Write "Hello, World!"
-        print >> js_file, r'context.font = "30px Garamond";'
-        print >> js_file, r'context.fillText("Hello, World!", 15, 175);'
+        print >> js_file, r'ctx.font = "30px Garamond";'
+        print >> js_file, r'ctx.fillText("Hello, World!", 15, 175);'
        

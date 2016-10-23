@@ -1046,6 +1046,7 @@ def HLA_typing(ex_path,
                fastq,
                read_fname,
                alignment_fname,
+               num_frag_list,
                threads,
                enable_coverage,
                best_alleles,
@@ -1620,9 +1621,22 @@ def HLA_typing(ex_path,
                         asm_graph.add_node(read_id_, read_node)
                     read_nodes, read_var_list = [], []
 
+
+                # Generate edges
+                asm_graph.generate_edges()
+
+                # Reduce graph
+                asm_graph.reduce()
+                # asm_graph.assemble()
+                
                 # Draw assembly graph
-                asm_graph.assemble()
-                asm_graph.draw()
+                if len(num_frag_list) > 0:
+                    asm_graph.draw(num_frag_list[0][0])
+                else:
+                    asm_graph.draw()                    
+
+                # DK - debugging purposes
+                sys.exit(1)
 
             else:
                 assert index_type == "linear"
@@ -2359,6 +2373,7 @@ def test_HLA_genotyping(base_fname,
                                          fastq,
                                          read_fname,
                                          alignment_fname,
+                                         num_frag_list,
                                          threads,
                                          enable_coverage,
                                          best_alleles,
@@ -2406,6 +2421,7 @@ def test_HLA_genotyping(base_fname,
                    fastq,
                    read_fname,
                    alignment_fname,
+                   [],
                    threads,
                    enable_coverage,
                    best_alleles,
