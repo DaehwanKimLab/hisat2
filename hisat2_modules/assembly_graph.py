@@ -3,6 +3,8 @@
 import sys
 import math
 import random
+from copy import deepcopy
+
 
 #
 def get_major_nt(nt_dic):
@@ -16,6 +18,7 @@ def get_major_nt(nt_dic):
     assert nt in "ACGTD"
     return nt                
 
+
 #
 def match_score(nt_dic1, nt_dic2):
     total1, total2 = sum(nt_dic1.values()) * 2.0, sum(nt_dic2.values()) * 2.0
@@ -27,7 +30,17 @@ def match_score(nt_dic1, nt_dic2):
         if tmp_best > best:
             best = tmp_best
     return best
-    
+
+
+#
+def get_ungapped_seq(seq):
+    ungapped_seq = []
+    for nt_dic in seq:
+        if get_major_nt(nt_dic) == 'D':
+            continue
+        ungapped_seq.append(nt_dic)
+    return ungapped_seq
+
 
 class Node:
     # Initialize
@@ -56,6 +69,7 @@ class Node:
         
     # Check how compatible allele is in regard to read or pair
     def compatible_with_rnode(self, rnode):
+        assert False
         assert rnode.left + len(rnode.seq) <= len(self.seq)
         score = 0
         for i in range(len(rnode.seq)):
@@ -72,17 +86,12 @@ class Node:
         if self.right < other.left:
             return -1, -1
 
-        seq, other_seq = [], []
-        for nt_dic in self.seq:
-            if get_major_nt(nt_dic) == 'D':
-                continue
-            seq.append(nt_dic)
-        for nt_dic in other.seq:
-            if get_major_nt(nt_dic) == 'D':
-                continue
-            other_seq.append(nt_dic)
-
+        seq, other_seq = get_ungapped_seq(self.seq), get_ungapped_seq(other.seq)
         max_mm = 2.0
+
+        # DK - debugging purposes
+        max_mm = 0.1
+        
         for i in range(len(seq)):
             tmp_mm = 0.0
             for j in range(len(other_seq)):
@@ -132,20 +141,40 @@ class Node:
         assert len(self.seq) == len(self.var)
         self.right = self.left + len(self.seq) - 1
 
+
+    # Return the length of the ungapped sequence
+    def ungapped_length(self):
+        return len(get_ungapped_seq(self.seq))
+
+    # Get variants
+    def get_vars(self, Vars):
+        vars = []
+        for var_i in range(len(self.var)):
+            for var in self.var[var_i]:
+                assert var in Vars
+                if len(vars) > 0 and var == vars[-1]:
+                    continue
+                type, pos, data = Vars[var]
+                nt = get_major_nt(self.seq[var_i])
+                if data == nt or \
+                   type == "deletion" and nt == 'D':
+                    vars.append(var)                    
+        return vars
+
         
     # Display node information
     def print_info(self):
-        print "Pos: [%d, %d]" % (self.left, self.right)
+        print >> sys.stderr, "Pos: [%d, %d]" % (self.left, self.right)
         seq = ""
         for nt_dic in self.seq:
             seq += get_major_nt(nt_dic)
-        print "\t", seq
+        print >> sys.stderr, "\t", seq
         prev_var = ""
         for var_i in range(len(self.var)):
             var = self.var[var_i]
             var = '-'.join(list(var))
             if var != "" and var != prev_var:
-                print "\t%d: %s" % (var_i, var), self.seq[var_i],
+                print >> sys.stderr, "\t%d: %s" % (var_i, var), self.seq[var_i],
             prev_var = var
         print
 
@@ -178,7 +207,7 @@ class Graph:
 
 
     # Generate edges based on the overlapping information between nodes
-    def generate_edges(self):
+    def generate_edges(self, overlap_pct = 0.8):
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
@@ -195,16 +224,16 @@ class Graph:
                     break
                 node2 = self.nodes[id2]
                 at, overlap = node1.overlap_with(node2)
-                if overlap < 80:
+                if overlap < node1.ungapped_length() * overlap_pct:
                     continue
                 if id1 not in self.to_node:
-                    self.to_node[id1] = [id2]
+                    self.to_node[id1] = [[id2, at]]
                 else:
-                    self.to_node[id1].append(id2)
+                    self.to_node[id1].append([id2, at])
                 if id2 not in self.from_node:
-                    self.from_node[id2] = [id1]
+                    self.from_node[id2] = [[id1, -at]]
                 else:
-                    self.from_node[id2].append(id1)
+                    self.from_node[id2].append([id1, -at])
 
         
     # Display graph information
@@ -215,9 +244,335 @@ class Graph:
 
     # Reduce graph
     def reduce(self):
-        None
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        def node_cmp(a, b):
+            if a[1] != b[1]:
+                return a[1] - b[1]
+            return a[2] - b[2]
+        nodes = sorted(nodes, cmp=node_cmp)
+
+        # node id to number
+        id_to_num, num_to_id, node_len = {}, [], []
+        for node_id, _, _ in nodes:
+            id_to_num[node_id] = len(id_to_num)
+            num_to_id.append(node_id)
+            node_len.append(self.nodes[node_id].ungapped_length())
+
+        VACANT, INPLAY, ELIMINATED = range(3)
+        EDGE_UNUSED, EDGE_REDUNDANT, EDGE_UNITIG, EDGE_REDUCED, EDGE_USED = range(5)
+        
+        edge_range = []
+        edge_list = []
+        contain_list = {}
+        contained_list = [False] * len(nodes)
+        for node_id, to_node_ids in self.to_node.items():
+            id1 = id_to_num[node_id]
+            for to_node_id, at in to_node_ids:
+                id2 = id_to_num[to_node_id]
+                if at == 0:
+                    contained_list[id2] = True
+                    if id1 not in contain_list:
+                        contain_list[id1] = [id2]
+                    else:
+                        contain_list[id1].append(id2)
+                    
+                edge_list.append([id1, id2,  at, EDGE_UNUSED])
+                edge_list.append([id2, id1, -at, EDGE_UNUSED])
+
+        temp_edge_list = []
+        for edge in edge_list:
+            if contained_list[edge[0]] or contained_list[edge[1]]:
+                continue
+            temp_edge_list.append(edge)
+
+        edge_list = temp_edge_list
+        edge_list.sort()
+
+        num_node = len(id_to_num)
+        count = 0
+        begin, end = 0, 0
+        for i in range(num_node):
+            while count < len(edge_list) and edge_list[count][0] == i:
+                end = end + 1
+                count = count + 1
+            edge_range.append([begin, end])
+            edge_list[begin:end] = sorted(edge_list[begin:end], key=lambda x:abs(x[2]))
+            begin = end
+
+        mark = [VACANT] * num_node
+        # Mark redundant edges v ==> x when v ==> w ==> x
+        for v in range(num_node):
+            for edge in edge_list[edge_range[v][0]:edge_range[v][1]]:
+                w = edge[1]
+                mark[w] = INPLAY
+
+            for edge in edge_list[edge_range[v][0]:edge_range[v][1]]:
+                v, w, begin = edge[:-1]
+                if begin < 0 or mark[w] != INPLAY:
+                    continue
+                
+                for edge2 in edge_list[edge_range[w][0]:edge_range[w][1]]:
+                    _, x, begin2 = edge2[:-1]
+                    if begin2 < 0 or mark[x] != INPLAY:
+                        continue
+
+                    mark[x] = ELIMINATED
+
+            for edge in edge_list[edge_range[v][0]:edge_range[v][1]]:
+                w = edge[1]
+                if mark[w] == ELIMINATED:
+                    edge[3] = EDGE_REDUNDANT
+
+                    for opposite_edge in edge_list[edge_range[w][0]:edge_range[w][1]]:
+                        if opposite_edge[1] == v:
+                            opposite_edge[3] = EDGE_REDUNDANT
+                            break
+
+                mark[w] = VACANT
+
+        edge_list.sort()
+
+        # Unitig
+        unitig_list = [[[i, 0]] for i in range(num_node)]
+        vertex_included = [i for i in range(num_node)]
+
+        def belong(v):
+            v_temp = v
+            while True:
+                v_parent = vertex_included[v_temp]
+                if v_parent == v_temp:
+                    vertex_included[v] = v_parent
+                    return v_parent
+
+                v_temp = v_parent
+
+
+        # Merge two unitigs by edge
+        def merge_unitig(edge):
+            orig_v, orig_w = edge[:2]
+            v, w = belong(orig_v), belong(orig_w)
+            unitig_v = unitig_list[v][:]
+            unitig_w = unitig_list[w][:]
+
+            if unitig_v[0][0] == orig_v:
+                v_index = 0
+            else:
+                v_index = len(unitig_v) - 1
+
+            if unitig_w[0][0] == orig_w:
+                w_index = 0
+            else:
+                w_index = len(unitig_w) - 1
+
+            v_info, w_info = unitig_v[v_index], unitig_w[w_index]
+
+            # DK - debugging purposes
+            if v_info[0] != orig_v or w_info[0] != orig_w:
+                print >> sys.stderr, "v_info:", orig_v, "w_info:", orig_w
+                print >> sys.stderr, "unitig_v:", unitig_v, "unitig_w:", unitig_w
+            
+            assert v_info[0] == orig_v and w_info[0] == orig_w
+
+            if edge[2] >= 0:
+                assert unitig_v[-1][0] == orig_v and unitig_w[0][0] == orig_w
+                unitig_w[0][1] = edge[2]
+                unitig_v.extend(unitig_w)
+            else:
+                assert unitig_v[0][0] == orig_v and unitig_w[-1][0] == orig_w
+                unitig_v[0][1] = -edge[2]
+                unitig_w.extend(unitig_v)
+                unitig_v = unitig_w
+
+            # orig_v ==> orig_w
+            edge[3] = EDGE_UNITIG
+            for edge2 in edge_list[edge_range[orig_w][0]:edge_range[orig_w][1]]:
+                # orig_w ==> orig_v
+                if edge2[1] == orig_v:
+                    edge2[3] = EDGE_UNITIG
+                    break
+
+            vertex_included[w] = v
+            unitig_list[w] = []
+            unitig_list[v] = unitig_v
+
+            return unitig_v
+
+        def find_edges(v):
+            result_edge_list = []
+            v = belong(v)
+
+            v_list = [unitig_list[v][0][0]]
+            if len(unitig_list[v]) > 1:
+                v_list.append(unitig_list[v][-1][0])
+
+            result_list = []
+            for v_temp in v_list:
+                result = []
+                for edge in edge_list[edge_range[v_temp][0]:edge_range[v_temp][1]]:
+                    if edge[3] == EDGE_UNUSED:
+                        result.append(edge)
+                result_list.append(result)
+                
+            return result_list
+
+        def merge_unitigs():
+            for orig_v in range(num_node):
+                v = belong(orig_v)
+                v_edge_llist = find_edges(v)
+                for v_edge_list in v_edge_llist:
+                    if len(v_edge_list) > 2:
+                        continue
+
+                    if len(v_edge_list) == 2:
+                        if (v_edge_list[0][2] > 0 and v_edge_list[1][2] > 0) or \
+                           (v_edge_list[0][2] < 0 and v_edge_list[1][2] < 0):
+                            continue
+                    
+                    for e in v_edge_list:
+                        temp_edge_list = []
+                        for e2 in edge_list[edge_range[e[1]][0]:edge_range[e[1]][1]]:
+                            if e2[3] == EDGE_UNUSED:
+                                temp_edge_list.append(e2)
+
+                        left_count, right_count = 0, 0
+                        for e2 in temp_edge_list:
+                            if e2[2] < 0:
+                                left_count += 1
+                            else:
+                                assert e2[2] > 0
+                                right_count += 1
+                        if (e[2] < 0 and right_count > 1) or \
+                           (e[2] > 0 and left_count > 1):
+                            continue
+                            
+                        merge_unitig(e)
+
+        merge_unitigs()
+
+        # Incorporate the nodes that are previously inside or identical to other nodes
+        new_unitig_list = []
+        for unitig in unitig_list:
+            if len(unitig) <= 0:
+                continue
+            if len(unitig) == 1 and contained_list[unitig[0][0]]:
+                continue
+            new_unitig = []
+            for id, at in unitig:
+                new_unitig.append([id, at])
+                if id in contain_list:
+                    for id2 in contain_list[id]:
+                        new_unitig.append([id2, 0])
+            new_unitig_list.append(new_unitig)
+        unitig_list = new_unitig_list
+
+
+        # DK - debugging purposes
+        """
+        for i in range(len(unitig_list)):
+            if i > 20:
+                break
+            unitig = unitig_list[i]
+            print >> sys.stderr, "unitig", i,
+            for node in unitig:
+                num, at = node
+                id = num_to_id[num]
+                id = id.split('_')[0]
+                print >> sys.stderr, "[%s, %d]," % (id, nodes[num][1]),
+            print >> sys.stderr
+
+        debug_id = 13
+        print >> sys.stderr, "%d:" % debug_id,
+        for edge in edge_list[edge_range[debug_id][0]:edge_range[debug_id][1]]:
+            f, t, at = edge[:3]
+            id = num_to_id[f].split('_')[0]
+            id2 = num_to_id[t].split('_')[0]
+            print >> sys.stderr, "[%s ==> %s at %d]" % (id, id2, at),
+        print >> sys.stderr
+        """
+        
+
+        # Perform the assembly of unitigs into nodes
+        new_nodes = {}
+        for unitig in unitig_list:
+            assert len(unitig) > 0
+            node_num = unitig[0][0]
+            node_id = nodes[node_num][0]
+            node = self.nodes[node_id]
+            node.merged_nodes = [node_id.split('|')[0]]
+            for node_num2, _ in unitig[1:]:
+                node_id2 = nodes[node_num2][0]
+                node2 = self.nodes[node_id2]
+                node.combine_with(node2)
+                node.merged_nodes.append(node_id2.split('|')[0])
+            new_nodes[node_id] = node
+
+        self.nodes = new_nodes
+        self.generate_edges(0.1) # 10% overlap
+
+        
+    # Merge graph using mate pairs
+    def assemble_with_mates(self):
+        assert len(self.nodes) > 0
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        def node_cmp(a, b):
+            return a[1] - b[1]
+        nodes = sorted(nodes, cmp=node_cmp)
+        final_nodes = []
+        queue = [[self.nodes[nodes[0][0]], nodes[0][0], nodes[0][0]]]; nodes.pop(0)
+        while len(queue) > 0 and len(final_nodes) < 10:
+            node, node_id, node_id_last = queue.pop()
+            if node_id_last not in self.to_node or len(self.to_node[node_id_last]) <= 0:
+                final_nodes.append([node, node_id, node_id_last])
+
+                # DK - debugging purposes
+                # print >> sys.stderr, "DK1:", node_id, node_id_last
+                
+                continue
+            elif len(self.to_node[node_id_last]) == 1:
+                node_id2 = self.to_node[node_id_last][0][0]
+                node2 = self.nodes[node_id2]
+                new_node = deepcopy(node)
+                new_node.combine_with(node2)
+                new_node.merged_nodes += node2.merged_nodes
+                queue.append([new_node, node_id, node_id2])
+            else:
+                # DK - debugging purposes
+                # print >> sys.stderr, "#merged nodes:", node.merged_nodes
+                # print >> sys.stderr, "#edge list:", self.to_node[node_id_last]
+                
+                node_ids2, max_mate = [], 0
+                for tmp_node_id, _ in self.to_node[node_id_last]:
+                    tmp_node = self.nodes[tmp_node_id]
+                    tmp_mate = len(set(node.merged_nodes) & set(tmp_node.merged_nodes))
+
+                    # DK - debugging purposes
+                    # print >> sys.stderr, "tmp_mate:", tmp_mate
+                    # print >> sys.stderr, tmp_node_id, tmp_node.merged_nodes
+
+                    if max_mate < tmp_mate:
+                        max_mate = tmp_mate
+                        node_ids2 = [tmp_node_id]
+                    elif max_mate == tmp_mate:
+                        node_ids2.append(tmp_node_id)
+
+                if len(node_ids2) > 0:
+                    for node_id2 in node_ids2:
+                        node2 = self.nodes[node_id2]
+                        new_node = deepcopy(node)
+                        new_node.combine_with(node2)
+                        new_node.merged_nodes += node2.merged_nodes
+                        queue.append([new_node, node_id, node_id2])
+                else:
+                    final_nodes.append([node, node_id, node_id_last])
+                    
+                    # DK - debugging purposes
+                    # print >> sys.stderr, "DK2:", node_id, node_id_last, self.to_node[node_id_last]
+
+
+        return final_nodes        
     
 
+    # Assemble
     def assemble(self):
         if len(self.nodes) <= 0:
             return
@@ -271,8 +626,8 @@ class Graph:
             if len(nodes) <= 0:
                 break
             queue.append(nodes[0]); nodes.pop(0)
-        
-        
+
+       
     # Draw graph
     #   Top left as (0, 0) and Bottom right as (width, height)
     def draw(self, second_allele = sys.maxint):
@@ -283,7 +638,7 @@ class Graph:
         nodes = sorted(nodes, cmp=node_cmp)
 
         # display space
-        dspace = [[[0, 1000]]] * (nodes[-1][2] + 1)
+        dspace = [[[0, 1000]]] * (nodes[-1][2] + 100)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
             range1 = dspace[left]
@@ -344,21 +699,32 @@ class Graph:
         # htmlDraw.draw_smile()
         js_file = htmlDraw.js_file
 
-        # Draw vertical lines at every 500nt
-        print >> js_file, r'ctx.lineWidth = 0.2;'
+        # Choose font
+        print >> js_file, r'ctx.font = "12px Serif";'
+
+        # Draw vertical dotted lines at every 100nt and thick lines at every 500nt
         print >> js_file, r'ctx.fillStyle = "gray";'
-        print >> js_file, r'ctx.setLineDash([5, 15]);'
-        for pos in range(500, nodes[-1][2], 500):
+        for pos in range(100, nodes[-1][2], 100):
+            if pos % 500 == 0:
+                print >> js_file, r'ctx.setLineDash([]);'
+                print >> js_file, r'ctx.lineWidth = 1;'
+            else:
+                print >> js_file, r'ctx.setLineDash([5, 15]);'
+                print >> js_file, r'ctx.lineWidth = 0.2;'
+
             print >> js_file, r'ctx.beginPath();'
             print >> js_file, r'ctx.moveTo(%d, %d);' % \
                 (get_x(pos), self.top_margin)
             print >> js_file, r'ctx.lineTo(%d, %d);' % \
                 (get_x(pos), self.height)
             print >> js_file, r'ctx.stroke();'
-        print >> js_file, r'ctx.setLineDash([]);'
 
-        # Choose font
-        print >> js_file, r'ctx.font = "12px Serif";'
+            # Draw label
+            print >> js_file, r'ctx.fillStyle = "blue";'
+            print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
+                (pos, get_x(pos+2), get_y(200))
+
+        print >> js_file, r'ctx.setLineDash([]);'
 
         # Draw nodes
         node_to_y = {}
@@ -399,7 +765,7 @@ class Graph:
             node_y = get_y(node_to_y[node_id] + 5)
             print >> js_file, r'ctx.strokeStyle = "%s";' % \
                 line_colors[random.randrange(len(line_colors))]
-            for to_node_id in to_node_ids:
+            for to_node_id, _ in to_node_ids:
                 to_node = self.nodes[to_node_id]
                 to_node_x = (get_x(to_node.left) + get_x(to_node.right) + (random.random() * 10 - 5)) / 2
                 to_node_y = get_y(node_to_y[to_node_id] + 5)

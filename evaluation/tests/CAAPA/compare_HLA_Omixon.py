@@ -11,11 +11,14 @@ if __name__ == "__main__":
     hisat_hla = {}
     # hisat_fname = "hisat_old_caapa_hla_partial_Aug25.txt"
     # hisat_fname = "hisat_caapa_hla_Jul22.txt"
-    hisat_fname = "caapa_hla_partial_exonic_Aug31.txt"
+    hisat_fname = "HISAT_CAAPA_HLA_July22_2016.txt"
     for line in open(hisat_fname):
         line = line.strip()
         fields = line.split('\t')
-        if len(fields) == 3:
+        if len(fields) == 2:
+            sample, allele = fields
+            abundance, vars_covered = 0.0, ""
+        elif len(fields) == 3:
             sample, allele, abundance = fields
             vars_covered = ""
         else:

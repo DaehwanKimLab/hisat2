@@ -1621,12 +1621,51 @@ def HLA_typing(ex_path,
                         asm_graph.add_node(read_id_, read_node)
                     read_nodes, read_var_list = [], []
 
-
                 # Generate edges
                 asm_graph.generate_edges()
 
                 # Reduce graph
                 asm_graph.reduce()
+
+                # Further reduce graph with mate pairs
+                tmp_nodes = asm_graph.assemble_with_mates()
+
+                # DK - debugging purposes
+                print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
+                for i in range(min(10, len(tmp_nodes))):
+                    node, node_id, node_id_last = tmp_nodes[i]
+                    node_vars = node.get_vars(Vars[gene])
+                    print >> sys.stderr, node_id, node_id_last, node.merged_nodes; node.print_info()
+                    print >> sys.stderr
+                    if simulation:
+                        allele_name, cmp_vars, max_common = "", [], -1
+                        for test_HLA_name in test_HLA_names:
+                            tmp_vars = allele_nodes[test_HLA_name].get_vars(Vars[gene])
+                            tmp_common = len(set(node_vars) & set(allele_vars[test_HLA_name]))
+                            if max_common < tmp_common:
+                                max_common = tmp_common
+                                allele_name = test_HLA_name
+                                cmp_vars = tmp_vars
+                        print >> sys.stderr, "vs.", allele_name
+                        var_i, var_j = 0, 0
+                        while var_i < len(cmp_vars) and var_j < len(node_vars):
+                            cmp_var_id, node_var_id = cmp_vars[var_i], node_vars[var_j]
+                            if cmp_var_id == node_var_id:
+                                print >> sys.stderr, cmp_var_id, Vars[gene][cmp_var_id]
+                                var_i += 1; var_j += 1
+                                continue
+                            cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
+                            if cmp_var[1] <= node_var[1]:
+                                if (var_i > 0 and var_i + 1 < len(cmp_vars)) or cmp_var[0] != "deletion":
+                                    print >> sys.stderr, "***", cmp_var_id, cmp_var, "=="
+                                var_i += 1
+                            else:
+                                print >> sys.stderr, "*** ==", node_var_id, node_var
+                                var_j += 1
+                                
+                            
+                sys.exit(1)
+                
                 # asm_graph.assemble()
                 
                 # Draw assembly graph
@@ -2306,6 +2345,7 @@ def test_HLA_genotyping(base_fname,
 
         # DK - for debugging purposes
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
+        # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):
             if "test_id" in daehwan_debug:
