@@ -164,10 +164,11 @@ class Node:
         
     # Display node information
     def print_info(self):
-        print >> sys.stderr, "Pos: [%d, %d]" % (self.left, self.right)
-        seq = ""
+        seq, avg = "", 0
         for nt_dic in self.seq:
             seq += get_major_nt(nt_dic)
+            avg += sum(nt_dic.values())
+        print >> sys.stderr, "Pos: [%d, %d], Avg. coverage: %.1f" % (self.left, self.right, float(avg) / len(self.seq))
         print >> sys.stderr, "\t", seq
         prev_var = ""
         for var_i in range(len(self.var)):
@@ -199,6 +200,8 @@ class Graph:
 
     # Add node, which is an alignment w.r.t. the reference
     def add_node(self, id, node):
+        # DK - debugging purposes
+        id = id.split('_')[0]
         if id in self.nodes:
             # print >> sys.stderr, "Warning) multi-mapped read:", id
             return
@@ -241,285 +244,254 @@ class Graph:
         print >> sys.stderr, "Backbone len: %d" % len(self.backbone)
         print >> sys.stderr, "\t%s" % self.backbone
 
-
-    # Reduce graph
-    def reduce(self):
-        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
-        def node_cmp(a, b):
-            if a[1] != b[1]:
-                return a[1] - b[1]
-            return a[2] - b[2]
-        nodes = sorted(nodes, cmp=node_cmp)
-
-        # node id to number
-        id_to_num, num_to_id, node_len = {}, [], []
-        for node_id, _, _ in nodes:
-            id_to_num[node_id] = len(id_to_num)
-            num_to_id.append(node_id)
-            node_len.append(self.nodes[node_id].ungapped_length())
-
-        VACANT, INPLAY, ELIMINATED = range(3)
-        EDGE_UNUSED, EDGE_REDUNDANT, EDGE_UNITIG, EDGE_REDUCED, EDGE_USED = range(5)
         
-        edge_range = []
-        edge_list = []
-        contain_list = {}
-        contained_list = [False] * len(nodes)
-        for node_id, to_node_ids in self.to_node.items():
-            id1 = id_to_num[node_id]
-            for to_node_id, at in to_node_ids:
-                id2 = id_to_num[to_node_id]
+    # Remove redundant edges
+    def remove_redundant_edges(self):
+        # Check which nodes are contained within other nodes
+        contained_by = {}
+        for id1, to_node_ids in self.to_node.items():
+            for id2, at in to_node_ids:
                 if at == 0:
-                    contained_list[id2] = True
-                    if id1 not in contain_list:
-                        contain_list[id1] = [id2]
+                    if self.nodes[id1].ungapped_length() >= self.nodes[id2].ungapped_length():
+                        contained_by[id2] = id1
                     else:
-                        contain_list[id1].append(id2)
-                    
-                edge_list.append([id1, id2,  at, EDGE_UNUSED])
-                edge_list.append([id2, id1, -at, EDGE_UNUSED])
+                        contained_by[id1] = id2
+        contain = {}
+        for id, up_id in contained_by.items():
+            while up_id in contained_by:
+                up_id = contained_by[up_id]
+            contained_by[id] = up_id
+            if up_id not in contain:
+                contain[up_id] = set([id])
+            else:
+                contain[up_id].add(id)
 
-        temp_edge_list = []
-        for edge in edge_list:
-            if contained_list[edge[0]] or contained_list[edge[1]]:
+        # Remove the edges of nodes contained within other nodes
+        tmp_to_node, tmp_from_node = {}, {}
+        for id1, to_node_ids in self.to_node.items():
+            if id1 in contained_by:
                 continue
-            temp_edge_list.append(edge)
-
-        edge_list = temp_edge_list
-        edge_list.sort()
-
-        num_node = len(id_to_num)
-        count = 0
-        begin, end = 0, 0
-        for i in range(num_node):
-            while count < len(edge_list) and edge_list[count][0] == i:
-                end = end + 1
-                count = count + 1
-            edge_range.append([begin, end])
-            edge_list[begin:end] = sorted(edge_list[begin:end], key=lambda x:abs(x[2]))
-            begin = end
-
-        mark = [VACANT] * num_node
-        # Mark redundant edges v ==> x when v ==> w ==> x
-        for v in range(num_node):
-            for edge in edge_list[edge_range[v][0]:edge_range[v][1]]:
-                w = edge[1]
-                mark[w] = INPLAY
-
-            for edge in edge_list[edge_range[v][0]:edge_range[v][1]]:
-                v, w, begin = edge[:-1]
-                if begin < 0 or mark[w] != INPLAY:
+            for id2, _ in to_node_ids:
+                if id2 in contained_by:
                     continue
-                
-                for edge2 in edge_list[edge_range[w][0]:edge_range[w][1]]:
-                    _, x, begin2 = edge2[:-1]
-                    if begin2 < 0 or mark[x] != INPLAY:
-                        continue
+                if id1 not in tmp_to_node:
+                    tmp_to_node[id1] = set([id2])
+                else:
+                    tmp_to_node[id1].add(id2)
+                if id2 not in tmp_from_node:
+                    tmp_from_node[id2] = set([id1])
+                else:
+                    tmp_from_node[id2].add(id1)
 
-                    mark[x] = ELIMINATED
+        # Remove redundant edges
+        to_node, from_node = {}, {}
+        for id1, to_node_ids in tmp_to_node.items():
+            to_to_node_ids = set()
+            for id2 in to_node_ids:
+                if id2 not in tmp_to_node:
+                    continue
+                to_to_node_ids |= tmp_to_node[id2]
 
-            for edge in edge_list[edge_range[v][0]:edge_range[v][1]]:
-                w = edge[1]
-                if mark[w] == ELIMINATED:
-                    edge[3] = EDGE_REDUNDANT
-
-                    for opposite_edge in edge_list[edge_range[w][0]:edge_range[w][1]]:
-                        if opposite_edge[1] == v:
-                            opposite_edge[3] = EDGE_REDUNDANT
-                            break
-
-                mark[w] = VACANT
-
-        edge_list.sort()
-
-        # Unitig
-        unitig_list = [[[i, 0]] for i in range(num_node)]
-        vertex_included = [i for i in range(num_node)]
-
-        def belong(v):
-            v_temp = v
-            while True:
-                v_parent = vertex_included[v_temp]
-                if v_parent == v_temp:
-                    vertex_included[v] = v_parent
-                    return v_parent
-
-                v_temp = v_parent
-
-
-        # Merge two unitigs by edge
-        def merge_unitig(edge):
-            orig_v, orig_w = edge[:2]
-            v, w = belong(orig_v), belong(orig_w)
-            unitig_v = unitig_list[v][:]
-            unitig_w = unitig_list[w][:]
-
-            if unitig_v[0][0] == orig_v:
-                v_index = 0
-            else:
-                v_index = len(unitig_v) - 1
-
-            if unitig_w[0][0] == orig_w:
-                w_index = 0
-            else:
-                w_index = len(unitig_w) - 1
-
-            v_info, w_info = unitig_v[v_index], unitig_w[w_index]
-
-            # DK - debugging purposes
-            if v_info[0] != orig_v or w_info[0] != orig_w:
-                print >> sys.stderr, "v_info:", orig_v, "w_info:", orig_w
-                print >> sys.stderr, "unitig_v:", unitig_v, "unitig_w:", unitig_w
-            
-            assert v_info[0] == orig_v and w_info[0] == orig_w
-
-            if edge[2] >= 0:
-                assert unitig_v[-1][0] == orig_v and unitig_w[0][0] == orig_w
-                unitig_w[0][1] = edge[2]
-                unitig_v.extend(unitig_w)
-            else:
-                assert unitig_v[0][0] == orig_v and unitig_w[-1][0] == orig_w
-                unitig_v[0][1] = -edge[2]
-                unitig_w.extend(unitig_v)
-                unitig_v = unitig_w
-
-            # orig_v ==> orig_w
-            edge[3] = EDGE_UNITIG
-            for edge2 in edge_list[edge_range[orig_w][0]:edge_range[orig_w][1]]:
-                # orig_w ==> orig_v
-                if edge2[1] == orig_v:
-                    edge2[3] = EDGE_UNITIG
-                    break
-
-            vertex_included[w] = v
-            unitig_list[w] = []
-            unitig_list[v] = unitig_v
-
-            return unitig_v
-
-        def find_edges(v):
-            result_edge_list = []
-            v = belong(v)
-
-            v_list = [unitig_list[v][0][0]]
-            if len(unitig_list[v]) > 1:
-                v_list.append(unitig_list[v][-1][0])
-
-            result_list = []
-            for v_temp in v_list:
-                result = []
-                for edge in edge_list[edge_range[v_temp][0]:edge_range[v_temp][1]]:
-                    if edge[3] == EDGE_UNUSED:
-                        result.append(edge)
-                result_list.append(result)
-                
-            return result_list
-
-        def merge_unitigs():
-            for orig_v in range(num_node):
-                v = belong(orig_v)
-                v_edge_llist = find_edges(v)
-                for v_edge_list in v_edge_llist:
-                    if len(v_edge_list) > 2:
-                        continue
-
-                    if len(v_edge_list) == 2:
-                        if (v_edge_list[0][2] > 0 and v_edge_list[1][2] > 0) or \
-                           (v_edge_list[0][2] < 0 and v_edge_list[1][2] < 0):
-                            continue
-                    
-                    for e in v_edge_list:
-                        temp_edge_list = []
-                        for e2 in edge_list[edge_range[e[1]][0]:edge_range[e[1]][1]]:
-                            if e2[3] == EDGE_UNUSED:
-                                temp_edge_list.append(e2)
-
-                        left_count, right_count = 0, 0
-                        for e2 in temp_edge_list:
-                            if e2[2] < 0:
-                                left_count += 1
-                            else:
-                                assert e2[2] > 0
-                                right_count += 1
-                        if (e[2] < 0 and right_count > 1) or \
-                           (e[2] > 0 and left_count > 1):
-                            continue
-                            
-                        merge_unitig(e)
-
-        merge_unitigs()
-
-        # Incorporate the nodes that are previously inside or identical to other nodes
-        new_unitig_list = []
-        for unitig in unitig_list:
-            if len(unitig) <= 0:
-                continue
-            if len(unitig) == 1 and contained_list[unitig[0][0]]:
-                continue
-            new_unitig = []
-            for id, at in unitig:
-                new_unitig.append([id, at])
-                if id in contain_list:
-                    for id2 in contain_list[id]:
-                        new_unitig.append([id2, 0])
-            new_unitig_list.append(new_unitig)
-        unitig_list = new_unitig_list
-
+            for id2 in to_node_ids - to_to_node_ids:
+                if id1 not in to_node:
+                    to_node[id1] = set([id2])
+                else:
+                    to_node[id1].add(id2)
+                if id2 not in from_node:
+                    from_node[id2] = set([id1])
+                else:
+                    from_node[id2].add(id1)
 
         # DK - debugging purposes
         """
-        for i in range(len(unitig_list)):
-            if i > 20:
-                break
-            unitig = unitig_list[i]
-            print >> sys.stderr, "unitig", i,
-            for node in unitig:
-                num, at = node
-                id = num_to_id[num]
-                id = id.split('_')[0]
-                print >> sys.stderr, "[%s, %d]," % (id, nodes[num][1]),
-            print >> sys.stderr
-
-        debug_id = 13
-        print >> sys.stderr, "%d:" % debug_id,
-        for edge in edge_list[edge_range[debug_id][0]:edge_range[debug_id][1]]:
-            f, t, at = edge[:3]
-            id = num_to_id[f].split('_')[0]
-            id2 = num_to_id[t].split('_')[0]
-            print >> sys.stderr, "[%s ==> %s at %d]" % (id, id2, at),
-        print >> sys.stderr
+        for id, to_ids in to_node.items():
+            if len(to_ids) > 1:
+                print >> sys.stderr, "to>", id, to_ids
+                print >> sys.stderr, id,; self.nodes[id].print_info(); print >> sys.stderr
+                for id2 in to_ids:
+                    print >> sys.stderr, id2,; self.nodes[id2].print_info(); print >> sys.stderr
+        for id, from_ids in from_node.items():
+            if len(from_ids) > 1:
+                print >> sys.stderr, "from>", id, from_ids
+                print >> sys.stderr, id,; self.nodes[id].print_info(); print >> sys.stderr
+                for id2 in from_ids:
+                    print >> sys.stderr, id2,; self.nodes[id2].print_info(); print >> sys.stderr
         """
+
+        return to_node, from_node, contained_by, contain
         
 
-        # Perform the assembly of unitigs into nodes
+    # Reduce graph
+    def reduce(self):
+        to_node, from_node, contained_by, contain = self.remove_redundant_edges()
+        
+        # Assemble unitigs
+        unitigs = []
+        for id in self.nodes.keys():
+            if id in contained_by:
+                continue
+            
+            if id in from_node:
+                from_ids = from_node[id]
+                assert len(from_ids) >= 1
+                if len(from_ids) == 1:
+                    from_id = list(from_ids)[0]
+                    if len(to_node[from_id]) == 1:
+                        continue
+            
+            unitigs.append([id])
+            while True:
+                if id not in to_node:
+                    break
+                to_ids = to_node[id]
+                if len(to_ids) > 1:
+                    break
+                to_id = list(to_ids)[0]
+                if len(from_node[to_id]) > 1:
+                    break
+                id = to_id
+                unitigs[-1].append(id)
+
+        # Incorporate the nodes that are previously inside or identical to other nodes
+        new_unitigs = []
+        for unitig in unitigs:
+            new_unitig = []
+            for id in unitig:
+                new_unitig.append(id)
+                if id in contain:
+                    for id2 in contain[id]:
+                        new_unitig.append(id2)
+            new_unitigs.append(new_unitig)
+        unitigs = new_unitigs
+
+        # Perform the assembly of unitigs into new nodes
         new_nodes = {}
-        for unitig in unitig_list:
+        for unitig in unitigs:
             assert len(unitig) > 0
-            node_num = unitig[0][0]
-            node_id = nodes[node_num][0]
-            node = self.nodes[node_id]
-            node.merged_nodes = [node_id.split('|')[0]]
-            for node_num2, _ in unitig[1:]:
-                node_id2 = nodes[node_num2][0]
-                node2 = self.nodes[node_id2]
+            id = unitig[0]
+            node = self.nodes[id]
+            node.merged_nodes = [id.split('|')[0]]
+            for id2 in unitig[1:]:
+                node2 = self.nodes[id2]
                 node.combine_with(node2)
-                node.merged_nodes.append(node_id2.split('|')[0])
-            new_nodes[node_id] = node
+                node.merged_nodes.append(id2.split('|')[0])
+            new_nodes[id] = node
 
         self.nodes = new_nodes
         self.generate_edges(0.1) # 10% overlap
 
+        # DK - debugging purposes
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        def node_cmp(a, b):
+            return a[1] - b[1]
+        nodes = sorted(nodes, cmp=node_cmp)
+        for id, _, _ in nodes:
+            print >> sys.stderr, id, "==>", self.to_node[id] if id in self.to_node else []
+            self.nodes[id].print_info(); print >> sys.stderr
+            print >> sys.stderr, self.nodes[id].merged_nodes
+        # sys.exit(1)
+
+
         
     # Merge graph using mate pairs
     def assemble_with_mates(self):
+        to_node, from_node, contained_by, contain = self.remove_redundant_edges()
+                
+        # Duplicate nodes when necessary
+        matches_list = []
+        for id, to_ids in to_node.items():
+            if len(to_ids) <= 1:
+                continue
+            multi_path = False
+            for to_id in to_ids:
+                if to_id in from_node and \
+                   len(from_node[to_id]) > 1:
+                    multi_path = True
+                    break
+            if multi_path:
+                 continue
+            if id not in from_node:
+                continue
+            from_ids = from_node[id]
+            if len(from_ids) <= 1:
+                continue
+            multi_path = False
+            for from_id in from_ids:
+                if from_id in to_node and \
+                   len(to_node[from_id]) > 1:
+                    multi_path = True
+                    break
+            if multi_path:
+               continue
+            
+            matches = []
+            added = set()
+            for to_id in to_ids:
+                max_from_id, max_mate = "", 0
+                for from_id in from_ids:
+                    if from_id in added:
+                        continue
+                    tmp_mate = len(set(self.nodes[from_id].merged_nodes) & set(self.nodes[to_id].merged_nodes))
+                    if max_mate < tmp_mate:
+                        max_mate = tmp_mate
+                        max_from_id = from_id
+                if max_mate > 0:
+                    added.add(max_from_id)
+                    matches.append([max_from_id, id, to_id, max_mate])
+
+            if len(matches) != 2:
+                continue
+
+            # DK - debugging purposes
+            # """
+            print >> sys.stderr, "to:", id, "has", to_ids
+            print >> sys.stderr, "from:", id, "has", from_ids
+            print >> sys.stderr, matches
+            # """
+
+            matches_list.append(matches)
+
+        delete_nodes = set()
+        for matches in matches_list:
+            for match in matches:
+                from_id, id, to_id = match[:3]
+                from_node, node, to_node = self.nodes[from_id], self.nodes[id], self.nodes[to_id]
+                from_node.combine_with(node); delete_nodes.add(id)
+                from_node.combine_with(to_node); delete_nodes.add(to_id)
+                
+                """
+                self.to_node[from_id] = self.to_node[to_id]
+                for to_id2, _ in self.to_node[to_id]:
+                    from_nodes = self.from_node[to_id2]
+                    replaced = False
+                    for i_ in range(len(from_nodes)):
+                        if from_nodes[i_][0] == to_id:
+                            replaced = True
+                            from_nodes[i_][0] = 
+                    assert replaced
+                """
+        for delete_node in delete_nodes:
+            del self.nodes[delete_node]
+
+        self.generate_edges()
+        # self.reduce()
+
+        # DK - debugging purposes
+        return []
+        
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
             return a[1] - b[1]
         nodes = sorted(nodes, cmp=node_cmp)
         final_nodes = []
-        queue = [[self.nodes[nodes[0][0]], nodes[0][0], nodes[0][0]]]; nodes.pop(0)
-        while len(queue) > 0 and len(final_nodes) < 10:
+        queue = []
+        for id, left, _ in nodes:
+            if id in self.from_node:
+                continue
+            queue.append([self.nodes[id], id, id])                
+
+        while len(queue) > 0 and len(final_nodes) < 2:
             node, node_id, node_id_last = queue.pop()
             if node_id_last not in self.to_node or len(self.to_node[node_id_last]) <= 0:
                 final_nodes.append([node, node_id, node_id_last])
@@ -537,8 +509,11 @@ class Graph:
                 queue.append([new_node, node_id, node_id2])
             else:
                 # DK - debugging purposes
-                # print >> sys.stderr, "#merged nodes:", node.merged_nodes
-                # print >> sys.stderr, "#edge list:", self.to_node[node_id_last]
+                debug = len(self.to_node[node_id_last]) > 1
+                if debug:
+                    print >> sys.stderr, "#merged nodes:", node.merged_nodes
+                    print >> sys.stderr, "#edge list:", self.to_node[node_id_last]
+                    node.print_info(); print >> sys.stderr                    
                 
                 node_ids2, max_mate = [], 0
                 for tmp_node_id, _ in self.to_node[node_id_last]:
@@ -546,8 +521,9 @@ class Graph:
                     tmp_mate = len(set(node.merged_nodes) & set(tmp_node.merged_nodes))
 
                     # DK - debugging purposes
-                    # print >> sys.stderr, "tmp_mate:", tmp_mate
-                    # print >> sys.stderr, tmp_node_id, tmp_node.merged_nodes
+                    if debug:
+                        print >> sys.stderr, "tmp_mate:", tmp_mate
+                        print >> sys.stderr, tmp_node_id, tmp_node.merged_nodes
 
                     if max_mate < tmp_mate:
                         max_mate = tmp_mate
@@ -562,13 +538,21 @@ class Graph:
                         new_node.combine_with(node2)
                         new_node.merged_nodes += node2.merged_nodes
                         queue.append([new_node, node_id, node_id2])
+
+                        # DK - debugging purposes
+                        if debug:
+                            print >> sys.stderr, "merged:", node_id, node_id2, new_node.merged_nodes
+                            node2.print_info(); print >> sys.stderr
                 else:
                     final_nodes.append([node, node_id, node_id_last])
                     
                     # DK - debugging purposes
-                    # print >> sys.stderr, "DK2:", node_id, node_id_last, self.to_node[node_id_last]
+                    # if debug:
+                    #    print >> sys.stderr, "DK2:", node_id, node_id_last, self.to_node[node_id_last]
 
-
+        # DK - debugging purposes
+        # sys.exit(1)
+        
         return final_nodes        
     
 
@@ -630,7 +614,7 @@ class Graph:
        
     # Draw graph
     #   Top left as (0, 0) and Bottom right as (width, height)
-    def draw(self, second_allele = sys.maxint):
+    def draw(self, fname_base, second_allele = sys.maxint):
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
@@ -693,7 +677,7 @@ class Graph:
         def get_sy(y):
             return y * self.scaley
 
-        htmlDraw = HtmlDraw("assembly_graph")
+        htmlDraw = HtmlDraw(fname_base)
         htmlDraw.write_html_css(self.width, self.height)
         htmlDraw.start_js()
         # htmlDraw.draw_smile()

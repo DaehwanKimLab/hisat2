@@ -1624,11 +1624,29 @@ def HLA_typing(ex_path,
                 # Generate edges
                 asm_graph.generate_edges()
 
+                # Draw assembly graph
+                if len(num_frag_list) > 0:
+                    asm_graph.draw("assembly_graph1", num_frag_list[0][0])
+                else:
+                    asm_graph.draw("assembly_graph1")                    
+
                 # Reduce graph
                 asm_graph.reduce()
 
+                # Draw assembly graph
+                if len(num_frag_list) > 0:
+                    asm_graph.draw("assembly_graph2", num_frag_list[0][0])
+                else:
+                    asm_graph.draw("assembly_graph2")
+                
                 # Further reduce graph with mate pairs
                 tmp_nodes = asm_graph.assemble_with_mates()
+
+                # Draw assembly graph
+                if len(num_frag_list) > 0:
+                    asm_graph.draw("assembly_graph3", num_frag_list[0][0])
+                else:
+                    asm_graph.draw("assembly_graph3")
 
                 # DK - debugging purposes
                 print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
@@ -1664,16 +1682,8 @@ def HLA_typing(ex_path,
                                 var_j += 1
                                 
                             
-                sys.exit(1)
-                
                 # asm_graph.assemble()
                 
-                # Draw assembly graph
-                if len(num_frag_list) > 0:
-                    asm_graph.draw(num_frag_list[0][0])
-                else:
-                    asm_graph.draw()                    
-
                 # DK - debugging purposes
                 sys.exit(1)
 
