@@ -4263,7 +4263,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
     assert(hit.done());
     index_t minOff = 0;
-    if(hit.minWidth(minOff) > (index_t)(rp.khits * 2)) return false;
+    if(hit.minWidth(minOff) > (index_t)(rp.kseeds * 2)) return false;
     
     // Don't try to align if the potential alignment for this read might be
     // worse than the best alignment of its reverse complement
@@ -4275,7 +4275,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     if(!_secondary && numActualPartialSearch > maxmm + num_spliced + 1) return true;
     
     // choose candidate partial alignments for further alignment
-    const index_t maxsize = (index_t)rp.khits;
+    const index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
     index_t numHits = getAnchorHits(gfm,
                                     pepol,
                                     tpol,
@@ -5177,7 +5177,7 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
                 if(linearFM) {
                     rangeTemp = gfm.mapLF(tloc, bloc, c, &node_rangeTemp);
                 } else {
-                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, (index_t)rp.khits);
+                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, (index_t)rp.kseeds);
                 }
             } else {
                 bwops_++;
@@ -5387,7 +5387,7 @@ index_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
                 if(linearFM) {
                     rangeTemp = gfm.mapLF(tloc, bloc, c, &node_rangeTemp);
                 } else {
-                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, (index_t)rp.khits);
+                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_node_iedge_count, (index_t)rp.kseeds);
                 }
             } else {
                 bwops_++;
@@ -5426,7 +5426,7 @@ index_t HI_Aligner<index_t, local_index_t>::globalGFMSearch(
     }
     
     // Done
-    if(node_range.first < node_range.second && node_range.second - node_range.first <= rp.khits) {
+    if(node_range.first < node_range.second && node_range.second - node_range.first <= rp.kseeds) {
         assert_leq(node_range.second - node_range.first, range.second - range.first);
 #ifndef NDEBUG
         if(node_range.second - node_range.first < range.second - range.first) {
@@ -5531,7 +5531,7 @@ index_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
                 if(linearFM) {
                     rangeTemp = gfm.mapLF(tloc, bloc, c, &node_rangeTemp);
                 } else {
-                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_local_node_iedge_count, rp.khits);
+                    rangeTemp = gfm.mapGLF(tloc, bloc, c, &node_rangeTemp, &_tmp_local_node_iedge_count, rp.kseeds);
                 }
             } else {
                 bwops_++;
@@ -5571,7 +5571,7 @@ index_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
     }
     
     // Done
-    if(node_range.first < node_range.second && node_range.second - node_range.first <= rp.khits) {
+    if(node_range.first < node_range.second && node_range.second - node_range.first <= rp.kseeds) {
         assert_leq(node_range.second - node_range.first, range.second - range.first);
 #ifndef NDEBUG
         if(node_range.second - node_range.first < range.second - range.first) {

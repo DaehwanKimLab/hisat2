@@ -234,6 +234,7 @@ static bool doExactUpFront;   // do exact search up front if seeds seem good eno
 static bool do1mmUpFront;     // do 1mm search up front if seeds seem good enough
 static size_t do1mmMinLen;    // length below which we disable 1mm e2e search
 static int seedBoostThresh;   // if average non-zero position has more than this many elements
+static size_t maxSeeds;       // maximum number of seeds allowed
 static size_t nSeedRounds;    // # seed rounds
 static bool reorder;          // true -> reorder SAM recs in -p mode
 static float sampleFrac;      // only align random fraction of input reads
@@ -461,6 +462,7 @@ static void resetOptions() {
 	do1mmUpFront = true;     // do 1mm search up front if seeds seem good enough
 	seedBoostThresh = 300;   // if average non-zero position has more than this many elements
 	nSeedRounds = 2;         // # rounds of seed searches to do for repetitive reads
+    maxSeeds = 0;            // maximum number of seeds allowed
 	do1mmMinLen = 60;        // length below which we disable 1mm search
 	reorder = false;         // reorder SAM records with -p > 1
 	sampleFrac = 1.1f;       // align all reads
@@ -652,6 +654,7 @@ static struct option long_options[] = {
 	{(char*)"1mm-minlen",       required_argument, 0,        ARG_1MM_MINLEN},
 	{(char*)"seed-off",         required_argument, 0,        'O'},
 	{(char*)"seed-boost",       required_argument, 0,        ARG_SEED_BOOST_THRESH},
+    {(char*)"max-seeds",        required_argument, 0,        ARG_MAX_SEEDS},
 	{(char*)"read-times",       no_argument,       0,        ARG_READ_TIMES},
 	{(char*)"show-rand-seed",   no_argument,       0,        ARG_SHOW_RAND_SEED},
 	{(char*)"dp-fail-streak",   required_argument, 0,        ARG_DP_FAIL_STREAK_THRESH},
@@ -1215,6 +1218,10 @@ static void parseOption(int next_option, const char *arg) {
 			maxUg = parse<size_t>(arg);
 			break;
 		}
+        case ARG_MAX_SEEDS: {
+            maxSeeds = parse<size_t>(arg);
+            break;
+        }
 		case ARG_SEED_BOOST_THRESH: {
 			seedBoostThresh = parse<int>(arg);
 			break;
@@ -3012,8 +3019,12 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	auto_ptr<PatternSourcePerThread> ps(patsrcFact->create());
 	
     // Instantiate an object for holding reporting-related parameters.
+    if(maxSeeds == 0) {
+        maxSeeds = khits;
+    }
     ReportingParams rp(
                        (allHits ? std::numeric_limits<THitInt>::max() : khits), // -k
+                       (allHits ? std::numeric_limits<THitInt>::max() : maxSeeds), // --max-seeds
                        mhits,             // -m/-M
                        0,                 // penalty gap (not used now)
                        msample,           // true -> -M was specified, otherwise assume -m

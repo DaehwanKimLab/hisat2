@@ -218,17 +218,19 @@ struct ReportingParams {
 
 	explicit ReportingParams(
                              THitInt khits_,
+                             THitInt kseeds_,
                              THitInt mhits_,
                              THitInt pengap_,
                              bool msample_,
                              bool discord_,
                              bool mixed_)
 	{
-		init(khits_, mhits_, pengap_, msample_, discord_, mixed_);
+		init(khits_, kseeds_, mhits_, pengap_, msample_, discord_, mixed_);
 	}
 
 	void init(
               THitInt khits_,
+              THitInt kseeds_,
               THitInt mhits_,
               THitInt pengap_,
               bool msample_,
@@ -236,6 +238,7 @@ struct ReportingParams {
               bool mixed_)
 	{
 		khits   = khits_;     // -k (or high if -a)
+        kseeds  = kseeds_;
 		mhits   = ((mhits_ == 0) ? std::numeric_limits<THitInt>::max() : mhits_);
 		pengap  = pengap_;
 		msample = msample_;
@@ -295,6 +298,9 @@ struct ReportingParams {
 
 	// Number of alignments to report
 	THitInt khits;
+    
+    // Number of seeds allowed to extend
+    THitInt kseeds;
 	
 	// Read is non-unique if mhits-1 next-best alignments are within
 	// pengap of the best alignment

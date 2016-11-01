@@ -126,6 +126,7 @@ enum {
 	ARG_VERSION,                // --version
 	ARG_SEED_OFF,               // --seed-off
 	ARG_SEED_BOOST_THRESH,      // --seed-boost
+    ARG_MAX_SEEDS,
 	ARG_READ_TIMES,             // --read-times
 	ARG_EXTEND_ITERS,           // --extends
 	ARG_DP_MATE_STREAK_THRESH,  // --db-mate-streak
