@@ -468,7 +468,15 @@
 <p>It searches for at most <code>&lt;int&gt;</code> distinct, primary alignments for each read. Primary alignments mean alignments whose alignment score is equal or higher than any other alignments. The search terminates when it can't find more distinct valid alignments, or when it finds <code>&lt;int&gt;</code>, whichever happens first. The alignment score for a paired-end alignment equals the sum of the alignment scores of the individual mates. Each reported read or pair alignment beyond the first has the SAM 'secondary' bit (which equals 256) set in its FLAGS field. For reads that have more than <code>&lt;int&gt;</code> distinct, valid alignments, <code>hisat2</code> does not guarantee that the <code>&lt;int&gt;</code> alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)</p>
 <p>Note: HISAT2 is not designed with large values for <code>-k</code> in mind, and when aligning reads to long, repetitive genomes large <code>-k</code> can be very, very slow.</p>
 </td></tr>
-<tr><td id="hisat2-options-k">
+<tr><td id="hisat2-options-max-seeds">
+
+<pre><code>--max-seeds &lt;int&gt;</code></pre>
+</td><td>
+
+<p>HISAT2, like other aligners, uses seed-and-extend approaches. HISAT2 tries to extend seeds to full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that will be extended. HISAT2 extends up to these many seeds and skips the rest of the seeds. Large values for <code>--max-seeds</code> may improve alignment sensitivity, but HISAT2 is not designed with large values for <code>--max-seeds</code> in mind, and when aligning reads to long, repetitive genomes large <code>--max-seeds</code> can be very, very slow. The default value is the same as with <code>-k</code>.</p>
+</td></tr>
+
+<tr><td id="hisat2-options-secondary">
 
 <pre><code>--secondary</code></pre>
 </td><td>
