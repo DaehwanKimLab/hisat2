@@ -1210,8 +1210,12 @@ def calculate_read_cost(test_NH,
      
     aligners = [
         # ["hisat", "", "", ""],
-        ["hisat2", "", "", "204"],
-        ["hisat2", "", "", ""],        
+        # ["hisat2", "", "", "204"],
+        # ["hisat2", "", "snp", "203b"],
+        # ["hisat2", "", "snp", "204"],
+        # ["hisat2", "", "", ""],
+        ["hisat2", "", "snp", ""],
+        ["hisat2", "", "snp_noht", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
         # ["hisat2", "", "tran", ""],
@@ -1222,7 +1226,7 @@ def calculate_read_cost(test_NH,
         # ["hisat2", "", "snp", "201b"],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "x1", "snp_tran", "203b"],
-        ["hisat2", "x1", "snp_tran", ""],
+        # ["hisat2", "x1", "snp_tran", ""],
         # ["hisat2", "x1", "snp_tran_ercc", ""],
         # ["tophat2", "gtfonly", "", ""],
         # ["tophat2", "gtf", "", ""],
@@ -1345,7 +1349,8 @@ def calculate_read_cost(test_NH,
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
                     cmd += ["-f"]
-                    # cmd += ["-k", "5"]
+                    # cmd += ["-k", "10"]
+                    # cmd += ["--max-seeds", "100"]
                     # cmd += ["--score-min", "C,-18"]
                     # cmd += ["--pen-cansplice", "0"]
                     # cmd += ["--pen-noncansplice", "12"]
@@ -1360,7 +1365,8 @@ def calculate_read_cost(test_NH,
                         cmd += ["--no-temp-splicesite"]
 
                     # cmd += ["--no-anchorstop"]
-                    # cmd += ["--sp", "1000,1000"]
+                    if version == "204": # due to a bug in a version, 204
+                        cmd += ["--sp", "2,1"]
 
                     # daehwan - for debugging purposes
                     # cmd += ["--dta"]

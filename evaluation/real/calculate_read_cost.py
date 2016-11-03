@@ -798,14 +798,15 @@ def calculate_read_cost():
 
     aligners = [
         # ["hisat", "", "", ""],
-        # ["hisat2", "", "", ""],
+        ["hisat2", "", "", "204"],
+        ["hisat2", "", "", ""],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "tran", ""],
         # ["hisat2", "x1", "snp", ""],
         # ["hisat2", "x1", "", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "", "tran", ""],
-        ["hisat2", "", "snp_tran", "203b"],
+        ["hisat2", "", "snp_tran", "204"],
         ["hisat2", "", "snp_tran", ""],
         # ["hisat", "", "", ""],
         # ["tophat2", "", "", ""],
@@ -836,8 +837,8 @@ def calculate_read_cost():
 
     print >> sys.stderr, "aligner\tuse_annotation\tend_type\tedit_distance\tmapped_reads\tjunction_reads\tgtf_junction_reads\tjunctions\tgtf_junctions\truntime"
     
-    # for paired in [False, True]:
-    for paired in [False]:
+    for paired in [False, True]:
+    # for paired in [False]:
         type_read1_fname = "1.fq"
         if paired:
             type_read2_fname = "2.fq"
@@ -900,6 +901,9 @@ def calculate_read_cost():
                 # cmd += ["--pen-intronlen", "G,-8,1"]
                 # cmd += ["--metrics", "1",
                 #         "--metrics-file", "metrics.out"]
+
+                if version == "204":
+                    cmd += ["--sp", "2,1"]
 
                 if not RNA:
                     cmd += ["--no-spliced-alignment"]

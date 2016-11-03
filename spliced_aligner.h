@@ -1100,7 +1100,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                 ref);
                 assert_leq(trimedHit.len() + trimedHit.trim5() + trimedHit.trim3(), rdlen);
                 int64_t tmp_score = trimedHit.score();
-                if(tmp_score > max<int64_t>(maxsc, this->_minsc[rdi])) {
+                if(tmp_score > maxsc && tmp_score >= this->_minsc[rdi]) {
                     int64_t tmp_maxsc = hybridSearch_recur(
                                                            sc,
                                                            pepol,
@@ -1154,6 +1154,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            (index_t)tpol.maxIntronLen(),
                            tpol.minAnchorLen(),
                            tpol.minAnchorLen_noncan(),
+                           gpol.maxAltsTried(),
                            leftext,
                            rightext,
                            num_mismatch_allowed);
@@ -1774,7 +1775,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 assert_leq(trimedHit.trim5(), trimedHit.rdoff());
                 assert_leq(trimedHit.len() + trimedHit.trim5() + trimedHit.trim3(), rdlen);
                 int64_t tmp_score = trimedHit.score();
-                if(tmp_score > max<int64_t>(maxsc, this->_minsc[rdi])) {
+                if(tmp_score > maxsc && tmp_score >= this->_minsc[rdi]) {
                     int64_t tmp_maxsc = hybridSearch_recur(
                                                            sc,
                                                            pepol,
@@ -1828,6 +1829,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            (index_t)tpol.maxIntronLen(),
                            tpol.minAnchorLen(),
                            tpol.minAnchorLen_noncan(),
+                           gpol.maxAltsTried(),
                            leftext,
                            rightext,
                            num_mismatch_allowed);

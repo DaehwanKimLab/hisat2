@@ -20,11 +20,14 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
 	<div id="leftside">
-	  <h2>HISAT2 2.0.5 release 9/2X/2016</h2>
+	  <h2>HISAT2 2.0.5 release 11/3/2016</h2>
 	  Version 2.0.5 is a minor release with the following changes.
 	  <ul>
-	    <li>Options, -I and -X, for specifiying minimum and maximum fragment lengths are implemented.  The options are valid only with --no-spliced-alignment, which is used for the alignment of DNA-seq reads.</li>
-	    <li>Implemented --no-softclip option to disable soft-clipping near 5' and 3' ends.</li>
+            <li>Due to a policy change (HTTP to HTTPS) in using SRA data (`--sra-option`), users are strongly encouraged to use this version. As of 11/9/2016, NCBI will begin a permanent redirect to HTTPS, which means the previous versions of HISAT2 no longer works with `--sra-acc` option soon.</li>
+	    <li>Implemented -I and -X options for specifying minimum and maximum fragment lengths.  The options are valid only when used with --no-spliced-alignment, which is used for the alignment of DNA-seq reads.</li>
+            <li>Fixed some cases where reads with SNPs on their 5' ends were not properly aligned.</li>
+	    <li>Implemented --no-softclip option to disable soft-clipping.</li>
+            <li>Implemented --max-seeds to specify the maximum number of seeds that HISAT2 will try to extend to full-length alignments (see the manual for details).</li>
 	  </ul>
 	  <br/>	  
 	  
