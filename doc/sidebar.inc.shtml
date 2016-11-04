@@ -35,7 +35,7 @@
 <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
-   <table width="100%"><tbody><tr><td>version 2.0.5</td> <td align="right">11/3/2016</td></tr>
+   <table width="100%"><tbody><tr><td>version 2.0.5</td> <td align="right">11/4/2016</td></tr>
        <tr>
 	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.5-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
        </tr>
