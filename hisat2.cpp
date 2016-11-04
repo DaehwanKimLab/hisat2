@@ -854,9 +854,9 @@ static void printUsage(ostream& out) {
         << "  --dta-cufflinks                    Reports alignments tailored specifically for cufflinks" << endl
         << endl
 		<< " Scoring:" << endl
-		<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
-		<< "  --mp <int>,<int>   max and min penalties for mismatch; lower qual = lower penalty <2,6>" << endl
-        << "  --sp <int>,<int>   max and min penalties for soft-clipping; lower qual = lower penalty <1,2>" << endl
+		//<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
+		<< "  --mp <int>,<int>   max and min penalties for mismatch; lower qual = lower penalty <6,2>" << endl
+        << "  --sp <int>,<int>   max and min penalties for soft-clipping; lower qual = lower penalty <2,1>" << endl
         << "  --no-softclip      no soft-clipping" << endl
 		<< "  --np <int>         penalty for non-A/C/G/Ts in read/ref (1)" << endl
 		<< "  --rdg <int>,<int>  read gap open, extend penalties (5,3)" << endl
