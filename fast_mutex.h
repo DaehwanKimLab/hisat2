@@ -38,9 +38,9 @@ freely, subject to the following restrictions:
 
 // Check if we can support the assembly language level implementation (otherwise
 // revert to the system API)
-#if (defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))) || \
+#if !defined NO_FAST_MUTEX_ASM && ((defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))) || \
     (defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))) || \
-    (defined(__GNUC__) && (defined(__ppc__)))
+    (defined(__GNUC__) && (defined(__ppc__))))
   #define _FAST_MUTEX_ASM_
 #else
   #define _FAST_MUTEX_SYS_
@@ -63,6 +63,15 @@ freely, subject to the following restrictions:
     #include <pthread.h>
   #endif
 #endif
+
+#if defined(_FAST_MUTEX_ASM_) && defined(_MSC_VER) && defined (_M_X64)
+extern "C"
+{
+	void tryLockAsm(int * A, int* B);
+	void unlockAsm(int * A);
+}
+#endif
+
 
 namespace tthread {
 
@@ -94,9 +103,11 @@ class fast_mutex {
     fast_mutex()
     {
   #if defined(_TTHREAD_WIN32_)
-      InitializeCriticalSection(&mHandle);
+		mHandle = new CRITICAL_SECTION();
+      InitializeCriticalSection(mHandle);
   #elif defined(_TTHREAD_POSIX_)
-      pthread_mutex_init(&mHandle, NULL);
+		mHandle = new pthread_mutex_t();
+      pthread_mutex_init(mHandle, NULL);
   #endif
     }
 #endif
@@ -105,12 +116,26 @@ class fast_mutex {
     /// Destructor.
     ~fast_mutex()
     {
-  #if defined(_TTHREAD_WIN32_)
-      DeleteCriticalSection(&mHandle);
-  #elif defined(_TTHREAD_POSIX_)
-      pthread_mutex_destroy(&mHandle);
-  #endif
+		if (mHandle)
+		{
+ #if defined(_TTHREAD_WIN32_)
+			DeleteCriticalSection(mHandle);
+#elif defined(_TTHREAD_POSIX_)
+			pthread_mutex_destroy(mHandle);
+#endif
+			delete mHandle;
+			mHandle = 0;
+		}
     }
+	/// The handle is passed from the source to the desitination
+	/// Used primarily when mutexes are pushed onto a List either on their
+	/// own or as a member variable of another classs
+	fast_mutex & operator = (const fast_mutex& fm)
+	{
+		mHandle = fm.mHandle;
+		fm.mHandle = 0;
+		return *this;
+	}
 #endif
 
     /// Lock the mutex.
@@ -125,18 +150,18 @@ class fast_mutex {
         gotLock = try_lock();
         if(!gotLock)
         {
-  #if defined(_TTHREAD_WIN32_)
-          Sleep(0);
-  #elif defined(_TTHREAD_POSIX_)
-          sched_yield();
-  #endif
-        }
+#if defined(_TTHREAD_WIN32_)
+			Sleep(0);
+#elif defined(_TTHREAD_POSIX_)
+			sched_yield();
+#endif
+		}
       } while(!gotLock);
 #else
   #if defined(_TTHREAD_WIN32_)
-      EnterCriticalSection(&mHandle);
+      EnterCriticalSection(mHandle);
   #elif defined(_TTHREAD_POSIX_)
-      pthread_mutex_lock(&mHandle);
+      pthread_mutex_lock(mHandle);
   #endif
 #endif
     }
@@ -159,14 +184,18 @@ class fast_mutex {
         :
         : "%eax", "memory"
       );
-  #elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
-      int *ptrLock = &mLock;
-      __asm {
-        mov eax,1
-        mov ecx,ptrLock
-        xchg eax,[ecx]
-        mov oldLock,eax
-      }
+  #elif defined(_MSC_VER)
+	#if defined(_M_IX86)
+	  int *ptrLock = &mLock;
+	  __asm {
+		  mov eax, 1
+		  mov ecx, ptrLock
+		  xchg eax, [ecx]
+		  mov oldLock, eax
+	  }
+     #elif  defined(_M_X64)
+	  tryLockAsm(&mLock, &oldLock);
+     #endif
   #elif defined(__GNUC__) && (defined(__ppc__))
       int newLock = 1;
       asm volatile (
@@ -186,9 +215,9 @@ class fast_mutex {
       return (oldLock == 0);
 #else
   #if defined(_TTHREAD_WIN32_)
-      return TryEnterCriticalSection(&mHandle) ? true : false;
+      return TryEnterCriticalSection(mHandle) ? true : false;
   #elif defined(_TTHREAD_POSIX_)
-      return (pthread_mutex_trylock(&mHandle) == 0) ? true : false;
+      return (pthread_mutex_trylock(mHandle) == 0) ? true : false;
   #endif
 #endif
     }
@@ -207,13 +236,17 @@ class fast_mutex {
         :
         : "%eax", "memory"
       );
-  #elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
-      int *ptrLock = &mLock;
-      __asm {
-        mov eax,0
-        mov ecx,ptrLock
-        xchg eax,[ecx]
+  #elif defined(_MSC_VER)
+    #if defined(_M_IX86) 
+		int *ptrLock = &mLock;
+		__asm {
+		mov eax,0
+		mov ecx,ptrLock
+		xchg eax,[ecx]
       }
+    #elif defined(_M_X64)
+		unlockAsm(&mLock);
+    #endif
   #elif defined(__GNUC__) && (defined(__ppc__))
       asm volatile (
         "sync\n\t"  // Replace with lwsync where possible?
@@ -223,9 +256,9 @@ class fast_mutex {
   #endif
 #else
   #if defined(_TTHREAD_WIN32_)
-      LeaveCriticalSection(&mHandle);
+      LeaveCriticalSection(mHandle);
   #elif defined(_TTHREAD_POSIX_)
-      pthread_mutex_unlock(&mHandle);
+      pthread_mutex_unlock(mHandle);
   #endif
 #endif
     }
@@ -235,9 +268,9 @@ class fast_mutex {
     int mLock;
 #else
   #if defined(_TTHREAD_WIN32_)
-    CRITICAL_SECTION mHandle;
+    mutable CRITICAL_SECTION * mHandle;
   #elif defined(_TTHREAD_POSIX_)
-    pthread_mutex_t mHandle;
+    mutable pthread_mutex_t * mHandle;
   #endif
 #endif
 };

@@ -32,7 +32,7 @@ char* itoa10(const T& value, char* result) {
 	char* out = result;
 	T quotient = value;
 	if(std::numeric_limits<T>::is_signed) {
-		if(quotient <= 0) quotient = -quotient;
+		if(quotient <= 0) quotient = 0-quotient;
 	}
 	// Now write each digit from most to least significant
 	do {

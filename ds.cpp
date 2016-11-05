@@ -19,7 +19,7 @@
 
 #include "ds.h"
 
-MemoryTally gMemTally;
+extern MemoryTally gMemTally;
 
 /**
  * Tally a memory allocation of size amt bytes.

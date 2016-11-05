@@ -635,7 +635,7 @@ TAlScore SwAligner::alignGatherEE16(int& flag, bool debug) {
 			if(cperTri_) {
 				size_t rc_mod = coli & cper_.lomask_;
 				assert_lt(rc_mod, cper_.per_);
-				int64_t row = -rc_mod-1;
+				int64_t row = -(int64_t)rc_mod-1;
 				int64_t row_mod = row;
 				int64_t row_div = 0;
 				size_t idx = coli >> cper_.perpow2_;

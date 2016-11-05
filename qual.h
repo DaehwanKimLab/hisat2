@@ -21,6 +21,7 @@
 #define QUAL_H_
 
 #include <stdexcept>
+#include <algorithm>
 #include "search_globals.h"
 #include "sstring.h"
 

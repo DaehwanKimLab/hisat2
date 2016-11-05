@@ -544,7 +544,11 @@ struct USE_POPCNT_GENERIC {
 struct USE_POPCNT_INSTRUCTION {
     inline static int pop64(uint64_t x) {
         int64_t count;
+#ifdef USING_MSC_COMPILER
+		count = __popcnt64(x);
+#else
         asm ("popcntq %[x],%[count]\n": [count] "=&r" (count): [x] "r" (x));
+#endif
         return (int)count;
     }
 };
@@ -573,10 +577,13 @@ inline static int countInU64(int c, uint64_t dw) {
 
 #ifdef POPCNT_CAPABILITY   // wrapping of "struct"
 struct USE_POPCNT_GENERIC_BITS {
+	// Use this standard bit-bashing population count
+	inline static uint64_t pop64(uint64_t x) {
+#else
+// Use this standard bit-bashing population count
+	inline static uint64_t pop6464(uint64_t x) {
 #endif
-    // Use this standard bit-bashing population count
-    inline static int pop64(uint64_t x) {
-        x -= (x >> 1) & 0x5555555555555555ULL;
+		x -= (x >> 1) & 0x5555555555555555ULL;
         x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
         x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
         return int((x * 0x0101010101010101ULL) >> 56);
@@ -596,7 +603,7 @@ inline static int countInU64_bits(uint64_t dw) {
 #ifdef POPCNT_CAPABILITY
     uint64_t tmp = Operation().pop64(dw);
 #else
-    uint64_t tmp = pop64(dw);
+    uint64_t tmp = pop6464(dw);
 #endif
     return (int) tmp;
 }
@@ -5117,7 +5124,7 @@ index_t GFM<index_t>::walkLeft(index_t row, index_t steps) const {
         for(index_t i = 0; i < _zOffs.size(); i++) {
             if(row == _zOffs[i]) return (index_t)INDEX_MAX;
         }
-        pair<index_t, index_t> range = this->mapGLF1(row, l, NULL ASSERT_ONLY(, false));
+        pair<index_t, index_t> range = this->mapGLF1(row, l, (pair<index_t, index_t> *)NULL ASSERT_ONLY(, false));
         index_t newrow = range.first;
 		assert_neq((index_t)INDEX_MAX, newrow);
 		assert_neq(newrow, row);

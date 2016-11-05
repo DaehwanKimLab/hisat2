@@ -17,7 +17,7 @@
 #   include <cpuid.h>
 #elif defined(_MSC_VER)
 // __MSC_VER defined by Microsoft compiler
-#define USING MSC_COMPILER
+#define USING_MSC_COMPILER
 #endif
 
 struct regs_t {unsigned int EAX, EBX, ECX, EDX;};
@@ -43,13 +43,16 @@ public:
     regs_t regs;
 
     try {
-#if ( defined(USING_INTEL_COMPILER) || defined(USING_MSC_COMPILER) )
+#if defined(USING_MSC_COMPILER) 
+		__cpuid((int *) &regs, 0); // test if __cpuid() works, if not catch the exception
+		__cpuid((int *) &regs, 0x1); // POPCNT bit is bit 23 in ECX
+#elif defined(USING_INTEL_COMPILER)
         __cpuid((void *) &regs,0); // test if __cpuid() works, if not catch the exception
         __cpuid((void *) &regs,0x1); // POPCNT bit is bit 23 in ECX
 #elif defined(USING_GCC_COMPILER)
         __get_cpuid(0x1, &regs.EAX, &regs.EBX, &regs.ECX, &regs.EDX);
 #else
-        std::cerr << “ERROR: please define __cpuid() for this build.\n”; 
+        std::cerr << "ERROR: please define __cpuid() for this build.\n"; 
         assert(0);
 #endif
         if( !( (regs.ECX & BIT(20)) && (regs.ECX & BIT(23)) ) ) return false;

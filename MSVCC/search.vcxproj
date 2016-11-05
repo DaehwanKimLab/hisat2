@@ -1,0 +1,194 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{43F946A8-9184-456B-A522-7B411C10A4EB}</ProjectGuid>
+    <RootNamespace>search</RootNamespace>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <ProjectName>search</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="CoreDefs.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="CoreDefs.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IntDir>$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IntDir>$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\aligner_bt.h" />
+    <ClInclude Include="..\aligner_cache.h" />
+    <ClInclude Include="..\aligner_driver.h" />
+    <ClInclude Include="..\aligner_metrics.h" />
+    <ClInclude Include="..\aligner_report.h" />
+    <ClInclude Include="..\aligner_result.h" />
+    <ClInclude Include="..\aligner_seed.h" />
+    <ClInclude Include="..\aligner_seed2.h" />
+    <ClInclude Include="..\aligner_seed_policy.h" />
+    <ClInclude Include="..\aligner_sw.h" />
+    <ClInclude Include="..\aligner_swsse.h" />
+    <ClInclude Include="..\aligner_sw_common.h" />
+    <ClInclude Include="..\aligner_sw_driver.h" />
+    <ClInclude Include="..\aligner_sw_nuc.h" />
+    <ClInclude Include="..\aln_sink.h" />
+    <ClInclude Include="..\alphabet.h" />
+    <ClInclude Include="..\alt.h" />
+    <ClInclude Include="..\assert_helpers.h" />
+    <ClInclude Include="..\banded.h" />
+    <ClInclude Include="..\binary_sa_search.h" />
+    <ClInclude Include="..\bitpack.h" />
+    <ClInclude Include="..\blockwise_sa.h" />
+    <ClInclude Include="..\bp_aligner.h" />
+    <ClInclude Include="..\btypes.h" />
+    <ClInclude Include="..\classifier_li.h" />
+    <ClInclude Include="..\diff_sample.h" />
+    <ClInclude Include="..\dp_framer.h" />
+    <ClInclude Include="..\ds.h" />
+    <ClInclude Include="..\edit.h" />
+    <ClInclude Include="..\endian_swap.h" />
+    <ClInclude Include="..\fast_mutex.h" />
+    <ClInclude Include="..\filebuf.h" />
+    <ClInclude Include="..\formats.h" />
+    <ClInclude Include="..\gbwt_graph.h" />
+    <ClInclude Include="..\gfm.h" />
+    <ClInclude Include="..\group_walk.h" />
+    <ClInclude Include="..\hgfm.h" />
+    <ClInclude Include="..\hier_idx_common.h" />
+    <ClInclude Include="..\hi_aligner.h" />
+    <ClInclude Include="..\ival_list.h" />
+    <ClInclude Include="..\limit.h" />
+    <ClInclude Include="..\ls.h" />
+    <ClInclude Include="..\mask.h" />
+    <ClInclude Include="..\mem_ids.h" />
+    <ClInclude Include="..\mm.h" />
+    <ClInclude Include="..\multikey_qsort.h" />
+    <ClInclude Include="..\opts.h" />
+    <ClInclude Include="..\outq.h" />
+    <ClInclude Include="..\pat.h" />
+    <ClInclude Include="..\pe.h" />
+    <ClInclude Include="..\presets.h" />
+    <ClInclude Include="..\processor_support.h" />
+    <ClInclude Include="..\qual.h" />
+    <ClInclude Include="..\radix_sort.h" />
+    <ClInclude Include="..\random_source.h" />
+    <ClInclude Include="..\random_util.h" />
+    <ClInclude Include="..\read.h" />
+    <ClInclude Include="..\reference.h" />
+    <ClInclude Include="..\ref_coord.h" />
+    <ClInclude Include="..\ref_read.h" />
+    <ClInclude Include="..\sam.h" />
+    <ClInclude Include="..\scoring.h" />
+    <ClInclude Include="..\search_globals.h" />
+    <ClInclude Include="..\sequence_io.h" />
+    <ClInclude Include="..\shmem.h" />
+    <ClInclude Include="..\simple_func.h" />
+    <ClInclude Include="..\spliced_aligner.h" />
+    <ClInclude Include="..\splice_site.h" />
+    <ClInclude Include="..\splice_site_mem.h" />
+    <ClInclude Include="..\timer.h" />
+    <ClInclude Include="..\tp.h" />
+    <ClInclude Include="..\unique.h" />
+    <ClInclude Include="..\util.h" />
+    <ClInclude Include="..\word_io.h" />
+    <ClInclude Include="..\zbox.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\aligner_bt.cpp" />
+    <ClCompile Include="..\aligner_cache.cpp" />
+    <ClCompile Include="..\aligner_driver.cpp" />
+    <ClCompile Include="..\aligner_result.cpp" />
+    <ClCompile Include="..\aligner_seed.cpp" />
+    <ClCompile Include="..\aligner_seed2.cpp" />
+    <ClCompile Include="..\aligner_seed_policy.cpp" />
+    <ClCompile Include="..\aligner_sw.cpp" />
+    <ClCompile Include="..\aligner_swsse.cpp" />
+    <ClCompile Include="..\aligner_swsse_ee_i16.cpp" />
+    <ClCompile Include="..\aligner_swsse_ee_u8.cpp" />
+    <ClCompile Include="..\aligner_swsse_loc_i16.cpp" />
+    <ClCompile Include="..\aligner_swsse_loc_u8.cpp" />
+    <ClCompile Include="..\aligner_sw_driver.cpp" />
+    <ClCompile Include="..\aln_sink.cpp" />
+    <ClCompile Include="..\dp_framer.cpp" />
+    <ClCompile Include="..\mask.cpp" />
+    <ClCompile Include="..\outq.cpp" />
+    <ClCompile Include="..\pat.cpp" />
+    <ClCompile Include="..\pe.cpp" />
+    <ClCompile Include="..\presets.cpp" />
+    <ClCompile Include="..\qual.cpp" />
+    <ClCompile Include="..\random_util.cpp" />
+    <ClCompile Include="..\read_qseq.cpp" />
+    <ClCompile Include="..\ref_coord.cpp" />
+    <ClCompile Include="..\scoring.cpp" />
+    <ClCompile Include="..\simple_func.cpp" />
+    <ClCompile Include="..\splice_site.cpp" />
+    <ClCompile Include="..\sse_util.cpp" />
+    <ClCompile Include="..\unique.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
+  </ImportGroup>
+</Project>

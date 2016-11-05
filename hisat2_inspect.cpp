@@ -31,6 +31,8 @@
 
 using namespace std;
 
+MemoryTally gMemTally;
+
 static bool showVersion = false; // just print version and quit?
 int verbose             = 0;  // be talkative
 static int names_only   = 0;  // just print the sequence names in the index

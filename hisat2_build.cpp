@@ -45,6 +45,7 @@
 #include <iostream>
 #include <vector>
 
+MemoryTally gMemTally;
 // Build parameters
 int verbose;
 static int sanityCheck;

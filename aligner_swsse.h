@@ -26,7 +26,7 @@
 #include "scoring.h"
 #include "mask.h"
 #include "sse_util.h"
-#include <strings.h>
+#include <string>
 
 
 struct SSEMetrics {

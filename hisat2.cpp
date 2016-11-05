@@ -58,6 +58,8 @@
 
 using namespace std;
 
+MemoryTally gMemTally;
+
 static EList<string> mates1;  // mated reads (first mate)
 static EList<string> mates2;  // mated reads (second mate)
 static EList<string> mates12; // mated reads (1st/2nd interleaved in 1 file)
