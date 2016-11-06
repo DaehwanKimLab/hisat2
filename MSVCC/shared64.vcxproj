@@ -130,9 +130,6 @@
     <ClInclude Include="..\shmem.h" />
     <ClInclude Include="..\tinythread.h" />
   </ItemGroup>
-  <ItemGroup>
-    <MASM Include="..\fast_mutex64.asm" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />

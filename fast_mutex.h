@@ -31,8 +31,9 @@ The software has been modified in three ways:
 	copy in the new =operator. This allows it to be pushed into a vector or equivalent
 	It is not intended to allow multiple copies of a mutex to be created
 
-	b)	The assembler for 64bit MSC builds is provided as a separate fast_mutex64.asm
-	file as MSC does not support in line assembler for 64 bit builds.
+	b)	The code for 64bit MSC builds uses InterlockedExchange which provides more
+	efficient access to the xchg assembler instruction than implementing the code as 
+	a function in a separate .asm file. MSC does not support in line assembler for 64 bit builds.
 
 	c) The NO_FAST_MUTEX_ASM option has been introduced
 
@@ -80,15 +81,6 @@ The software has been modified in three ways:
     #include <pthread.h>
   #endif
 #endif
-
-#if defined(_FAST_MUTEX_ASM_) && defined(_MSC_VER) && defined (_M_X64)
-extern "C"
-{
-	void tryLockAsm(int * mLock, int* oldLock);
-	void unlockAsm(int * mLock);
-}
-#endif
-
 
 namespace tthread {
 
@@ -211,7 +203,7 @@ class fast_mutex {
 		  mov oldLock, eax
 	  }
      #elif  defined(_M_X64)
-	  tryLockAsm(&mLock, &oldLock);
+	  oldLock = InterlockedExchange(&mLock, 1);
      #endif
   #elif defined(__GNUC__) && (defined(__ppc__))
       int newLock = 1;
@@ -262,7 +254,7 @@ class fast_mutex {
 		xchg eax,[ecx]
       }
     #elif defined(_M_X64)
-		unlockAsm(&mLock);
+		InterlockedExchange(&mLock, 0);
     #endif
   #elif defined(__GNUC__) && (defined(__ppc__))
       asm volatile (
@@ -282,7 +274,11 @@ class fast_mutex {
 
   private:
 #if defined(_FAST_MUTEX_ASM_)
-    int mLock;
+#if defined(_M_X64) && defined (_MSC_VER)
+	  long mLock;
+#else
+	  int mLock;
+#endif
 #else
   #if defined(_TTHREAD_WIN32_)
     mutable CRITICAL_SECTION * mHandle;
