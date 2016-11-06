@@ -1,6 +1,20 @@
 #include <sys/time.h>
 #include <time.h>
 
+/*
+* This file is a copy of the public domain code provided by "echoooooo" at 
+*
+* https://social.msdn.microsoft.com/Forums/vstudio/en-US/
+* 430449b3-f6dd-4e18-84de-eebd26a8d668/gettimeofday?forum=vcgeneral
+*
+* This is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with Bowtie 2.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #if defined(_MSC_VER) || defined(_MSC_EXTENSIONS)
   #define DELTA_EPOCH_IN_MICROSECS  11644473600000000Ui64

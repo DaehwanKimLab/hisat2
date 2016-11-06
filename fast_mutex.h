@@ -19,6 +19,23 @@ freely, subject to the following restrictions:
 
     3. This notice may not be removed or altered from any source
     distribution.
+
+*****************************************************************************
+Copyright (c) 2016 Nigel Dyer
+This version has been modified from the original, whose original Copyright notice
+is reproduced above.  The permissions continue as above.
+
+The software has been modified in three ways:
+
+	a)  mHandle is now a mutable pointer variable which is passed to the
+	copy in the new =operator. This allows it to be pushed into a vector or equivalent
+	It is not intended to allow multiple copies of a mutex to be created
+
+	b)	The assembler for 64bit MSC builds is provided as a separate fast_mutex64.asm
+	file as MSC does not support in line assembler for 64 bit builds.
+
+	c) The NO_FAST_MUTEX_ASM option has been introduced
+
 */
 
 #ifndef _FAST_MUTEX_H_
@@ -67,8 +84,8 @@ freely, subject to the following restrictions:
 #if defined(_FAST_MUTEX_ASM_) && defined(_MSC_VER) && defined (_M_X64)
 extern "C"
 {
-	void tryLockAsm(int * A, int* B);
-	void unlockAsm(int * A);
+	void tryLockAsm(int * mLock, int* oldLock);
+	void unlockAsm(int * mLock);
 }
 #endif
 
