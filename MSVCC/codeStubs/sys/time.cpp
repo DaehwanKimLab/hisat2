@@ -2,10 +2,8 @@
 #include <time.h>
 
 /*
-* This file is a copy of the public domain code provided by "echoooooo" at 
-*
-* https://social.msdn.microsoft.com/Forums/vstudio/en-US/
-* 430449b3-f6dd-4e18-84de-eebd26a8d668/gettimeofday?forum=vcgeneral
+* This file is a copy of the public domain code that can be found in
+* multiple locations and whose prevenance is unclear
 *
 * This is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
