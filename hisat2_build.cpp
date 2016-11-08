@@ -105,7 +105,7 @@ static void resetOptions() {
 	nsToAs         = false; // convert reference Ns to As prior to indexing
 	autoMem        = true;  // automatically adjust memory usage parameters
 	packed         = false; //
-	writeRef       = true;  // write compact reference to .3.bt2/.4.bt2
+	writeRef       = true;  // write compact reference to .3.ht2/.4.ht2
 	justRef        = false; // *just* write compact reference, don't index
 	reverseEach    = false;
     nthreads       = 1;
@@ -155,9 +155,9 @@ static void printUsage(ostream& out) {
 		tool_name = "hisat2-build";
 	}
     
-	out << "Usage: hisat2-build [options]* <reference_in> <bt2_index_base>" << endl
+	out << "Usage: hisat2-build [options]* <reference_in> <ht2_index_base>" << endl
 	    << "    reference_in            comma-separated list of files with ref sequences" << endl
-	    << "    hisat2_index_base          write " << gfm_ext << " data to files with this dir/basename" << endl
+	    << "    hisat2_index_base       write " << gfm_ext << " data to files with this dir/basename" << endl
         << "Options:" << endl
         << "    -c                      reference sequences given on cmd line (as" << endl
         << "                            <reference_in>)" << endl;
@@ -171,8 +171,8 @@ static void printUsage(ostream& out) {
 	    << "    --bmaxdivn <int>        max bucket sz as divisor of ref len (default: 4)" << endl
 	    << "    --dcv <int>             diff-cover period for blockwise (default: 1024)" << endl
 	    << "    --nodc                  disable diff-cover (algorithm becomes quadratic)" << endl
-	    << "    -r/--noref              don't build .3/.4.bt2 (packed reference) portion" << endl
-	    << "    -3/--justref            just build .3/.4.bt2 (packed reference) portion" << endl
+	    << "    -r/--noref              don't build .3/.4.ht2 (packed reference) portion" << endl
+	    << "    -3/--justref            just build .3/.4.ht2 (packed reference) portion" << endl
 	    << "    -o/--offrate <int>      SA is sampled every 2^offRate BWT chars (default: 5)" << endl
 	    << "    -t/--ftabchars <int>    # of chars consumed in initial lookup (default: 10)" << endl
         << "    --localoffrate <int>    SA (local) is sampled every 2^offRate BWT chars (default: 3)" << endl

@@ -98,7 +98,7 @@ static void printUsage(ostream& out) {
     << "  --ss               Print splice sites" << endl
     << "  --ss-all           Print splice sites including those not in the global index" << endl
     << "  --exon             Print exons" << endl
-	<< "  -e/--bt2-ref       Reconstruct reference from ." << gfm_ext << " (slow, preserves colors)" << endl
+	<< "  -e/--ht2-ref       Reconstruct reference from ." << gfm_ext << " (slow, preserves colors)" << endl
 	<< "  -v/--verbose       Verbose output (for debugging)" << endl
 	<< "  -h/--help          print detailed description of tool and its options" << endl
 	<< "  --help             print this usage message" << endl
