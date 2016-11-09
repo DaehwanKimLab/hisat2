@@ -3022,7 +3022,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	
     // Instantiate an object for holding reporting-related parameters.
     if(maxSeeds == 0) {
-        maxSeeds = khits;
+        maxSeeds = max<size_t>(5, khits * 2);
     }
     ReportingParams rp(
                        (allHits ? std::numeric_limits<THitInt>::max() : khits), // -k
