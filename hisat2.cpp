@@ -1512,7 +1512,7 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_NO_SOFTCLIP: {
             ostringstream convert;
-            convert << std::numeric_limits<typeof(penScMax)>::max();
+            convert << std::numeric_limits<int>::max();
             polstr += ";SCP=Q,";
             polstr += convert.str();
             polstr += ",";
