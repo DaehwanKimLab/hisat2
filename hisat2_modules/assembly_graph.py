@@ -210,7 +210,7 @@ class Graph:
 
 
     # Generate edges based on the overlapping information between nodes
-    def generate_edges(self, overlap_pct = 0.8):
+    def generate_raw_edges(self, overlap_pct = 0.8):
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
@@ -238,15 +238,9 @@ class Graph:
                 else:
                     self.from_node[id2].append([id1, -at])
 
-        
-    # Display graph information
-    def print_info(self): 
-        print >> sys.stderr, "Backbone len: %d" % len(self.backbone)
-        print >> sys.stderr, "\t%s" % self.backbone
-
-        
-    # Remove redundant edges
-    def remove_redundant_edges(self):
+                    
+    # Merge and remove nodes inside other nodes, and update edges accordingly
+    def merge_inside_nodes(self):
         # Check which nodes are contained within other nodes
         contained_by = {}
         for id1, to_node_ids in self.to_node.items():
@@ -266,41 +260,71 @@ class Graph:
             else:
                 contain[up_id].add(id)
 
+        # Merges nodes with those including them inside
+        nodes = {}
+        for id, node in self.nodes.items():
+            if id in contained_by:
+                continue
+            nodes[id] = deepcopy(node)
+            
+        for id, inside_ids in contain.items():
+            node = self.nodes[id]
+            node.merged_nodes = [id.split('|')[0]]
+            for id2 in inside_ids:
+                node2 = self.nodes[id2]
+                node.combine_with(node2)
+                node.merged_nodes.append(id2.split('|')[0])
+
         # Remove the edges of nodes contained within other nodes
         tmp_to_node, tmp_from_node = {}, {}
         for id1, to_node_ids in self.to_node.items():
             if id1 in contained_by:
                 continue
-            for id2, _ in to_node_ids:
+            for id2, at in to_node_ids:
                 if id2 in contained_by:
                     continue
-                if id1 not in tmp_to_node:
-                    tmp_to_node[id1] = set([id2])
-                else:
-                    tmp_to_node[id1].add(id2)
-                if id2 not in tmp_from_node:
-                    tmp_from_node[id2] = set([id1])
-                else:
-                    tmp_from_node[id2].add(id1)
 
-        # Remove redundant edges
+                assert id1 in nodes and id2 in nodes
+                if id1 not in tmp_to_node:
+                    tmp_to_node[id1] = [[id2, at]]
+                else:
+                    tmp_to_node[id1].append([id2, at])
+                if id2 not in tmp_from_node:
+                    tmp_from_node[id2] = [[id1, -at]]
+                else:
+                    tmp_from_node[id2].append([id1, -at])
+
+        self.nodes = nodes
+        self.to_node = tmp_to_node
+        self.from_node = tmp_from_node
+
+                    
+    # Remove redundant edges
+    def remove_redundant_edges(self):
         to_node, from_node = {}, {}
-        for id1, to_node_ids in tmp_to_node.items():
+        for id1, to_node_ids in self.to_node.items():
+            to_node_ids = set([i[0] for i in to_node_ids])
             to_to_node_ids = set()
             for id2 in to_node_ids:
-                if id2 not in tmp_to_node:
+                if id2 not in self.to_node:
                     continue
-                to_to_node_ids |= tmp_to_node[id2]
+                to_to_node_ids |= set([i[0] for i in self.to_node[id2]])
 
-            for id2 in to_node_ids - to_to_node_ids:
+            to_node_ids -= to_to_node_ids
+            for id2, at in self.to_node[id1]:
+                if id2 not in to_node_ids:
+                    continue
                 if id1 not in to_node:
-                    to_node[id1] = set([id2])
+                    to_node[id1] = [[id2, at]]
                 else:
-                    to_node[id1].add(id2)
+                    to_node[id1].append([id2, at])
                 if id2 not in from_node:
-                    from_node[id2] = set([id1])
+                    from_node[id2] = [[id1, -at]]
                 else:
-                    from_node[id2].add(id1)
+                    from_node[id2].append([id1, -at])
+
+        self.to_node = to_node
+        self.from_node = from_node
 
         # DK - debugging purposes
         """
@@ -318,24 +342,33 @@ class Graph:
                     print >> sys.stderr, id2,; self.nodes[id2].print_info(); print >> sys.stderr
         """
 
-        return to_node, from_node, contained_by, contain
+        
+    # Generate edges based on the overlapping information between nodes
+    def generate_edges(self, overlap_pct = 0.8):
+        self.generate_raw_edges(overlap_pct)
+        self.merge_inside_nodes()
+        self.remove_redundant_edges()
+        
+        
+    # Display graph information
+    def print_info(self): 
+        print >> sys.stderr, "Backbone len: %d" % len(self.backbone)
+        print >> sys.stderr, "\t%s" % self.backbone   
         
 
     # Reduce graph
     def reduce(self):
-        to_node, from_node, contained_by, contain = self.remove_redundant_edges()
+        to_node = self.to_node
+        from_node = self.from_node
         
         # Assemble unitigs
         unitigs = []
         for id in self.nodes.keys():
-            if id in contained_by:
-                continue
-            
             if id in from_node:
-                from_ids = from_node[id]
+                from_ids = [i[0] for i in from_node[id]]
                 assert len(from_ids) >= 1
                 if len(from_ids) == 1:
-                    from_id = list(from_ids)[0]
+                    from_id = from_ids[0]
                     if len(to_node[from_id]) == 1:
                         continue
             
@@ -343,10 +376,10 @@ class Graph:
             while True:
                 if id not in to_node:
                     break
-                to_ids = to_node[id]
+                to_ids = [i[0] for i in to_node[id]]
                 if len(to_ids) > 1:
                     break
-                to_id = list(to_ids)[0]
+                to_id = to_ids[0]
                 if len(from_node[to_id]) > 1:
                     break
                 id = to_id
@@ -358,9 +391,6 @@ class Graph:
             new_unitig = []
             for id in unitig:
                 new_unitig.append(id)
-                if id in contain:
-                    for id2 in contain[id]:
-                        new_unitig.append(id2)
             new_unitigs.append(new_unitig)
         unitigs = new_unitigs
 
@@ -395,11 +425,13 @@ class Graph:
         
     # Merge graph using mate pairs
     def assemble_with_mates(self):
-        to_node, from_node, contained_by, contain = self.remove_redundant_edges()
-                
+        to_node = self.to_node
+        from_node = self.from_node
+        
         # Duplicate nodes when necessary
         matches_list = []
         for id, to_ids in to_node.items():
+            to_ids = [i[0] for i in to_ids]
             if len(to_ids) <= 1:
                 continue
             multi_path = False
@@ -412,7 +444,7 @@ class Graph:
                  continue
             if id not in from_node:
                 continue
-            from_ids = from_node[id]
+            from_ids = [i[0] for i in from_node[id]]
             if len(from_ids) <= 1:
                 continue
             multi_path = False

@@ -1628,7 +1628,7 @@ def HLA_typing(ex_path,
                 if len(num_frag_list) > 0:
                     asm_graph.draw("assembly_graph1", num_frag_list[0][0])
                 else:
-                    asm_graph.draw("assembly_graph1")                    
+                    asm_graph.draw("assembly_graph1")
 
                 # Reduce graph
                 asm_graph.reduce()
