@@ -929,7 +929,7 @@ aligning reads to long, repetitive genomes large `-k` can be very, very slow.
 
 </td><td>
 
-HISAT2, like other aligners, uses seed-and-extend approaches.  HISAT2 tries to extend seeds to full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that will be extended. HISAT2 extends up to these many seeds and skips the rest of the seeds. Large values for `--max-seeds` may improve alignment sensitivity, but HISAT2 is not designed with large values for `--max-seeds` in mind, and when aligning reads to long, repetitive genomes large `--max-seeds` can be very, very slow. The default value is the same as with `-k`.
+HISAT2, like other aligners, uses seed-and-extend approaches.  HISAT2 tries to extend seeds to full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that will be extended. HISAT2 extends up to these many seeds and skips the rest of the seeds. Large values for `--max-seeds` may improve alignment sensitivity, but HISAT2 is not designed with large values for `--max-seeds` in mind, and when aligning reads to long, repetitive genomes large `--max-seeds` can be very, very slow. The default value is the maximum of 5 and the value that comes with`-k`.
 
 </td></tr>
 
