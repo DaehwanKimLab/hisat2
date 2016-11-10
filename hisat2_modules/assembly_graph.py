@@ -44,10 +44,11 @@ def get_ungapped_seq(seq):
 
 class Node:
     # Initialize
-    def __init__(self, left, seq, var):
+    def __init__(self, id, left, seq, var):
         self.next = [] # list of next nodes
 
-        self.nodeID = 0 # Node ID
+        id = id.split('_')[0]
+        self.id = id # Node ID
 
         self.left = left # starting position
 
@@ -66,6 +67,10 @@ class Node:
         assert len(self.seq) == len(self.var)
         self.right = self.left + len(seq) - 1
 
+        # DK -
+        self.read_ids = set([id])
+        self.mate_ids = set([id.split('|')[0]])
+
         
     # Check how compatible allele is in regard to read or pair
     def compatible_with_rnode(self, rnode):
@@ -77,6 +82,7 @@ class Node:
             read_bp = rnode.seq[i]
             if allele_bp == read_bp:
                 score += 1
+
         return float(score) / len(rnode.seq)
 
 
@@ -87,12 +93,8 @@ class Node:
             return -1, -1
 
         seq, other_seq = get_ungapped_seq(self.seq), get_ungapped_seq(other.seq)
-        max_mm = 2.0
-
-        # DK - debugging purposes
-        max_mm = 0.1
-        
         for i in range(len(seq)):
+            max_mm = 0.01 * (len(seq) - i)
             tmp_mm = 0.0
             for j in range(len(other_seq)):
                 if i + j >= len(seq):
@@ -105,7 +107,7 @@ class Node:
                     break
             if tmp_mm <= max_mm:
                 return i, len(seq) - i
-
+                
         return -1, -1
 
     
@@ -136,6 +138,9 @@ class Node:
         assert i == len(self.seq)
         new_seq += other.seq[j:]
         new_var += other.var[j:]
+
+        self.read_ids |= other.read_ids
+        self.mate_ids |= other.mate_ids
 
         self.seq, self.var = new_seq, new_var
         assert len(self.seq) == len(self.var)
@@ -269,11 +274,9 @@ class Graph:
             
         for id, inside_ids in contain.items():
             node = self.nodes[id]
-            node.merged_nodes = [id.split('|')[0]]
             for id2 in inside_ids:
                 node2 = self.nodes[id2]
                 node.combine_with(node2)
-                node.merged_nodes.append(id2.split('|')[0])
 
         # Remove the edges of nodes contained within other nodes
         tmp_to_node, tmp_from_node = {}, {}
@@ -400,17 +403,16 @@ class Graph:
             assert len(unitig) > 0
             id = unitig[0]
             node = self.nodes[id]
-            node.merged_nodes = [id.split('|')[0]]
             for id2 in unitig[1:]:
                 node2 = self.nodes[id2]
                 node.combine_with(node2)
-                node.merged_nodes.append(id2.split('|')[0])
             new_nodes[id] = node
 
         self.nodes = new_nodes
         self.generate_edges(0.1) # 10% overlap
 
         # DK - debugging purposes
+        """
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
             return a[1] - b[1]
@@ -418,176 +420,171 @@ class Graph:
         for id, _, _ in nodes:
             print >> sys.stderr, id, "==>", self.to_node[id] if id in self.to_node else []
             self.nodes[id].print_info(); print >> sys.stderr
-            print >> sys.stderr, self.nodes[id].merged_nodes
-        # sys.exit(1)
-
+            print >> sys.stderr, self.nodes[id].mate_ids
+        sys.exit(1)
+        """
 
         
-    # Merge graph using mate pairs
+    # Reduce the graph using mate pairs
     def assemble_with_mates(self):
-        to_node = self.to_node
-        from_node = self.from_node
-        
         # Duplicate nodes when necessary
-        matches_list = []
-        for id, to_ids in to_node.items():
-            to_ids = [i[0] for i in to_ids]
-            if len(to_ids) <= 1:
-                continue
-            multi_path = False
-            for to_id in to_ids:
-                if to_id in from_node and \
-                   len(from_node[to_id]) > 1:
-                    multi_path = True
-                    break
-            if multi_path:
-                 continue
-            if id not in from_node:
-                continue
-            from_ids = [i[0] for i in from_node[id]]
-            if len(from_ids) <= 1:
-                continue
-            multi_path = False
-            for from_id in from_ids:
-                if from_id in to_node and \
-                   len(to_node[from_id]) > 1:
-                    multi_path = True
-                    break
-            if multi_path:
-               continue
-            
-            matches = []
-            added = set()
-            for to_id in to_ids:
-                max_from_id, max_mate = "", 0
-                for from_id in from_ids:
-                    if from_id in added:
+        iter = 0
+        while True and iter < 10:
+            iter += 1
+            to_node = self.to_node
+            from_node = self.from_node
+            nodes, new_nodes = self.nodes, {}
+            matches_list = []
+            for id, to_ids in to_node.items():                
+                to_ids = [i[0] for i in to_ids]
+                from_ids = [i[0] for i in from_node[id]] if id in from_node else []
+                matches = []
+                # id is a center node with multipe predecessors and successors
+                if len(from_ids) > 1 and len(to_ids) > 1:
+                    multi_path = False
+                    for to_id in to_ids:
+                        if to_id in from_node and \
+                           len(from_node[to_id]) > 1:
+                            multi_path = True
+                            break
+                    if multi_path:
+                         continue
+
+                    if len(from_ids) <= 1:
                         continue
-                    tmp_mate = len(set(self.nodes[from_id].merged_nodes) & set(self.nodes[to_id].merged_nodes))
-                    if max_mate < tmp_mate:
-                        max_mate = tmp_mate
-                        max_from_id = from_id
-                if max_mate > 0:
-                    added.add(max_from_id)
-                    matches.append([max_from_id, id, to_id, max_mate])
+                    multi_path = False
+                    for from_id in from_ids:
+                        if from_id in to_node and \
+                           len(to_node[from_id]) > 1:
+                            multi_path = True
+                            break
+                    if multi_path:
+                       continue
+                    added = set()
+                    for to_id in to_ids:
+                        max_from_id, max_mate = "", 0
+                        for from_id in from_ids:
+                            if from_id in added:
+                                continue
+                            tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
+                            if max_mate < tmp_mate:
+                                max_mate = tmp_mate
+                                max_from_id = from_id
+                        if max_mate > 0:
+                            added.add(max_from_id)
+                            matches.append([max_from_id, id, to_id, max_mate])
 
-            if len(matches) != 2:
-                continue
+                    if len(matches) != 2:
+                        continue
+                elif len(from_ids) == 2:
+                    None
+                # id has two successors
+                elif len(to_ids) == 2:
+                    from_ids = []
+                    for to_id in to_ids:
+                        if to_id not in from_node:
+                            continue
+                        for from_id, _ in from_node[to_id]:
+                            if from_id not in from_ids:
+                                from_ids.append(from_id)
+                    # The two successors have two predecessors in total
+                    if len(from_ids) > 2:
+                        continue
 
-            # DK - debugging purposes
-            # """
-            print >> sys.stderr, "to:", id, "has", to_ids
-            print >> sys.stderr, "from:", id, "has", from_ids
-            print >> sys.stderr, matches
-            # """
+                    added = set()
+                    for to_id in to_ids:
+                        max_from_id, max_mate = "", 0
+                        for from_id in from_ids:
+                            if from_id in added:
+                                continue
+                            tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
+                            if max_mate < tmp_mate:
+                                max_mate = tmp_mate
+                                max_from_id = from_id
+                        if max_mate > 0:
+                            added.add(max_from_id)
+                            matches.append([max_from_id, to_id, "", max_mate])
 
-            matches_list.append(matches)
+                    if len(matches) != 2:
+                        continue
 
-        delete_nodes = set()
-        for matches in matches_list:
-            for match in matches:
-                from_id, id, to_id = match[:3]
-                from_node, node, to_node = self.nodes[from_id], self.nodes[id], self.nodes[to_id]
-                from_node.combine_with(node); delete_nodes.add(id)
-                from_node.combine_with(to_node); delete_nodes.add(to_id)
-                
-                """
-                self.to_node[from_id] = self.to_node[to_id]
-                for to_id2, _ in self.to_node[to_id]:
-                    from_nodes = self.from_node[to_id2]
-                    replaced = False
-                    for i_ in range(len(from_nodes)):
-                        if from_nodes[i_][0] == to_id:
-                            replaced = True
-                            from_nodes[i_][0] = 
-                    assert replaced
-                """
-        for delete_node in delete_nodes:
-            del self.nodes[delete_node]
+                    # DK - debugging purposes
+                    if iter > 1 and id == "172|L":
+                        print >> sys.stderr, id, to_ids, from_ids
+                        print >> sys.stderr, matches
+                        sys.exit(1)
+                            
 
-        self.generate_edges()
-        # self.reduce()
+                # DK - debugging purposes
+                # """
+                if len(matches) <= 0:
+                    continue
+                print >> sys.stderr, "to:", id, "has", to_ids
+                print >> sys.stderr, "from:", id, "has", from_ids
+                print >> sys.stderr, matches
+                for from_id, id, to_id, _ in matches:
+                    print >> sys.stderr, from_id; nodes[from_id].print_info()
+                    print >> sys.stderr, id; nodes[id].print_info()
+                    if to_id != "":
+                        print >> sys.stderr, to_id; nodes[to_id].print_info()
+                print >> sys.stderr
+                # """
+
+                matches_list.append(matches)
+
+            if len(matches_list) <= 0:
+                break
+
+            delete_nodes = set()
+            for matches in matches_list:
+                for from_id, id, to_id, _ in matches:
+                    # DK - debugging purposes
+                    if from_id in new_nodes:
+                        continue
+                    from_node, node = deepcopy(nodes[from_id]), nodes[id]
+                    from_node.combine_with(node); delete_nodes.add(id)
+                    if to_id != "":
+                        to_node = nodes[to_id]
+                        from_node.combine_with(to_node); delete_nodes.add(to_id)
+                    new_nodes[from_id] = from_node
+
+                    """
+                    self.to_node[from_id] = self.to_node[to_id]
+                    for to_id2, _ in self.to_node[to_id]:
+                        from_nodes = self.from_node[to_id2]
+                        replaced = False
+                        for i_ in range(len(from_nodes)):
+                            if from_nodes[i_][0] == to_id:
+                                replaced = True
+                                from_nodes[i_][0] = 
+                        assert replaced
+                    """
+            
+            for id, node in nodes.items():
+                if id in delete_nodes or id in new_nodes:
+                    continue
+                new_nodes[id] = node
+
+            self.nodes = new_nodes
+            self.generate_edges(0.1) # 10% overlapping
+            self.reduce()
+
 
         # DK - debugging purposes
-        return []
-        
-        assert len(self.nodes) > 0
+        # """
+        print >> sys.stderr, "Iter:", iter
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
             return a[1] - b[1]
         nodes = sorted(nodes, cmp=node_cmp)
-        final_nodes = []
-        queue = []
-        for id, left, _ in nodes:
-            if id in self.from_node:
-                continue
-            queue.append([self.nodes[id], id, id])                
-
-        while len(queue) > 0 and len(final_nodes) < 2:
-            node, node_id, node_id_last = queue.pop()
-            if node_id_last not in self.to_node or len(self.to_node[node_id_last]) <= 0:
-                final_nodes.append([node, node_id, node_id_last])
-
-                # DK - debugging purposes
-                # print >> sys.stderr, "DK1:", node_id, node_id_last
-                
-                continue
-            elif len(self.to_node[node_id_last]) == 1:
-                node_id2 = self.to_node[node_id_last][0][0]
-                node2 = self.nodes[node_id2]
-                new_node = deepcopy(node)
-                new_node.combine_with(node2)
-                new_node.merged_nodes += node2.merged_nodes
-                queue.append([new_node, node_id, node_id2])
-            else:
-                # DK - debugging purposes
-                debug = len(self.to_node[node_id_last]) > 1
-                if debug:
-                    print >> sys.stderr, "#merged nodes:", node.merged_nodes
-                    print >> sys.stderr, "#edge list:", self.to_node[node_id_last]
-                    node.print_info(); print >> sys.stderr                    
-                
-                node_ids2, max_mate = [], 0
-                for tmp_node_id, _ in self.to_node[node_id_last]:
-                    tmp_node = self.nodes[tmp_node_id]
-                    tmp_mate = len(set(node.merged_nodes) & set(tmp_node.merged_nodes))
-
-                    # DK - debugging purposes
-                    if debug:
-                        print >> sys.stderr, "tmp_mate:", tmp_mate
-                        print >> sys.stderr, tmp_node_id, tmp_node.merged_nodes
-
-                    if max_mate < tmp_mate:
-                        max_mate = tmp_mate
-                        node_ids2 = [tmp_node_id]
-                    elif max_mate == tmp_mate:
-                        node_ids2.append(tmp_node_id)
-
-                if len(node_ids2) > 0:
-                    for node_id2 in node_ids2:
-                        node2 = self.nodes[node_id2]
-                        new_node = deepcopy(node)
-                        new_node.combine_with(node2)
-                        new_node.merged_nodes += node2.merged_nodes
-                        queue.append([new_node, node_id, node_id2])
-
-                        # DK - debugging purposes
-                        if debug:
-                            print >> sys.stderr, "merged:", node_id, node_id2, new_node.merged_nodes
-                            node2.print_info(); print >> sys.stderr
-                else:
-                    final_nodes.append([node, node_id, node_id_last])
-                    
-                    # DK - debugging purposes
-                    # if debug:
-                    #    print >> sys.stderr, "DK2:", node_id, node_id_last, self.to_node[node_id_last]
-
-        # DK - debugging purposes
+        for id, _, _ in nodes:
+            print >> sys.stderr, id, "==>", self.to_node[id] if id in self.to_node else []
+            self.nodes[id].print_info(); print >> sys.stderr
+            print >> sys.stderr, sorted(self.nodes[id].mate_ids)
         # sys.exit(1)
-        
-        return final_nodes        
-    
+        # """
 
+            
     # Assemble
     def assemble(self):
         if len(self.nodes) <= 0:

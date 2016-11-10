@@ -1151,7 +1151,7 @@ def HLA_typing(ex_path,
                         var[var_pos:var_pos + del_len] = [var_id] * del_len
 
                 seq = ''.join(seq)
-                allele_nodes[allele_id] = assembly_graph.Node(0, seq, var)
+                allele_nodes[allele_id] = assembly_graph.Node(allele_id, 0, seq, var)
 
             # Extract variants that are within exons
             exon_vars = get_exonic_vars(Vars[gene], ref_exons)
@@ -1597,7 +1597,7 @@ def HLA_typing(ex_path,
                         assert False
 
                     # Node
-                    read_nodes.append([orig_read_id, assembly_graph.Node(read_node_pos, read_node_seq, read_node_var)])
+                    read_nodes.append([orig_read_id, assembly_graph.Node(orig_read_id, read_node_pos, read_node_seq, read_node_var)])
 
                     for positive_var in positive_vars:
                         if positive_var in exon_vars:
@@ -1641,6 +1641,7 @@ def HLA_typing(ex_path,
                 
                 # Further reduce graph with mate pairs
                 tmp_nodes = asm_graph.assemble_with_mates()
+                tmp_nodes = []
 
                 # Draw assembly graph
                 if len(num_frag_list) > 0:
