@@ -1640,8 +1640,8 @@ def HLA_typing(ex_path,
                     asm_graph.draw("assembly_graph2")
                 
                 # Further reduce graph with mate pairs
-                tmp_nodes = asm_graph.assemble_with_mates()
-                tmp_nodes = []
+                asm_graph.assemble_with_mates()
+                tmp_nodes = asm_graph.nodes
 
                 # Draw assembly graph
                 if len(num_frag_list) > 0:
@@ -1651,11 +1651,13 @@ def HLA_typing(ex_path,
 
                 # DK - debugging purposes
                 print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
-                for i in range(min(10, len(tmp_nodes))):
-                    node, node_id, node_id_last = tmp_nodes[i]
+                count = 0
+                for id, node in tmp_nodes.items():
+                    count += 1
+                    if count > 10:
+                        break
                     node_vars = node.get_vars(Vars[gene])
-                    print >> sys.stderr, node_id, node_id_last, node.merged_nodes; node.print_info()
-                    print >> sys.stderr
+                    node.print_info(); print >> sys.stderr
                     if simulation:
                         allele_name, cmp_vars, max_common = "", [], -1
                         for test_HLA_name in test_HLA_names:

@@ -105,6 +105,7 @@ class Node:
                 tmp_mm += mismatch
                 if tmp_mm > max_mm:
                     break
+
             if tmp_mm <= max_mm:
                 return i, len(seq) - i
                 
@@ -173,6 +174,7 @@ class Node:
         for nt_dic in self.seq:
             seq += get_major_nt(nt_dic)
             avg += sum(nt_dic.values())
+        print >> sys.stderr, "Node ID:", self.id
         print >> sys.stderr, "Pos: [%d, %d], Avg. coverage: %.1f" % (self.left, self.right, float(avg) / len(self.seq))
         print >> sys.stderr, "\t", seq
         prev_var = ""
@@ -182,7 +184,9 @@ class Node:
             if var != "" and var != prev_var:
                 print >> sys.stderr, "\t%d: %s" % (var_i, var), self.seq[var_i],
             prev_var = var
-        print
+        print >> sys.stderr
+        print >> sys.stderr, "mates:", sorted(self.mate_ids, key=int)
+        # print >> sys.stderr, "reads:", sorted(self.read_ids)
 
                 
 class Graph:
@@ -360,7 +364,7 @@ class Graph:
         
 
     # Reduce graph
-    def reduce(self):
+    def reduce(self, overlap_pct = 0.1):
         to_node = self.to_node
         from_node = self.from_node
         
@@ -409,7 +413,7 @@ class Graph:
             new_nodes[id] = node
 
         self.nodes = new_nodes
-        self.generate_edges(0.1) # 10% overlap
+        self.generate_edges(overlap_pct)
 
         # DK - debugging purposes
         """
@@ -420,7 +424,6 @@ class Graph:
         for id, _, _ in nodes:
             print >> sys.stderr, id, "==>", self.to_node[id] if id in self.to_node else []
             self.nodes[id].print_info(); print >> sys.stderr
-            print >> sys.stderr, self.nodes[id].mate_ids
         sys.exit(1)
         """
 
@@ -434,50 +437,51 @@ class Graph:
             to_node = self.to_node
             from_node = self.from_node
             nodes, new_nodes = self.nodes, {}
+            sorted_nodes = [[id, node.left, node.right] for id, node in nodes.items()]
+            def node_cmp(a, b):
+                return a[1] - b[1]
+            sorted_nodes = sorted(sorted_nodes, cmp=node_cmp)
+            
             matches_list = []
-            for id, to_ids in to_node.items():                
-                to_ids = [i[0] for i in to_ids]
+            for id, _, _ in sorted_nodes:                
+                to_ids = [i[0] for i in to_node[id]] if id in to_node else []
                 from_ids = [i[0] for i in from_node[id]] if id in from_node else []
                 matches = []
-                # id is a center node with multipe predecessors and successors
-                if len(from_ids) > 1 and len(to_ids) > 1:
-                    multi_path = False
-                    for to_id in to_ids:
-                        if to_id in from_node and \
-                           len(from_node[to_id]) > 1:
-                            multi_path = True
-                            break
-                    if multi_path:
-                         continue
-
-                    if len(from_ids) <= 1:
-                        continue
-                    multi_path = False
+                # id has two predecessors
+                if len(from_ids) == 2:
+                    to_ids = []
                     for from_id in from_ids:
-                        if from_id in to_node and \
-                           len(to_node[from_id]) > 1:
-                            multi_path = True
-                            break
-                    if multi_path:
-                       continue
-                    added = set()
-                    for to_id in to_ids:
-                        max_from_id, max_mate = "", 0
-                        for from_id in from_ids:
-                            if from_id in added:
-                                continue
-                            tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
-                            if max_mate < tmp_mate:
-                                max_mate = tmp_mate
-                                max_from_id = from_id
-                        if max_mate > 0:
-                            added.add(max_from_id)
-                            matches.append([max_from_id, id, to_id, max_mate])
-
-                    if len(matches) != 2:
+                        if from_id not in to_node:
+                            continue
+                        for to_id, _ in to_node[from_id]:
+                            if to_id not in to_ids:
+                                to_ids.append(to_id)
+                    # The two predecessors have one or two successors in total
+                    assert len(to_ids) > 0
+                    if len(to_ids) > 2:
                         continue
-                elif len(from_ids) == 2:
-                    None
+
+                    if len(to_ids) == 1:
+                        for from_id in from_ids:
+                            matches.append([from_id, id, 0])
+                    else:
+                        added = set()
+                        for from_id in from_ids:
+                            max_to_id, max_mate = "", 0
+                            for to_id in to_ids:
+                                if to_id in added:
+                                    continue
+                                tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
+                                if max_mate < tmp_mate:
+                                    max_mate = tmp_mate
+                                    max_to_id = to_id
+                            if max_mate > 0:
+                                added.add(max_to_id)
+                                matches.append([from_id, max_to_id, max_mate])
+                                
+                        if len(matches) != 2:
+                            continue
+                    
                 # id has two successors
                 elif len(to_ids) == 2:
                     from_ids = []
@@ -487,33 +491,31 @@ class Graph:
                         for from_id, _ in from_node[to_id]:
                             if from_id not in from_ids:
                                 from_ids.append(from_id)
-                    # The two successors have two predecessors in total
+                    # The two successors have one or two predecessors in total
+                    assert len(from_ids) > 0
                     if len(from_ids) > 2:
                         continue
 
-                    added = set()
-                    for to_id in to_ids:
-                        max_from_id, max_mate = "", 0
-                        for from_id in from_ids:
-                            if from_id in added:
-                                continue
-                            tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
-                            if max_mate < tmp_mate:
-                                max_mate = tmp_mate
-                                max_from_id = from_id
-                        if max_mate > 0:
-                            added.add(max_from_id)
-                            matches.append([max_from_id, to_id, "", max_mate])
+                    if len(from_ids) == 1:
+                        for to_id in to_ids:
+                            matches.append([id, to_id, 0])
+                    else:
+                        added = set()
+                        for to_id in to_ids:
+                            max_from_id, max_mate = "", 0
+                            for from_id in from_ids:
+                                if from_id in added:
+                                    continue
+                                tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
+                                if max_mate < tmp_mate:
+                                    max_mate = tmp_mate
+                                    max_from_id = from_id
+                            if max_mate > 0:
+                                added.add(max_from_id)
+                                matches.append([max_from_id, to_id, max_mate])
 
-                    if len(matches) != 2:
-                        continue
-
-                    # DK - debugging purposes
-                    if iter > 1 and id == "172|L":
-                        print >> sys.stderr, id, to_ids, from_ids
-                        print >> sys.stderr, matches
-                        sys.exit(1)
-                            
+                        if len(matches) != 2:
+                            continue
 
                 # DK - debugging purposes
                 # """
@@ -522,11 +524,9 @@ class Graph:
                 print >> sys.stderr, "to:", id, "has", to_ids
                 print >> sys.stderr, "from:", id, "has", from_ids
                 print >> sys.stderr, matches
-                for from_id, id, to_id, _ in matches:
+                for from_id, id, _ in matches:
                     print >> sys.stderr, from_id; nodes[from_id].print_info()
                     print >> sys.stderr, id; nodes[id].print_info()
-                    if to_id != "":
-                        print >> sys.stderr, to_id; nodes[to_id].print_info()
                 print >> sys.stderr
                 # """
 
@@ -537,15 +537,11 @@ class Graph:
 
             delete_nodes = set()
             for matches in matches_list:
-                for from_id, id, to_id, _ in matches:
-                    # DK - debugging purposes
+                for from_id, id, _ in matches:
                     if from_id in new_nodes:
                         continue
                     from_node, node = deepcopy(nodes[from_id]), nodes[id]
                     from_node.combine_with(node); delete_nodes.add(id)
-                    if to_id != "":
-                        to_node = nodes[to_id]
-                        from_node.combine_with(to_node); delete_nodes.add(to_id)
                     new_nodes[from_id] = from_node
 
                     """
@@ -566,8 +562,8 @@ class Graph:
                 new_nodes[id] = node
 
             self.nodes = new_nodes
-            self.generate_edges(0.1) # 10% overlapping
-            self.reduce()
+            self.generate_edges(0.02)
+            self.reduce(0.02)
 
 
         # DK - debugging purposes
@@ -580,7 +576,6 @@ class Graph:
         for id, _, _ in nodes:
             print >> sys.stderr, id, "==>", self.to_node[id] if id in self.to_node else []
             self.nodes[id].print_info(); print >> sys.stderr
-            print >> sys.stderr, sorted(self.nodes[id].mate_ids)
         # sys.exit(1)
         # """
 
