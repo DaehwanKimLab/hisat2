@@ -33,13 +33,15 @@ def match_score(nt_dic1, nt_dic2):
 
 
 #
-def get_ungapped_seq(seq):
-    ungapped_seq = []
-    for nt_dic in seq:
+def get_ungapped_seq_var(seq, var):
+    ungapped_seq, ungapped_var = [], []
+    for i in range(len(seq)):
+        nt_dic, var_dic = seq[i], var[i]
         if get_major_nt(nt_dic) == 'D':
             continue
         ungapped_seq.append(nt_dic)
-    return ungapped_seq
+        ungapped_var.append(var_dic)
+    return ungapped_seq, ungapped_var
 
 
 class Node:
@@ -87,12 +89,13 @@ class Node:
 
 
     # Check how nodes overlap with each other without considering deletions
-    def overlap_with(self, other):
+    def overlap_with(self, other, vars = {}):
         assert self.left <= other.left
         if self.right < other.left:
             return -1, -1
 
-        seq, other_seq = get_ungapped_seq(self.seq), get_ungapped_seq(other.seq)
+        seq, var = get_ungapped_seq_var(self.seq, self.var)
+        other_seq, other_var = get_ungapped_seq_var(other.seq, other.var)
         for i in range(len(seq)):
             max_mm = 0.01 * (len(seq) - i)
             tmp_mm = 0.0
@@ -101,6 +104,22 @@ class Node:
                     break
                 other_nt_dic = other.seq[j]
                 mismatch = 1.0 - match_score(seq[i+j], other_seq[j])
+
+                # Higher penalty for mismatches in variants
+                nt, other_nt = get_major_nt(seq[i+j]), get_major_nt(other_seq[j])
+                if nt != other_nt and (len(var[i+j]) > 0 or len(other_var[j]) > 0):
+                    def get_var_id(nt, var_ids, vars):
+                        for _id in var_ids:
+                            _type, _pos, _data = vars[_id]
+                            if _type != "single":
+                                continue
+                            if _data == nt:
+                                return _id
+                        return ""
+                    nt_var, other_nt_var = get_var_id(nt, var[i+j], vars), get_var_id(other_nt, other_var[j], vars)
+                    if nt_var != other_nt_var:
+                        mismatch = 2.0
+                    
                 assert mismatch >= 0.0
                 tmp_mm += mismatch
                 if tmp_mm > max_mm:
@@ -151,7 +170,7 @@ class Node:
 
     # Return the length of the ungapped sequence
     def ungapped_length(self):
-        return len(get_ungapped_seq(self.seq))
+        return len(get_ungapped_seq_var(self.seq, self.var)[0])
 
     
     # Get variants
@@ -192,9 +211,10 @@ class Node:
 
                 
 class Graph:
-    def __init__(self, backbone):
+    def __init__(self, backbone, vars):
         # self.head = Node()
         self.backbone = backbone # backbone sequence
+        self.vars = vars
 
         self.nodes = {}
         self.edges = {}
@@ -237,7 +257,7 @@ class Graph:
                 if right1 < left2:
                     break
                 node2 = self.nodes[id2]
-                at, overlap = node1.overlap_with(node2)
+                at, overlap = node1.overlap_with(node2, self.vars)
                 if overlap < node1.ungapped_length() * overlap_pct:
                     continue
                 if id1 not in self.to_node:
@@ -432,7 +452,7 @@ class Graph:
     def informed_assemble(self, params = {"mate": True}):
         mate = "mate" in params and params["mate"]
         allele_nodes = params["alleles"] if "alleles" in params else {}
-        vars = params["vars"] if "vars" in params else {}
+        vars = self.vars
         if not mate:
             assert len(allele_nodes) > 0 and len(vars) > 0
         
@@ -598,8 +618,8 @@ class Graph:
 
             
     # Assemble by aligning to known alleles
-    def assemble_with_alleles(self, allele_nodes, vars):
-        self.informed_assemble({"allele" : True, "alleles" : allele_nodes, "vars" :  vars})
+    def assemble_with_alleles(self, allele_nodes):
+        self.informed_assemble({"allele" : True, "alleles" : allele_nodes})
 
         
     # Begin drawing graph
@@ -675,7 +695,7 @@ class Graph:
         nodes = sorted(nodes, cmp=node_cmp)
 
         # display space
-        dspace = [[[begin_y, 1000]]] * (nodes[-1][2] + 100)
+        dspace = [[[begin_y, 2000]]] * (nodes[-1][2] + 100)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
             range1 = dspace[left]

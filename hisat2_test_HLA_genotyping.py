@@ -1119,7 +1119,7 @@ def HLA_typing(ex_path,
                                              stderr=open("/dev/null", 'w'))
 
             # Assembly graph
-            asm_graph = assembly_graph.Graph(ref_seq)
+            asm_graph = assembly_graph.Graph(ref_seq, Vars[gene])
 
             # List of nodes that represent alleles
             allele_vars = {}
@@ -1631,7 +1631,7 @@ def HLA_typing(ex_path,
                 begin_y = asm_graph.draw(0,
                                          "Initial graph",
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
-                begin_y += 100
+                begin_y += 200
 
                 # Reduce graph
                 asm_graph.reduce()
@@ -1640,7 +1640,7 @@ def HLA_typing(ex_path,
                 begin_y = asm_graph.draw(begin_y,
                                          "Unitigs",
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
-                begin_y += 100
+                begin_y += 200
                 
                 # Further reduce graph with mate pairs
                 asm_graph.assemble_with_mates()
@@ -1649,15 +1649,15 @@ def HLA_typing(ex_path,
                 begin_y = asm_graph.draw(begin_y,
                                          "Graph with mate pairs",
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
-                begin_y += 100
+                begin_y += 200
 
-                asm_graph.assemble_with_alleles(allele_nodes, Vars[gene])
+                asm_graph.assemble_with_alleles(allele_nodes)
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y,
                                          "Graph with alleles",
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
-                begin_y += 100
+                begin_y += 200
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
