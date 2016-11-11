@@ -115,6 +115,7 @@ class Node:
     # Combine two nodes with considering deletions
     def combine_with(self, other):
         assert self.left <= other.left
+        assert self.right >= other.left
         if self.right >= other.right:
             return
 
@@ -152,6 +153,7 @@ class Node:
     def ungapped_length(self):
         return len(get_ungapped_seq(self.seq))
 
+    
     # Get variants
     def get_vars(self, Vars):
         vars = []
@@ -427,9 +429,13 @@ class Graph:
         sys.exit(1)
         """
 
+    def informed_assemble(self, params = {"mate": True}):
+        mate = "mate" in params and params["mate"]
+
+        # DK - debugging purposes
+        if not mate:
+            return
         
-    # Reduce the graph using mate pairs
-    def assemble_with_mates(self):
         # Duplicate nodes when necessary
         iter = 0
         while True and iter < 10:
@@ -443,79 +449,55 @@ class Graph:
             sorted_nodes = sorted(sorted_nodes, cmp=node_cmp)
             
             matches_list = []
-            for id, _, _ in sorted_nodes:                
-                to_ids = [i[0] for i in to_node[id]] if id in to_node else []
-                from_ids = [i[0] for i in from_node[id]] if id in from_node else []
-                matches = []
-                # id has two predecessors
-                if len(from_ids) == 2:
-                    to_ids = []
-                    for from_id in from_ids:
-                        if from_id not in to_node:
-                            continue
-                        for to_id, _ in to_node[from_id]:
-                            if to_id not in to_ids:
-                                to_ids.append(to_id)
-                    # The two predecessors have one or two successors in total
-                    assert len(to_ids) > 0
-                    if len(to_ids) > 2:
-                        continue
-
-                    if len(to_ids) == 1:
-                        for from_id in from_ids:
-                            matches.append([from_id, id, 0])
-                    else:
-                        added = set()
-                        for from_id in from_ids:
-                            max_to_id, max_mate = "", 0
-                            for to_id in to_ids:
-                                if to_id in added:
-                                    continue
-                                tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
-                                if max_mate < tmp_mate:
-                                    max_mate = tmp_mate
-                                    max_to_id = to_id
-                            if max_mate > 0:
-                                added.add(max_to_id)
-                                matches.append([from_id, max_to_id, max_mate])
-                                
-                        if len(matches) != 2:
-                            continue
-                    
+            for id, _, _ in sorted_nodes:
+                if id not in to_node:
+                    continue                
+                to_ids = [i[0] for i in to_node[id]]
                 # id has two successors
-                elif len(to_ids) == 2:
-                    from_ids = []
-                    for to_id in to_ids:
-                        if to_id not in from_node:
-                            continue
-                        for from_id, _ in from_node[to_id]:
-                            if from_id not in from_ids:
-                                from_ids.append(from_id)
-                    # The two successors have one or two predecessors in total
-                    assert len(from_ids) > 0
-                    if len(from_ids) > 2:
+                if len(to_ids) > 2:
+                    continue
+                matches = []
+
+                from_ids = []
+                for to_id in to_ids:
+                    if to_id not in from_node:
                         continue
+                    for from_id, _ in from_node[to_id]:
+                        if from_id not in from_ids:
+                            from_ids.append(from_id)
+                # The two successors have one or two predecessors in total
+                assert len(from_ids) > 0
+                if len(from_ids) > 2:
+                    continue
 
-                    if len(from_ids) == 1:
-                        for to_id in to_ids:
-                            matches.append([id, to_id, 0])
-                    else:
-                        added = set()
-                        for to_id in to_ids:
-                            max_from_id, max_mate = "", 0
-                            for from_id in from_ids:
-                                if from_id in added:
-                                    continue
-                                tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
-                                if max_mate < tmp_mate:
-                                    max_mate = tmp_mate
-                                    max_from_id = from_id
-                            if max_mate > 0:
-                                added.add(max_from_id)
-                                matches.append([max_from_id, to_id, max_mate])
+                if len(from_ids) <= 1 and len(to_ids) <= 1:
+                    continue
 
-                        if len(matches) != 2:
-                            continue
+                if len(from_ids) == 1:
+                    for to_id in to_ids:
+                        matches.append([id, to_id, 0])
+                else:
+                    added = set()
+                    for to_id in to_ids:
+                        max_from_id, max_mate = "", 0
+                        for from_id in from_ids:
+                            if from_id in added:
+                                continue
+
+                            to_ids2 = [i[0] for i in to_node[from_id]] if from_id in to_node else []
+                            if to_id not in to_ids2:
+                                continue
+
+                            tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
+                            if max_mate < tmp_mate:
+                                max_mate = tmp_mate
+                                max_from_id = from_id
+                        if max_mate > 0:
+                            added.add(max_from_id)
+                            matches.append([max_from_id, to_id, max_mate])
+
+                    if len(matches) != 2:
+                        continue
 
                 # DK - debugging purposes
                 # """
@@ -528,6 +510,7 @@ class Graph:
                     print >> sys.stderr, from_id; nodes[from_id].print_info()
                     print >> sys.stderr, id; nodes[id].print_info()
                 print >> sys.stderr
+                # sys.exit(1)
                 # """
 
                 matches_list.append(matches)
@@ -538,11 +521,13 @@ class Graph:
             delete_nodes = set()
             for matches in matches_list:
                 for from_id, id, _ in matches:
-                    if from_id in new_nodes:
+                    new_id = from_id + '|' + id
+                    if new_id in new_nodes:
                         continue
-                    from_node, node = deepcopy(nodes[from_id]), nodes[id]
-                    from_node.combine_with(node); delete_nodes.add(id)
-                    new_nodes[from_id] = from_node
+                    from_node, node = deepcopy(nodes[from_id]), nodes[id]; delete_nodes.add(from_id)
+                    from_node.id = new_id
+                    from_node.combine_with(node); delete_nodes.add(id)                    
+                    new_nodes[new_id] = from_node
 
                     """
                     self.to_node[from_id] = self.to_node[to_id]
@@ -579,66 +564,83 @@ class Graph:
         # sys.exit(1)
         # """
 
+        
+    # Reduce the graph using mate pairs
+    def assemble_with_mates(self):
+        self.informed_assemble({"mate" : True})
+
             
-    # Assemble
-    def assemble(self):
-        if len(self.nodes) <= 0:
-            return
+    # Assemble by aligning to known alleles
+    def assemble_with_alleles(self):
+        self.informed_assemble({"allele" : True, "alleles" : 0})
+
+        
+    # Begin drawing graph
+    def begin_draw(self, fname_base):
+        assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
             return a[1] - b[1]
         nodes = sorted(nodes, cmp=node_cmp)
 
-        queue = [nodes[0]]; nodes.pop(0)
-        while len(queue) > 0:
-            node_id, node_left, node_right = queue.pop()
-            node = self.nodes[node_id]
+        def get_x(x):
+            return self.left_margin + x * self.scalex
 
-            node_i = 0
-            del_nodes = []
-            while node_i < len(nodes):
-                node2_id, node2_left, node2_right = nodes[node_i]
-                node2 = self.nodes[node2_id]
-                at, overlap = node.overlap_with(node2)
-                if overlap >= 80:
-                    # DK - debugging purposes
-                    print node_id; node.print_info()
-                    print node2_id; node2.print_info()
+        def get_y(y):
+            return self.top_margin + y * self.scaley
 
-                    node.combine_with(node2)
-                    del_nodes.append(node_i)
+        # Get scalar
+        def get_sx(x):
+            return x * self.scalex
 
-                    print "at %d, overlap with %d" % (at, overlap)
-                    print "combined:", node_id; node.print_info()
-                else:
-                    # DK - debugging purposes
-                    print node_id; node.print_info()
-                    print node2_id; node2.print_info()
-                    print "at %d, overlap with %d" % (at, overlap)
-                    sys.exit(1)
-                    
-                    node_i += 1
-                    continue
+        def get_sy(y):
+            return y * self.scaley
 
-                node_i += 1
+        htmlDraw = self.htmlDraw = HtmlDraw(fname_base)
+        htmlDraw.write_html_css(self.width, self.height)
+        htmlDraw.start_js()
+        # htmlDraw.draw_smile()
+        js_file = htmlDraw.js_file
 
-            # DK - debugging purposes
-            print node_id; node.print_info()
-            # sys.exit(1)
-            
-            new_nodes = []
-            for node_i in range(len(nodes)):
-                if node_i not in del_nodes:
-                    new_nodes.append(nodes[node_i])
-            nodes = new_nodes
-            if len(nodes) <= 0:
-                break
-            queue.append(nodes[0]); nodes.pop(0)
+        # Choose font
+        print >> js_file, r'ctx.font = "12px Serif";'
 
-       
+        # Draw vertical dotted lines at every 100nt and thick lines at every 500nt
+        print >> js_file, r'ctx.fillStyle = "gray";'
+        for pos in range(100, nodes[-1][2], 100):
+            if pos % 500 == 0:
+                print >> js_file, r'ctx.setLineDash([]);'
+                print >> js_file, r'ctx.lineWidth = 1;'
+            else:
+                print >> js_file, r'ctx.setLineDash([5, 15]);'
+                print >> js_file, r'ctx.lineWidth = 0.2;'
+
+            print >> js_file, r'ctx.beginPath();'
+            print >> js_file, r'ctx.moveTo(%d, %d);' % \
+                (get_x(pos), self.top_margin)
+            print >> js_file, r'ctx.lineTo(%d, %d);' % \
+                (get_x(pos), self.height)
+            print >> js_file, r'ctx.stroke();'
+
+            # Draw label
+            print >> js_file, r'ctx.fillStyle = "blue";'
+            print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
+                (pos, get_x(pos+2), get_y(200))
+
+        print >> js_file, r'ctx.setLineDash([]);'
+
+
+    # End drawing graph
+    def end_draw(self):
+        self.htmlDraw.end_js()
+
+        
     # Draw graph
     #   Top left as (0, 0) and Bottom right as (width, height)
-    def draw(self, fname_base, second_allele = sys.maxint):
+    def draw(self,
+             begin_y,
+             title = "",
+             second_allele = sys.maxint):
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
@@ -646,7 +648,7 @@ class Graph:
         nodes = sorted(nodes, cmp=node_cmp)
 
         # display space
-        dspace = [[[0, 1000]]] * (nodes[-1][2] + 100)
+        dspace = [[[begin_y, 1000]]] * (nodes[-1][2] + 100)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
             range1 = dspace[left]
@@ -701,41 +703,13 @@ class Graph:
         def get_sy(y):
             return y * self.scaley
 
-        htmlDraw = HtmlDraw(fname_base)
-        htmlDraw.write_html_css(self.width, self.height)
-        htmlDraw.start_js()
+        htmlDraw = self.htmlDraw
         # htmlDraw.draw_smile()
         js_file = htmlDraw.js_file
 
-        # Choose font
-        print >> js_file, r'ctx.font = "12px Serif";'
-
-        # Draw vertical dotted lines at every 100nt and thick lines at every 500nt
-        print >> js_file, r'ctx.fillStyle = "gray";'
-        for pos in range(100, nodes[-1][2], 100):
-            if pos % 500 == 0:
-                print >> js_file, r'ctx.setLineDash([]);'
-                print >> js_file, r'ctx.lineWidth = 1;'
-            else:
-                print >> js_file, r'ctx.setLineDash([5, 15]);'
-                print >> js_file, r'ctx.lineWidth = 0.2;'
-
-            print >> js_file, r'ctx.beginPath();'
-            print >> js_file, r'ctx.moveTo(%d, %d);' % \
-                (get_x(pos), self.top_margin)
-            print >> js_file, r'ctx.lineTo(%d, %d);' % \
-                (get_x(pos), self.height)
-            print >> js_file, r'ctx.stroke();'
-
-            # Draw label
-            print >> js_file, r'ctx.fillStyle = "blue";'
-            print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
-                (pos, get_x(pos+2), get_y(200))
-
-        print >> js_file, r'ctx.setLineDash([]);'
-
         # Draw nodes
         node_to_y = {}
+        draw_title = False
         for id, left, right in nodes:
             read_id, mate = id.split('|')[:2]
             mate = mate.split('_')[0]
@@ -764,6 +738,14 @@ class Graph:
             print >> js_file, r'ctx.fillText("%s %s", %d, %d);' % \
                 (read_id, mate, get_x(left + 2), get_y(y + 7))
 
+            if not draw_title:
+                draw_title = True
+                print >> js_file, r'ctx.font = "24px Serif";'
+                print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
+                    (title, get_x(10), get_y(y + 7))
+                print >> js_file, r'ctx.font = "12px Serif";'
+
+
         # Draw edges
         print >> js_file, r'ctx.lineWidth = 1;'
         line_colors = ["red", "black", "blue"]
@@ -785,9 +767,9 @@ class Graph:
                 print >> js_file, r'ctx.moveTo(%d, %d);' % (node_x + jitter1, node_y)
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (to_node_x + jitter2, to_node_y)
                 print >> js_file, r'ctx.stroke();'
-               
-        htmlDraw.end_js()
 
+        return get_dspace(0, nodes[-1][2], 1)        
+               
         
 class HtmlDraw:
     def __init__(self, base_fname):

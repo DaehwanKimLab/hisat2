@@ -1624,32 +1624,45 @@ def HLA_typing(ex_path,
                 # Generate edges
                 asm_graph.generate_edges()
 
+                # Start drawing assembly graph
+                asm_graph.begin_draw("assembly_graph")
+
                 # Draw assembly graph
-                if len(num_frag_list) > 0:
-                    asm_graph.draw("assembly_graph1", num_frag_list[0][0])
-                else:
-                    asm_graph.draw("assembly_graph1")
+                begin_y = asm_graph.draw(0,
+                                         "Initial graph",
+                                         num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
+                begin_y += 100
 
                 # Reduce graph
                 asm_graph.reduce()
 
                 # Draw assembly graph
-                if len(num_frag_list) > 0:
-                    asm_graph.draw("assembly_graph2", num_frag_list[0][0])
-                else:
-                    asm_graph.draw("assembly_graph2")
+                begin_y = asm_graph.draw(begin_y,
+                                         "Unitigs",
+                                         num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
+                begin_y += 100
                 
                 # Further reduce graph with mate pairs
                 asm_graph.assemble_with_mates()
-                tmp_nodes = asm_graph.nodes
 
                 # Draw assembly graph
-                if len(num_frag_list) > 0:
-                    asm_graph.draw("assembly_graph3", num_frag_list[0][0])
-                else:
-                    asm_graph.draw("assembly_graph3")
+                begin_y = asm_graph.draw(begin_y,
+                                         "Graph with mate pairs",
+                                         num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
+                begin_y += 100
 
-                # DK - debugging purposes
+                asm_graph.assemble_with_alleles()                
+
+                # Draw assembly graph
+                begin_y = asm_graph.draw(begin_y,
+                                         "Graph with alleles",
+                                         num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
+                begin_y += 100
+
+                # End drawing assembly graph
+                asm_graph.end_draw()
+                
+                tmp_nodes = asm_graph.nodes
                 print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
                 count = 0
                 for id, node in tmp_nodes.items():
@@ -1668,24 +1681,25 @@ def HLA_typing(ex_path,
                                 allele_name = test_HLA_name
                                 cmp_vars = tmp_vars
                         print >> sys.stderr, "vs.", allele_name
+                        skip = True
                         var_i, var_j = 0, 0
                         while var_i < len(cmp_vars) and var_j < len(node_vars):
                             cmp_var_id, node_var_id = cmp_vars[var_i], node_vars[var_j]
                             if cmp_var_id == node_var_id:
+                                skip = False
                                 print >> sys.stderr, cmp_var_id, Vars[gene][cmp_var_id]
                                 var_i += 1; var_j += 1
                                 continue
                             cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
                             if cmp_var[1] <= node_var[1]:
-                                if (var_i > 0 and var_i + 1 < len(cmp_vars)) or cmp_var[0] != "deletion":
-                                    print >> sys.stderr, "***", cmp_var_id, cmp_var, "=="
+                                if not skip:
+                                    if (var_i > 0 and var_i + 1 < len(cmp_vars)) or cmp_var[0] != "deletion":
+                                        print >> sys.stderr, "***", cmp_var_id, cmp_var, "=="
                                 var_i += 1
                             else:
-                                print >> sys.stderr, "*** ==", node_var_id, node_var
-                                var_j += 1
-                                
-                            
-                # asm_graph.assemble()
+                                if not skip:
+                                    print >> sys.stderr, "*** ==", node_var_id, node_var
+                                var_j += 1               
                 
                 # DK - debugging purposes
                 sys.exit(1)
