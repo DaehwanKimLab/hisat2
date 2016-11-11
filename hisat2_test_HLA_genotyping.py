@@ -1651,7 +1651,7 @@ def HLA_typing(ex_path,
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
                 begin_y += 100
 
-                asm_graph.assemble_with_alleles()                
+                asm_graph.assemble_with_alleles(allele_nodes, Vars[gene])
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y,

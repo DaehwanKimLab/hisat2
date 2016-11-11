@@ -431,10 +431,10 @@ class Graph:
 
     def informed_assemble(self, params = {"mate": True}):
         mate = "mate" in params and params["mate"]
-
-        # DK - debugging purposes
+        allele_nodes = params["alleles"] if "alleles" in params else {}
+        vars = params["vars"] if "vars" in params else {}
         if not mate:
-            return
+            assert len(allele_nodes) > 0 and len(vars) > 0
         
         # Duplicate nodes when necessary
         iter = 0
@@ -443,6 +443,25 @@ class Graph:
             to_node = self.to_node
             from_node = self.from_node
             nodes, new_nodes = self.nodes, {}
+
+            if not mate:
+                for node in nodes.values():
+                    node_vars = node.get_vars(vars)
+                    max_alleles, max_common = set(), 0
+                    for anode in allele_nodes.values():
+                        allele_vars = anode.get_vars(vars)
+                        tmp_common = len(set(node_vars) & set(allele_vars))
+                        if tmp_common > max_common:
+                            max_common = tmp_common
+                            max_alleles = set([anode.id])
+                        elif tmp_common == max_common:
+                            max_alleles.add(anode.id)
+
+                    if max_common > 0:
+                        node.max_alleles = max_alleles
+                    else:
+                        node.max_alleles = set()
+            
             sorted_nodes = [[id, node.left, node.right] for id, node in nodes.items()]
             def node_cmp(a, b):
                 return a[1] - b[1]
@@ -488,7 +507,11 @@ class Graph:
                             if to_id not in to_ids2:
                                 continue
 
-                            tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
+                            if mate:
+                                tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
+                            else:
+                                tmp_mate = len(nodes[from_id].max_alleles & nodes[to_id].max_alleles)
+                                
                             if max_mate < tmp_mate:
                                 max_mate = tmp_mate
                                 max_from_id = from_id
@@ -503,6 +526,10 @@ class Graph:
                 # """
                 if len(matches) <= 0:
                     continue
+                matches_list.append(matches)
+                
+                if mate:
+                    continue 
                 print >> sys.stderr, "to:", id, "has", to_ids
                 print >> sys.stderr, "from:", id, "has", from_ids
                 print >> sys.stderr, matches
@@ -513,7 +540,7 @@ class Graph:
                 # sys.exit(1)
                 # """
 
-                matches_list.append(matches)
+                
 
             if len(matches_list) <= 0:
                 break
@@ -571,8 +598,8 @@ class Graph:
 
             
     # Assemble by aligning to known alleles
-    def assemble_with_alleles(self):
-        self.informed_assemble({"allele" : True, "alleles" : 0})
+    def assemble_with_alleles(self, allele_nodes, vars):
+        self.informed_assemble({"allele" : True, "alleles" : allele_nodes, "vars" :  vars})
 
         
     # Begin drawing graph
@@ -603,7 +630,7 @@ class Graph:
         js_file = htmlDraw.js_file
 
         # Choose font
-        print >> js_file, r'ctx.font = "12px Serif";'
+        print >> js_file, r'ctx.font = "12px Times New Roman";'
 
         # Draw vertical dotted lines at every 100nt and thick lines at every 500nt
         print >> js_file, r'ctx.fillStyle = "gray";'
@@ -740,10 +767,10 @@ class Graph:
 
             if not draw_title:
                 draw_title = True
-                print >> js_file, r'ctx.font = "24px Serif";'
+                print >> js_file, r'ctx.font = "24px Times New Roman";'
                 print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
                     (title, get_x(10), get_y(y + 7))
-                print >> js_file, r'ctx.font = "12px Serif";'
+                print >> js_file, r'ctx.font = "12px Times New Roman";'
 
 
         # Draw edges
