@@ -1018,6 +1018,179 @@ def calculate_allele_coverage(allele_haplotype,
 
 
 """
+samtools mpileup
+"""
+def get_mpileup(mpileup_cmd):
+    mpileup = []
+    proc = subprocess.Popen(mpileup_cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=open("/dev/null", 'w'))
+
+    prev_pos = -1
+    for line in proc.stdout:
+        line = line.strip()
+        allele, pos, ref_nt, num_reads, orig_nts, quals = line.split('\t')
+        pos = int(pos) - 1
+        assert pos == prev_pos + 1 or prev_pos == -1
+        if prev_pos == -1 and pos > 0:
+            mpileup = [[[], {}]] * pos
+            
+        nt_dic, num_nt = {}, 0
+        i = 0
+        while i < len(orig_nts):
+            c = orig_nts[i]
+            if c == '-':
+                i += 1
+                continue
+
+            num = 0
+            while c.isdigit():
+                num = num * 10 + int(c)
+                i += 1
+                c = orig_nts[i]
+
+            if num > 0:
+                i += num
+                continue
+
+            if c in "ACGTNacgtn":
+                num_nt += 1
+                c = c.upper()
+                if c not in nt_dic:
+                    nt_dic[c] = 1
+                else:
+                    nt_dic[c] += 1
+
+            i += 1
+        nt_set = []
+        if num_nt >= 20:
+            for nt, count in nt_dic.items():
+                if count >= num_nt / 3.5:
+                    nt_set.append(nt)
+
+        mpileup.append([nt_set, nt_dic])
+        prev_pos = pos
+        
+    return mpileup
+
+
+"""
+"""
+def error_correct(ref_seq,
+                  read_seq,
+                  read_pos,
+                  mpileup,
+                  Vars,
+                  Var_list,
+                  cmp_list,
+                  debug = False):
+    # DK - debugging purposes
+    if debug:
+        print cmp_list
+
+    i = 0
+    while i < len(cmp_list):
+        type, left, length = cmp_list[i][:3]
+        assert length > 0
+        if type == "match":
+            middle_cmp_list = []
+            last_j = 0
+            for j in range(length):
+                read_bp, ref_bp = read_seq[read_pos + j], ref_seq[left + j]
+                assert left + j < len(mpileup)
+                nt_set = mpileup[left + j][0]
+                if len(nt_set) > 0 and read_bp not in nt_set:
+                    read_bp = 'N' if len(nt_set) > 1 else nt_set[0]
+                    assert read_bp != ref_bp
+                    new_cmp = ["mismatch", left + j, 1, "unknown"]
+                    if read_bp != 'N':
+                        var_idx = lower_bound(Var_list, left + j)
+                        while var_idx < len(Var_list):
+                            var_pos, var_id = Var_list[var_idx]
+                            if var_pos > left + j:
+                                break
+                            if var_pos == left + j:
+                                var_type, _, var_data = Vars[var_id]
+                                if var_type == "single" and read_bp == var_data:
+                                    new_cmp[3] = var_id
+                                    break                                                        
+                            var_idx += 1
+                    if j > last_j:
+                        middle_cmp_list.append(["match", left + last_j, j- last_j])
+                    middle_cmp_list.append(new_cmp)
+                    last_j = j + 1
+            if last_j < length:
+                middle_cmp_list.append(["match", left + last_j, length - last_j])
+
+            assert len(middle_cmp_list) > 0
+            cmp_list = cmp_list[:i] + middle_cmp_list + cmp_list[i+1:]
+            i += (len(middle_cmp_list) - 1)
+
+            # DK - debugging purposes
+            if len(middle_cmp_list) > 1:
+                print >> sys.stderr, "DK:", cmp_list[i]
+                print >> sys.stderr, "DK:", middle_cmp_list
+                sys.exit(1)
+        else:
+            assert type == "mismatch"
+            read_bp, ref_bp = read_seq[read_pos], ref_seq[left]
+            assert left < len(mpileup)
+            nt_set = mpileup[left][0]
+
+            # DK - debugging purposes
+            if debug:
+                print left, read_bp, ref_bp, mpileup[left]
+
+            if len(nt_set) > 0 and read_bp not in nt_set:
+                read_bp = 'N' if len(nt_set) > 1 else nt_set[0]
+                read_seq = read_seq[:read_pos] + read_bp + read_seq[read_pos+1:]
+                if read_bp == 'N':
+                    cmp_list[i][3] = "unknown"
+                elif read_bp == ref_bp:
+                    cmp_list[i] = ["match", left, 1]
+                else:
+                    cmp_list[i][3] = "unknown"
+                    var_idx = lower_bound(Var_list, left)
+                    while var_idx < len(Var_list):
+                        var_pos, var_id = Var_list[var_idx]
+                        if var_pos > left:
+                            break
+                        if var_pos == left:
+                            var_type, _, var_data = Vars[var_id]
+                            if var_type == "single" and read_bp == var_data:
+                                cmp_list[i][3] = var_id
+                                break                                                        
+                        var_idx += 1
+
+                # DK - debugging purposes
+                if debug:
+                    print left, read_bp, ref_bp, mpileup[left]
+                    print cmp_list[i]
+
+        read_pos += length
+
+        i += 1
+
+    # Combine matches
+    i = 0
+    while i < len(cmp_list):
+        type, left, length = cmp_list[i][:3]
+        if type == "match" and i + 1 < len(cmp_list):
+            type2, left2, length2 = cmp_list[i+1][:3]
+            if type2 == "match":
+                cmp_list[i] = [type, left, length + length2]
+                cmp_list = cmp_list[:i+1] + cmp_list[i+2:]
+                continue
+        i += 1
+
+    # DK - debugging purposes
+    if debug:
+        print cmp_list
+                            
+    return cmp_list
+
+
+"""
 """
 def HLA_typing(ex_path,
                simulation,
@@ -1048,7 +1221,6 @@ def HLA_typing(ex_path,
                alignment_fname,
                num_frag_list,
                threads,
-               enable_coverage,
                best_alleles,
                verbose):    
     if simulation:
@@ -1090,6 +1262,11 @@ def HLA_typing(ex_path,
 
             if not os.path.exists(alignment_fname + ".bai"):
                 os.system("samtools index %s" % alignment_fname)
+            # samtools mpileup
+            mpileup_cmd = ["samtools",
+                           "mpileup",
+                           alignment_fname]
+            
             # Read alignments
             alignview_cmd = ["samtools",
                              "view",
@@ -1097,12 +1274,16 @@ def HLA_typing(ex_path,
             base_locus = 0
             if index_type == "graph":
                 if reference_type == "gene":
-                    alignview_cmd += ["%s" % ref_allele]
+                    mpileup_cmd += ["-r", ref_allele]
+                    alignview_cmd += [ref_allele]
                 else:
                     assert reference_type in ["chromosome", "genome"]
                     _, chr, left, right, _ = refHLA_loci[gene]
                     base_locus = left
+                    mpileup_cmd += ["-r", "%s:%d-%d" % (chr, left + 1, right + 1)]
                     alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
+
+                mpileup = get_mpileup(mpileup_cmd)
 
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
@@ -1117,6 +1298,7 @@ def HLA_typing(ex_path,
                 alignview_proc = subprocess.Popen(alignview_cmd,
                                              stdout=subprocess.PIPE,
                                              stderr=open("/dev/null", 'w'))
+
 
             # Assembly graph
             asm_graph = assembly_graph.Graph(ref_seq, Vars[gene])
@@ -1250,17 +1432,9 @@ def HLA_typing(ex_path,
                     for i in range(len(cigars)):
                         cigar_op, length = cigars[i]
                         if cigar_op == 'M':
-                            # Update coverage
-                            if enable_coverage:
-                                if right_pos + length < len(coverage):
-                                    coverage[right_pos] += 1
-                                    coverage[right_pos + length] -= 1
-                                elif right_pos < len(coverage):
-                                    coverage[right_pos] += 1
-                                    coverage[-1] -= 1
-
                             first = True
                             MD_len_used = 0
+                            cmp_list_i = len(cmp_list)
                             while True:
                                 if not first or MD_len == 0:
                                     if MD[MD_str_pos].isdigit():
@@ -1276,14 +1450,16 @@ def HLA_typing(ex_path,
                                 # Insertion or full match followed
                                 if MD_len >= length:
                                     MD_len -= length
-                                    cmp_list.append(["match", right_pos + MD_len_used, length - MD_len_used])
+                                    if length > MD_len_used:
+                                        cmp_list.append(["match", right_pos + MD_len_used, length - MD_len_used])
                                     break
                                 first = False
                                 read_base = read_seq[read_pos + MD_len]
                                 MD_ref_base = MD[MD_str_pos]
                                 MD_str_pos += 1
                                 assert MD_ref_base in "ACGT"
-                                cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
+                                if MD_len > MD_len_used:
+                                    cmp_list.append(["match", right_pos + MD_len_used, MD_len - MD_len_used])
 
                                 _var_id = "unknown"
                                 if read_pos + MD_len == Zs_pos and Zs_i < len(Zs):
@@ -1301,7 +1477,21 @@ def HLA_typing(ex_path,
                                 if MD_len == length:
                                     MD_len = 0
                                     break
+
+                            # Correction for sequencing errors and update for cmp_list
+                            assert cmp_list_i < len(cmp_list)
+                            new_cmp_list = error_correct(ref_seq,
+                                                         read_seq,
+                                                         read_pos,
+                                                         mpileup,
+                                                         Vars[gene],
+                                                         Var_list[gene],
+                                                         cmp_list[cmp_list_i:],
+                                                         orig_read_id.find("313|R") == 0)
+                            cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
+                                    
                         elif cigar_op == 'I':
+                            assert False
                             cmp_list.append(["insertion", right_pos, length])
                         elif cigar_op == 'D':
                             if MD[MD_str_pos] == '0':
@@ -1330,6 +1520,7 @@ def HLA_typing(ex_path,
                                 softclip[1] = length
                         else:                    
                             assert cigar_op == 'N'
+                            assert False
                             cmp_list.append(["intron", right_pos, length])
 
                         if cigar_op in "MND":
@@ -1476,8 +1667,9 @@ def HLA_typing(ex_path,
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
                         type, length = cmp[0], cmp[2]
-                        if num_mismatch == 0 and type in ["mismatch", "deletion", "insertion"]:
-                            assert cmp[3] != "unknown"
+                        # Disable the following sanity check due to error correction
+                        # if num_mismatch == 0 and type in ["mismatch", "deletion", "insertion"]:
+                        #     assert cmp[3] != "unknown"
 
                         if type in ["match", "mismatch"]:
                             if read_node_pos < 0:
@@ -1589,8 +1781,8 @@ def HLA_typing(ex_path,
                     cmp_MD += ("%d" % MD_match_len)
                     # Sanity check
                     if read_pos != len(read_seq) or \
-                            cmp_cigar_str != cigar_str or \
-                            cmp_MD != MD:
+                            cmp_cigar_str != cigar_str:
+                            # cmp_MD != MD: # Disabled due to error correction
                         print >> sys.stderr, "Error:", cigar_str, MD
                         print >> sys.stderr, "\tcomputed:", cmp_cigar_str, cmp_MD
                         print >> sys.stderr, "\tcmp list:", cmp_list
@@ -1641,7 +1833,10 @@ def HLA_typing(ex_path,
                                          "Unitigs",
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
                 begin_y += 200
-                
+
+                # DK - debugging purposes
+                # """
+
                 # Further reduce graph with mate pairs
                 asm_graph.assemble_with_mates()
 
@@ -1651,6 +1846,7 @@ def HLA_typing(ex_path,
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
                 begin_y += 200
 
+                
                 asm_graph.assemble_with_alleles(allele_nodes)
 
                 # Draw assembly graph
@@ -1658,6 +1854,8 @@ def HLA_typing(ex_path,
                                          "Graph with alleles",
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
                 begin_y += 200
+
+                # """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
@@ -1667,39 +1865,44 @@ def HLA_typing(ex_path,
                 count = 0
                 for id, node in tmp_nodes.items():
                     count += 1
-                    if count > 10:
+                    if count > 100:
                         break
                     node_vars = node.get_vars(Vars[gene])
                     node.print_info(); print >> sys.stderr
                     if simulation:
-                        allele_name, cmp_vars, max_common = "", [], -1
+                        alleles, cmp_vars, max_common = "", [], -1
                         for test_HLA_name in test_HLA_names:
                             tmp_vars = allele_nodes[test_HLA_name].get_vars(Vars[gene])
                             tmp_common = len(set(node_vars) & set(allele_vars[test_HLA_name]))
                             if max_common < tmp_common:
                                 max_common = tmp_common
-                                allele_name = test_HLA_name
-                                cmp_vars = tmp_vars
-                        print >> sys.stderr, "vs.", allele_name
-                        skip = True
-                        var_i, var_j = 0, 0
-                        while var_i < len(cmp_vars) and var_j < len(node_vars):
-                            cmp_var_id, node_var_id = cmp_vars[var_i], node_vars[var_j]
-                            if cmp_var_id == node_var_id:
-                                skip = False
-                                print >> sys.stderr, cmp_var_id, Vars[gene][cmp_var_id]
-                                var_i += 1; var_j += 1
-                                continue
-                            cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
-                            if cmp_var[1] <= node_var[1]:
-                                if not skip:
-                                    if (var_i > 0 and var_i + 1 < len(cmp_vars)) or cmp_var[0] != "deletion":
-                                        print >> sys.stderr, "***", cmp_var_id, cmp_var, "=="
-                                var_i += 1
-                            else:
-                                if not skip:
-                                    print >> sys.stderr, "*** ==", node_var_id, node_var
-                                var_j += 1               
+                                alleles = [[test_HLA_name, tmp_vars]]
+                            elif max_common == tmp_common:
+                                alleles.append([test_HLA_name, tmp_vars])
+
+                        for allele_name, cmp_vars in alleles:
+                            print >> sys.stderr, "vs.", allele_name
+                            skip = True
+                            var_i, var_j = 0, 0
+                            while var_i < len(cmp_vars) and var_j < len(node_vars):
+                                cmp_var_id, node_var_id = cmp_vars[var_i], node_vars[var_j]
+                                if cmp_var_id == node_var_id:
+                                    skip = False
+                                    print >> sys.stderr, cmp_var_id, Vars[gene][cmp_var_id]
+                                    var_i += 1; var_j += 1
+                                    continue
+                                cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
+                                if cmp_var[1] <= node_var[1]:
+                                    if not skip:
+                                        if (var_i > 0 and var_i + 1 < len(cmp_vars)) or cmp_var[0] != "deletion":
+                                            print >> sys.stderr, "***", cmp_var_id, cmp_var, "=="
+                                    var_i += 1
+                                else:
+                                    if not skip:
+                                        print >> sys.stderr, "*** ==", node_var_id, node_var
+                                    var_j += 1
+                    print >> sys.stderr
+                    print >> sys.stderr
                 
                 # DK - debugging purposes
                 sys.exit(1)
@@ -2041,7 +2244,6 @@ def test_HLA_genotyping(base_fname,
                         alignment_fname,
                         threads,
                         simulate_interval,
-                        enable_coverage,
                         best_alleles,
                         exclude_allele_list,
                         default_allele_list,
@@ -2442,7 +2644,6 @@ def test_HLA_genotyping(base_fname,
                                          alignment_fname,
                                          num_frag_list,
                                          threads,
-                                         enable_coverage,
                                          best_alleles,
                                          verbose)
 
@@ -2490,7 +2691,6 @@ def test_HLA_genotyping(base_fname,
                    alignment_fname,
                    [],
                    threads,
-                   enable_coverage,
                    best_alleles,
                    verbose)
 
@@ -2549,10 +2749,6 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Reads simulated at every these base pairs (default: 1)")
-    parser.add_argument("--coverage",
-                        dest="coverage",
-                        action='store_true',
-                        help="Experimental purpose (assign reads based on coverage)")
     parser.add_argument("--best-alleles",
                         dest="best_alleles",
                         action='store_true',
@@ -2702,7 +2898,6 @@ if __name__ == '__main__':
                         args.alignment_fname,
                         args.threads,
                         args.simulate_interval,
-                        args.coverage,
                         args.best_alleles,
                         args.exclude_allele_list,
                         args.default_allele_list,

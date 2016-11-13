@@ -15,7 +15,7 @@ def get_major_nt(nt_dic):
         if tmp_count > max_count:
             max_count = tmp_count
             nt = tmp_nt
-    assert nt in "ACGTD"
+    assert nt in "ACGTDN"
     return nt                
 
 
@@ -58,7 +58,7 @@ class Node:
         assert 'I' not in seq
         self.seq = []
         for nt in seq:
-            assert nt in "ACGTD"
+            assert nt in "ACGTDN"
             self.seq.append({nt : 1})
 
         # how sequence is related to backbone
@@ -97,7 +97,7 @@ class Node:
         seq, var = get_ungapped_seq_var(self.seq, self.var)
         other_seq, other_var = get_ungapped_seq_var(other.seq, other.var)
         for i in range(len(seq)):
-            max_mm = 0.01 * (len(seq) - i)
+            max_mm = 0.012 * (len(seq) - i)
             tmp_mm = 0.0
             for j in range(len(other_seq)):
                 if i + j >= len(seq):
@@ -110,6 +110,8 @@ class Node:
                 if nt != other_nt and (len(var[i+j]) > 0 or len(other_var[j]) > 0):
                     def get_var_id(nt, var_ids, vars):
                         for _id in var_ids:
+                            if _id == "unknown":
+                                continue
                             _type, _pos, _data = vars[_id]
                             if _type != "single":
                                 continue
@@ -118,7 +120,7 @@ class Node:
                         return ""
                     nt_var, other_nt_var = get_var_id(nt, var[i+j], vars), get_var_id(other_nt, other_var[j], vars)
                     if nt_var != other_nt_var:
-                        mismatch = 2.0
+                        mismatch = 5.0
                     
                 assert mismatch >= 0.0
                 tmp_mm += mismatch
@@ -178,6 +180,8 @@ class Node:
         vars = []
         for var_i in range(len(self.var)):
             for var in self.var[var_i]:
+                if var == "unknown":
+                    continue
                 assert var in Vars
                 if len(vars) > 0 and var == vars[-1]:
                     continue
@@ -207,7 +211,7 @@ class Node:
             prev_var = var
         print >> sys.stderr
         print >> sys.stderr, "mates:", sorted(self.mate_ids, key=int)
-        # print >> sys.stderr, "reads:", sorted(self.read_ids)
+        print >> sys.stderr, "reads:", sorted(self.read_ids)
 
                 
 class Graph:
@@ -281,6 +285,15 @@ class Graph:
                         contained_by[id2] = id1
                     else:
                         contained_by[id1] = id2
+
+        # DK - debugging purposes
+        debug_id = "79|R-96|L"
+        if debug_id in contained_by:
+            print >> sys.stderr, debug_id, contained_by[debug_id]
+            self.nodes[debug_id].print_info(); print >> sys.stderr
+            self.nodes[contained_by[debug_id]].print_info(); print >> sys.stderr
+            # sys.exit(1)
+                        
         contain = {}
         for id, up_id in contained_by.items():
             while up_id in contained_by:
@@ -438,7 +451,7 @@ class Graph:
         self.generate_edges(overlap_pct)
 
         # DK - debugging purposes
-        """
+        # """
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
             return a[1] - b[1]
@@ -446,16 +459,20 @@ class Graph:
         for id, _, _ in nodes:
             print >> sys.stderr, id, "==>", self.to_node[id] if id in self.to_node else []
             self.nodes[id].print_info(); print >> sys.stderr
-        sys.exit(1)
-        """
+        # sys.exit(1)
+        # """
 
+        
     def informed_assemble(self, params = {"mate": True}):
         mate = "mate" in params and params["mate"]
         allele_nodes = params["alleles"] if "alleles" in params else {}
         vars = self.vars
         if not mate:
             assert len(allele_nodes) > 0 and len(vars) > 0
-        
+            if len(self.nodes) > 20:
+                print >> sys.stderr, "Warning: too many nodes (%d) for guided assembly using known alleles..." % (len(self.nodes))
+                return
+
         # Duplicate nodes when necessary
         iter = 0
         while True and iter < 10:
@@ -496,7 +513,6 @@ class Graph:
                 if len(to_ids) > 2:
                     continue
                 matches = []
-
                 from_ids = []
                 for to_id in to_ids:
                     if to_id not in from_node:
@@ -547,9 +563,6 @@ class Graph:
                 if len(matches) <= 0:
                     continue
                 matches_list.append(matches)
-                
-                if mate:
-                    continue 
                 print >> sys.stderr, "to:", id, "has", to_ids
                 print >> sys.stderr, "from:", id, "has", from_ids
                 print >> sys.stderr, matches
@@ -559,8 +572,7 @@ class Graph:
                 print >> sys.stderr
                 # sys.exit(1)
                 # """
-
-                
+              
 
             if len(matches_list) <= 0:
                 break
@@ -568,7 +580,9 @@ class Graph:
             delete_nodes = set()
             for matches in matches_list:
                 for from_id, id, _ in matches:
-                    new_id = from_id + '|' + id
+                    sep = '-' if mate else '+'
+                    sep = sep * iter
+                    new_id = from_id + sep + id
                     if new_id in new_nodes:
                         continue
                     from_node, node = deepcopy(nodes[from_id]), nodes[id]; delete_nodes.add(from_id)
@@ -576,18 +590,6 @@ class Graph:
                     from_node.combine_with(node); delete_nodes.add(id)                    
                     new_nodes[new_id] = from_node
 
-                    """
-                    self.to_node[from_id] = self.to_node[to_id]
-                    for to_id2, _ in self.to_node[to_id]:
-                        from_nodes = self.from_node[to_id2]
-                        replaced = False
-                        for i_ in range(len(from_nodes)):
-                            if from_nodes[i_][0] == to_id:
-                                replaced = True
-                                from_nodes[i_][0] = 
-                        assert replaced
-                    """
-            
             for id, node in nodes.items():
                 if id in delete_nodes or id in new_nodes:
                     continue
@@ -596,6 +598,10 @@ class Graph:
             self.nodes = new_nodes
             self.generate_edges(0.02)
             self.reduce(0.02)
+
+            # DK - debugging purposes
+            # if iter >= 1:
+            #    break
 
 
         # DK - debugging purposes
@@ -758,6 +764,7 @@ class Graph:
         node_to_y = {}
         draw_title = False
         for id, left, right in nodes:
+            node = self.nodes[id]
             read_id, mate = id.split('|')[:2]
             mate = mate.split('_')[0]
 
@@ -782,8 +789,8 @@ class Graph:
 
             # Draw label
             print >> js_file, r'ctx.fillStyle = "blue";'
-            print >> js_file, r'ctx.fillText("%s %s", %d, %d);' % \
-                (read_id, mate, get_x(left + 2), get_y(y + 7))
+            print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
+                (node.id, get_x(left + 2), get_y(y + 7))
 
             if not draw_title:
                 draw_title = True
