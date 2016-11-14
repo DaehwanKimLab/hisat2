@@ -536,9 +536,6 @@ class Graph:
                     for to_id in to_ids:
                         max_from_id, max_mate = "", 0
                         for from_id in from_ids:
-                            if from_id in added:
-                                continue
-
                             to_ids2 = [i[0] for i in to_node[from_id]] if from_id in to_node else []
                             if to_id not in to_ids2:
                                 continue
@@ -552,6 +549,10 @@ class Graph:
                                 max_mate = tmp_mate
                                 max_from_id = from_id
                         if max_mate > 0:
+                            if max_from_id in added:
+                                matches = []
+                                break
+                            
                             added.add(max_from_id)
                             matches.append([max_from_id, to_id, max_mate])
 
@@ -600,7 +601,7 @@ class Graph:
             self.reduce(0.02)
 
             # DK - debugging purposes
-            # if iter >= 1:
+            # if iter >= 2:
             #    break
 
 
@@ -699,9 +700,10 @@ class Graph:
         def node_cmp(a, b):
             return a[1] - b[1]
         nodes = sorted(nodes, cmp=node_cmp)
+        max_right = max([i[2] for i in nodes])
 
         # display space
-        dspace = [[[begin_y, 2000]]] * (nodes[-1][2] + 100)
+        dspace = [[[begin_y, 2000]]] * (max_right + 100)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
             range1 = dspace[left]

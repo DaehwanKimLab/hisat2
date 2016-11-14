@@ -1372,7 +1372,6 @@ def HLA_typing(ex_path,
                     if simulation:
                         read_id = read_id.split('|')[0]
                     read_seq, qual = cols[9], cols[10]
-                    num_reads += 1
                     total_read_len += len(read_seq)
                     flag, pos = int(flag), int(pos)
                     pos -= (base_locus + 1)
@@ -1411,6 +1410,9 @@ def HLA_typing(ex_path,
                     if NH > 1:
                         continue
 
+                    # Count the number of reads aligned uniquely with some constraints
+                    num_reads += 1
+                    
                     if Zs:
                         Zs = Zs.split(',')
 
@@ -1487,7 +1489,7 @@ def HLA_typing(ex_path,
                                                          Vars[gene],
                                                          Var_list[gene],
                                                          cmp_list[cmp_list_i:],
-                                                         orig_read_id.find("313|R") == 0)
+                                                         orig_read_id.find("#377|L") == 0)
                             cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
                                     
                         elif cigar_op == 'I':
@@ -1902,11 +1904,7 @@ def HLA_typing(ex_path,
                                         print >> sys.stderr, "*** ==", node_var_id, node_var
                                     var_j += 1
                     print >> sys.stderr
-                    print >> sys.stderr
-                
-                # DK - debugging purposes
-                sys.exit(1)
-
+                    print >> sys.stderr                                
             else:
                 assert index_type == "linear"
                 def add_alleles(alleles):
@@ -2073,6 +2071,9 @@ def HLA_typing(ex_path,
                 if prob_i >= 19:
                     break
             print >> sys.stderr
+
+            # DK - debugging purposes
+            sys.exit(1)
 
             # DK - for debugging purposes
             if False and (len(test_HLA_names) == 2 or not simulation):
