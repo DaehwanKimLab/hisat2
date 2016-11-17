@@ -1053,8 +1053,10 @@ def get_mpileup(mpileup_cmd):
                 i += num
                 continue
 
-            if c in "ACGTNacgtn":
+            if c in "ACGTNacgtn*":
                 num_nt += 1
+                if c == '*':
+                    c = 'D'
                 c = c.upper()
                 if c not in nt_dic:
                     nt_dic[c] = 1
@@ -1065,6 +1067,8 @@ def get_mpileup(mpileup_cmd):
         nt_set = []
         if num_nt >= 20:
             for nt, count in nt_dic.items():
+                if nt not in "ACGT":
+                    continue
                 if count >= num_nt / 3.5:
                     nt_set.append(nt)
 
@@ -1401,9 +1405,6 @@ def HLA_typing(ex_path,
                     if NH > 1:
                         continue
 
-                    # Count the number of reads aligned uniquely with some constraints
-                    num_reads += 1
-                    
                     if Zs:
                         Zs = Zs.split(',')
 
@@ -1419,6 +1420,8 @@ def HLA_typing(ex_path,
                     cigars = cigar_re.findall(cigar_str)
                     cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
                     cmp_list = []
+
+                    likely_misalignment = False
 
                     # Extract variants w.r.t backbone from CIGAR string
                     softclip = [0, 0]
@@ -1502,8 +1505,19 @@ def HLA_typing(ex_path,
                                 Zs_i += 1
                                 if Zs_i < len(Zs):
                                     Zs_pos += int(Zs[Zs_i][0])
-
                             cmp_list.append(["deletion", right_pos, length, _var_id])
+
+                            # Check if this deletion is artificial alignment
+                            assert right_pos < mpileup
+                            del_count, nt_count = 0, 0
+                            for nt, count in mpileup[right_pos][1].items():
+                                if nt == 'D':
+                                    del_count += count
+                                else:
+                                    nt_count += count
+                            if del_count * 12 < nt_count:
+                                likely_misalignment = True
+                            
                         elif cigar_op == 'S':
                             if i == 0:
                                 softclip[0] = length
@@ -1541,6 +1555,12 @@ def HLA_typing(ex_path,
                     if right_pos > len(ref_seq):
                         continue
 
+                    if likely_misalignment:
+                        continue
+
+                    # Count the number of reads aligned uniquely with some constraints
+                    num_reads += 1
+                    
                     def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, include_alleles = set()):
                         max_count = max(HLA_count_per_read.values())
                         cur_cmpt = set()
@@ -1799,6 +1819,8 @@ def HLA_typing(ex_path,
                 if num_reads <= 0:
                     continue
 
+                print >> sys.stderr, "\t\t\tNumber of reads aligned: %d" % num_reads
+
                 if prev_read_id != None:
                     add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                     add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
@@ -1863,7 +1885,7 @@ def HLA_typing(ex_path,
                     node.print_info(); print >> sys.stderr
                     if node.id in asm_graph.to_node:
                         for id2, at in asm_graph.to_node[node.id]:
-                            print >> sys.stderr, "\tat ==>", id2
+                            print >> sys.stderr, "\tat %d ==> %s" % (at, id2)
 
                     if simulation:
                         alleles, cmp_vars, max_common = "", [], -1
