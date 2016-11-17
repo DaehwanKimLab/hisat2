@@ -1405,6 +1405,10 @@ def HLA_typing(ex_path,
                     if NH > 1:
                         continue
 
+                    # DK - debugging purposes
+                    #if NM > 0 and int(read_id) != 11 and int(read_id) != 12:
+                    #    continue
+
                     if Zs:
                         Zs = Zs.split(',')
 
@@ -1859,7 +1863,7 @@ def HLA_typing(ex_path,
                 begin_y += 200
 
                 # DK - debugging purposes
-                # """
+                """
 
                 asm_graph.assemble_with_alleles(allele_nodes)
 
@@ -1869,7 +1873,7 @@ def HLA_typing(ex_path,
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
                 begin_y += 200
 
-                # """
+                """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()

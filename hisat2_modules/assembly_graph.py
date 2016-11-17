@@ -453,15 +453,37 @@ class Graph:
 
     # Remove nodes with relatively low coverage
     def remove_low_cov_nodes(self):
+        delete_ids = set()
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
             if a[1] != b[1]:
                 return a[1] - b[1]
             return a[2] - b[2]
         nodes = sorted(nodes, cmp=node_cmp)
-        for id, _, _ in nodes:
-            None
-        
+        for n in range(len(nodes)):
+            id, left, right = nodes[n]
+            node = self.nodes[id]
+            i = n - 1
+            while i >= 0:
+                id2, left2, right2 = nodes[i]
+                if right2 < left:
+                    break
+                node2 = self.nodes[id2]
+                left_, right_ = max(left, left2), min(right, right2)
+                overlap = right_ - left_
+                if (right - left) * 0.8 >= overlap and \
+                   node.get_avg_cov() < 3.0 and \
+                   node.get_avg_cov() * 3 < node2.get_avg_cov():
+                    delete_ids.add(id)
+                if (right2 - left2) * 0.8 >= overlap and \
+                   node2.get_avg_cov() < 3.0 and \
+                   node2.get_avg_cov() * 3.0 < node.get_avg_cov():
+                    delete_ids.add(id2)
+                i -= 1
+
+        for delete_id in delete_ids:
+            del self.nodes[delete_id]
+            
         
     # Display graph information
     def print_info(self): 
