@@ -1296,7 +1296,7 @@ def HLA_typing(ex_path,
 
 
             # Assembly graph
-            asm_graph = assembly_graph.Graph(ref_seq, Vars[gene])
+            asm_graph = assembly_graph.Graph(ref_seq, Vars[gene], ref_exons)
 
             # List of nodes that represent alleles
             allele_vars = {}
@@ -1873,6 +1873,35 @@ def HLA_typing(ex_path,
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
+
+                def compare_alleles(vars1, vars2):
+                    skip = True
+                    var_i, var_j = 0, 0
+                    while var_i < len(vars1) and var_j < len(vars2):
+                        cmp_var_id, node_var_id = vars1[var_i], vars2[var_j]
+                        if cmp_var_id == node_var_id:
+                            skip = False
+                            var = Vars[gene][cmp_var_id]
+                            print >> sys.stderr, cmp_var_id, var, "\t\t\t", mpileup[var[1]]
+                            var_i += 1; var_j += 1
+                            continue
+                        cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
+                        if cmp_var[1] <= node_var[1]:
+                            if not skip:
+                                if (var_i > 0 and var_i + 1 < len(vars1)) or cmp_var[0] != "deletion":
+                                    print >> sys.stderr, "***", cmp_var_id, cmp_var, "==", "\t\t\t", mpileup[cmp_var[1]]
+                            var_i += 1
+                        else:
+                            if not skip:
+                                print >> sys.stderr, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
+                            var_j += 1
+                    
+                if simulation and len(test_HLA_names) == 2:
+                    allele_name1, allele_name2 = test_HLA_names
+                    print >> sys.stderr, allele_name1, "vs.", allele_name2
+                    vars1 = allele_nodes[allele_name1].get_vars(Vars[gene])
+                    vars2 = allele_nodes[allele_name2].get_vars(Vars[gene])
+                    compare_alleles(vars1, vars2)
                 
                 tmp_nodes = asm_graph.nodes
                 print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
@@ -1900,25 +1929,8 @@ def HLA_typing(ex_path,
 
                         for allele_name, cmp_vars in alleles:
                             print >> sys.stderr, "vs.", allele_name
-                            skip = True
-                            var_i, var_j = 0, 0
-                            while var_i < len(cmp_vars) and var_j < len(node_vars):
-                                cmp_var_id, node_var_id = cmp_vars[var_i], node_vars[var_j]
-                                if cmp_var_id == node_var_id:
-                                    skip = False
-                                    print >> sys.stderr, cmp_var_id, Vars[gene][cmp_var_id]
-                                    var_i += 1; var_j += 1
-                                    continue
-                                cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
-                                if cmp_var[1] <= node_var[1]:
-                                    if not skip:
-                                        if (var_i > 0 and var_i + 1 < len(cmp_vars)) or cmp_var[0] != "deletion":
-                                            print >> sys.stderr, "***", cmp_var_id, cmp_var, "=="
-                                    var_i += 1
-                                else:
-                                    if not skip:
-                                        print >> sys.stderr, "*** ==", node_var_id, node_var
-                                    var_j += 1
+                            compare_alleles(cmp_vars, node_vars)
+                            
                     print >> sys.stderr
                     print >> sys.stderr                                
             else:
@@ -2379,6 +2391,8 @@ def test_HLA_genotyping(base_fname,
             extract_cmd += ["--no-partial"]
         extract_cmd += ["--inter-gap", "30",
                         "--intra-gap", "50"]
+        # DK - debugging purposes
+        # extract_cmd += ["--ext-seq", "300"]
         if verbose >= 1:
             print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))

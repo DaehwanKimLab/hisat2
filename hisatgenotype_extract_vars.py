@@ -52,7 +52,7 @@ def extract_vars(base_fname,
                  partial,
                  inter_gap,
                  intra_gap,
-                 DRB1_REF,
+                 ext_seq_len,
                  exclude_allele_list,
                  leftshift,
                  verbose):
@@ -72,6 +72,7 @@ def extract_vars(base_fname,
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
     hla_ref_file = open(base_fullpath_name + ".ref", 'w')
+    left_ext_seq, right_ext_seq = "", ""
     if base_fname in ["hla"]:
         HLA_genes, HLA_gene_strand = {}, {}
         for gene in hla_list:
@@ -86,12 +87,17 @@ def extract_vars(base_fname,
                                           stderr=open("/dev/null", 'w'))
             print aligner_cmd
             allele_id, strand = "", ''
+            chr, left, right = "", -1, -1
             for line in align_proc.stdout:
                 if line.startswith('@'):
                     continue
                 line = line.strip()
                 cols = line.split()
-                t_allele_id, flag = cols[:2]
+                t_allele_id, flag, chr, left, _, cigar_str = cols[:6]
+                assert cigar_str[-1] == 'M'
+                left = int(left)
+                right = left + int(cigar_str[:-1])
+                
                 # Avoid selection of excluded allele as backbone
                 if t_allele_id in exclude_allele_list:
                     continue
@@ -122,6 +128,29 @@ def extract_vars(base_fname,
             HLA_gene_strand[gene] = strand
             print "HLA-%s's backbone allele is %s on '%s' strand" % (gene, allele_name, strand)
 
+            assert chr != "" and left >= 0 and right > left
+            if ext_seq_len > 0:
+                left1, left2 = max(1, left - ext_seq_len), max(1, left - 1)
+                if left2 > 0:
+                    extract_seq_cmd = ["samtools", "faidx", "genome.fa", "%s:%d-%d" % (chr, left1, left2)]
+                    extract_seq_proc = subprocess.Popen(extract_seq_cmd,
+                                                        stdout=subprocess.PIPE,
+                                                        stderr=open("/dev/null", 'w'))
+                    for line in extract_seq_proc.stdout:
+                        if line.startswith('>'):
+                            continue
+                        line = line.strip()
+                        left_ext_seq += line
+                extract_seq_cmd = ["samtools", "faidx", "genome.fa", "%s:%d-%d" % (chr, right, right + ext_seq_len - 1)]
+                extract_seq_proc = subprocess.Popen(extract_seq_cmd,
+                                                    stdout=subprocess.PIPE,
+                                                    stderr=open("/dev/null", 'w'))
+                for line in extract_seq_proc.stdout:
+                    if line.startswith('>'):
+                        continue
+                    line = line.strip()
+                    right_ext_seq += line
+
         # Extract exon information from hla.data
         HLA_gene_exons = {}
         skip = False
@@ -143,7 +172,7 @@ def extract_vars(base_fname,
                 exon_range = line.split()[2].split("..")
                 if not gene in HLA_gene_exons:
                     HLA_gene_exons[gene] = []
-                HLA_gene_exons[gene].append([int(exon_range[0]) - 1, int(exon_range[1]) - 1])
+                HLA_gene_exons[gene].append([int(exon_range[0]) - 1 + len(left_ext_seq), int(exon_range[1]) - 1 + len(left_ext_seq)])
     else:
         assert base_fname == "cyp"
         
@@ -168,7 +197,7 @@ def extract_vars(base_fname,
 
         HLA_gene_exons = {}
         assert reference_type == "gene"
-        
+
     # Write the backbone sequences into a fasta file
     if reference_type == "gene":
         backbone_file = open(base_fullpath_name + "_backbone.fa", 'w')        
@@ -184,7 +213,7 @@ def extract_vars(base_fname,
     HLA_full_alleles = {}
     for HLA_gene, HLA_ref_gene in HLA_genes.items():
         strand = HLA_gene_strand[HLA_gene]        
-        def read_MSF_file(fname):
+        def read_MSF_file(fname, left_ext_seq = "", right_ext_seq = ""):
             HLA_names = {} # HLA allele names to numeric IDs
             HLA_seqs = []  # HLA multiple alignment sequences
             for line in open(fname):
@@ -213,7 +242,7 @@ def extract_vars(base_fname,
                     HLA_names[name] = len(HLA_names)
                 else:
                     if len(HLA_seqs) == 0:
-                        HLA_seqs = ["" for i in range(len(HLA_names))]
+                        HLA_seqs = [left_ext_seq for i in range(len(HLA_names))]
                     try:
                         cols = line.split()
                         name = cols[0]
@@ -228,7 +257,7 @@ def extract_vars(base_fname,
                     id = HLA_names[name]
                     if id >= len(HLA_seqs):
                         assert id == len(HLA_seqs)
-                        HLA_seqs.append("")
+                        HLA_seqs.append(left_ext_seq)
                         
                     HLA_seqs[id] += ''.join(fives)
 
@@ -241,8 +270,12 @@ def extract_vars(base_fname,
                         if sub_name not in HLA_full_alleles:
                             HLA_full_alleles[sub_name] = [name]
                         else:
-                            HLA_full_alleles[sub_name].append(name)                        
-                    
+                            HLA_full_alleles[sub_name].append(name)
+
+            if len(right_ext_seq) > 0:
+                for i_ in range(len(HLA_seqs)):
+                    HLA_seqs[i_] += right_ext_seq
+
             return HLA_names, HLA_seqs
 
         if base_fname == "hla":
@@ -254,7 +287,7 @@ def extract_vars(base_fname,
             print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
             continue
         
-        HLA_names, HLA_seqs = read_MSF_file(HLA_MSA_fname)
+        HLA_names, HLA_seqs = read_MSF_file(HLA_MSA_fname, left_ext_seq, right_ext_seq)
 
         # Identify a consensus sequence
         assert len(HLA_seqs) > 0
@@ -327,8 +360,7 @@ def extract_vars(base_fname,
             return consensus_seq
 
         seq_len = find_seq_len(HLA_seqs)        
-        if reference_type == "gene" and \
-                (not DRB1_REF or HLA_gene != "DRB1"):
+        if reference_type == "gene":
             backbone_name = "%s*BACKBONE" % HLA_gene
             backbone_seq = create_consensus_seq(HLA_seqs, seq_len, partial)
             # Allele sequences can shrink, so readjust the sequence length
@@ -383,7 +415,7 @@ def extract_vars(base_fname,
                 exon_len += (right - left + 1)
                 # Make sure two MSF files (e.g. A_gen.msf and A_nuc.msf) share the same MSF lengths in the exonic sequences
                 ref_exon_len = ref_exons[-1][1] - ref_exons[-1][0] + 1
-                ref_partial_exon_len =  ref_partial_exons[-1][1] - ref_partial_exons[-1][0] + 1
+                ref_partial_exon_len = ref_partial_exons[-1][1] - ref_partial_exons[-1][0] + 1
                 assert ref_exon_len == ref_partial_exon_len
                 
             for HLA_name, seq_id in HLA_partial_names.items():
@@ -958,10 +990,11 @@ if __name__ == '__main__':
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes")
-    parser.add_argument("--DRB1-REF",
-                        dest="DRB1_REF",
-                        action="store_true",
-                        help="Some DRB1 alleles seem to include vector sequences, so use this option to avoid including them")
+    parser.add_argument("--ext-seq",
+                        dest="ext_seq_len",
+                        type=int,
+                        default=0,
+                        help="Length of extra sequences flanking backbone sequences (Default: 0)")
     parser.add_argument("--exclude-allele-list",
                         dest="exclude_allele_list",
                         type=str,
@@ -1006,7 +1039,7 @@ if __name__ == '__main__':
                  args.partial,
                  args.inter_gap,
                  args.intra_gap,
-                 args.DRB1_REF,
+                 args.ext_seq_len,
                  args.exclude_allele_list,
                  args.leftshift,
                  args.verbose)

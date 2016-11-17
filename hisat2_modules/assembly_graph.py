@@ -273,10 +273,11 @@ class Node:
 
                 
 class Graph:
-    def __init__(self, backbone, vars):
+    def __init__(self, backbone, vars, exons):
         # self.head = Node()
         self.backbone = backbone # backbone sequence
         self.vars = vars
+        self.exons = exons
 
         self.nodes = {}
         self.edges = {}
@@ -870,6 +871,33 @@ class Graph:
         htmlDraw = self.htmlDraw
         # htmlDraw.draw_smile()
         js_file = htmlDraw.js_file
+
+        # Draw exons
+        y = get_dspace(0, nodes[-1][2], 14)
+        for e in range(len(self.exons)):
+            left, right = self.exons[e]
+
+            # Draw node
+            print >> js_file, r'ctx.beginPath();'
+            print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
+                (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
+            print >> js_file, r'ctx.fillStyle = "black";'
+            print >> js_file, r'ctx.fill();'
+            print >> js_file, r'ctx.lineWidth = 2;'
+            print >> js_file, r'ctx.strokeStyle = "black";'
+            print >> js_file, r'ctx.stroke();'
+
+            # Draw label
+            print >> js_file, r'ctx.fillStyle = "blue";'
+            print >> js_file, r'ctx.fillText("Exon %d", %d, %d);' % \
+                (e+1, get_x(left + 2), get_y(y + 5))
+
+            if e > 0:
+                prev_right = self.exons[e-1][1]
+                print >> js_file, r'ctx.beginPath();'
+                print >> js_file, r'ctx.moveTo(%d, %d);' % (get_x(left), get_y(y + 5))
+                print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
+                print >> js_file, r'ctx.stroke();'
 
         # Draw nodes
         node_to_y = {}
