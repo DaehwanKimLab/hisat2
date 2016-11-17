@@ -46,7 +46,7 @@ def get_ungapped_seq_var(seq, var):
 
 class Node:
     # Initialize
-    def __init__(self, id, left, seq, var):
+    def __init__(self, id, left, seq, var, ref_seq, ref_vars):
         self.next = [] # list of next nodes
 
         id = id.split('_')[0]
@@ -73,6 +73,12 @@ class Node:
         self.read_ids = set([id])
         self.mate_ids = set([id.split('|')[0]])
 
+        self.calculate_avg_cov()
+
+        # debugging information
+        self.ref_seq = ref_seq
+        self.ref_vars = ref_vars
+
         
     # Check how compatible allele is in regard to read or pair
     def compatible_with_rnode(self, rnode):
@@ -89,43 +95,58 @@ class Node:
 
 
     # Check how nodes overlap with each other without considering deletions
-    def overlap_with(self, other, vars = {}):
+    def overlap_with(self, other, vars, debug = False):
         assert self.left <= other.left
         if self.right < other.left:
             return -1, -1
 
         seq, var = get_ungapped_seq_var(self.seq, self.var)
         other_seq, other_var = get_ungapped_seq_var(other.seq, other.var)
+        add_mm = len(self.mate_ids & other.mate_ids)
         for i in range(len(seq)):
-            max_mm = 0.012 * (len(seq) - i)
+            max_mm = 0.012 * (len(seq) - i) # 1 mismatch per 83 bases
+            # DK - working ..
+            # max_mm += add_mm # Allow more mismatches if mate pairs support the overlapping
             tmp_mm = 0.0
             for j in range(len(other_seq)):
                 if i + j >= len(seq):
                     break
-                other_nt_dic = other.seq[j]
-                mismatch = 1.0 - match_score(seq[i+j], other_seq[j])
+                nt_dic, other_nt_dic = seq[i+j], other_seq[j]
+                nt, other_nt = get_major_nt(nt_dic), get_major_nt(other_nt_dic)
+                mismatch = 0
+                if nt != other_nt:
+                    mismatch = 1.0 - match_score(seq[i+j], other_seq[j])
+                    # Higher penalty for mismatches in variants
+                    if len(var[i+j]) > 0 or len(other_var[j]) > 0:
+                        def get_var_id(nt, var_ids, vars):
+                            for _id in var_ids:
+                                if _id == "unknown":
+                                    continue
+                                _type, _pos, _data = vars[_id]
+                                if _type != "single":
+                                    continue
+                                if _data == nt:
+                                    return _id
+                            return ""
+                        nt_var, other_nt_var = get_var_id(nt, var[i+j], vars), get_var_id(other_nt, other_var[j], vars)
+                        if nt_var != other_nt_var:
+                            mismatch = 5.0
+                            adjust = min(1.0, nt_dic[nt] / self.get_avg_cov()) * \
+                                     min(1.0, other_nt_dic[other_nt] / other.get_avg_cov())
+                            mismatch *= adjust
+                            if mismatch < 1.0:
+                                mismatch = 1.0
 
-                # Higher penalty for mismatches in variants
-                nt, other_nt = get_major_nt(seq[i+j]), get_major_nt(other_seq[j])
-                if nt != other_nt and (len(var[i+j]) > 0 or len(other_var[j]) > 0):
-                    def get_var_id(nt, var_ids, vars):
-                        for _id in var_ids:
-                            if _id == "unknown":
-                                continue
-                            _type, _pos, _data = vars[_id]
-                            if _type != "single":
-                                continue
-                            if _data == nt:
-                                return _id
-                        return ""
-                    nt_var, other_nt_var = get_var_id(nt, var[i+j], vars), get_var_id(other_nt, other_var[j], vars)
-                    if nt_var != other_nt_var:
-                        mismatch = 5.0
+                if debug and i == 0:
+                    print "\t", j, nt_dic, other_nt_dic, mismatch
                     
                 assert mismatch >= 0.0
                 tmp_mm += mismatch
                 if tmp_mm > max_mm:
                     break
+
+            if debug and i < 200:
+                print "at %d (%d) with overlap of %d and mismatch of %.2f" % (i, self.left + i, j, tmp_mm)
 
             if tmp_mm <= max_mm:
                 return i, len(seq) - i
@@ -169,6 +190,9 @@ class Node:
         assert len(self.seq) == len(self.var)
         self.right = self.left + len(self.seq) - 1
 
+        # Update coverage
+        self.calculate_avg_cov()
+
 
     # Return the length of the ungapped sequence
     def ungapped_length(self):
@@ -192,26 +216,60 @@ class Node:
                     vars.append(var)                    
         return vars
 
+
+    # Get average coverage
+    def get_avg_cov(self):
+        return self.avg
+
+    
+    # Calculate average coverage
+    def calculate_avg_cov(self):
+        self.avg = 0.0
+        for nt_dic in self.seq:
+            self.avg += sum(nt_dic.values())
+        self.avg /= len(self.seq)
+        return self.avg
+
         
     # Display node information
-    def print_info(self):
-        seq, avg = "", 0
-        for nt_dic in self.seq:
-            seq += get_major_nt(nt_dic)
-            avg += sum(nt_dic.values())
-        print >> sys.stderr, "Node ID:", self.id
-        print >> sys.stderr, "Pos: [%d, %d], Avg. coverage: %.1f" % (self.left, self.right, float(avg) / len(self.seq))
-        print >> sys.stderr, "\t", seq
+    def print_info(self, output=sys.stderr):
+        seq = ""
+        for i in range(len(self.seq)):
+            if (self.left + i) % 100 == 0:
+                seq += ("|%d|" % (self.left + i))
+            elif (self.left + i) % 20 == 0:
+                seq += '|'
+            nt_dic = self.seq[i]
+            nt = get_major_nt(nt_dic)
+            if nt != self.ref_seq[self.left + i]:
+                var_id = "unknown"
+                for tmp_id in self.var[i]:
+                    if tmp_id == "unknown":
+                        continue
+                    type, pos, data = self.ref_vars[tmp_id]
+                    if (type == "single" and data == nt) or \
+                       (type == "deletion" and nt == 'D'):
+                        var_id = tmp_id                    
+                if var_id == "unknown":
+                    seq += "\033[91m" # red
+                else:
+                    seq += "\033[94m" # blue
+            seq += nt
+            if nt != self.ref_seq[self.left + i]:
+                seq += "\033[00m"
+        print >> output, "Node ID:", self.id
+        print >> output, "Pos: [%d, %d], Avg. coverage: %.1f" % (self.left, self.right, self.get_avg_cov())
+        print >> output, "\t", seq
         prev_var = ""
         for var_i in range(len(self.var)):
             var = self.var[var_i]
             var = '-'.join(list(var))
             if var != "" and var != prev_var:
-                print >> sys.stderr, "\t%d: %s" % (var_i, var), self.seq[var_i],
+                print >> output, "\t%d: %s" % (var_i, var), self.seq[var_i],
             prev_var = var
-        print >> sys.stderr
-        print >> sys.stderr, "mates:", sorted(self.mate_ids, key=int)
-        print >> sys.stderr, "reads:", sorted(self.read_ids)
+        print >> output
+        print >> output, "mates:", sorted(self.mate_ids, key=int)
+        print >> output, "reads:", sorted(self.read_ids)
 
                 
 class Graph:
@@ -245,7 +303,7 @@ class Graph:
 
 
     # Generate edges based on the overlapping information between nodes
-    def generate_raw_edges(self, overlap_pct = 0.8):
+    def generate_raw_edges(self, overlap_pct = 0.1):
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
@@ -262,7 +320,10 @@ class Graph:
                     break
                 node2 = self.nodes[id2]
                 at, overlap = node1.overlap_with(node2, self.vars)
-                if overlap < node1.ungapped_length() * overlap_pct:
+                if overlap < node1.ungapped_length() * overlap_pct and \
+                   overlap < node2.ungapped_length() * overlap_pct:
+                    continue
+                if at < 0 or overlap <= 0:
                     continue
                 if id1 not in self.to_node:
                     self.to_node[id1] = [[id2, at]]
@@ -280,20 +341,17 @@ class Graph:
         contained_by = {}
         for id1, to_node_ids in self.to_node.items():
             for id2, at in to_node_ids:
+                length1, length2 = self.nodes[id1].ungapped_length(), self.nodes[id2].ungapped_length()
                 if at == 0:
-                    if self.nodes[id1].ungapped_length() >= self.nodes[id2].ungapped_length():
+                    if length1 >= length2:
                         contained_by[id2] = id1
                     else:
                         contained_by[id1] = id2
+                else:
+                    assert at > 0
+                    if length1 >= length2 + at:
+                        contained_by[id2] = id1
 
-        # DK - debugging purposes
-        debug_id = "79|R-96|L"
-        if debug_id in contained_by:
-            print >> sys.stderr, debug_id, contained_by[debug_id]
-            self.nodes[debug_id].print_info(); print >> sys.stderr
-            self.nodes[contained_by[debug_id]].print_info(); print >> sys.stderr
-            # sys.exit(1)
-                        
         contain = {}
         for id, up_id in contained_by.items():
             while up_id in contained_by:
@@ -509,7 +567,32 @@ class Graph:
                 if id not in to_node:
                     continue                
                 to_ids = [i[0] for i in to_node[id]]
+
+                def eliminate_low_cov(ids):
+                    if len(ids) <= 2:
+                        return ids
+                    
+                    length, cov = 0, 0.0
+                    for id in ids:
+                        node = self.nodes[id]
+                        length += node.ungapped_length()
+                        cov += node.get_avg_cov() * node.ungapped_length()
+                    avg_cov = cov / float(length)
+
+                    delete_ids = set()
+                    for id in ids:
+                        node = self.nodes[id]
+                        if node.get_avg_cov() * 5 < avg_cov:
+                            delete_ids.add(id)
+
+                    if len(delete_ids) > 0:
+                        ids = list(set(ids) - set(delete_ids))
+                        
+                    return ids
+
                 # id has two successors
+                # DK - debugging purposes
+                to_ids = eliminate_low_cov(to_ids)
                 if len(to_ids) > 2:
                     continue
                 matches = []
@@ -522,6 +605,8 @@ class Graph:
                             from_ids.append(from_id)
                 # The two successors have one or two predecessors in total
                 assert len(from_ids) > 0
+                # DK - debugging purposes
+                from_ids = eliminate_low_cov(from_ids)
                 if len(from_ids) > 2:
                     continue
 
@@ -530,7 +615,7 @@ class Graph:
 
                 if len(from_ids) == 1:
                     for to_id in to_ids:
-                        matches.append([id, to_id, 0])
+                        matches.append([from_ids[0], to_id, 0])
                 else:
                     added = set()
                     for to_id in to_ids:
@@ -599,10 +684,21 @@ class Graph:
             self.nodes = new_nodes
             self.generate_edges(0.02)
             self.reduce(0.02)
+         
 
             # DK - debugging purposes
             # if iter >= 2:
             #    break
+
+        # DK - debugging purposes
+        if False:
+            id1, id2 = "462|L-469|R", "462|L-483|L"
+            node1, node2 = self.nodes[id1], self.nodes[id2]
+            node1.print_info(sys.stdout); print
+            node2.print_info(sys.stdout); print
+            at, overlap = node1.overlap_with(node2, self.vars, True)
+            print "at %d with overlap of %d" % (at, overlap)
+            sys.exit(1)
 
 
         # DK - debugging purposes

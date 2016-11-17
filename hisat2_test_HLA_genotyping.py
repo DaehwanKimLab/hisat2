@@ -1084,9 +1084,9 @@ def error_correct(ref_seq,
                   Var_list,
                   cmp_list,
                   debug = False):
-    # DK - debugging purposes
     if debug:
         print cmp_list
+        print read_seq
 
     i = 0
     while i < len(cmp_list):
@@ -1125,19 +1125,12 @@ def error_correct(ref_seq,
             assert len(middle_cmp_list) > 0
             cmp_list = cmp_list[:i] + middle_cmp_list + cmp_list[i+1:]
             i += (len(middle_cmp_list) - 1)
-
-            # DK - debugging purposes
-            if len(middle_cmp_list) > 1:
-                print >> sys.stderr, "DK:", cmp_list[i]
-                print >> sys.stderr, "DK:", middle_cmp_list
-                sys.exit(1)
         else:
             assert type == "mismatch"
             read_bp, ref_bp = read_seq[read_pos], ref_seq[left]
             assert left < len(mpileup)
             nt_set = mpileup[left][0]
 
-            # DK - debugging purposes
             if debug:
                 print left, read_bp, ref_bp, mpileup[left]
 
@@ -1162,13 +1155,11 @@ def error_correct(ref_seq,
                                 break                                                        
                         var_idx += 1
 
-                # DK - debugging purposes
                 if debug:
                     print left, read_bp, ref_bp, mpileup[left]
                     print cmp_list[i]
 
         read_pos += length
-
         i += 1
 
     # Combine matches
@@ -1183,11 +1174,11 @@ def error_correct(ref_seq,
                 continue
         i += 1
 
-    # DK - debugging purposes
     if debug:
         print cmp_list
+        print read_seq
                             
-    return cmp_list
+    return cmp_list, read_seq
 
 
 """
@@ -1333,7 +1324,7 @@ def HLA_typing(ex_path,
                         var[var_pos:var_pos + del_len] = [var_id] * del_len
 
                 seq = ''.join(seq)
-                allele_nodes[allele_id] = assembly_graph.Node(allele_id, 0, seq, var)
+                allele_nodes[allele_id] = assembly_graph.Node(allele_id, 0, seq, var, ref_seq, Vars[gene])
 
             # Extract variants that are within exons
             exon_vars = get_exonic_vars(Vars[gene], ref_exons)
@@ -1482,14 +1473,14 @@ def HLA_typing(ex_path,
 
                             # Correction for sequencing errors and update for cmp_list
                             assert cmp_list_i < len(cmp_list)
-                            new_cmp_list = error_correct(ref_seq,
-                                                         read_seq,
-                                                         read_pos,
-                                                         mpileup,
-                                                         Vars[gene],
-                                                         Var_list[gene],
-                                                         cmp_list[cmp_list_i:],
-                                                         orig_read_id.find("#377|L") == 0)
+                            new_cmp_list, read_seq = error_correct(ref_seq,
+                                                                   read_seq,
+                                                                   read_pos,
+                                                                   mpileup,
+                                                                   Vars[gene],
+                                                                   Var_list[gene],
+                                                                   cmp_list[cmp_list_i:],
+                                                                   orig_read_id.find("#257|L") == 0)
                             cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
                                     
                         elif cigar_op == 'I':
@@ -1791,7 +1782,7 @@ def HLA_typing(ex_path,
                         assert False
 
                     # Node
-                    read_nodes.append([orig_read_id, assembly_graph.Node(orig_read_id, read_node_pos, read_node_seq, read_node_var)])
+                    read_nodes.append([orig_read_id, assembly_graph.Node(orig_read_id, read_node_pos, read_node_seq, read_node_var, ref_seq, Vars[gene])])
 
                     for positive_var in positive_vars:
                         if positive_var in exon_vars:
@@ -1836,9 +1827,6 @@ def HLA_typing(ex_path,
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
                 begin_y += 200
 
-                # DK - debugging purposes
-                # """
-
                 # Further reduce graph with mate pairs
                 asm_graph.assemble_with_mates()
 
@@ -1848,6 +1836,8 @@ def HLA_typing(ex_path,
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
                 begin_y += 200
 
+                # DK - debugging purposes
+                # """
                 
                 asm_graph.assemble_with_alleles(allele_nodes)
 
@@ -1871,6 +1861,10 @@ def HLA_typing(ex_path,
                         break
                     node_vars = node.get_vars(Vars[gene])
                     node.print_info(); print >> sys.stderr
+                    if node.id in asm_graph.to_node:
+                        for id2, at in asm_graph.to_node[node.id]:
+                            print >> sys.stderr, "\tat ==>", id2
+
                     if simulation:
                         alleles, cmp_vars, max_common = "", [], -1
                         for test_HLA_name in test_HLA_names:
