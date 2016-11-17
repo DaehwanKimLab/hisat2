@@ -448,6 +448,18 @@ class Graph:
         self.generate_raw_edges(overlap_pct)
         self.merge_inside_nodes()
         self.remove_redundant_edges()
+
+
+    # Remove nodes with relatively low coverage
+    def remove_low_cov_nodes(self):
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        def node_cmp(a, b):
+            if a[1] != b[1]:
+                return a[1] - b[1]
+            return a[2] - b[2]
+        nodes = sorted(nodes, cmp=node_cmp)
+        for id, _, _ in nodes:
+            None
         
         
     # Display graph information
@@ -682,6 +694,7 @@ class Graph:
                 new_nodes[id] = node
 
             self.nodes = new_nodes
+            self.remove_low_cov_nodes()
             self.generate_edges(0.02)
             self.reduce(0.02)
          

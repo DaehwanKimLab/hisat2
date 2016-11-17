@@ -1515,7 +1515,7 @@ def HLA_typing(ex_path,
                                     del_count += count
                                 else:
                                     nt_count += count
-                            if del_count * 12 < nt_count:
+                            if del_count * 6 < nt_count:
                                 likely_misalignment = True
                             
                         elif cigar_op == 'S':
@@ -1860,7 +1860,7 @@ def HLA_typing(ex_path,
 
                 # DK - debugging purposes
                 # """
-                
+
                 asm_graph.assemble_with_alleles(allele_nodes)
 
                 # Draw assembly graph
