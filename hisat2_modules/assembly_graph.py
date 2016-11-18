@@ -808,11 +808,6 @@ class Graph:
                 (get_x(pos), self.height)
             print >> js_file, r'ctx.stroke();'
 
-            # Draw label
-            print >> js_file, r'ctx.fillStyle = "blue";'
-            print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
-                (pos, get_x(pos+2), get_y(200))
-
         print >> js_file, r'ctx.setLineDash([]);'
 
 
@@ -920,6 +915,14 @@ class Graph:
                 print >> js_file, r'ctx.moveTo(%d, %d);' % (get_x(left), get_y(y + 5))
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
                 print >> js_file, r'ctx.stroke();'
+
+        # Draw location at every 100bp
+        y = get_dspace(0, nodes[-1][2], 14)
+        for pos in range(100, nodes[-1][2], 100):
+            # Draw label
+            print >> js_file, r'ctx.fillStyle = "blue";'
+            print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
+                (pos, get_x(pos+2), get_y(y + 2))
 
         # Draw nodes
         node_to_y = {}

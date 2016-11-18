@@ -1406,8 +1406,8 @@ def HLA_typing(ex_path,
                         continue
 
                     # DK - debugging purposes
-                    #if NM > 0 and int(read_id) != 11 and int(read_id) != 12:
-                    #    continue
+                    if NM > 0 and int(read_id) != 11 and int(read_id) != 12:
+                        continue
 
                     if Zs:
                         Zs = Zs.split(',')
