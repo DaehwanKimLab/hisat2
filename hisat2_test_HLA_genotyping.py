@@ -34,6 +34,8 @@ def simulate_reads(HLAs,
                    Vars,
                    Links,
                    simulate_interval = 1,
+                   read_len = 100,
+                   frag_len = 250,
                    perbase_errorrate = 0.0,
                    perbase_snprate = 0.0):
     HLA_reads_1, HLA_reads_2 = [], []
@@ -68,10 +70,10 @@ def simulate_reads(HLAs,
                                 ex_seq,
                                 ex_desc,
                                 simulate_interval = 1,
-                                perbase_errorrate = 0.0,
-                                perbase_snprate = 0.0,
+                                read_len = 100,
                                 frag_len = 250,
-                                read_len = 100):
+                                perbase_errorrate = 0.0,
+                                perbase_snprate = 0.0):
             # Introduce sequencing errors
             def introduce_seq_err(read_seq, pos):
                 read_seq = list(read_seq)
@@ -203,6 +205,8 @@ def simulate_reads(HLAs,
                                                            HLA_ex_seq,
                                                            HLA_ex_desc,                                                           
                                                            simulate_interval,
+                                                           read_len,
+                                                           frag_len,
                                                            perbase_errorrate)
             HLA_reads_1 += tmp_reads_1
             HLA_reads_2 += tmp_reads_2
@@ -2300,6 +2304,8 @@ def test_HLA_genotyping(base_fname,
                         alignment_fname,
                         threads,
                         simulate_interval,
+                        read_len,
+                        fragment_len,
                         best_alleles,
                         exclude_allele_list,
                         default_allele_list,
@@ -2648,6 +2654,8 @@ def test_HLA_genotyping(base_fname,
                                            Vars,
                                            Links,
                                            simulate_interval,
+                                           read_len,
+                                           fragment_len,
                                            perbase_errorrate,
                                            perbase_snprate)
 
@@ -2809,6 +2817,16 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Reads simulated at every these base pairs (default: 1)")
+    parser.add_argument("--read-len",
+                        dest="read_len",
+                        type=int,
+                        default=100,
+                        help="Length of simulated reads (default: 100)")
+    parser.add_argument("--fragment-len",
+                        dest="fragment_len",
+                        type=int,
+                        default=250,
+                        help="Length of fragments (default: 250)")
     parser.add_argument("--best-alleles",
                         dest="best_alleles",
                         action='store_true',
@@ -2953,6 +2971,9 @@ if __name__ == '__main__':
         print >> sys.stderr, "Error: --no-partial is not supported!"
         sys.exit(1)
 
+    if args.read_len * 2 > args.fragment_len:
+        print >> sys.stderr, "Warning: fragment might be too short (%d)" % (args.fragment_len)
+
     random.seed(1)
     test_HLA_genotyping(args.base_fname,
                         args.reference_type,
@@ -2963,6 +2984,8 @@ if __name__ == '__main__':
                         args.alignment_fname,
                         args.threads,
                         args.simulate_interval,
+                        args.read_len,
+                        args.fragment_len,
                         args.best_alleles,
                         args.exclude_allele_list,
                         args.default_allele_list,
