@@ -456,9 +456,10 @@ class Graph:
         delete_ids = set()
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
-            if a[1] != b[1]:
+            if a[2] != b[2]:
+                return a[2] - b[2]
+            else:
                 return a[1] - b[1]
-            return a[2] - b[2]
         nodes = sorted(nodes, cmp=node_cmp)
         for n in range(len(nodes)):
             id, left, right = nodes[n]
@@ -471,14 +472,20 @@ class Graph:
                 node2 = self.nodes[id2]
                 left_, right_ = max(left, left2), min(right, right2)
                 overlap = right_ - left_
-                if (right - left) * 0.8 >= overlap and \
-                   node.get_avg_cov() < 3.0 and \
-                   node.get_avg_cov() * 3 < node2.get_avg_cov():
-                    delete_ids.add(id)
-                if (right2 - left2) * 0.8 >= overlap and \
-                   node2.get_avg_cov() < 3.0 and \
-                   node2.get_avg_cov() * 3.0 < node.get_avg_cov():
-                    delete_ids.add(id2)
+                if overlap < 10:
+                    i -= 1
+                    continue
+                if id not in delete_ids and node.get_avg_cov() < 3.0:
+                    overlap_pct = float(overlap) / (right - left)
+                    assert overlap_pct <= 1.0
+                    if node.get_avg_cov() * (1.3 - overlap_pct) * 10 < node2.get_avg_cov():
+                        delete_ids.add(id)
+                        
+                if id2 not in delete_ids and node2.get_avg_cov() < 3.0:
+                    overlap_pct = float(overlap) / (right2 - left2)
+                    assert overlap_pct <= 1.0
+                    if node2.get_avg_cov() * (1.3 - overlap_pct) * 10 < node.get_avg_cov():
+                        delete_ids.add(id2)
                 i -= 1
 
         for delete_id in delete_ids:
