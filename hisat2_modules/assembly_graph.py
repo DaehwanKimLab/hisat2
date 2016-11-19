@@ -596,7 +596,10 @@ class Graph:
             def node_cmp(a, b):
                 return a[1] - b[1]
             sorted_nodes = sorted(sorted_nodes, cmp=node_cmp)
-            
+
+            # Resolve two cases iteratively:
+            #   (1) one node with two "to" nodes
+            #   (2) two nodes with two "to" nodes from them
             matches_list = []
             for id, _, _ in sorted_nodes:
                 if id not in to_node:
@@ -628,7 +631,7 @@ class Graph:
                 # id has two successors
                 # DK - debugging purposes
                 to_ids = eliminate_low_cov(to_ids)
-                if len(to_ids) > 2:
+                if len(to_ids) != 2:
                     continue
                 matches = []
                 from_ids = []
@@ -638,6 +641,7 @@ class Graph:
                     for from_id, _ in from_node[to_id]:
                         if from_id not in from_ids:
                             from_ids.append(from_id)
+                  
                 # The two successors have one or two predecessors in total
                 assert len(from_ids) > 0
                 # DK - debugging purposes
@@ -645,36 +649,40 @@ class Graph:
                 if len(from_ids) > 2:
                     continue
 
-                if len(from_ids) <= 1 and len(to_ids) <= 1:
-                    continue
-
                 if len(from_ids) == 1:
                     for to_id in to_ids:
                         matches.append([from_ids[0], to_id, 0])
                 else:
-                    added = set()
-                    for to_id in to_ids:
-                        max_from_id, max_mate = "", 0
-                        for from_id in from_ids:
+                    assert len(from_ids) == 2 and len(to_ids) == 2
+                    mates = []
+                    for i_ in range(len(from_ids)):
+                        from_id = from_ids[i_]
+                        node1 = nodes[from_id]
+                        mates.append([0] * len(to_ids))
+                        for j_ in range(len(to_ids)):
+                            to_id = to_ids[j_]
                             to_ids2 = [i[0] for i in to_node[from_id]] if from_id in to_node else []
                             if to_id not in to_ids2:
                                 continue
+                            node2 = nodes[to_id]
+                            mates[i_][j_] = len(node1.mate_ids & node2.mate_ids)
 
-                            if mate:
-                                tmp_mate = len(nodes[from_id].mate_ids & nodes[to_id].mate_ids)
-                            else:
-                                tmp_mate = len(nodes[from_id].max_alleles & nodes[to_id].max_alleles)
-                                
-                            if max_mate < tmp_mate:
-                                max_mate = tmp_mate
-                                max_from_id = from_id
-                        if max_mate > 0:
-                            if max_from_id in added:
-                                matches = []
-                                break
-                            
-                            added.add(max_from_id)
-                            matches.append([max_from_id, to_id, max_mate])
+                    if mates[0][0] == 0 or mates[1][1] == 0:
+                        score00 = 0
+                    else:
+                        score00 = mates[0][0] + mates[1][1]
+
+                    if mates[0][1] == 0 or mates[1][0] == 0:
+                        score01 = 0
+                    else:
+                        score01 = mates[0][1] + mates[1][0]
+
+                    if score00 > score01:
+                        matches.append([from_ids[0], to_ids[0], mates[0][0]])
+                        matches.append([from_ids[1], to_ids[1], mates[1][1]])
+                    elif score01 > score00:
+                        matches.append([from_ids[0], to_ids[1], mates[0][1]])
+                        matches.append([from_ids[1], to_ids[0], mates[1][0]])
 
                     if len(matches) != 2:
                         continue
@@ -760,6 +768,10 @@ class Graph:
     def assemble_with_alleles(self, allele_nodes):
         self.informed_assemble({"allele" : True, "alleles" : allele_nodes})
 
+
+    # Compare nodes
+    def print_node_comparison(nodes):
+        None
         
     # Begin drawing graph
     def begin_draw(self, fname_base):

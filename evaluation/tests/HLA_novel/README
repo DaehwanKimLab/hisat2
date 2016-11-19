@@ -1,4 +1,6 @@
 To run HISAT-genotype
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A
 
-   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 1 --verbose-level 2 --debug paired > temp
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --debug paired --perbase-errorrate 0.3 --perbase-snprate 0.0 --num-mismatch 1
+
+

@@ -136,9 +136,7 @@ def simulate_reads(HLAs,
                 
             comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
             reads_1, reads_2 = [], []
-            # DK - debugging purposes
             for i in range(0, len(seq) - frag_len + 1, simulate_interval):
-            # for i in range(0, 600, simulate_interval):
                 pos1 = i
                 seq1 = seq[pos1:pos1+read_len]
                 if perbase_errorrate > 0.0:
@@ -1435,10 +1433,6 @@ def HLA_typing(ex_path,
                     if NH > 1:
                         continue
 
-                    # DK - debugging purposes
-                    if NM > 0 and int(read_id) not in [11] and False:
-                        continue
-
                     if Zs:
                         Zs = Zs.split(',')
 
@@ -1882,7 +1876,7 @@ def HLA_typing(ex_path,
                                          "Unitigs",
                                          num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
                 begin_y += 200
-
+                
                 # Further reduce graph with mate pairs
                 asm_graph.assemble_with_mates()
 
@@ -1894,7 +1888,6 @@ def HLA_typing(ex_path,
 
                 # DK - debugging purposes
                 """
-
                 asm_graph.assemble_with_alleles(allele_nodes)
 
                 # Draw assembly graph
