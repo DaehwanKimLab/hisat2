@@ -34,12 +34,33 @@ def simulate_reads(HLAs,
                    Vars,
                    Links,
                    simulate_interval = 1,
-                   perbase_errorrate = 0.0):
+                   perbase_errorrate = 0.0,
+                   perbase_snprate = 0.0):
     HLA_reads_1, HLA_reads_2 = [], []
     num_pairs = []
     for test_HLA_names in test_HLA_list:
         gene = test_HLA_names[0].split('*')[0]
         num_pairs.append([])
+
+        # Introduce SNPs into allele sequences
+        def introduce_snps(seq):
+            seq = list(seq)
+            for i in range(len(seq)):
+                if random.random() * 100 < perbase_snprate:
+                    if seq[i] == 'A':
+                        alt_bases = ['C', 'G', 'T']
+                    elif seq[i] == 'C':
+                        alt_bases = ['A', 'G', 'T']
+                    elif seq[i] == 'G':
+                        alt_bases = ['A', 'C', 'T']
+                    else:
+                        assert seq[i] == 'T'
+                        alt_bases = ['A', 'C', 'G']
+                    random.shuffle(alt_bases)
+                    alt_base = alt_bases[0]
+                    seq[i] = alt_base
+            seq = ''.join(seq)
+            return seq
 
         # Simulate reads from two HLA alleles
         def simulate_reads_impl(seq,
@@ -48,6 +69,7 @@ def simulate_reads(HLAs,
                                 ex_desc,
                                 simulate_interval = 1,
                                 perbase_errorrate = 0.0,
+                                perbase_snprate = 0.0,
                                 frag_len = 250,
                                 read_len = 100):
             # Introduce sequencing errors
@@ -114,7 +136,9 @@ def simulate_reads(HLAs,
                 
             comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
             reads_1, reads_2 = [], []
+            # DK - debugging purposes
             for i in range(0, len(seq) - frag_len + 1, simulate_interval):
+            # for i in range(0, 600, simulate_interval):
                 pos1 = i
                 seq1 = seq[pos1:pos1+read_len]
                 if perbase_errorrate > 0.0:
@@ -143,6 +167,9 @@ def simulate_reads(HLAs,
             HLA_ex_seq = list(HLAs[gene]["%s*BACKBONE" % gene])
             HLA_ex_desc = [''] * len(HLA_ex_seq)
             HLA_seq_map = [i for i in range(len(HLA_seq))]
+
+            if perbase_snprate > 0:
+                HLA_seq = introduce_snps(HLA_seq)
 
             # Extract variants included in the allele
             vars = []
@@ -1020,7 +1047,7 @@ def calculate_allele_coverage(allele_haplotype,
 """
 samtools mpileup
 """
-def get_mpileup(mpileup_cmd):
+def get_mpileup(mpileup_cmd, ref_seq_len):
     mpileup = []
     proc = subprocess.Popen(mpileup_cmd,
                             stdout=subprocess.PIPE,
@@ -1074,6 +1101,9 @@ def get_mpileup(mpileup_cmd):
 
         mpileup.append([nt_set, nt_dic])
         prev_pos = pos
+
+    if len(mpileup) < ref_seq_len:
+        mpileup += ([[[], {}]] * (ref_seq_len - len(mpileup)))
         
     return mpileup
 
@@ -1278,7 +1308,7 @@ def HLA_typing(ex_path,
                     mpileup_cmd += ["-r", "%s:%d-%d" % (chr, left + 1, right + 1)]
                     alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
 
-                mpileup = get_mpileup(mpileup_cmd)
+                mpileup = get_mpileup(mpileup_cmd, len(ref_seq))
 
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
@@ -1406,7 +1436,7 @@ def HLA_typing(ex_path,
                         continue
 
                     # DK - debugging purposes
-                    if NM > 0 and int(read_id) != 11 and int(read_id) != 12:
+                    if NM > 0 and int(read_id) not in [11] and False:
                         continue
 
                     if Zs:
@@ -1487,7 +1517,7 @@ def HLA_typing(ex_path,
                                                                    Vars[gene],
                                                                    Var_list[gene],
                                                                    cmp_list[cmp_list_i:],
-                                                                   orig_read_id.find("#257|L") == 0)
+                                                                   orig_read_id.find("#11|L") == 0)
                             cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
                                     
                         elif cigar_op == 'I':
@@ -2282,6 +2312,7 @@ def test_HLA_genotyping(base_fname,
                         default_allele_list,
                         num_mismatch,
                         perbase_errorrate,
+                        perbase_snprate,
                         assembly,
                         concordant_assembly,
                         exonic_only,
@@ -2624,7 +2655,8 @@ def test_HLA_genotyping(base_fname,
                                            Vars,
                                            Links,
                                            simulate_interval,
-                                           perbase_errorrate)
+                                           perbase_errorrate,
+                                           perbase_snprate)
 
             assert len(num_frag_list) == len(test_HLA_list)
             for i_ in range(len(test_HLA_list)):
@@ -2807,7 +2839,12 @@ if __name__ == '__main__':
                         dest="perbase_errorrate",
                         type=float,
                         default=0.0,
-                        help="Per basepair error rate when simulating reads (default: 0.0)")
+                        help="Per basepair error rate in percentage when simulating reads (default: 0.0)")
+    parser.add_argument("--perbase-snprate",
+                        dest="perbase_snprate",
+                        type=float,
+                        default=0.0,
+                        help="Per basepair SNP rate in percentage when simulating reads (default: 0.0)")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -2938,6 +2975,7 @@ if __name__ == '__main__':
                         args.default_allele_list,
                         args.num_mismatch,
                         args.perbase_errorrate,
+                        args.perbase_snprate,
                         args.assembly,
                         args.concordant_assembly,
                         args.exonic_only,

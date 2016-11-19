@@ -265,7 +265,7 @@ class Node:
             var = self.var[var_i]
             var = '-'.join(list(var))
             if var != "" and var != prev_var:
-                print >> output, "\t%d: %s" % (var_i, var), self.seq[var_i],
+                print >> output, "\t%d: %s" % (self.left + var_i, var), self.seq[var_i],
             prev_var = var
         print >> output
         print >> output, "mates:", sorted(self.mate_ids, key=int)
