@@ -606,31 +606,7 @@ class Graph:
                     continue                
                 to_ids = [i[0] for i in to_node[id]]
 
-                def eliminate_low_cov(ids):
-                    if len(ids) <= 2:
-                        return ids
-                    
-                    length, cov = 0, 0.0
-                    for id in ids:
-                        node = self.nodes[id]
-                        length += node.ungapped_length()
-                        cov += node.get_avg_cov() * node.ungapped_length()
-                    avg_cov = cov / float(length)
-
-                    delete_ids = set()
-                    for id in ids:
-                        node = self.nodes[id]
-                        if node.get_avg_cov() * 5 < avg_cov:
-                            delete_ids.add(id)
-
-                    if len(delete_ids) > 0:
-                        ids = list(set(ids) - set(delete_ids))
-                        
-                    return ids
-
                 # id has two successors
-                # DK - debugging purposes
-                to_ids = eliminate_low_cov(to_ids)
                 if len(to_ids) != 2:
                     continue
                 matches = []
@@ -644,8 +620,6 @@ class Graph:
                   
                 # The two successors have one or two predecessors in total
                 assert len(from_ids) > 0
-                # DK - debugging purposes
-                from_ids = eliminate_low_cov(from_ids)
                 if len(from_ids) > 2:
                     continue
 
