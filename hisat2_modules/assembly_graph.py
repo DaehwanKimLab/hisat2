@@ -754,7 +754,7 @@ class Graph:
     # Compare nodes and get information
     def get_node_comparison_info(self, node_dic):
         assert len(node_dic) > 0
-        nodes = [[id, node.left, node.right, []] for id, node in node_dic.items()]
+        nodes = [[id, node.left, node.right] for id, node in node_dic.items()]
         def node_cmp(a, b):
             if a[1] != b[1]:
                 return a[1] - b[1]
@@ -765,7 +765,7 @@ class Graph:
         for p in range(len(self.backbone)):
             nts = set()
             for n in range(len(nodes)):
-                id, left, right = nodes[n][:3]
+                id, left, right = nodes[n]
                 node = node_dic[id]
                 if p >= left and p <= right:
                     nt_dic = node.seq[p - left]
@@ -776,7 +776,7 @@ class Graph:
                 if p == 0:
                     seqs.append([])
                     colors.append([])
-                id, left, right = nodes[n][:3]
+                id, left, right = nodes[n]
                 node = node_dic[id]
                 if p >= left and p <= right:
                     nt_dic = node.seq[p - left]
@@ -816,7 +816,7 @@ class Graph:
         for p in range(0, (len(self.backbone) + interval - 1) / interval * interval, interval):
             cur_seqs = []
             for n in range(len(nodes)):
-                id, left, right = nodes[n][:3] # inclusive coordinate
+                id, left, right = nodes[n] # inclusive coordinate
                 right += 1
                 seq = []
                 seq_left, seq_right = max(p, left), min(p+interval, right)
@@ -845,9 +845,6 @@ class Graph:
             for seq, id in cur_seqs:
                 print >> sys.stderr, "\t", seq, id
                                 
-        # DK - debugging purposes
-        sys.exit(1)
-
         
     # Begin drawing graph
     def begin_draw(self, fname_base):
@@ -1003,6 +1000,58 @@ class Graph:
                 print >> js_file, r'ctx.moveTo(%d, %d);' % (get_x(left), get_y(y + 5))
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
                 print >> js_file, r'ctx.stroke();'
+
+        # Draw true alleles
+        node_colors = ["yellow", "green"]
+        allele_nodes, seqs, colors = [], [], []
+        if len(self.allele_nodes) > 0:
+            allele_nodes, seqs, colors = self.get_node_comparison_info(self.allele_nodes)
+            for n in range(len(allele_nodes)):
+                allele_id, left, right = allele_nodes[n]
+                allele_node = self.allele_nodes[allele_id]
+                y = get_dspace(0, nodes[-1][2], 14)
+
+                # Draw allele name
+                print >> js_file, r'ctx.fillStyle = "blue";'
+                print >> js_file, r'ctx.font = "24px Times New Roman";'
+                print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
+                    (allele_id, get_x(10), get_y(y + 5))
+                print >> js_file, r'ctx.font = "12px Times New Roman";'
+        
+                # Draw node
+                print >> js_file, r'ctx.beginPath();'
+                print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
+                    (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
+                print >> js_file, r'ctx.fillStyle = "%s";' % (node_colors[n % len(node_colors)])
+                print >> js_file, r'ctx.fill();'
+                print >> js_file, r'ctx.lineWidth = 2;'
+                print >> js_file, r'ctx.strokeStyle = "black";'
+                print >> js_file, r'ctx.stroke();'
+
+                color_boxes = []
+                c = 0
+                while c < len(colors[n]):
+                    color = colors[n][c]
+                    c2 = c + 1
+                    if color != 'N':                        
+                        while c2 < len(colors[n]):
+                            color2 = colors[n][c2]
+                            if color != color2:
+                                break
+                            c2 += 1
+                        color_boxes.append([c, c2, color])
+                    c = c2
+
+                # Draw variants
+                for color_box in color_boxes:
+                    cleft, cright, color = color_box
+                    cleft += left; cright += left
+                    color = "blue" # known variants
+                    print >> js_file, r'ctx.beginPath();'
+                    print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
+                        (get_x(cleft), get_y(y + 1), get_x(cright) - get_x(cleft), get_sy(8))
+                    print >> js_file, r'ctx.fillStyle = "%s";' % (color)
+                    print >> js_file, r'ctx.fill();'
 
         # Draw location at every 100bp
         y = get_dspace(0, nodes[-1][2], 14)
