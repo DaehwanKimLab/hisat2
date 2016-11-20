@@ -37,7 +37,8 @@ def simulate_reads(HLAs,
                    read_len = 100,
                    frag_len = 250,
                    perbase_errorrate = 0.0,
-                   perbase_snprate = 0.0):
+                   perbase_snprate = 0.0,
+                   skip_fragment_regions = []):
     HLA_reads_1, HLA_reads_2 = [], []
     num_pairs = []
     for test_HLA_names in test_HLA_list:
@@ -73,7 +74,7 @@ def simulate_reads(HLAs,
                                 read_len = 100,
                                 frag_len = 250,
                                 perbase_errorrate = 0.0,
-                                perbase_snprate = 0.0):
+                                skip_fragment_regions = []):
             # Introduce sequencing errors
             def introduce_seq_err(read_seq, pos):
                 read_seq = list(read_seq)
@@ -139,6 +140,15 @@ def simulate_reads(HLAs,
             comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
             reads_1, reads_2 = [], []
             for i in range(0, len(seq) - frag_len + 1, simulate_interval):
+                if len(skip_fragment_regions) > 0:
+                    skip = False
+                    for skip_left, skip_right in skip_fragment_regions:
+                        if i <= skip_right and i + frag_len > skip_left:
+                            skip = True
+                            break
+                    if skip:
+                        continue
+                        
                 pos1 = i
                 seq1 = seq[pos1:pos1+read_len]
                 if perbase_errorrate > 0.0:
@@ -207,7 +217,8 @@ def simulate_reads(HLAs,
                                                            simulate_interval,
                                                            read_len,
                                                            frag_len,
-                                                           perbase_errorrate)
+                                                           perbase_errorrate,
+                                                           skip_fragment_regions)
             HLA_reads_1 += tmp_reads_1
             HLA_reads_2 += tmp_reads_2
             num_pairs[-1].append(len(tmp_reads_1))
@@ -1061,8 +1072,8 @@ def get_mpileup(mpileup_cmd, ref_seq_len):
         allele, pos, ref_nt, num_reads, orig_nts, quals = line.split('\t')
         pos = int(pos) - 1
         assert pos == prev_pos + 1 or prev_pos == -1
-        if prev_pos == -1 and pos > 0:
-            mpileup = [[[], {}]] * pos
+        if prev_pos + 1 < pos:
+            mpileup = [[[], {}]] * (pos - prev_pos - 1)
             
         nt_dic, num_nt = {}, 0
         i = 0
@@ -2310,6 +2321,7 @@ def test_HLA_genotyping(base_fname,
                         num_mismatch,
                         perbase_errorrate,
                         perbase_snprate,
+                        skip_fragment_regions,
                         assembly,
                         concordant_assembly,
                         exonic_only,
@@ -2655,7 +2667,8 @@ def test_HLA_genotyping(base_fname,
                                            read_len,
                                            fragment_len,
                                            perbase_errorrate,
-                                           perbase_snprate)
+                                           perbase_snprate,
+                                           skip_fragment_regions)
 
             assert len(num_frag_list) == len(test_HLA_list)
             for i_ in range(len(test_HLA_list)):
@@ -2854,6 +2867,11 @@ if __name__ == '__main__':
                         type=float,
                         default=0.0,
                         help="Per basepair SNP rate in percentage when simulating reads (default: 0.0)")
+    parser.add_argument("--skip-fragment-regions",
+                        dest="skip_fragment_regions",
+                        type=str,
+                        default="",
+                        help="A comma-separated list of regions from which no reads originate, e.g., 500-600,1200-1400 (default: None).")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -2972,6 +2990,17 @@ if __name__ == '__main__':
     if args.read_len * 2 > args.fragment_len:
         print >> sys.stderr, "Warning: fragment might be too short (%d)" % (args.fragment_len)
 
+    skip_fragment_regions = []
+    if args.skip_fragment_regions != "":
+        prev_left, prev_right = -1, -1
+        for region in args.skip_fragment_regions.split(','):
+            left, right = region.split('-')
+            left, right = int(left), int(right)
+            assert left < right
+            assert prev_right < left
+            prev_left, prev_right = left, right
+            skip_fragment_regions.append([left, right])
+
     random.seed(1)
     test_HLA_genotyping(args.base_fname,
                         args.reference_type,
@@ -2990,6 +3019,7 @@ if __name__ == '__main__':
                         args.num_mismatch,
                         args.perbase_errorrate,
                         args.perbase_snprate,
+                        skip_fragment_regions,
                         args.assembly,
                         args.concordant_assembly,
                         args.exonic_only,
