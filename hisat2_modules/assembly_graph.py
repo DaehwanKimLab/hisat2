@@ -273,11 +273,12 @@ class Node:
 
                 
 class Graph:
-    def __init__(self, backbone, vars, exons):
+    def __init__(self, backbone, vars, exons, allele_nodes = {}):
         # self.head = Node()
         self.backbone = backbone # backbone sequence
         self.vars = vars
         self.exons = exons
+        self.allele_nodes = allele_nodes
 
         self.nodes = {}
         self.edges = {}
@@ -750,9 +751,103 @@ class Graph:
         self.informed_assemble({"allele" : True, "alleles" : allele_nodes})
 
 
+    # Compare nodes and get information
+    def get_node_comparison_info(self, node_dic):
+        assert len(node_dic) > 0
+        nodes = [[id, node.left, node.right, []] for id, node in node_dic.items()]
+        def node_cmp(a, b):
+            if a[1] != b[1]:
+                return a[1] - b[1]
+            else:
+                return a[2] - b[2]
+        nodes = sorted(nodes, cmp=node_cmp)
+        seqs, colors = [], []
+        for p in range(len(self.backbone)):
+            nts = set()
+            for n in range(len(nodes)):
+                id, left, right = nodes[n][:3]
+                node = node_dic[id]
+                if p >= left and p <= right:
+                    nt_dic = node.seq[p - left]
+                    nt = get_major_nt(nt_dic)
+                    nts.add(nt)
+
+            for n in range(len(nodes)):
+                if p == 0:
+                    seqs.append([])
+                    colors.append([])
+                id, left, right = nodes[n][:3]
+                node = node_dic[id]
+                if p >= left and p <= right:
+                    nt_dic = node.seq[p - left]
+                    nt = get_major_nt(nt_dic)
+                    seqs[n].append(nt)
+                    if nt != self.backbone[p]:
+                        if len(nts) > 1:
+                            colors[n].append('R')
+                        else:
+                            colors[n].append('B')
+                    else:
+                        colors[n].append('N')
+                else:
+                    seqs[n].append(' ')
+
+        assert len(nodes) == len(seqs)
+        for n in range(len(nodes)):
+            node, seq = nodes[n], seqs[n]
+            left_del_len, right_del_len = 0, 0
+            while seq[left_del_len] == 'D':
+                left_del_len += 1
+            while seq[-(right_del_len + 1)] == 'D':
+                right_del_len += 1
+
+            node[1] += left_del_len
+            node[2] -= right_del_len
+            seqs[n] = seq[left_del_len:-right_del_len]
+            colors[n] = colors[n][left_del_len:-right_del_len]
+
+        return nodes, seqs, colors
+
+
     # Compare nodes
-    def print_node_comparison(nodes):
-        None
+    def print_node_comparison(self, node_dic):
+        nodes, seqs, colors = self.get_node_comparison_info(node_dic)
+        interval = 100
+        for p in range(0, (len(self.backbone) + interval - 1) / interval * interval, interval):
+            cur_seqs = []
+            for n in range(len(nodes)):
+                id, left, right = nodes[n][:3] # inclusive coordinate
+                right += 1
+                seq = []
+                seq_left, seq_right = max(p, left), min(p+interval, right)
+                if seq_left >= seq_right:
+                    continue
+                if p < left:
+                    seq += ([' '] * (left - p))
+                for s in range(seq_left, seq_right):
+                    nt, color = seqs[n][s-left], colors[n][s-left]
+                    if color in "RB":
+                        if color == 'R':
+                            nt = "\033[91m" + nt
+                        else:
+                            nt = "\033[94m" + nt
+                        nt += "\033[00m"        
+                    seq.append(nt)
+                if right < p + interval:
+                    seq += ([' '] * (p + interval - right))
+                seq = ''.join(seq)
+                cur_seqs.append([seq, id])
+
+            if len(cur_seqs) <= 0:
+                continue
+                
+            print >> sys.stderr, p
+            for seq, id in cur_seqs:
+                print >> sys.stderr, "\t", seq, id
+                                
+        # DK - debugging purposes
+        sys.exit(1)
+
         
     # Begin drawing graph
     def begin_draw(self, fname_base):

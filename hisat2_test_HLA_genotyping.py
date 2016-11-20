@@ -1326,10 +1326,6 @@ def HLA_typing(ex_path,
                                              stdout=subprocess.PIPE,
                                              stderr=open("/dev/null", 'w'))
 
-
-            # Assembly graph
-            asm_graph = assembly_graph.Graph(ref_seq, Vars[gene], ref_exons)
-
             # List of nodes that represent alleles
             allele_vars = {}
             for var_id, allele_list in Links_default.items():
@@ -1341,6 +1337,11 @@ def HLA_typing(ex_path,
                     else:
                         allele_vars[allele_id].append(var_id)
 
+            # Extract variants that are within exons
+            exon_vars = get_exonic_vars(Vars[gene], ref_exons)
+
+            # Compare two alleles
+            true_allele_nodes = {}
             allele_nodes = {}
             for allele_id, var_ids in allele_vars.items():
                 seq = list(ref_seq)  # sequence that node represents
@@ -1362,8 +1363,15 @@ def HLA_typing(ex_path,
                 seq = ''.join(seq)
                 allele_nodes[allele_id] = assembly_graph.Node(allele_id, 0, seq, var, ref_seq, Vars[gene])
 
-            # Extract variants that are within exons
-            exon_vars = get_exonic_vars(Vars[gene], ref_exons)
+            if simulation and len(test_HLA_names) == 2:
+                for allele_name in test_HLA_names:
+                    true_allele_nodes[allele_name] = allele_nodes[allele_name]
+
+            # Assembly graph
+            asm_graph = assembly_graph.Graph(ref_seq,
+                                             Vars[gene],
+                                             ref_exons,
+                                             true_allele_nodes)
 
             # Choose allele representives from those that share the same exonic sequences
             allele_reps, allele_rep_groups = get_rep_alleles(Links, exon_vars)
@@ -1905,6 +1913,13 @@ def HLA_typing(ex_path,
                 # End drawing assembly graph
                 asm_graph.end_draw()
 
+
+                # Compare two alleles
+                if simulation and len(test_HLA_names) == 2:
+                    allele_name1, allele_name2 = test_HLA_names
+                    print >> sys.stderr, allele_name1, "vs.", allele_name2
+                    asm_graph.print_node_comparison(asm_graph.allele_nodes)
+
                 def compare_alleles(vars1, vars2):
                     skip = True
                     var_i, var_j = 0, 0
@@ -1927,13 +1942,6 @@ def HLA_typing(ex_path,
                                 print >> sys.stderr, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
                             var_j += 1
                     
-                if simulation and len(test_HLA_names) == 2:
-                    allele_name1, allele_name2 = test_HLA_names
-                    print >> sys.stderr, allele_name1, "vs.", allele_name2
-                    vars1 = allele_nodes[allele_name1].get_vars(Vars[gene])
-                    vars2 = allele_nodes[allele_name2].get_vars(Vars[gene])
-                    compare_alleles(vars1, vars2)
-                
                 tmp_nodes = asm_graph.nodes
                 print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
                 count = 0
