@@ -199,10 +199,13 @@ class Node:
         return len(get_ungapped_seq_var(self.seq, self.var)[0])
 
     
-    # Get variants
-    def get_vars(self, Vars):
+    # Get variant ids
+    def get_var_ids(self, Vars, left = 0, right = sys.maxint):
         vars = []
-        for var_i in range(len(self.var)):
+        left = max(left, self.left)
+        right = min(right, self.right)
+        for pos in range(left, right + 1):
+            var_i = pos - self.left
             for var in self.var[var_i]:
                 if var == "unknown":
                     continue
@@ -211,9 +214,43 @@ class Node:
                     continue
                 type, pos, data = Vars[var]
                 nt = get_major_nt(self.seq[var_i])
-                if data == nt or \
-                   type == "deletion" and nt == 'D':
+                if data == nt or (type == "deletion" and nt == 'D'):
                     vars.append(var)                    
+        return vars
+
+    
+    # Get variant ids
+    #   left, right are absolute coordinates
+    def get_vars(self, Vars, left = 0, right = sys.maxint):
+        vars = []
+        left = max(left, self.left)
+        right = min(right, self.right)
+        for pos in range(left, right + 1):
+            var_i = pos - self.left
+            nt = get_major_nt(self.seq[var_i])
+            if nt == self.ref_seq[pos]:
+                continue
+            added = False
+            for var in self.var[var_i]:
+                if var == "unknown":
+                    continue
+                if len(vars) > 0 and var == vars[-1][0]:
+                    continue
+                assert var in Vars
+                type, var_pos, data = Vars[var]                    
+                if data == nt or (type == "deletion" and nt == 'D'):
+                    # DK - debugging purposes
+                    if pos != var_pos:
+                        self.print_info(); print >> sys.stderr
+                        print "pos: %d, var_i: %d" % (pos, var_i)
+                        print vars, self.var[var_i - 1], self.var[var_i]
+                    
+                    assert pos == var_pos
+                    added = True
+                    vars.append([var, pos])
+            if not added and "unknown" in self.var[var_i]:
+                vars.append(["unknown", pos])
+            
         return vars
 
 
@@ -584,10 +621,10 @@ class Graph:
 
             if not mate:
                 for node in nodes.values():
-                    node_vars = node.get_vars(vars)
+                    node_vars = node.get_var_ids(vars)
                     max_alleles, max_common = set(), 0
                     for anode in allele_nodes.values():
-                        allele_vars = anode.get_vars(vars)
+                        allele_vars = anode.get_var_ids(vars)
                         tmp_common = len(set(node_vars) & set(allele_vars))
                         if tmp_common > max_common:
                             max_common = tmp_common
@@ -905,8 +942,7 @@ class Graph:
     #   Top left as (0, 0) and Bottom right as (width, height)
     def draw(self,
              begin_y,
-             title = "",
-             second_allele = sys.maxint):
+             title = ""):
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
@@ -983,7 +1019,7 @@ class Graph:
             print >> js_file, r'ctx.beginPath();'
             print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
                 (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-            print >> js_file, r'ctx.fillStyle = "black";'
+            print >> js_file, r'ctx.fillStyle = "white";'
             print >> js_file, r'ctx.fill();'
             print >> js_file, r'ctx.lineWidth = 2;'
             print >> js_file, r'ctx.strokeStyle = "black";'
@@ -992,7 +1028,7 @@ class Graph:
             # Draw label
             print >> js_file, r'ctx.fillStyle = "blue";'
             print >> js_file, r'ctx.fillText("Exon %d", %d, %d);' % \
-                (e+1, get_x(left + 2), get_y(y + 5))
+                (e+1, get_x(left + 2), get_y(y + 7))
 
             if e > 0:
                 prev_right = self.exons[e-1][1]
@@ -1046,7 +1082,12 @@ class Graph:
                 for color_box in color_boxes:
                     cleft, cright, color = color_box
                     cleft += left; cright += left
-                    color = "blue" # known variants
+                    if color == 'B':
+                        color = "blue" 
+                    else:
+                        color = "#1E90FF"
+                    # DK - debugging purposes
+                    color = "blue"
                     print >> js_file, r'ctx.beginPath();'
                     print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
                         (get_x(cleft), get_y(y + 1), get_x(cright) - get_x(cleft), get_sy(8))
@@ -1073,10 +1114,25 @@ class Graph:
             y = get_dspace(left, right, 14)
             node_to_y[id] = y
 
-            if int(read_id) < second_allele:
-                color = "yellow"
+            node_vars = node.get_vars(self.vars)
+            node_var_ids = node.get_var_ids(self.vars)
+            if len(allele_nodes) > 0:
+                color = "white"
+                max_common = -sys.maxint
+                for a in range(len(allele_nodes)):
+                    allele_node_id, allele_left, allele_right = allele_nodes[a]
+                    if left < allele_left or right > allele_right:
+                        continue
+                    allele_vars = self.allele_nodes[allele_node_id].get_var_ids(self.vars, left, right)
+                    common_vars = set(node_var_ids) & set(allele_vars)
+                    tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
+                    if max_common < tmp_common:
+                        max_common = tmp_common
+                        color = node_colors[a % len(node_colors)]
+                    elif max_common == tmp_common:
+                        color = "white"
             else:
-                color = "green"
+                color = "yellow"    
 
             # Draw node
             print >> js_file, r'ctx.beginPath();'
@@ -1087,6 +1143,25 @@ class Graph:
             print >> js_file, r'ctx.lineWidth = 2;'
             print >> js_file, r'ctx.strokeStyle = "black";'
             print >> js_file, r'ctx.stroke();'
+
+            # Draw variants
+            for var_id, pos in node_vars:
+                if var_id != "unknown":
+                    var_type, var_left, var_data = self.vars[var_id]
+                    color = "blue"
+                else:
+                    var_type, var_left = "single", pos
+                    color = "red"
+                if var_type == "single":
+                    var_right = var_left + 1
+                else:
+                    assert var_type == "deletion"
+                    var_right = var_left + int(var_data)
+                print >> js_file, r'ctx.beginPath();'
+                print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
+                    (get_x(var_left), get_y(y + 1), get_x(var_right) - get_x(var_left), get_sy(8))
+                print >> js_file, r'ctx.fillStyle = "%s";' % (color)
+                print >> js_file, r'ctx.fill();'
 
             # Draw label
             print >> js_file, r'ctx.fillStyle = "blue";'

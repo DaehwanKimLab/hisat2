@@ -1875,27 +1875,21 @@ def HLA_typing(ex_path,
                 asm_graph.begin_draw("assembly_graph")
 
                 # Draw assembly graph
-                begin_y = asm_graph.draw(0,
-                                         "Initial graph",
-                                         num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
+                begin_y = asm_graph.draw(0, "Initial graph")
                 begin_y += 200
 
                 # Reduce graph
                 asm_graph.reduce()
 
                 # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y,
-                                         "Unitigs",
-                                         num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
+                begin_y = asm_graph.draw(begin_y, "Unitigs")
                 begin_y += 200
                 
                 # Further reduce graph with mate pairs
                 asm_graph.assemble_with_mates()
 
                 # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y,
-                                         "Graph with mate pairs",
-                                         num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
+                begin_y = asm_graph.draw(begin_y, "Graph with mate pairs")
                 begin_y += 200
 
                 # DK - debugging purposes
@@ -1903,11 +1897,7 @@ def HLA_typing(ex_path,
                 asm_graph.assemble_with_alleles(allele_nodes)
 
                 # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y,
-                                         "Graph with alleles",
-                                         num_frag_list[0][0] if len(num_frag_list) else sys.maxint)
-                begin_y += 200
-
+                begin_y = asm_graph.draw(begin_y, "Graph with alleles")
                 """
 
                 # End drawing assembly graph
@@ -1949,7 +1939,7 @@ def HLA_typing(ex_path,
                     count += 1
                     if count > 100:
                         break
-                    node_vars = node.get_vars(Vars[gene])
+                    node_vars = node.get_var_ids(Vars[gene])
                     node.print_info(); print >> sys.stderr
                     if node.id in asm_graph.to_node:
                         for id2, at in asm_graph.to_node[node.id]:
@@ -1958,7 +1948,7 @@ def HLA_typing(ex_path,
                     if simulation:
                         alleles, cmp_vars, max_common = "", [], -1
                         for test_HLA_name in test_HLA_names:
-                            tmp_vars = allele_nodes[test_HLA_name].get_vars(Vars[gene])
+                            tmp_vars = allele_nodes[test_HLA_name].get_var_ids(Vars[gene])
                             tmp_common = len(set(node_vars) & set(allele_vars[test_HLA_name]))
                             if max_common < tmp_common:
                                 max_common = tmp_common
