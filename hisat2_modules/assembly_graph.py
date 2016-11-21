@@ -311,7 +311,7 @@ class Node:
                 print >> output, "\t%d: %s" % (self.left + var_i, var), self.seq[var_i],
             prev_var = var
         print >> output
-        print >> output, "mates:", sorted(self.mate_ids, key=int)
+        print >> output, "mates:", sorted(self.mate_ids)
         print >> output, "reads:", sorted(self.read_ids)
 
                 
@@ -326,7 +326,7 @@ class Graph:
         self.nodes = {}
         self.edges = {}
 
-        self.left_margin = 20
+        self.left_margin = 200
         self.right_margin = 20
         self.top_margin = 20
         self.bottom_margin = 20
@@ -600,13 +600,15 @@ class Graph:
                 if id not in delete_ids and node.get_avg_cov() < 3.0:
                     overlap_pct = float(overlap) / (right - left)
                     assert overlap_pct <= 1.0
-                    if node.get_avg_cov() * (1.3 - overlap_pct) * 10 < node2.get_avg_cov():
+                    if overlap_pct >= 0.5 and \
+                       node.get_avg_cov() * (1.3 - overlap_pct) * 10 < node2.get_avg_cov():
                         delete_ids.add(id)
                         
                 if id2 not in delete_ids and node2.get_avg_cov() < 3.0:
                     overlap_pct = float(overlap) / (right2 - left2)
                     assert overlap_pct <= 1.0
-                    if node2.get_avg_cov() * (1.3 - overlap_pct) * 10 < node.get_avg_cov():
+                    if overlap_pct >= 0.5 and \
+                       node2.get_avg_cov() * (1.3 - overlap_pct) * 10 < node.get_avg_cov():
                         delete_ids.add(id2)
                 i -= 1
 
@@ -836,10 +838,9 @@ class Graph:
             self.generate_edges(0.02,
                                 True) # jump edges
             self.reduce(0.02)
-         
 
             # DK - debugging purposes
-            # if iter >= 2:
+            # if iter >= 4:
             #    break
 
         # DK - debugging purposes
@@ -920,17 +921,17 @@ class Graph:
 
         assert len(nodes) == len(seqs)
         for n in range(len(nodes)):
-            node, seq = nodes[n], seqs[n]
-            left_del_len, right_del_len = 0, 0
-            while seq[left_del_len] == 'D':
-                left_del_len += 1
-            while seq[-(right_del_len + 1)] == 'D':
-                right_del_len += 1
+            node, seq, color = nodes[n], seqs[n], colors[n]
+            new_left, new_right = 0, len(seq) - 1
+            while seq[new_left] == 'D':
+                new_left += 1
+            while seq[new_right] == 'D':
+                new_right -= 1
 
-            node[1] += left_del_len
-            node[2] -= right_del_len
-            seqs[n] = seq[left_del_len:-right_del_len]
-            colors[n] = colors[n][left_del_len:-right_del_len]
+            node[1] = new_left
+            node[2] = new_right
+            seqs[n] = seq[new_left:new_right+1]
+            colors[n] = color[new_left:new_right+1]
 
         return nodes, seqs, colors
 
@@ -1004,8 +1005,8 @@ class Graph:
 
         # Draw vertical dotted lines at every 100nt and thick lines at every 500nt
         print >> js_file, r'ctx.fillStyle = "gray";'
-        for pos in range(100, nodes[-1][2], 100):
-            if pos % 500 == 0:
+        for pos in range(0, nodes[-1][2], 100):
+            if pos != 0 and pos % 500 == 0:
                 print >> js_file, r'ctx.setLineDash([]);'
                 print >> js_file, r'ctx.lineWidth = 1;'
             else:
@@ -1127,7 +1128,8 @@ class Graph:
                 print >> js_file, r'ctx.stroke();'
 
         # Draw true alleles
-        node_colors = ["yellow", "green"]
+        node_colors = ["#FFFF00", "#00FF00"]
+        allele_node_colors = ["#888800", "#008800"]
         allele_nodes, seqs, colors = [], [], []
         if len(self.allele_nodes) > 0:
             allele_nodes, seqs, colors = self.get_node_comparison_info(self.allele_nodes)
@@ -1140,14 +1142,14 @@ class Graph:
                 print >> js_file, r'ctx.fillStyle = "blue";'
                 print >> js_file, r'ctx.font = "24px Times New Roman";'
                 print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                    (allele_id, get_x(10), get_y(y + 5))
+                    (allele_id, 10, get_y(y + 5))
                 print >> js_file, r'ctx.font = "12px Times New Roman";'
         
                 # Draw node
                 print >> js_file, r'ctx.beginPath();'
                 print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
                     (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-                print >> js_file, r'ctx.fillStyle = "%s";' % (node_colors[n % len(node_colors)])
+                print >> js_file, r'ctx.fillStyle = "%s";' % (allele_node_colors[n % len(allele_node_colors)])
                 print >> js_file, r'ctx.fill();'
                 print >> js_file, r'ctx.lineWidth = 2;'
                 print >> js_file, r'ctx.strokeStyle = "black";'
@@ -1185,7 +1187,7 @@ class Graph:
 
         # Draw location at every 100bp
         y = get_dspace(0, nodes[-1][2], 14)
-        for pos in range(100, nodes[-1][2], 100):
+        for pos in range(0, nodes[-1][2], 100):
             # Draw label
             print >> js_file, r'ctx.fillStyle = "blue";'
             print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
@@ -1210,7 +1212,7 @@ class Graph:
                 max_common = -sys.maxint
                 for a in range(len(allele_nodes)):
                     allele_node_id, allele_left, allele_right = allele_nodes[a]
-                    if left < allele_left or right > allele_right:
+                    if right - left <= 500 and (left < allele_left or right > allele_right):
                         continue
                     allele_vars = self.allele_nodes[allele_node_id].get_var_ids(self.vars, left, right)
                     common_vars = set(node_var_ids) & set(allele_vars)
@@ -1265,7 +1267,7 @@ class Graph:
                 draw_title = True
                 print >> js_file, r'ctx.font = "24px Times New Roman";'
                 print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                    (title, get_x(10), get_y(y + 7))
+                    (title, 10, get_y(y + 7))
                 print >> js_file, r'ctx.font = "12px Times New Roman";'
 
 

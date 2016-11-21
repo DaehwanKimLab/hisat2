@@ -1352,7 +1352,6 @@ def HLA_typing(ex_path,
             exon_vars = get_exonic_vars(Vars[gene], ref_exons)
 
             # Compare two alleles
-            true_allele_nodes = {}
             allele_nodes = {}
             for allele_id, var_ids in allele_vars.items():
                 seq = list(ref_seq)  # sequence that node represents
@@ -1374,7 +1373,8 @@ def HLA_typing(ex_path,
                 seq = ''.join(seq)
                 allele_nodes[allele_id] = assembly_graph.Node(allele_id, 0, seq, var, ref_seq, Vars[gene])
 
-            if simulation and len(test_HLA_names) == 2:
+            true_allele_nodes = {}
+            if simulation:
                 for allele_name in test_HLA_names:
                     true_allele_nodes[allele_name] = allele_nodes[allele_name]
 
@@ -1566,7 +1566,8 @@ def HLA_typing(ex_path,
                                     del_count += count
                                 else:
                                     nt_count += count
-                            if del_count * 6 < nt_count:
+                            # DK - debugging purposes
+                            if del_count * 6 < nt_count: # and nt_count >= 15:
                                 likely_misalignment = True
                             
                         elif cigar_op == 'S':
@@ -1585,7 +1586,7 @@ def HLA_typing(ex_path,
                             right_pos += length
 
                         if cigar_op in "MIS":
-                            read_pos += length
+                            read_pos += length                     
 
                     # Remove softclip in cigar and modify read_seq and read_qual accordingly
                     if sum(softclip) > 0:
@@ -1611,7 +1612,7 @@ def HLA_typing(ex_path,
 
                     # Count the number of reads aligned uniquely with some constraints
                     num_reads += 1
-                    
+
                     def add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, include_alleles = set()):
                         max_count = max(HLA_count_per_read.values())
                         cur_cmpt = set()
@@ -1905,10 +1906,12 @@ def HLA_typing(ex_path,
 
                 # DK - debugging purposes
                 # """
+
                 asm_graph.assemble_with_alleles(allele_nodes)
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Graph with alleles")
+
                 # """
 
                 # End drawing assembly graph
