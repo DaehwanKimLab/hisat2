@@ -1071,9 +1071,9 @@ def get_mpileup(mpileup_cmd, ref_seq_len):
         line = line.strip()
         allele, pos, ref_nt, num_reads, orig_nts, quals = line.split('\t')
         pos = int(pos) - 1
-        assert pos == prev_pos + 1 or prev_pos == -1
         if prev_pos + 1 < pos:
-            mpileup = [[[], {}]] * (pos - prev_pos - 1)
+            mpileup += [[[], {}]] * (pos - prev_pos - 1)
+        assert len(mpileup) == pos
             
         nt_dic, num_nt = {}, 0
         i = 0
@@ -1904,12 +1904,12 @@ def HLA_typing(ex_path,
                 begin_y += 200
 
                 # DK - debugging purposes
-                """
+                # """
                 asm_graph.assemble_with_alleles(allele_nodes)
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Graph with alleles")
-                """
+                # """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
@@ -2641,6 +2641,12 @@ def test_HLA_genotyping(base_fname,
                         for allele in HLA_names[gene]:
                             if allele.find("BACKBONE") != -1:
                                 continue
+
+                            # DK - debugging purposes
+                            # skip partial sequeuces
+                            # if allele in partial_alleles:
+                            #    continue
+                            
                             HLA_gene_alleles.append(allele)
                         nums = [i for i in range(len(HLA_gene_alleles))]
                         random.shuffle(nums)
@@ -2850,8 +2856,8 @@ if __name__ == '__main__':
     parser.add_argument("--random-seed",
                         dest="random_seed",
                         type=int,
-                        default=0,
-                        help="A seeding number for randomness (default: 0)")
+                        default=1,
+                        help="A seeding number for randomness (default: 1)")
     parser.add_argument("--num-mismatch",
                         dest="num_mismatch",
                         type=int,
@@ -3001,7 +3007,7 @@ if __name__ == '__main__':
             prev_left, prev_right = left, right
             skip_fragment_regions.append([left, right])
 
-    random.seed(1)
+    random.seed(args.random_seed)
     test_HLA_genotyping(args.base_fname,
                         args.reference_type,
                         args.hla_list,

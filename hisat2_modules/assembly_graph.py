@@ -157,7 +157,6 @@ class Node:
     # Combine two nodes with considering deletions
     def combine_with(self, other):
         assert self.left <= other.left
-        assert self.right >= other.left
         if self.right >= other.right:
             return
 
@@ -179,7 +178,11 @@ class Node:
             j += 1
             
         # Append the rest of the other sequence
-        assert i == len(self.seq)
+        if i > len(self.seq):
+            for k in range(i - len(self.seq)):
+                new_seq.append({'N': 1})
+                new_var.append(set())
+                
         new_seq += other.seq[j:]
         new_var += other.var[j:]
 
@@ -230,6 +233,9 @@ class Node:
             nt = get_major_nt(self.seq[var_i])
             if nt == self.ref_seq[pos]:
                 continue
+            if nt == 'N':
+                vars.append(["gap", pos])
+                continue            
             added = False
             for var in self.var[var_i]:
                 if var == "unknown":
@@ -346,7 +352,10 @@ class Graph:
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
-            return a[1] - b[1]
+            if a[1] != b[1]:
+                return a[1] - b[1]
+            else:
+                return a[2] - b[2]
         nodes = sorted(nodes, cmp=node_cmp)
 
         self.from_node, self.to_node = {}, {}
@@ -372,6 +381,79 @@ class Graph:
                     self.from_node[id2] = [[id1, -at]]
                 else:
                     self.from_node[id2].append([id1, -at])
+
+                    
+    # Generate edges based on nodes that are close to one another, but not overlapping
+    def generate_jump_edges(self):
+        assert len(self.nodes) > 0
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        def node_cmp(a, b):
+            if a[1] != b[1]:
+                return a[1] - b[1]
+            else:
+                return a[2] - b[2]
+        add_to_node = {}
+        nodes = sorted(nodes, cmp=node_cmp)
+        for i in range(len(nodes)):
+            id, left, right = nodes[i]
+            node = self.nodes[id]
+
+            try_jump_edge = True
+            if id in self.to_node:
+                to_nodes = self.to_node[id]
+                if len(to_nodes) > 1:
+                    continue
+                for id2, at in to_nodes:
+                    node2 = self.nodes[id2]
+                    overlap = node.right - node.left - at
+                    overlap_pct1 = float(overlap) / (node.right - node.left)
+                    overlap_pct2 = float(overlap) / (node2.right - node2.left)
+                    if max(overlap_pct1, overlap_pct2) > 0.2:
+                        try_jump_edge = False
+                        break
+
+            if not try_jump_edge:
+                continue
+
+            avoid_nodes = set()
+            if id in self.to_node:
+                avoid_nodes = set([id2 for id2, _ in self.to_node[id]])
+                add_avoid_nodes = set()
+                for id2 in avoid_nodes:
+                    if id2 not in self.to_node:
+                        continue
+                    add_avoid_nodes |= set([id3 for id3, _ in self.to_node[id2]])
+                avoid_nodes |= add_avoid_nodes
+                                  
+            for j in range(i + 1, len(nodes)):
+                id2, left2, right2 = nodes[j]
+                if id2 in avoid_nodes:
+                    continue
+                if right > left2:
+                    continue
+
+                if id not in add_to_node:
+                    add_to_node[id] = []
+                add_to_node[id].append([id2, left2 - left])
+                if len(add_to_node[id]) >= 2:
+                    break
+                avoid_nodes.add(id2)
+                if id2 in self.to_node:
+                    avoid_nodes |= set([id3 for id3, _ in self.to_node[id2]])
+
+        # DK - debugging purposes
+        # print add_to_node
+        # sys.exit(1)
+
+        for id, to_nodes in add_to_node.items():
+            for id2, at in to_nodes:
+                if id not in self.to_node:
+                    self.to_node[id] = []
+                self.to_node[id].append([id2, at])
+                if id2 not in self.from_node:
+                    self.from_node[id2] = []
+                self.from_node[id2].append([id, -at])
+        
 
                     
     # Merge and remove nodes inside other nodes, and update edges accordingly
@@ -483,8 +565,10 @@ class Graph:
 
         
     # Generate edges based on the overlapping information between nodes
-    def generate_edges(self, overlap_pct = 0.8):
+    def generate_edges(self, overlap_pct = 0.8, jump_edges = False):
         self.generate_raw_edges(overlap_pct)
+        if jump_edges:
+            self.generate_jump_edges()
         self.merge_inside_nodes()
         self.remove_redundant_edges()
 
@@ -586,7 +670,8 @@ class Graph:
             new_nodes[id] = node
 
         self.nodes = new_nodes
-        self.generate_edges(overlap_pct)
+        self.generate_edges(overlap_pct,
+                            True) # jump edge
 
         # DK - debugging purposes
         # """
@@ -684,7 +769,10 @@ class Graph:
                             if to_id not in to_ids2:
                                 continue
                             node2 = nodes[to_id]
-                            mates[i_][j_] = len(node1.mate_ids & node2.mate_ids)
+                            if mate:
+                                mates[i_][j_] = len(node1.mate_ids & node2.mate_ids)
+                            else:
+                                mates[i_][j_] = len(node1.max_alleles & node2.max_alleles)
 
                     if mates[0][0] == 0 or mates[1][1] == 0:
                         score00 = 0
@@ -745,7 +833,8 @@ class Graph:
 
             self.nodes = new_nodes
             self.remove_low_cov_nodes()
-            self.generate_edges(0.02)
+            self.generate_edges(0.02,
+                                True) # jump edges
             self.reduce(0.02)
          
 
@@ -1146,12 +1235,16 @@ class Graph:
 
             # Draw variants
             for var_id, pos in node_vars:
-                if var_id != "unknown":
-                    var_type, var_left, var_data = self.vars[var_id]
-                    color = "blue"
-                else:
+                if var_id == "gap":
+                    var_type, var_left = "single", pos
+                    color = "black"
+                elif var_id == "unknown":
                     var_type, var_left = "single", pos
                     color = "red"
+                else:
+                    var_type, var_left, var_data = self.vars[var_id]
+
+                    color = "blue"
                 if var_type == "single":
                     var_right = var_left + 1
                 else:
