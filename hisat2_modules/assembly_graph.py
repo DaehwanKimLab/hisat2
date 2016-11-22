@@ -739,8 +739,8 @@ class Graph:
                     continue                
                 to_ids = [i[0] for i in to_node[id]]
 
-                # id has two successors
-                if len(to_ids) != 2:
+                # id has one or two successors
+                if len(to_ids) > 2:
                     continue
                 matches = []
                 from_ids = []
@@ -754,6 +754,15 @@ class Graph:
                 # The two successors have one or two predecessors in total
                 assert len(from_ids) > 0
                 if len(from_ids) > 2:
+                    continue
+
+                # Special case for one allele simulation
+                if len(self.allele_nodes) == 1:
+                    if len(from_ids) == 1 and len(to_ids) == 1:
+                        matches.append([from_ids[0], to_ids[0], 0])
+                        matches_list.append(matches)
+                        continue
+                if len(to_ids) != 2:
                     continue
 
                 if len(from_ids) == 1:
