@@ -1122,6 +1122,59 @@ def get_mpileup(mpileup_cmd, ref_seq_len):
 
 
 """
+HISAT-genotype's mpileup
+"""
+def get_mpileup2(alignview_cmd, ref_seq_len, base_locus):
+    mpileup = []
+    for i in range(ref_seq_len):
+        mpileup.append([[], {}])
+        
+    proc = subprocess.Popen(alignview_cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=open("/dev/null", 'w'))
+
+    prev_pos = -1
+    cigar_re = re.compile('\d+\w')
+    for line in proc.stdout:
+        line = line.strip()
+        cols = line.split()
+        read_id, flag, _, pos, _, cigar_str = cols[:6]
+        read_seq = cols[9]
+        flag, pos = int(flag), int(pos)
+        # Unalined?
+        if flag & 0x4 != 0:
+            continue
+        pos -= (base_locus + 1)
+        if pos < 0:
+            continue
+
+        read_pos, left_pos = 0, pos
+        right_pos = left_pos
+        cigars = cigar_re.findall(cigar_str)
+        cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+        for i in range(len(cigars)):
+            cigar_op, length = cigars[i]
+            if cigar_op in "MD":
+                for j in range(length):
+                    if cigar_op == 'M':
+                        read_nt = read_seq[read_pos + j]
+                    else:
+                        read_nt = 'D'
+                    if read_nt not in mpileup[right_pos + j][1]:
+                        mpileup[right_pos + j][1][read_nt] = 1
+                    else:
+                        mpileup[right_pos + j][1][read_nt] += 1
+
+            if cigar_op in "MND":
+                right_pos += length
+
+            if cigar_op in "MIS":
+                read_pos += length                     
+
+    return mpileup
+
+
+"""
 """
 def error_correct(ref_seq,
                   read_seq,
@@ -1322,6 +1375,16 @@ def HLA_typing(ex_path,
                     alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
 
                 mpileup = get_mpileup(mpileup_cmd, len(ref_seq))
+                mpileup = get_mpileup2(alignview_cmd, len(ref_seq), base_locus)
+
+
+                # DK - debugging purposes
+                """
+                assert len(mpileup) == len(mpileup2)
+                for i_ in range(len(mpileup)):
+                    print i_, mpileup[i_], "vs.", mpileup2[i_]
+                sys.exit(1)
+                """
 
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
