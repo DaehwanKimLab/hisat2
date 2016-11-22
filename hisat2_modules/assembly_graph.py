@@ -672,6 +672,7 @@ class Graph:
             new_nodes[id] = node
 
         self.nodes = new_nodes
+        self.remove_low_cov_nodes()
         self.generate_edges(overlap_pct,
                             True) # jump edge
 
