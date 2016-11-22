@@ -1058,73 +1058,9 @@ def calculate_allele_coverage(allele_haplotype,
 
 
 """
-samtools mpileup
-"""
-def get_mpileup(mpileup_cmd, ref_seq_len):
-    mpileup = []
-    proc = subprocess.Popen(mpileup_cmd,
-                            stdout=subprocess.PIPE,
-                            stderr=open("/dev/null", 'w'))
-
-    prev_pos = -1
-    for line in proc.stdout:
-        line = line.strip()
-        allele, pos, ref_nt, num_reads, orig_nts, quals = line.split('\t')
-        pos = int(pos) - 1
-        if prev_pos + 1 < pos:
-            mpileup += [[[], {}]] * (pos - prev_pos - 1)
-        assert len(mpileup) == pos
-            
-        nt_dic, num_nt = {}, 0
-        i = 0
-        while i < len(orig_nts):
-            c = orig_nts[i]
-            if c == '-':
-                i += 1
-                continue
-
-            num = 0
-            while c.isdigit():
-                num = num * 10 + int(c)
-                i += 1
-                c = orig_nts[i]
-
-            if num > 0:
-                i += num
-                continue
-
-            if c in "ACGTNacgtn*":
-                num_nt += 1
-                if c == '*':
-                    c = 'D'
-                c = c.upper()
-                if c not in nt_dic:
-                    nt_dic[c] = 1
-                else:
-                    nt_dic[c] += 1
-
-            i += 1
-        nt_set = []
-        if num_nt >= 20:
-            for nt, count in nt_dic.items():
-                if nt not in "ACGT":
-                    continue
-                if count >= num_nt / 3.5:
-                    nt_set.append(nt)
-
-        mpileup.append([nt_set, nt_dic])
-        prev_pos = pos
-
-    if len(mpileup) < ref_seq_len:
-        mpileup += ([[[], {}]] * (ref_seq_len - len(mpileup)))
-        
-    return mpileup
-
-
-"""
 HISAT-genotype's mpileup
 """
-def get_mpileup2(alignview_cmd, ref_seq_len, base_locus):
+def get_mpileup(alignview_cmd, ref_seq_len, base_locus):
     mpileup = []
     for i in range(ref_seq_len):
         mpileup.append([[], {}])
@@ -1169,7 +1105,19 @@ def get_mpileup2(alignview_cmd, ref_seq_len, base_locus):
                 right_pos += length
 
             if cigar_op in "MIS":
-                read_pos += length                     
+                read_pos += length
+
+    for i in range(len(mpileup)):
+        nt_dic = mpileup[i][1]
+        num_nt = sum(nt_dic.values())
+        nt_set = []
+        if num_nt >= 20:
+            for nt, count in nt_dic.items():
+                if nt not in "ACGT":
+                    continue
+                if count >= num_nt / 3.5:
+                    nt_set.append(nt)
+        mpileup[i][0] = nt_set
 
     return mpileup
 
@@ -1374,17 +1322,7 @@ def HLA_typing(ex_path,
                     mpileup_cmd += ["-r", "%s:%d-%d" % (chr, left + 1, right + 1)]
                     alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
 
-                mpileup = get_mpileup(mpileup_cmd, len(ref_seq))
-                mpileup = get_mpileup2(alignview_cmd, len(ref_seq), base_locus)
-
-
-                # DK - debugging purposes
-                """
-                assert len(mpileup) == len(mpileup2)
-                for i_ in range(len(mpileup)):
-                    print i_, mpileup[i_], "vs.", mpileup2[i_]
-                sys.exit(1)
-                """
+                mpileup = get_mpileup(alignview_cmd, len(ref_seq), base_locus)
 
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
