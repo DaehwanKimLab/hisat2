@@ -1372,7 +1372,13 @@ def HLA_typing(ex_path,
                         var[var_pos:var_pos + del_len] = [var_id] * del_len
 
                 seq = ''.join(seq)
-                allele_nodes[allele_id] = assembly_graph.Node(allele_id, 0, seq, var, ref_seq, Vars[gene])
+                allele_nodes[allele_id] = assembly_graph.Node(allele_id,
+                                                              0,
+                                                              seq,
+                                                              var,
+                                                              ref_seq,
+                                                              Vars[gene],
+                                                              mpileup)
 
             true_allele_nodes = {}
             if simulation:
@@ -1855,7 +1861,14 @@ def HLA_typing(ex_path,
                         assert False
 
                     # Node
-                    read_nodes.append([orig_read_id, assembly_graph.Node(orig_read_id, read_node_pos, read_node_seq, read_node_var, ref_seq, Vars[gene])])
+                    read_nodes.append([orig_read_id,
+                                       assembly_graph.Node(orig_read_id,
+                                                           read_node_pos,
+                                                           read_node_seq,
+                                                           read_node_var,
+                                                           ref_seq,
+                                                           Vars[gene],
+                                                           mpileup)])
 
                     for positive_var in positive_vars:
                         if positive_var in exon_vars:

@@ -46,7 +46,14 @@ def get_ungapped_seq_var(seq, var):
 
 class Node:
     # Initialize
-    def __init__(self, id, left, seq, var, ref_seq, ref_vars):
+    def __init__(self,
+                 id,
+                 left,
+                 seq,
+                 var,
+                 ref_seq,
+                 ref_vars,
+                 mpileup):
         self.next = [] # list of next nodes
 
         id = id.split('_')[0]
@@ -75,9 +82,10 @@ class Node:
 
         self.calculate_avg_cov()
 
-        # debugging information
         self.ref_seq = ref_seq
         self.ref_vars = ref_vars
+
+        self.mpileup = mpileup
 
         
     # Check how compatible allele is in regard to read or pair
@@ -180,7 +188,10 @@ class Node:
         # Append the rest of the other sequence
         if i > len(self.seq):
             for k in range(i - len(self.seq)):
-                new_seq.append({'N': 1})
+                # nt_dic = self.mpileup[k + 1 + self.right][1]
+                # nt = get_major_nt(nt_dic)
+                nt = 'N'
+                new_seq.append({nt: 1})
                 new_var.append(set())
                 
         new_seq += other.seq[j:]
@@ -228,7 +239,10 @@ class Node:
         vars = []
         left = max(left, self.left)
         right = min(right, self.right)
+        skip_pos = -1
         for pos in range(left, right + 1):
+            if pos <= skip_pos:
+                continue
             var_i = pos - self.left
             nt = get_major_nt(self.seq[var_i])
             if nt == self.ref_seq[pos]:
@@ -245,11 +259,13 @@ class Node:
                 assert var in Vars
                 type, var_pos, data = Vars[var]                    
                 if data == nt or (type == "deletion" and nt == 'D'):
+                    if type == "deletion":
+                        skip_pos = pos + int(data) - 1
                     # DK - debugging purposes
                     if pos != var_pos:
-                        self.print_info(); print >> sys.stderr
-                        print "pos: %d, var_i: %d" % (pos, var_i)
-                        print vars, self.var[var_i - 1], self.var[var_i]
+                        self.print_info()
+                        print "pos: %d, var_pos: %d, var_i: %d" % (pos, var_pos, var_i)
+                        print vars, self.var[var_i-3:var_i], self.var[var_i]
                     
                     assert pos == var_pos
                     added = True
@@ -399,9 +415,11 @@ class Graph:
             node = self.nodes[id]
 
             try_jump_edge = True
+            num_to_node = 0
             if id in self.to_node:
                 to_nodes = self.to_node[id]
-                if len(to_nodes) > 1:
+                num_to_node = len(to_nodes)
+                if len(to_nodes) >= 2:
                     continue
                 for id2, at in to_nodes:
                     node2 = self.nodes[id2]
@@ -431,11 +449,18 @@ class Graph:
                     continue
                 if right > left2:
                     continue
+                    # DK - debugging purposes
+                    """
+                    node2 = self.nodes[id2]
+                    at, overlap = node.overlap_with(node2, self.vars)
+                    if at < 0:
+                        continue
+                    """
 
                 if id not in add_to_node:
                     add_to_node[id] = []
                 add_to_node[id].append([id2, left2 - left])
-                if len(add_to_node[id]) >= 2:
+                if len(add_to_node[id]) + num_to_node >= 2:
                     break
                 avoid_nodes.add(id2)
                 if id2 in self.to_node:
@@ -786,16 +811,8 @@ class Graph:
                             else:
                                 mates[i_][j_] = len(node1.max_alleles & node2.max_alleles)
 
-                    if mates[0][0] == 0 or mates[1][1] == 0:
-                        score00 = 0
-                    else:
-                        score00 = mates[0][0] + mates[1][1]
-
-                    if mates[0][1] == 0 or mates[1][0] == 0:
-                        score01 = 0
-                    else:
-                        score01 = mates[0][1] + mates[1][0]
-
+                    score00 = mates[0][0] + mates[1][1]
+                    score01 = mates[0][1] + mates[1][0]
                     if score00 > score01:
                         matches.append([from_ids[0], to_ids[0], mates[0][0]])
                         matches.append([from_ids[1], to_ids[1], mates[1][1]])
