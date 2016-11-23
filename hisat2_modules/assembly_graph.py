@@ -53,10 +53,12 @@ class Node:
                  var,
                  ref_seq,
                  ref_vars,
-                 mpileup):
+                 mpileup,
+                 simulation):
         self.next = [] # list of next nodes
 
-        id = id.split('_')[0]
+        if simulation:
+            id = id.split('_')[0]
         self.id = id # Node ID
 
         self.left = left # starting position
@@ -76,9 +78,11 @@ class Node:
         assert len(self.seq) == len(self.var)
         self.right = self.left + len(seq) - 1
 
-        # DK -
         self.read_ids = set([id])
-        self.mate_ids = set([id.split('|')[0]])
+        if simulation:
+            self.mate_ids = set([id.split('|')[0]])
+        else:
+            self.mate_ids = set([id])
 
         self.calculate_avg_cov()
 
@@ -332,30 +336,39 @@ class Node:
 
                 
 class Graph:
-    def __init__(self, backbone, vars, exons, allele_nodes = {}):
+    def __init__(self, backbone, vars, exons, partial_allele_ids, allele_nodes = {}, simulation = False):
         # self.head = Node()
         self.backbone = backbone # backbone sequence
         self.vars = vars
         self.exons = exons
+        self.partial_allele_ids = partial_allele_ids
         self.allele_nodes = allele_nodes
+        self.simulation = simulation
 
         self.nodes = {}
         self.edges = {}
 
-        self.left_margin = 200
+        self.left_margin = 300
         self.right_margin = 20
         self.top_margin = 20
         self.bottom_margin = 20
 
         self.scalex, self.scaley = 5, 2
         self.width = len(self.backbone) * self.scalex + self.left_margin + self.right_margin
-        self.height = 2000 * self.scaley
+        self.unscaled_height = 6000
+        self.height = self.unscaled_height * self.scaley
 
+
+    # Set predicted two allele nodes
+    def set_allele_nodes(self, allele_nodes):
+        assert len(allele_nodes) > 0
+        self.allele_nodes = allele_nodes
+        
 
     # Add node, which is an alignment w.r.t. the reference
-    def add_node(self, id, node):
-        # DK - debugging purposes
-        id = id.split('_')[0]
+    def add_node(self, id, node, simulation = False):
+        if simulation:
+            id = id.split('_')[0]
         if id in self.nodes:
             # print >> sys.stderr, "Warning) multi-mapped read:", id
             return
@@ -1068,7 +1081,7 @@ class Graph:
         max_right = max([i[2] for i in nodes])
 
         # display space
-        dspace = [[[begin_y, 2000]]] * (max_right + 100)
+        dspace = [[[begin_y, self.unscaled_height]]] * (max_right + 100)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
             range1 = dspace[left]
@@ -1154,7 +1167,7 @@ class Graph:
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
                 print >> js_file, r'ctx.stroke();'
 
-        # Draw true alleles
+        # Draw true or predicted alleles
         node_colors = ["#FFFF00", "#00FF00"]
         allele_node_colors = ["#888800", "#008800"]
         allele_nodes, seqs, colors = [], [], []
@@ -1167,9 +1180,13 @@ class Graph:
 
                 # Draw allele name
                 print >> js_file, r'ctx.fillStyle = "blue";'
-                print >> js_file, r'ctx.font = "24px Times New Roman";'
-                print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                    (allele_id, 10, get_y(y + 5))
+                print >> js_file, r'ctx.font = "20px Times New Roman";'
+                print >> js_file, r'ctx.fillText("%s (%s, %s)", %d, %d);' % \
+                    (allele_id,
+                     "partial" if allele_id in self.partial_allele_ids else "full",
+                     "true" if self.simulation else "predicted",
+                     10,
+                     get_y(y + 5))
                 print >> js_file, r'ctx.font = "12px Times New Roman";'
         
                 # Draw node
@@ -1225,8 +1242,6 @@ class Graph:
         draw_title = False
         for id, left, right in nodes:
             node = self.nodes[id]
-            read_id, mate = id.split('|')[:2]
-            mate = mate.split('_')[0]
 
             # Get y position
             y = get_dspace(left, right, 14)

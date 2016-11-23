@@ -1378,7 +1378,8 @@ def HLA_typing(ex_path,
                                                               var,
                                                               ref_seq,
                                                               Vars[gene],
-                                                              mpileup)
+                                                              mpileup,
+                                                              simulation)
 
             true_allele_nodes = {}
             if simulation:
@@ -1389,7 +1390,9 @@ def HLA_typing(ex_path,
             asm_graph = assembly_graph.Graph(ref_seq,
                                              Vars[gene],
                                              ref_exons,
-                                             true_allele_nodes)
+                                             partial_alleles,
+                                             true_allele_nodes,
+                                             simulation)
 
             # Choose allele representives from those that share the same exonic sequences
             allele_reps, allele_rep_groups = get_rep_alleles(Links, exon_vars)
@@ -1674,7 +1677,9 @@ def HLA_typing(ex_path,
                             cur_cmpt = add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                             add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                             for read_id_, read_node in read_nodes:
-                                asm_graph.add_node(read_id_, read_node)
+                                asm_graph.add_node(read_id_,
+                                                   read_node,
+                                                   simulation)
                             read_nodes, read_var_list = [], []
 
                             if verbose >= 2:
@@ -1868,7 +1873,8 @@ def HLA_typing(ex_path,
                                                            read_node_var,
                                                            ref_seq,
                                                            Vars[gene],
-                                                           mpileup)])
+                                                           mpileup,
+                                                           simulation)])
 
                     for positive_var in positive_vars:
                         if positive_var in exon_vars:
@@ -1888,108 +1894,25 @@ def HLA_typing(ex_path,
                 print >> sys.stderr, "\t\t\tNumber of reads aligned: %d" % num_reads
 
                 if prev_read_id != None:
+                    # Node
+                    read_nodes.append([orig_read_id,
+                                       assembly_graph.Node(orig_read_id,
+                                                           read_node_pos,
+                                                           read_node_seq,
+                                                           read_node_var,
+                                                           ref_seq,
+                                                           Vars[gene],
+                                                           mpileup,
+                                                           simulation)])
+
                     add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                     add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                     for read_id_, read_node in read_nodes:
-                        asm_graph.add_node(read_id_, read_node)
+                        asm_graph.add_node(read_id_,
+                                           read_node,
+                                           simulation)
                     read_nodes, read_var_list = [], []
-
-                # Generate edges
-                asm_graph.generate_edges()
-
-                # Start drawing assembly graph
-                asm_graph.begin_draw("assembly_graph")
-
-                # Draw assembly graph
-                begin_y = asm_graph.draw(0, "Initial graph")
-                begin_y += 200
-
-                # Reduce graph
-                asm_graph.reduce()
-
-                # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y, "Unitigs")
-                begin_y += 200
                 
-                # Further reduce graph with mate pairs
-                asm_graph.assemble_with_mates()
-
-                # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y, "Graph with mate pairs")
-                begin_y += 200
-
-                # DK - debugging purposes
-                # """
-
-                asm_graph.assemble_with_alleles(allele_nodes)
-
-                # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y, "Graph with alleles")
-
-                # """
-
-                # End drawing assembly graph
-                asm_graph.end_draw()
-
-
-                # Compare two alleles
-                if simulation and len(test_HLA_names) == 2:
-                    allele_name1, allele_name2 = test_HLA_names
-                    print >> sys.stderr, allele_name1, "vs.", allele_name2
-                    asm_graph.print_node_comparison(asm_graph.allele_nodes)
-
-                def compare_alleles(vars1, vars2):
-                    skip = True
-                    var_i, var_j = 0, 0
-                    while var_i < len(vars1) and var_j < len(vars2):
-                        cmp_var_id, node_var_id = vars1[var_i], vars2[var_j]
-                        if cmp_var_id == node_var_id:
-                            skip = False
-                            var = Vars[gene][cmp_var_id]
-                            print >> sys.stderr, cmp_var_id, var, "\t\t\t", mpileup[var[1]]
-                            var_i += 1; var_j += 1
-                            continue
-                        cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
-                        if cmp_var[1] <= node_var[1]:
-                            if not skip:
-                                if (var_i > 0 and var_i + 1 < len(vars1)) or cmp_var[0] != "deletion":
-                                    print >> sys.stderr, "***", cmp_var_id, cmp_var, "==", "\t\t\t", mpileup[cmp_var[1]]
-                            var_i += 1
-                        else:
-                            if not skip:
-                                print >> sys.stderr, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
-                            var_j += 1
-                    
-                tmp_nodes = asm_graph.nodes
-                print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
-                count = 0
-                for id, node in tmp_nodes.items():
-                    count += 1
-                    if count > 100:
-                        break
-                    node_vars = node.get_var_ids(Vars[gene])
-                    node.print_info(); print >> sys.stderr
-                    if node.id in asm_graph.to_node:
-                        for id2, at in asm_graph.to_node[node.id]:
-                            print >> sys.stderr, "\tat %d ==> %s" % (at, id2)
-
-                    if simulation:
-                        alleles, cmp_vars, max_common = "", [], -1
-                        for test_HLA_name in test_HLA_names:
-                            tmp_vars = allele_nodes[test_HLA_name].get_var_ids(Vars[gene])
-                            tmp_common = len(set(node_vars) & set(allele_vars[test_HLA_name]))
-                            if max_common < tmp_common:
-                                max_common = tmp_common
-                                alleles = [[test_HLA_name, tmp_vars]]
-                            elif max_common == tmp_common:
-                                alleles.append([test_HLA_name, tmp_vars])
-
-                        for allele_name, cmp_vars in alleles:
-                            print >> sys.stderr, "vs.", allele_name
-                            compare_alleles(cmp_vars, node_vars)
-                            
-                    print >> sys.stderr
-                    print >> sys.stderr                                
             else:
                 assert index_type == "linear"
                 def add_alleles(alleles):
@@ -2118,6 +2041,115 @@ def HLA_typing(ex_path,
                 HLA_prob = [[allele, prob] for allele, prob in HLA_combined_prob.items()]
                 HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
 
+            if index_type == "graph":
+                if not simulation:
+                    predicted_allele_nodes = {}
+                    for allele_name, prob in HLA_prob:
+                        assert allele_name in allele_nodes
+                        assert allele_name not in predicted_allele_nodes
+                        predicted_allele_nodes[allele_name] = allele_nodes[allele_name]
+                        if len(predicted_allele_nodes) >= 2:
+                            break
+                    asm_graph.set_allele_nodes(predicted_allele_nodes)
+
+                 # Generate edges
+                asm_graph.generate_edges()
+
+                # Start drawing assembly graph
+                asm_graph.begin_draw("assembly_graph")
+
+                # Draw assembly graph
+                begin_y = asm_graph.draw(0, "Initial graph")
+                begin_y += 200
+
+                # Reduce graph
+                asm_graph.reduce()
+
+                # Draw assembly graph
+                begin_y = asm_graph.draw(begin_y, "Unitigs")
+                begin_y += 200
+
+                # DK - debugging purposes
+                # """
+                
+                # Further reduce graph with mate pairs
+                asm_graph.assemble_with_mates()
+
+                # Draw assembly graph
+                begin_y = asm_graph.draw(begin_y, "Graph with mate pairs")
+                begin_y += 200
+
+                asm_graph.assemble_with_alleles(allele_nodes)
+
+                # Draw assembly graph
+                begin_y = asm_graph.draw(begin_y, "Graph with alleles")
+
+                # """
+
+                # End drawing assembly graph
+                asm_graph.end_draw()
+
+
+                # Compare two alleles
+                if simulation and len(test_HLA_names) == 2:
+                    allele_name1, allele_name2 = test_HLA_names
+                    print >> sys.stderr, allele_name1, "vs.", allele_name2
+                    asm_graph.print_node_comparison(asm_graph.allele_nodes)
+
+                def compare_alleles(vars1, vars2):
+                    skip = True
+                    var_i, var_j = 0, 0
+                    while var_i < len(vars1) and var_j < len(vars2):
+                        cmp_var_id, node_var_id = vars1[var_i], vars2[var_j]
+                        if cmp_var_id == node_var_id:
+                            skip = False
+                            var = Vars[gene][cmp_var_id]
+                            print >> sys.stderr, cmp_var_id, var, "\t\t\t", mpileup[var[1]]
+                            var_i += 1; var_j += 1
+                            continue
+                        cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
+                        if cmp_var[1] <= node_var[1]:
+                            if not skip:
+                                if (var_i > 0 and var_i + 1 < len(vars1)) or cmp_var[0] != "deletion":
+                                    print >> sys.stderr, "***", cmp_var_id, cmp_var, "==", "\t\t\t", mpileup[cmp_var[1]]
+                            var_i += 1
+                        else:
+                            if not skip:
+                                print >> sys.stderr, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
+                            var_j += 1
+                    
+                tmp_nodes = asm_graph.nodes
+                print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
+                count = 0
+                for id, node in tmp_nodes.items():
+                    count += 1
+                    if count > 100:
+                        break
+                    node_vars = node.get_var_ids(Vars[gene])
+                    node.print_info(); print >> sys.stderr
+                    if node.id in asm_graph.to_node:
+                        for id2, at in asm_graph.to_node[node.id]:
+                            print >> sys.stderr, "\tat %d ==> %s" % (at, id2)
+
+                    if simulation:
+                        alleles, cmp_vars, max_common = "", [], -sys.maxint
+                        for test_HLA_name in test_HLA_names:
+                            tmp_vars = allele_nodes[test_HLA_name].get_var_ids(Vars[gene])
+                            tmp_common = len(set(node_vars) & set(allele_vars[test_HLA_name]))
+                            tmp_common -= len(set(node_vars) | set(allele_vars[test_HLA_name]))
+                            if max_common < tmp_common:
+                                max_common = tmp_common
+                                alleles = [[test_HLA_name, tmp_vars]]
+                            elif max_common == tmp_common:
+                                alleles.append([test_HLA_name, tmp_vars])
+
+                        for allele_name, cmp_vars in alleles:
+                            print >> sys.stderr, "vs.", allele_name
+                            compare_alleles(cmp_vars, node_vars)
+                            
+                    print >> sys.stderr
+                    print >> sys.stderr
+
             success = [False for i in range(len(test_HLA_names))]
             found_list = [False for i in range(len(test_HLA_names))]
             for prob_i in range(len(HLA_prob)):
@@ -2156,7 +2188,7 @@ def HLA_typing(ex_path,
                 if prob_i >= 19:
                     break
             print >> sys.stderr
-
+            
             # DK - debugging purposes
             sys.exit(1)
 
