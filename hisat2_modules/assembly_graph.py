@@ -117,8 +117,6 @@ class Node:
         add_mm = len(self.mate_ids & other.mate_ids)
         for i in range(len(seq)):
             max_mm = 0.012 * (len(seq) - i) # 1 mismatch per 83 bases
-            # DK - working ..
-            # max_mm += add_mm # Allow more mismatches if mate pairs support the overlapping
             tmp_mm = 0.0
             for j in range(len(other_seq)):
                 if i + j >= len(seq):
@@ -149,15 +147,12 @@ class Node:
                             if mismatch < 1.0:
                                 mismatch = 1.0
 
-                if debug and i == 0:
-                    print "\t", j, nt_dic, other_nt_dic, mismatch
-                    
                 assert mismatch >= 0.0
                 tmp_mm += mismatch
                 if tmp_mm > max_mm:
                     break
 
-            if debug and i < 200:
+            if debug and i > 3450:
                 print "at %d (%d) with overlap of %d and mismatch of %.2f" % (i, self.left + i, j, tmp_mm)
 
             if tmp_mm <= max_mm:
@@ -768,7 +763,10 @@ class Graph:
             
             sorted_nodes = [[id, node.left, node.right] for id, node in nodes.items()]
             def node_cmp(a, b):
-                return a[1] - b[1]
+                if a[1] != b[1]:
+                    return a[1] - b[1]
+                else:
+                    return a[2] - b[2]
             sorted_nodes = sorted(sorted_nodes, cmp=node_cmp)
 
             # Resolve two cases iteratively:
@@ -803,30 +801,41 @@ class Graph:
                         matches.append([from_ids[0], to_ids[0], 0])
                         matches_list.append(matches)
                         continue
-                if len(to_ids) != 2:
+                if len(to_ids) > 2:
+                    continue
+                if len(from_ids) == 1 and len(to_ids) == 1:
                     continue
 
-                if len(from_ids) == 1:
+                mates = []                    
+                for i_ in range(len(from_ids)):
+                    from_id = from_ids[i_]
+                    node1 = nodes[from_id]
+                    mates.append([0] * len(to_ids))
+                    for j_ in range(len(to_ids)):
+                        to_id = to_ids[j_]
+                        to_ids2 = [i[0] for i in to_node[from_id]] if from_id in to_node else []
+                        if to_id not in to_ids2:
+                            continue
+                        node2 = nodes[to_id]
+                        if mate:
+                            mates[i_][j_] = len(node1.mate_ids & node2.mate_ids)
+                        else:
+                            mates[i_][j_] = len(node1.max_alleles & node2.max_alleles)
+
+                if len(from_ids) == 1 and len(to_ids) == 2:
                     for to_id in to_ids:
                         matches.append([from_ids[0], to_id, 0])
+                elif len(from_ids) == 2 and len(to_ids) == 1:
+                    if to_ids[0] == sorted_nodes[-1][0]:
+                        if mates[0][0] > mates[1][0]:
+                            matches.append([from_ids[0], to_ids[0], mates[0][0]])
+                        elif mates[0][0] < mates[1][0]:
+                            matches.append([from_ids[1], to_ids[0], mates[1][0]])
+                        elif mates[0][0] > 0:
+                            matches.append([from_ids[0], to_ids[0], mates[0][0]])
+                            matches.append([from_ids[1], to_ids[0], mates[1][0]])
                 else:
                     assert len(from_ids) == 2 and len(to_ids) == 2
-                    mates = []
-                    for i_ in range(len(from_ids)):
-                        from_id = from_ids[i_]
-                        node1 = nodes[from_id]
-                        mates.append([0] * len(to_ids))
-                        for j_ in range(len(to_ids)):
-                            to_id = to_ids[j_]
-                            to_ids2 = [i[0] for i in to_node[from_id]] if from_id in to_node else []
-                            if to_id not in to_ids2:
-                                continue
-                            node2 = nodes[to_id]
-                            if mate:
-                                mates[i_][j_] = len(node1.mate_ids & node2.mate_ids)
-                            else:
-                                mates[i_][j_] = len(node1.max_alleles & node2.max_alleles)
-
                     score00 = mates[0][0] + mates[1][1]
                     score01 = mates[0][1] + mates[1][0]
                     if score00 > score01:

@@ -2384,6 +2384,9 @@ def test_HLA_genotyping(base_fname,
     if not os.path.exists("IMGTHLA"):
         os.system("git clone https://github.com/jrob119/IMGTHLA.git")
 
+        # July 14, 2016
+        # 45c377516bdb7f1b926d1bb504afc801069d5bba
+
     simulation = (read_fname == [] and alignment_fname == "")
 
     def check_files(fnames):
