@@ -2691,10 +2691,9 @@ def test_HLA_genotyping(base_fname,
                             if allele.find("BACKBONE") != -1:
                                 continue
 
-                            # DK - debugging purposes
-                            # skip partial sequeuces
-                            # if allele in partial_alleles:
-                            #    continue
+                            if "full" in debug:
+                                if allele in partial_alleles:
+                                    continue
                             
                             HLA_gene_alleles.append(allele)
                         nums = [i for i in range(len(HLA_gene_alleles))]

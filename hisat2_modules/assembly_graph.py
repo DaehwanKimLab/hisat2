@@ -263,15 +263,18 @@ class Node:
                 assert var in Vars
                 type, var_pos, data = Vars[var]                    
                 if data == nt or (type == "deletion" and nt == 'D'):
+                    assert pos >= var_pos
+                    if type == "deletion" and pos > var_pos:
+                        continue                    
                     if type == "deletion":
                         skip_pos = pos + int(data) - 1
+                        
                     # DK - debugging purposes
                     if pos != var_pos:
                         self.print_info()
                         print "pos: %d, var_pos: %d, var_i: %d" % (pos, var_pos, var_i)
                         print vars, self.var[var_i-3:var_i], self.var[var_i]
-                    
-                    assert pos == var_pos
+                        
                     added = True
                     vars.append([var, pos])
             if not added and "unknown" in self.var[var_i]:
