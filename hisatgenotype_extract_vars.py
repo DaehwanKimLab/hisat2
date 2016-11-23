@@ -378,7 +378,7 @@ def extract_vars(base_fname,
                 continue
             HLA_partial_names, HLA_partial_seqs = read_MSF_file(HLA_partial_MSA_fname)
 
-            # DK - for debugging purposes
+            # DK - debugging purposes
             # Partial alleles vs. Full alleles
             """
             counts = [0, 0, 0, 0]
@@ -417,7 +417,9 @@ def extract_vars(base_fname,
                 ref_exon_len = ref_exons[-1][1] - ref_exons[-1][0] + 1
                 ref_partial_exon_len = ref_partial_exons[-1][1] - ref_partial_exons[-1][0] + 1
                 assert ref_exon_len == ref_partial_exon_len
-                
+
+            partial_seq_len = find_seq_len(HLA_partial_seqs)
+            partial_backbone_seq = create_consensus_seq(HLA_partial_seqs, partial_seq_len, partial)
             for HLA_name, seq_id in HLA_partial_names.items():
                 if HLA_name in HLA_names:
                     continue
@@ -428,7 +430,11 @@ def extract_vars(base_fname,
                     ref_exon = ref_exons[e]
                     ref_partial_exon = ref_partial_exons[e]
                     new_seq += backbone_seq[right:ref_exon[0]]
-                    new_seq += seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
+                    exon_seq = seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
+                    nt_exon_seq = exon_seq.replace('.', '')
+                    if len(nt_exon_seq) == 0:
+                        exon_seq = partial_backbone_seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
+                    new_seq += exon_seq
                     right = ref_exon[1] + 1
                 new_seq += backbone_seq[right:]
                 HLA_names[HLA_name] = len(HLA_seqs)
