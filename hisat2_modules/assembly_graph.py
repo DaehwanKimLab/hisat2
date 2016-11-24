@@ -336,7 +336,6 @@ class Node:
                 
 class Graph:
     def __init__(self, backbone, vars, exons, partial_allele_ids, allele_nodes = {}, simulation = False):
-        # self.head = Node()
         self.backbone = backbone # backbone sequence
         self.vars = vars
         self.exons = exons

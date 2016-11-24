@@ -1060,7 +1060,11 @@ def calculate_allele_coverage(allele_haplotype,
 """
 HISAT-genotype's mpileup
 """
-def get_mpileup(alignview_cmd, ref_seq_len, base_locus):
+def get_mpileup(alignview_cmd,
+                ref_seq,
+                base_locus,
+                vars):
+    ref_seq_len = len(ref_seq)
     mpileup = []
     for i in range(ref_seq_len):
         mpileup.append([[], {}])
@@ -1107,6 +1111,7 @@ def get_mpileup(alignview_cmd, ref_seq_len, base_locus):
             if cigar_op in "MIS":
                 read_pos += length
 
+    # Choose representative bases or 'D'
     for i in range(len(mpileup)):
         nt_dic = mpileup[i][1]
         num_nt = sum(nt_dic.values())
@@ -1118,6 +1123,55 @@ def get_mpileup(alignview_cmd, ref_seq_len, base_locus):
                 if count >= num_nt / 3.5:
                     nt_set.append(nt)
         mpileup[i][0] = nt_set
+
+    # Sort variants
+    var_list = [[] for i in range(len(mpileup))]
+    for var_id, value in vars.items():
+        var_type, var_pos, var_data = value
+        assert var_pos < len(var_list)
+        var_list[var_pos].append([var_id, var_type, var_data])
+
+    # Assign known or unknown variants
+    skip_i, prev_del_var_id = -1, ""
+    for i in range(len(mpileup)):
+        nt_dic = mpileup[i][1]
+        ref_nt = ref_seq[i]
+        var_set = set()
+        for nt, count in nt_dic.items():
+            if nt == 'D':
+                if i <= skip_i:
+                    assert prev_del_var_id != ""
+                    var_set.add(prev_del_var_id)
+                    continue
+                for var_id, var_type, var_data in var_list[i]:
+                    if var_type != "deletion":
+                        continue
+                    del_len = int(var_data)
+                    del_exist = True
+                    for j in range(i + 1, i + del_len):
+                        assert j < len(mpileup)
+                        nt_dic2 = mpileup[j][1]
+                        if 'D' not in nt_dic2:
+                            del_exist = False
+                            break
+                    if del_exist:
+                        var_set.add(var_id)
+                        prev_del_var_id = var_id
+                        skip_i = i + del_len - 1
+                        break
+                                                
+            elif nt != ref_nt:
+                assert nt in "ACGT"
+                id = "unknown"
+                for var_id, var_type, var_data in var_list[i]:
+                    if var_type != "single":
+                        continue
+                    if nt == var_data:
+                        id = var_id
+                        break
+                var_set.add(id)
+                        
+        mpileup[i].append(var_set)
 
     return mpileup
 
@@ -1322,7 +1376,10 @@ def HLA_typing(ex_path,
                     mpileup_cmd += ["-r", "%s:%d-%d" % (chr, left + 1, right + 1)]
                     alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
 
-                mpileup = get_mpileup(alignview_cmd, len(ref_seq), base_locus)
+                mpileup = get_mpileup(alignview_cmd,
+                                      ref_seq,
+                                      base_locus,
+                                      Vars[gene])
 
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
