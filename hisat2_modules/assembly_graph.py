@@ -186,12 +186,19 @@ class Node:
             
         # Append the rest of the other sequence
         if i > len(self.seq):
+            flank_cov = sum(self.seq[-1].values()) + sum(other.seq[0].values())
+            flank_cov /= 2.0
             for k in range(i - len(self.seq)):
-                # nt_dic = self.mpileup[k + 1 + self.right][1]
-                # nt = get_major_nt(nt_dic)
-                nt = 'N'
-                new_seq.append({nt: 1})
-                new_var.append(set())
+                nt_dic, var_set = self.mpileup[k + 1 + self.right][1:]
+                nt_dic, var_set = deepcopy(nt_dic), deepcopy(var_set)
+                if len(nt_dic) == 0:
+                    nt_dic = {'N' : 1}
+                weight = flank_cov / max(1.0, sum(nt_dic.values()))
+                for nt, value in nt_dic.items():
+                    nt_dic[nt] = value * weight
+
+                new_seq.append(nt_dic)
+                new_var.append(var_set)
                 
         new_seq += other.seq[j:]
         new_var += other.var[j:]
