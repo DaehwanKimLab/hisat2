@@ -228,7 +228,8 @@ class Node:
                 type, pos, data = Vars[var]
                 nt = get_major_nt(self.seq[var_i])
                 if data == nt or (type == "deletion" and nt == 'D'):
-                    vars.append(var)                    
+                    vars.append(var)
+
         return vars
 
     
@@ -274,7 +275,7 @@ class Node:
                     vars.append([var, pos])
             if not added and "unknown" in self.var[var_i]:
                 vars.append(["unknown", pos])
-            
+
         return vars
 
 
@@ -1090,10 +1091,10 @@ class Graph:
         def node_cmp(a, b):
             return a[1] - b[1]
         nodes = sorted(nodes, cmp=node_cmp)
-        max_right = max([i[2] for i in nodes])
+        max_right = len(self.backbone)
 
         # display space
-        dspace = [[[begin_y, self.unscaled_height]]] * (max_right + 100)
+        dspace = [[[begin_y, self.unscaled_height]]] * (max_right + 1)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
             range1 = dspace[left]
@@ -1153,9 +1154,10 @@ class Graph:
         js_file = htmlDraw.js_file
 
         # Draw exons
-        y = get_dspace(0, nodes[-1][2], 14)
+        y = get_dspace(0, max_right, 14)
         for e in range(len(self.exons)):
             left, right = self.exons[e]
+            right += 1
 
             # Draw node
             print >> js_file, r'ctx.beginPath();'
@@ -1187,8 +1189,9 @@ class Graph:
             allele_nodes, seqs, colors = self.get_node_comparison_info(self.allele_nodes)
             for n in range(len(allele_nodes)):
                 allele_id, left, right = allele_nodes[n]
+                right += 1
                 allele_node = self.allele_nodes[allele_id]
-                y = get_dspace(0, nodes[-1][2], 14)
+                y = get_dspace(0, max_right, 14)
 
                 # Draw allele name
                 print >> js_file, r'ctx.fillStyle = "blue";'
@@ -1258,6 +1261,7 @@ class Graph:
             # Get y position
             y = get_dspace(left, right, 14)
             node_to_y[id] = y
+            right += 1
 
             node_vars = node.get_vars(self.vars)
             node_var_ids = node.get_var_ids(self.vars)

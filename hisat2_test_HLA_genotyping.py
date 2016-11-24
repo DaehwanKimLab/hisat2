@@ -2384,8 +2384,10 @@ def test_HLA_genotyping(base_fname,
     if not os.path.exists("IMGTHLA"):
         os.system("git clone https://github.com/jrob119/IMGTHLA.git")
 
-        # July 14, 2016
-        # 45c377516bdb7f1b926d1bb504afc801069d5bba
+        # Check out one particular revision just to have the same data across multiple computers        
+        # Revision on July 14, 2016
+        revision = "45c377516bdb7f1b926"
+        os.system("cd IMGTHLA; git checkout %s; cd .." % revision)
 
     simulation = (read_fname == [] and alignment_fname == "")
 
