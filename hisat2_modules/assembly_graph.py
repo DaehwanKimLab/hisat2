@@ -750,23 +750,20 @@ class Graph:
             from_node = self.from_node
             nodes, new_nodes = self.nodes, {}
 
-            if not mate:
+            if not mate: # w.r.t. known alleles
                 for node in nodes.values():
                     node_vars = node.get_var_ids(vars)
-                    max_alleles, max_common = set(), 0
+                    max_alleles, max_common = set(), -sys.maxint
                     for anode in allele_nodes.values():
-                        allele_vars = anode.get_var_ids(vars)
-                        tmp_common = len(set(node_vars) & set(allele_vars))
+                        allele_vars = anode.get_var_ids(vars, node.left, node.right)
+                        tmp_common = len(set(node_vars) & set(allele_vars)) - len(set(node_vars) | set(allele_vars))
                         if tmp_common > max_common:
                             max_common = tmp_common
                             max_alleles = set([anode.id])
                         elif tmp_common == max_common:
                             max_alleles.add(anode.id)
 
-                    if max_common > 0:
-                        node.max_alleles = max_alleles
-                    else:
-                        node.max_alleles = set()
+                    node.max_alleles = max_alleles
             
             sorted_nodes = [[id, node.left, node.right] for id, node in nodes.items()]
             def node_cmp(a, b):
@@ -829,9 +826,27 @@ class Graph:
                         else:
                             mates[i_][j_] = len(node1.max_alleles & node2.max_alleles)
 
+                # DK - debugging purposes
+                """
+                if "479|L" in to_ids and \
+                   "164|R" in to_ids:
+                    print from_ids, "===>", to_ids
+                    print mates
+                    sys.exit(1)
+                """
+
                 if len(from_ids) == 1 and len(to_ids) == 2:
-                    for to_id in to_ids:
-                        matches.append([from_ids[0], to_id, 0])
+                    if from_ids[0] == sorted_nodes[0][0]:
+                        if mates[0][0] > mates[0][1]:
+                            matches.append([from_ids[0], to_ids[0], mates[0][0]])
+                        elif mates[0][0] < mates[0][1]:
+                            matches.append([from_ids[0], to_ids[1], mates[0][1]])
+                        else:
+                            matches.append([from_ids[0], to_ids[0], mates[0][0]])
+                            matches.append([from_ids[0], to_ids[1], mates[0][1]])                            
+                    else:
+                        for to_id in to_ids:
+                            matches.append([from_ids[0], to_id, 0])
                 elif len(from_ids) == 2 and len(to_ids) == 1:
                     if to_ids[0] == sorted_nodes[-1][0]:
                         if mates[0][0] > mates[1][0]:
@@ -1181,7 +1196,7 @@ class Graph:
                 (e+1, get_x(left + 2), get_y(y + 7))
 
             if e > 0:
-                prev_right = self.exons[e-1][1]
+                prev_right = self.exons[e-1][1] + 1
                 print >> js_file, r'ctx.beginPath();'
                 print >> js_file, r'ctx.moveTo(%d, %d);' % (get_x(left), get_y(y + 5))
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
@@ -1189,7 +1204,7 @@ class Graph:
 
         # Draw true or predicted alleles
         node_colors = ["#FFFF00", "#00FF00"]
-        allele_node_colors = ["#888800", "#008800"]
+        allele_node_colors = ["#DDDD00", "#008800"]
         allele_nodes, seqs, colors = [], [], []
         if len(self.allele_nodes) > 0:
             allele_nodes, seqs, colors = self.get_node_comparison_info(self.allele_nodes)
@@ -1267,7 +1282,6 @@ class Graph:
             # Get y position
             y = get_dspace(left, right, 14)
             node_to_y[id] = y
-            right += 1
 
             node_vars = node.get_vars(self.vars)
             node_var_ids = node.get_var_ids(self.vars)
@@ -1290,6 +1304,7 @@ class Graph:
                 color = "yellow"    
 
             # Draw node
+            right += 1
             print >> js_file, r'ctx.beginPath();'
             print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
                 (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))

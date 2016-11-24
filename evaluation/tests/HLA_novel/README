@@ -1,11 +1,12 @@
 To run HISAT-genotype
-   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-mismatch 2 --debug paired --skip-fragment-regions 1000-1020
 
-   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-mismatch 2 --debug paired,full
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-mismatch 2 --debug paired,full --random-seed 0
 
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-mismatch 2 --reads CP/LP6005590-DNA_H04.extracted.fq.1.gz,CP/LP6005590-DNA_H04.extracted.fq.2.gz
 
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-mismatch 2 --reads illumina/NA12878.fished_1.fq,illumina/NA12878.fished_2.fq
+
 
 To extract HLA alleles and variants
 

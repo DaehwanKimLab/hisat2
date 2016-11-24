@@ -1470,6 +1470,7 @@ def HLA_typing(ex_path,
             prev_read_id = None
             prev_right_pos = 0
             prev_lines = []
+            left_read_ids, right_read_ids = set(), set()
             if index_type == "graph":
                 # nodes for reads
                 read_nodes = []
@@ -1519,9 +1520,22 @@ def HLA_typing(ex_path,
                     if NM > num_mismatch:
                         continue
 
+                    # DK - debugging purposes
+                    """
                     # Only consider unique alignment
                     if NH > 1:
                         continue
+                    """
+
+                    # Left read?
+                    if flag & 0x40 != 0:
+                        if read_id in left_read_ids:
+                            continue
+                        left_read_ids.add(read_id)
+                    else: # Right read?
+                        if read_id in right_read_ids:
+                            continue
+                        right_read_ids.add(read_id)
 
                     if Zs:
                         Zs = Zs.split(',')
