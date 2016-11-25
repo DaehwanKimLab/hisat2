@@ -75,6 +75,19 @@ def extract_vars(base_fname,
     left_ext_seq, right_ext_seq = "", ""
     if base_fname in ["hla"]:
         HLA_genes, HLA_gene_strand = {}, {}
+
+        # Check HLA genes
+        HLA_gene_names = []
+        for HLA_gen_fname in glob.glob("IMGTHLA/fasta/*_gen.fasta"):
+            HLA_gene_name = HLA_gen_fname.split('/')[-1].split('_')[0]
+            if HLA_gene_name == "hla":
+                continue
+            HLA_gene_names.append(HLA_gene_name)
+
+        if hla_list == []:
+            hla_list = HLA_gene_names
+
+        remove_hla_list = []
         for gene in hla_list:
             hisat2 = os.path.join(ex_path, "hisat2")
             aligner_cmd = [hisat2,
@@ -85,7 +98,6 @@ def extract_vars(base_fname,
             align_proc = subprocess.Popen(aligner_cmd,
                                           stdout=subprocess.PIPE,
                                           stderr=open("/dev/null", 'w'))
-            print aligner_cmd
             allele_id, strand = "", ''
             chr, left, right = "", -1, -1
             for line in align_proc.stdout:
@@ -113,7 +125,9 @@ def extract_vars(base_fname,
                 assert int(AS) == 0
 
             align_proc.communicate()
-            assert allele_id != ""
+            if allele_id == "":
+                remove_hla_list.append(gene)
+                continue
             allele_name = ""
             for line in open("IMGTHLA/fasta/%s_gen.fasta" % gene):
                 line = line.strip()
@@ -156,7 +170,9 @@ def extract_vars(base_fname,
         skip = False
         for line in open("IMGTHLA/hla.dat"):
             if line.startswith("DE"):
-                allele_name = line.split()[1][4:-1]
+                allele_name = line.split()[1][:-1]
+                if allele_name.startswith("HLA-"):
+                    allele_name = allele_name[4:]
                 gene = allele_name.split('*')[0]
                 if line.find("partial") != -1 or \
                         not gene in HLA_genes or \
@@ -173,6 +189,20 @@ def extract_vars(base_fname,
                 if not gene in HLA_gene_exons:
                     HLA_gene_exons[gene] = []
                 HLA_gene_exons[gene].append([int(exon_range[0]) - 1 + len(left_ext_seq), int(exon_range[1]) - 1 + len(left_ext_seq)])
+
+        tmp_hla_list = []
+        for gene in hla_list:
+            if gene in remove_hla_list:
+                continue
+            if gene not in HLA_gene_exons:
+                continue
+            tmp_hla_list.append(gene)
+        hla_list = tmp_hla_list
+        for key in HLA_genes.keys():
+            if key in hla_list:
+                continue
+            del HLA_genes[key]
+            del HLA_gene_strand[key]
     else:
         assert base_fname == "cyp"
         
@@ -309,7 +339,7 @@ def extract_vars(base_fname,
                     max_seq_count = tmp_seq_count
             return seq_len
 
-        def create_consensus_seq(seqs, seq_len, partial):
+        def create_consensus_seq(seqs, seq_len, remove_empty = True):
             consensus_count = [[0, 0, 0, 0] for i in range(seq_len)]
             for i in range(len(seqs)):                
                 seq = seqs[i]
@@ -330,7 +360,8 @@ def extract_vars(base_fname,
                         consensus_count[j][3] += 1
             consensus_seq = ""
             has_empty = False
-            for count in consensus_count:
+            for c in range(len(consensus_count)):
+                count = consensus_count[c]
                 # No alleles have bases at this particular location
                 if sum(count) <= 0:
                     has_empty = True
@@ -342,7 +373,7 @@ def extract_vars(base_fname,
             consensus_seq = ''.join(consensus_seq)
 
             # Remove dots (deletions)
-            if has_empty and not partial:
+            if has_empty and remove_empty:
                 for seq_i in range(len(seqs)):
                     seqs[seq_i] = list(seqs[seq_i])
                 for i in range(len(consensus_seq)):
@@ -358,11 +389,14 @@ def extract_vars(base_fname,
                 consensus_seq = consensus_seq.replace('E', '')
                 
             return consensus_seq
+        
 
         seq_len = find_seq_len(HLA_seqs)        
         if reference_type == "gene":
             backbone_name = "%s*BACKBONE" % HLA_gene
-            backbone_seq = create_consensus_seq(HLA_seqs, seq_len, partial)
+            backbone_seq = create_consensus_seq(HLA_seqs,
+                                                seq_len,
+                                                not partial) # Remove empty sequences?
             # Allele sequences can shrink, so readjust the sequence length
             if not partial:
                 seq_len = find_seq_len(HLA_seqs)
@@ -408,39 +442,54 @@ def extract_vars(base_fname,
             exon_len = 0
             ref_exons = [] # converted exons to MSF file (e.g. A_gen.msf)
             ref_partial_exons = [] # converted exons to MSF file (e.g. A_nuc.msf)
+
+            complete = True
             for exon in exons:
                 left, right = exon
                 ref_exons.append([ref_seq_map[left], ref_seq_map[right]])
-                ref_partial_exons.append([ref_partial_seq_map[exon_len], ref_partial_seq_map[right - left + exon_len]])
+                next_exon_len = right - left + exon_len
+                if next_exon_len >= len(ref_partial_seq_map):
+                    print >> sys.stderr, "Warning: partial sequences (%s) seem to be incomplete" % HLA_gene
+                    complete = False
+                    break
+                ref_partial_exons.append([ref_partial_seq_map[exon_len], ref_partial_seq_map[next_exon_len]])
                 exon_len += (right - left + 1)
                 # Make sure two MSF files (e.g. A_gen.msf and A_nuc.msf) share the same MSF lengths in the exonic sequences
                 ref_exon_len = ref_exons[-1][1] - ref_exons[-1][0] + 1
                 ref_partial_exon_len = ref_partial_exons[-1][1] - ref_partial_exons[-1][0] + 1
                 assert ref_exon_len == ref_partial_exon_len
 
-            partial_seq_len = find_seq_len(HLA_partial_seqs)
-            partial_backbone_seq = create_consensus_seq(HLA_partial_seqs, partial_seq_len, partial)
-            for HLA_name, seq_id in HLA_partial_names.items():
-                if HLA_name in HLA_names:
-                    continue
-                seq = HLA_partial_seqs[seq_id]
-                new_seq = ""
-                right = 0
-                for e in range(len(exons)):
-                    ref_exon = ref_exons[e]
-                    ref_partial_exon = ref_partial_exons[e]
-                    new_seq += backbone_seq[right:ref_exon[0]]
-                    exon_seq = seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
-                    nt_exon_seq = exon_seq.replace('.', '')
-                    if len(nt_exon_seq) == 0:
-                        exon_seq = partial_backbone_seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
-                    new_seq += exon_seq
-                    right = ref_exon[1] + 1
-                new_seq += backbone_seq[right:]
-                HLA_names[HLA_name] = len(HLA_seqs)
-                HLA_seqs.append(new_seq)
+            if complete:
+                partial_seq_len = find_seq_len(HLA_partial_seqs)
+                partial_backbone_seq = create_consensus_seq(HLA_partial_seqs,
+                                                            partial_seq_len,
+                                                            False) # Remove empty sequences?
+                for HLA_name, seq_id in HLA_partial_names.items():
+                    if HLA_name in HLA_names:
+                        continue
+                    seq = HLA_partial_seqs[seq_id]
+                    new_seq = ""
+                    right = 0
+                    for e in range(len(exons)):
+                        ref_exon = ref_exons[e]
+                        ref_partial_exon = ref_partial_exons[e]
+                        new_seq += backbone_seq[right:ref_exon[0]]
+                        exon_seq = seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
+                        nt_exon_seq = exon_seq.replace('.', '')
+                        if len(nt_exon_seq) == 0:
+                            exon_seq = partial_backbone_seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
+                        new_seq += exon_seq
+                        right = ref_exon[1] + 1
+                    new_seq += backbone_seq[right:]
+                    HLA_names[HLA_name] = len(HLA_seqs)
+                    HLA_seqs.append(new_seq)
 
-            backbone_seq = create_consensus_seq(HLA_seqs, seq_len, partial)
+                backbone_seq = create_consensus_seq(HLA_seqs,
+                                                    seq_len,
+                                                    True) # Remove empty sequences?
+                seq_len = find_seq_len(HLA_seqs)
+
+        assert '.' not in backbone_seq and 'E' not in backbone_seq
 
         # Left-shift deletions if poissble
         def leftshift_deletions(backbone_seq, seq, debug = False):
@@ -980,8 +1029,8 @@ if __name__ == '__main__':
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
-                        default="A,B,C,DQA1,DQB1,DRB1",
-                        help="A comma-separated list of HLA genes")
+                        default="",
+                        help="A comma-separated list of HLA genes (default: empty, all HLA genes in IMGT/HLA database)")
     parser.add_argument("--no-partial",
                         dest="partial",
                         action="store_false",
@@ -1016,7 +1065,10 @@ if __name__ == '__main__':
                         help="also print some statistics to stderr")
 
     args = parser.parse_args()
-    args.hla_list = args.hla_list.split(',')
+    if args.hla_list == "":
+        hla_list = []
+    else:
+        hla_list = args.hla_list.split(',')
     if args.inter_gap > args.intra_gap:
         print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
@@ -1041,7 +1093,7 @@ if __name__ == '__main__':
     extract_vars(base_fname,
                  base_dname,
                  args.reference_type,
-                 args.hla_list,
+                 hla_list,
                  args.partial,
                  args.inter_gap,
                  args.intra_gap,

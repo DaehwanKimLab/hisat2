@@ -1307,15 +1307,13 @@ def HLA_typing(ex_path,
                aligners,
                num_mismatch,
                assembly,
-               concordant_assembly,
-               exonic_only,
                fastq,
                read_fname,
                alignment_fname,
                num_frag_list,
                threads,
                best_alleles,
-               verbose):    
+               verbose):
     if simulation:
         test_passed = {}
     for aligner, index_type in aligners:
@@ -2112,7 +2110,7 @@ def HLA_typing(ex_path,
                 HLA_prob = [[allele, prob] for allele, prob in HLA_combined_prob.items()]
                 HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
 
-            if index_type == "graph":
+            if index_type == "graph" and assembly:
                 if not simulation:
                     predicted_allele_nodes = {}
                     for allele_name, prob in HLA_prob:
@@ -2227,10 +2225,12 @@ def HLA_typing(ex_path,
                 prob = HLA_prob[prob_i]
                 found = False
                 _allele_rep = prob[0]
+                """
                 if partial and exonic_only:
                     _fields = _allele_rep.split(':')
                     if len(_fields) == 4:
                         _allele_rep = ':'.join(_fields[:-1])
+                """
 
                 if simulation:
                     for name_i in range(len(test_HLA_names)):
@@ -2443,8 +2443,6 @@ def test_HLA_genotyping(base_fname,
                         perbase_snprate,
                         skip_fragment_regions,
                         assembly,
-                        concordant_assembly,
-                        exonic_only,
                         verbose,
                         daehwan_debug):
     # Current script directory
@@ -2481,14 +2479,14 @@ def test_HLA_genotyping(base_fname,
     # Check if the pre-existing files (hla*) are compatible with the current parameter setting
     if os.path.exists("hla.ref"):
         left = 0
-        HLA_genes = set()
+        HLA_genes = []
         BACKBONE = False
         for line in open("hla.ref"):
             HLA_name = line.strip().split()[0]
             if HLA_name.find("BACKBONE") != -1:
                 BACKBONE = True
             HLA_gene = HLA_name.split('*')[0]
-            HLA_genes.add(HLA_gene)
+            HLA_genes.append(HLA_gene)
         delete_hla_files = False
         if reference_type == "gene":
             if not BACKBONE:
@@ -2498,11 +2496,13 @@ def test_HLA_genotyping(base_fname,
                 delete_hla_files = True
         else:
             assert False
-        if not set(hla_list).issubset(HLA_genes):
+        if len(hla_list) == 0:
+            hla_list = HLA_genes
+        if not set(hla_list).issubset(set(HLA_genes)):
             delete_hla_files = True
         if delete_hla_files:
             os.system("rm hla*")
-    
+
     # Extract HLA variants, backbone sequence, and other sequeces  
     if len(base_fname) > 0:
         base_fname = "_" + base_fname
@@ -2546,8 +2546,9 @@ def test_HLA_genotyping(base_fname,
     if (not check_files(HLA_fnames)) or (not excluded_alleles_match) :
         extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
         extract_cmd = [extract_hla_script,
-                       "--reference-type", reference_type,
-                       "--hla-list", ','.join(hla_list)]
+                       "--reference-type", reference_type]
+        if len(hla_list) > 0:
+            extract_cmd += ["--hla-list", ','.join(hla_list)]
 
         if len(exclude_allele_list) > 0:
             print exclude_allele_list
@@ -2625,7 +2626,9 @@ def test_HLA_genotyping(base_fname,
     for line in open("IMGTHLA/hla.dat"):
         if not line.startswith("DE"):
             continue
-        allele_name = line.split()[1][4:-1]
+        allele_name = line.split()[1][:-1]
+        if allele_name.startswith("HLA-"):
+            allele_name = allele_name[4:]
         gene = allele_name.split('*')[0]
         if line.find("partial") != -1:
             partial_alleles.add(allele_name)
@@ -2846,8 +2849,6 @@ def test_HLA_genotyping(base_fname,
                                          aligners,
                                          num_mismatch,
                                          assembly,
-                                         concordant_assembly,
-                                         exonic_only,
                                          fastq,
                                          read_fname,
                                          alignment_fname,
@@ -2893,8 +2894,6 @@ def test_HLA_genotyping(base_fname,
                    aligners,
                    num_mismatch,
                    assembly,
-                   concordant_assembly,
-                   exonic_only,
                    fastq,
                    read_fname,
                    alignment_fname,
@@ -2927,8 +2926,8 @@ if __name__ == '__main__':
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
-                        default="A,B,C,DQA1,DQB1,DRB1",
-                        help="A comma-separated list of HLA genes (default: A,B,C,DQA1,DQB1,DRB1)")
+                        default="",
+                        help="A comma-separated list of HLA genes (default: empty, all HLA genes in IMGT/HLA database)")
     parser.add_argument('--no-partial',
                         dest='partial',
                         action='store_false',
@@ -3016,29 +3015,23 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="e.g., test_id:10,read_id:10000,basic_test")
-    parser.add_argument("--assembly",
+    parser.add_argument("--no-assembly",
                         dest="assembly",
-                        action="store_true",
-                        help="Perform assembly")
-    parser.add_argument("--no-concordant-assembly",
-                        dest="concordant_assembly",
                         action="store_false",
-                        help="")
-    parser.add_argument("--exonic-only",
-                        dest="exonic_only",
-                        action="store_true",
-                        help="Consider exonic regions only")
+                        help="Perform assembly")
     parser.add_argument("--novel_allele_detection",
                         dest="novel_allele_detection",
                         action='store_true',
                         help="Change test to detection of new alleles. Report sensitivity and specificity rate at the end.")
 
-
     args = parser.parse_args()
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
         sys.exit(1)
-    args.hla_list = args.hla_list.split(',')
+    if args.hla_list == "":
+        hla_list = []
+    else:
+        hla_list = args.hla_list.split(',')
     if args.aligners == "":
         print >> sys.stderr, "Error: --aligners must be non-empty."
         sys.exit(1)    
@@ -3134,7 +3127,7 @@ if __name__ == '__main__':
     random.seed(args.random_seed)
     test_HLA_genotyping(args.base_fname,
                         args.reference_type,
-                        args.hla_list,
+                        hla_list,
                         args.partial,
                         args.aligners,
                         args.read_fname,
@@ -3151,8 +3144,6 @@ if __name__ == '__main__':
                         args.perbase_snprate,
                         skip_fragment_regions,
                         args.assembly,
-                        args.concordant_assembly,
-                        args.exonic_only,
                         args.verbose_level,
                         debug)
 
