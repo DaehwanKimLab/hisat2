@@ -1158,9 +1158,8 @@ def get_mpileup(alignview_cmd,
                         var_set.add(var_id)
                         prev_del_var_id = var_id
                         skip_i = i + del_len - 1
-                        break
-                                                
-            elif nt != ref_nt:
+                        break                                                
+            elif nt != 'N' and nt != ref_nt:
                 assert nt in "ACGT"
                 id = "unknown"
                 for var_id, var_type, var_data in var_list[i]:
@@ -1307,6 +1306,7 @@ def HLA_typing(ex_path,
                aligners,
                num_mismatch,
                assembly,
+               display_alleles,
                fastq,
                read_fname,
                alignment_fname,
@@ -1441,12 +1441,19 @@ def HLA_typing(ex_path,
                 for allele_name in test_HLA_names:
                     true_allele_nodes[allele_name] = allele_nodes[allele_name]
 
+            display_allele_nodes = {}
+            for display_allele in display_alleles:
+                if display_allele not in allele_nodes:
+                    continue
+                display_allele_nodes[display_allele] = allele_nodes[display_allele]
+
             # Assembly graph
             asm_graph = assembly_graph.Graph(ref_seq,
                                              Vars[gene],
                                              ref_exons,
                                              partial_alleles,
                                              true_allele_nodes,
+                                             display_allele_nodes,
                                              simulation)
 
             # Choose allele representives from those that share the same exonic sequences
@@ -2443,6 +2450,7 @@ def test_HLA_genotyping(base_fname,
                         perbase_snprate,
                         skip_fragment_regions,
                         assembly,
+                        display_alleles,
                         verbose,
                         daehwan_debug):
     # Current script directory
@@ -2849,6 +2857,7 @@ def test_HLA_genotyping(base_fname,
                                          aligners,
                                          num_mismatch,
                                          assembly,
+                                         display_alleles,
                                          fastq,
                                          read_fname,
                                          alignment_fname,
@@ -2894,6 +2903,7 @@ def test_HLA_genotyping(base_fname,
                    aligners,
                    num_mismatch,
                    assembly,
+                   display_alleles,
                    fastq,
                    read_fname,
                    alignment_fname,
@@ -3019,10 +3029,11 @@ if __name__ == '__main__':
                         dest="assembly",
                         action="store_false",
                         help="Perform assembly")
-    parser.add_argument("--novel_allele_detection",
-                        dest="novel_allele_detection",
-                        action='store_true',
-                        help="Change test to detection of new alleles. Report sensitivity and specificity rate at the end.")
+    parser.add_argument("--display-alleles",
+                        dest="display_alleles",
+                        type=str,
+                        default="",
+                        help="A comma-separated list of alleles to display in HTML (default: empty)")
 
     args = parser.parse_args()
     if not args.reference_type in ["gene", "chromosome", "genome"]:
@@ -3124,6 +3135,11 @@ if __name__ == '__main__':
             prev_left, prev_right = left, right
             skip_fragment_regions.append([left, right])
 
+    if args.display_alleles == "":
+        display_alleles = []
+    else:
+        display_alleles = args.display_alleles.split(',')
+
     random.seed(args.random_seed)
     test_HLA_genotyping(args.base_fname,
                         args.reference_type,
@@ -3144,6 +3160,7 @@ if __name__ == '__main__':
                         args.perbase_snprate,
                         skip_fragment_regions,
                         args.assembly,
+                        display_alleles,
                         args.verbose_level,
                         debug)
 

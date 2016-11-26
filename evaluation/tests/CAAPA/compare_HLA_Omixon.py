@@ -10,8 +10,8 @@ if __name__ == "__main__":
     # Read HISAT-genotype predicted HLA alleles for the CAAPA genomes
     hisat_hla = {}
     # hisat_fname = "hisat_old_caapa_hla_partial_Aug25.txt"
-    # hisat_fname = "hisat_caapa_hla_Jul22.txt"
-    hisat_fname = "HISAT_CAAPA_HLA_July22_2016.txt"
+    hisat_fname = "hisat_caapa_hla_Jul22.txt"
+    # hisat_fname = "HISAT_CAAPA_HLA_July22_2016.txt"
     for line in open(hisat_fname):
         line = line.strip()
         fields = line.split('\t')
@@ -96,18 +96,18 @@ if __name__ == "__main__":
                         num_match_10 += 1
                         break
             # DK - for debugging purposes
-            """
-            if num_match == 1 and num_match_10 == 2:
+            # """
+            if gene == "A" and num_match == 0 and num_match_10 == 2:
                 print sample
                 print "\t", omixon_gene
                 print "\t", hisat_gene
                 # sys.exit(1)
-            """
+            # """
                 
             assert num_match < len(count)
             count[num_match] += 1
             count_10[num_match_10] += 1
-            
+
         print >> sys.stderr, "\tTop two\t0: %d, 1: %d, 2: %d (%.2f%%)" % (count[0], count[1], count[2], (count[1] + count[2] * 2) / float(sum(count) * 2) * 100.0)
         print >> sys.stderr, "\tTop ten\t0: %d, 1: %d, 2: %d (%.2f%%)" % (count_10[0], count_10[1], count_10[2], (count_10[1] + count_10[2] * 2) / float(sum(count_10) * 2) * 100.0)
         

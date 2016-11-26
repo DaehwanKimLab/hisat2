@@ -342,12 +342,20 @@ class Node:
 
                 
 class Graph:
-    def __init__(self, backbone, vars, exons, partial_allele_ids, allele_nodes = {}, simulation = False):
+    def __init__(self,
+                 backbone,
+                 vars,
+                 exons,
+                 partial_allele_ids,
+                 allele_nodes = {},
+                 display_allele_nodes = {},
+                 simulation = False):
         self.backbone = backbone # backbone sequence
         self.vars = vars
         self.exons = exons
         self.partial_allele_ids = partial_allele_ids
         self.allele_nodes = allele_nodes
+        self.display_allele_nodes = display_allele_nodes
         self.simulation = simulation
 
         self.nodes = {}
@@ -1205,22 +1213,30 @@ class Graph:
         # Draw true or predicted alleles
         node_colors = ["#FFFF00", "#00FF00"]
         allele_node_colors = ["#DDDD00", "#008800"]
-        allele_nodes, seqs, colors = [], [], []
-        if len(self.allele_nodes) > 0:
-            allele_nodes, seqs, colors = self.get_node_comparison_info(self.allele_nodes)
+        def draw_alleles(allele_node_dic, allele_node_colors, display = False):
+            if len(allele_node_dic) <= 0:
+                return
+            allele_nodes, seqs, colors = self.get_node_comparison_info(allele_node_dic)
             for n in range(len(allele_nodes)):
                 allele_id, left, right = allele_nodes[n]
                 right += 1
-                allele_node = self.allele_nodes[allele_id]
+                allele_node = allele_node_dic[allele_id]
                 y = get_dspace(0, max_right, 14)
 
                 # Draw allele name
+                if display:
+                    allele_type = "Omixon"
+                else:
+                    if self.simulation:
+                        allele_type = "true"
+                    else:
+                        allele_type = "predicted"
                 print >> js_file, r'ctx.fillStyle = "blue";'
                 print >> js_file, r'ctx.font = "20px Times New Roman";'
                 print >> js_file, r'ctx.fillText("%s (%s, %s)", %d, %d);' % \
                     (allele_id,
                      "partial" if allele_id in self.partial_allele_ids else "full",
-                     "true" if self.simulation else "predicted",
+                     allele_type,
                      10,
                      get_y(y + 5))
                 print >> js_file, r'ctx.font = "12px Times New Roman";'
@@ -1264,6 +1280,13 @@ class Graph:
                         (get_x(cleft), get_y(y + 1), get_x(cright) - get_x(cleft), get_sy(8))
                     print >> js_file, r'ctx.fillStyle = "%s";' % (color)
                     print >> js_file, r'ctx.fill();'
+            return allele_nodes, seqs, colors
+
+        allele_nodes, seqs, colors = draw_alleles(self.allele_nodes,
+                                                  allele_node_colors)
+        draw_alleles(self.display_allele_nodes,
+                     ["#FFCBA4", "#810541"],
+                     True) # display alleles?
 
         # Draw location at every 100bp
         y = get_dspace(0, nodes[-1][2], 14)
