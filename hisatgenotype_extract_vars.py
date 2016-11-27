@@ -566,7 +566,7 @@ def extract_vars(base_fname,
                 HLA_seqs[i] = reverse_complement(HLA_seqs[i])
             backbone_seq = reverse_complement(backbone_seq)
 
-        print >> sys.stderr, "%s: number of HLA genes is %d." % (HLA_gene, len(HLA_names))
+        print >> sys.stderr, "%s: number of HLA alleles is %d." % (HLA_gene, len(HLA_names))
 
         Vars = {}
         for cmp_name, id in HLA_names.items():

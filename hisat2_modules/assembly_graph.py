@@ -1211,8 +1211,8 @@ class Graph:
                 print >> js_file, r'ctx.stroke();'
 
         # Draw true or predicted alleles
-        node_colors = ["#FFFF00", "#00FF00"]
-        allele_node_colors = ["#DDDD00", "#008800"]
+        node_colors = ["#FFFF00", "#00FF00", "#FFCBA4", "#810541"]
+        allele_node_colors = ["#DDDD00", "#008800", "#DDA982", "#610521"]
         def draw_alleles(allele_node_dic, allele_node_colors, display = False):
             if len(allele_node_dic) <= 0:
                 return
@@ -1285,7 +1285,7 @@ class Graph:
         allele_nodes, seqs, colors = draw_alleles(self.allele_nodes,
                                                   allele_node_colors)
         draw_alleles(self.display_allele_nodes,
-                     ["#FFCBA4", "#810541"],
+                     ["#FFF5EE"],
                      True) # display alleles?
 
         # Draw location at every 100bp
@@ -1347,7 +1347,6 @@ class Graph:
                     color = "red"
                 else:
                     var_type, var_left, var_data = self.vars[var_id]
-
                     color = "blue"
                 if var_type == "single":
                     var_right = var_left + 1
