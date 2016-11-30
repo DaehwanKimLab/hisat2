@@ -423,7 +423,8 @@ def single_abundance(HLA_cmpt,
         HLA_prob[allele] /= float(allele_len)
     """
     
-    normalize(HLA_prob)
+    # normalize(HLA_prob)
+    normalize2(HLA_prob, HLA_length)
     HLA_prob = [[allele, prob] for allele, prob in HLA_prob.items()]
     HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
     return HLA_prob
@@ -1723,7 +1724,7 @@ def HLA_typing(ex_path,
 
                         # DK - for debugging purposes                            
                         alleles = ["", ""]
-                        # alleles = ["B*40:304", "B*40:02:01"]
+                        # alleles = ["A*24:36N", "A*24:359N"]
                         allele1_found, allele2_found = False, False
                         if alleles[0] != "":
                             for allele, count in HLA_count_per_read.items():
@@ -1813,12 +1814,26 @@ def HLA_typing(ex_path,
                     # Sanity check - read length, cigar string, and MD string
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
+
                     cmp_list_left, cmp_list_right = identify_ambigious_diffs(Vars[gene],
                                                                              Alts_left,
                                                                              Alts_right,
                                                                              cmp_list,
                                                                              verbose)
 
+                    # Deletions at 5' and 3' ends
+                    for var_id, data in Vars[gene].items():
+                        var_type, var_pos, var_data = data
+                        if var_type != "deletion":
+                            continue
+                        if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
+                            negative_vars.add(var_id)
+
+                            # DK - debugging purposes
+                            if var_id == "hv599":
+                                print read_id, left_pos, right_pos
+                                print var_id, data
+                    
                     cmp_i = 0
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
@@ -2121,15 +2136,20 @@ def HLA_typing(ex_path,
                 HLA_prob = sorted(HLA_prob, cmp=HLA_prob_cmp)
 
             if index_type == "graph" and assembly:
+                allele_node_order = []
                 if not simulation:
                     predicted_allele_nodes = {}
                     for allele_name, prob in HLA_prob:
                         assert allele_name in allele_nodes
                         assert allele_name not in predicted_allele_nodes
                         predicted_allele_nodes[allele_name] = allele_nodes[allele_name]
+                        allele_node_order.append([allele_name, prob])
+                        # DK - debugging purposes
                         if len(predicted_allele_nodes) >= 2:
+                        # if len(predicted_allele_nodes) >= 10:
                             break
                     asm_graph.set_allele_nodes(predicted_allele_nodes)
+                    asm_graph.allele_node_order = allele_node_order
 
                  # Generate edges
                 asm_graph.generate_edges()
@@ -2167,7 +2187,6 @@ def HLA_typing(ex_path,
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
-
 
                 # Compare two alleles
                 if simulation and len(test_HLA_names) == 2:
@@ -2689,7 +2708,7 @@ def test_HLA_genotyping(base_fname,
     if reference_type == "gene":
         read_HLA_alleles(base_fname + "_backbone.fa", HLAs)
     read_HLA_alleles(base_fname + "_sequences.fa", HLAs)
-    
+
     # HLA gene alleles
     HLA_names = {}
     for HLA_gene, data in HLAs.items():
@@ -2794,6 +2813,8 @@ def test_HLA_genotyping(base_fname,
         # DK - for debugging purposes
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
         # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
+        # test_list = [[["A*24:36N", "A*30:03"]]]
+        # test_list = [[["A*24:36N"]]]
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):
             if "test_id" in daehwan_debug:
@@ -2968,8 +2989,8 @@ if __name__ == '__main__':
     parser.add_argument("--simulate-interval",
                         dest="simulate_interval",
                         type=int,
-                        default=1,
-                        help="Reads simulated at every these base pairs (default: 1)")
+                        default=10,
+                        help="Reads simulated at every these base pairs (default: 10)")
     parser.add_argument("--read-len",
                         dest="read_len",
                         type=int,
@@ -3121,8 +3142,7 @@ if __name__ == '__main__':
                 debug[item] = 1
 
     if not args.partial:
-        print >> sys.stderr, "Error: --no-partial is not supported!"
-        sys.exit(1)
+        print >> sys.stderr, "Warning: --no-partial will be no longer supported!"
 
     if args.read_len * 2 > args.fragment_len:
         print >> sys.stderr, "Warning: fragment might be too short (%d)" % (args.fragment_len)

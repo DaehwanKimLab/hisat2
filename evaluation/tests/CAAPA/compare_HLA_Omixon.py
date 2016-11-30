@@ -98,6 +98,7 @@ if __name__ == "__main__":
             # DK - for debugging purposes
             # """
             if gene == "A" and num_match == 0 and num_match_10 == 2:
+            # if gene == "A" and num_match == 2 and hisat_gene[1][1] >= 10.0:
                 print sample
                 print "\t", omixon_gene
                 print "\t", hisat_gene

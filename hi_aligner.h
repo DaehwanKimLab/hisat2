@@ -2824,7 +2824,16 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     alt_compatible = true;
                 }
             } else if(alt.type == ALT_SNP_DEL) {
-                if(rd_i > 0) {
+                bool try_del = rd_i > 0;
+                if(rd_i == 0 && dep > 0) {
+                    // Avoid consecutive deletions
+                    assert_gt(tmp_edits.size(), 0);
+                    const Edit& e = tmp_edits.back();
+                    if(e.type != EDIT_TYPE_READ_GAP) {
+                        try_del = true;
+                    }
+                }
+                if(try_del) {
                     if(rf_i + alt.len <= rflen) {
                         for(index_t i = 0; i < alt.len; i++) {
                             rf_bp = rfseq[rf_i + i];
@@ -2894,7 +2903,16 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     }
                 }
             } else if(alt.type == ALT_SPLICESITE) {
-                if(rd_i > 0) {
+                bool try_splice = rd_i > 0;
+                if(rd_i == 0 && dep > 0) {
+                    // Avoid consecutive introns
+                    assert_gt(tmp_edits.size(), 0);
+                    const Edit& e = tmp_edits.back();
+                    if(e.type != EDIT_TYPE_SPL) {
+                        try_splice = true;
+                    }
+                }
+                if(try_splice) {
                     assert_lt(rd_i, rflen);
                     index_t intronLen = alt.right - alt.left + 1;
                     Edit e(rd_i + rdoff_add,

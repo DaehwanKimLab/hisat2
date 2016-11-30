@@ -355,6 +355,7 @@ class Graph:
         self.exons = exons
         self.partial_allele_ids = partial_allele_ids
         self.allele_nodes = allele_nodes
+        self.allele_node_order = []
         self.display_allele_nodes = display_allele_nodes
         self.simulation = simulation
 
@@ -1211,13 +1212,25 @@ class Graph:
                 print >> js_file, r'ctx.stroke();'
 
         # Draw true or predicted alleles
-        node_colors = ["#FFFF00", "#00FF00", "#FFCBA4", "#810541"]
-        allele_node_colors = ["#DDDD00", "#008800", "#DDA982", "#610521"]
+        node_colors = ["#FFFF00", "#00FF00", "#FFCBA4", "#C14581"]
+        allele_node_colors = ["#DDDD00", "#008800", "#DDA982", "#A12561"]
         def draw_alleles(allele_node_dic, allele_node_colors, display = False):
             if len(allele_node_dic) <= 0:
                 return
             allele_nodes, seqs, colors = self.get_node_comparison_info(allele_node_dic)
-            for n in range(len(allele_nodes)):
+            for n_ in range(len(allele_nodes)):
+                n = -1
+                prob = ""
+                if not display and len(self.allele_node_order) == len(allele_node_dic):
+                    allele_id, prob = self.allele_node_order[n_]
+                    for n2_ in range(len(allele_nodes)):
+                        if allele_id == allele_nodes[n2_][0]:
+                            n = n2_
+                            break
+                    prob = ": %.2f" % prob
+                else:
+                    n = n_
+                assert n >= 0 and n < len(allele_nodes)
                 allele_id, left, right = allele_nodes[n]
                 right += 1
                 allele_node = allele_node_dic[allele_id]
@@ -1233,10 +1246,12 @@ class Graph:
                         allele_type = "predicted"
                 print >> js_file, r'ctx.fillStyle = "blue";'
                 print >> js_file, r'ctx.font = "20px Times New Roman";'
-                print >> js_file, r'ctx.fillText("%s (%s, %s)", %d, %d);' % \
+                print >> js_file, r'ctx.fillText("%s (%s, %s%s)", %d, %d);' % \
                     (allele_id,
                      "partial" if allele_id in self.partial_allele_ids else "full",
                      allele_type,
+                     # prob,
+                     "",
                      10,
                      get_y(y + 5))
                 print >> js_file, r'ctx.font = "12px Times New Roman";'

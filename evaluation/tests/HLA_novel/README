@@ -3,8 +3,15 @@ To run HISAT-genotype
 
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-mismatch 2 --debug paired,full --random-seed 0
 
+HISAT-genotype vs. Omixon
+
+(1) Good match
+    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-mismatch 2 --reads CP/LP6005042-DNA_H03.extracted.fq.1.gz,CP/LP6005042-DNA_H03.extracted.fq.2.gz
+
+(2) Bad match
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-mismatch 2 --reads CP/LP6005106-DNA_H02.extracted.fq.1.gz,CP/LP6005106-DNA_H02.extracted.fq.2.gz --display-alleles A*23:17,A*02:02:01:01
 
+HISAT-genotye on Illumina Platinum Genomes
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-mismatch 2 --reads illumina/NA12878.fished_1.fq,illumina/NA12878.fished_2.fq
 
 
