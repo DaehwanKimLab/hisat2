@@ -392,18 +392,13 @@ def extract_vars(base_fname,
         
 
         seq_len = find_seq_len(HLA_seqs)        
-        if reference_type == "gene":
-            backbone_name = "%s*BACKBONE" % HLA_gene
-            backbone_seq = create_consensus_seq(HLA_seqs,
-                                                seq_len,
-                                                not partial) # Remove empty sequences?
-            # Allele sequences can shrink, so readjust the sequence length
-            if not partial:
-                seq_len = find_seq_len(HLA_seqs)
-        else:
-            backbone_name = HLA_ref_gene
-            backbone_id = HLA_names[backbone_name]
-            backbone_seq = HLA_seqs[backbone_id]
+        backbone_name = "%s*BACKBONE" % HLA_gene
+        backbone_seq = create_consensus_seq(HLA_seqs,
+                                            seq_len,
+                                            not partial) # Remove empty sequences?
+        # Allele sequences can shrink, so readjust the sequence length
+        if not partial:
+            seq_len = find_seq_len(HLA_seqs)
 
         if partial:
             HLA_partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % HLA_gene
@@ -1025,7 +1020,7 @@ if __name__ == '__main__':
                         dest="reference_type",
                         type=str,
                         default="gene",
-                        help="Reference type: gene, chromosome, and genome")
+                        help="Reference type: gene, chromosome, and genome (Default: gene)")
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,

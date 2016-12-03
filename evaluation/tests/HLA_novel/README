@@ -3,6 +3,10 @@ To run HISAT-genotype
 
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-mismatch 2 --debug paired,full --random-seed 0
 
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --debug paired,full --no-assembly
+
+
+
 HISAT-genotype vs. Omixon
 
 (1) Good match
@@ -15,7 +19,15 @@ HISAT-genotye on Illumina Platinum Genomes
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-mismatch 2 --reads illumina/NA12878.fished_1.fq,illumina/NA12878.fished_2.fq
 
 
+
 To extract HLA alleles and variants
 
    ./hisatgenotype_extract_vars.py --reference-type gene --hla-list A --inter-gap 30 --intra-gap 50
+
+To build genotype genome
+
+   ./hisatgenotype_build_genome.py genome.fa genotype_genome -p 3 --verbose
+
+To genotype
+   ./hisatgenotype.py --base-name genotype_6 -f -1 1.fa -2 2.fa
 

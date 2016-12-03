@@ -24,7 +24,7 @@ import inspect, random
 import math
 from datetime import datetime, date, time
 from argparse import ArgumentParser, FileType
-from hisat2_modules import assembly_graph
+from hisatgenotype_modules import common_typing, HLA_typing, assembly_graph
 
 
 """
@@ -264,6 +264,8 @@ def align_reads(ex_path,
             aligner_cmd += ["-k", "10"]
         else:
             aligner_cmd += ["--max-altstried", "64"]
+            # DK - debugging purposes
+            aligner_cmd += ["--max-seeds", "10000"]
         aligner_cmd += ["-x", "hla.%s" % index_type]
     elif aligner == "bowtie2":
         aligner_cmd = [aligner,
@@ -1288,36 +1290,36 @@ def error_correct(ref_seq,
 
 """
 """
-def HLA_typing(ex_path,
-               simulation,
-               reference_type,
-               hla_list,
-               partial,
-               partial_alleles,
-               refHLAs,
-               HLAs,
-               HLA_names,
-               HLA_lengths,
-               refHLA_loci,
-               Vars,
-               Var_list,
-               Links,
-               HLAs_default,
-               Vars_default,
-               Var_list_default,
-               Links_default,
-               exclude_allele_list,
-               aligners,
-               num_mismatch,
-               assembly,
-               display_alleles,
-               fastq,
-               read_fname,
-               alignment_fname,
-               num_frag_list,
-               threads,
-               best_alleles,
-               verbose):
+def typing(ex_path,
+           simulation,
+           reference_type,
+           hla_list,
+           partial,
+           partial_alleles,
+           refHLAs,
+           HLAs,
+           HLA_names,
+           HLA_lengths,
+           refHLA_loci,
+           Vars,
+           Var_list,
+           Links,
+           HLAs_default,
+           Vars_default,
+           Var_list_default,
+           Links_default,
+           exclude_allele_list,
+           aligners,
+           num_mismatch,
+           assembly,
+           display_alleles,
+           fastq,
+           read_fname,
+           alignment_fname,
+           num_frag_list,
+           threads,
+           best_alleles,
+           verbose):
     if simulation:
         test_passed = {}
     for aligner, index_type in aligners:
@@ -2481,12 +2483,7 @@ def test_HLA_genotyping(base_fname,
 
     # Clone a git repository, IMGTHLA
     if not os.path.exists("IMGTHLA"):
-        os.system("git clone https://github.com/jrob119/IMGTHLA.git")
-
-        # Check out one particular revision just to have the same data across multiple computers        
-        revision = "d3b559b34b96ff9e7f0d97476222d8e4cdee63ad" # Revision on November 16, 2016
-        # revision = "45c377516bdb7f1b926" # Revision on July 14, 2016
-        os.system("cd IMGTHLA; git checkout %s; cd .." % revision)
+        HLA_typing.clone_IMGTHLA_database()
 
     simulation = (read_fname == [] and alignment_fname == "")
 
@@ -2496,15 +2493,12 @@ def test_HLA_genotyping(base_fname,
                 return False
         return True
 
-    # Download HISAT2 index
+    # Download human genome and HISAT2 index
     HISAT2_fnames = ["grch38",
                      "genome.fa",
                      "genome.fa.fai"]
     if not check_files(HISAT2_fnames):
-        os.system("wget ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz; tar xvzf grch38.tar.gz; rm grch38.tar.gz")
-        hisat2_inspect = os.path.join(ex_path, "hisat2-inspect")
-        os.system("%s grch38/genome > genome.fa" % hisat2_inspect)
-        os.system("samtools faidx genome.fa")
+        common_typing.download_genome_and_index(ex_path)
 
     # Check if the pre-existing files (hla*) are compatible with the current parameter setting
     if os.path.exists("hla.ref"):
@@ -2813,7 +2807,7 @@ def test_HLA_genotyping(base_fname,
         # DK - for debugging purposes
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
         # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
-        # test_list = [[["A*24:36N", "A*30:03"]]]
+        test_list = [[["A*24:36N", "A*30:03"]]]
         # test_list = [[["A*24:36N"]]]
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):
@@ -2859,36 +2853,36 @@ def test_HLA_genotyping(base_fname,
                 read_fname = ["hla_input_1.fa", "hla_input_2.fa"]
 
             fastq = False
-            tmp_test_passed = HLA_typing(ex_path,
-                                         simulation,
-                                         reference_type,
-                                         test_HLA_list,
-                                         partial,
-                                         partial_alleles,
-                                         refHLAs,
-                                         HLAs,                       
-                                         HLA_names,
-                                         HLA_lengths,
-                                         refHLA_loci,
-                                         Vars,
-                                         Var_list,
-                                         Links,
-                                         HLAs_default,
-                                         Vars_default,
-                                         Var_list_default,
-                                         Links_default,
-                                         exclude_allele_list,
-                                         aligners,
-                                         num_mismatch,
-                                         assembly,
-                                         display_alleles,
-                                         fastq,
-                                         read_fname,
-                                         alignment_fname,
-                                         num_frag_list,
-                                         threads,
-                                         best_alleles,
-                                         verbose)
+            tmp_test_passed = typing(ex_path,
+                                     simulation,
+                                     reference_type,
+                                     test_HLA_list,
+                                     partial,
+                                     partial_alleles,
+                                     refHLAs,
+                                     HLAs,                       
+                                     HLA_names,
+                                     HLA_lengths,
+                                     refHLA_loci,
+                                     Vars,
+                                     Var_list,
+                                     Links,
+                                     HLAs_default,
+                                     Vars_default,
+                                     Var_list_default,
+                                     Links_default,
+                                     exclude_allele_list,
+                                     aligners,
+                                     num_mismatch,
+                                     assembly,
+                                     display_alleles,
+                                     fastq,
+                                     read_fname,
+                                     alignment_fname,
+                                     num_frag_list,
+                                     threads,
+                                     best_alleles,
+                                     verbose)
 
             for aligner_type, passed in tmp_test_passed.items():
                 if aligner_type in test_passed:
@@ -2905,36 +2899,36 @@ def test_HLA_genotyping(base_fname,
     else: # With real reads or BAMs
         print >> sys.stderr, "\t", ' '.join(hla_list)
         fastq = True
-        HLA_typing(ex_path,
-                   simulation,
-                   reference_type,
-                   hla_list,
-                   partial,
-                   partial_alleles,
-                   refHLAs,
-                   HLAs,                       
-                   HLA_names,
-                   HLA_lengths,
-                   refHLA_loci,
-                   Vars,
-                   Var_list,
-                   Links,
-                   HLAs_default,
-                   Vars_default,
-                   Var_list_default,
-                   Links_default,
-                   exclude_allele_list,
-                   aligners,
-                   num_mismatch,
-                   assembly,
-                   display_alleles,
-                   fastq,
-                   read_fname,
-                   alignment_fname,
-                   [],
-                   threads,
-                   best_alleles,
-                   verbose)
+        typing(ex_path,
+               simulation,
+               reference_type,
+               hla_list,
+               partial,
+               partial_alleles,
+               refHLAs,
+               HLAs,                       
+               HLA_names,
+               HLA_lengths,
+               refHLA_loci,
+               Vars,
+               Var_list,
+               Links,
+               HLAs_default,
+               Vars_default,
+               Var_list_default,
+               Links_default,
+               exclude_allele_list,
+               aligners,
+               num_mismatch,
+               assembly,
+               display_alleles,
+               fastq,
+               read_fname,
+               alignment_fname,
+               [],
+               threads,
+               best_alleles,
+               verbose)
 
         
 """
