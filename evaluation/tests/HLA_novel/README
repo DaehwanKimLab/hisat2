@@ -31,3 +31,11 @@ To build genotype genome
 To genotype
    ./hisatgenotype.py --base-name genotype_6 -f -1 1.fa -2 2.fa
 
+
+On MARCC - https://www.marcc.jhu.edu/getting-started/basic
+
+sbatch script-name
+squeue -u dkim136@jhu.edu
+scancel job-id
+sinfo
+

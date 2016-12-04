@@ -90,6 +90,8 @@ def wait_pids(pids):
 """
 def extract_reads(base_fname,
                   reference_type,
+                  read_dir,
+                  out_dir,
                   hla_list,
                   partial,
                   DRB1_ref,
@@ -130,14 +132,14 @@ def extract_reads(base_fname,
                       "hla.link"]
 
         if not check_files(HLA_fnames):
-            extract_hla_script = os.path.join(ex_path, "hisat2_extract_HLA_vars.py")
+            extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
             extract_cmd = [extract_hla_script]
             extract_cmd += ["--reference-type", reference_type,
                                 "--hla-list", ','.join(hla_list)]
             if DRB1_ref:
                 extract_cmd += ["--DRB1-REF"]
-            if partial:
-                extract_cmd += ["--partial"]
+            if not partial:
+                extract_cmd += ["--no-partial"]
             extract_cmd += ["--inter-gap", "30",
                             "--intra-gap", "50"]
             print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
@@ -174,14 +176,14 @@ def extract_reads(base_fname,
         # hisat2 graph index files
         genotype_fnames += ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
         if not check_files(genotype_fnames):        
-            build_script = os.path.join(ex_path, "hisat2_build_genotype_genome.py")
+            build_script = os.path.join(ex_path, "hisatgenotype_build_genome.py")
             build_cmd = [build_script]
             if partial:
                 build_cmd += ["--partial"]
             build_cmd += ["--inter-gap", "30",
                           "--intra-gap", "50"]
             build_cmd += ["--threads", "4"]
-            build_cmd += ["--no-clinvar"]
+            # build_cmd += ["--no-clinvar"]
             build_cmd += ["genome.fa", "genotype_genome"]
             print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
             proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -206,11 +208,11 @@ def extract_reads(base_fname,
         """
         gene_loci[gene_name] = [allele_name, chr, left, right]
 
-    if not os.path.exists("CP"):
-        os.mkdir("CP")
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir)
 
     # Extract reads
-    fq_fnames = glob.glob("genomes/*.1.fq.gz")
+    fq_fnames = glob.glob("%s/*.1.fq.gz" % read_dir)
     count = 0
     pids = [0 for i in range(threads)]
     for file_i in range(len(fq_fnames)):
@@ -222,11 +224,11 @@ def extract_reads(base_fname,
 
         fq_fname_base = fq_fname.split('/')[-1]
         fq_fname_base = fq_fname_base.split('.')[0]
-        fq_fname2 = "genomes/%s.2.fq.gz" % fq_fname_base
+        fq_fname2 = "%s/%s.2.fq.gz" % (read_dir, fq_fname_base)
         if not os.path.exists(fq_fname2):
             print >> sys.stderr, "%s does not exist." % fq_fname2
             continue
-        if os.path.exists("CP/%s.extracted.fq.1.gz" % fq_fname_base):
+        if os.path.exists("%s/%s.extracted.fq.1.gz" % (out_dir, fq_fname_base)):
             continue        
         count += 1
 
@@ -240,7 +242,7 @@ def extract_reads(base_fname,
             hisat2 = os.path.join(ex_path, "hisat2")
             aligner_cmd = [hisat2]
             if reference_type == "gene":
-                aligner_cmd += ["--al-conc-disc-gz", "CP/%s.extracted.fq.gz" % fq_fname_base]
+                aligner_cmd += ["--al-conc-disc-gz", "%s/%s.extracted.fq.gz" % (out_dir, fq_fname_base)]
                 aligner_cmd += ["-x", "hla.graph"]
             else:
                 aligner_cmd += ["-x", "genotype_genome"]
@@ -260,13 +262,13 @@ def extract_reads(base_fname,
                 # LP6005041-DNA_A01.extracted.fq.1.gz
                 gzip1_proc = subprocess.Popen(["gzip"],
                                               stdin=subprocess.PIPE,
-                                              stdout=open("CP/%s.extracted.fq.1.gz" % fq_fname_base, 'w'),
+                                              stdout=open("%s/%s.extracted.fq.1.gz" % (out_dir, fq_fname_base), 'w'),
                                               stderr=open("/dev/null", 'w'))
 
                 # LP6005041-DNA_A01.extracted.fq.2.gz
                 gzip2_proc = subprocess.Popen(["gzip"],
                                               stdin=subprocess.PIPE,
-                                              stdout=open("CP/%s.extracted.fq.2.gz" % fq_fname_base, 'w'),
+                                              stdout=open("%s/%s.extracted.fq.2.gz" % (out_dir, fq_fname_base), 'w'),
                                               stderr=open("/dev/null", 'w'))
                 prev_read_name, extract_read, read1, read2 = "", False, [], []
                 for line in align_proc.stdout:
@@ -356,8 +358,8 @@ def extract_reads(base_fname,
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='test HLA genotyping for Platinum Genomes')
-    parser.add_argument("--base_fname",
+        description='extract reads')
+    parser.add_argument("--base-fname",
                         dest="base_fname",
                         type=str,
                         default="genotype_genome",
@@ -366,15 +368,25 @@ if __name__ == '__main__':
                         dest="reference_type",
                         type=str,
                         default="genome",
-                        help="Reference type: gene, chromosome, and genome (default: gene)")
+                        help="Reference type: gene, chromosome, and genome (default: genome)")
+    parser.add_argument("--read-dir",
+                        dest="read_dir",
+                        type=str,
+                        default="",
+                        help="Directory for reads")
+    parser.add_argument("--out-dir",
+                        dest="out_dir",
+                        type=str,
+                        default="",
+                        help="Directory for extracted reads")
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
-                        default="A,B,C,DQA1,DQB1,DRB1",
-                        help="A comma-separated list of HLA genes (default: A,B,C,DQA1,DQB1,DRB1)")
-    parser.add_argument('--partial',
+                        default="",
+                        help="A comma-separated list of HLA genes (default: empty)")
+    parser.add_argument('--no-partial',
                         dest='partial',
-                        action='store_true',
+                        action='store_false',
                         help='Include partial alleles (e.g. A_nuc.fasta)')
     parser.add_argument("--DRB1-REF",
                         dest="DRB1_ref",
@@ -400,15 +412,27 @@ if __name__ == '__main__':
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
         sys.exit(1)
-    args.hla_list = args.hla_list.split(',')
+    if args.hla_list == "":
+        hla_list = []
+    else:
+        hla_list = args.hla_list.split(',')
+    if args.read_dir == "" or not os.path.exists(args.read_dir):
+        print >> sys.stderr, "Error: please specify --read-dir with an existing directory."
+        sys.exit(1)
+    if args.out_dir == "":
+        print >> sys.stderr, "Error: please specify --out-dir with a directory name."
+        sys.exit(1)
     job_range = []
     for num in args.job_range.split(','):
         job_range.append(int(num))
     extract_reads(args.base_fname,
                   args.reference_type,
-                  args.hla_list,
+                  args.read_dir,
+                  args.out_dir,
+                  hla_list,
                   args.partial,
                   args.DRB1_ref,
                   args.threads,
                   job_range,
                   args.verbose)
+
