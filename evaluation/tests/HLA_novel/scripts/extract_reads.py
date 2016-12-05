@@ -247,8 +247,7 @@ def extract_reads(base_fname,
             else:
                 aligner_cmd += ["-x", "genotype_genome"]
             aligner_cmd += ["--no-spliced-alignment",
-                            "--max-altstried", "64",
-                            "--max-seeds", "1000"]
+                            "--max-altstried", "64"]
             aligner_cmd += ["-1", fq_fname,
                             "-2", fq_fname2]
             # print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)
