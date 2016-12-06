@@ -265,7 +265,7 @@ def align_reads(ex_path,
         else:
             aligner_cmd += ["--max-altstried", "64"]
             # DK - debugging purposes
-            aligner_cmd += ["--max-seeds", "10000"]
+            # aligner_cmd += ["--max-seeds", "100"]
         aligner_cmd += ["-x", "hla.%s" % index_type]
     elif aligner == "bowtie2":
         aligner_cmd = [aligner,
@@ -2807,7 +2807,8 @@ def test_HLA_genotyping(base_fname,
         # DK - for debugging purposes
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
         # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
-        test_list = [[["A*24:36N", "A*30:03"]]]
+        # test_list = [[["A*24:36N", "A*30:03"]]]
+        test_list = [[["A*24:36N"]]]
         # test_list = [[["A*24:36N"]]]
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):

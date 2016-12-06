@@ -87,7 +87,7 @@ def worker(ex_path,
            verbose):
     fq_name = path.split('/')[-1]
     genome = fq_name.split('.')[0]
-    read_fname_1, read_fname_2 = "CP/%s.extracted.fq.1.gz" % genome, "CP/%s.extracted.fq.2.gz" % genome
+    read_fname_1, read_fname_2 = "CP/%s.extracted.1.fq.gz" % genome, "CP/%s.extracted.2.fq.gz" % genome
     if not os.path.exists(read_fname_1) or not os.path.exists(read_fname_2):
         return
     lock.acquire()
@@ -149,7 +149,7 @@ def test_HLA_genotyping(reference_type,
         sys.exit(1)
 
     # fastq files
-    fq_fnames = glob.glob("CP/*.1.gz")
+    fq_fnames = glob.glob("CP/*.1.fq.gz")
 
     lock = threading.Lock()
     threads = []

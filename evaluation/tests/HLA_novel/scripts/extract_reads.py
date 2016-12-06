@@ -92,6 +92,8 @@ def extract_reads(base_fname,
                   reference_type,
                   read_dir,
                   out_dir,
+                  suffix,
+                  paired,
                   hla_list,
                   partial,
                   DRB1_ref,
@@ -212,7 +214,10 @@ def extract_reads(base_fname,
         os.mkdir(out_dir)
 
     # Extract reads
-    fq_fnames = glob.glob("%s/*.1.fq.gz" % read_dir)
+    if paired:
+        fq_fnames = glob.glob("%s/*.1.%s" % (read_dir, suffix))
+    else:
+        fq_fnames = glob.glob("%s/*.%s" % (read_dir, suffix))
     count = 0
     pids = [0 for i in range(threads)]
     for file_i in range(len(fq_fnames)):
@@ -224,12 +229,20 @@ def extract_reads(base_fname,
 
         fq_fname_base = fq_fname.split('/')[-1]
         fq_fname_base = fq_fname_base.split('.')[0]
-        fq_fname2 = "%s/%s.2.fq.gz" % (read_dir, fq_fname_base)
-        if not os.path.exists(fq_fname2):
-            print >> sys.stderr, "%s does not exist." % fq_fname2
-            continue
-        if os.path.exists("%s/%s.extracted.fq.1.gz" % (out_dir, fq_fname_base)):
-            continue        
+        if paired:
+            fq_fname2 = "%s/%s.2.%s" % (read_dir, fq_fname_base, suffix)
+            if not os.path.exists(fq_fname2):
+                print >> sys.stderr, "%s does not exist." % fq_fname2
+                continue
+        else:
+            fq_fname2 = ""
+
+        if paired:
+            if os.path.exists("%s/%s.extracted.1.fq.gz" % (out_dir, fq_fname_base)):
+                continue
+        else:
+            if os.path.exists("%s/%s.extracted.fq.gz" % (out_dir, fq_fname_base)):
+                continue
         count += 1
 
         print >> sys.stderr, "\t%d: Extracting reads from %s" % (count, fq_fname_base)
@@ -248,8 +261,11 @@ def extract_reads(base_fname,
                 aligner_cmd += ["-x", "genotype_genome"]
             aligner_cmd += ["--no-spliced-alignment",
                             "--max-altstried", "64"]
-            aligner_cmd += ["-1", fq_fname,
-                            "-2", fq_fname2]
+            if paired:
+                aligner_cmd += ["-1", fq_fname,
+                                "-2", fq_fname2]
+            else:
+                aligner_cmd += ["-U", fq_fname]
             # print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)
             if reference_type == "gene": 
                 align_proc = subprocess.Popen(aligner_cmd,
@@ -260,18 +276,26 @@ def extract_reads(base_fname,
                 assert reference_type == "genome"
                 align_proc = subprocess.Popen(aligner_cmd,
                                               stdout=subprocess.PIPE,
-                                              stderr=open("/dev/null", 'w'))
-                # LP6005041-DNA_A01.extracted.fq.1.gz
-                gzip1_proc = subprocess.Popen(["gzip"],
-                                              stdin=subprocess.PIPE,
-                                              stdout=open("%s/%s.extracted.fq.1.gz" % (out_dir, fq_fname_base), 'w'),
-                                              stderr=open("/dev/null", 'w'))
+                                              stderr=open("/dev/null", 'w'))                
+                if paired:
+                    # LP6005041-DNA_A01.extracted.1.fq.gz
+                    gzip1_proc = subprocess.Popen(["gzip"],
+                                                  stdin=subprocess.PIPE,
+                                                  stdout=open("%s/%s.extracted.1.fq.gz" % (out_dir, fq_fname_base), 'w'),
+                                                  stderr=open("/dev/null", 'w'))
 
-                # LP6005041-DNA_A01.extracted.fq.2.gz
-                gzip2_proc = subprocess.Popen(["gzip"],
-                                              stdin=subprocess.PIPE,
-                                              stdout=open("%s/%s.extracted.fq.2.gz" % (out_dir, fq_fname_base), 'w'),
-                                              stderr=open("/dev/null", 'w'))
+                    # LP6005041-DNA_A01.extracted.2.fq.gz
+                    gzip2_proc = subprocess.Popen(["gzip"],
+                                                  stdin=subprocess.PIPE,
+                                                  stdout=open("%s/%s.extracted.2.fq.gz" % (out_dir, fq_fname_base), 'w'),
+                                                  stderr=open("/dev/null", 'w'))
+                else:
+                    # LP6005041-DNA_A01.extracted.fq.gz
+                    gzip1_proc = subprocess.Popen(["gzip"],
+                                                  stdin=subprocess.PIPE,
+                                                  stdout=open("%s/%s.extracted.fq.gz" % (out_dir, fq_fname_base), 'w'),
+                                                  stderr=open("/dev/null", 'w'))
+
                 prev_read_name, extract_read, read1, read2 = "", False, [], []
                 for line in align_proc.stdout:
                     if line.startswith('@'):
@@ -295,10 +319,11 @@ def extract_reads(base_fname,
                             gzip1_proc.stdin.write("%s\n" % read1[0])
                             gzip1_proc.stdin.write("+\n")
                             gzip1_proc.stdin.write("%s\n" % read1[1])
-                            gzip2_proc.stdin.write("@%s\n" % prev_read_name)
-                            gzip2_proc.stdin.write("%s\n" % read2[0])
-                            gzip2_proc.stdin.write("+\n")
-                            gzip2_proc.stdin.write("%s\n" % read2[1])
+                            if paired:
+                                gzip2_proc.stdin.write("@%s\n" % prev_read_name)
+                                gzip2_proc.stdin.write("%s\n" % read2[0])
+                                gzip2_proc.stdin.write("+\n")
+                                gzip2_proc.stdin.write("%s\n" % read2[1])
 
                         prev_read_name, extract_read, read1, read2 = read_name, False, [], []
                         
@@ -309,7 +334,7 @@ def extract_reads(base_fname,
                                 extract_read = True
                                 break
 
-                    if flag & 0x40: # left read
+                    if flag & 0x40 or not paired: # left read
                         if not read1:
                             if flag & 0x10: # reverse complement
                                 read1 = [reverse_complement(read), qual[::-1]]
@@ -327,13 +352,15 @@ def extract_reads(base_fname,
                     gzip1_proc.stdin.write("%s\n" % read1[0])
                     gzip1_proc.stdin.write("+\n")
                     gzip1_proc.stdin.write("%s\n" % read1[1])
-                    gzip2_proc.stdin.write("@%s\n" % prev_read_name)
-                    gzip2_proc.stdin.write("%s\n" % read2[0])
-                    gzip2_proc.stdin.write("+\n")
-                    gzip2_proc.stdin.write("%s\n" % read2[1])                            
+                    if paired:
+                        gzip2_proc.stdin.write("@%s\n" % prev_read_name)
+                        gzip2_proc.stdin.write("%s\n" % read2[0])
+                        gzip2_proc.stdin.write("+\n")
+                        gzip2_proc.stdin.write("%s\n" % read2[1])                            
                         
                 gzip1_proc.stdin.close()
-                gzip2_proc.stdin.close()                        
+                if paired:
+                    gzip2_proc.stdin.close()                        
 
         if threads <= 1:
             work(ex_path, 
@@ -381,6 +408,15 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="Directory for extracted reads")
+    parser.add_argument("--suffix",
+                        dest="suffix",
+                        type=str,
+                        default="fq.gz",
+                        help="Read file suffix (Default: fq.gz)")
+    parser.add_argument('--single',
+                        dest='paired',
+                        action='store_false',
+                        help='Single-end reads (Default: False)')
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
@@ -431,6 +467,8 @@ if __name__ == '__main__':
                   args.reference_type,
                   args.read_dir,
                   args.out_dir,
+                  args.suffix,
+                  args.paired,
                   hla_list,
                   args.partial,
                   args.DRB1_ref,
