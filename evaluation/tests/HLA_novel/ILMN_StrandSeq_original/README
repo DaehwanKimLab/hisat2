@@ -1,0 +1,8 @@
+Download SRA reads in the FASTQ format
+         for i in `awk '{if(NR != 1) print $4}' SraRunInfo.txt`; do fastq-dump --gzip $i; done
+
+
+for i in `ls *.gz`; do echo $i; ../../../../hisat2 --no-hd -x ../hla.graph -U $i --max-altstried 64 2> /dev/null | grep "A\*B" >> temp; done
+
+scripts/get_haplotype_ILMN_StrandSeq.py ILMN_StrandSeq/SraRunInfo.txt ILMN_StrandSeq/temp
+
