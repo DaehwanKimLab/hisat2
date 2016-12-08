@@ -140,7 +140,7 @@ def extract_vars(base_fname,
             assert allele_name != "" and strand != ''
             HLA_genes[gene] = allele_name
             HLA_gene_strand[gene] = strand
-            print "HLA-%s's backbone allele is %s on '%s' strand" % (gene, allele_name, strand)
+            print >> sys.stderr, "HLA-%s's backbone allele is %s on '%s' strand" % (gene, allele_name, strand)
 
             assert chr != "" and left >= 0 and right > left
             if ext_seq_len > 0:

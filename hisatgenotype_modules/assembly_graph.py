@@ -1409,7 +1409,97 @@ class Graph:
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (to_node_x + jitter2, to_node_y)
                 print >> js_file, r'ctx.stroke();'
 
-        return get_dspace(0, nodes[-1][2], 1)        
+        return get_dspace(0, nodes[-1][2], 1)
+
+
+    #
+    # Identify haplotypes, which is work in progress
+    def identify_haplotypes(self):
+        assert len(self.nodes) > 0
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        def node_cmp(a, b):
+            if a[1] != b[1]:
+                return a[1] - b[1]
+            else:
+                return a[2] - b[2]
+        add_to_node = {}
+        nodes = sorted(nodes, cmp=node_cmp)
+
+        node_i = 0
+        window, interval = 60, 20
+        for w_left in range(0, len(self.backbone), interval):
+            w_right = w_left + window            
+            haplotypes = {}
+            for node_i2 in range(node_i, len(nodes)):
+                node_id, node_left, node_right = nodes[node_i2]                
+                if node_right < w_right:
+                    node_i = node_i2
+                    continue
+                if node_left > w_left:
+                    break
+
+                node = self.nodes[node_id]
+                prev_var = ""
+                haplotype = ""
+                for pos in range(w_left, w_right):
+                    var_i = pos - node.left
+                    assert var_i < len(node.var)
+                    var = node.var[var_i]
+                    var = '-'.join(list(var))
+                    if var != "" and var != prev_var:
+                        if haplotype != "":
+                            haplotype += ","
+                        haplotype += var
+                    prev_var = var
+
+                if haplotype not in haplotypes:
+                    haplotypes[haplotype] = [node_id]
+                else:
+                    haplotypes[haplotype].append(node_id)
+
+            if len(haplotypes) <= 2:
+                continue
+            
+            # DK - debugging purposes
+            print "[%d, %d)" % (w_left, w_right)
+            for haplotype, node_ids in haplotypes.items():
+                print "\t%s: %d" % (haplotype, len(node_ids))
+                for var_id in haplotype.split(','):
+                    if var_id not in self.vars:
+                        continue
+                    print "\t\t", var_id, self.vars[var_id]
+
+                for node_id in node_ids:
+                    node = self.nodes[node_id]
+                    if node_id.endswith("88989"):
+                        node.print_info()
+                    seq = ""
+                    for pos in range(w_left, w_right):
+                        seq_i = pos - node.left
+                        assert seq_i < len(node.seq)
+                        nt_dic = node.seq[seq_i]
+                        nt = get_major_nt(nt_dic)
+                        if nt != self.backbone[pos]:
+                            var_id = "unknown"
+                            for tmp_id in node.var[seq_i]:
+                                if tmp_id == "unknown":
+                                    continue
+                                type, pos, data = self.vars[tmp_id]
+                                if (type == "single" and data == nt) or \
+                                   (type == "deletion" and nt == 'D'):
+                                    var_id = tmp_id                    
+                            if var_id == "unknown":
+                                seq += "\033[91m" # red
+                            else:
+                                seq += "\033[94m" # blue
+                        seq += nt
+                        if nt != self.backbone[pos]:
+                            seq += "\033[00m"
+                    print "\t\t%50s" % node_id, seq
+
+            # DK - debugging purposes
+            if w_left == 500:
+                sys.exit(1)
                
         
 class HtmlDraw:

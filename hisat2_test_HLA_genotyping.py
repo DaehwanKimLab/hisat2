@@ -1312,6 +1312,7 @@ def typing(ex_path,
            aligners,
            num_mismatch,
            assembly,
+           error_correction,
            display_alleles,
            fastq,
            read_fname,
@@ -1618,17 +1619,18 @@ def typing(ex_path,
                                     break
 
                             # Correction for sequencing errors and update for cmp_list
-                            assert cmp_list_i < len(cmp_list)
-                            new_cmp_list, read_seq = error_correct(ref_seq,
-                                                                   read_seq,
-                                                                   read_pos,
-                                                                   mpileup,
-                                                                   Vars[gene],
-                                                                   Var_list[gene],
-                                                                   cmp_list[cmp_list_i:],
-                                                                   orig_read_id.find("#11|L") == 0)
-                            cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
-                                    
+                            if error_correction:
+                                assert cmp_list_i < len(cmp_list)
+                                new_cmp_list, read_seq = error_correct(ref_seq,
+                                                                       read_seq,
+                                                                       read_pos,
+                                                                       mpileup,
+                                                                       Vars[gene],
+                                                                       Var_list[gene],
+                                                                       cmp_list[cmp_list_i:],
+                                                                       orig_read_id.find("#11|L") == 0)
+                                cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
+
                         elif cigar_op == 'I':
                             assert False
                             cmp_list.append(["insertion", right_pos, length])
@@ -2153,7 +2155,12 @@ def typing(ex_path,
                     asm_graph.set_allele_nodes(predicted_allele_nodes)
                     asm_graph.allele_node_order = allele_node_order
 
-                 # Generate edges
+
+                # DK - debugging purposes
+                asm_graph.identify_haplotypes()
+                
+
+                # Generate edges
                 asm_graph.generate_edges()
 
                 # Start drawing assembly graph
@@ -2474,6 +2481,7 @@ def test_HLA_genotyping(base_fname,
                         perbase_snprate,
                         skip_fragment_regions,
                         assembly,
+                        error_correction,
                         display_alleles,
                         verbose,
                         daehwan_debug):
@@ -2876,6 +2884,7 @@ def test_HLA_genotyping(base_fname,
                                      aligners,
                                      num_mismatch,
                                      assembly,
+                                     error_correction,
                                      display_alleles,
                                      fastq,
                                      read_fname,
@@ -2922,6 +2931,7 @@ def test_HLA_genotyping(base_fname,
                aligners,
                num_mismatch,
                assembly,
+               error_correction,
                display_alleles,
                fastq,
                read_fname,
@@ -3048,6 +3058,10 @@ if __name__ == '__main__':
                         dest="assembly",
                         action="store_false",
                         help="Perform assembly")
+    parser.add_argument("--no-error-correction",
+                        dest="error_correction",
+                        action="store_false",
+                        help="Correct sequencing errors")    
     parser.add_argument("--display-alleles",
                         dest="display_alleles",
                         type=str,
@@ -3178,6 +3192,7 @@ if __name__ == '__main__':
                         args.perbase_snprate,
                         skip_fragment_regions,
                         args.assembly,
+                        args.error_correction,
                         display_alleles,
                         args.verbose_level,
                         debug)

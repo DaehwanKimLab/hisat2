@@ -17,6 +17,8 @@ HISAT-genotype vs. Omixon
 
 HISAT-genotye on Illumina Platinum Genomes
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-mismatch 2 --reads illumina/NA12892.fished_1.fq,illumina/NA12892.fished_2.fq
+   
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-mismatch 2 --reads ILMN/NA12892.extracted.1.fq.gz,ILMN/NA12892.extracted.2.fq.gz
 
 
 
