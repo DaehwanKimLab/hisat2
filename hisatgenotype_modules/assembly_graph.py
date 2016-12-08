@@ -1471,7 +1471,7 @@ class Graph:
 
                 for node_id in node_ids:
                     node = self.nodes[node_id]
-                    if node_id.endswith("88989"):
+                    if node_id.endswith("88989##"):
                         node.print_info()
                     seq = ""
                     for pos in range(w_left, w_right):
@@ -1498,7 +1498,7 @@ class Graph:
                     print "\t\t%50s" % node_id, seq
 
             # DK - debugging purposes
-            if w_left == 500:
+            if w_left >= 500 and False:
                 sys.exit(1)
                
         

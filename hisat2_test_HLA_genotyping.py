@@ -1426,12 +1426,14 @@ def typing(ex_path,
                     if var_type == "single":
                         seq[var_pos] = var_data
                         var[var_pos] = var_id
-                    else:
+                    elif var_type == "deletion":
                         assert var_type == "deletion"
                         del_len = int(var_data)
                         assert var_pos + del_len <= len(ref_seq)
                         seq[var_pos:var_pos + del_len] = ['D'] * del_len
                         var[var_pos:var_pos + del_len] = [var_id] * del_len
+                    else:
+                        None
 
                 seq = ''.join(seq)
                 allele_nodes[allele_id] = assembly_graph.Node(allele_id,
@@ -1532,12 +1534,14 @@ def typing(ex_path,
                     if NM > num_mismatch:
                         continue
 
-                    # DK - debugging purposes
-                    """
                     # Only consider unique alignment
                     if NH > 1:
                         continue
-                    """
+
+                    # DK - debugging purposes
+                    # Concordantly aligned mate pairs
+                    if not concordant:
+                        continue
 
                     # Left read?
                     if flag & 0x40 != 0:
@@ -2544,9 +2548,9 @@ def test_HLA_genotyping(base_fname,
                   base_fname + "_sequences.fa",
                   base_fname + ".ref",
                   base_fname + ".snp",
+                  base_fname + ".index.snp",
                   base_fname + ".haplotype",
-                  base_fname + ".link",
-                  base_fname + "_alleles_excluded.txt"]
+                  base_fname + ".link"]
     
     # Check if excluded alleles in current files match
     excluded_alleles_match = False
@@ -2566,7 +2570,6 @@ def test_HLA_genotyping(base_fname,
             pass
         
     if not excluded_alleles_match:
-        print("Creating Allele Exclusion File.\n")
         afile = open(HLA_fnames[6],'w')
         afile.write("Alleles excluded:\n")
         afile.write("\n".join(exclude_allele_list))
@@ -2593,6 +2596,10 @@ def test_HLA_genotyping(base_fname,
             extract_cmd += ["--no-partial"]
         extract_cmd += ["--inter-gap", "30",
                         "--intra-gap", "50"]
+
+        # DK - debugging purposes
+        extract_cmd += ["--min-var-freq", "0.1"]
+
         # DK - debugging purposes
         # extract_cmd += ["--ext-seq", "300"]
         if verbose >= 1:
@@ -2601,7 +2608,7 @@ def test_HLA_genotyping(base_fname,
         proc.communicate()
         
         if not check_files(HLA_fnames):
-            print >> sys.stderr, "Error: extract_HLA_vars failed!"
+            print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
             sys.exit(1)
 
     for aligner, index_type in aligners:
@@ -2613,7 +2620,7 @@ def test_HLA_genotyping(base_fname,
                     hisat2_build = os.path.join(ex_path, "hisat2-build")
                     build_cmd = [hisat2_build,
                                  "-p", str(threads),
-                                 "--snp", "%s.snp" % base_fname,
+                                 "--snp", "%s.index.snp" % base_fname,
                                  "--haplotype", "%s.haplotype" % base_fname,
                                  "%s_backbone.fa" % base_fname,
                                  "%s.graph" % base_fname]
@@ -2689,7 +2696,7 @@ def test_HLA_genotyping(base_fname,
             proc.communicate()
             
             if not os.path.exists("Default-HLA/hla_backbone.fa"):
-                print >> sys.stderr, "Error: extract_HLA_vars (Default) failed!"
+                print >> sys.stderr, "Error: hisatgenotype_extract_vars (Default) failed!"
                 sys.exit(1)
     
     # Read HLA alleles (names and sequences)
@@ -3118,7 +3125,7 @@ if __name__ == '__main__':
                 proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
                 proc.communicate()
                 if not os.path.exists("Default-HLA/hla_backbone.fa"):
-                    print >> sys.stderr, "Error: extract_HLA_vars (Default) failed!"
+                    print >> sys.stderr, "Error: hisatgenotype_extract_vars (Default) failed!"
                     sys.exit(1)
        
             HLAs_default = {}

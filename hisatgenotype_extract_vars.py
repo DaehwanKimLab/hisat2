@@ -52,6 +52,7 @@ def extract_vars(base_fname,
                  partial,
                  inter_gap,
                  intra_gap,
+                 min_var_freq,
                  ext_seq_len,
                  exclude_allele_list,
                  leftshift,
@@ -233,6 +234,7 @@ def extract_vars(base_fname,
         backbone_file = open(base_fullpath_name + "_backbone.fa", 'w')        
     # variants w.r.t the backbone sequences into a SNP file
     var_file = open(base_fullpath_name + ".snp", 'w')
+    var_index_file = open(base_fullpath_name + ".index.snp", 'w')
     # haplotypes
     haplotype_file = open(base_fullpath_name + ".haplotype", 'w')
     # pairs of a variant and the corresponding HLA allels into a LINK file    
@@ -339,46 +341,62 @@ def extract_vars(base_fname,
                     max_seq_count = tmp_seq_count
             return seq_len
 
-        def create_consensus_seq(seqs, seq_len, remove_empty = True):
-            consensus_count = [[0, 0, 0, 0] for i in range(seq_len)]
+        def create_consensus_seq(seqs,
+                                 seq_len,
+                                 min_var_freq,
+                                 remove_empty = True):
+            consensus_freq = [[0, 0, 0, 0, 0] for i in range(seq_len)]
             for i in range(len(seqs)):                
                 seq = seqs[i]
                 if len(seq) != seq_len:
                     continue                    
                 for j in range(seq_len):
                     nt = seq[j]
-                    if not nt in "ACGT":
-                        continue
+                    assert nt in "ACGT."
                     if nt == 'A':
-                        consensus_count[j][0] += 1
+                        consensus_freq[j][0] += 1
                     elif nt == 'C':
-                        consensus_count[j][1] += 1
+                        consensus_freq[j][1] += 1
                     elif nt == 'G':
-                        consensus_count[j][2] += 1
+                        consensus_freq[j][2] += 1
+                    elif nt == 'T':
+                        consensus_freq[j][3] += 1
                     else:
-                        assert nt == 'T'
-                        consensus_count[j][3] += 1
+                        assert nt == '.'
+                        consensus_freq[j][4] += 1
+
+            for j in range(len(consensus_freq)):
+                for k in range(len(consensus_freq[j])):
+                    consensus_freq[j][k] /= float(len(seqs))
+                    consensus_freq[j][k] *= 100.0
+
             consensus_seq = ""
             has_empty = False
-            for c in range(len(consensus_count)):
-                count = consensus_count[c]
+            for c in range(len(consensus_freq)):
+                freq = consensus_freq[c]
+                A, C, G, T, E = freq
                 # No alleles have bases at this particular location
-                if sum(count) <= 0:
+                if E >= 100.0:
                     has_empty = True
                     consensus_seq += 'E'
                     continue
-                idx = count.index(max(count))
-                assert idx < 4
-                consensus_seq += "ACGT"[idx]
+                if E >= 100.0 - min_var_freq:
+                    idx = 4
+                else:
+                    idx = freq.index(max(freq[:4]))
+                assert idx < 5
+                consensus_seq += "ACGT."[idx]
             consensus_seq = ''.join(consensus_seq)
 
             # Remove dots (deletions)
+            skip_pos = set()
             if has_empty and remove_empty:
                 for seq_i in range(len(seqs)):
                     seqs[seq_i] = list(seqs[seq_i])
                 for i in range(len(consensus_seq)):
                     if consensus_seq[i] != 'E':
                         continue
+                    skip_pos.add(i)
                     for seq_i in range(len(seqs)):
                         if i >= len(seqs[seq_i]):
                             continue
@@ -387,15 +405,32 @@ def extract_vars(base_fname,
                     seqs[seq_i] = ''.join(seqs[seq_i])
                     seqs[seq_i] = seqs[seq_i].replace('E', '')
                 consensus_seq = consensus_seq.replace('E', '')
-                
-            return consensus_seq
+
+            # Convert a list form of consensus_freq to a dictionary form
+            temp_freq = []
+            for j in range(len(consensus_freq)):
+                if j in skip_pos:
+                    continue
+                freq_dic = {}
+                for k in range(len(consensus_freq[j])):
+                    freq = consensus_freq[j][k]
+                    if freq <= 0.0:
+                        continue
+                    nt = "ACGT."[k]                    
+                    freq_dic[nt] = freq
+                temp_freq.append(freq_dic)
+            consensus_freq = temp_freq
+
+            assert len(consensus_seq) == len(consensus_freq)                
+            return consensus_seq, consensus_freq
         
 
         seq_len = find_seq_len(HLA_seqs)        
         backbone_name = "%s*BACKBONE" % HLA_gene
-        backbone_seq = create_consensus_seq(HLA_seqs,
-                                            seq_len,
-                                            not partial) # Remove empty sequences?
+        backbone_seq, backbone_freq = create_consensus_seq(HLA_seqs,
+                                                           seq_len,
+                                                           min_var_freq,
+                                                           not partial) # Remove empty sequences?
         # Allele sequences can shrink, so readjust the sequence length
         if not partial:
             seq_len = find_seq_len(HLA_seqs)
@@ -456,9 +491,10 @@ def extract_vars(base_fname,
 
             if complete:
                 partial_seq_len = find_seq_len(HLA_partial_seqs)
-                partial_backbone_seq = create_consensus_seq(HLA_partial_seqs,
-                                                            partial_seq_len,
-                                                            False) # Remove empty sequences?
+                partial_backbone_seq, partial_backbone_freq = create_consensus_seq(HLA_partial_seqs,
+                                                                                   partial_seq_len,
+                                                                                   min_var_freq,
+                                                                                   False) # Remove empty sequences?
                 for HLA_name, seq_id in HLA_partial_names.items():
                     if HLA_name in HLA_names:
                         continue
@@ -479,12 +515,14 @@ def extract_vars(base_fname,
                     HLA_names[HLA_name] = len(HLA_seqs)
                     HLA_seqs.append(new_seq)
 
-                backbone_seq = create_consensus_seq(HLA_seqs,
-                                                    seq_len,
-                                                    True) # Remove empty sequences?
+                backbone_seq, backbone_freq = create_consensus_seq(HLA_seqs,
+                                                                   seq_len,
+                                                                   min_var_freq,
+                                                                   True) # Remove empty sequences?
                 seq_len = find_seq_len(HLA_seqs)
 
-        assert '.' not in backbone_seq and 'E' not in backbone_seq
+        if min_var_freq <= 0.0:
+            assert '.' not in backbone_seq and 'E' not in backbone_seq
 
         # Left-shift deletions if poissble
         def leftshift_deletions(backbone_seq, seq, debug = False):
@@ -575,7 +613,7 @@ def extract_vars(base_fname,
                     (cmp_name, len(cmp_seq), seq_len)
                 continue
 
-            # DK - for debugging purposes
+            # DK - debugging purposes
             """
             if cmp_name == "A*03:01:07":
                 print cmp_name
@@ -586,16 +624,43 @@ def extract_vars(base_fname,
                     print s, cmp_seq[s:s+100]
                 # sys.exit(1)
             """
-
-            def insertVar(indel, type):
+            def insertVar(type, info):
+                pos, backbone_pos, data = info
                 if type in "MI":
-                    varKey = "%d-%s-%s" % (indel[0], type, indel[1])
+                    varKey = "%d-%s-%s" % (pos, type, data)
                 else:
-                    varKey = "%d-%s-%d" % (indel[0], type, indel[1])
+                    varKey = "%d-%s-%d" % (pos, type, data)
+
                 if varKey not in Vars:
-                    Vars[varKey] = [cmp_name]
+                    if type == 'M':
+                        assert backbone_pos < backbone_freq
+                        assert data in backbone_freq[backbone_pos]
+                        freq = backbone_freq[backbone_pos][data]
+                    elif type == 'D':
+                        del_len = int(data)
+                        freq = 100.0
+                        assert backbone_pos + del_len <= backbone_freq
+                        for d in range(del_len):
+                            assert '.' in backbone_freq[backbone_pos + d]
+                            freq2 = backbone_freq[backbone_pos + d]['.']
+                            if freq2 < freq:
+                                freq = freq2
+                    else:
+                        assert type == 'I'
+                        ins_len = len(data)
+                        freq = 100.0
+                        assert backbone_pos + ins_len <= backbone_freq
+                        for i in range(ins_len):
+                            nt = data[i]
+                            assert nt in backbone_freq[backbone_pos + i]
+                            freq2 = backbone_freq[backbone_pos + i][nt]
+                            if freq2 < freq:
+                                freq = freq2
+                        assert freq <= min_var_freq
+                    
+                    Vars[varKey] = [freq, [cmp_name]]
                 else:
-                    Vars[varKey].append(cmp_name)
+                    Vars[varKey][1].append(cmp_name)
 
             insertion, deletion = [], []
             ndots = 0
@@ -605,34 +670,33 @@ def extract_vars(base_fname,
                 cc = cmp_seq[s]
                 if bc != '.' and cc != '.':
                     if insertion:
-                        insertVar(insertion, 'I')
+                        insertVar('I', insertion)
                         insertion = []
                     elif deletion:
-                        insertVar(deletion, 'D')
+                        insertVar('D', deletion)
                         deletion = []
                     if bc != cc:
-                        mismatch = [s - ndots, cc]
-                        insertVar(mismatch, 'M')
+                        mismatch = [s - ndots, s, cc]
+                        insertVar('M', mismatch)
                 elif bc == '.' and cc != '.':
                     if deletion:
-                        insertVar(deletion, 'D')
+                        insertVar('D', deletion)
                         deletion = []
                     if insertion:
-                        insertion[1] += cc
+                        insertion[2] += cc
                     else:
-                        insertion = [s - ndots, cc]
+                        insertion = [s - ndots, s, cc]
                 elif bc != '.' and cc == '.':
                     if insertion:
-                        insertVar(insertion, 'I')
+                        insertVar('I', insertion)
                         insertion = []
                     if deletion:
-                        deletion[1] += 1
+                        deletion[2] += 1
                     else:
-                        deletion = [s - ndots, 1]
+                        deletion = [s - ndots, s, 1]
 
                 if bc == '.':
                     ndots += 1
-
 
                 """
                 if backbone_seq[s] != cmp_seq[s]:
@@ -641,9 +705,9 @@ def extract_vars(base_fname,
                 """
 
             if insertion:
-                insertVar(insertion, 'I')
+                insertVar('I', insertion)
             elif deletion:
-                insertVar(deletion, 'D')
+                insertVar('D', deletion)
 
 
         print >> sys.stderr, "Number of variants is %d." % (len(Vars.keys()))
@@ -676,7 +740,8 @@ def extract_vars(base_fname,
                 return int(a_data) - int(b_data)            
 
         HLA_Vars = {}
-        for key, names in Vars.items():
+        for key, values in Vars.items():
+            freq, names = values
             for name in names:
                 if not name in HLA_Vars:
                     HLA_Vars[name] = [key]
@@ -835,19 +900,27 @@ def extract_vars(base_fname,
                 assert type == 'D'
                 type_str = "deletion"
 
+            freq, names = Vars[keys[k]]
+            names = sorted(names)            
             varID = "hv%d" % (num_vars)
             tmp_backbone_name = backbone_name
             if reference_type != "gene":
                 tmp_backbone_name = "6"
             print >> var_file, "%s\t%s\t%s\t%d\t%s" % \
                 (varID, type_str, tmp_backbone_name, base_locus + locus, data)
-            names = sorted(Vars[keys[k]])
+            if freq >= min_var_freq:
+                print >> var_index_file, "%s\t%s\t%s\t%d\t%s" % \
+                    (varID, type_str, tmp_backbone_name, base_locus + locus, data)
             print >> link_file, "%s\t%s" % (varID, ' '.join(names))
             var2ID[keys[k]] = num_vars
             num_vars += 1
 
         add_seq_len = 0
         # Write haplotypes
+        excluded_vars = set()
+        for key in keys:
+            if Vars[key][0] < min_var_freq:
+                excluded_vars.add(key)
         i = 0
         while i < len(keys):
             key_i = keys[i]
@@ -871,13 +944,16 @@ def extract_vars(base_fname,
             alleles = set()
             for k in range(i, j):
                 key_k = keys[k]
-                add_alleles = set(Vars[key_k])
+                freq, names = Vars[key_k]
+                if freq < min_var_freq:
+                    continue
+                add_alleles = set(names)
                 alleles |= add_alleles
 
             haplotypes = set()
-            cur_vars = set(keys[i:j])
+            cur_vars = set(keys[i:j]) - excluded_vars
             for allele in alleles:
-                allele_vars = set(HLA_Vars[allele])
+                allele_vars = set(HLA_Vars[allele]) - excluded_vars
                 allele_cur_vars = '#'.join(sorted(list(cur_vars & allele_vars), cmp=cmp_varKey))
                 haplotypes.add(allele_cur_vars)
 
@@ -1001,6 +1077,7 @@ def extract_vars(base_fname,
 
     hla_ref_file.close()
     var_file.close()
+    var_index_file.close()
     haplotype_file.close()
     link_file.close()
     input_file.close()
@@ -1040,6 +1117,11 @@ if __name__ == '__main__':
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes")
+    parser.add_argument("--min-var-freq",
+                        dest="min_var_freq",
+                        type=float,
+                        default=0.0,
+                        help="Exclude variants whose freq is below than this value in percentage (Default: 0.0)")    
     parser.add_argument("--ext-seq",
                         dest="ext_seq_len",
                         type=int,
@@ -1092,7 +1174,9 @@ if __name__ == '__main__':
                  args.partial,
                  args.inter_gap,
                  args.intra_gap,
+                 args.min_var_freq,
                  args.ext_seq_len,
                  args.exclude_allele_list,
                  args.leftshift,
                  args.verbose)
+
