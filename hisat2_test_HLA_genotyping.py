@@ -1310,7 +1310,7 @@ def typing(ex_path,
            Links_default,
            exclude_allele_list,
            aligners,
-           num_mismatch,
+           num_editdist,
            assembly,
            error_correction,
            display_alleles,
@@ -1531,7 +1531,7 @@ def typing(ex_path,
                         elif col.startswith("NH"):
                             NH = int(col[5:])
 
-                    if NM > num_mismatch:
+                    if NM > num_editdist:
                         continue
 
                     # Only consider unique alignment
@@ -1613,6 +1613,23 @@ def typing(ex_path,
                                     Zs_pos += 1
                                     if Zs_i < len(Zs):
                                         Zs_pos += int(Zs[Zs_i][0])
+                                else:
+                                    # Search for a known (yet not indexed) variant or a novel variant
+                                    ref_pos = right_pos + MD_len
+                                    var_idx = lower_bound(Var_list[gene], ref_pos)
+                                    while var_idx < len(Var_list[gene]):
+                                        var_pos, var_id = Var_list[gene][var_idx]
+                                        if var_pos > ref_pos:
+                                            break
+                                        if var_pos == ref_pos:
+                                            var_type, _, var_data = Vars[gene][var_id]
+                                            if var_type == "single" and var_data == read_base:
+                                                _var_id = var_id
+                                                # DK - debugging purposes
+                                                print var_id, right_pos
+                                                break
+                                        var_idx += 1
+
 
                                 cmp_list.append(["mismatch", right_pos + MD_len, 1, _var_id])
                                 MD_len_used = MD_len + 1
@@ -1836,18 +1853,13 @@ def typing(ex_path,
                             continue
                         if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
                             negative_vars.add(var_id)
-
-                            # DK - debugging purposes
-                            if var_id == "hv599":
-                                print read_id, left_pos, right_pos
-                                print var_id, data
                     
                     cmp_i = 0
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
                         type, length = cmp[0], cmp[2]
                         # Disable the following sanity check due to error correction
-                        # if num_mismatch == 0 and type in ["mismatch", "deletion", "insertion"]:
+                        # if num_editdist == 0 and type in ["mismatch", "deletion", "insertion"]:
                         #     assert cmp[3] != "unknown"
 
                         if type in ["match", "mismatch"]:
@@ -2367,7 +2379,7 @@ def typing(ex_path,
                 else:
                     test_passed[aligner_type] += 1
 
-        if remove_alignment_file:
+        if remove_alignment_file and not simulation:
             os.system("rm %s*" % (alignment_fname))
 
     if simulation:
@@ -2480,7 +2492,7 @@ def test_HLA_genotyping(base_fname,
                         best_alleles,
                         exclude_allele_list,
                         default_allele_list,
-                        num_mismatch,
+                        num_editdist,
                         perbase_errorrate,
                         perbase_snprate,
                         skip_fragment_regions,
@@ -2889,7 +2901,7 @@ def test_HLA_genotyping(base_fname,
                                      Links_default,
                                      exclude_allele_list,
                                      aligners,
-                                     num_mismatch,
+                                     num_editdist,
                                      assembly,
                                      error_correction,
                                      display_alleles,
@@ -2936,7 +2948,7 @@ def test_HLA_genotyping(base_fname,
                Links_default,
                exclude_allele_list,
                aligners,
-               num_mismatch,
+               num_editdist,
                assembly,
                error_correction,
                display_alleles,
@@ -3027,8 +3039,8 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="A seeding number for randomness (default: 1)")
-    parser.add_argument("--num-mismatch", "--num-editdist",
-                        dest="num_mismatch",
+    parser.add_argument("--num-editdist", "--num-mismatch",
+                        dest="num_editdist",
                         type=int,
                         default=0,
                         help="Maximum number of mismatches per read alignment to be considered (default: 0)")
@@ -3145,8 +3157,8 @@ if __name__ == '__main__':
         else:
             args.exclude_allele_list = args.exclude_allele_list.split(',')
 
-        if args.num_mismatch == 0:
-            args.num_mismatch = 3
+        if args.num_editdist == 0:
+            args.num_editdist = 3
         
     debug = {}
     if args.debug != "":
@@ -3194,7 +3206,7 @@ if __name__ == '__main__':
                         args.best_alleles,
                         args.exclude_allele_list,
                         args.default_allele_list,
-                        args.num_mismatch,
+                        args.num_editdist,
                         args.perbase_errorrate,
                         args.perbase_snprate,
                         skip_fragment_regions,

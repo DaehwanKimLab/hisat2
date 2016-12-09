@@ -1737,7 +1737,22 @@ bool GenomeHit<index_t>::combineWith(
             assert_geq(this_rdoff, this->_rdoff);
             index_t addoff = this_rdoff - this->_rdoff;
             if(rdc != rfc) {
-                Edit e((uint32_t)(i + addoff), rfc, rdc, EDIT_TYPE_MM, false);
+                ALT<index_t> cmp_alt;
+                assert_geq(this_toff, this->_toff);
+                cmp_alt.pos = this->_joinedOff + i + (this_toff - this->_toff);
+                index_t alt_i = (index_t)altdb.alts().bsearchLoBound(cmp_alt);
+                index_t add_alt_i = std::numeric_limits<index_t>::max();
+                for(; alt_i < altdb.alts().size(); alt_i++) {
+                    const ALT<index_t>& alt = altdb.alts()[alt_i];
+                    if(alt.left > cmp_alt.pos) break;
+                    if(alt.type != ALT_SNP_SGL) continue;
+                    if(alt.seq == rdc) {
+                        add_alt_i = alt_i;
+                        break;
+                    }
+                }
+                
+                Edit e((uint32_t)(i + addoff), rfc, rdc, EDIT_TYPE_MM, false, add_alt_i);
                 _edits->push_back(e);
             }
             if(i == maxscorei) {
