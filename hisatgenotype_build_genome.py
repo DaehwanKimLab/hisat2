@@ -45,6 +45,7 @@ def build_genotype_genome(reference,
                           intra_gap,
                           threads,
                           use_clinvar,
+                          use_commonvar,
                           verbose):    
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(build_genotype_genome))
@@ -66,6 +67,7 @@ def build_genotype_genome(reference,
     # Load genomic sequences
     chr_dic, chr_names, chr_full_names = common_typing.read_genome(open(reference))
 
+    genotype_vars, genotype_haplotypes, genotype_clnsig = {}, {}, {}
     if use_clinvar:
         # Extract variants from the ClinVar database
         CLINVAR_fnames = ["clinvar.vcf.gz",
@@ -93,15 +95,42 @@ def build_genotype_genome(reference,
                 sys.exit(1)
 
         # Read variants to be genotyped
-        genotype_vars = read_variants("clinvar.snp")
+        genotype_vars = common_typing.read_variants("clinvar.snp")
 
         # Read haplotypes
-        genotype_haplotypes = read_haplotypes("clinvar.haplotype")
+        genotype_haplotypes = common_typing.read_haplotypes("clinvar.haplotype")
 
         # Read information about clinical significance
-        genotype_clnsig = read_clnsig("clinvar.clnsig")
-    else:
-        genotype_vars, genotype_haplotypes, genotype_clnsig = {}, {}, {}
+        genotype_clnsig = common_typing.read_clnsig("clinvar.clnsig")
+
+    if use_commonvar:
+        # Extract variants from dbSNP database
+        commonvar_fbase = "snp144Common"
+        commonvar_fnames = ["%s.snp" % commonvar_fbase,
+                            "%s.haplotype" % commonvar_fbase]
+        if not check_files(commonvar_fnames):
+            if not os.path.exists("%s.txt.gz" % commonvar_fbase):
+                os.system("wget http://hgdownload.cse.ucsc.edu/goldenPath/hg38/database/%s.txt.gz" % commonvar_fbase)
+            assert os.path.exists("%s.txt.gz" % commonvar_fbase)
+            os.system("gzip -cd %s.txt.gz | awk 'BEGIN{OFS=\"\t\"} {if($2 ~ /^chr/) {$2 = substr($2, 4)}; if($2 == \"M\") {$2 = \"MT\"} print}' > %s.txt" % (commonvar_fbase, commonvar_fbase))
+            extract_commonvar_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes_UCSC.py")
+            extract_cmd = [extract_commonvar_script,
+                           "--inter-gap", str(inter_gap),
+                           "--intra-gap", str(intra_gap),
+                           reference, "%s.txt" % commonvar_fbase, commonvar_fbase]
+            if verbose:
+                print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
+            proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+            proc.communicate()
+            if not check_files(commonvar_fnames):
+                print >> sys.stderr, "Error: extract variants from clinvar failed!"
+                sys.exit(1)
+
+        # Read variants to be genotyped
+        genotype_vars = common_typing.read_variants("%s.snp" % commonvar_fbase)
+
+        # Read haplotypes
+        genotype_haplotypes = common_typing.read_haplotypes("%s.haplotype" % commonvar_fbase)
 
     # Genes to be genotyped
     genotype_genes = {}
@@ -114,6 +143,7 @@ def build_genotype_genome(reference,
     HLA_fnames = ["hla_backbone.fa",
                   "hla.ref",
                   "hla.snp",
+                  "hla.index.snp",
                   "hla.haplotype",
                   "hla.link"]
     if not check_files(HLA_fnames):
@@ -122,7 +152,8 @@ def build_genotype_genome(reference,
         if not partial:
             extract_cmd += ["--no-partial"]
         extract_cmd += ["--inter-gap", str(inter_gap),
-                        "--intra-gap", str(intra_gap)]
+                        "--intra-gap", str(intra_gap),
+                        "--min-var-freq", "0.1"]
         if verbose:
             print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -189,15 +220,16 @@ def build_genotype_genome(reference,
                 if var_right > right:
                     break
                 if var_right >= left:
+                    chr_genotype_vari += 1
                     continue
 
                 print >> var_out_file, "%s\t%s\t%s\t%d\t%s" % \
                     (var_id, var_type, chr, var_left + off, var_data)
 
-                assert var_id in genotype_clnsig
-                var_gene, clnsig = genotype_clnsig[var_id]
-                print >> clnsig_out_file, "%s\t%s\t%s" % \
-                    (var_id, var_gene, clnsig)
+                if var_id in genotype_clnsig:
+                    var_gene, clnsig = genotype_clnsig[var_id]
+                    print >> clnsig_out_file, "%s\t%s\t%s" % \
+                        (var_id, var_gene, clnsig)
                 
                 chr_genotype_vari += 1
 
@@ -207,6 +239,7 @@ def build_genotype_genome(reference,
                 if ht_right > right:
                     break
                 if ht_right >= left:
+                    chr_genotype_hti += 1
                     continue
 
                 print >> haplotype_out_file, "ht%d\t%s\t%d\t%d\t%s" % \
@@ -229,7 +262,7 @@ def build_genotype_genome(reference,
             allele_seqs = common_typing.read_allele_sequences("%s_backbone.fa" % family)
 
             # Read HLA variants
-            allele_vars = common_typing.read_variants("%s.snp" % family)
+            allele_vars = common_typing.read_variants("%s.index.snp" % family)
 
             # Read HLA haplotypes
             allele_haplotypes = common_typing.read_haplotypes("%s.haplotype" % family)
@@ -318,7 +351,7 @@ def build_genotype_genome(reference,
             prev_right = right + 1
 
         # Write the rest of the Vars
-        chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(10000000000, 10000000000, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
+        chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(sys.maxint, sys.maxint, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
             
         print >> coord_out_file, "%s\t%d\t%d\t%d" % \
             (chr, len(out_chr_seq), prev_right, len(chr_seq) - prev_right)
@@ -357,7 +390,6 @@ def build_genotype_genome(reference,
         print >> sys.stderr, "Error: indexing failed!  Perhaps, you may have forgotten to build hisat2 executables?"
         sys.exit(1)
 
-
         
 """
 """
@@ -394,7 +426,11 @@ if __name__ == '__main__':
     parser.add_argument("--clinvar",
                         dest="use_clinvar",
                         action="store_true",
-                        help="")
+                        help="Include variants from ClinVar database")
+    parser.add_argument("--commonvar",
+                        dest="use_commonvar",
+                        action="store_true",
+                        help="Include common variants from dbSNP")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -407,6 +443,10 @@ if __name__ == '__main__':
     if args.inter_gap > args.intra_gap:
         print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
+    if args.use_clinvar and args.use_commonvar:
+        print >> sys.stderr, "Error: both --clinvar and --commonvar cannot be used together."
+        sys.exit(1)
+        
     build_genotype_genome(args.reference,
                           args.base_fname,
                           args.partial,
@@ -414,4 +454,6 @@ if __name__ == '__main__':
                           args.intra_gap,
                           args.threads,
                           args.use_clinvar,
+                          args.use_commonvar,
                           args.verbose)
+    
