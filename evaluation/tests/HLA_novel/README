@@ -25,12 +25,14 @@ HISAT-genotye on Illumina Platinum Genomes
 To extract HLA alleles and variants
 
    ./hisatgenotype_extract_vars.py --reference-type gene --hla-list A --inter-gap 30 --intra-gap 50
+   ./hisatgenotype_extract_vars.py --reference-type gene --hla-list A --inter-gap 30 --intra-gap 50 --min-var-freq 0.1
 
 To build genotype genome
 
    ./hisatgenotype_build_genome.py genome.fa genotype_genome -p 3 --verbose
 
 To genotype
+
    ./hisatgenotype.py --base-name genotype_6 -f -1 1.fa -2 2.fa
 
 

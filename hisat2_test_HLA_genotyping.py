@@ -2823,7 +2823,7 @@ def test_HLA_genotyping(base_fname,
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
         # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
         # test_list = [[["A*24:36N", "A*30:03"]]]
-        test_list = [[["A*24:36N"]]]
+        test_list = [[["A*30:107"]]]
         # test_list = [[["A*24:36N"]]]
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):
@@ -3027,7 +3027,7 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="A seeding number for randomness (default: 1)")
-    parser.add_argument("--num-mismatch",
+    parser.add_argument("--num-mismatch", "--num-editdist",
                         dest="num_mismatch",
                         type=int,
                         default=0,

@@ -235,6 +235,8 @@ def extract_vars(base_fname,
     # variants w.r.t the backbone sequences into a SNP file
     var_file = open(base_fullpath_name + ".snp", 'w')
     var_index_file = open(base_fullpath_name + ".index.snp", 'w')
+    # variant frequence
+    var_freq_file = open(base_fullpath_name + ".snp.freq", 'w')
     # haplotypes
     haplotype_file = open(base_fullpath_name + ".haplotype", 'w')
     # pairs of a variant and the corresponding HLA allels into a LINK file    
@@ -352,7 +354,7 @@ def extract_vars(base_fname,
                     continue                    
                 for j in range(seq_len):
                     nt = seq[j]
-                    assert nt in "ACGT."
+                    assert nt in "ACGT.E"
                     if nt == 'A':
                         consensus_freq[j][0] += 1
                     elif nt == 'C':
@@ -362,7 +364,7 @@ def extract_vars(base_fname,
                     elif nt == 'T':
                         consensus_freq[j][3] += 1
                     else:
-                        assert nt == '.'
+                        assert nt in ".E"
                         consensus_freq[j][4] += 1
 
             for j in range(len(consensus_freq)):
@@ -423,7 +425,6 @@ def extract_vars(base_fname,
 
             assert len(consensus_seq) == len(consensus_freq)                
             return consensus_seq, consensus_freq
-        
 
         seq_len = find_seq_len(HLA_seqs)        
         backbone_name = "%s*BACKBONE" % HLA_gene
@@ -520,7 +521,7 @@ def extract_vars(base_fname,
                                                                    min_var_freq,
                                                                    True) # Remove empty sequences?
                 seq_len = find_seq_len(HLA_seqs)
-
+                
         if min_var_freq <= 0.0:
             assert '.' not in backbone_seq and 'E' not in backbone_seq
 
@@ -598,6 +599,22 @@ def extract_vars(base_fname,
             for i in range(len(HLA_seqs)):
                 HLA_seqs[i] = reverse_complement(HLA_seqs[i])
             backbone_seq = reverse_complement(backbone_seq)
+            backbone_freq = backbone_freq[::-1]
+            for i in range(len(backbone_freq)):
+                freq_dic = {}
+                for nt, freq in backbone_freq[i].items():
+                    if nt == 'A':
+                        freq_dic['T'] = freq
+                    elif nt == 'C':
+                        freq_dic['G'] = freq
+                    elif nt == 'G':
+                        freq_dic['C'] = freq
+                    elif nt == 'T':
+                        freq_dic['A'] = freq
+                    else:
+                        assert nt == '.'
+                        freq_dic['.'] = freq
+                backbone_freq[i] = freq_dic
 
         print >> sys.stderr, "%s: number of HLA alleles is %d." % (HLA_gene, len(HLA_names))
 
@@ -607,7 +624,6 @@ def extract_vars(base_fname,
                 continue
             assert id < len(HLA_seqs)
             cmp_seq = HLA_seqs[id]
-
             if len(cmp_seq) != seq_len:
                 print >> sys.stderr, "Warning: the length of %s (%d) is different from %d" % \
                     (cmp_name, len(cmp_seq), seq_len)
@@ -911,6 +927,7 @@ def extract_vars(base_fname,
             if freq >= min_var_freq:
                 print >> var_index_file, "%s\t%s\t%s\t%d\t%s" % \
                     (varID, type_str, tmp_backbone_name, base_locus + locus, data)
+            print >> var_freq_file, "%s\t%.2f" % (varID, freq)
             print >> link_file, "%s\t%s" % (varID, ' '.join(names))
             var2ID[keys[k]] = num_vars
             num_vars += 1
@@ -1078,6 +1095,7 @@ def extract_vars(base_fname,
     hla_ref_file.close()
     var_file.close()
     var_index_file.close()
+    var_freq_file.close()
     haplotype_file.close()
     link_file.close()
     input_file.close()
