@@ -1498,7 +1498,7 @@ class Graph:
                     print "\t\t%50s" % node_id, seq
 
             # DK - debugging purposes
-            if w_left >= 500 and False:
+            if w_left >= 500:
                 sys.exit(1)
                
         

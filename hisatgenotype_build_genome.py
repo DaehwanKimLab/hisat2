@@ -23,7 +23,7 @@
 import os, sys, subprocess, re
 import inspect
 from argparse import ArgumentParser, FileType
-from hisatgenotype_modules import HLA_typing, common_typing
+from hisatgenotype_modules import HLA_typing, typing_common
 
 
 """
@@ -62,10 +62,10 @@ def build_genotype_genome(reference,
                      "genome.fa",
                      "genome.fa.fai"]
     if not check_files(HISAT2_fnames):
-        common_typing.download_genome_and_index(ex_path)
+        typing_common.download_genome_and_index(ex_path)
 
     # Load genomic sequences
-    chr_dic, chr_names, chr_full_names = common_typing.read_genome(open(reference))
+    chr_dic, chr_names, chr_full_names = typing_common.read_genome(open(reference))
 
     genotype_vars, genotype_haplotypes, genotype_clnsig = {}, {}, {}
     if use_clinvar:
@@ -95,13 +95,13 @@ def build_genotype_genome(reference,
                 sys.exit(1)
 
         # Read variants to be genotyped
-        genotype_vars = common_typing.read_variants("clinvar.snp")
+        genotype_vars = typing_common.read_variants("clinvar.snp")
 
         # Read haplotypes
-        genotype_haplotypes = common_typing.read_haplotypes("clinvar.haplotype")
+        genotype_haplotypes = typing_common.read_haplotypes("clinvar.haplotype")
 
         # Read information about clinical significance
-        genotype_clnsig = common_typing.read_clnsig("clinvar.clnsig")
+        genotype_clnsig = typing_common.read_clnsig("clinvar.clnsig")
 
     if use_commonvar:
         # Extract variants from dbSNP database
@@ -127,10 +127,10 @@ def build_genotype_genome(reference,
                 sys.exit(1)
 
         # Read variants to be genotyped
-        genotype_vars = common_typing.read_variants("%s.snp" % commonvar_fbase)
+        genotype_vars = typing_common.read_variants("%s.snp" % commonvar_fbase)
 
         # Read haplotypes
-        genotype_haplotypes = common_typing.read_haplotypes("%s.haplotype" % commonvar_fbase)
+        genotype_haplotypes = typing_common.read_haplotypes("%s.haplotype" % commonvar_fbase)
 
     # Genes to be genotyped
     genotype_genes = {}
@@ -259,16 +259,16 @@ def build_genotype_genome(reference,
             chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(left, right, chr_genotype_vari, chr_genotype_hti, haplotype_num)
 
             # Read HLA backbone sequences
-            allele_seqs = common_typing.read_allele_sequences("%s_backbone.fa" % family)
+            allele_seqs = typing_common.read_allele_sequences("%s_backbone.fa" % family)
 
             # Read HLA variants
-            allele_vars = common_typing.read_variants("%s.index.snp" % family)
+            allele_vars = typing_common.read_variants("%s.index.snp" % family)
 
             # Read HLA haplotypes
-            allele_haplotypes = common_typing.read_haplotypes("%s.haplotype" % family)
+            allele_haplotypes = typing_common.read_haplotypes("%s.haplotype" % family)
 
             # Read HLA link information between haplotypes and variants
-            links = common_typing.read_links("%s.link" % family)
+            links = typing_common.read_links("%s.link" % family)
 
             if name not in allele_seqs or \
                     name not in allele_vars or \

@@ -24,216 +24,8 @@ import inspect, random
 import math
 from datetime import datetime, date, time
 from argparse import ArgumentParser, FileType
-from hisatgenotype_modules import common_typing, HLA_typing, assembly_graph
+from hisatgenotype_modules import typing_common, HLA_typing, assembly_graph
 
-
-"""
-"""
-def simulate_reads(HLAs,
-                   test_HLA_list,
-                   Vars,
-                   Links,
-                   simulate_interval = 1,
-                   read_len = 100,
-                   frag_len = 250,
-                   perbase_errorrate = 0.0,
-                   perbase_snprate = 0.0,
-                   skip_fragment_regions = []):
-    HLA_reads_1, HLA_reads_2 = [], []
-    num_pairs = []
-    for test_HLA_names in test_HLA_list:
-        gene = test_HLA_names[0].split('*')[0]
-        num_pairs.append([])
-
-        # Introduce SNPs into allele sequences
-        def introduce_snps(seq):
-            seq = list(seq)
-            for i in range(len(seq)):
-                if random.random() * 100 < perbase_snprate:
-                    if seq[i] == 'A':
-                        alt_bases = ['C', 'G', 'T']
-                    elif seq[i] == 'C':
-                        alt_bases = ['A', 'G', 'T']
-                    elif seq[i] == 'G':
-                        alt_bases = ['A', 'C', 'T']
-                    else:
-                        assert seq[i] == 'T'
-                        alt_bases = ['A', 'C', 'G']
-                    random.shuffle(alt_bases)
-                    alt_base = alt_bases[0]
-                    seq[i] = alt_base
-            seq = ''.join(seq)
-            return seq
-
-        # Simulate reads from two HLA alleles
-        def simulate_reads_impl(seq,
-                                seq_map,
-                                ex_seq,
-                                ex_desc,
-                                simulate_interval = 1,
-                                read_len = 100,
-                                frag_len = 250,
-                                perbase_errorrate = 0.0,
-                                skip_fragment_regions = []):
-            # Introduce sequencing errors
-            def introduce_seq_err(read_seq, pos):
-                read_seq = list(read_seq)
-                for i in range(read_len):
-                    map_pos = seq_map[pos + i]
-                    if ex_desc[map_pos] != "":
-                        continue
-                    if random.random() * 100 < perbase_errorrate:
-                        if read_seq[i] == 'A':
-                            alt_bases = ['C', 'G', 'T']
-                        elif read_seq[i] == 'C':
-                            alt_bases = ['A', 'G', 'T']
-                        elif read_seq[i] == 'G':
-                            alt_bases = ['A', 'C', 'T']
-                        else:
-                            assert read_seq[i] == 'T'
-                            alt_bases = ['A', 'C', 'G']
-                        random.shuffle(alt_bases)
-                        alt_base = alt_bases[0]
-                        read_seq[i] = alt_base
-                read_seq = ''.join(read_seq)
-                return read_seq                            
-                            
-            # Get read alignment, e.g., 260|R_483_61M5D38M23D1M_46|S|hv154,3|S|hv162,10|D|hv185,38|D|hv266
-            def get_info(read_seq, pos):
-                info = "%d_" % (seq_map[pos] + 1)
-                total_match, match, sub_match = 0, 0, 0
-                var_str = ""
-                for i in range(pos, pos + read_len):
-                    map_i = seq_map[i]
-                    assert ex_seq[map_i] != 'D'
-                    total_match += 1
-                    match += 1
-                    if ex_desc[map_i] != "" or read_seq[i-pos] != ex_seq[map_i]:
-                        if var_str != "":
-                            var_str += ','
-                        var_str += ("%d|S|%s" % (sub_match, ex_desc[map_i] if ex_desc[map_i] != "" else "unknown"))
-                        sub_match = 0
-                    else:
-                        sub_match += 1
-                    if i + 1 < pos + read_len and ex_seq[map_i+1] == 'D':
-                        assert match > 0
-                        info += ("%dM" % match)
-                        match = 0
-                        del_len = 1
-                        while map_i + 1 + del_len < len(ex_seq):
-                            if ex_seq[map_i + 1 + del_len] != 'D':
-                                break
-                            del_len += 1
-                        info += ("%dD" % del_len)
-                        if var_str != "":
-                            var_str += ','
-                        var_str += ("%s|D|%s" % (sub_match, ex_desc[map_i + 1]))
-                        sub_match = 0
-                assert match > 0
-                info += ("%dM" % match)
-                assert total_match == read_len
-                if var_str:
-                    info += "_"
-                    info += var_str                
-                return info
-                
-            comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
-            reads_1, reads_2 = [], []
-            for i in range(0, len(seq) - frag_len + 1, simulate_interval):
-                if len(skip_fragment_regions) > 0:
-                    skip = False
-                    for skip_left, skip_right in skip_fragment_regions:
-                        if i <= skip_right and i + frag_len > skip_left:
-                            skip = True
-                            break
-                    if skip:
-                        continue
-                        
-                pos1 = i
-                seq1 = seq[pos1:pos1+read_len]
-                if perbase_errorrate > 0.0:
-                    seq1 = introduce_seq_err(seq1, pos1)
-                info1 = get_info(seq1, pos1)
-                reads_1.append([seq1, info1])
-                
-                pos2 = i + frag_len - read_len
-                seq2 = seq[pos2:pos2+read_len]
-                if perbase_errorrate > 0.0:
-                    seq2 = introduce_seq_err(seq2, pos2)                
-                info2 = get_info(seq2, pos2)
-                tmp_read_2 = reversed(seq2)
-                read_2 = ""
-                for s in tmp_read_2:
-                    if s in comp_table:
-                        read_2 += comp_table[s]
-                    else:
-                        read_2 += s
-                reads_2.append([read_2, info2])
-            return reads_1, reads_2
-
-        # for each allele in a list of alleles such as ['A*32:29', 'B*07:02:01']
-        for test_HLA_name in test_HLA_names:
-            HLA_seq = HLAs[gene][test_HLA_name]
-            HLA_ex_seq = list(HLAs[gene]["%s*BACKBONE" % gene])
-            HLA_ex_desc = [''] * len(HLA_ex_seq)
-            HLA_seq_map = [i for i in range(len(HLA_seq))]
-
-            if perbase_snprate > 0:
-                HLA_seq = introduce_snps(HLA_seq)
-
-            # Extract variants included in the allele
-            vars = []
-            for var, allele_list in Links.items():
-                if test_HLA_name in allele_list:
-                    vars.append(var)
-
-            # Build annotated sequence for the allele w.r.t backbone sequence
-            for var in vars:
-                var_type, var_pos, var_data = Vars[gene][var]
-                if var_type == "single":
-                    HLA_ex_seq[var_pos] = var_data
-                    HLA_ex_desc[var_pos] = var
-                else:
-                    assert var_type == "deletion"
-                    del_len = int(var_data)
-                    assert var_pos + del_len <= len(HLA_ex_seq)
-                    HLA_ex_seq[var_pos:var_pos+del_len] = ['D'] * del_len
-                    HLA_ex_desc[var_pos:var_pos+del_len] = [var] * del_len
-            HLA_ex_seq = ''.join(HLA_ex_seq)
-
-            # Build mapping from the allele to the annotated sequence
-            prev_j = 0
-            for i in range(len(HLA_seq)):
-                for j in range(prev_j, len(HLA_ex_seq)):
-                    if HLA_ex_seq[j] != 'D':
-                        break
-                HLA_seq_map[i] = j
-                prev_j = j + 1
-            
-            tmp_reads_1, tmp_reads_2 = simulate_reads_impl(HLA_seq,
-                                                           HLA_seq_map,
-                                                           HLA_ex_seq,
-                                                           HLA_ex_desc,                                                           
-                                                           simulate_interval,
-                                                           read_len,
-                                                           frag_len,
-                                                           perbase_errorrate,
-                                                           skip_fragment_regions)
-            HLA_reads_1 += tmp_reads_1
-            HLA_reads_2 += tmp_reads_2
-            num_pairs[-1].append(len(tmp_reads_1))
-
-    # Write reads into a fasta read file
-    def write_reads(reads, idx):
-        read_file = open('hla_input_%d.fa' % idx, 'w')
-        for read_i in range(len(reads)):
-            print >> read_file, ">%d|%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
-            print >> read_file, reads[read_i][0]
-        read_file.close()
-    write_reads(HLA_reads_1, 1)
-    write_reads(HLA_reads_2, 2)
-
-    return num_pairs
 
 
 """
@@ -254,8 +46,8 @@ def align_reads(ex_path,
         if not simulation:
             aligner_cmd += ["--no-unal"]            
         # No detection of novel insertions and deletions
-        aligner_cmd += ["--rdg", "10000,10000"] # deletion
-        aligner_cmd += ["--rfg", "10000,10000"] # insertion
+        # aligner_cmd += ["--rdg", "10000,10000"] # deletion
+        # aligner_cmd += ["--rfg", "10000,10000"] # insertion
         DNA = True
         if DNA:
             aligner_cmd += ["--no-spliced-alignment"] # no spliced alignment
@@ -1534,6 +1326,10 @@ def typing(ex_path,
                     if NM > num_editdist:
                         continue
 
+                    # DK - debugging purposes
+                    if 'I' in cigar_str:
+                        continue
+                    
                     # Only consider unique alignment
                     if NH > 1:
                         continue
@@ -1625,11 +1421,8 @@ def typing(ex_path,
                                             var_type, _, var_data = Vars[gene][var_id]
                                             if var_type == "single" and var_data == read_base:
                                                 _var_id = var_id
-                                                # DK - debugging purposes
-                                                print var_id, right_pos
                                                 break
                                         var_idx += 1
-
 
                                 cmp_list.append(["mismatch", right_pos + MD_len, 1, _var_id])
                                 MD_len_used = MD_len + 1
@@ -1671,6 +1464,20 @@ def typing(ex_path,
                                 Zs_i += 1
                                 if Zs_i < len(Zs):
                                     Zs_pos += int(Zs[Zs_i][0])
+                            else:
+                                # Search for a known (yet not indexed) variant or a novel variant
+                                var_idx = lower_bound(Var_list[gene], right_pos)
+                                while var_idx < len(Var_list[gene]):
+                                    var_pos, var_id = Var_list[gene][var_idx]
+                                    if var_pos > right_pos:
+                                        break
+                                    if var_pos == right_pos:
+                                        var_type, _, var_data = Vars[gene][var_id]
+                                        if var_type == "deletion" and int(var_data) == length:
+                                            _var_id = var_id
+                                            break
+                                    var_idx += 1
+
                             cmp_list.append(["deletion", right_pos, length, _var_id])
 
                             # Check if this deletion is artificial alignment
@@ -2522,7 +2329,7 @@ def test_HLA_genotyping(base_fname,
                      "genome.fa",
                      "genome.fa.fai"]
     if not check_files(HISAT2_fnames):
-        common_typing.download_genome_and_index(ex_path)
+        typing_common.download_genome_and_index(ex_path)
 
     # Check if the pre-existing files (hla*) are compatible with the current parameter setting
     if os.path.exists("hla.ref"):
@@ -2835,8 +2642,8 @@ def test_HLA_genotyping(base_fname,
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
         # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
         # test_list = [[["A*24:36N", "A*30:03"]]]
-        test_list = [[["A*30:107"]]]
-        # test_list = [[["A*24:36N"]]]
+        # test_list = [[["A*26:25N"]]] # for allele that includes an insertion
+        # test_list = [[["A*24:36N"]]] # for normal allele?
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):
             if "test_id" in daehwan_debug:
@@ -2846,16 +2653,16 @@ def test_HLA_genotyping(base_fname,
 
             print >> sys.stderr, "Test %d" % (test_i + 1), str(datetime.now())
             test_HLA_list = test_list[test_i]
-            num_frag_list = simulate_reads(HLAs_default if custom_allele_check else HLAs,
-                                           test_HLA_list,
-                                           Vars,
-                                           Links,
-                                           simulate_interval,
-                                           read_len,
-                                           fragment_len,
-                                           perbase_errorrate,
-                                           perbase_snprate,
-                                           skip_fragment_regions)
+            num_frag_list = typing_common.simulate_reads(HLAs_default if custom_allele_check else HLAs,
+                                                         test_HLA_list,
+                                                         Vars,
+                                                         Links,
+                                                         simulate_interval,
+                                                         read_len,
+                                                         fragment_len,
+                                                         perbase_errorrate,
+                                                         perbase_snprate,
+                                                         skip_fragment_regions)
 
             assert len(num_frag_list) == len(test_HLA_list)
             for i_ in range(len(test_HLA_list)):
