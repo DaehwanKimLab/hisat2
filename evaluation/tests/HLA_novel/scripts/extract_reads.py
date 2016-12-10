@@ -304,14 +304,14 @@ def extract_reads(base_fname,
                     cols = line.split()
                     read_name, flag, chr, pos, mapQ, cigar, _, _, _, read, qual = cols[:11]
                     flag, pos = int(flag), int(pos)
-                    """
                     strand = '-' if flag & 0x10 else '+'                   
-                    AS = ""
+                    AS, NH = "", ""
                     for i in range(11, len(cols)):
                         col = cols[i]
                         if col.startswith("AS"):
                             AS = int(col[5:])
-                    """
+                        elif col.startswith("NH"):
+                            NH = int(col[5:])
 
                     if read_name != prev_read_name:
                         if extract_read:
@@ -327,7 +327,7 @@ def extract_reads(base_fname,
 
                         prev_read_name, extract_read, read1, read2 = read_name, False, [], []
                         
-                    if flag & 0x4 == 0:
+                    if flag & 0x4 == 0 and NH == 1:
                         for loci in gene_loci.values():
                             _, loci_chr, loci_left, loci_right = loci
                             if chr == loci_chr and pos >= loci_left and pos < loci_right:
