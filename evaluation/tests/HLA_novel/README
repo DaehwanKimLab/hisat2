@@ -20,6 +20,8 @@ HISAT-genotye on Illumina Platinum Genomes
    
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN/NA12892.extracted.1.fq.gz,ILMN/NA12892.extracted.2.fq.gz
 
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz
+
 
 
 To extract HLA alleles and variants
@@ -30,6 +32,9 @@ To extract HLA alleles and variants
 To build genotype genome
 
    ./hisatgenotype_build_genome.py genome.fa genotype_genome -p 3 --verbose
+
+To extract reads that may have originated from HLA genes
+   scripts/extract_reads.py --base-fname genotype_genome --reference-type genome --read-dir ILMN_12062016 --out-dir ILMN
 
 To genotype
 

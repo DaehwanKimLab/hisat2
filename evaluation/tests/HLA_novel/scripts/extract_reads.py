@@ -171,6 +171,7 @@ def extract_reads(base_fname,
         genotype_fnames = ["%s.fa" % base_fname,
                            "%s.gene" % base_fname,
                            "%s.snp" % base_fname,
+                           "%s.index.snp" % base_fname,
                            "%s.haplotype" % base_fname,
                            "%s.link" % base_fname,
                            "%s.coord" % base_fname,
@@ -180,8 +181,8 @@ def extract_reads(base_fname,
         if not check_files(genotype_fnames):        
             build_script = os.path.join(ex_path, "hisatgenotype_build_genome.py")
             build_cmd = [build_script]
-            if partial:
-                build_cmd += ["--partial"]
+            if not partial:
+                build_cmd += ["--no-partial"]
             build_cmd += ["--inter-gap", "30",
                           "--intra-gap", "50"]
             build_cmd += ["--threads", "4"]

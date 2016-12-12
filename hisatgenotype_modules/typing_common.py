@@ -231,13 +231,14 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
                         var_str += ("%s|I|%s" % (sub_match, ins_var))
                         ins_len, ins_var = 0, ""
                         sub_match = 0
-                    if ex_desc[map_i] != "" or read_seq[i-pos] != ex_seq[map_i]:
-                        if var_str != "":
-                            var_str += ','
-                        var_str += ("%d|S|%s" % (sub_match, ex_desc[map_i] if ex_desc[map_i] != "" else "unknown"))
-                        sub_match = 0
-                    else:
-                        sub_match += 1
+                    if ex_seq[map_i] != 'I':
+                        if ex_desc[map_i] != "" or read_seq[i-pos] != ex_seq[map_i]:
+                            if var_str != "":
+                                var_str += ','
+                            var_str += ("%d|S|%s" % (sub_match, ex_desc[map_i] if ex_desc[map_i] != "" else "unknown"))
+                            sub_match = 0
+                        else:
+                            sub_match += 1
                     if i + 1 < pos + read_len and ex_seq[map_i+1] == 'D':
                         assert match > 0
                         info += ("%dM" % match)
@@ -361,7 +362,7 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
             print len(allele_ex_seq), "vs.", len(seq_dic[gene]["A*BACKBONE"]), "vs.", len(allele_seq_map)
             print allele_ex_seq[1943:1946]
             print allele_ex_desc[1943:1946]
-            # sys.exit(1)
+            sys.exit(1)
             """
             
             tmp_reads_1, tmp_reads_2 = simulate_reads_impl(allele_seq,

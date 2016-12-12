@@ -79,10 +79,7 @@ class Node:
         self.right = self.left + len(seq) - 1
 
         self.read_ids = set([id])
-        if simulation:
-            self.mate_ids = set([id.split('|')[0]])
-        else:
-            self.mate_ids = set([id])
+        self.mate_ids = set([id.split('|')[0]])
 
         self.calculate_avg_cov()
 
@@ -384,7 +381,12 @@ class Graph:
         if simulation:
             id = id.split('_')[0]
         if id in self.nodes:
-            # print >> sys.stderr, "Warning) multi-mapped read:", id
+            print >> sys.stderr, "Warning) multi-mapped read:", id
+
+            # DK - debugging purposes
+            self.nodes[id].print_info()
+            
+            assert False
             return
         assert id not in self.nodes
         self.nodes[id] = node
@@ -1463,6 +1465,8 @@ class Graph:
             # DK - debugging purposes
             print "[%d, %d)" % (w_left, w_right)
             for haplotype, node_ids in haplotypes.items():
+                if haplotype == "":
+                    haplotype = "nothing"
                 print "\t%s: %d" % (haplotype, len(node_ids))
                 for var_id in haplotype.split(','):
                     if var_id not in self.vars:
@@ -1498,7 +1502,7 @@ class Graph:
                     print "\t\t%50s" % node_id, seq
 
             # DK - debugging purposes
-            if w_left >= 500:
+            if w_left >= 1100 and False:
                 sys.exit(1)
                
         

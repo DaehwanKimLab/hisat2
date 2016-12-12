@@ -999,7 +999,8 @@ def error_correct(ref_seq,
                 assert left + j < len(mpileup)
                 nt_set = mpileup[left + j][0]
                 if len(nt_set) > 0 and read_bp not in nt_set:
-                    read_bp = 'N' if len(nt_set) > 1 else nt_set[0]
+                    read_bp = 'N' if len(nt_set) > 1 else nt_set[0]                    
+                    read_seq = read_seq[:read_pos + j] + read_bp + read_seq[read_pos + j + 1:]
                     assert read_bp != ref_bp
                     new_cmp = ["mismatch", left + j, 1, "unknown"]
                     if read_bp != 'N':
@@ -1288,7 +1289,7 @@ def typing(ex_path,
                     line = line.strip()
                     cols = line.split()
                     read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
-                    orig_read_id = read_id
+                    node_read_id = orig_read_id = read_id
                     if simulation:
                         read_id = read_id.split('|')[0]
                     read_seq, qual = cols[9], cols[10]
@@ -1344,13 +1345,17 @@ def typing(ex_path,
                         if read_id in left_read_ids:
                             continue
                         left_read_ids.add(read_id)
+                        if not simulation:
+                            node_read_id += '|L'
                     else: # Right read?
                         if read_id in right_read_ids:
                             continue
                         right_read_ids.add(read_id)
+                        if not simulation:
+                            node_read_id += '|R'
 
                     if Zs:
-                        Zs = Zs.split(',')
+                        Zs = Zs.split(',')             
 
                     assert MD != ""
                     MD_str_pos, MD_len = 0, 0
@@ -1432,6 +1437,12 @@ def typing(ex_path,
                                     MD_len = 0
                                     break
 
+                            # DK - debugging purposes
+                            if read_id == "HSQ1008:176:D0UYCACXX:6:2208:21122:33761":
+                                print read_id
+                                print node_read_id
+
+
                             # Correction for sequencing errors and update for cmp_list
                             if error_correction:
                                 assert cmp_list_i < len(cmp_list)
@@ -1442,7 +1453,7 @@ def typing(ex_path,
                                                                        Vars[gene],
                                                                        Var_list[gene],
                                                                        cmp_list[cmp_list_i:],
-                                                                       orig_read_id.find("#11|L") == 0)
+                                                                       node_read_id == "#HSQ1008:176:D0UYCACXX:6:2208:21122:33761|R")
                                 cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
 
                         elif cigar_op == 'I':
@@ -1587,7 +1598,7 @@ def typing(ex_path,
                     if read_id != prev_read_id:
                         if prev_read_id != None:
                             cur_cmpt = add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
-                            add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
+                            add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)                            
                             for read_id_, read_node in read_nodes:
                                 asm_graph.add_node(read_id_,
                                                    read_node,
@@ -1787,8 +1798,8 @@ def typing(ex_path,
                         assert False
 
                     # Node
-                    read_nodes.append([orig_read_id,
-                                       assembly_graph.Node(orig_read_id,
+                    read_nodes.append([node_read_id,
+                                       assembly_graph.Node(node_read_id,
                                                            read_node_pos,
                                                            read_node_seq,
                                                            read_node_var,
@@ -1815,17 +1826,6 @@ def typing(ex_path,
                 print >> sys.stderr, "\t\t\tNumber of reads aligned: %d" % num_reads
 
                 if prev_read_id != None:
-                    # Node
-                    read_nodes.append([orig_read_id,
-                                       assembly_graph.Node(orig_read_id,
-                                                           read_node_pos,
-                                                           read_node_seq,
-                                                           read_node_var,
-                                                           ref_seq,
-                                                           Vars[gene],
-                                                           mpileup,
-                                                           simulation)])
-
                     add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
                     add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                     for read_id_, read_node in read_nodes:
@@ -2642,7 +2642,7 @@ def test_HLA_genotyping(base_fname,
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
         # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
         # test_list = [[["A*24:36N", "A*30:03"]]]
-        # test_list = [[["A*26:25N"]]] # for allele that includes an insertion
+        test_list = [[["A*26:25N"]]] # for allele that includes an insertion
         # test_list = [[["A*24:36N"]]] # for normal allele?
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):
