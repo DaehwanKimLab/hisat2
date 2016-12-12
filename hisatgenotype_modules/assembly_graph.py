@@ -127,7 +127,7 @@ class Node:
                     if len(var[i+j]) > 0 or len(other_var[j]) > 0:
                         def get_var_id(nt, var_ids, vars):
                             for _id in var_ids:
-                                if _id == "unknown":
+                                if _id == "unknown" or _id.startswith("nv"):
                                     continue
                                 _type, _pos, _data = vars[_id]
                                 if _type != "single":
@@ -224,7 +224,7 @@ class Node:
         for pos in range(left, right + 1):
             var_i = pos - self.left
             for var in self.var[var_i]:
-                if var == "unknown":
+                if var == "unknown" or var.startswith("nv"):
                     continue
                 assert var in Vars
                 if len(vars) > 0 and var == vars[-1]:
@@ -256,7 +256,7 @@ class Node:
                 continue            
             added = False
             for var in self.var[var_i]:
-                if var == "unknown":
+                if var == "unknown" or var.startswith("nv"):
                     continue
                 if len(vars) > 0 and var == vars[-1][0]:
                     continue
@@ -310,13 +310,13 @@ class Node:
             if nt != self.ref_seq[self.left + i]:
                 var_id = "unknown"
                 for tmp_id in self.var[i]:
-                    if tmp_id == "unknown":
+                    if tmp_id == "unknown" or tmp_id.startswith("nv"):
                         continue
                     type, pos, data = self.ref_vars[tmp_id]
                     if (type == "single" and data == nt) or \
                        (type == "deletion" and nt == 'D'):
                         var_id = tmp_id                    
-                if var_id == "unknown":
+                if var_id == "unknown" or var_id.startswith("nv"):
                     seq += "\033[91m" # red
                 else:
                     seq += "\033[94m" # blue
@@ -1359,7 +1359,7 @@ class Graph:
                 if var_id == "gap":
                     var_type, var_left = "single", pos
                     color = "black"
-                elif var_id == "unknown":
+                elif var_id == "unknown" or var_id.startswith("nv"):
                     var_type, var_left = "single", pos
                     color = "red"
                 else:
@@ -1486,13 +1486,13 @@ class Graph:
                         if nt != self.backbone[pos]:
                             var_id = "unknown"
                             for tmp_id in node.var[seq_i]:
-                                if tmp_id == "unknown":
+                                if tmp_id == "unknown" or tmp_id.startswith("nv"):
                                     continue
                                 type, pos, data = self.vars[tmp_id]
                                 if (type == "single" and data == nt) or \
                                    (type == "deletion" and nt == 'D'):
                                     var_id = tmp_id                    
-                            if var_id == "unknown":
+                            if var_id == "unknown" or var_id.startswith("nv"):
                                 seq += "\033[91m" # red
                             else:
                                 seq += "\033[94m" # blue

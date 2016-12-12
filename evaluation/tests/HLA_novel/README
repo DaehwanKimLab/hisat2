@@ -41,6 +41,10 @@ To genotype
    ./hisatgenotype.py --base-name genotype_6 -f -1 1.fa -2 2.fa
 
 
+HISAT2 alignment
+   ../../../hisat2 --no-hd -x genotype_genome -c CAGCTGGGATGTGGAGTGGTGTGAGGAGTGGCCACAGGGGAGCAGAGGAGGTGGCAGAAGCCGGAGGTAAAGGTGTCTTAAA
+
+
 On MARCC - https://www.marcc.jhu.edu/getting-started/basic
 
 sbatch script-name

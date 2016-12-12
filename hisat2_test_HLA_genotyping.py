@@ -24,6 +24,7 @@ import inspect, random
 import math
 from datetime import datetime, date, time
 from argparse import ArgumentParser, FileType
+from copy import deepcopy
 from hisatgenotype_modules import typing_common, HLA_typing, assembly_graph
 
 
@@ -1116,6 +1117,7 @@ def typing(ex_path,
            verbose):
     if simulation:
         test_passed = {}
+
     for aligner, index_type in aligners:
         if index_type == "graph":
             print >> sys.stderr, "\n\t\t%s %s on %s" % (aligner, index_type, reference_type)
@@ -1151,6 +1153,38 @@ def typing(ex_path,
             ref_seq = HLAs[gene][ref_allele]
             ref_exons = refHLA_loci[gene][-1]
 
+            novel_var_count = 0        
+            gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
+            var_count = {}
+            def add_novel_var(gene_vars,
+                              gene_var_list,
+                              novel_var_count,
+                              var_type,
+                              var_pos,
+                              var_data):
+                var_idx = lower_bound(gene_var_list, var_pos)
+                while var_idx < len(gene_var_list):
+                    pos_, id_ = gene_var_list[var_idx]
+                    if pos_ > var_pos:
+                        break
+                    if pos_ == var_pos:
+                        type_, _, data_ = gene_vars[id_]
+                        assert type_ != var_type or data_ != var_data
+                        if type_ != var_type:
+                            if var_type == "insertion":
+                                break
+                            elif var_type == "single" and type_ == "deletion":
+                                break
+                        else:
+                            if var_data < data_:
+                                break
+                    var_idx += 1
+                var_id = "nv%d" % novel_var_count
+                assert var_id not in gene_vars
+                gene_vars[var_id] = [var_type, var_pos, var_data]
+                gene_var_list.insert(var_idx, [var_pos, var_id])                
+                return var_id, novel_var_count + 1
+
             if not os.path.exists(alignment_fname + ".bai"):
                 os.system("samtools index %s" % alignment_fname)
             # samtools mpileup
@@ -1177,7 +1211,7 @@ def typing(ex_path,
                 mpileup = get_mpileup(alignview_cmd,
                                       ref_seq,
                                       base_locus,
-                                      Vars[gene])
+                                      gene_vars)
 
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
@@ -1205,7 +1239,7 @@ def typing(ex_path,
                         allele_vars[allele_id].append(var_id)
 
             # Extract variants that are within exons
-            exon_vars = get_exonic_vars(Vars[gene], ref_exons)
+            exon_vars = get_exonic_vars(gene_vars, ref_exons)
 
             # Compare two alleles
             allele_nodes = {}
@@ -1213,8 +1247,8 @@ def typing(ex_path,
                 seq = list(ref_seq)  # sequence that node represents
                 var = ["" for i in range(len(ref_seq))]  # how sequence is related to backbone
                 for var_id in var_ids:
-                    assert var_id in Vars[gene]
-                    var_type, var_pos, var_data = Vars[gene][var_id]
+                    assert var_id in gene_vars
+                    var_type, var_pos, var_data = gene_vars[var_id]
                     assert var_pos >= 0 and var_pos < len(ref_seq)
                     if var_type == "single":
                         seq[var_pos] = var_data
@@ -1234,7 +1268,7 @@ def typing(ex_path,
                                                               seq,
                                                               var,
                                                               ref_seq,
-                                                              Vars[gene],
+                                                              gene_vars,
                                                               mpileup,
                                                               simulation)
 
@@ -1251,7 +1285,7 @@ def typing(ex_path,
 
             # Assembly graph
             asm_graph = assembly_graph.Graph(ref_seq,
-                                             Vars[gene],
+                                             gene_vars,
                                              ref_exons,
                                              partial_alleles,
                                              true_allele_nodes,
@@ -1263,7 +1297,7 @@ def typing(ex_path,
             allele_rep_set = set(allele_reps.values())
 
             # For checking alternative alignments near the ends of alignments
-            Alts_left, Alts_right = get_alternatives(ref_seq, Vars[gene], Var_list[gene], verbose)
+            Alts_left, Alts_right = get_alternatives(ref_seq, gene_vars, gene_var_list, verbose)
 
             # Count alleles
             HLA_counts, HLA_cmpt = {}, {}
@@ -1327,10 +1361,6 @@ def typing(ex_path,
                     if NM > num_editdist:
                         continue
 
-                    # DK - debugging purposes
-                    if 'I' in cigar_str:
-                        continue
-                    
                     # Only consider unique alignment
                     if NH > 1:
                         continue
@@ -1417,13 +1447,13 @@ def typing(ex_path,
                                 else:
                                     # Search for a known (yet not indexed) variant or a novel variant
                                     ref_pos = right_pos + MD_len
-                                    var_idx = lower_bound(Var_list[gene], ref_pos)
-                                    while var_idx < len(Var_list[gene]):
-                                        var_pos, var_id = Var_list[gene][var_idx]
+                                    var_idx = lower_bound(gene_var_list, ref_pos)
+                                    while var_idx < len(gene_var_list):
+                                        var_pos, var_id = gene_var_list[var_idx]
                                         if var_pos > ref_pos:
                                             break
                                         if var_pos == ref_pos:
-                                            var_type, _, var_data = Vars[gene][var_id]
+                                            var_type, _, var_data = gene_vars[var_id]
                                             if var_type == "single" and var_data == read_base:
                                                 _var_id = var_id
                                                 break
@@ -1437,12 +1467,6 @@ def typing(ex_path,
                                     MD_len = 0
                                     break
 
-                            # DK - debugging purposes
-                            if read_id == "HSQ1008:176:D0UYCACXX:6:2208:21122:33761":
-                                print read_id
-                                print node_read_id
-
-
                             # Correction for sequencing errors and update for cmp_list
                             if error_correction:
                                 assert cmp_list_i < len(cmp_list)
@@ -1450,15 +1474,34 @@ def typing(ex_path,
                                                                        read_seq,
                                                                        read_pos,
                                                                        mpileup,
-                                                                       Vars[gene],
-                                                                       Var_list[gene],
+                                                                       gene_vars,
+                                                                       gene_var_list,
                                                                        cmp_list[cmp_list_i:],
                                                                        node_read_id == "#HSQ1008:176:D0UYCACXX:6:2208:21122:33761|R")
                                 cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
 
                         elif cigar_op == 'I':
-                            assert False
-                            cmp_list.append(["insertion", right_pos, length])
+                            _var_id = "unknown"
+                            if read_pos == Zs_pos and Zs_i < len(Zs):
+                                assert Zs[Zs_i][1] == 'I'
+                                _var_id = Zs[Zs_i][2]
+                                Zs_i += 1
+                                if Zs_i < len(Zs):
+                                    Zs_pos += int(Zs[Zs_i][0])
+                            else:
+                                # Search for a known (yet not indexed) variant or a novel variant
+                                var_idx = lower_bound(gene_var_list, right_pos)
+                                while var_idx < len(gene_var_list):
+                                    var_pos, var_id = gene_var_list[var_idx]
+                                    if var_pos > right_pos:
+                                        break
+                                    if var_pos == right_pos:
+                                        var_type, _, var_data = gene_vars[var_id]
+                                        if var_type == "insertion" and len(var_data) == length:
+                                            _var_id = var_id
+                                            break
+                                    var_idx += 1                            
+                            cmp_list.append(["insertion", right_pos, length, _var_id])
                         elif cigar_op == 'D':
                             if MD[MD_str_pos] == '0':
                                 MD_str_pos += 1
@@ -1477,13 +1520,13 @@ def typing(ex_path,
                                     Zs_pos += int(Zs[Zs_i][0])
                             else:
                                 # Search for a known (yet not indexed) variant or a novel variant
-                                var_idx = lower_bound(Var_list[gene], right_pos)
-                                while var_idx < len(Var_list[gene]):
-                                    var_pos, var_id = Var_list[gene][var_idx]
+                                var_idx = lower_bound(gene_var_list, right_pos)
+                                while var_idx < len(gene_var_list):
+                                    var_pos, var_id = gene_var_list[var_idx]
                                     if var_pos > right_pos:
                                         break
                                     if var_pos == right_pos:
-                                        var_type, _, var_data = Vars[gene][var_id]
+                                        var_type, _, var_data = gene_vars[var_id]
                                         if var_type == "deletion" and int(var_data) == length:
                                             _var_id = var_id
                                             break
@@ -1542,6 +1585,39 @@ def typing(ex_path,
 
                     if likely_misalignment:
                         continue
+
+                    # Add novel variants
+                    read_pos = 0
+                    for cmp_i in range(len(cmp_list)):
+                        type_, pos_, length_ = cmp_list[cmp_i][:3]
+                        if type_ != "match":
+                            var_id_ = cmp_list[cmp_i][3]
+                            if var_id_ == "unknown":
+                                add = True
+                                if type_ == "mismatch":
+                                    data_ = read_seq[read_pos]
+                                    if data_ == 'N':
+                                        add = False
+                                elif type_ == "deletion":
+                                    data_ = str(length_)
+                                else:
+                                    assert type_ == "insertion"
+                                    data_ = read_seq[read_pos:read_pos + length_]
+                                if add:
+                                    var_id, novel_var_count = add_novel_var(gene_vars,
+                                                                            gene_var_list,
+                                                                            novel_var_count,
+                                                                            type_ if type_ != "mismatch" else "single",
+                                                                            pos_,
+                                                                            data_)
+                                    cmp_list[cmp_i][3] = var_id
+                            if var_id not in var_count:
+                                var_count[var_id] = 1
+                            else:
+                                var_count[var_id] += 1
+                                
+                        if type_ != "deletion":
+                            read_pos += length_
 
                     # Count the number of reads aligned uniquely with some constraints
                     num_reads += 1
@@ -1638,7 +1714,9 @@ def typing(ex_path,
                             count_per_read[allele] += add
 
                     # Decide which allele(s) a read most likely came from
-                    for var_id, data in Vars[gene].items():
+                    for var_id, data in gene_vars.items():
+                        if var_id == "unknown" or var_id.startswith("nv"):
+                            continue
                         var_type, var_pos, var_data = data
                         if var_type != "deletion":
                             continue
@@ -1658,14 +1736,14 @@ def typing(ex_path,
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
 
-                    cmp_list_left, cmp_list_right = identify_ambigious_diffs(Vars[gene],
+                    cmp_list_left, cmp_list_right = identify_ambigious_diffs(gene_vars,
                                                                              Alts_left,
                                                                              Alts_right,
                                                                              cmp_list,
                                                                              verbose)
 
                     # Deletions at 5' and 3' ends
-                    for var_id, data in Vars[gene].items():
+                    for var_id, data in gene_vars.items():
                         var_type, var_pos, var_data = data
                         if var_type != "deletion":
                             continue
@@ -1688,13 +1766,13 @@ def typing(ex_path,
                             read_node_seq += read_seq[read_pos:read_pos+length]
                             read_node_var += ([''] * length)
                             
-                            var_idx = lower_bound(Var_list[gene], ref_pos)
-                            while var_idx < len(Var_list[gene]):
-                                var_pos, var_id = Var_list[gene][var_idx]
+                            var_idx = lower_bound(gene_var_list, ref_pos)
+                            while var_idx < len(gene_var_list):
+                                var_pos, var_id = gene_var_list[var_idx]
                                 if ref_pos + length <= var_pos:
                                     break
                                 if ref_pos <= var_pos:
-                                    var_type, _, var_data = Vars[gene][var_id]
+                                    var_type, _, var_data = gene_vars[var_id]
                                     if var_type == "insertion":
                                         if ref_pos < var_pos and ref_pos + length > var_pos + len(var_data):
                                             negative_vars.add(var_id)
@@ -1734,15 +1812,14 @@ def typing(ex_path,
                             read_pos += 1
                             ref_pos += 1
                         elif type == "insertion":
-                            assert False
                             ins_seq = read_seq[read_pos:read_pos+length]
-                            var_idx = lower_bound(Var_list[gene], ref_pos)
-                            while var_idx < len(Var_list[gene]):
-                                var_pos, var_id = Var_list[gene][var_idx]
+                            var_idx = lower_bound(gene_var_list, ref_pos)
+                            while var_idx < len(gene_var_list):
+                                var_pos, var_id = gene_var_list[var_idx]
                                 if ref_pos < var_pos:
                                     break
                                 if ref_pos == var_pos:
-                                    var_type, _, var_data = Vars[gene][var_id]
+                                    var_type, _, var_data = gene_vars[var_id]
                                     if var_type == "insertion":                                
                                         if var_data == ins_seq:
                                             positive_vars.add(var_id)
@@ -1804,15 +1881,19 @@ def typing(ex_path,
                                                            read_node_seq,
                                                            read_node_var,
                                                            ref_seq,
-                                                           Vars[gene],
+                                                           gene_vars,
                                                            mpileup,
                                                            simulation)])
 
                     for positive_var in positive_vars:
+                        if positive_var == "unknown" or positive_var.startswith("nv"):
+                            continue
                         if positive_var in exon_vars:
                             add_count(HLA_count_per_read, positive_var, 1)
                         add_count(HLA_gen_count_per_read, positive_var, 1)
                     for negative_var in negative_vars:
+                        if negative_var == "unknown" or negative_var.startswith("nv"):
+                            continue
                         if negative_var in exon_vars:
                             add_count(HLA_count_per_read, negative_var, -1)
                         add_count(HLA_gen_count_per_read, negative_var, -1)
@@ -2033,11 +2114,11 @@ def typing(ex_path,
                         cmp_var_id, node_var_id = vars1[var_i], vars2[var_j]
                         if cmp_var_id == node_var_id:
                             skip = False
-                            var = Vars[gene][cmp_var_id]
+                            var = gene_vars[cmp_var_id]
                             print >> sys.stderr, cmp_var_id, var, "\t\t\t", mpileup[var[1]]
                             var_i += 1; var_j += 1
                             continue
-                        cmp_var, node_var = Vars[gene][cmp_var_id], Vars[gene][node_var_id]
+                        cmp_var, node_var = gene_vars[cmp_var_id], gene_vars[node_var_id]
                         if cmp_var[1] <= node_var[1]:
                             if not skip:
                                 if (var_i > 0 and var_i + 1 < len(vars1)) or cmp_var[0] != "deletion":
@@ -2055,7 +2136,7 @@ def typing(ex_path,
                     count += 1
                     if count > 100:
                         break
-                    node_vars = node.get_var_ids(Vars[gene])
+                    node_vars = node.get_var_ids(gene_vars)
                     node.print_info(); print >> sys.stderr
                     if node.id in asm_graph.to_node:
                         for id2, at in asm_graph.to_node[node.id]:
@@ -2064,7 +2145,7 @@ def typing(ex_path,
                     if simulation:
                         alleles, cmp_vars, max_common = "", [], -sys.maxint
                         for test_HLA_name in test_HLA_names:
-                            tmp_vars = allele_nodes[test_HLA_name].get_var_ids(Vars[gene])
+                            tmp_vars = allele_nodes[test_HLA_name].get_var_ids(gene_vars)
                             tmp_common = len(set(node_vars) & set(allele_vars[test_HLA_name]))
                             tmp_common -= len(set(node_vars) | set(allele_vars[test_HLA_name]))
                             if max_common < tmp_common:
