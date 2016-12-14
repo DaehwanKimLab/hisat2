@@ -1260,6 +1260,7 @@ def typing(ex_path,
                         seq[var_pos:var_pos + del_len] = ['D'] * del_len
                         var[var_pos:var_pos + del_len] = [var_id] * del_len
                     else:
+                        # DK - to be implemented for insertions
                         None
 
                 seq = ''.join(seq)
@@ -1726,7 +1727,7 @@ def typing(ex_path,
                             add_count(HLA_gen_count_per_read, var_id, -1)
 
                     # Node
-                    read_node_pos, read_node_seq, read_node_var = -1, "", []
+                    read_node_pos, read_node_seq, read_node_var = -1, [], []
                     read_vars = []
 
                     # Positive and negative evidence
@@ -1763,7 +1764,7 @@ def typing(ex_path,
                                 read_node_pos = ref_pos
 
                         if type == "match":
-                            read_node_seq += read_seq[read_pos:read_pos+length]
+                            read_node_seq += list(read_seq[read_pos:read_pos+length])
                             read_node_var += ([''] * length)
                             
                             var_idx = lower_bound(gene_var_list, ref_pos)
@@ -1800,7 +1801,7 @@ def typing(ex_path,
                         elif type == "mismatch":
                             var_id = cmp[3]
                             read_base = read_seq[read_pos]
-                            read_node_seq += read_base
+                            read_node_seq += [read_base]
                             read_node_var.append(var_id)
                             if var_id != "unknown":
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
@@ -1812,18 +1813,16 @@ def typing(ex_path,
                             read_pos += 1
                             ref_pos += 1
                         elif type == "insertion":
-                            ins_seq = read_seq[read_pos:read_pos+length]
-                            var_idx = lower_bound(gene_var_list, ref_pos)
-                            while var_idx < len(gene_var_list):
-                                var_pos, var_id = gene_var_list[var_idx]
-                                if ref_pos < var_pos:
-                                    break
-                                if ref_pos == var_pos:
-                                    var_type, _, var_data = gene_vars[var_id]
-                                    if var_type == "insertion":                                
-                                        if var_data == ins_seq:
-                                            positive_vars.add(var_id)
-                                var_idx += 1
+                            var_id = cmp[3]
+                            ins_len = length
+                            ins_seq = read_seq[read_pos:read_pos+ins_len]
+                            if var_id != "unknown" or not var_id.startswith("nv"):
+                                if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
+                                    # Require at least 5bp match before and after a deletion
+                                    if read_pos >= 5 and read_pos + 5 <= len(read_seq):
+                                        positive_vars.add(var_id)
+                            read_node_seq += ["I%s" % nt for nt in ins_seq]
+                            read_node_var += ([var_id] * ins_len)                                        
                             if cigar_match_len > 0:
                                 cmp_cigar_str += ("%dM" % cigar_match_len)
                                 cigar_match_len = 0
@@ -1833,8 +1832,8 @@ def typing(ex_path,
                             var_id = cmp[3]
                             alt_match = False
                             del_len = length
-                            read_node_seq += ('D' * del_len)
-                            if var_id != "unknown":
+                            read_node_seq += (['D'] * del_len)
+                            if var_id != "unknown" or not var_id.statswith("nv"):
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
                                     # Require at least 5bp match before and after a deletion
                                     if read_pos >= 5 and read_pos + 5 <= len(read_seq):

@@ -10,38 +10,47 @@ from copy import deepcopy
 def get_major_nt(nt_dic):
     nt = ''
     max_count = 0
-    for tmp_nt, tmp_count in nt_dic.items():
-        assert nt in "ACGTD"
+    for tmp_nt, tmp_value in nt_dic.items():
+        tmp_count, tmp_var_id = tmp_value
+        if len(tmp_nt) == 1:
+            assert tmp_nt in "ACGTDN"
+        else:
+            assert len(tmp_nt) == 2 and tmp_nt[0] == 'I' and tmp_nt[1] in "ACGT"
         if tmp_count > max_count:
             max_count = tmp_count
             nt = tmp_nt
-    assert nt in "ACGTDN"
+    if len(nt) == 1:
+        assert nt in "ACGTDN"
+    else:
+        assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
     return nt                
 
 
 #
 def match_score(nt_dic1, nt_dic2):
-    total1, total2 = sum(nt_dic1.values()) * 2.0, sum(nt_dic2.values()) * 2.0
+    sum_1 = sum([count for count, _ in nt_dic1.values()])
+    sum_2 = sum([count for count, _ in nt_dic2.values()])
+    total1, total2 = sum_1 * 2.0, sum_2 * 2.0
     best = 0.0
     for nt in "ACGT":
         if nt not in nt_dic1 or nt not in nt_dic2:
             continue
-        tmp_best = nt_dic1[nt] / total1 + nt_dic2[nt] / total2
+        tmp_best = nt_dic1[nt][0] / total1 + nt_dic2[nt][0] / total2
         if tmp_best > best:
             best = tmp_best
     return best
 
 
 #
-def get_ungapped_seq_var(seq, var):
-    ungapped_seq, ungapped_var = [], []
+def get_ungapped_seq_var(seq):
+    ungapped_seq = []
     for i in range(len(seq)):
-        nt_dic, var_dic = seq[i], var[i]
-        if get_major_nt(nt_dic) == 'D':
+        nt_dic = seq[i]
+        nt = get_major_nt(nt_dic)
+        if nt == 'D':
             continue
         ungapped_seq.append(nt_dic)
-        ungapped_var.append(var_dic)
-    return ungapped_seq, ungapped_var
+    return ungapped_seq
 
 
 class Node:
@@ -60,23 +69,24 @@ class Node:
         if simulation:
             id = id.split('_')[0]
         self.id = id # Node ID
-
         self.left = left # starting position
 
         # sequence that node represents
-        assert 'I' not in seq
+        #   with information about how the sequence is related to backbone
+        assert len(seq) == len(var)
         self.seq = []
-        for nt in seq:
-            assert nt in "ACGTDN"
-            self.seq.append({nt : 1})
+        self.ins_len = 0
+        for s in range(len(seq)):
+            nt = seq[s]
+            if len(nt) == 1:
+                assert nt in "ACGTDN"
+            else:
+                assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
+                self.ins_len += 1                
+            var_id = var[s]
+            self.seq.append({nt : [1, var_id]})
 
-        # how sequence is related to backbone
-        self.var = []
-        for v in var:
-            self.var.append(set([v]) if v != '' else set())
-
-        assert len(self.seq) == len(self.var)
-        self.right = self.left + len(seq) - 1
+        self.right = self.left + len(seq) - 1 - self.ins_len
 
         self.read_ids = set([id])
         self.mate_ids = set([id.split('|')[0]])
@@ -109,8 +119,8 @@ class Node:
         if self.right < other.left:
             return -1, -1
 
-        seq, var = get_ungapped_seq_var(self.seq, self.var)
-        other_seq, other_var = get_ungapped_seq_var(other.seq, other.var)
+        seq = get_ungapped_seq_var(self.seq)
+        other_seq = get_ungapped_seq_var(other.seq)
         add_mm = len(self.mate_ids & other.mate_ids)
         for i in range(len(seq)):
             max_mm = 0.012 * (len(seq) - i) # 1 mismatch per 83 bases
@@ -123,11 +133,15 @@ class Node:
                 mismatch = 0
                 if nt != other_nt:
                     mismatch = 1.0 - match_score(seq[i+j], other_seq[j])
+                    var_ids = [var_id for _, var_id in nt_dic.values()]
+                    other_var_ids = [var_id for _, var_id in nt_dic.values()]
                     # Higher penalty for mismatches in variants
-                    if len(var[i+j]) > 0 or len(other_var[j]) > 0:
+                    if len(var_ids) > 0 or len(other_var_ids) > 0:
                         def get_var_id(nt, var_ids, vars):
                             for _id in var_ids:
-                                if _id == "unknown" or _id.startswith("nv"):
+                                if _id == "" or \
+                                   _id == "unknown" or \
+                                   _id.startswith("nv"):
                                     continue
                                 _type, _pos, _data = vars[_id]
                                 if _type != "single":
@@ -135,11 +149,11 @@ class Node:
                                 if _data == nt:
                                     return _id
                             return ""
-                        nt_var, other_nt_var = get_var_id(nt, var[i+j], vars), get_var_id(other_nt, other_var[j], vars)
+                        nt_var, other_nt_var = get_var_id(nt, var_ids, vars), get_var_id(other_nt, other_var_ids, vars)
                         if nt_var != other_nt_var:
                             mismatch = 5.0
-                            adjust = min(1.0, nt_dic[nt] / self.get_avg_cov()) * \
-                                     min(1.0, other_nt_dic[other_nt] / other.get_avg_cov())
+                            adjust = min(1.0, nt_dic[nt][0] / self.get_avg_cov()) * \
+                                     min(1.0, other_nt_dic[other_nt][0] / other.get_avg_cov())
                             mismatch *= adjust
                             if mismatch < 1.0:
                                 mismatch = 1.0
@@ -166,54 +180,70 @@ class Node:
 
         # Merge two sequences
         assert len(other.seq) > 0 and 'D' not in other.seq[0].keys()
-        i, j = other.left - self.left, 0
-        new_seq, new_var = self.seq[:i], self.var[:i]
-        while i < len(self.seq) and j < len(other.seq):
-            nt_dic, nt_var = self.seq[i], self.var[i]
-            nt_dic2, nt_var2 = other.seq[j], other.var[j]
-            new_seq.append(nt_dic)
-            new_var.append(nt_var | nt_var2)
-            for nt, count in nt_dic2.items():
-                if nt in nt_dic:
-                    nt_dic[nt] += count
-                else:
-                    nt_dic[nt] = count
-            i += 1
-            j += 1
-            
-        # Append the rest of the other sequence
-        if i > len(self.seq):
-            flank_cov = sum(self.seq[-1].values()) + sum(other.seq[0].values())
-            flank_cov /= 2.0
-            for k in range(i - len(self.seq)):
+        j = 0        
+        # Merge the overlapped parts
+        if self.right >= other.left:
+            overlap, ins_len = False, 0
+            for i in range(len(self.seq)):
+                nt_dic = self.seq[i]
+                nt = get_major_nt(nt_dic)
+                if nt.startswith('I'):
+                    ins_len += 1
+                if i == other.left - self.left + ins_len:
+                    overlap = True
+                    break
+            assert overlap
+            new_seq = self.seq[:i]
+            while i < len(self.seq) and j < len(other.seq):
+                nt_dic, nt_dic2 = self.seq[i], other.seq[j]
+                new_seq.append(nt_dic)
+                for nt, value in nt_dic2.items():
+                    count, var_id = value
+                    if nt in nt_dic:
+                        nt_dic[nt][0] += count
+                        assert nt_dic[nt][1] == var_id
+                    else:
+                        nt_dic[nt] = [count, var_id]
+                i += 1
+                j += 1
+        # Fill in the gap between the two nodes if exists
+        else:
+            new_seq = self.seq[:]
+            sum_1 = sum([count for count, _ in self.seq[-1].values()])
+            sum_2 = sum([count for count, _ in other.seq[0].values()])
+            flank_cov = (sum_1 + sum_2) / 2.0
+            for k in range(other.left - self.right - 1):
                 nt_dic, var_set = self.mpileup[k + 1 + self.right][1:]
                 nt_dic, var_set = deepcopy(nt_dic), deepcopy(var_set)
                 if len(nt_dic) == 0:
-                    nt_dic = {'N' : 1}
-                weight = flank_cov / max(1.0, sum(nt_dic.values()))
-                for nt, value in nt_dic.items():
-                    nt_dic[nt] = value * weight
-
+                    nt_dic = {'N' : [1, ""]}
+                else:
+                    weight = flank_cov / max(1.0, sum(nt_dic.values()))
+                    for nt, value in nt_dic.items():
+                        nt_dic[nt] = [value * weight, ""]
                 new_seq.append(nt_dic)
-                new_var.append(var_set)
-                
-        new_seq += other.seq[j:]
-        new_var += other.var[j:]
 
+        # Append the rest of the other sequence
+        new_seq += other.seq[j:]
         self.read_ids |= other.read_ids
         self.mate_ids |= other.mate_ids
 
-        self.seq, self.var = new_seq, new_var
-        assert len(self.seq) == len(self.var)
-        self.right = self.left + len(self.seq) - 1
-
+        self.seq = new_seq
+        self.ins_len = 0
+        for i in range(len(self.seq)):
+            nt_dic = self.seq[i]
+            nt = get_major_nt(nt_dic)
+            if nt[0] == 'I':
+                self.ins_len += 1
+        self.right = self.left + len(self.seq) - 1 - self.ins_len
+        
         # Update coverage
         self.calculate_avg_cov()
 
 
     # Return the length of the ungapped sequence
     def ungapped_length(self):
-        return len(get_ungapped_seq_var(self.seq, self.var)[0])
+        return len(get_ungapped_seq_var(self.seq))
 
     
     # Get variant ids
@@ -221,16 +251,26 @@ class Node:
         vars = []
         left = max(left, self.left)
         right = min(right, self.right)
+        ins_len = 0
         for pos in range(left, right + 1):
-            var_i = pos - self.left
-            for var in self.var[var_i]:
-                if var == "unknown" or var.startswith("nv"):
+            var_i = pos - self.left + ins_len
+            while var_i < len(self.seq):
+                nt_dic = self.seq[var_i]
+                nt = get_major_nt(nt_dic)
+                if nt.startswith('I'):
+                    var_i += 1
+                    ins_len += 1
+                else:
+                    break            
+            for _, var in nt_dic.values():
+                if var == "" or \
+                   var == "unknown" or \
+                   var.startswith("nv"):
                     continue
                 assert var in Vars
                 if len(vars) > 0 and var == vars[-1]:
                     continue
                 type, pos, data = Vars[var]
-                nt = get_major_nt(self.seq[var_i])
                 if data == nt or (type == "deletion" and nt == 'D'):
                     vars.append(var)
 
@@ -244,25 +284,45 @@ class Node:
         left = max(left, self.left)
         right = min(right, self.right)
         skip_pos = -1
+        ins_len = 0
         for pos in range(left, right + 1):
             if pos <= skip_pos:
                 continue
-            var_i = pos - self.left
-            nt = get_major_nt(self.seq[var_i])
+            var_i = pos - self.left + ins_len
+            while var_i < len(self.seq):
+                nt_dic = self.seq[var_i]
+                nt = get_major_nt(nt_dic)
+                if nt.startswith('I'):
+                    var_i += 1
+                    ins_len += 1
+                    var = nt_dic[nt][1]
+                    if len(vars) > 0 and var != vars[-1][0]:
+                        vars.append([var, pos])
+                else:
+                    break
             if nt == self.ref_seq[pos]:
                 continue
             if nt == 'N':
                 vars.append(["gap", pos])
                 continue            
             added = False
-            for var in self.var[var_i]:
-                if var == "unknown" or var.startswith("nv"):
+            for _, var in nt_dic.values():
+                if var == "" or \
+                   var == "unknown" or \
+                   var.startswith("nv"):
                     continue
                 if len(vars) > 0 and var == vars[-1][0]:
                     continue
                 assert var in Vars
                 type, var_pos, data = Vars[var]                    
                 if data == nt or (type == "deletion" and nt == 'D'):
+
+                    # DK - debugging purposes
+                    if pos < var_pos:
+                        self.print_info()
+                        print "pos:", pos, "var_pos:", var_pos
+                        print nt_dic, nt
+                    
                     assert pos >= var_pos
                     if type == "deletion" and pos > var_pos:
                         continue                    
@@ -273,11 +333,12 @@ class Node:
                     if pos != var_pos:
                         self.print_info()
                         print "pos: %d, var_pos: %d, var_i: %d" % (pos, var_pos, var_i)
-                        print vars, self.var[var_i-3:var_i], self.var[var_i]
+                        print vars, self.seq[var_i-3:var_i], self.seq[var_i]
+                        assert False
                         
                     added = True
                     vars.append([var, pos])
-            if not added and "unknown" in self.var[var_i]:
+            if not added and "unknown" in [var_id for _, var_id in nt_dic.values()]:
                 vars.append(["unknown", pos])
 
         return vars
@@ -292,47 +353,56 @@ class Node:
     def calculate_avg_cov(self):
         self.avg = 0.0
         for nt_dic in self.seq:
-            self.avg += sum(nt_dic.values())
+            for count, _ in nt_dic.values():
+                self.avg += count
         self.avg /= len(self.seq)
         return self.avg
 
         
     # Display node information
     def print_info(self, output=sys.stderr):
-        seq = ""
+        seq, var_str = "", ""
+        prev_var = ""
+        ins_len = 0
         for i in range(len(self.seq)):
-            if (self.left + i) % 100 == 0:
-                seq += ("|%d|" % (self.left + i))
-            elif (self.left + i) % 20 == 0:
+            if (self.left + i - ins_len) % 100 == 0:
+                seq += ("|%d|" % (self.left + i - ins_len))
+            elif (self.left + i - ins_len) % 20 == 0:
                 seq += '|'
             nt_dic = self.seq[i]
             nt = get_major_nt(nt_dic)
-            if nt != self.ref_seq[self.left + i]:
-                var_id = "unknown"
-                for tmp_id in self.var[i]:
-                    if tmp_id == "unknown" or tmp_id.startswith("nv"):
-                        continue
-                    type, pos, data = self.ref_vars[tmp_id]
-                    if (type == "single" and data == nt) or \
-                       (type == "deletion" and nt == 'D'):
-                        var_id = tmp_id                    
+            if nt[0] == 'I':
+                seq += "\033[93m"
+            elif nt != self.ref_seq[self.left + i - ins_len]:
+                var_id = nt_dic[nt][1]
                 if var_id == "unknown" or var_id.startswith("nv"):
                     seq += "\033[91m" # red
                 else:
                     seq += "\033[94m" # blue
-            seq += nt
-            if nt != self.ref_seq[self.left + i]:
+            if nt[0] == 'I':
+                seq += nt[1]
+            else:
+                seq += nt
+            if nt[0] == 'I' or nt != self.ref_seq[self.left + i - ins_len]:
                 seq += "\033[00m"
+
+            var = []
+            for _, var_id in nt_dic.values():
+                if var_id == "":
+                    continue
+                var.append(var_id)
+            var = '-'.join(var)
+            if var != "" and var != prev_var:
+                var_str += "\t%d: %s %s" % (self.left + i - ins_len, var, str(nt_dic))
+            prev_var = var
+            if nt[0] == 'I':
+                ins_len += 1
+        
         print >> output, "Node ID:", self.id
         print >> output, "Pos: [%d, %d], Avg. coverage: %.1f" % (self.left, self.right, self.get_avg_cov())
         print >> output, "\t", seq
-        prev_var = ""
-        for var_i in range(len(self.var)):
-            var = self.var[var_i]
-            var = '-'.join(list(var))
-            if var != "" and var != prev_var:
-                print >> output, "\t%d: %s" % (self.left + var_i, var), self.seq[var_i],
-            prev_var = var
+        print >> output, "\t", var_str
+
         print >> output
         print >> output, "mates:", sorted(self.mate_ids)
         print >> output, "reads:", sorted(self.read_ids)
@@ -382,11 +452,7 @@ class Graph:
             id = id.split('_')[0]
         if id in self.nodes:
             print >> sys.stderr, "Warning) multi-mapped read:", id
-
-            # DK - debugging purposes
-            self.nodes[id].print_info()
-            
-            assert False
+            # assert False
             return
         assert id not in self.nodes
         self.nodes[id] = node
@@ -1445,9 +1511,14 @@ class Graph:
                 haplotype = ""
                 for pos in range(w_left, w_right):
                     var_i = pos - node.left
-                    assert var_i < len(node.var)
-                    var = node.var[var_i]
-                    var = '-'.join(list(var))
+                    assert var_i < len(node.seq)
+                    nt_dic = node.seq[var_i]
+                    var = []
+                    for _, var_id in nt_dic.values():
+                        if var_id == "":
+                            continue
+                        var.append(var_id)
+                    var = '-'.join(var)
                     if var != "" and var != prev_var:
                         if haplotype != "":
                             haplotype += ","
@@ -1482,11 +1553,13 @@ class Graph:
                         seq_i = pos - node.left
                         assert seq_i < len(node.seq)
                         nt_dic = node.seq[seq_i]
-                        nt = get_major_nt(nt_dic)
+                        nt = get_major_nt(nt_dic)                        
                         if nt != self.backbone[pos]:
                             var_id = "unknown"
-                            for tmp_id in node.var[seq_i]:
-                                if tmp_id == "unknown" or tmp_id.startswith("nv"):
+                            for _, tmp_id in nt_dic.values():
+                                if tmp_id == "" or \
+                                   tmp_id == "unknown" or \
+                                   tmp_id.startswith("nv"):
                                     continue
                                 type, pos, data = self.vars[tmp_id]
                                 if (type == "single" and data == nt) or \
