@@ -1263,10 +1263,11 @@ def typing(ex_path,
                         # DK - to be implemented for insertions
                         None
 
-                seq = ''.join(seq)
+                qual = ' ' * len(seq)
                 allele_nodes[allele_id] = assembly_graph.Node(allele_id,
                                                               0,
                                                               seq,
+                                                              qual,
                                                               var,
                                                               ref_seq,
                                                               gene_vars,
@@ -1327,7 +1328,7 @@ def typing(ex_path,
                     node_read_id = orig_read_id = read_id
                     if simulation:
                         read_id = read_id.split('|')[0]
-                    read_seq, qual = cols[9], cols[10]
+                    read_seq, read_qual = cols[9], cols[10]
                     total_read_len += len(read_seq)
                     flag, pos = int(flag), int(pos)
                     pos -= (base_locus + 1)
@@ -1379,6 +1380,7 @@ def typing(ex_path,
                         if not simulation:
                             node_read_id += '|L'
                     else: # Right read?
+                        assert flag & 0x80 != 0
                         if read_id in right_read_ids:
                             continue
                         right_read_ids.add(read_id)
@@ -1570,11 +1572,11 @@ def typing(ex_path,
                         if softclip[0] > 0:
                             cigars = cigars[1:]
                             read_seq = read_seq[softclip[0]:]
-                            qual = qual[softclip[0]:]
+                            read_qual = read_qual[softclip[0]:]
                         if softclip[1] > 0:
                             cigars = cigars[:-1]
                             read_seq = read_seq[:-softclip[1]]
-                            qual = qual[:-softclip[1]]
+                            read_qual = read_qual[:-softclip[1]]
 
                         cigar_str = ""
                         for type, length in cigars:
@@ -1727,7 +1729,7 @@ def typing(ex_path,
                             add_count(HLA_gen_count_per_read, var_id, -1)
 
                     # Node
-                    read_node_pos, read_node_seq, read_node_var = -1, [], []
+                    read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
                     read_vars = []
 
                     # Positive and negative evidence
@@ -1765,6 +1767,7 @@ def typing(ex_path,
 
                         if type == "match":
                             read_node_seq += list(read_seq[read_pos:read_pos+length])
+                            read_node_qual += list(read_qual[read_pos:read_pos+length])
                             read_node_var += ([''] * length)
                             
                             var_idx = lower_bound(gene_var_list, ref_pos)
@@ -1800,8 +1803,9 @@ def typing(ex_path,
                             MD_match_len += length
                         elif type == "mismatch":
                             var_id = cmp[3]
-                            read_base = read_seq[read_pos]
+                            read_base, qual = read_seq[read_pos], read_qual[read_pos]
                             read_node_seq += [read_base]
+                            read_node_qual += [qual]
                             read_node_var.append(var_id)
                             if var_id != "unknown":
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
@@ -1822,6 +1826,7 @@ def typing(ex_path,
                                     if read_pos >= 5 and read_pos + 5 <= len(read_seq):
                                         positive_vars.add(var_id)
                             read_node_seq += ["I%s" % nt for nt in ins_seq]
+                            read_node_qual += list(read_qual[read_pos:read_pos+ins_len])
                             read_node_var += ([var_id] * ins_len)                                        
                             if cigar_match_len > 0:
                                 cmp_cigar_str += ("%dM" % cigar_match_len)
@@ -1833,6 +1838,7 @@ def typing(ex_path,
                             alt_match = False
                             del_len = length
                             read_node_seq += (['D'] * del_len)
+                            read_node_qual += ([''] * del_len)
                             if var_id != "unknown" or not var_id.statswith("nv"):
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
                                     # Require at least 5bp match before and after a deletion
@@ -1878,6 +1884,7 @@ def typing(ex_path,
                                        assembly_graph.Node(node_read_id,
                                                            read_node_pos,
                                                            read_node_seq,
+                                                           read_node_qual,
                                                            read_node_var,
                                                            ref_seq,
                                                            gene_vars,

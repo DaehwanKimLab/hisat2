@@ -42,7 +42,7 @@ def match_score(nt_dic1, nt_dic2):
 
 
 #
-def get_ungapped_seq_var(seq):
+def get_ungapped_seq(seq):
     ungapped_seq = []
     for i in range(len(seq)):
         nt_dic = seq[i]
@@ -59,6 +59,7 @@ class Node:
                  id,
                  left,
                  seq,
+                 qual,
                  var,
                  ref_seq,
                  ref_vars,
@@ -74,6 +75,7 @@ class Node:
         # sequence that node represents
         #   with information about how the sequence is related to backbone
         assert len(seq) == len(var)
+        assert len(seq) == len(qual)
         self.seq = []
         self.ins_len = 0
         for s in range(len(seq)):
@@ -85,6 +87,12 @@ class Node:
                 self.ins_len += 1                
             var_id = var[s]
             self.seq.append({nt : [1, var_id]})
+        self.qual = []
+        for q in qual:
+            if q != '':
+                self.qual.append(max(0, ord(q) / 10 - 3))
+            else:
+                self.qual.append(0)
 
         self.right = self.left + len(seq) - 1 - self.ins_len
 
@@ -119,8 +127,8 @@ class Node:
         if self.right < other.left:
             return -1, -1
 
-        seq = get_ungapped_seq_var(self.seq)
-        other_seq = get_ungapped_seq_var(other.seq)
+        seq = get_ungapped_seq(self.seq)
+        other_seq = get_ungapped_seq(other.seq)
         add_mm = len(self.mate_ids & other.mate_ids)
         for i in range(len(seq)):
             max_mm = 0.012 * (len(seq) - i) # 1 mismatch per 83 bases
@@ -243,7 +251,7 @@ class Node:
 
     # Return the length of the ungapped sequence
     def ungapped_length(self):
-        return len(get_ungapped_seq_var(self.seq))
+        return len(get_ungapped_seq(self.seq))
 
     
     # Get variant ids
@@ -1493,8 +1501,22 @@ class Graph:
         add_to_node = {}
         nodes = sorted(nodes, cmp=node_cmp)
 
+        # Average node length
+        avg_len = sum([node.ungapped_length() for _, node in self.nodes.items()]) / float(len(nodes))
+
+        def get_alt_node_id(node_id):
+            node_id2, end = node_id.split('|')
+            if end == 'L':
+                end = 'R'
+            else:
+                end = 'L'
+            node_id2 = '|'.join([node_id2, end])
+            return node_id2
+
         node_i = 0
-        window, interval = 60, 20
+        window, interval = int(avg_len * 0.6), 20
+        window_list = []
+        supported_node_ids = set()
         for w_left in range(0, len(self.backbone), interval):
             w_right = w_left + window            
             haplotypes = {}
@@ -1526,15 +1548,63 @@ class Graph:
                     prev_var = var
 
                 if haplotype not in haplotypes:
-                    haplotypes[haplotype] = [node_id]
+                    haplotypes[haplotype] = set([node_id])
                 else:
-                    haplotypes[haplotype].append(node_id)
+                    haplotypes[haplotype].add(node_id)
+                supported_node_ids.add(node_id)
 
+            if len(haplotypes) > 0:
+                window_list.append([w_left, w_right, haplotypes])
+
+        # Filter out nodes
+        while True:
+            updated = False
+            new_window_list = []
+            new_supported_node_ids = set()
+            for w_left, w_right, haplotypes in window_list:
+                assert len(haplotypes) > 0
+                haplotype_count = {}
+                for haplotype, node_ids in haplotypes.items():
+                    for node_id in node_ids:
+                        node_id2 = get_alt_node_id(node_id)
+                        if node_id2 not in supported_node_ids:
+                            continue
+                        if haplotype not in haplotype_count:
+                            haplotype_count[haplotype] = 1
+                        else:
+                            haplotype_count[haplotype] += 1
+                tot_num_node = sum(haplotype_count.values())
+                filtered_haplotypes = {}
+
+                for haplotype, count in haplotype_count.items():
+                    if len(haplotypes) > 1:
+                        if count * 3 < (tot_num_node - count) / float(len(haplotypes) - 1):
+                            continue
+                    filtered_haplotypes[haplotype] = haplotypes[haplotype]
+                    new_supported_node_ids |= haplotypes[haplotype]
+                new_window_list.append([w_left, w_right, filtered_haplotypes])
+                if len(filtered_haplotypes) != len(haplotypes):
+                    assert len(filtered_haplotypes) <= len(haplotypes)
+                    updated = True
+
+            if not updated:
+                break
+
+            window_list = new_window_list
+            supported_node_ids = new_supported_node_ids
+            
+        
+        num_conflict = 0
+        for w_left, w_right, haplotypes in window_list:
             if len(haplotypes) <= 2:
                 continue
+
+            num_conflict += 1
             
             # DK - debugging purposes
             print "[%d, %d)" % (w_left, w_right)
+            reads = []
+            left_window, right_window = [sys.maxint, 0], [sys.maxint, 0]
             for haplotype, node_ids in haplotypes.items():
                 if haplotype == "":
                     haplotype = "nothing"
@@ -1548,12 +1618,27 @@ class Graph:
                     node = self.nodes[node_id]
                     if node_id.endswith("88989##"):
                         node.print_info()
-                    seq = ""
+                    node_id2 = get_alt_node_id(node_id)
+                    if node_id2 in self.nodes:
+                        node2 = self.nodes[node_id2]
+                        if node2.left < node.left:
+                            if node2.left < left_window[0]:
+                                left_window[0] = node2.left
+                            if node2.right > left_window[1]:
+                                left_window[1] = node2.right
+                        else:
+                            if node2.left < right_window[0]:
+                                right_window[0] = node2.left
+                            if node2.right > right_window[1]:
+                                right_window[1] = node2.right
+
+                    seq, qual = "", ""
                     for pos in range(w_left, w_right):
                         seq_i = pos - node.left
                         assert seq_i < len(node.seq)
                         nt_dic = node.seq[seq_i]
-                        nt = get_major_nt(nt_dic)                        
+                        nt = get_major_nt(nt_dic)
+                        q = node.qual[seq_i]
                         if nt != self.backbone[pos]:
                             var_id = "unknown"
                             for _, tmp_id in nt_dic.values():
@@ -1570,13 +1655,70 @@ class Graph:
                             else:
                                 seq += "\033[94m" # blue
                         seq += nt
+                        qual += "%d" % q
                         if nt != self.backbone[pos]:
                             seq += "\033[00m"
-                    print "\t\t%50s" % node_id, seq
+                    has_mate = 'T' if node_id2 in supported_node_ids else 'F'
+                    print "\t\t%s%50s" % (has_mate, node_id), seq
+                    print "\t\t %50s" % (node_id), qual
+
+            for haplotype, node_ids in haplotypes.items():
+                left_reads, right_reads = [], []                
+                for node_id in node_ids:
+                    node = self.nodes[node_id]
+                    node_id2 = get_alt_node_id(node_id)
+                    if node_id2 not in self.nodes:
+                        continue
+                    node2 = self.nodes[node_id2]
+                    cur_window = left_window if node2.left < node.left else right_window
+                    seq = ""
+                    for pos in range(cur_window[0], cur_window[1]):
+                        seq_i = pos - node2.left
+                        if seq_i >= 0 and seq_i < len(node2.seq):
+                            nt_dic = node2.seq[seq_i]
+                            nt = get_major_nt(nt_dic)                        
+                            if nt != self.backbone[pos]:
+                                var_id = "unknown"
+                                for _, tmp_id in nt_dic.values():
+                                    if tmp_id == "" or \
+                                       tmp_id == "unknown" or \
+                                       tmp_id.startswith("nv"):
+                                        continue
+                                    type, pos, data = self.vars[tmp_id]
+                                    if (type == "single" and data == nt) or \
+                                       (type == "deletion" and nt == 'D'):
+                                        var_id = tmp_id                    
+                                if var_id == "unknown" or var_id.startswith("nv"):
+                                    seq += "\033[91m" # red
+                                else:
+                                    seq += "\033[94m" # blue
+                            seq += nt
+                            if nt != self.backbone[pos]:
+                                seq += "\033[00m"
+                        else:
+                             seq += ' '
+                    if node2.left < node.left:
+                        left_reads.append([node_id2, seq, node2.left])
+                    else:
+                        right_reads.append([node_id2, seq, node2.left])
+
+                reads += left_reads
+                reads += right_reads
+            def my_cmp(a, b):
+                return a[2] - b[2]
+            reads = sorted(reads, cmp=my_cmp)                        
+            for node_id2, seq, _ in reads:
+                # print "\t\t%50s" % node_id2, seq
+                # print "\t", seq
+                None
 
             # DK - debugging purposes
-            if w_left >= 1100 and False:
+            if w_left >= 1200 and False:
                 sys.exit(1)
+
+        # DK - debugging purposes
+        print "Number of conflicts:", num_conflict
+        sys.exit(1)
                
         
 class HtmlDraw:
