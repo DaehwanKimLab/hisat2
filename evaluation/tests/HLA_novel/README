@@ -1,3 +1,9 @@
+Important notes
+- Extract reads using the whole genome, not particular genes.
+- Perform genotyping on reads using all of their respective genes.  If reads that map to A, B, C are extracted, then A, B, C genes are used for genotyping.
+
+
+
 To run HISAT-genotype
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-editdist 2 --debug paired --skip-fragment-regions 1000-1020
 
@@ -18,9 +24,9 @@ HISAT-genotype vs. Omixon
 HISAT-genotye on Illumina Platinum Genomes
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads illumina/NA12892.fished_1.fq,illumina/NA12892.fished_2.fq
    
-   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN/NA12892.extracted.1.fq.gz,ILMN/NA12892.extracted.2.fq.gz
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_A/NA12892.extracted.1.fq.gz,ILMN_A/NA12892.extracted.2.fq.gz --display-alleles A*02:01:01:01,A*11:01:01:01
 
-   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz 
 
 
 

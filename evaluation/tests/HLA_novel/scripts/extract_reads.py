@@ -96,7 +96,6 @@ def extract_reads(base_fname,
                   paired,
                   hla_list,
                   partial,
-                  DRB1_ref,
                   threads,
                   job_range,
                   verbose):
@@ -138,8 +137,6 @@ def extract_reads(base_fname,
             extract_cmd = [extract_hla_script]
             extract_cmd += ["--reference-type", reference_type,
                                 "--hla-list", ','.join(hla_list)]
-            if DRB1_ref:
-                extract_cmd += ["--DRB1-REF"]
             if not partial:
                 extract_cmd += ["--no-partial"]
             extract_cmd += ["--inter-gap", "30",
@@ -171,7 +168,6 @@ def extract_reads(base_fname,
         genotype_fnames = ["%s.fa" % base_fname,
                            "%s.gene" % base_fname,
                            "%s.snp" % base_fname,
-                           "%s.index.snp" % base_fname,
                            "%s.haplotype" % base_fname,
                            "%s.link" % base_fname,
                            "%s.coord" % base_fname,
@@ -427,10 +423,6 @@ if __name__ == '__main__':
                         dest='partial',
                         action='store_false',
                         help='Include partial alleles (e.g. A_nuc.fasta)')
-    parser.add_argument("--DRB1-REF",
-                        dest="DRB1_ref",
-                        action='store_true',
-                        help="Some DRB1 alleles seem to include vector sequences, so use this option to avoid including them")
     parser.add_argument("-p", "--threads",
                         dest="threads",
                         type=int,
@@ -472,7 +464,6 @@ if __name__ == '__main__':
                   args.paired,
                   hla_list,
                   args.partial,
-                  args.DRB1_ref,
                   args.threads,
                   job_range,
                   args.verbose)

@@ -209,7 +209,8 @@ class Node:
                     count, var_id = value
                     if nt in nt_dic:
                         nt_dic[nt][0] += count
-                        assert nt_dic[nt][1] == var_id
+                        # DK - debugging purposes
+                        # assert nt_dic[nt][1] == var_id
                     else:
                         nt_dic[nt] = [count, var_id]
                 i += 1
@@ -1490,7 +1491,7 @@ class Graph:
 
     #
     # Identify haplotypes, which is work in progress
-    def identify_haplotypes(self):
+    def filter_nodes(self):
         assert len(self.nodes) > 0
         nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
         def node_cmp(a, b):
@@ -1516,7 +1517,7 @@ class Graph:
         node_i = 0
         window, interval = int(avg_len * 0.6), 20
         window_list = []
-        supported_node_ids = set()
+        supported_node_ids = {}
         for w_left in range(0, len(self.backbone), interval):
             w_right = w_left + window            
             haplotypes = {}
@@ -1551,7 +1552,13 @@ class Graph:
                     haplotypes[haplotype] = set([node_id])
                 else:
                     haplotypes[haplotype].add(node_id)
-                supported_node_ids.add(node_id)
+                    
+            for haplotype, node_ids in haplotypes.items():
+                for node_id in node_ids:
+                    if node_id not in supported_node_ids:
+                        supported_node_ids[node_id] = len(node_ids)
+                    else:
+                        supported_node_ids[node_id] = max(supported_node_ids[node_id], len(node_ids))
 
             if len(haplotypes) > 0:
                 window_list.append([w_left, w_right, haplotypes])
@@ -1560,7 +1567,7 @@ class Graph:
         while True:
             updated = False
             new_window_list = []
-            new_supported_node_ids = set()
+            new_supported_node_ids = {}
             for w_left, w_right, haplotypes in window_list:
                 assert len(haplotypes) > 0
                 haplotype_count = {}
@@ -1580,9 +1587,17 @@ class Graph:
                     if len(haplotypes) > 1:
                         if count * 3 < (tot_num_node - count) / float(len(haplotypes) - 1):
                             continue
+                        
                     filtered_haplotypes[haplotype] = haplotypes[haplotype]
-                    new_supported_node_ids |= haplotypes[haplotype]
-                new_window_list.append([w_left, w_right, filtered_haplotypes])
+                    for node_ids in haplotypes.values():
+                        for node_id in node_ids:
+                            if node_id not in new_supported_node_ids:
+                                new_supported_node_ids[node_id] = len(node_ids)
+                            else:
+                                new_supported_node_ids[node_id] = max(supported_node_ids[node_id], len(node_ids))
+
+                if len(filtered_haplotypes) > 0:
+                    new_window_list.append([w_left, w_right, filtered_haplotypes])
                 if len(filtered_haplotypes) != len(haplotypes):
                     assert len(filtered_haplotypes) <= len(haplotypes)
                     updated = True
@@ -1592,7 +1607,6 @@ class Graph:
 
             window_list = new_window_list
             supported_node_ids = new_supported_node_ids
-            
         
         num_conflict = 0
         for w_left, w_right, haplotypes in window_list:
@@ -1718,7 +1732,11 @@ class Graph:
 
         # DK - debugging purposes
         print "Number of conflicts:", num_conflict
-        sys.exit(1)
+        # sys.exit(1)
+
+        for node_id in self.nodes.keys():
+            if node_id not in supported_node_ids:
+                del self.nodes[node_id]
                
         
 class HtmlDraw:

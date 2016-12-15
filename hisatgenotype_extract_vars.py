@@ -54,7 +54,6 @@ def extract_vars(base_fname,
                  intra_gap,
                  min_var_freq,
                  ext_seq_len,
-                 exclude_allele_list,
                  leftshift,
                  verbose):
     # Current script directory
@@ -110,10 +109,6 @@ def extract_vars(base_fname,
                 assert cigar_str[-1] == 'M'
                 left = int(left)
                 right = left + int(cigar_str[:-1])
-                
-                # Avoid selection of excluded allele as backbone
-                if t_allele_id in exclude_allele_list:
-                    continue
                 allele_id = t_allele_id
 
                 flag = int(flag)
@@ -177,8 +172,7 @@ def extract_vars(base_fname,
                 gene = allele_name.split('*')[0]
                 if line.find("partial") != -1 or \
                         not gene in HLA_genes or \
-                        allele_name != HLA_genes[gene] or \
-                        allele_name in exclude_allele_list :
+                        allele_name != HLA_genes[gene]:
                     skip = True
                     continue
                 skip = False
@@ -263,9 +257,6 @@ def extract_vars(base_fname,
                     try:
                         name = line.split('\t')[0]
                         name = name.split()[1]
-                        if name in exclude_allele_list:
-                            continue
-                        
                     except ValueError:
                         continue
 
@@ -555,14 +546,13 @@ def extract_vars(base_fname,
                     bp_i = bp_j
                     break
                 
-                # DK - for debugging purposes
+                # DK - debugging purposes
                 if debug:
                     print bp_i, bp_j, backbone_seq[bp_i-10:bp_i], backbone_seq[bp_i:bp_j], backbone_seq[bp_j:bp_j+10]
                     print bp_i, bp_j, ''.join(seq[bp_i-10:bp_i]), ''.join(seq[bp_i:bp_j]), ''.join(seq[bp_j:bp_j+10])
                 prev_i, prev_j = bp_i, bp_j
 
-                while bp_i > 0 and seq[bp_i-1] in "ACGT":
-                    assert backbone_seq[bp_j-1] in "ACGT"
+                while bp_i > 0 and seq[bp_i-1] in "ACGT" and seq[bp_j-1] in "ACGT":
                     if seq[bp_i-1] != backbone_seq[bp_j-1]:
                         break
                     seq[bp_j-1] = seq[bp_i-1]
@@ -575,7 +565,7 @@ def extract_vars(base_fname,
                         break
                     bp_i += 1
 
-                # DK - for debugging purposes
+                # DK - debugging purposes
                 if debug:
                     print prev_i, prev_j, ''.join(seq[prev_i-10:prev_i]), ''.join(seq[prev_i:prev_j]), ''.join(seq[prev_j:prev_j+10])
                   
@@ -1145,11 +1135,6 @@ if __name__ == '__main__':
                         type=int,
                         default=0,
                         help="Length of extra sequences flanking backbone sequences (Default: 0)")
-    parser.add_argument("--exclude-allele-list",
-                        dest="exclude_allele_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of alleles to be excluded")
     parser.add_argument("--leftshift",
                         dest="leftshift",
                         action="store_true",
@@ -1171,11 +1156,6 @@ if __name__ == '__main__':
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome" % (args.reference_type)
         sys.exit(1)
              
-    if len(args.exclude_allele_list) > 0:
-        args.exclude_allele_list = args.exclude_allele_list.split(',')
-    else:
-        args.exclude_allele_list = []
-
     if args.base_fname.find('/') != -1:
         elems = args.base_fname.split('/')
         base_fname = elems[-1]
@@ -1184,7 +1164,6 @@ if __name__ == '__main__':
         base_fname = args.base_fname
         base_dname = ""
         
-    # print args.exclude_allele_list
     extract_vars(base_fname,
                  base_dname,
                  args.reference_type,
@@ -1194,7 +1173,6 @@ if __name__ == '__main__':
                  args.intra_gap,
                  args.min_var_freq,
                  args.ext_seq_len,
-                 args.exclude_allele_list,
                  args.leftshift,
                  args.verbose)
 

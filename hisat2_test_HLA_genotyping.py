@@ -1098,11 +1098,6 @@ def typing(ex_path,
            Vars,
            Var_list,
            Links,
-           HLAs_default,
-           Vars_default,
-           Var_list_default,
-           Links_default,
-           exclude_allele_list,
            aligners,
            num_editdist,
            assembly,
@@ -1187,11 +1182,6 @@ def typing(ex_path,
 
             if not os.path.exists(alignment_fname + ".bai"):
                 os.system("samtools index %s" % alignment_fname)
-            # samtools mpileup
-            mpileup_cmd = ["samtools",
-                           "mpileup",
-                           alignment_fname]
-            
             # Read alignments
             alignview_cmd = ["samtools",
                              "view",
@@ -1199,13 +1189,11 @@ def typing(ex_path,
             base_locus = 0
             if index_type == "graph":
                 if reference_type == "gene":
-                    mpileup_cmd += ["-r", ref_allele]
                     alignview_cmd += [ref_allele]
                 else:
                     assert reference_type in ["chromosome", "genome"]
                     _, chr, left, right, _ = refHLA_loci[gene]
                     base_locus = left
-                    mpileup_cmd += ["-r", "%s:%d-%d" % (chr, left + 1, right + 1)]
                     alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
 
                 mpileup = get_mpileup(alignview_cmd,
@@ -1229,7 +1217,7 @@ def typing(ex_path,
 
             # List of nodes that represent alleles
             allele_vars = {}
-            for var_id, allele_list in Links_default.items():
+            for var_id, allele_list in Links.items():
                 for allele_id in allele_list:
                     if allele_id not in HLAs[gene]:
                         continue
@@ -1480,7 +1468,7 @@ def typing(ex_path,
                                                                        gene_vars,
                                                                        gene_var_list,
                                                                        cmp_list[cmp_list_i:],
-                                                                       node_read_id == "#HSQ1008:176:D0UYCACXX:6:2208:21122:33761|R")
+                                                                       node_read_id == "#HSQ1008:176:D0UYCACXX:5:1110:4878:92411|L")
                                 cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
 
                         elif cigar_op == 'I':
@@ -2067,7 +2055,7 @@ def typing(ex_path,
 
 
                 # DK - debugging purposes
-                asm_graph.identify_haplotypes()
+                asm_graph.filter_nodes()
                 
 
                 # Generate edges
@@ -2384,8 +2372,6 @@ def test_HLA_genotyping(base_fname,
                         read_len,
                         fragment_len,
                         best_alleles,
-                        exclude_allele_list,
-                        default_allele_list,
                         num_editdist,
                         perbase_errorrate,
                         perbase_snprate,
@@ -2458,42 +2444,15 @@ def test_HLA_genotyping(base_fname,
                   base_fname + ".haplotype",
                   base_fname + ".link"]
     
-    # Check if excluded alleles in current files match
-    excluded_alleles_match = False
-    if(os.path.exists(HLA_fnames[6])):
-        afile = open(HLA_fnames[6],'r')
-        afile.readline()
-        lines = afile.read().split()
-        excluded_alleles_match = (set(exclude_allele_list) == set(lines))
-        afile.close()
-    elif len(exclude_allele_list) == 0:
-        excluded_alleles_match = True
-        try:
-            temp_name = HLA_fnames[6]
-            HLA_fnames.remove(HLA_fnames[6])
-            os.remove(temp_name)
-        except OSError:
-            pass
-        
-    if not excluded_alleles_match:
-        afile = open(HLA_fnames[6],'w')
-        afile.write("Alleles excluded:\n")
-        afile.write("\n".join(exclude_allele_list))
-        afile.close()
-
     if verbose >= 1:
         print >> sys.stderr, HLA_fnames
     
-    if (not check_files(HLA_fnames)) or (not excluded_alleles_match) :
+    if not check_files(HLA_fnames):
         extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
         extract_cmd = [extract_hla_script,
                        "--reference-type", reference_type]
         if len(hla_list) > 0:
             extract_cmd += ["--hla-list", ','.join(hla_list)]
-
-        if len(exclude_allele_list) > 0:
-            print exclude_allele_list
-            extract_cmd += ["--exclude-allele-list", ",".join(exclude_allele_list)]
 
         if len(base_fname) > 3:
             extract_cmd += ["--base", base_fname]
@@ -2505,8 +2464,8 @@ def test_HLA_genotyping(base_fname,
 
         # DK - debugging purposes
         extract_cmd += ["--min-var-freq", "0.1"]
-
-        # DK - debugging purposes
+        
+        # extract_cmd += ["--leftshift"]
         # extract_cmd += ["--ext-seq", "300"]
         if verbose >= 1:
             print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
@@ -2522,7 +2481,7 @@ def test_HLA_genotyping(base_fname,
             # Build HISAT2 graph indexes based on the above information
             if index_type == "graph":
                 HLA_hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                if not check_files(HLA_hisat2_graph_index_fnames) or (not excluded_alleles_match):
+                if not check_files(HLA_hisat2_graph_index_fnames):
                     hisat2_build = os.path.join(ex_path, "hisat2-build")
                     build_cmd = [hisat2_build,
                                  "-p", str(threads),
@@ -2541,7 +2500,7 @@ def test_HLA_genotyping(base_fname,
             else:
                 assert index_type == "linear"
                 HLA_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                if reference_type == "gene" and (not check_files(HLA_hisat2_linear_index_fnames) or (not excluded_alleles_match)):
+                if reference_type == "gene" and not check_files(HLA_hisat2_linear_index_fnames):
                     hisat2_build = os.path.join(ex_path, "hisat2-build")
                     build_cmd = [hisat2_build,
                                  "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
@@ -2556,7 +2515,7 @@ def test_HLA_genotyping(base_fname,
             # Build Bowtie2 indexes based on the above information
             HLA_bowtie2_index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
             HLA_bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
-            if reference_type == "gene" and (not check_files(HLA_bowtie2_index_fnames) or (not excluded_alleles_match)):
+            if reference_type == "gene" and not check_files(HLA_bowtie2_index_fnames):
                 build_cmd = ["bowtie2-build",
                              "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
                              base_fname]
@@ -2578,33 +2537,6 @@ def test_HLA_genotyping(base_fname,
         if line.find("partial") != -1:
             partial_alleles.add(allele_name)
 
-    if len(default_allele_list) > 0:
-        if not os.path.exists("Default-HLA/hla_backbone.fa"):
-            try:
-                os.mkdir("Default-HLA")
-            except:
-                pass
-            #os.chdir(current_path + "/Default-HLA")
-            
-            extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
-            extract_cmd = [extract_hla_script,
-                           "--reference-type", reference_type,
-                           "--hla-list", ','.join(hla_list),
-                           "--base", "Default-HLA/hla"]
-
-            if not partial:
-                extract_cmd += ["--no-partial"]
-            extract_cmd += ["--inter-gap", "30",
-                            "--intra-gap", "50"]
-            if verbose >= 1:
-                print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-            proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-            proc.communicate()
-            
-            if not os.path.exists("Default-HLA/hla_backbone.fa"):
-                print >> sys.stderr, "Error: hisatgenotype_extract_vars (Default) failed!"
-                sys.exit(1)
-    
     # Read HLA alleles (names and sequences)
     refHLAs, refHLA_loci = {}, {}
     for line in open("hla.ref"):
@@ -2619,6 +2551,8 @@ def test_HLA_genotyping(base_fname,
             exons.append([int(exon_left), int(exon_right)])
         refHLA_loci[HLA_gene] = [HLA_name, chr, left, right, exons]
     HLAs = {}
+    if len(hla_list) == 0:
+        hla_list = refHLA_loci.keys()
 
     if reference_type == "gene":
         read_HLA_alleles(base_fname + "_backbone.fa", HLAs)
@@ -2636,39 +2570,9 @@ def test_HLA_genotyping(base_fname,
         for allele_name, seq in HLA_alleles.items():
             HLA_lengths[HLA_gene][allele_name] = len(seq)
 
-    # Construct excluded alleles (Via default backbone data)
-    custom_allele_check = False
-    if len(default_allele_list) > 0:
-        custom_allele_check = True
-        HLAs_default = {}
-        read_HLA_alleles("Default-HLA/hla_backbone.fa", HLAs_default)
-        read_HLA_alleles("Default-HLA/hla_sequences.fa", HLAs_default)
-        #HLA_lengths_default = {}
-
-        for HLA_gene, HLA_alleles in HLAs_default.items():
-            for allele_name, seq in HLA_alleles.items():
-                if allele_name in default_allele_list:
-                    HLA_lengths[HLA_gene][allele_name] = len(seq)
-        
-        #for allele_name, seq in HLAs_default.items():
-         #   if allele_name in default_allele_list:
-          #      HLA_lengths[allele_name] = len(seq)
-            #if (allele_name in default_allele_list):
-            #    HLA_lengths_default[allele_name] = len(seq)
-    else:
-        HLAs_default = HLAs
-
     # Read HLA variants, and link information
     Vars, Var_list = read_HLA_vars("%s.snp" % base_fname, reference_type)
     Links = read_HLA_links("%s.link" % base_fname)
-    Vars_default, Var_list_default, Links_default = {}, {}, {}
-    if len(default_allele_list) > 0:
-        Vars_default, Var_list_default = read_HLA_vars("Default-HLA/hla.snp", reference_type)
-        Links_default = read_HLA_links("Default-HLA/hla.link")
-    else:
-        Vars_default, Var_list_default = Vars, Var_list
-        Links_default = Links
-
     # Test HLA typing
     test_list = []
     if simulation:
@@ -2683,47 +2587,33 @@ def test_HLA_genotyping(base_fname,
         test_list = []
         genes = list(set(hla_list) & set(HLA_names.keys()))
         if basic_test:
-            if custom_allele_check:
-                for allele in default_allele_list:
-                    test_list.append([[allele]])
-            else:
-                for gene in genes:
-                    HLA_gene_alleles = HLA_names[gene]
-                    for HLA_name in HLA_gene_alleles:
-                        if HLA_name.find("BACKBONE") != -1:
-                            continue
-                        test_list.append([[HLA_name]])
+            for gene in genes:
+                HLA_gene_alleles = HLA_names[gene]
+                for HLA_name in HLA_gene_alleles:
+                    if HLA_name.find("BACKBONE") != -1:
+                        continue
+                    test_list.append([[HLA_name]])
         if pair_test:
             test_size = 500
             allele_count = 2
-            if custom_allele_check:
-                if (default_allele_list) < allele_count:
-                    print >> sys.stderr, "# of default alleles (%d) is at least %d" % (len(defeault_allele_list), allele_count)
-                    sys.exit(1)
-                    
-                for test_i in range(1):
-                    random.shuffle(default_allele_list)
-                    test_pair = [default_allele_list[:allele_count]]
-                    test_list.append(test_pair)
-            else:
-                for test_i in range(test_size):
-                    test_pairs = []
-                    for gene in genes:
-                        HLA_gene_alleles = []
+            for test_i in range(test_size):
+                test_pairs = []
+                for gene in genes:
+                    HLA_gene_alleles = []
 
-                        for allele in HLA_names[gene]:
-                            if allele.find("BACKBONE") != -1:
+                    for allele in HLA_names[gene]:
+                        if allele.find("BACKBONE") != -1:
+                            continue
+
+                        if "full" in debug:
+                            if allele in partial_alleles:
                                 continue
 
-                            if "full" in debug:
-                                if allele in partial_alleles:
-                                    continue
-                            
-                            HLA_gene_alleles.append(allele)
-                        nums = [i for i in range(len(HLA_gene_alleles))]
-                        random.shuffle(nums)
-                        test_pairs.append(sorted([HLA_gene_alleles[nums[i]] for i in range(allele_count)]))
-                    test_list.append(test_pairs)
+                        HLA_gene_alleles.append(allele)
+                    nums = [i for i in range(len(HLA_gene_alleles))]
+                    random.shuffle(nums)
+                    test_pairs.append(sorted([HLA_gene_alleles[nums[i]] for i in range(allele_count)]))
+                test_list.append(test_pairs)
 
         # DK - for debugging purposes
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
@@ -2740,7 +2630,7 @@ def test_HLA_genotyping(base_fname,
 
             print >> sys.stderr, "Test %d" % (test_i + 1), str(datetime.now())
             test_HLA_list = test_list[test_i]
-            num_frag_list = typing_common.simulate_reads(HLAs_default if custom_allele_check else HLAs,
+            num_frag_list = typing_common.simulate_reads(HLAs,
                                                          test_HLA_list,
                                                          Vars,
                                                          Links,
@@ -2760,7 +2650,7 @@ def test_HLA_genotyping(base_fname,
                     test_HLA_name = test_HLA_names[j_]
                     if custom_allele_check:
                         gene = test_HLA_name.split('*')[0]
-                        test_HLA_seq = HLAs_default[gene][test_HLA_name]
+                        test_HLA_seq = HLAs[gene][test_HLA_name]
                         seq_type = "partial" if test_HLA_name in partial_alleles else "full"
                         print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_HLA_name, len(test_HLA_seq), seq_type, num_frag_list_i[j_])
                         continue
@@ -2789,11 +2679,6 @@ def test_HLA_genotyping(base_fname,
                                      Vars,
                                      Var_list,
                                      Links,
-                                     HLAs_default,
-                                     Vars_default,
-                                     Var_list_default,
-                                     Links_default,
-                                     exclude_allele_list,
                                      aligners,
                                      num_editdist,
                                      assembly,
@@ -2836,11 +2721,6 @@ def test_HLA_genotyping(base_fname,
                Vars,
                Var_list,
                Links,
-               HLAs_default,
-               Vars_default,
-               Var_list_default,
-               Links_default,
-               exclude_allele_list,
                aligners,
                num_editdist,
                assembly,
@@ -2865,11 +2745,6 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="base filename for backbone HLA sequence, HLA variants, and HLA linking info")
-    parser.add_argument("--default-list",
-                        dest = "default_allele_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of HLA alleles to be tested. Alleles are retrieved from default backbone data (all alleles included in backbone).")
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
@@ -2923,11 +2798,6 @@ if __name__ == '__main__':
                         dest="best_alleles",
                         action='store_true',
                         help="")
-    parser.add_argument("--exclude-allele-list",
-                        dest="exclude_allele_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of alleles to be excluded. Enter a number N to randomly select N alleles for exclusion and N non-excluded alleles for testing (2N tested in total).")
     parser.add_argument("--random-seed",
                         dest="random_seed",
                         type=int,
@@ -3006,53 +2876,6 @@ if __name__ == '__main__':
 
     if args.verbose and args.verbose_level == 0:
         args.verbose_level = 1
-    
-    if len(args.default_allele_list) > 0:
-        args.default_allele_list = args.default_allele_list.split(',')
-        
-    if len(args.exclude_allele_list) > 0:
-        if args.exclude_allele_list.strip().isdigit():
-            num_alleles = int(args.exclude_allele_list)            
-            
-            if not os.path.exists("Default-HLA/hla_backbone.fa"):
-                curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
-                ex_path = os.path.dirname(curr_script)
-                extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
-                extract_cmd = [extract_hla_script,
-                               "--reference-type", args.reference_type,
-                               "--hla-list", ','.join(args.hla_list),
-                               "--base", "Default-HLA/hla"]
-                if not args.partial:
-                    extract_cmd += ["--no-partial"]
-                extract_cmd += ["--inter-gap", "30",
-                                "--intra-gap", "50"]
-                if args.verbose_level >= 1:
-                    print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-                proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-                proc.communicate()
-                if not os.path.exists("Default-HLA/hla_backbone.fa"):
-                    print >> sys.stderr, "Error: hisatgenotype_extract_vars (Default) failed!"
-                    sys.exit(1)
-       
-            HLAs_default = {}
-            #read_HLA_alleles("Default-HLA/hla_backbone.fa", HLAs_default)
-            read_HLA_alleles("Default-HLA/hla_sequences.fa", HLAs_default)
-            
-            allele_names = list(HLAs_default['A'].keys())
-            random.seed(args.random_seed)
-            random.shuffle(allele_names)
-            args.exclude_allele_list = allele_names[0:num_alleles]
-            args.default_allele_list = allele_names[num_alleles:2*num_alleles]
-            
-            args.default_allele_list = args.default_allele_list + args.exclude_allele_list
-            
-            # DK - for debugging purposes
-            args.default_allele_list = args.exclude_allele_list
-        else:
-            args.exclude_allele_list = args.exclude_allele_list.split(',')
-
-        if args.num_editdist == 0:
-            args.num_editdist = 3
         
     debug = {}
     if args.debug != "":
@@ -3098,8 +2921,6 @@ if __name__ == '__main__':
                         args.read_len,
                         args.fragment_len,
                         args.best_alleles,
-                        args.exclude_allele_list,
-                        args.default_allele_list,
                         args.num_editdist,
                         args.perbase_errorrate,
                         args.perbase_snprate,
