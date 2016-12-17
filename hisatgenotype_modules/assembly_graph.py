@@ -1617,7 +1617,6 @@ class Graph:
             
             # DK - debugging purposes
             print "[%d, %d)" % (w_left, w_right)
-            reads = []
             left_window, right_window = [sys.maxint, 0], [sys.maxint, 0]
             for haplotype, node_ids in haplotypes.items():
                 if haplotype == "":
@@ -1675,56 +1674,6 @@ class Graph:
                     has_mate = 'T' if node_id2 in supported_node_ids else 'F'
                     print "\t\t%s%50s" % (has_mate, node_id), seq
                     print "\t\t %50s" % (node_id), qual
-
-            for haplotype, node_ids in haplotypes.items():
-                left_reads, right_reads = [], []                
-                for node_id in node_ids:
-                    node = self.nodes[node_id]
-                    node_id2 = get_alt_node_id(node_id)
-                    if node_id2 not in self.nodes:
-                        continue
-                    node2 = self.nodes[node_id2]
-                    cur_window = left_window if node2.left < node.left else right_window
-                    seq = ""
-                    for pos in range(cur_window[0], cur_window[1]):
-                        seq_i = pos - node2.left
-                        if seq_i >= 0 and seq_i < len(node2.seq):
-                            nt_dic = node2.seq[seq_i]
-                            nt = get_major_nt(nt_dic)                        
-                            if nt != self.backbone[pos]:
-                                var_id = "unknown"
-                                for _, tmp_id in nt_dic.values():
-                                    if tmp_id == "" or \
-                                       tmp_id == "unknown" or \
-                                       tmp_id.startswith("nv"):
-                                        continue
-                                    type, pos, data = self.vars[tmp_id]
-                                    if (type == "single" and data == nt) or \
-                                       (type == "deletion" and nt == 'D'):
-                                        var_id = tmp_id                    
-                                if var_id == "unknown" or var_id.startswith("nv"):
-                                    seq += "\033[91m" # red
-                                else:
-                                    seq += "\033[94m" # blue
-                            seq += nt
-                            if nt != self.backbone[pos]:
-                                seq += "\033[00m"
-                        else:
-                             seq += ' '
-                    if node2.left < node.left:
-                        left_reads.append([node_id2, seq, node2.left])
-                    else:
-                        right_reads.append([node_id2, seq, node2.left])
-
-                reads += left_reads
-                reads += right_reads
-            def my_cmp(a, b):
-                return a[2] - b[2]
-            reads = sorted(reads, cmp=my_cmp)                        
-            for node_id2, seq, _ in reads:
-                # print "\t\t%50s" % node_id2, seq
-                # print "\t", seq
-                None
 
             # DK - debugging purposes
             if w_left >= 1200 and False:

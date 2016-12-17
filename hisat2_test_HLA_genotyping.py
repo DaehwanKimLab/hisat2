@@ -46,13 +46,10 @@ def align_reads(ex_path,
         aligner_cmd = [hisat2, "--mm"]
         if not simulation:
             aligner_cmd += ["--no-unal"]            
-        # No detection of novel insertions and deletions
-        # aligner_cmd += ["--rdg", "10000,10000"] # deletion
-        # aligner_cmd += ["--rfg", "10000,10000"] # insertion
         DNA = True
         if DNA:
             aligner_cmd += ["--no-spliced-alignment"] # no spliced alignment
-            # aligner_cmd += ["--min-intronlen", "100000"]
+            aligner_cmd += ["-X", "1000"] # max fragment length
         if index_type == "linear":
             aligner_cmd += ["-k", "10"]
         else:
@@ -862,7 +859,8 @@ HISAT-genotype's mpileup
 def get_mpileup(alignview_cmd,
                 ref_seq,
                 base_locus,
-                vars):
+                vars,
+                allow_discordant):
     ref_seq_len = len(ref_seq)
     mpileup = []
     for i in range(ref_seq_len):
@@ -886,6 +884,15 @@ def get_mpileup(alignview_cmd,
         pos -= (base_locus + 1)
         if pos < 0:
             continue
+
+        # Concordantly mapped?
+        if flag & 0x2 != 0:
+            concordant = True
+        else:
+            concordant = False
+
+        if not allow_discordant and not concordant:
+            continue                    
 
         read_pos, left_pos = 0, pos
         right_pos = left_pos
@@ -919,7 +926,7 @@ def get_mpileup(alignview_cmd,
             for nt, count in nt_dic.items():
                 if nt not in "ACGT":
                     continue
-                if count >= num_nt / 3.5:
+                if count >= num_nt * 0.25 or count >= 8:
                     nt_set.append(nt)
         mpileup[i][0] = nt_set
 
@@ -1102,6 +1109,7 @@ def typing(ex_path,
            num_editdist,
            assembly,
            error_correction,
+           allow_discordant,
            display_alleles,
            fastq,
            read_fname,
@@ -1199,7 +1207,8 @@ def typing(ex_path,
                 mpileup = get_mpileup(alignview_cmd,
                                       ref_seq,
                                       base_locus,
-                                      gene_vars)
+                                      gene_vars,
+                                      allow_discordant)
 
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
@@ -1355,9 +1364,8 @@ def typing(ex_path,
                     if NH > 1:
                         continue
 
-                    # DK - debugging purposes
                     # Concordantly aligned mate pairs
-                    if not concordant:
+                    if not allow_discordant and not concordant:
                         continue
 
                     # Left read?
@@ -1468,7 +1476,7 @@ def typing(ex_path,
                                                                        gene_vars,
                                                                        gene_var_list,
                                                                        cmp_list[cmp_list_i:],
-                                                                       node_read_id == "#HSQ1008:176:D0UYCACXX:5:1110:4878:92411|L")
+                                                                       node_read_id == "HSQ1008:176:D0UYCACXX:4:1304:19006:96208|R")
                                 cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
 
                         elif cigar_op == 'I':
@@ -2053,10 +2061,8 @@ def typing(ex_path,
                     asm_graph.set_allele_nodes(predicted_allele_nodes)
                     asm_graph.allele_node_order = allele_node_order
 
-
-                # DK - debugging purposes
-                asm_graph.filter_nodes()
-                
+                # Filter out nodes
+                asm_graph.filter_nodes()                
 
                 # Generate edges
                 asm_graph.generate_edges()
@@ -2128,7 +2134,7 @@ def typing(ex_path,
                 count = 0
                 for id, node in tmp_nodes.items():
                     count += 1
-                    if count > 100:
+                    if count > 10:
                         break
                     node_vars = node.get_var_ids(gene_vars)
                     node.print_info(); print >> sys.stderr
@@ -2137,21 +2143,25 @@ def typing(ex_path,
                             print >> sys.stderr, "\tat %d ==> %s" % (at, id2)
 
                     if simulation:
-                        alleles, cmp_vars, max_common = "", [], -sys.maxint
-                        for test_HLA_name in test_HLA_names:
-                            tmp_vars = allele_nodes[test_HLA_name].get_var_ids(gene_vars)
-                            tmp_common = len(set(node_vars) & set(allele_vars[test_HLA_name]))
-                            tmp_common -= len(set(node_vars) | set(allele_vars[test_HLA_name]))
-                            if max_common < tmp_common:
-                                max_common = tmp_common
-                                alleles = [[test_HLA_name, tmp_vars]]
-                            elif max_common == tmp_common:
-                                alleles.append([test_HLA_name, tmp_vars])
+                        cmp_HLA_names = test_HLA_names
+                    else:
+                        cmp_HLA_names = [allele_name for allele_name, _ in allele_node_order]
+                        
+                    alleles, cmp_vars, max_common = "", [], -sys.maxint
+                    for cmp_HLA_name in cmp_HLA_names:
+                        tmp_vars = allele_nodes[cmp_HLA_name].get_var_ids(gene_vars)
+                        tmp_common = len(set(node_vars) & set(allele_vars[cmp_HLA_name]))
+                        tmp_common -= len(set(node_vars) | set(allele_vars[cmp_HLA_name]))
+                        if max_common < tmp_common:
+                            max_common = tmp_common
+                            alleles = [[cmp_HLA_name, tmp_vars]]
+                        elif max_common == tmp_common:
+                            alleles.append([cmp_HLA_name, tmp_vars])
 
-                        for allele_name, cmp_vars in alleles:
-                            print >> sys.stderr, "vs.", allele_name
-                            compare_alleles(cmp_vars, node_vars)
-                            
+                    for allele_name, cmp_vars in alleles:
+                        print >> sys.stderr, "vs.", allele_name
+                        compare_alleles(cmp_vars, node_vars)
+
                     print >> sys.stderr
                     print >> sys.stderr
 
@@ -2378,6 +2388,7 @@ def test_HLA_genotyping(base_fname,
                         skip_fragment_regions,
                         assembly,
                         error_correction,
+                        discordant,
                         display_alleles,
                         verbose,
                         daehwan_debug):
@@ -2683,6 +2694,7 @@ def test_HLA_genotyping(base_fname,
                                      num_editdist,
                                      assembly,
                                      error_correction,
+                                     discordant,
                                      display_alleles,
                                      fastq,
                                      read_fname,
@@ -2725,6 +2737,7 @@ def test_HLA_genotyping(base_fname,
                num_editdist,
                assembly,
                error_correction,
+               discordant,
                display_alleles,
                fastq,
                read_fname,
@@ -2844,7 +2857,11 @@ if __name__ == '__main__':
     parser.add_argument("--no-error-correction",
                         dest="error_correction",
                         action="store_false",
-                        help="Correct sequencing errors")    
+                        help="Correct sequencing errors")
+    parser.add_argument("--discordant",
+                        dest="discordant",
+                        action="store_true",
+                        help="Allow discordantly mapped pairs or singletons")    
     parser.add_argument("--display-alleles",
                         dest="display_alleles",
                         type=str,
@@ -2927,6 +2944,7 @@ if __name__ == '__main__':
                         skip_fragment_regions,
                         args.assembly,
                         args.error_correction,
+                        args.discordant,
                         display_alleles,
                         args.verbose_level,
                         debug)
