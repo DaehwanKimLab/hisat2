@@ -97,6 +97,7 @@ def extract_reads(base_fname,
                   hla_list,
                   partial,
                   threads,
+                  max_sample,
                   job_range,
                   verbose):
     # Current script directory
@@ -218,8 +219,9 @@ def extract_reads(base_fname,
     count = 0
     pids = [0 for i in range(threads)]
     for file_i in range(len(fq_fnames)):
+        if file_i >= max_sample:
+            break
         fq_fname = fq_fnames[file_i]
-
         if job_range[1] > 1:
             if job_range[0] != (file_i % job_range[1]):
                 continue
@@ -428,6 +430,11 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Number of threads")
+    parser.add_argument("--max-sample",
+                        dest="max_sample",
+                        type=int,
+                        default=sys.maxint,
+                        help="Number of samples to be extracted (default: sys.maxint)")
     parser.add_argument("--job-range",
                         dest="job_range",
                         type=str,
@@ -465,6 +472,7 @@ if __name__ == '__main__':
                   hla_list,
                   args.partial,
                   args.threads,
+                  args.max_sample,
                   job_range,
                   args.verbose)
 
