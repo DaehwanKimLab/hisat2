@@ -985,7 +985,7 @@ class Graph:
                         continue
                     from_node, node = deepcopy(nodes[from_id]), nodes[id]; delete_nodes.add(from_id)
                     from_node.id = new_id
-                    from_node.combine_with(node); delete_nodes.add(id)                    
+                    from_node.combine_with(node); delete_nodes.add(id)
                     new_nodes[new_id] = from_node
 
             for id, node in nodes.items():
@@ -1000,8 +1000,8 @@ class Graph:
             self.reduce(0.02)
 
             # DK - debugging purposes
-            # if iter >= 4:
-            #    break
+            # if iter >= 1:
+            #     break
 
         # DK - debugging purposes
         if False:

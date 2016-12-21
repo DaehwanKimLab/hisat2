@@ -1476,7 +1476,7 @@ def typing(ex_path,
                                                                        gene_vars,
                                                                        gene_var_list,
                                                                        cmp_list[cmp_list_i:],
-                                                                       node_read_id == "HSQ1008:176:D0UYCACXX:4:1304:19006:96208|R")
+                                                                       node_read_id == "#HSQ1008:176:D0UYCACXX:4:1304:19006:96208|R")
                                 cmp_list = cmp_list[:cmp_list_i] + new_cmp_list                            
 
                         elif cigar_op == 'I':
@@ -2062,7 +2062,7 @@ def typing(ex_path,
                     asm_graph.allele_node_order = allele_node_order
 
                 # Filter out nodes
-                asm_graph.filter_nodes()                
+                asm_graph.filter_nodes()
 
                 # Generate edges
                 asm_graph.generate_edges()
@@ -2081,9 +2081,6 @@ def typing(ex_path,
                 begin_y = asm_graph.draw(begin_y, "Unitigs")
                 begin_y += 200
 
-                # DK - debugging purposes
-                # """
-                
                 # Further reduce graph with mate pairs
                 asm_graph.assemble_with_mates()
 
@@ -2095,8 +2092,6 @@ def typing(ex_path,
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Graph with alleles")
-
-                # """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()

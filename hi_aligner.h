@@ -1294,7 +1294,6 @@ bool GenomeHit<index_t>::combineWith(
     const index_t reflen = ref.approxLen(_tidx);
     if(this_toff + len > reflen) return false;
     assert_leq(this_toff + len, reflen);
-    assert_geq(other_toff + other_len, len);
     
     // check if an indel or an intron is necessary
     index_t refdif = other_toff - this_toff;
