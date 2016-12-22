@@ -310,26 +310,11 @@ class Node:
                 assert var in Vars
                 type, var_pos, data = Vars[var]                    
                 if data == nt or (type == "deletion" and nt == 'D'):
-
-                    # DK - debugging purposes
-                    if pos < var_pos:
-                        self.print_info()
-                        print "pos:", pos, "var_pos:", var_pos
-                        print nt_dic, nt
-                    
                     assert pos >= var_pos
                     if type == "deletion" and pos > var_pos:
                         continue                    
                     if type == "deletion":
                         skip_pos = pos + int(data) - 1
-                        
-                    # DK - debugging purposes
-                    if pos != var_pos:
-                        self.print_info()
-                        print "pos: %d, var_pos: %d, var_i: %d" % (pos, var_pos, var_i)
-                        print vars, self.seq[var_i-3:var_i], self.seq[var_i]
-                        assert False
-                        
                     added = True
                     vars.append([var, pos])
             if not added and "unknown" in [var_id for _, var_id in nt_dic.values()]:
@@ -396,10 +381,9 @@ class Node:
         print >> output, "Pos: [%d, %d], Avg. coverage: %.1f" % (self.left, self.right, self.get_avg_cov())
         print >> output, "\t", seq
         print >> output, "\t", var_str
-
-        print >> output
         print >> output, "mates:", sorted(self.mate_ids)
         print >> output, "reads:", sorted(self.read_ids)
+        print >> output
 
                 
 class Graph:
@@ -724,6 +708,7 @@ class Graph:
                     if overlap_pct >= 0.5 and \
                        node2.get_avg_cov() * (1.3 - overlap_pct) * 10 < node.get_avg_cov():
                         delete_ids.add(id2)
+
                 i -= 1
 
         for delete_id in delete_ids:
@@ -740,7 +725,7 @@ class Graph:
     def reduce(self, overlap_pct = 0.1):
         to_node = self.to_node
         from_node = self.from_node
-        
+
         # Assemble unitigs
         unitigs = []
         for id in self.nodes.keys():
@@ -876,6 +861,7 @@ class Graph:
                         matches.append([from_ids[0], to_ids[0], 0])
                         matches_list.append(matches)
                         continue
+                    
                 if len(to_ids) > 2:
                     continue
                 if len(from_ids) == 1 and len(to_ids) == 1:
@@ -1603,6 +1589,7 @@ class Graph:
             num_conflict += 1
             
             # DK - debugging purposes
+            """
             print "[%d, %d)" % (w_left, w_right)
             left_window, right_window = [sys.maxint, 0], [sys.maxint, 0]
             for haplotype, node_ids in haplotypes.items():
@@ -1661,13 +1648,14 @@ class Graph:
                     has_mate = 'T' if node_id2 in supported_node_ids else 'F'
                     print "\t\t%s%50s" % (has_mate, node_id), seq
                     print "\t\t %50s" % (node_id), qual
+            """
 
             # DK - debugging purposes
-            if w_left >= 1200 and False:
-                sys.exit(1)
+            # if w_left >= 1200 and False:
+            #    sys.exit(1)
 
         # DK - debugging purposes
-        print "Number of conflicts:", num_conflict
+        # print "Number of conflicts:", num_conflict
         # sys.exit(1)
 
         for node_id in self.nodes.keys():

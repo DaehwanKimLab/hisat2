@@ -1676,7 +1676,7 @@ def typing(ex_path,
                     if read_id != prev_read_id:
                         if prev_read_id != None:
                             cur_cmpt = add_stat(HLA_cmpt, HLA_counts, HLA_count_per_read, allele_rep_set)
-                            add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)                            
+                            add_stat(HLA_gen_cmpt, HLA_gen_counts, HLA_gen_count_per_read)
                             for read_id_, read_node in read_nodes:
                                 asm_graph.add_node(read_id_,
                                                    read_node,
