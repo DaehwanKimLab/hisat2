@@ -1391,8 +1391,9 @@ def typing(ex_path,
                     Zs_pos, Zs_i = 0, 0
                     for _i in range(len(Zs)):
                         Zs[_i] = Zs[_i].split('|')
+                        Zs[_i][0] = int(Zs[_i][0])
                     if Zs_i < len(Zs):
-                        Zs_pos += int(Zs[Zs_i][0])
+                        Zs_pos += Zs[Zs_i][0]
                     read_pos, left_pos = 0, pos
                     right_pos = left_pos
                     cigars = cigar_re.findall(cigar_str)
@@ -1442,7 +1443,7 @@ def typing(ex_path,
                                     Zs_i += 1
                                     Zs_pos += 1
                                     if Zs_i < len(Zs):
-                                        Zs_pos += int(Zs[Zs_i][0])
+                                        Zs_pos += Zs[Zs_i][0]
                                 else:
                                     # Search for a known (yet not indexed) variant or a novel variant
                                     ref_pos = right_pos + MD_len
@@ -1486,7 +1487,7 @@ def typing(ex_path,
                                 _var_id = Zs[Zs_i][2]
                                 Zs_i += 1
                                 if Zs_i < len(Zs):
-                                    Zs_pos += int(Zs[Zs_i][0])
+                                    Zs_pos += Zs[Zs_i][0]
                             else:
                                 # Search for a known (yet not indexed) variant or a novel variant
                                 var_idx = lower_bound(gene_var_list, right_pos)
@@ -1501,6 +1502,9 @@ def typing(ex_path,
                                             break
                                     var_idx += 1                            
                             cmp_list.append(["insertion", right_pos, length, _var_id])
+                            if 'N' in read_seq[read_pos:read_pos+length]:
+                                likely_misalignment = True
+                                
                         elif cigar_op == 'D':
                             if MD[MD_str_pos] == '0':
                                 MD_str_pos += 1
@@ -1516,7 +1520,7 @@ def typing(ex_path,
                                 _var_id = Zs[Zs_i][2]
                                 Zs_i += 1
                                 if Zs_i < len(Zs):
-                                    Zs_pos += int(Zs[Zs_i][0])
+                                    Zs_pos += Zs[Zs_i][0]
                             else:
                                 # Search for a known (yet not indexed) variant or a novel variant
                                 var_idx = lower_bound(gene_var_list, right_pos)
@@ -1548,7 +1552,6 @@ def typing(ex_path,
                         elif cigar_op == 'S':
                             if i == 0:
                                 softclip[0] = length
-                                Zs_pos += length
                             else:
                                 assert i + 1 == len(cigars)
                                 softclip[1] = length
@@ -2088,10 +2091,16 @@ def typing(ex_path,
                 begin_y = asm_graph.draw(begin_y, "Graph with mate pairs")
                 begin_y += 200
 
+                # DK - debugging purposes
+                """
+
                 asm_graph.assemble_with_alleles(allele_nodes)
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Graph with alleles")
+
+
+                """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
@@ -2144,9 +2153,9 @@ def typing(ex_path,
                         
                     alleles, cmp_vars, max_common = "", [], -sys.maxint
                     for cmp_HLA_name in cmp_HLA_names:
-                        tmp_vars = allele_nodes[cmp_HLA_name].get_var_ids(gene_vars)
-                        tmp_common = len(set(node_vars) & set(allele_vars[cmp_HLA_name]))
-                        tmp_common -= len(set(node_vars) | set(allele_vars[cmp_HLA_name]))
+                        tmp_vars = allele_nodes[cmp_HLA_name].get_var_ids(gene_vars, node.left, node.right)
+                        tmp_common = len(set(node_vars) & set(tmp_vars))
+                        tmp_common -= len(set(node_vars) | set(tmp_vars))
                         if max_common < tmp_common:
                             max_common = tmp_common
                             alleles = [[cmp_HLA_name, tmp_vars]]

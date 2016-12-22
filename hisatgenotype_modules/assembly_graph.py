@@ -126,7 +126,6 @@ class Node:
         assert self.left <= other.left
         if self.right < other.left:
             return -1, -1
-
         seq = get_ungapped_seq(self.seq)
         other_seq = get_ungapped_seq(other.seq)
         add_mm = len(self.mate_ids & other.mate_ids)
@@ -141,37 +140,23 @@ class Node:
                 mismatch = 0
                 if nt != other_nt:
                     mismatch = 1.0 - match_score(seq[i+j], other_seq[j])
-                    var_ids = [var_id for _, var_id in nt_dic.values()]
-                    other_var_ids = [var_id for _, var_id in nt_dic.values()]
+                    
                     # Higher penalty for mismatches in variants
-                    if len(var_ids) > 0 or len(other_var_ids) > 0:
-                        def get_var_id(nt, var_ids, vars):
-                            for _id in var_ids:
-                                if _id == "" or \
-                                   _id == "unknown" or \
-                                   _id.startswith("nv"):
-                                    continue
-                                _type, _pos, _data = vars[_id]
-                                if _type != "single":
-                                    continue
-                                if _data == nt:
-                                    return _id
-                            return ""
-                        nt_var, other_nt_var = get_var_id(nt, var_ids, vars), get_var_id(other_nt, other_var_ids, vars)
-                        if nt_var != other_nt_var:
-                            mismatch = 5.0
-                            adjust = min(1.0, nt_dic[nt][0] / self.get_avg_cov()) * \
-                                     min(1.0, other_nt_dic[other_nt][0] / other.get_avg_cov())
-                            mismatch *= adjust
-                            if mismatch < 1.0:
-                                mismatch = 1.0
+                    nt_var, other_nt_var = nt_dic[nt][1], other_nt_dic[other_nt][1]
+                    if nt_var != other_nt_var:
+                        mismatch = 5.0
+                        adjust = min(1.0, nt_dic[nt][0] / self.get_avg_cov()) * \
+                                 min(1.0, other_nt_dic[other_nt][0] / other.get_avg_cov())
+                        mismatch *= adjust
+                        if mismatch < 1.0:
+                            mismatch = 1.0
 
                 assert mismatch >= 0.0
                 tmp_mm += mismatch
                 if tmp_mm > max_mm:
                     break
 
-            if debug and i > 3450:
+            if debug:
                 print "at %d (%d) with overlap of %d and mismatch of %.2f" % (i, self.left + i, j, tmp_mm)
 
             if tmp_mm <= max_mm:
@@ -961,14 +946,16 @@ class Graph:
                 if len(matches) <= 0:
                     continue
                 matches_list.append(matches)
-                print >> sys.stderr, "to:", id, "has", to_ids
-                print >> sys.stderr, "from:", id, "has", from_ids
-                print >> sys.stderr, matches
-                for from_id, id, _ in matches:
-                    print >> sys.stderr, from_id; nodes[from_id].print_info()
-                    print >> sys.stderr, id; nodes[id].print_info()
-                print >> sys.stderr
-                # sys.exit(1)
+                debug_id = "HSQ1008:175:C0JVFACXX:6:2302:19706:8667|R"
+                if debug_id in from_ids or debug_id in to_ids:
+                    print >> sys.stderr, "to:", id, "has", to_ids
+                    print >> sys.stderr, "from:", id, "has", from_ids
+                    print >> sys.stderr, matches
+                    for from_id, id, _ in matches:
+                        print >> sys.stderr, from_id; nodes[from_id].print_info()
+                        print >> sys.stderr, id; nodes[id].print_info()
+                    print >> sys.stderr
+                    sys.exit(1)
                 # """
               
 
