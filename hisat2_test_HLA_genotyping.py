@@ -2664,12 +2664,6 @@ def test_HLA_genotyping(base_fname,
                 assert len(num_frag_list_i) == len(test_HLA_names)
                 for j_ in range(len(test_HLA_names)):
                     test_HLA_name = test_HLA_names[j_]
-                    if custom_allele_check:
-                        gene = test_HLA_name.split('*')[0]
-                        test_HLA_seq = HLAs[gene][test_HLA_name]
-                        seq_type = "partial" if test_HLA_name in partial_alleles else "full"
-                        print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_HLA_name, len(test_HLA_seq), seq_type, num_frag_list_i[j_])
-                        continue
                     gene = test_HLA_name.split('*')[0]
                     test_HLA_seq = HLAs[gene][test_HLA_name]
                     seq_type = "partial" if test_HLA_name in partial_alleles else "full"
