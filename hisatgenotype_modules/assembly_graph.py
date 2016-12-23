@@ -53,6 +53,21 @@ def get_ungapped_seq(seq):
     return ungapped_seq
 
 
+#
+def get_ungapped_seq_pos(seq, pos):
+    tot_del_len, tot_ins_len = 0, 0
+    for i in range(len(seq)):
+        nt_dic = seq[i]
+        nt = get_major_nt(nt_dic)
+        if nt == 'D':
+            tot_del_len += 1
+        elif nt[0] == 'I':
+            tot_ins_len += 1
+        if i - tot_ins_len == pos:
+            return pos - tot_del_len
+    return -1
+
+
 # Get mate node id
 #  HSQ1008:141:D0CC8ACXX:3:2304:4780:36964|L to HSQ1008:141:D0CC8ACXX:3:2304:4780:36964|R or vice versa
 def get_mate_node_id(node_id):
@@ -142,7 +157,8 @@ class Node:
         seq = get_ungapped_seq(self.seq)
         other_seq = get_ungapped_seq(other.seq)
         add_mm = len(self.mate_ids & other.mate_ids)
-        for i in range(len(seq)):
+        i_left = get_ungapped_seq_pos(self.seq, other.left - self.left)
+        for i in range(i_left - 5, i_left + 6):
             max_mm = 0.012 * (len(seq) - i) # 1 mismatch per 83 bases
             tmp_mm = 0.0
             for j in range(len(other_seq)):
@@ -220,12 +236,12 @@ class Node:
             sum_2 = sum([count for count, _ in other.seq[0].values()])
             flank_cov = (sum_1 + sum_2) / 2.0
             for k in range(other.left - self.right - 1):
-                nt_dic, var_set = self.mpileup[k + 1 + self.right][1:]
-                nt_dic, var_set = deepcopy(nt_dic), deepcopy(var_set)
+                ref_nt_dic = self.mpileup[k + 1 + self.right][1]
+                nt_dic = {}
                 if len(nt_dic) == 0:
                     nt_dic = {'N' : [1, ""]}
                 else:
-                    weight = flank_cov / max(1.0, sum(nt_dic.values()))
+                    weight = flank_cov / max(1.0, sum(ref_nt_dic.values()))
                     for nt, value in nt_dic.items():
                         nt_dic[nt] = [value * weight, ""]
                 new_seq.append(nt_dic)
@@ -450,10 +466,6 @@ class Graph:
 
     # Generate edges based on the overlapping information between nodes
     def generate_raw_edges(self, overlap_pct = 0.1):
-
-        # DK - debugging purposes
-        print str(datetime.now())
-        
         assert len(self.nodes) > 0
         has_mate = True
         nodes = []
@@ -536,9 +548,6 @@ class Graph:
                     self.from_node[id2] = [[id1, -at]]
                 else:
                     self.from_node[id2].append([id1, -at])
-
-        # DK - debugging purposes
-        print str(datetime.now())
 
                     
     # Generate edges based on nodes that are close to one another, but not overlapping
@@ -650,18 +659,12 @@ class Graph:
             else:
                 contain[up_id].add(id)
 
-        # Merges nodes with those including them inside
-        nodes = {}
-        for id, node in self.nodes.items():
-            if id in contained_by:
-                continue
-            nodes[id] = deepcopy(node)
-            
         for id, inside_ids in contain.items():
             node = self.nodes[id]
             for id2 in inside_ids:
                 node2 = self.nodes[id2]
                 node.combine_with(node2)
+                del self.nodes[id2]
 
         # Remove the edges of nodes contained within other nodes
         tmp_to_node, tmp_from_node = {}, {}
@@ -672,7 +675,7 @@ class Graph:
                 if id2 in contained_by:
                     continue
 
-                assert id1 in nodes and id2 in nodes
+                assert id1 in self.nodes and id2 in self.nodes
                 if id1 not in tmp_to_node:
                     tmp_to_node[id1] = [[id2, at]]
                 else:
@@ -682,7 +685,6 @@ class Graph:
                 else:
                     tmp_from_node[id2].append([id1, -at])
 
-        self.nodes = nodes
         self.to_node = tmp_to_node
         self.from_node = tmp_from_node
 

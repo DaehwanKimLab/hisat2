@@ -2057,9 +2057,7 @@ def typing(ex_path,
                         assert allele_name not in predicted_allele_nodes
                         predicted_allele_nodes[allele_name] = allele_nodes[allele_name]
                         allele_node_order.append([allele_name, prob])
-                        # DK - debugging purposes
                         if len(predicted_allele_nodes) >= 2:
-                        # if len(predicted_allele_nodes) >= 10:
                             break
                     asm_graph.set_allele_nodes(predicted_allele_nodes)
                     asm_graph.allele_node_order = allele_node_order
@@ -2068,7 +2066,6 @@ def typing(ex_path,
                 asm_graph.filter_nodes()
 
                 # Generate edges
-                # DK - debugging purposes
                 asm_graph.generate_edges(0.5)
 
                 # Start drawing assembly graph
