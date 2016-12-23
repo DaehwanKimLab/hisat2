@@ -191,14 +191,12 @@ def single_abundance(HLA_cmpt,
         HLA_prob = HLA_prob_next
 
         # Accelerate convergence
-        """
         if iter >= 10:
             HLA_prob2 = {}
             for allele, prob in HLA_prob.items():
                 if prob >= 0.005:
                     HLA_prob2[allele] = prob
             HLA_prob = HLA_prob2
-        """
 
         # DK - debugging purposes
         if iter % 10 == 0 and False:
