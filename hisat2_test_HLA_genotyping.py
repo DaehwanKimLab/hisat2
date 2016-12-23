@@ -2635,7 +2635,7 @@ def test_HLA_genotyping(base_fname,
         # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
         # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
         # test_list = [[["A*24:36N", "A*30:03"]]]
-        test_list = [[["A*26:25N"]]] # for allele that includes an insertion
+        # test_list = [[["A*26:25N"]]] # for allele that includes an insertion
         # test_list = [[["A*24:36N"]]] # for normal allele?
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
         for test_i in range(len(test_list)):
