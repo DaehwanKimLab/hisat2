@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import sys
-import math
-import random
+import math, random
+from datetime import datetime, date, time
 from copy import deepcopy
 
 
@@ -51,6 +51,19 @@ def get_ungapped_seq(seq):
             continue
         ungapped_seq.append(nt_dic)
     return ungapped_seq
+
+
+# Get mate node id
+#  HSQ1008:141:D0CC8ACXX:3:2304:4780:36964|L to HSQ1008:141:D0CC8ACXX:3:2304:4780:36964|R or vice versa
+def get_mate_node_id(node_id):
+    node_id2, end = node_id.split('|')
+    if end == 'L':
+        end = 'R'
+    else:
+        end = 'L'
+    node_id2 = '|'.join([node_id2, end])
+    return node_id2
+
 
 
 class Node:
@@ -389,14 +402,14 @@ class Node:
 class Graph:
     def __init__(self,
                  backbone,
-                 vars,
+                 gene_vars,
                  exons,
                  partial_allele_ids,
                  allele_nodes = {},
                  display_allele_nodes = {},
                  simulation = False):
         self.backbone = backbone # backbone sequence
-        self.vars = vars
+        self.gene_vars = gene_vars
         self.exons = exons
         self.partial_allele_ids = partial_allele_ids
         self.allele_nodes = allele_nodes
@@ -435,18 +448,65 @@ class Graph:
         assert id not in self.nodes
         self.nodes[id] = node
 
-
     # Generate edges based on the overlapping information between nodes
     def generate_raw_edges(self, overlap_pct = 0.1):
+
+        # DK - debugging purposes
+        print str(datetime.now())
+        
         assert len(self.nodes) > 0
-        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        has_mate = True
+        nodes = []
+        for id, node in self.nodes.items():
+            nodes.append([id, node.left, node.right])
+            if len(node.read_ids) > 1:
+                has_mate = False            
         def node_cmp(a, b):
             if a[1] != b[1]:
                 return a[1] - b[1]
             else:
                 return a[2] - b[2]
         nodes = sorted(nodes, cmp=node_cmp)
+        
+        node_to_alleles = {}
+        for id, node in self.nodes.items():
+            if id in node_to_alleles:
+                continue
+            # Identify alleles that nodes closely match
+            def get_alleles(id, mate_id):
+                node = self.nodes[id]
+                node_vars = node.get_var_ids(self.gene_vars)
+                if mate_id in self.nodes:
+                    mate_node = self.nodes[mate_id]
+                    node_vars += mate_node.get_var_ids(self.gene_vars)
+                node_vars = set(node_vars)
+                max_alleles, max_common = set(), -sys.maxint
+                for anode in self.allele_nodes.values():
+                    allele_vars = anode.get_var_ids(self.gene_vars, node.left, node.right)
+                    if mate_id in self.nodes:
+                        allele_vars += anode.get_var_ids(self.gene_vars, mate_node.left, mate_node.right)
+                    allele_vars = set(allele_vars)
+                    tmp_common = len(node_vars & allele_vars) - len(node_vars | allele_vars)
+                    if abs(tmp_common - max_common) <= 1:
+                        max_alleles.add(anode.id)
+                        if tmp_common > max_common:
+                            max_common = tmp_common
+                    elif tmp_common > max_common:
+                        assert tmp_common > max_common + 1
+                        max_common = tmp_common
+                        max_alleles = set([anode.id])
+                return max_alleles, max_common
 
+            if has_mate:
+                mate_id = get_mate_node_id(id)
+            else:
+                mate_id = ""
+            alleles, common = get_alleles(id, mate_id)
+            node_to_alleles[id] = [alleles, common]
+            if mate_id in self.nodes:
+                node_to_alleles[mate_id] = [alleles, common]
+
+        coloring = has_mate
         self.from_node, self.to_node = {}, {}
         for i in range(len(nodes)):
             id1, left1, right1 = nodes[i]
@@ -456,12 +516,18 @@ class Graph:
                 if right1 < left2:
                     break
                 node2 = self.nodes[id2]
-                at, overlap = node1.overlap_with(node2, self.vars)
+                at, overlap = node1.overlap_with(node2, self.gene_vars)
                 if overlap < node1.ungapped_length() * overlap_pct and \
                    overlap < node2.ungapped_length() * overlap_pct:
                     continue
                 if at < 0 or overlap <= 0:
                     continue
+                
+                if coloring:
+                    alleles1, alleles2 = node_to_alleles[id1][0], node_to_alleles[id2][0]
+                    if len(alleles1 & alleles2) <= 0:
+                        continue
+                
                 if id1 not in self.to_node:
                     self.to_node[id1] = [[id2, at]]
                 else:
@@ -470,6 +536,9 @@ class Graph:
                     self.from_node[id2] = [[id1, -at]]
                 else:
                     self.from_node[id2].append([id1, -at])
+
+        # DK - debugging purposes
+        print str(datetime.now())
 
                     
     # Generate edges based on nodes that are close to one another, but not overlapping
@@ -525,7 +594,7 @@ class Graph:
                     # DK - debugging purposes
                     """
                     node2 = self.nodes[id2]
-                    at, overlap = node.overlap_with(node2, self.vars)
+                    at, overlap = node.overlap_with(node2, self.gene_vars)
                     if at < 0:
                         continue
                     """
@@ -791,7 +860,7 @@ class Graph:
     def informed_assemble(self, params = {"mate": True}):
         mate = "mate" in params and params["mate"]
         allele_nodes = params["alleles"] if "alleles" in params else {}
-        vars = self.vars
+        vars = self.gene_vars
         if not mate:
             assert len(allele_nodes) > 0 and len(vars) > 0
             if len(self.nodes) > 20:
@@ -982,7 +1051,7 @@ class Graph:
             node1, node2 = self.nodes[id1], self.nodes[id2]
             node1.print_info(sys.stdout); print
             node2.print_info(sys.stdout); print
-            at, overlap = node1.overlap_with(node2, self.vars, True)
+            at, overlap = node1.overlap_with(node2, self.gene_vars, True)
             print "at %d with overlap of %d" % (at, overlap)
             sys.exit(1)
 
@@ -1371,8 +1440,8 @@ class Graph:
             y = get_dspace(left, right, 14)
             node_to_y[id] = y
 
-            node_vars = node.get_vars(self.vars)
-            node_var_ids = node.get_var_ids(self.vars)
+            node_vars = node.get_vars(self.gene_vars)
+            node_var_ids = node.get_var_ids(self.gene_vars)
             if len(allele_nodes) > 0:
                 color = "white"
                 max_common = -sys.maxint
@@ -1380,7 +1449,7 @@ class Graph:
                     allele_node_id, allele_left, allele_right = allele_nodes[a]
                     if right - left <= 500 and (left < allele_left or right > allele_right):
                         continue
-                    allele_vars = self.allele_nodes[allele_node_id].get_var_ids(self.vars, left, right)
+                    allele_vars = self.allele_nodes[allele_node_id].get_var_ids(self.gene_vars, left, right)
                     common_vars = set(node_var_ids) & set(allele_vars)
                     tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
                     if max_common < tmp_common:
@@ -1411,7 +1480,7 @@ class Graph:
                     var_type, var_left = "single", pos
                     color = "red"
                 else:
-                    var_type, var_left, var_data = self.vars[var_id]
+                    var_type, var_left, var_data = self.gene_vars[var_id]
                     color = "blue"
                 if var_type == "single":
                     var_right = var_left + 1
@@ -1478,15 +1547,6 @@ class Graph:
         # Average node length
         avg_len = sum([node.ungapped_length() for _, node in self.nodes.items()]) / float(len(nodes))
 
-        def get_alt_node_id(node_id):
-            node_id2, end = node_id.split('|')
-            if end == 'L':
-                end = 'R'
-            else:
-                end = 'L'
-            node_id2 = '|'.join([node_id2, end])
-            return node_id2
-
         node_i = 0
         window, interval = int(avg_len * 0.6), 20
         window_list = []
@@ -1546,7 +1606,7 @@ class Graph:
                 haplotype_count = {}
                 for haplotype, node_ids in haplotypes.items():
                     for node_id in node_ids:
-                        node_id2 = get_alt_node_id(node_id)
+                        node_id2 = get_mate_node_id(node_id)
                         if node_id2 not in supported_node_ids:
                             continue
                         if haplotype not in haplotype_count:
@@ -1597,15 +1657,15 @@ class Graph:
                     haplotype = "nothing"
                 print "\t%s: %d" % (haplotype, len(node_ids))
                 for var_id in haplotype.split(','):
-                    if var_id not in self.vars:
+                    if var_id not in self.gene_vars:
                         continue
-                    print "\t\t", var_id, self.vars[var_id]
+                    print "\t\t", var_id, self.gene_vars[var_id]
 
                 for node_id in node_ids:
                     node = self.nodes[node_id]
                     if node_id.endswith("88989##"):
                         node.print_info()
-                    node_id2 = get_alt_node_id(node_id)
+                    node_id2 = get_mate_node_id(node_id)
                     if node_id2 in self.nodes:
                         node2 = self.nodes[node_id2]
                         if node2.left < node.left:
@@ -1633,7 +1693,7 @@ class Graph:
                                    tmp_id == "unknown" or \
                                    tmp_id.startswith("nv"):
                                     continue
-                                type, pos, data = self.vars[tmp_id]
+                                type, pos, data = self.gene_vars[tmp_id]
                                 if (type == "single" and data == nt) or \
                                    (type == "deletion" and nt == 'D'):
                                     var_id = tmp_id                    
@@ -1661,7 +1721,8 @@ class Graph:
         for node_id in self.nodes.keys():
             if node_id not in supported_node_ids:
                 del self.nodes[node_id]
-               
+
+
         
 class HtmlDraw:
     def __init__(self, base_fname):

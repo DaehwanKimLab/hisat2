@@ -2068,7 +2068,8 @@ def typing(ex_path,
                 asm_graph.filter_nodes()
 
                 # Generate edges
-                asm_graph.generate_edges()
+                # DK - debugging purposes
+                asm_graph.generate_edges(0.5)
 
                 # Start drawing assembly graph
                 asm_graph.begin_draw("assembly_graph")
