@@ -421,17 +421,22 @@ class Graph:
                  gene_vars,
                  exons,
                  partial_allele_ids,
-                 allele_nodes = {},
+                 true_allele_nodes = {},
+                 predicted_allele_nodes = {},
                  display_allele_nodes = {},
                  simulation = False):
         self.backbone = backbone # backbone sequence
         self.gene_vars = gene_vars
         self.exons = exons
         self.partial_allele_ids = partial_allele_ids
-        self.allele_nodes = allele_nodes
+        self.true_allele_nodes = true_allele_nodes
+        self.predicted_allele_nodes = predicted_allele_nodes
         self.allele_node_order = []
         self.display_allele_nodes = display_allele_nodes
         self.simulation = simulation
+
+        if simulation:
+            assert len(true_allele_nodes) == 0
 
         self.nodes = {}
         self.edges = {}
@@ -447,12 +452,6 @@ class Graph:
         self.height = self.unscaled_height * self.scaley
 
 
-    # Set predicted two allele nodes
-    def set_allele_nodes(self, allele_nodes):
-        assert len(allele_nodes) > 0
-        self.allele_nodes = allele_nodes
-        
-
     # Add node, which is an alignment w.r.t. the reference
     def add_node(self, id, node, simulation = False):
         if simulation:
@@ -464,6 +463,7 @@ class Graph:
         assert id not in self.nodes
         self.nodes[id] = node
 
+        
     # Generate edges based on the overlapping information between nodes
     def generate_raw_edges(self, overlap_pct = 0.1):
         assert len(self.nodes) > 0
@@ -493,7 +493,7 @@ class Graph:
                     node_vars += mate_node.get_var_ids(self.gene_vars)
                 node_vars = set(node_vars)
                 max_alleles, max_common = set(), -sys.maxint
-                for anode in self.allele_nodes.values():
+                for anode in self.predicted_allele_nodes.values():
                     allele_vars = anode.get_var_ids(self.gene_vars, node.left, node.right)
                     if mate_id in self.nodes:
                         allele_vars += anode.get_var_ids(self.gene_vars, mate_node.left, mate_node.right)
@@ -593,13 +593,20 @@ class Graph:
                         continue
                     add_avoid_nodes |= set([id3 for id3, _ in self.to_node[id2]])
                 avoid_nodes |= add_avoid_nodes
-                                  
+
+            overlap_node_count = 0
+            if id in self.to_node:
+                overlap_node_count = len(self.to_node[id])
             for j in range(i + 1, len(nodes)):
                 id2, left2, right2 = nodes[j]
                 if id2 in avoid_nodes:
                     continue
                 if right > left2:
-                    continue
+                    overlap_node_count += 1
+                    if overlap_node_count >= 2:
+                        break
+                    else:
+                        continue
                     # DK - debugging purposes
                     """
                     node2 = self.nodes[id2]
@@ -734,7 +741,7 @@ class Graph:
 
         
     # Generate edges based on the overlapping information between nodes
-    def generate_edges(self, overlap_pct = 0.8, jump_edges = False):
+    def generate_edges(self, overlap_pct = 0.5, jump_edges = False):
         self.generate_raw_edges(overlap_pct)
         if jump_edges:
             self.generate_jump_edges()
@@ -927,7 +934,7 @@ class Graph:
                     continue
 
                 # Special case for one allele simulation
-                if len(self.allele_nodes) == 1:
+                if len(self.true_allele_nodes) == 1:
                     if len(from_ids) == 1 and len(to_ids) == 1:
                         matches.append([from_ids[0], to_ids[0], 0])
                         matches_list.append(matches)
@@ -936,6 +943,16 @@ class Graph:
                 if len(to_ids) > 2:
                     continue
                 if len(from_ids) == 1 and len(to_ids) == 1:
+                    continue
+
+                # Make sure "from" nodes precede "to" nodes
+                precede = True
+                for from_id in from_ids:
+                    for to_id in to_ids:
+                        if self.nodes[from_id].left >= self.nodes[to_id].left:
+                            precede = False
+                            break
+                if not precede:
                     continue
 
                 mates = []                    
@@ -963,11 +980,12 @@ class Graph:
                     sys.exit(1)
                 """
 
+                mult = 2 if mate else 1
                 if len(from_ids) == 1 and len(to_ids) == 2:
                     if from_ids[0] == sorted_nodes[0][0]:
-                        if mates[0][0] > mates[0][1]:
+                        if mates[0][0] > mates[0][1] * mult:
                             matches.append([from_ids[0], to_ids[0], mates[0][0]])
-                        elif mates[0][0] < mates[0][1]:
+                        elif mates[0][0] * mult < mates[0][1]:
                             matches.append([from_ids[0], to_ids[1], mates[0][1]])
                         else:
                             matches.append([from_ids[0], to_ids[0], mates[0][0]])
@@ -977,9 +995,9 @@ class Graph:
                             matches.append([from_ids[0], to_id, 0])
                 elif len(from_ids) == 2 and len(to_ids) == 1:
                     if to_ids[0] == sorted_nodes[-1][0]:
-                        if mates[0][0] > mates[1][0]:
+                        if mates[0][0] > mates[1][0] * mult:
                             matches.append([from_ids[0], to_ids[0], mates[0][0]])
-                        elif mates[0][0] < mates[1][0]:
+                        elif mates[0][0] * mult < mates[1][0]:
                             matches.append([from_ids[1], to_ids[0], mates[1][0]])
                         elif mates[0][0] > 0:
                             matches.append([from_ids[0], to_ids[0], mates[0][0]])
@@ -988,36 +1006,42 @@ class Graph:
                     assert len(from_ids) == 2 and len(to_ids) == 2
                     score00 = mates[0][0] + mates[1][1]
                     score01 = mates[0][1] + mates[1][0]
-                    if score00 > score01:
+                    if (mate and score00 > max(2, score01 * mult)) or \
+                       (not mate and score00 > score01):
                         matches.append([from_ids[0], to_ids[0], mates[0][0]])
                         matches.append([from_ids[1], to_ids[1], mates[1][1]])
-                    elif score01 > score00:
+                    elif (mate and score01 > max(2, score00 * mult)) or \
+                         (not mate and score01 > score00):
                         matches.append([from_ids[0], to_ids[1], mates[0][1]])
                         matches.append([from_ids[1], to_ids[0], mates[1][0]])
 
                     if len(matches) != 2:
                         continue
 
-                # DK - debugging purposes
-                # """
                 if len(matches) <= 0:
                     continue
                 matches_list.append(matches)
-                debug_id = "HSQ1008:175:C0JVFACXX:6:2302:19706:8667|R"
+
+                # DK - debugging purposes
+                """
+                debug_id = "HSQ1009:116:C0J32ACXX:3:1204:7306:26074|R"
                 if debug_id in from_ids or debug_id in to_ids:
                     print >> sys.stderr, "to:", id, "has", to_ids
                     print >> sys.stderr, "from:", id, "has", from_ids
                     print >> sys.stderr, matches
                     for from_id, id, _ in matches:
-                        print >> sys.stderr, from_id; nodes[from_id].print_info()
-                        print >> sys.stderr, id; nodes[id].print_info()
-                    print >> sys.stderr
+                        nodes[from_id].print_info(sys.stderr)
+                        nodes[id].print_info(sys.stderr)
+                        print >> sys.stderr, "mates:", len(nodes[from_id].mate_ids), "vs.", len(nodes[id].mate_ids)
+                        print >> sys.stderr, "mates common", len(nodes[from_id].mate_ids & nodes[id].mate_ids)
+                    print >> sys.stderr, "mate count:", mates
+                    for from_id in from_ids:
+                        nodes[from_id].print_info(sys.stderr)
+                        print >> sys.stderr, "mates:", len(nodes[from_id].mate_ids)
+                    # print >> sys.stderr, "mates common between from nodes", len(nodes[from_ids[0]].mate_ids & nodes[from_ids[1]].mate_ids)
+                    print >> sys.stderr, "Iter:", iter
                     sys.exit(1)
-                # """
-              
-
-            if len(matches_list) <= 0:
-                break
+                """
 
             delete_nodes = set()
             for matches in matches_list:
@@ -1028,7 +1052,8 @@ class Graph:
                     if new_id in new_nodes:
                         continue
                     from_node, node = deepcopy(nodes[from_id]), nodes[id]; delete_nodes.add(from_id)
-                    from_node.id = new_id
+                    from_node.id = new_id                        
+                    
                     from_node.combine_with(node); delete_nodes.add(id)
                     new_nodes[new_id] = from_node
 
@@ -1043,20 +1068,12 @@ class Graph:
                                 True) # jump edges
             self.reduce(0.02)
 
+            if len(matches_list) <= 0:
+                break
+
             # DK - debugging purposes
-            # if iter >= 1:
-            #     break
-
-        # DK - debugging purposes
-        if False:
-            id1, id2 = "462|L-469|R", "462|L-483|L"
-            node1, node2 = self.nodes[id1], self.nodes[id2]
-            node1.print_info(sys.stdout); print
-            node2.print_info(sys.stdout); print
-            at, overlap = node1.overlap_with(node2, self.gene_vars, True)
-            print "at %d with overlap of %d" % (at, overlap)
-            sys.exit(1)
-
+            # if iter >= 2:
+            #    break
 
         # DK - debugging purposes
         # """
@@ -1078,8 +1095,8 @@ class Graph:
 
             
     # Assemble by aligning to known alleles
-    def assemble_with_alleles(self, allele_nodes):
-        self.informed_assemble({"allele" : True, "alleles" : allele_nodes})
+    def assemble_with_alleles(self):
+        self.informed_assemble({"allele" : True, "alleles" : self.predicted_allele_nodes})
 
 
     # Compare nodes and get information
@@ -1418,7 +1435,7 @@ class Graph:
                     print >> js_file, r'ctx.fill();'
             return allele_nodes, seqs, colors
 
-        allele_nodes, seqs, colors = draw_alleles(self.allele_nodes,
+        allele_nodes, seqs, colors = draw_alleles(self.true_allele_nodes if self.simulation else self.predicted_allele_nodes,
                                                   allele_node_colors)
         draw_alleles(self.display_allele_nodes,
                      ["#FFF5EE"],
@@ -1451,7 +1468,11 @@ class Graph:
                     allele_node_id, allele_left, allele_right = allele_nodes[a]
                     if right - left <= 500 and (left < allele_left or right > allele_right):
                         continue
-                    allele_vars = self.allele_nodes[allele_node_id].get_var_ids(self.gene_vars, left, right)
+                    if self.simulation:
+                        allele_node = self.true_allele_nodes[allele_node_id]
+                    else:
+                        allele_node = self.predicted_allele_nodes[allele_node_id]
+                    allele_vars = allele_node.get_var_ids(self.gene_vars, left, right)
                     common_vars = set(node_var_ids) & set(allele_vars)
                     tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
                     if max_common < tmp_common:
@@ -1624,12 +1645,11 @@ class Graph:
                             continue
                         
                     filtered_haplotypes[haplotype] = haplotypes[haplotype]
-                    for node_ids in haplotypes.values():
-                        for node_id in node_ids:
-                            if node_id not in new_supported_node_ids:
-                                new_supported_node_ids[node_id] = len(node_ids)
-                            else:
-                                new_supported_node_ids[node_id] = max(supported_node_ids[node_id], len(node_ids))
+                    for node_id in haplotypes[haplotype]:
+                        if node_id not in new_supported_node_ids:
+                            new_supported_node_ids[node_id] = len(node_ids)
+                        else:
+                            new_supported_node_ids[node_id] = max(supported_node_ids[node_id], len(node_ids))
 
                 if len(filtered_haplotypes) > 0:
                     new_window_list.append([w_left, w_right, filtered_haplotypes])

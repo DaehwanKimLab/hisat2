@@ -924,7 +924,7 @@ def get_mpileup(alignview_cmd,
             for nt, count in nt_dic.items():
                 if nt not in "ACGT":
                     continue
-                if count >= num_nt * 0.25 or count >= 8:
+                if count >= num_nt * 0.2 or count >= 7:
                     nt_set.append(nt)
         mpileup[i][0] = nt_set
 
@@ -1106,6 +1106,7 @@ def typing(ex_path,
            aligners,
            num_editdist,
            assembly,
+           assembly_base,
            error_correction,
            allow_discordant,
            display_alleles,
@@ -1286,6 +1287,7 @@ def typing(ex_path,
                                              ref_exons,
                                              partial_alleles,
                                              true_allele_nodes,
+                                             {}, # predicted_allele_nodes, which is empty for now
                                              display_allele_nodes,
                                              simulation)
 
@@ -2048,26 +2050,27 @@ def typing(ex_path,
 
             if index_type == "graph" and assembly:
                 allele_node_order = []
-                if not simulation:
-                    predicted_allele_nodes = {}
-                    for allele_name, prob in HLA_prob:
-                        assert allele_name in allele_nodes
-                        assert allele_name not in predicted_allele_nodes
-                        predicted_allele_nodes[allele_name] = allele_nodes[allele_name]
-                        allele_node_order.append([allele_name, prob])
-                        if len(predicted_allele_nodes) >= 2:
-                            break
-                    asm_graph.set_allele_nodes(predicted_allele_nodes)
-                    asm_graph.allele_node_order = allele_node_order
+                predicted_allele_nodes = {}
+                for allele_name, prob in HLA_prob:
+                    if prob < 0.1: # abundance of 10%
+                        break
+                    assert allele_name in allele_nodes
+                    assert allele_name not in predicted_allele_nodes
+                    predicted_allele_nodes[allele_name] = allele_nodes[allele_name]
+                    allele_node_order.append([allele_name, prob])
+                    if len(predicted_allele_nodes) >= 2:
+                        break
+                asm_graph.predicted_allele_nodes = predicted_allele_nodes
+                asm_graph.allele_node_order = allele_node_order
 
                 # Filter out nodes
                 asm_graph.filter_nodes()
 
                 # Generate edges
-                asm_graph.generate_edges(0.5)
+                asm_graph.generate_edges()
 
                 # Start drawing assembly graph
-                asm_graph.begin_draw("assembly_graph")
+                asm_graph.begin_draw(assembly_base)
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(0, "Initial graph")
@@ -2088,15 +2091,15 @@ def typing(ex_path,
                 begin_y += 200
 
                 # DK - debugging purposes
-                """
+                # """
 
-                asm_graph.assemble_with_alleles(allele_nodes)
+                asm_graph.assemble_with_alleles()
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Graph with alleles")
 
 
-                """
+                # """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
@@ -2387,6 +2390,7 @@ def test_HLA_genotyping(base_fname,
                         perbase_snprate,
                         skip_fragment_regions,
                         assembly,
+                        assembly_base,
                         error_correction,
                         discordant,
                         display_alleles,
@@ -2687,6 +2691,7 @@ def test_HLA_genotyping(base_fname,
                                      aligners,
                                      num_editdist,
                                      assembly,
+                                     assembly_base,
                                      error_correction,
                                      discordant,
                                      display_alleles,
@@ -2730,6 +2735,7 @@ def test_HLA_genotyping(base_fname,
                aligners,
                num_editdist,
                assembly,
+               assembly_base,
                error_correction,
                discordant,
                display_alleles,
@@ -2844,6 +2850,11 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="e.g., test_id:10,read_id:10000,basic_test")
+    parser.add_argument("--assembly-base",
+                        dest="assembly_base",
+                        type=str,
+                        default="assembly_graph",
+                        help="base file name (default: assembly_graph)")
     parser.add_argument("--no-assembly",
                         dest="assembly",
                         action="store_false",
@@ -2937,6 +2948,7 @@ if __name__ == '__main__':
                         args.perbase_snprate,
                         skip_fragment_regions,
                         args.assembly,
+                        args.assembly_base,
                         args.error_correction,
                         args.discordant,
                         display_alleles,

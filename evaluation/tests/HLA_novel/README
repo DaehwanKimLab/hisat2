@@ -26,7 +26,9 @@ HISAT-genotye on Illumina Platinum Genomes
    
    ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_A/NA12892.extracted.1.fq.gz,ILMN_A/NA12892.extracted.2.fq.gz --display-alleles A*02:01:01:01,A*11:01:01:01
 
-   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz 
+   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz
+
+   for i in `ls -l ILMN/NA128*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisat2_test_HLA_genotyping.py --hla-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/$i.extracted.1.fq.gz,ILMN/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
 
 
 
