@@ -1916,8 +1916,8 @@ class Graph:
                 print "\t%d:" % v, kmer_seq, len(read_ids), predecessors, read_ids
 
             # DK - debugging purposes
-            # if i > 500:
-            #    break
+            if i > 500:
+                break
         """
 
         # Generate compressed nodes
@@ -1968,6 +1968,10 @@ class Graph:
             done.add(i_str)
 
             num_ids = set(num_ids)
+            paths.append([i, j, num_ids])
+
+
+        def get_mate_num_ids(num_ids):
             mate_num_ids = set()
             for num_id in num_ids:
                 read_id = num_to_id[num_id]
@@ -1975,8 +1979,9 @@ class Graph:
                 if mate_read_id in id_to_num:
                     mate_num_id = id_to_num[mate_read_id]
                     mate_num_ids.add(mate_num_id)
-                        
-            paths.append([i, j, num_ids, mate_num_ids])
+                    
+            return mate_num_ids
+        
 
         # Generate a compressed assembly graph
         def path_cmp(a, b):
@@ -1986,38 +1991,40 @@ class Graph:
                 return a[1] - b[1]
         paths = sorted(paths, cmp=path_cmp)
 
-        left_dic, right_dic = {}, {}
-        for p in range(len(paths)):
-            left, right, num_ids  = paths[p][:3]
-
-            # print "%d: [%d, %d] : %d" % (p, left, right, len(num_ids))
-            
-            if left not in left_dic:
-                left_dic[left] = [p]
-            else:
-                left_dic[left].append(p)
-            if right not in right_dic:
-                right_dic[right] = [p]
-            else:
-                right_dic[right].append(p)
-
+        excl_num_ids = set() # exclusive num ids
         equiv_list = []
         p = 0
         while p < len(paths):
-            left, right, num_ids = paths[p][:3]
+            left, right, num_ids = paths[p]
             p2 = p + 1
             while p2 < len(paths):
-                next_left, next_right, next_num_ids = paths[p2][:3]
+                next_left, next_right, next_num_ids = paths[p2]
                 if next_left >= right:
                     break
                 p2 += 1
 
             equiv_list.append([])
             for i in range(p, p2):
-                left, right, num_ids, mate_num_ids = paths[i]
-                equiv_list[-1].append([[i], num_ids | mate_num_ids])
+                left, right, num_ids = paths[i]
+                equiv_list[-1].append([[i], num_ids, num_ids | get_mate_num_ids(num_ids)])
+                if p + 1 < p2:
+                    excl_num_ids |= num_ids
 
             p = p2
+
+        new_equiv_list = []
+        for classes in equiv_list:
+            if len(classes) > 1:
+                new_equiv_list.append(classes)
+                continue
+            assert len(classes) == 1
+            num_ids = classes[0][1] - excl_num_ids
+            if len(num_ids) <= 0:
+                continue
+            classes[0][1] = num_ids
+            classes[0][2] = get_mate_num_ids(classes[0][1])
+            new_equiv_list.append(classes)
+        equiv_list = new_equiv_list
 
         while True:
             # DK - debugging purposes
@@ -2025,8 +2032,8 @@ class Graph:
             for i in range(len(equiv_list)):
                 classes = equiv_list[i]
                 for j in range(len(classes)):
-                    ids, num_ids = classes[j]
-                    print i, j, ids, len(num_ids)
+                    ids, num_ids, all_ids = classes[j]
+                    print i, j, ids, len(num_ids), sorted(list(num_ids))[:20]
 
                 print
             """
@@ -2039,9 +2046,9 @@ class Graph:
                     common_mat = []
                     for j in range(len(classes)):
                         common_mat.append([])
-                        ids = classes[j][1]
+                        ids = classes[j][2]
                         for j2 in range(len(classes2)):
-                            ids2 = classes2[j2][1]
+                            ids2 = classes2[j2][2]
                             common_mat[-1].append(len(ids & ids2))
 
                     # Calculate stat
@@ -2066,38 +2073,41 @@ class Graph:
             
             if best_stat < 0:
                 break
-            
+
             # DK - for the moment
             mat = best_common_mat
             classes, classes2 = equiv_list[best_i], equiv_list[best_i2]
             assert len(classes) <= 2 and len(classes2) <= 2
             if len(classes) == 1 and len(classes2) == 1:
                 classes[0][0] = sorted(classes[0][0] + classes2[0][0])
-                classes[0][1] = classes[0][1] | classes2[0][1]
+                classes[0][1] |= classes2[0][1]
             elif len(classes) == 1:
                 classes.append(deepcopy(classes[0]))
                 classes[0][0] = sorted(classes[0][0] + classes2[0][0])
-                classes[0][1] = classes[0][1] | classes2[0][1]
+                classes[0][1] |= classes2[0][1]
                 classes[1][0] = sorted(classes[1][0] + classes2[1][0])
-                classes[1][1] = classes[1][1] | classes2[1][1]
+                classes[1][1] |= classes2[1][1]
             elif len(classes2) == 1:
                 classes[0][0] = sorted(classes[0][0] + classes2[0][0])
-                classes[0][1] = classes[0][1] | classes2[0][1]
+                classes[0][1] |= classes2[0][1]
                 classes[1][0] = sorted(classes[1][0] + classes2[0][0])
-                classes[1][1] = classes[1][1] | classes2[0][1]
+                classes[1][1] |= classes2[0][1]
             else:                
                 score00 = mat[0][0] + mat[1][1]
                 score01 = mat[0][1] + mat[1][0]
                 if score00 > score01:
                     classes[0][0] = sorted(classes[0][0] + classes2[0][0])
-                    classes[0][1] = classes[0][1] | classes2[0][1]
+                    classes[0][1] |= classes2[0][1]
                     classes[1][0] = sorted(classes[1][0] + classes2[1][0])
-                    classes[1][1] = classes[1][1] | classes2[1][1]
+                    classes[1][1] |= classes2[1][1]
                 else:
                     classes[0][0] = sorted(classes[0][0] + classes2[1][0])
-                    classes[0][1] = classes[0][1] | classes2[1][1]
+                    classes[0][1] |= classes2[1][1]
                     classes[1][0] = sorted(classes[1][0] + classes2[0][0])
-                    classes[1][1] = classes[1][1] | classes2[0][1]
+                    classes[1][1] |= classes2[0][1]
+
+            for c in range(len(classes)):
+                classes[c][2] = get_mate_num_ids(classes[c][1])
             
             equiv_list = equiv_list[:best_i2] + equiv_list[best_i2+1:]
 
@@ -2105,8 +2115,12 @@ class Graph:
         for i in range(len(equiv_list)):
             classes = equiv_list[i]
             for j in range(len(classes)):
-                ids, num_ids = classes[j]
+                ids, num_ids, all_ids = classes[j]
                 num_ids = sorted(list(num_ids))
+
+                # DK - debugging purposes
+                print i, j, num_ids
+                
                 assert (num_ids) > 0
                 read_id = num_to_id[num_ids[0]]
                 node = deepcopy(self.nodes[read_id])
@@ -2116,6 +2130,7 @@ class Graph:
                     node.combine_with(node2)
 
                 new_read_id = "(%d-%d)%s" % (i, j, read_id)
+                node.id = new_read_id
                 new_read_id not in new_nodes
                 new_nodes[new_read_id] = node
         self.nodes = new_nodes            

@@ -2064,7 +2064,7 @@ def typing(ex_path,
                 asm_graph.allele_node_order = allele_node_order
 
                 # DK - debugging purposes
-                use_debruijn = False
+                use_debruijn = True
                 
                 # Start drawing assembly graph
                 asm_graph.begin_draw(assembly_base)
