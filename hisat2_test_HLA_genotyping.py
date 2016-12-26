@@ -2063,32 +2063,46 @@ def typing(ex_path,
                 asm_graph.predicted_allele_nodes = predicted_allele_nodes
                 asm_graph.allele_node_order = allele_node_order
 
-                # Filter out nodes
-                asm_graph.filter_nodes()
+                # DK - debugging purposes
+                use_debruijn = False
+                
+                # Start drawing assembly graph
+                asm_graph.begin_draw(assembly_base)
+
+                if not use_debruijn:
+                    # Filter out nodes
+                    asm_graph.filter_nodes()
 
                 # Generate edges
                 asm_graph.generate_edges()
 
-                # Start drawing assembly graph
-                asm_graph.begin_draw(assembly_base)
-
                 # Draw assembly graph
                 begin_y = asm_graph.draw(0, "Initial graph")
                 begin_y += 200
+                
+                if use_debruijn:
+                    # Apply De Bruijn graph
+                    asm_graph.build_guided_DeBruijn()
+                    asm_graph.generate_edges()
 
-                # Reduce graph
-                asm_graph.reduce()
+                    # Draw assembly graph
+                    begin_y = asm_graph.draw(begin_y, "Asssembly")
+                    begin_y += 200
 
-                # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y, "Unitigs")
-                begin_y += 200
+                else:
+                    # Reduce graph
+                    asm_graph.reduce()
 
-                # Further reduce graph with mate pairs
-                asm_graph.assemble_with_mates()
+                    # Draw assembly graph
+                    begin_y = asm_graph.draw(begin_y, "Unitigs")
+                    begin_y += 200
 
-                # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y, "Graph with mate pairs")
-                begin_y += 200
+                    # Further reduce graph with mate pairs
+                    asm_graph.assemble_with_mates()
+
+                    # Draw assembly graph
+                    begin_y = asm_graph.draw(begin_y, "Graph with mate pairs")
+                    begin_y += 200
 
                 # DK - debugging purposes
                 # """

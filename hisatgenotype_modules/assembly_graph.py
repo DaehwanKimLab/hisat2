@@ -3,6 +3,7 @@
 import sys
 import math, random
 from datetime import datetime, date, time
+from collections import deque
 from copy import deepcopy
 
 
@@ -1743,6 +1744,384 @@ class Graph:
         for node_id in self.nodes.keys():
             if node_id not in supported_node_ids:
                 del self.nodes[node_id]
+
+
+    #
+    # Identify haplotypes, which is work in progress
+    def build_guided_DeBruijn(self):
+        assert len(self.nodes) > 0
+        k = 60 # k-mer
+
+        while True:
+            delete_ids = set()
+            nodes = []
+            for id, node in self.nodes.items():
+                s, kmer = 0, []
+                while s < len(node.seq) and len(kmer) < k:
+                    nt_dic = node.seq[s] # {'C': [1, '']}
+                    nt = get_major_nt(nt_dic)
+                    if nt in "ACGTND":
+                        kmer.append(nt)
+                    else:
+                        assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
+                    s += 1
+
+                if len(kmer) != k:
+                    continue
+                nodes.append([id, node.left, node.right, kmer, node.seq, s])
+            def node_cmp(a, b):
+                if a[1] != b[1]:
+                    return a[1] - b[1]
+                else:
+                    return a[2] - b[2]
+            nodes = sorted(nodes, cmp=node_cmp)
+
+            # Generate numerical read IDs
+            id_to_num = {}
+            num_to_id = []
+            for id in [node[0] for node in nodes]:
+                id_to_num[id] = len(id_to_num)
+                num_to_id.append(id)
+
+            # Construct De Bruijn graph with 80-mer
+            self.debruijn = debruijn = [[] for i in range(len(self.backbone) - k + 1)]
+            min_n = 0
+            for pos in range(len(debruijn)):
+                for n in range(min_n, len(nodes)):
+                    id, node_pos, node_right, kmer, seq, s = nodes[n]
+                    if node_pos < pos:
+                        min_n = n + 1
+                        continue
+                    elif node_pos > pos:
+                        break
+
+                    assert len(kmer) == k
+                    num_id = id_to_num[id]
+
+                    # Add a new node or update the De Bruijn graph
+                    curr_vertices = debruijn[pos]
+                    found = False
+                    kmer_seq = ''.join(kmer)
+                    for v in range(len(curr_vertices)):
+                        cmp_nt, cmp_k_m1_mer = curr_vertices[v][:2]
+                        if kmer_seq == cmp_k_m1_mer + cmp_nt:                        
+                            curr_vertices[v][3].append(num_id)
+                            found = True
+                            break
+
+                    if not found:
+                        predecessors = []
+                        if pos > 0:
+                            prev_vertices = debruijn[pos - 1]
+                            for v in range(len(prev_vertices)):
+                                cmp_nt, cmp_k_m1_mer = prev_vertices[v][:2]
+                                if kmer_seq[:-1] == cmp_k_m1_mer[1:] + cmp_nt:
+                                    predecessors.append(v)
+                        debruijn[pos].append([kmer_seq[-1],           # base
+                                              ''.join(kmer_seq[:-1]), # (k-1)-mer
+                                              predecessors,           # predecessors
+                                              [num_id]])              # numeric read IDs
+
+                    # Update k-mer
+                    kmer = kmer[1:]
+                    while s < len(seq) and len(kmer) < k:
+                        nt_dic = seq[s] # {'C': [1, '']}
+                        nt = get_major_nt(nt_dic)
+                        if nt in "ACGTND":
+                            kmer.append(nt)
+                        else:
+                            assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
+                        s += 1
+
+                    if len(kmer) == k:
+                        nodes[n] = [id, node_pos + 1, node_right, kmer, seq, s]
+
+            # Filter out reads
+            for pos in range(len(debruijn)):
+                vertices = debruijn[pos]
+                num_vertices = 0
+                for v in range(len(vertices)):
+                    _, _, predecessors, num_ids = vertices[v]
+                    if not (set(num_ids) <= delete_ids):
+                        num_vertices += 1
+                if num_vertices <= 2:
+                    continue
+                
+                vertice_count = [0] * len(vertices)
+                for v in range(len(vertices)):
+                    _, _, predecessors, num_ids = vertices[v]
+                    for num_id in num_ids:
+                        if num_id in delete_ids:
+                            continue
+                        read_id = num_to_id[num_id]
+                        mate_read_id = get_mate_node_id(read_id)
+                        if mate_read_id in self.nodes:
+                            vertice_count[v] += 1
+
+                # DK - debugging purposes
+                debug_msg = False
+                if debug_msg:
+                    print "at", pos, vertices
+                    print "count:", vertice_count
+
+                for v in range(len(vertices)):
+                    if vertice_count[v] * 3 < (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1):
+                        num_ids = vertices[v][3]
+                        delete_ids |= set(num_ids)
+                        if debug_msg:
+                            print v, "is removed with", num_ids
+
+                if debug_msg:
+                    print
+                    print                        
+                
+            if len(delete_ids) == 0:
+                break
+
+            for num_id in delete_ids:
+                read_id = num_to_id[num_id]
+                del self.nodes[read_id]
+
+        # Print De Bruijn graph
+        """
+        for i in range(len(debruijn)):
+            curr_vertices = debruijn[i]
+            if len(curr_vertices) == 0:
+                continue
+            consensus_seq = [{} for j in range(k)]
+            for v in range(len(curr_vertices)):
+                nt, k_m1_mer = curr_vertices[v][:2]
+                kmer = k_m1_mer + nt
+                assert len(kmer) == k
+                for j in range(k):
+                    nt = kmer[j]
+                    if nt not in consensus_seq[j]:
+                        consensus_seq[j][nt] = 1
+                    else:
+                        consensus_seq[j][nt] += 1
+
+            print i
+            for v in range(len(curr_vertices)):
+                nt, k_m1_mer, predecessors, read_ids = curr_vertices[v]
+                kmer = k_m1_mer + nt
+                kmer_seq = ""
+                for j in range(k):
+                    nt = kmer[j]
+                    if len(consensus_seq[j]) >= 2:
+                        kmer_seq += "\033[94m"
+                    kmer_seq += nt
+                    if len(consensus_seq[j]) >= 2:
+                        kmer_seq += "\033[00m"
+                    
+                print "\t%d:" % v, kmer_seq, len(read_ids), predecessors, read_ids
+
+            # DK - debugging purposes
+            # if i > 500:
+            #    break
+        """
+
+        # Generate compressed nodes
+        paths = []
+        path_queue, done = deque(), set()
+        for i in range(len(debruijn)):
+            if len(debruijn[i]) == 0:
+                continue
+            for i2 in range(len(debruijn[i])):
+                path_queue.append("%d-%d" % (i, i2))
+            break
+
+        while len(path_queue) > 0:
+            i_str = path_queue.popleft()
+            if i_str in done:
+                continue
+            
+            i, i2 = i_str.split('-')
+            i, i2 = int(i), int(i2)
+            num_ids = debruijn[i][i2][3]
+            j = i + 1
+            while j < len(debruijn):
+                merge, branch = False, False
+                new_i2 = -1
+                tmp_num_ids = []
+                for j2 in range(len(debruijn[j])):
+                    _, _, predecessors, add_read_ids = debruijn[j][j2]
+                    if i2 in predecessors:
+                        # merge into one node
+                        if len(predecessors) > 1:
+                            merge = True
+                        if new_i2 >= 0:
+                            branch = True
+                        new_i2 = j2
+                        tmp_num_ids += add_read_ids
+                        
+                if merge or branch:
+                    for j2 in range(len(debruijn[j])):
+                        _, _, predecessors, add_num_ids = debruijn[j][j2]
+                        if i2 in predecessors:
+                            path_queue.append("%d-%d" % (j, j2))
+                    break
+                
+                num_ids += tmp_num_ids
+                i2 = new_i2
+                j += 1
+
+            done.add(i_str)
+
+            num_ids = set(num_ids)
+            mate_num_ids = set()
+            for num_id in num_ids:
+                read_id = num_to_id[num_id]
+                mate_read_id = get_mate_node_id(read_id)
+                if mate_read_id in id_to_num:
+                    mate_num_id = id_to_num[mate_read_id]
+                    mate_num_ids.add(mate_num_id)
+                        
+            paths.append([i, j, num_ids, mate_num_ids])
+
+        # Generate a compressed assembly graph
+        def path_cmp(a, b):
+            if a[0] != b[0]:
+                return a[0] - b[0]
+            else:
+                return a[1] - b[1]
+        paths = sorted(paths, cmp=path_cmp)
+
+        left_dic, right_dic = {}, {}
+        for p in range(len(paths)):
+            left, right, num_ids  = paths[p][:3]
+
+            # print "%d: [%d, %d] : %d" % (p, left, right, len(num_ids))
+            
+            if left not in left_dic:
+                left_dic[left] = [p]
+            else:
+                left_dic[left].append(p)
+            if right not in right_dic:
+                right_dic[right] = [p]
+            else:
+                right_dic[right].append(p)
+
+        equiv_list = []
+        p = 0
+        while p < len(paths):
+            left, right, num_ids = paths[p][:3]
+            p2 = p + 1
+            while p2 < len(paths):
+                next_left, next_right, next_num_ids = paths[p2][:3]
+                if next_left >= right:
+                    break
+                p2 += 1
+
+            equiv_list.append([])
+            for i in range(p, p2):
+                left, right, num_ids, mate_num_ids = paths[i]
+                equiv_list[-1].append([[i], num_ids | mate_num_ids])
+
+            p = p2
+
+        while True:
+            # DK - debugging purposes
+            """
+            for i in range(len(equiv_list)):
+                classes = equiv_list[i]
+                for j in range(len(classes)):
+                    ids, num_ids = classes[j]
+                    print i, j, ids, len(num_ids)
+
+                print
+            """
+            
+            best_common_mat, best_stat, best_i, best_i2 = [], -sys.maxint, -1, -1
+            for i in range(len(equiv_list) - 1):
+                classes = equiv_list[i]
+                for i2 in range(i + 1, len(equiv_list)):
+                    classes2 = equiv_list[i2]
+                    common_mat = []
+                    for j in range(len(classes)):
+                        common_mat.append([])
+                        ids = classes[j][1]
+                        for j2 in range(len(classes2)):
+                            ids2 = classes2[j2][1]
+                            common_mat[-1].append(len(ids & ids2))
+
+                    # Calculate stat
+                    common_stat = 0
+                    if len(classes) == 1 or len(classes2) == 1:
+                        for row in common_mat:
+                            common_stat += sum(row)
+                    else:
+                        for row in common_mat:
+                            sorted_row = sorted(row, reverse=True)
+                            common_stat += (sorted_row[0] - sorted_row[1])
+
+                    if common_stat > best_stat:
+                        best_common_mat, best_stat, best_i, best_i2 = common_mat,  common_stat, i, i2
+
+            # DK - debugging purposes
+            """
+            print "best:", best_i, best_i2, best_stat, best_common_mat
+            print
+            print
+            """
+            
+            if best_stat < 0:
+                break
+            
+            # DK - for the moment
+            mat = best_common_mat
+            classes, classes2 = equiv_list[best_i], equiv_list[best_i2]
+            assert len(classes) <= 2 and len(classes2) <= 2
+            if len(classes) == 1 and len(classes2) == 1:
+                classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                classes[0][1] = classes[0][1] | classes2[0][1]
+            elif len(classes) == 1:
+                classes.append(deepcopy(classes[0]))
+                classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                classes[0][1] = classes[0][1] | classes2[0][1]
+                classes[1][0] = sorted(classes[1][0] + classes2[1][0])
+                classes[1][1] = classes[1][1] | classes2[1][1]
+            elif len(classes2) == 1:
+                classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                classes[0][1] = classes[0][1] | classes2[0][1]
+                classes[1][0] = sorted(classes[1][0] + classes2[0][0])
+                classes[1][1] = classes[1][1] | classes2[0][1]
+            else:                
+                score00 = mat[0][0] + mat[1][1]
+                score01 = mat[0][1] + mat[1][0]
+                if score00 > score01:
+                    classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                    classes[0][1] = classes[0][1] | classes2[0][1]
+                    classes[1][0] = sorted(classes[1][0] + classes2[1][0])
+                    classes[1][1] = classes[1][1] | classes2[1][1]
+                else:
+                    classes[0][0] = sorted(classes[0][0] + classes2[1][0])
+                    classes[0][1] = classes[0][1] | classes2[1][1]
+                    classes[1][0] = sorted(classes[1][0] + classes2[0][0])
+                    classes[1][1] = classes[1][1] | classes2[0][1]
+            
+            equiv_list = equiv_list[:best_i2] + equiv_list[best_i2+1:]
+
+        new_nodes = {}
+        for i in range(len(equiv_list)):
+            classes = equiv_list[i]
+            for j in range(len(classes)):
+                ids, num_ids = classes[j]
+                num_ids = sorted(list(num_ids))
+                assert (num_ids) > 0
+                read_id = num_to_id[num_ids[0]]
+                node = deepcopy(self.nodes[read_id])
+                for num_id2 in num_ids[1:]:
+                    read_id2 = num_to_id[num_id2]
+                    node2 = self.nodes[read_id2]
+                    node.combine_with(node2)
+
+                new_read_id = "(%d-%d)%s" % (i, j, read_id)
+                new_read_id not in new_nodes
+                new_nodes[new_read_id] = node
+        self.nodes = new_nodes            
+            
+        # DK - debugging purposes
+        # sys.exit(1)
 
 
         
