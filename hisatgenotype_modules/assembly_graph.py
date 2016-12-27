@@ -239,16 +239,18 @@ class Node:
             for k in range(other.left - self.right - 1):
                 ref_nt_dic = self.mpileup[k + 1 + self.right][1]
                 nt_dic = {}
-                if len(nt_dic) == 0:
+                if len(ref_nt_dic) == 0:
                     nt_dic = {'N' : [1, ""]}
                 else:
                     weight = flank_cov / max(1.0, sum(ref_nt_dic.values()))
-                    for nt, value in nt_dic.items():
+                    for nt, value in ref_nt_dic.items():
                         nt_dic[nt] = [value * weight, ""]
                 new_seq.append(nt_dic)
 
         # Append the rest of the other sequence
-        new_seq += other.seq[j:]
+        # DK - debugging purposes
+        # new_seq += other.seq[j:]
+        new_seq += deepcopy(other.seq[j:])
         self.read_ids |= other.read_ids
         self.mate_ids |= other.mate_ids
 
@@ -1913,7 +1915,7 @@ class Graph:
         # Print De Bruijn graph
         # """
         # for i in range(len(debruijn)):
-        for i in range(500):
+        for i in range(200):
             curr_vertices = debruijn[i]
             if len(curr_vertices) == 0:
                 continue
@@ -2142,36 +2144,6 @@ class Graph:
                     new_mat.append(row)
                 return classes[:c] + classes[c+1:], new_mat
                 
-            """
-            if len(classes) > 2:
-                sum_mat = [[max(mat[r]), r] for r in range(len(mat))]
-                print "DK:", sum_mat
-                print "DK:", sorted(sum_mat, key=labmda a: a[0])
-                print "DK:", classses, mat
-                keep = sorted([sum_mat[0][0], sum_mat[0][1]])
-                classes = [classes[keep[0]], classes[keep[1]]]
-                mat = [mat[keep[0]], mat[keep[1]]]
-                print "DK:", classes, mat
-                assert False
-                
-            if len(classes2) > 2:
-                sum_mat = []
-                for c in range(len(classes2)):
-                    entries = []
-                    for r in range(len(classes)):
-                        entries.append(mat[r][c])
-                    sum_mat.append([max(entries), c])                
-                print "DK:", sum_mat
-                print "DK:", sorted(sum_mat, key=labmda a: a[0])
-                print "DK:", classes2, mat
-                keep = sorted([sum_mat[0][0], sum_mat[0][1]])
-                classes2 = [classes2[keep[0]], classes2[keep[1]]]
-                for r in range(len(mat)):
-                    mat[r] = [mat[r][keep[0]], mat[r][keep[1]]]
-                print "DK:", classes2, mat
-                assert False
-            """
-            
             assert len(classes) <= 2 and len(classes2) <= 2
             if len(classes) == 2 and len(classes2) == 2:
                 # Check row
@@ -2208,10 +2180,22 @@ class Graph:
                     classes[0][1] |= classes2[1][1]
                 else:
                     classes.append(deepcopy(classes[0]))
-                    classes[0][0] = sorted(classes[0][0] + classes2[0][0])
-                    classes[0][1] |= classes2[0][1]
-                    classes[1][0] = sorted(classes[1][0] + classes2[1][0])
-                    classes[1][1] |= classes2[1][1]
+                    # Handle a special case at 5' end
+                    if 0 in classes[0][0] and len(classes[0][0]) == 1 and mat[0][0] != mat[0][1]:
+                        if mat[0][0] > mat[0][1]:
+                            classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                            classes[0][1] |= classes2[0][1]
+                            classes[1] = classes2[1]
+                        else:
+                            assert mat[0][1] > mat[0][0]
+                            classes[0] = classes2[0]
+                            classes[1][0] = sorted(classes[1][0] + classes2[1][0])
+                            classes[1][1] |= classes2[1][1]
+                    else:
+                        classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                        classes[0][1] |= classes2[0][1]
+                        classes[1][0] = sorted(classes[1][0] + classes2[1][0])
+                        classes[1][1] |= classes2[1][1]
             elif len(classes2) == 1:
                 if mat[0][0] > max(2, mat[1][0] * 6):
                     classes[0][0] = sorted(classes[0][0] + classes2[0][0])
