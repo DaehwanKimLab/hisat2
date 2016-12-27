@@ -2105,15 +2105,14 @@ def typing(ex_path,
                     begin_y += 200
 
                 # DK - debugging purposes
-                # """
+                """
 
                 asm_graph.assemble_with_alleles()
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Graph with alleles")
 
-
-                # """
+                """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
@@ -2142,8 +2141,7 @@ def typing(ex_path,
                                     print >> sys.stderr, "***", cmp_var_id, cmp_var, "==", "\t\t\t", mpileup[cmp_var[1]]
                             var_i += 1
                         else:
-                            if not skip:
-                                print >> sys.stderr, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
+                            print >> sys.stderr, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
                             var_j += 1
                     
                 tmp_nodes = asm_graph.nodes

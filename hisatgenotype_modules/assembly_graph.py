@@ -1752,6 +1752,7 @@ class Graph:
         assert len(self.nodes) > 0
         k = 60 # k-mer
 
+        try_hard = False
         while True:
             delete_ids = set()
             nodes = []
@@ -1844,7 +1845,7 @@ class Graph:
                     _, _, predecessors, num_ids = vertices[v]
                     if not (set(num_ids) <= delete_ids):
                         num_vertices += 1
-                if num_vertices <= 2:
+                if num_vertices <= 1:
                     continue
                 
                 vertice_count = [0] * len(vertices)
@@ -1864,27 +1865,55 @@ class Graph:
                     print "at", pos, vertices
                     print "count:", vertice_count
 
-                for v in range(len(vertices)):
-                    if vertice_count[v] * 3 < (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1):
+                if try_hard:
+                    vertice_with_id = [[vertice_count[v], v] for v in range(len(vertice_count))]
+                    vertice_with_id = sorted(vertice_with_id, key=lambda a: a[0])
+                    for v in range(len(vertice_count) - 2):
+                        v = vertice_with_id[v][1]
                         num_ids = vertices[v][3]
                         delete_ids |= set(num_ids)
                         if debug_msg:
                             print v, "is removed with", num_ids
+                else:
+                    for v in range(len(vertices)):
+                        assert len(vertices) >= 2
+                        relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
+                        if len(vertices) == 2:
+                            # DK - working on ...
+                            None
+                            """
+                            if vertice_count[v] * 6 < relative_avg:
+                                num_ids = vertices[v][3]
+                                delete_ids |= set(num_ids)
+                                if debug_msg:
+                                    print v, "is removed with", num_ids
+                            """
+                        else:
+                            if vertice_count[v] * 3 < relative_avg:
+                                num_ids = vertices[v][3]
+                                delete_ids |= set(num_ids)
+                                if debug_msg:
+                                    print v, "is removed with", num_ids
 
                 if debug_msg:
                     print
                     print                        
                 
             if len(delete_ids) == 0:
-                break
+                if try_hard:
+                    break
+                else:
+                    try_hard = True
+            
 
             for num_id in delete_ids:
                 read_id = num_to_id[num_id]
                 del self.nodes[read_id]
 
         # Print De Bruijn graph
-        """
-        for i in range(len(debruijn)):
+        # """
+        # for i in range(len(debruijn)):
+        for i in range(500):
             curr_vertices = debruijn[i]
             if len(curr_vertices) == 0:
                 continue
@@ -1915,10 +1944,7 @@ class Graph:
                     
                 print "\t%d:" % v, kmer_seq, len(read_ids), predecessors, read_ids
 
-            # DK - debugging purposes
-            if i > 500:
-                break
-        """
+        # """
 
         # Generate compressed nodes
         paths = []
@@ -1934,18 +1960,22 @@ class Graph:
             i_str = path_queue.popleft()
             if i_str in done:
                 continue
-            
+
             i, i2 = i_str.split('-')
             i, i2 = int(i), int(i2)
             num_ids = debruijn[i][i2][3]
             j = i + 1
             while j < len(debruijn):
-                merge, branch = False, False
+                merge, branch = len(debruijn[j-1]) > len(debruijn[j]), len(debruijn[j-1]) < len(debruijn[j])
                 new_i2 = -1
                 tmp_num_ids = []
+                found = False
                 for j2 in range(len(debruijn[j])):
                     _, _, predecessors, add_read_ids = debruijn[j][j2]
-                    if i2 in predecessors:
+                    if len(predecessors) == 0:
+                        path_queue.append("%d-%d" % (j, j2))
+                    elif i2 in predecessors:
+                        found = True
                         # merge into one node
                         if len(predecessors) > 1:
                             merge = True
@@ -1953,12 +1983,14 @@ class Graph:
                             branch = True
                         new_i2 = j2
                         tmp_num_ids += add_read_ids
-                        
+
                 if merge or branch:
                     for j2 in range(len(debruijn[j])):
                         _, _, predecessors, add_num_ids = debruijn[j][j2]
                         if i2 in predecessors:
                             path_queue.append("%d-%d" % (j, j2))
+                    break
+                if not found:
                     break
                 
                 num_ids += tmp_num_ids
@@ -1970,6 +2002,14 @@ class Graph:
             num_ids = set(num_ids)
             paths.append([i, j, num_ids])
 
+            if j < len(debruijn) and len(debruijn[j]) == 0:
+                j += 1
+                while j < len(debruijn) and len(debruijn[j]) == 0:
+                    j += 1
+                if j < len(debruijn):
+                    for j2 in range(len(debruijn[j])):
+                        path_queue.append("%d-%d" % (j, j2))
+                        
 
         def get_mate_num_ids(num_ids):
             mate_num_ids = set()
@@ -1991,6 +2031,11 @@ class Graph:
                 return a[1] - b[1]
         paths = sorted(paths, cmp=path_cmp)
 
+        # DK - debugging purposes
+        for p in range(len(paths)):
+            print "path:", p, paths[p]
+        # assert False
+
         excl_num_ids = set() # exclusive num ids
         equiv_list = []
         p = 0
@@ -2008,6 +2053,7 @@ class Graph:
                 left, right, num_ids = paths[i]
                 equiv_list[-1].append([[i], num_ids, num_ids | get_mate_num_ids(num_ids)])
                 if p + 1 < p2:
+                    assert p + 2 == p2
                     excl_num_ids |= num_ids
 
             p = p2
@@ -2022,21 +2068,21 @@ class Graph:
             if len(num_ids) <= 0:
                 continue
             classes[0][1] = num_ids
-            classes[0][2] = get_mate_num_ids(classes[0][1])
+            classes[0][2] = num_ids | get_mate_num_ids(num_ids)
             new_equiv_list.append(classes)
         equiv_list = new_equiv_list
 
         while True:
             # DK - debugging purposes
-            """
+            # """
             for i in range(len(equiv_list)):
                 classes = equiv_list[i]
                 for j in range(len(classes)):
                     ids, num_ids, all_ids = classes[j]
-                    print i, j, ids, len(num_ids), sorted(list(num_ids))[:20]
+                    print i, j, ids, len(num_ids), sorted(list(num_ids))[:]
 
                 print
-            """
+            # """
             
             best_common_mat, best_stat, best_i, best_i2 = [], -sys.maxint, -1, -1
             for i in range(len(equiv_list) - 1):
@@ -2060,38 +2106,126 @@ class Graph:
                         for row in common_mat:
                             sorted_row = sorted(row, reverse=True)
                             common_stat += (sorted_row[0] - sorted_row[1])
+                        if common_mat[0][0] + common_mat[1][1] == \
+                           common_mat[1][0] + common_mat[0][1]:
+                            common_stat = -1
 
                     if common_stat > best_stat:
                         best_common_mat, best_stat, best_i, best_i2 = common_mat,  common_stat, i, i2
 
+                    # DK - debugging purposes
+                    if 26 in classes[0][0] and 29 in classes2[0][0]:
+                        print "DK:", i, i2, common_stat, common_mat
+
             # DK - debugging purposes
-            """
+            # """
             print "best:", best_i, best_i2, best_stat, best_common_mat
             print
             print
-            """
-            
+            # """
+
             if best_stat < 0:
                 break
 
             # DK - for the moment
             mat = best_common_mat
             classes, classes2 = equiv_list[best_i], equiv_list[best_i2]
+
+            # Filter vertices further if necessary
+            def del_row(classes, mat, r):
+                return classes[:r] + classes[r+1:], mat[:r] + mat[r+1:]
+            
+            def del_col(classes, mat, c):                    
+                new_mat = []
+                for row in mat:
+                    row = row[:c] + row[c+1:]
+                    new_mat.append(row)
+                return classes[:c] + classes[c+1:], new_mat
+                
+            """
+            if len(classes) > 2:
+                sum_mat = [[max(mat[r]), r] for r in range(len(mat))]
+                print "DK:", sum_mat
+                print "DK:", sorted(sum_mat, key=labmda a: a[0])
+                print "DK:", classses, mat
+                keep = sorted([sum_mat[0][0], sum_mat[0][1]])
+                classes = [classes[keep[0]], classes[keep[1]]]
+                mat = [mat[keep[0]], mat[keep[1]]]
+                print "DK:", classes, mat
+                assert False
+                
+            if len(classes2) > 2:
+                sum_mat = []
+                for c in range(len(classes2)):
+                    entries = []
+                    for r in range(len(classes)):
+                        entries.append(mat[r][c])
+                    sum_mat.append([max(entries), c])                
+                print "DK:", sum_mat
+                print "DK:", sorted(sum_mat, key=labmda a: a[0])
+                print "DK:", classes2, mat
+                keep = sorted([sum_mat[0][0], sum_mat[0][1]])
+                classes2 = [classes2[keep[0]], classes2[keep[1]]]
+                for r in range(len(mat)):
+                    mat[r] = [mat[r][keep[0]], mat[r][keep[1]]]
+                print "DK:", classes2, mat
+                assert False
+            """
+            
             assert len(classes) <= 2 and len(classes2) <= 2
+            if len(classes) == 2 and len(classes2) == 2:
+                # Check row
+                num_ids1, num_ids2 = len(classes[0][1]), len(classes[1][1])
+                if num_ids1 * 6 < num_ids2 or num_ids2 * 6 < num_ids1:
+                    row_sum1, row_sum2 = sum(mat[0]), sum(mat[1])
+                    if row_sum1 > max(2, row_sum2 * 6):
+                        classes, mat = del_row(classes, mat, 1)
+                        classes[0][1] -= excl_num_ids
+                    elif row_sum2 > max(2, row_sum1 * 6):
+                        classes, mat = del_row(classes, mat, 0)
+                        classes[0][1] -= excl_num_ids
+                # Check column
+                if len(classes) == 2:
+                    num_ids1, num_ids2 = len(classes2[0][1]), len(classes2[1][1])
+                    if num_ids1 * 6 < num_ids2 or num_ids2 * 6 < num_ids1:
+                        col_sum1, col_sum2 = mat[0][0] + mat[1][0], mat[0][1] + mat[1][1]
+                        if col_sum1 > max(2, col_sum2 * 6):
+                            classes2, mat = del_col(classes2, mat, 1)
+                            classes2[0][1] -= excl_num_ids
+                        elif col_sum2 > max(2, col_sum1 * 6):
+                            classes2, mat = del_col(classes2, mat, 0)
+                            classes2[0][1] -= excl_num_ids
+                        
             if len(classes) == 1 and len(classes2) == 1:
                 classes[0][0] = sorted(classes[0][0] + classes2[0][0])
                 classes[0][1] |= classes2[0][1]
             elif len(classes) == 1:
-                classes.append(deepcopy(classes[0]))
-                classes[0][0] = sorted(classes[0][0] + classes2[0][0])
-                classes[0][1] |= classes2[0][1]
-                classes[1][0] = sorted(classes[1][0] + classes2[1][0])
-                classes[1][1] |= classes2[1][1]
+                if mat[0][0] > max(2, mat[0][1] * 6):
+                    classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                    classes[0][1] |= classes2[0][1]
+                elif mat[0][1] > max(2, mat[0][0] * 6):
+                    classes[0][0] = sorted(classes[0][0] + classes2[1][0])
+                    classes[0][1] |= classes2[1][1]
+                else:
+                    classes.append(deepcopy(classes[0]))
+                    classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                    classes[0][1] |= classes2[0][1]
+                    classes[1][0] = sorted(classes[1][0] + classes2[1][0])
+                    classes[1][1] |= classes2[1][1]
             elif len(classes2) == 1:
-                classes[0][0] = sorted(classes[0][0] + classes2[0][0])
-                classes[0][1] |= classes2[0][1]
-                classes[1][0] = sorted(classes[1][0] + classes2[0][0])
-                classes[1][1] |= classes2[0][1]
+                if mat[0][0] > max(2, mat[1][0] * 6):
+                    classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                    classes[0][1] |= classes2[0][1]
+                    classes = [classes[0]]
+                elif mat[1][0] > max(2, mat[0][0] * 6):
+                    classes[1][0] = sorted(classes[1][0] + classes2[0][0])
+                    classes[1][1] |= classes2[0][1]
+                    classes = [classes[1]]
+                else:
+                    classes[0][0] = sorted(classes[0][0] + classes2[0][0])
+                    classes[0][1] |= classes2[0][1]
+                    classes[1][0] = sorted(classes[1][0] + classes2[0][0])
+                    classes[1][1] |= classes2[0][1]
             else:                
                 score00 = mat[0][0] + mat[1][1]
                 score01 = mat[0][1] + mat[1][0]
@@ -2100,15 +2234,18 @@ class Graph:
                     classes[0][1] |= classes2[0][1]
                     classes[1][0] = sorted(classes[1][0] + classes2[1][0])
                     classes[1][1] |= classes2[1][1]
-                else:
+                elif score00 < score01:
                     classes[0][0] = sorted(classes[0][0] + classes2[1][0])
                     classes[0][1] |= classes2[1][1]
                     classes[1][0] = sorted(classes[1][0] + classes2[0][0])
                     classes[1][1] |= classes2[0][1]
+                else:
+                    break
 
             for c in range(len(classes)):
-                classes[c][2] = get_mate_num_ids(classes[c][1])
-            
+                classes[c][2] = classes[c][1] | get_mate_num_ids(classes[c][1])
+                
+            equiv_list[best_i] = classes            
             equiv_list = equiv_list[:best_i2] + equiv_list[best_i2+1:]
 
         new_nodes = {}
