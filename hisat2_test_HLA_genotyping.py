@@ -940,41 +940,42 @@ def get_mpileup(alignview_cmd,
     for i in range(len(mpileup)):
         nt_dic = mpileup[i][1]
         ref_nt = ref_seq[i]
-        var_set = set()
+        new_nt_dic = {}
         for nt, count in nt_dic.items():
+            var_id = ""
             if nt == 'D':
                 if i <= skip_i:
                     assert prev_del_var_id != ""
-                    var_set.add(prev_del_var_id)
-                    continue
-                for var_id, var_type, var_data in var_list[i]:
-                    if var_type != "deletion":
-                        continue
-                    del_len = int(var_data)
-                    del_exist = True
-                    for j in range(i + 1, i + del_len):
-                        assert j < len(mpileup)
-                        nt_dic2 = mpileup[j][1]
-                        if 'D' not in nt_dic2:
-                            del_exist = False
-                            break
-                    if del_exist:
-                        var_set.add(var_id)
-                        prev_del_var_id = var_id
-                        skip_i = i + del_len - 1
-                        break                                                
+                    var_id = prev_del_var_id
+                else:
+                    for var_id_, var_type, var_data in var_list[i]:
+                        if var_type != "deletion":
+                            continue
+                        del_len = int(var_data)
+                        del_exist = True
+                        for j in range(i + 1, i + del_len):
+                            assert j < len(mpileup)
+                            nt_dic2 = mpileup[j][1]
+                            if 'D' not in nt_dic2:
+                                del_exist = False
+                                break
+                        if del_exist:
+                            var_id = var_id_
+                            prev_del_var_id = var_id
+                            skip_i = i + del_len - 1
+                            break                                                
             elif nt != 'N' and nt != ref_nt:
                 assert nt in "ACGT"
                 id = "unknown"
-                for var_id, var_type, var_data in var_list[i]:
+                for var_id_, var_type, var_data in var_list[i]:
                     if var_type != "single":
                         continue
                     if nt == var_data:
-                        id = var_id
+                        var_id = var_id_
                         break
-                var_set.add(id)
+            new_nt_dic[nt] = [count, var_id]
                         
-        mpileup[i].append(var_set)
+        mpileup[i][1] = new_nt_dic
 
     return mpileup
 
@@ -1540,7 +1541,8 @@ def typing(ex_path,
                             # Check if this deletion is artificial alignment
                             assert right_pos < mpileup
                             del_count, nt_count = 0, 0
-                            for nt, count in mpileup[right_pos][1].items():
+                            for nt, value in mpileup[right_pos][1].items():
+                                count = value[0]
                                 if nt == 'D':
                                     del_count += count
                                 else:
@@ -2063,15 +2065,8 @@ def typing(ex_path,
                 asm_graph.predicted_allele_nodes = predicted_allele_nodes
                 asm_graph.allele_node_order = allele_node_order
 
-                # DK - debugging purposes
-                use_debruijn = True
-                
                 # Start drawing assembly graph
                 asm_graph.begin_draw(assembly_base)
-
-                if not use_debruijn:
-                    # Filter out nodes
-                    asm_graph.filter_nodes()
 
                 # Generate edges
                 asm_graph.generate_edges()
@@ -2080,39 +2075,25 @@ def typing(ex_path,
                 begin_y = asm_graph.draw(0, "Initial graph")
                 begin_y += 200
                 
-                if use_debruijn:
-                    # Apply De Bruijn graph
-                    asm_graph.build_guided_DeBruijn()
-                    asm_graph.generate_edges()
+                # Apply De Bruijn graph
+                asm_graph.guided_DeBruijn()
+                asm_graph.generate_edges(0.01,
+                                         True, # jump_edge
+                                         True) # skipN
 
-                    # Draw assembly graph
-                    begin_y = asm_graph.draw(begin_y, "Asssembly")
-                    begin_y += 200
-
-                else:
-                    # Reduce graph
-                    asm_graph.reduce()
-
-                    # Draw assembly graph
-                    begin_y = asm_graph.draw(begin_y, "Unitigs")
-                    begin_y += 200
-
-                    # Further reduce graph with mate pairs
-                    asm_graph.assemble_with_mates()
-
-                    # Draw assembly graph
-                    begin_y = asm_graph.draw(begin_y, "Graph with mate pairs")
-                    begin_y += 200
+                # Draw assembly graph
+                begin_y = asm_graph.draw(begin_y, "Asssembly")
+                begin_y += 200
 
                 # DK - debugging purposes
-                """
+                # """
 
                 asm_graph.assemble_with_alleles()
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Graph with alleles")
 
-                """
+                # """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()

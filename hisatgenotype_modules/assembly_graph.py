@@ -151,7 +151,7 @@ class Node:
 
 
     # Check how nodes overlap with each other without considering deletions
-    def overlap_with(self, other, vars, debug = False):
+    def overlap_with(self, other, vars, skipN = False, debug = False):
         assert self.left <= other.left
         if self.right < other.left:
             return -1, -1
@@ -167,8 +167,10 @@ class Node:
                     break
                 nt_dic, other_nt_dic = seq[i+j], other_seq[j]
                 nt, other_nt = get_major_nt(nt_dic), get_major_nt(other_nt_dic)
-                mismatch = 0
-                if nt != other_nt:
+                mismatch = 0.0
+                if skipN and (nt == 'N' or other_nt == 'N'):
+                    mismatch = 0.0
+                elif nt != other_nt:
                     mismatch = 1.0 - match_score(seq[i+j], other_seq[j])
                     
                     # Higher penalty for mismatches in variants
@@ -239,17 +241,17 @@ class Node:
             for k in range(other.left - self.right - 1):
                 ref_nt_dic = self.mpileup[k + 1 + self.right][1]
                 nt_dic = {}
-                if len(ref_nt_dic) == 0:
+                # Fill in the gap with Ns for now
+                if len(ref_nt_dic) == 0 or True:
                     nt_dic = {'N' : [1, ""]}
                 else:
-                    weight = flank_cov / max(1.0, sum(ref_nt_dic.values()))
+                    weight = flank_cov / max(1.0, sum([count for count, _ in ref_nt_dic.values()]))
                     for nt, value in ref_nt_dic.items():
-                        nt_dic[nt] = [value * weight, ""]
+                        count, var_id = value
+                        nt_dic[nt] = [count * weight, var_id]
                 new_seq.append(nt_dic)
 
-        # Append the rest of the other sequence
-        # DK - debugging purposes
-        # new_seq += other.seq[j:]
+        # Append the rest of the other sequence to it
         new_seq += deepcopy(other.seq[j:])
         self.read_ids |= other.read_ids
         self.mate_ids |= other.mate_ids
@@ -468,14 +470,11 @@ class Graph:
 
         
     # Generate edges based on the overlapping information between nodes
-    def generate_raw_edges(self, overlap_pct = 0.1):
+    def generate_raw_edges(self, overlap_pct = 0.1, skipN = False):
         assert len(self.nodes) > 0
-        has_mate = True
         nodes = []
         for id, node in self.nodes.items():
             nodes.append([id, node.left, node.right])
-            if len(node.read_ids) > 1:
-                has_mate = False            
         def node_cmp(a, b):
             if a[1] != b[1]:
                 return a[1] - b[1]
@@ -483,45 +482,6 @@ class Graph:
                 return a[2] - b[2]
         nodes = sorted(nodes, cmp=node_cmp)
         
-        node_to_alleles = {}
-        for id, node in self.nodes.items():
-            if id in node_to_alleles:
-                continue
-            # Identify alleles that nodes closely match
-            def get_alleles(id, mate_id):
-                node = self.nodes[id]
-                node_vars = node.get_var_ids(self.gene_vars)
-                if mate_id in self.nodes:
-                    mate_node = self.nodes[mate_id]
-                    node_vars += mate_node.get_var_ids(self.gene_vars)
-                node_vars = set(node_vars)
-                max_alleles, max_common = set(), -sys.maxint
-                for anode in self.predicted_allele_nodes.values():
-                    allele_vars = anode.get_var_ids(self.gene_vars, node.left, node.right)
-                    if mate_id in self.nodes:
-                        allele_vars += anode.get_var_ids(self.gene_vars, mate_node.left, mate_node.right)
-                    allele_vars = set(allele_vars)
-                    tmp_common = len(node_vars & allele_vars) - len(node_vars | allele_vars)
-                    if abs(tmp_common - max_common) <= 1:
-                        max_alleles.add(anode.id)
-                        if tmp_common > max_common:
-                            max_common = tmp_common
-                    elif tmp_common > max_common:
-                        assert tmp_common > max_common + 1
-                        max_common = tmp_common
-                        max_alleles = set([anode.id])
-                return max_alleles, max_common
-
-            if has_mate:
-                mate_id = get_mate_node_id(id)
-            else:
-                mate_id = ""
-            alleles, common = get_alleles(id, mate_id)
-            node_to_alleles[id] = [alleles, common]
-            if mate_id in self.nodes:
-                node_to_alleles[mate_id] = [alleles, common]
-
-        coloring = has_mate
         self.from_node, self.to_node = {}, {}
         for i in range(len(nodes)):
             id1, left1, right1 = nodes[i]
@@ -531,18 +491,12 @@ class Graph:
                 if right1 < left2:
                     break
                 node2 = self.nodes[id2]
-                at, overlap = node1.overlap_with(node2, self.gene_vars)
+                at, overlap = node1.overlap_with(node2, self.gene_vars, skipN)
                 if overlap < node1.ungapped_length() * overlap_pct and \
                    overlap < node2.ungapped_length() * overlap_pct:
                     continue
                 if at < 0 or overlap <= 0:
                     continue
-                
-                if coloring:
-                    alleles1, alleles2 = node_to_alleles[id1][0], node_to_alleles[id2][0]
-                    if len(alleles1 & alleles2) <= 0:
-                        continue
-                
                 if id1 not in self.to_node:
                     self.to_node[id1] = [[id2, at]]
                 else:
@@ -584,9 +538,6 @@ class Graph:
                         try_jump_edge = False
                         break
 
-            if not try_jump_edge:
-                continue
-
             avoid_nodes = set()
             if id in self.to_node:
                 avoid_nodes = set([id2 for id2, _ in self.to_node[id]])
@@ -604,17 +555,21 @@ class Graph:
                 id2, left2, right2 = nodes[j]
                 if id2 in avoid_nodes:
                     continue
+
+                # DK - in the middle of working now ...
                 if right > left2:
+                    node2 = self.nodes[id2]
+                    overlap = right - left2
+                    overlap_pct1 = float(overlap) / (node.right - node.left)
+                    overlap_pct2 = float(overlap) / (node2.right - node2.left)
+                    if max(overlap_pct1, overlap_pct2) > 0.5:
+                        continue
+                    
+                    """
                     overlap_node_count += 1
                     if overlap_node_count >= 2:
                         break
                     else:
-                        continue
-                    # DK - debugging purposes
-                    """
-                    node2 = self.nodes[id2]
-                    at, overlap = node.overlap_with(node2, self.gene_vars)
-                    if at < 0:
                         continue
                     """
 
@@ -744,11 +699,11 @@ class Graph:
 
         
     # Generate edges based on the overlapping information between nodes
-    def generate_edges(self, overlap_pct = 0.5, jump_edges = False):
-        self.generate_raw_edges(overlap_pct)
+    def generate_edges(self, overlap_pct = 0.5, jump_edges = False, skipN = False):
+        self.generate_raw_edges(overlap_pct, skipN)
+        self.merge_inside_nodes()
         if jump_edges:
             self.generate_jump_edges()
-        self.merge_inside_nodes()
         self.remove_redundant_edges()
 
 
@@ -800,7 +755,7 @@ class Graph:
     def print_info(self): 
         print >> sys.stderr, "Backbone len: %d" % len(self.backbone)
         print >> sys.stderr, "\t%s" % self.backbone   
-        
+
 
     # Reduce graph
     def reduce(self, overlap_pct = 0.1):
@@ -867,7 +822,6 @@ class Graph:
             self.nodes[id].print_info(); print >> sys.stderr
         # sys.exit(1)
         # """
-
         
     def informed_assemble(self, params = {"mate": True}):
         mate = "mate" in params and params["mate"]
@@ -1068,7 +1022,8 @@ class Graph:
             self.nodes = new_nodes
             self.remove_low_cov_nodes()
             self.generate_edges(0.02,
-                                True) # jump edges
+                                True, # jump_edge
+                                True) # skipN
             self.reduce(0.02)
 
             if len(matches_list) <= 0:
@@ -1559,198 +1514,7 @@ class Graph:
 
     #
     # Identify haplotypes, which is work in progress
-    def filter_nodes(self):
-        assert len(self.nodes) > 0
-        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
-        def node_cmp(a, b):
-            if a[1] != b[1]:
-                return a[1] - b[1]
-            else:
-                return a[2] - b[2]
-        add_to_node = {}
-        nodes = sorted(nodes, cmp=node_cmp)
-
-        # Average node length
-        avg_len = sum([node.ungapped_length() for _, node in self.nodes.items()]) / float(len(nodes))
-
-        node_i = 0
-        window, interval = int(avg_len * 0.6), 20
-        window_list = []
-        supported_node_ids = {}
-        for w_left in range(0, len(self.backbone), interval):
-            w_right = w_left + window            
-            haplotypes = {}
-            for node_i2 in range(node_i, len(nodes)):
-                node_id, node_left, node_right = nodes[node_i2]                
-                if node_right < w_right:
-                    node_i = node_i2
-                    continue
-                if node_left > w_left:
-                    break
-
-                node = self.nodes[node_id]
-                prev_var = ""
-                haplotype = ""
-                for pos in range(w_left, w_right):
-                    var_i = pos - node.left
-                    assert var_i < len(node.seq)
-                    nt_dic = node.seq[var_i]
-                    var = []
-                    for _, var_id in nt_dic.values():
-                        if var_id == "":
-                            continue
-                        var.append(var_id)
-                    var = '-'.join(var)
-                    if var != "" and var != prev_var:
-                        if haplotype != "":
-                            haplotype += ","
-                        haplotype += var
-                    prev_var = var
-
-                if haplotype not in haplotypes:
-                    haplotypes[haplotype] = set([node_id])
-                else:
-                    haplotypes[haplotype].add(node_id)
-                    
-            for haplotype, node_ids in haplotypes.items():
-                for node_id in node_ids:
-                    if node_id not in supported_node_ids:
-                        supported_node_ids[node_id] = len(node_ids)
-                    else:
-                        supported_node_ids[node_id] = max(supported_node_ids[node_id], len(node_ids))
-
-            if len(haplotypes) > 0:
-                window_list.append([w_left, w_right, haplotypes])
-
-        # Filter out nodes
-        while True:
-            updated = False
-            new_window_list = []
-            new_supported_node_ids = {}
-            for w_left, w_right, haplotypes in window_list:
-                assert len(haplotypes) > 0
-                haplotype_count = {}
-                for haplotype, node_ids in haplotypes.items():
-                    for node_id in node_ids:
-                        node_id2 = get_mate_node_id(node_id)
-                        if node_id2 not in supported_node_ids:
-                            continue
-                        if haplotype not in haplotype_count:
-                            haplotype_count[haplotype] = 1
-                        else:
-                            haplotype_count[haplotype] += 1
-                tot_num_node = sum(haplotype_count.values())
-                filtered_haplotypes = {}
-
-                for haplotype, count in haplotype_count.items():
-                    if len(haplotypes) > 1:
-                        if count * 3 < (tot_num_node - count) / float(len(haplotypes) - 1):
-                            continue
-                        
-                    filtered_haplotypes[haplotype] = haplotypes[haplotype]
-                    for node_id in haplotypes[haplotype]:
-                        if node_id not in new_supported_node_ids:
-                            new_supported_node_ids[node_id] = len(node_ids)
-                        else:
-                            new_supported_node_ids[node_id] = max(supported_node_ids[node_id], len(node_ids))
-
-                if len(filtered_haplotypes) > 0:
-                    new_window_list.append([w_left, w_right, filtered_haplotypes])
-                if len(filtered_haplotypes) != len(haplotypes):
-                    assert len(filtered_haplotypes) <= len(haplotypes)
-                    updated = True
-
-            if not updated:
-                break
-
-            window_list = new_window_list
-            supported_node_ids = new_supported_node_ids
-        
-        num_conflict = 0
-        for w_left, w_right, haplotypes in window_list:
-            if len(haplotypes) <= 2:
-                continue
-
-            num_conflict += 1
-            
-            # DK - debugging purposes
-            """
-            print "[%d, %d)" % (w_left, w_right)
-            left_window, right_window = [sys.maxint, 0], [sys.maxint, 0]
-            for haplotype, node_ids in haplotypes.items():
-                if haplotype == "":
-                    haplotype = "nothing"
-                print "\t%s: %d" % (haplotype, len(node_ids))
-                for var_id in haplotype.split(','):
-                    if var_id not in self.gene_vars:
-                        continue
-                    print "\t\t", var_id, self.gene_vars[var_id]
-
-                for node_id in node_ids:
-                    node = self.nodes[node_id]
-                    if node_id.endswith("88989##"):
-                        node.print_info()
-                    node_id2 = get_mate_node_id(node_id)
-                    if node_id2 in self.nodes:
-                        node2 = self.nodes[node_id2]
-                        if node2.left < node.left:
-                            if node2.left < left_window[0]:
-                                left_window[0] = node2.left
-                            if node2.right > left_window[1]:
-                                left_window[1] = node2.right
-                        else:
-                            if node2.left < right_window[0]:
-                                right_window[0] = node2.left
-                            if node2.right > right_window[1]:
-                                right_window[1] = node2.right
-
-                    seq, qual = "", ""
-                    for pos in range(w_left, w_right):
-                        seq_i = pos - node.left
-                        assert seq_i < len(node.seq)
-                        nt_dic = node.seq[seq_i]
-                        nt = get_major_nt(nt_dic)
-                        q = node.qual[seq_i]
-                        if nt != self.backbone[pos]:
-                            var_id = "unknown"
-                            for _, tmp_id in nt_dic.values():
-                                if tmp_id == "" or \
-                                   tmp_id == "unknown" or \
-                                   tmp_id.startswith("nv"):
-                                    continue
-                                type, pos, data = self.gene_vars[tmp_id]
-                                if (type == "single" and data == nt) or \
-                                   (type == "deletion" and nt == 'D'):
-                                    var_id = tmp_id                    
-                            if var_id == "unknown" or var_id.startswith("nv"):
-                                seq += "\033[91m" # red
-                            else:
-                                seq += "\033[94m" # blue
-                        seq += nt
-                        qual += "%d" % q
-                        if nt != self.backbone[pos]:
-                            seq += "\033[00m"
-                    has_mate = 'T' if node_id2 in supported_node_ids else 'F'
-                    print "\t\t%s%50s" % (has_mate, node_id), seq
-                    print "\t\t %50s" % (node_id), qual
-            """
-
-            # DK - debugging purposes
-            # if w_left >= 1200 and False:
-            #    sys.exit(1)
-
-        # DK - debugging purposes
-        # print "Number of conflicts:", num_conflict
-        # sys.exit(1)
-
-        for node_id in self.nodes.keys():
-            if node_id not in supported_node_ids:
-                del self.nodes[node_id]
-
-
-    #
-    # Identify haplotypes, which is work in progress
-    def build_guided_DeBruijn(self):
+    def guided_DeBruijn(self):
         assert len(self.nodes) > 0
         k = 60 # k-mer
 
@@ -2200,11 +1964,13 @@ class Graph:
                 if mat[0][0] > max(2, mat[1][0] * 6):
                     classes[0][0] = sorted(classes[0][0] + classes2[0][0])
                     classes[0][1] |= classes2[0][1]
-                    classes = [classes[0]]
+                    if len(classes[0][1]) > len(classes[1][1]) * 6:
+                        classes = [classes[0]]
                 elif mat[1][0] > max(2, mat[0][0] * 6):
                     classes[1][0] = sorted(classes[1][0] + classes2[0][0])
                     classes[1][1] |= classes2[0][1]
-                    classes = [classes[1]]
+                    if len(classes[1][1]) > len(classes[0][1]) * 6:
+                        classes = [classes[1]]
                 else:
                     classes[0][0] = sorted(classes[0][0] + classes2[0][0])
                     classes[0][1] |= classes2[0][1]
