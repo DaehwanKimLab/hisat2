@@ -2069,7 +2069,7 @@ def typing(ex_path,
                 asm_graph.begin_draw(assembly_base)
 
                 # Generate edges
-                asm_graph.generate_edges()
+                # asm_graph.generate_edges()
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(0, "Initial graph")

@@ -200,8 +200,6 @@ class Node:
     # Combine two nodes with considering deletions
     def combine_with(self, other):
         assert self.left <= other.left
-        if self.right >= other.right:
-            return
 
         # Merge two sequences
         assert len(other.seq) > 0 and 'D' not in other.seq[0].keys()
@@ -232,6 +230,9 @@ class Node:
                         nt_dic[nt] = [count, var_id]
                 i += 1
                 j += 1
+            # this node contains the other node
+            if i < len(self.seq):
+                new_seq += self.seq[i:]
         # Fill in the gap between the two nodes if exists
         else:
             new_seq = self.seq[:]
@@ -252,7 +253,8 @@ class Node:
                 new_seq.append(nt_dic)
 
         # Append the rest of the other sequence to it
-        new_seq += deepcopy(other.seq[j:])
+        if j < len(other.seq):
+            new_seq += deepcopy(other.seq[j:])
         self.read_ids |= other.read_ids
         self.mate_ids |= other.mate_ids
 
@@ -272,6 +274,16 @@ class Node:
     # Return the length of the ungapped sequence
     def ungapped_length(self):
         return len(get_ungapped_seq(self.seq))
+
+
+    # Contains Ns?
+    def contain_Ns(self):
+        for i in range(len(self.seq)):
+            nt_dic = self.seq[i]
+            nt = get_major_nt(nt_dic)
+            if nt == 'N':
+                return True
+        return False
 
     
     # Get variant ids
@@ -445,6 +457,7 @@ class Graph:
 
         self.nodes = {}
         self.edges = {}
+        self.to_node, self.from_node = {}, {}
 
         self.left_margin = 300
         self.right_margin = 20
@@ -538,6 +551,9 @@ class Graph:
                         try_jump_edge = False
                         break
 
+            if not try_jump_edge:
+                continue
+
             avoid_nodes = set()
             if id in self.to_node:
                 avoid_nodes = set([id2 for id2, _ in self.to_node[id]])
@@ -562,7 +578,7 @@ class Graph:
                     overlap = right - left2
                     overlap_pct1 = float(overlap) / (node.right - node.left)
                     overlap_pct2 = float(overlap) / (node2.right - node2.left)
-                    if max(overlap_pct1, overlap_pct2) > 0.5:
+                    if min(overlap_pct1, overlap_pct2) > 0.8:
                         continue
                     
                     """
@@ -626,8 +642,15 @@ class Graph:
 
         for id, inside_ids in contain.items():
             node = self.nodes[id]
+            # DK - temporary solution
+            if node.contain_Ns():
+                continue
             for id2 in inside_ids:
                 node2 = self.nodes[id2]
+                # DK - temporary solution
+                if node2.contain_Ns():
+                    continue
+
                 node.combine_with(node2)
                 del self.nodes[id2]
 
@@ -822,6 +845,7 @@ class Graph:
             self.nodes[id].print_info(); print >> sys.stderr
         # sys.exit(1)
         # """
+
         
     def informed_assemble(self, params = {"mate": True}):
         mate = "mate" in params and params["mate"]
@@ -987,17 +1011,19 @@ class Graph:
                     print >> sys.stderr, "from:", id, "has", from_ids
                     print >> sys.stderr, matches
                     for from_id, id, _ in matches:
-                        nodes[from_id].print_info(sys.stderr)
-                        nodes[id].print_info(sys.stderr)
+                        # nodes[from_id].print_info(sys.stderr)
+                        # nodes[id].print_info(sys.stderr)
+                        print >> sys.stderr, from_id, nodes[from_id].left, nodes[from_id].right
+                        print >> sys.stderr, id, nodes[id].left, nodes[id].right
                         print >> sys.stderr, "mates:", len(nodes[from_id].mate_ids), "vs.", len(nodes[id].mate_ids)
                         print >> sys.stderr, "mates common", len(nodes[from_id].mate_ids & nodes[id].mate_ids)
                     print >> sys.stderr, "mate count:", mates
-                    for from_id in from_ids:
-                        nodes[from_id].print_info(sys.stderr)
-                        print >> sys.stderr, "mates:", len(nodes[from_id].mate_ids)
+                    # for from_id in from_ids:
+                    #     nodes[from_id].print_info(sys.stderr)
+                    #     print >> sys.stderr, "mates:", len(nodes[from_id].mate_ids)
                     # print >> sys.stderr, "mates common between from nodes", len(nodes[from_ids[0]].mate_ids & nodes[from_ids[1]].mate_ids)
                     print >> sys.stderr, "Iter:", iter
-                    sys.exit(1)
+                    # sys.exit(1)
                 """
 
             delete_nodes = set()
@@ -1030,7 +1056,7 @@ class Graph:
                 break
 
             # DK - debugging purposes
-            # if iter >= 2:
+            # if iter >= 1:
             #    break
 
         # DK - debugging purposes
@@ -1936,10 +1962,10 @@ class Graph:
                 classes[0][0] = sorted(classes[0][0] + classes2[0][0])
                 classes[0][1] |= classes2[0][1]
             elif len(classes) == 1:
-                if mat[0][0] > max(2, mat[0][1] * 6):
+                if 0 not in classes[0][0] and mat[0][0] > max(2, mat[0][1] * 6):
                     classes[0][0] = sorted(classes[0][0] + classes2[0][0])
                     classes[0][1] |= classes2[0][1]
-                elif mat[0][1] > max(2, mat[0][0] * 6):
+                elif 0 not in classes[0][0] and mat[0][1] > max(2, mat[0][0] * 6):
                     classes[0][0] = sorted(classes[0][0] + classes2[1][0])
                     classes[0][1] |= classes2[1][1]
                 else:
