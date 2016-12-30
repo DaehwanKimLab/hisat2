@@ -464,7 +464,13 @@ class Graph:
         self.top_margin = 20
         self.bottom_margin = 20
 
-        self.scalex, self.scaley = 5, 2
+        if len(backbone) <= 4000:
+            self.scalex = 5
+        elif len(backbone) <= 8000:
+            self.scalex = 2
+        else:
+            self.scalex = 1
+        self.scaley = 2
         self.width = len(self.backbone) * self.scalex + self.left_margin + self.right_margin
         self.unscaled_height = 6000
         self.height = self.unscaled_height * self.scaley
@@ -853,9 +859,12 @@ class Graph:
         vars = self.gene_vars
         if not mate:
             assert len(allele_nodes) > 0 and len(vars) > 0
+            # DK - debugging purposes
+            """
             if len(self.nodes) > 20:
                 print >> sys.stderr, "Warning: too many nodes (%d) for guided assembly using known alleles..." % (len(self.nodes))
                 return
+            """
 
         # Duplicate nodes when necessary
         iter = 0
@@ -1501,9 +1510,10 @@ class Graph:
                 print >> js_file, r'ctx.fill();'
 
             # Draw label
-            print >> js_file, r'ctx.fillStyle = "blue";'
-            print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                (node.id, get_x(left + 2), get_y(y + 7))
+            if get_sx(right - left) >= 300:
+                print >> js_file, r'ctx.fillStyle = "blue";'
+                print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
+                    (node.id, get_x(left + 2), get_y(y + 7))
 
             if not draw_title:
                 draw_title = True
@@ -1539,7 +1549,7 @@ class Graph:
 
 
     #
-    # Identify haplotypes, which is work in progress
+    # 
     def guided_DeBruijn(self):
         assert len(self.nodes) > 0
         k = 60 # k-mer
@@ -1654,8 +1664,8 @@ class Graph:
                 # DK - debugging purposes
                 debug_msg = False
                 if debug_msg:
-                    print "at", pos, vertices
-                    print "count:", vertice_count
+                    print >> sys.stderr, "at", pos, vertices
+                    print >> sys.stderr, "count:", vertice_count
 
                 if try_hard:
                     vertice_with_id = [[vertice_count[v], v] for v in range(len(vertice_count))]
@@ -1665,7 +1675,7 @@ class Graph:
                         num_ids = vertices[v][3]
                         delete_ids |= set(num_ids)
                         if debug_msg:
-                            print v, "is removed with", num_ids
+                            print >> sys.stderr, v, "is removed with", num_ids
                 else:
                     for v in range(len(vertices)):
                         assert len(vertices) >= 2
@@ -1678,18 +1688,18 @@ class Graph:
                                 num_ids = vertices[v][3]
                                 delete_ids |= set(num_ids)
                                 if debug_msg:
-                                    print v, "is removed with", num_ids
+                                    print >> sys.stderr, v, "is removed with", num_ids
                             """
                         else:
                             if vertice_count[v] * 3 < relative_avg:
                                 num_ids = vertices[v][3]
                                 delete_ids |= set(num_ids)
                                 if debug_msg:
-                                    print v, "is removed with", num_ids
+                                    print >> sys.stderr, v, "is removed with", num_ids
 
                 if debug_msg:
-                    print
-                    print                        
+                    print >> sys.stderr
+                    print >> sys.stderr             
                 
             if len(delete_ids) == 0:
                 if try_hard:
@@ -1705,7 +1715,7 @@ class Graph:
         # Print De Bruijn graph
         # """
         # for i in range(len(debruijn)):
-        for i in range(200):
+        for i in range(len(debruijn)):
             curr_vertices = debruijn[i]
             if len(curr_vertices) == 0:
                 continue
@@ -1721,7 +1731,7 @@ class Graph:
                     else:
                         consensus_seq[j][nt] += 1
 
-            print i
+            print >> sys.stderr, i
             for v in range(len(curr_vertices)):
                 nt, k_m1_mer, predecessors, read_ids = curr_vertices[v]
                 kmer = k_m1_mer + nt
@@ -1734,7 +1744,7 @@ class Graph:
                     if len(consensus_seq[j]) >= 2:
                         kmer_seq += "\033[00m"
                     
-                print "\t%d:" % v, kmer_seq, len(read_ids), predecessors, read_ids
+                print >> sys.stderr, "\t%d:" % v, kmer_seq, len(read_ids), predecessors, read_ids
 
         # """
 
@@ -1825,8 +1835,7 @@ class Graph:
 
         # DK - debugging purposes
         for p in range(len(paths)):
-            print "path:", p, paths[p]
-        # assert False
+            print >> sys.stderr, "path:", p, paths[p]
 
         excl_num_ids = set() # exclusive num ids
         equiv_list = []
@@ -1871,9 +1880,9 @@ class Graph:
                 classes = equiv_list[i]
                 for j in range(len(classes)):
                     ids, num_ids, all_ids = classes[j]
-                    print i, j, ids, len(num_ids), sorted(list(num_ids))[:]
+                    print >> sys.stderr, i, j, ids, len(num_ids), sorted(list(num_ids))[:]
 
-                print
+                print >> sys.stderr
             # """
             
             best_common_mat, best_stat, best_i, best_i2 = [], -sys.maxint, -1, -1
@@ -1905,15 +1914,11 @@ class Graph:
                     if common_stat > best_stat:
                         best_common_mat, best_stat, best_i, best_i2 = common_mat,  common_stat, i, i2
 
-                    # DK - debugging purposes
-                    if 26 in classes[0][0] and 29 in classes2[0][0]:
-                        print "DK:", i, i2, common_stat, common_mat
-
             # DK - debugging purposes
             # """
-            print "best:", best_i, best_i2, best_stat, best_common_mat
-            print
-            print
+            print >> sys.stderr, "best:", best_i, best_i2, best_stat, best_common_mat
+            print >> sys.stderr
+            print >> sys.stderr
             # """
 
             if best_stat < 0:
@@ -2032,7 +2037,7 @@ class Graph:
                 num_ids = sorted(list(num_ids))
 
                 # DK - debugging purposes
-                print i, j, num_ids
+                print >> sys.stderr, i, j, num_ids
                 
                 assert (num_ids) > 0
                 read_id = num_to_id[num_ids[0]]

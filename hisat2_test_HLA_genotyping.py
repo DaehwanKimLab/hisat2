@@ -1089,6 +1089,107 @@ def error_correct(ref_seq,
 
 
 """
+Use Stranded-seq reads to resolve assembly ambiguity
+"""
+def stranded_seq_alignment(genome_name,
+                           sra_run_info,
+                           ex_path,
+                           ref_allele):
+    read_dir = sra_run_info.split('/')[:-1]
+    read_dir = '/'.join(read_dir)
+    runs = []
+    for line in open(sra_run_info):
+        line = line.strip()
+        fields = line.split('\t')
+        genome_name_, run = fields[4], fields[0]
+        if genome_name == genome_name_:
+            runs.append(run)
+
+    run_alignments = []
+    for run in runs:
+        read_fname, out_fname = "%s/%s.extracted.fq.gz" % (read_dir, run), "%s/%s.bam" % (read_dir, run)
+        align_reads(ex_path,
+                    "hisat2",
+                    False,         # simulation?
+                    "graph",
+                    [read_fname],
+                    True,          # fastq?
+                    1,             # number of threads
+                    out_fname,
+                    False)         # verbose?
+
+        # Read alignments
+        alignview_cmd = ["samtools",
+                         "view",
+                         out_fname]
+        base_locus = 0
+        alignview_cmd += [ref_allele]
+        
+        """
+        if reference_type == "gene":
+            alignview_cmd += [ref_allele]
+        else:
+            assert reference_type in ["chromosome", "genome"]
+            _, chr, left, right, _ = refHLA_loci[gene]
+            base_locus = left
+            alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
+        """
+        alignview_proc = subprocess.Popen(alignview_cmd,
+                                          stdout=subprocess.PIPE,
+                                          stderr=open("/dev/null", 'w'))
+
+        plus, minus = [], []
+        # Cigar regular expression
+        cigar_re = re.compile('\d+\w')
+        pos_added = set()
+        for line in alignview_proc.stdout:
+            line = line.strip()
+            fields = line.split('\t')
+            read_id, flag, ref, pos, _, cigar_str = fields[:6]
+            flag = int(flag)
+            assert run == read_id.split('.')[0]
+
+            if flag & 0x4 != 0:
+                continue
+
+            Zs = ""
+            for i in range(11, len(fields)):
+                field = fields[i]
+                if field.startswith("Zs"):
+                    Zs = field[5:]
+
+            vars = []
+            if Zs != "":
+                for var in Zs.split(','):
+                    _, _, var = var.split('|')
+                    vars.append(var)
+
+            left_pos = int(pos) - 1
+            if left_pos in pos_added:
+                continue
+            pos_added.add(left_pos)
+            right_pos = left_pos
+            cigars = cigar_re.findall(cigar_str)
+            cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+            for i in range(len(cigars)):
+                cigar_op, length = cigars[i]
+                if cigar_op in "MND":
+                    right_pos += length
+
+            entry = [left_pos, right_pos, vars]
+            if flag & 0x10 == 0:
+                plus.append(entry)
+            else:
+                minus.append(entry)
+
+        if len(plus) > 0 and len(minus) > 0:
+            if len(plus) > 1 or len(minus) > 1:
+                run_alignments.append([run, plus, minus])
+
+    return run_alignments
+
+
+"""
 """
 def typing(ex_path,
            simulation,
@@ -1111,6 +1212,7 @@ def typing(ex_path,
            error_correction,
            allow_discordant,
            display_alleles,
+           stranded_seq,
            fastq,
            read_fname,
            alignment_fname,
@@ -2060,7 +2162,7 @@ def typing(ex_path,
                     assert allele_name not in predicted_allele_nodes
                     predicted_allele_nodes[allele_name] = allele_nodes[allele_name]
                     allele_node_order.append([allele_name, prob])
-                    if len(predicted_allele_nodes) >= 2:
+                    if len(predicted_allele_nodes) >= 4:
                         break
                 asm_graph.predicted_allele_nodes = predicted_allele_nodes
                 asm_graph.allele_node_order = allele_node_order
@@ -2084,6 +2186,38 @@ def typing(ex_path,
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Asssembly")
                 begin_y += 200
+
+                # Stranded-seq read analysis
+                if len(stranded_seq) == 2:
+                    run_alignments = stranded_seq_alignment(stranded_seq[0],
+                                                            stranded_seq[1],
+                                                            ex_path,
+                                                            ref_allele)
+
+                    def get_best_alleles(left, right, vars):
+                        max_alleles, max_common = [], -sys.maxint
+                        for allele_name, allele_node in predicted_allele_nodes.items():
+                            tmp_vars = allele_node.get_var_ids(gene_vars, left, right)
+                            tmp_common = len(set(vars) & set(tmp_vars))
+                            tmp_common -= len(set(vars) | set(tmp_vars))
+                            if max_common < tmp_common:
+                                max_common = tmp_common
+                                max_alleles = [[allele_name, max_common]]
+                            elif max_common == tmp_common:
+                                max_alleles.append([allele_name, max_common])
+                        return max_alleles
+
+                    for run, plus, minus in run_alignments:
+                        print run
+                        print "\tplus:"
+                        for left, right, vars in plus:
+                            print "\t\t", left, right, vars, get_best_alleles(left, right, vars)
+                        print "\tminus:"
+                        for left, right, vars in minus:
+                            print "\t\t", left, right, vars, get_best_alleles(left, right, vars)
+                            
+                    assert False
+
 
                 # DK - debugging purposes
                 # """
@@ -2387,6 +2521,7 @@ def test_HLA_genotyping(base_fname,
                         error_correction,
                         discordant,
                         display_alleles,
+                        stranded_seq,
                         verbose,
                         daehwan_debug):
     # Current script directory
@@ -2688,6 +2823,7 @@ def test_HLA_genotyping(base_fname,
                                      error_correction,
                                      discordant,
                                      display_alleles,
+                                     stranded_seq,
                                      fastq,
                                      read_fname,
                                      alignment_fname,
@@ -2732,6 +2868,7 @@ def test_HLA_genotyping(base_fname,
                error_correction,
                discordant,
                display_alleles,
+               stranded_seq,
                fastq,
                read_fname,
                alignment_fname,
@@ -2768,8 +2905,8 @@ if __name__ == '__main__':
     parser.add_argument("--aligner-list",
                         dest="aligners",
                         type=str,
-                        default="hisat2.graph,hisat2.linear,bowtie2.linear",
-                        help="A comma-separated list of aligners (default: hisat2.graph,hisat2.linear,bowtie2.linear)")
+                        default="hisat2.graph",
+                        help="A comma-separated list of aligners such as hisat2.graph,hisat2.linear,bowtie2.linear (default: hisat2.graph)")
     parser.add_argument("--reads",
                         dest="read_fname",
                         type=str,
@@ -2865,6 +3002,11 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of alleles to display in HTML (default: empty)")
+    parser.add_argument("--stranded-seq",
+                        dest="stranded_seq",
+                        type=str,
+                        default="",
+                        help="Stranded-seq data (e.g.,: NA12892,ILMN_StrandSeq/SraRunInfo.txt")
 
     args = parser.parse_args()
     if not args.reference_type in ["gene", "chromosome", "genome"]:
@@ -2923,6 +3065,14 @@ if __name__ == '__main__':
     else:
         display_alleles = args.display_alleles.split(',')
 
+    if args.stranded_seq != "":
+        stranded_seq = args.stranded_seq.split(',')
+        if len(stranded_seq) != 2:
+            print >> sys.stderr, "Error: --stranded-seq is incorrectly specified"
+            sys.exit(1)
+    else:
+        stranded_seq = []
+
     random.seed(args.random_seed)
     test_HLA_genotyping(args.base_fname,
                         args.reference_type,
@@ -2945,6 +3095,7 @@ if __name__ == '__main__':
                         args.error_correction,
                         args.discordant,
                         display_alleles,
+                        stranded_seq,
                         args.verbose_level,
                         debug)
 
