@@ -552,7 +552,7 @@ def extract_vars(base_fname,
                     print bp_i, bp_j, ''.join(seq[bp_i-10:bp_i]), ''.join(seq[bp_i:bp_j]), ''.join(seq[bp_j:bp_j+10])
                 prev_i, prev_j = bp_i, bp_j
 
-                while bp_i > 0 and seq[bp_i-1] in "ACGT" and seq[bp_j-1] in "ACGT":
+                while bp_i > 0 and seq[bp_i-1] in "ACGT" and backbone_seq[bp_j-1] in "ACGT":
                     if seq[bp_i-1] != backbone_seq[bp_j-1]:
                         break
                     seq[bp_j-1] = seq[bp_i-1]

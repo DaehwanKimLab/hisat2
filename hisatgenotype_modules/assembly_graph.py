@@ -219,15 +219,15 @@ class Node:
             new_seq = self.seq[:i]
             while i < len(self.seq) and j < len(other.seq):
                 nt_dic, nt_dic2 = self.seq[i], other.seq[j]
-                new_seq.append(nt_dic)
                 for nt, value in nt_dic2.items():
                     count, var_id = value
                     if nt in nt_dic:
                         nt_dic[nt][0] += count
-                        # DK - debugging purposes
-                        # assert nt_dic[nt][1] == var_id
+                        if nt != 'D':
+                            assert nt_dic[nt][1] == var_id
                     else:
                         nt_dic[nt] = [count, var_id]
+                new_seq.append(nt_dic)
                 i += 1
                 j += 1
             # this node contains the other node
@@ -287,7 +287,7 @@ class Node:
 
     
     # Get variant ids
-    def get_var_ids(self, Vars, left = 0, right = sys.maxint):
+    def get_var_ids(self, left = 0, right = sys.maxint):
         vars = []
         left = max(left, self.left)
         right = min(right, self.right)
@@ -304,13 +304,12 @@ class Node:
                     break            
             for _, var in nt_dic.values():
                 if var == "" or \
-                   var == "unknown" or \
-                   var.startswith("nv"):
+                   var == "unknown":
                     continue
-                assert var in Vars
+                assert var in self.ref_vars
                 if len(vars) > 0 and var == vars[-1]:
                     continue
-                type, pos, data = Vars[var]
+                type, pos, data = self.ref_vars[var]
                 if data == nt or (type == "deletion" and nt == 'D'):
                     vars.append(var)
 
@@ -319,7 +318,7 @@ class Node:
     
     # Get variant ids
     #   left, right are absolute coordinates
-    def get_vars(self, Vars, left = 0, right = sys.maxint):
+    def get_vars(self, left = 0, right = sys.maxint):
         vars = []
         left = max(left, self.left)
         right = min(right, self.right)
@@ -348,13 +347,12 @@ class Node:
             added = False
             for _, var in nt_dic.values():
                 if var == "" or \
-                   var == "unknown" or \
-                   var.startswith("nv"):
+                   var == "unknown":
                     continue
                 if len(vars) > 0 and var == vars[-1][0]:
                     continue
-                assert var in Vars
-                type, var_pos, data = Vars[var]                    
+                assert var in self.ref_vars
+                type, var_pos, data = self.ref_vars[var]                    
                 if data == nt or (type == "deletion" and nt == 'D'):
                     assert pos >= var_pos
                     if type == "deletion" and pos > var_pos:
@@ -876,10 +874,10 @@ class Graph:
 
             if not mate: # w.r.t. known alleles
                 for node in nodes.values():
-                    node_vars = node.get_var_ids(vars)
+                    node_vars = node.get_var_ids()
                     max_alleles, max_common = set(), -sys.maxint
                     for anode in allele_nodes.values():
-                        allele_vars = anode.get_var_ids(vars, node.left, node.right)
+                        allele_vars = anode.get_var_ids(node.left, node.right)
                         tmp_common = len(set(node_vars) & set(allele_vars)) - len(set(node_vars) | set(allele_vars))
                         if tmp_common > max_common:
                             max_common = tmp_common
@@ -1452,8 +1450,8 @@ class Graph:
             y = get_dspace(left, right, 14)
             node_to_y[id] = y
 
-            node_vars = node.get_vars(self.gene_vars)
-            node_var_ids = node.get_var_ids(self.gene_vars)
+            node_vars = node.get_vars()
+            node_var_ids = node.get_var_ids()
             if len(allele_nodes) > 0:
                 color = "white"
                 max_common = -sys.maxint
@@ -1465,7 +1463,7 @@ class Graph:
                         allele_node = self.true_allele_nodes[allele_node_id]
                     else:
                         allele_node = self.predicted_allele_nodes[allele_node_id]
-                    allele_vars = allele_node.get_var_ids(self.gene_vars, left, right)
+                    allele_vars = allele_node.get_var_ids(left, right)
                     common_vars = set(node_var_ids) & set(allele_vars)
                     tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
                     if max_common < tmp_common:
@@ -1554,24 +1552,74 @@ class Graph:
         assert len(self.nodes) > 0
         k = 60 # k-mer
 
+        DRB1_debug = False
+
+        node_seq = {}
+        for id, node in self.nodes.items():
+            s, seq = 0, []
+            while s < len(node.seq):
+                nt_dic = node.seq[s] # {'C': [1, '']}
+                nt = get_major_nt(nt_dic)
+                if nt in "ACGTND":
+                    seq.append(nt)
+                else:
+                    assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
+                s += 1
+
+            if len(seq) < k:
+                continue
+
+            def leftshift(seq, ref_seq):
+                seq_len = len(seq)
+                assert seq_len > 0 and seq[0] != 'D'
+
+                bp_i = 0
+                while bp_i < seq_len:
+                    bp = seq[bp_i]
+                    if bp != 'D':
+                        bp_i += 1
+                        continue
+                    bp_j = bp_i + 1
+                    while bp_j < seq_len:
+                        bp2 = seq[bp_j]
+                        if bp2 != 'D':
+                            break
+                        else:
+                            bp_j += 1
+
+                    if bp_j >= seq_len:
+                        bp_i = bp_j
+                        break
+
+                    prev_i, prev_j = bp_i, bp_j
+                    while bp_i > 0 and seq[bp_i-1] in "ACGT" and ref_seq[bp_j-1] in "ACGT":
+                        if seq[bp_i-1] != ref_seq[bp_j-1]:
+                            break
+                        seq[bp_j-1] = seq[bp_i-1]
+                        seq[bp_i-1] = 'D'
+                        bp_i -= 1
+                        bp_j -= 1
+                    bp_i = bp_j
+                    while bp_i < seq_len:
+                        if seq[bp_i] in "ACGT":
+                            break
+                        bp_i += 1
+
+            if DRB1_debug:
+                leftshift(seq, self.backbone[node.left:node.left + len(seq)])
+            node_seq[id] = seq
+            
         try_hard = False
         while True:
             delete_ids = set()
             nodes = []
             for id, node in self.nodes.items():
-                s, kmer = 0, []
-                while s < len(node.seq) and len(kmer) < k:
-                    nt_dic = node.seq[s] # {'C': [1, '']}
-                    nt = get_major_nt(nt_dic)
-                    if nt in "ACGTND":
-                        kmer.append(nt)
-                    else:
-                        assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
-                    s += 1
-
-                if len(kmer) != k:
+                seq = node_seq[id]
+                if len(seq) < k:
                     continue
-                nodes.append([id, node.left, node.right, kmer, node.seq, s])
+                kmer, seq = seq[:k], seq[k:]
+                nodes.append([id, node.left, node.right, kmer, seq])
+                
             def node_cmp(a, b):
                 if a[1] != b[1]:
                     return a[1] - b[1]
@@ -1591,7 +1639,7 @@ class Graph:
             min_n = 0
             for pos in range(len(debruijn)):
                 for n in range(min_n, len(nodes)):
-                    id, node_pos, node_right, kmer, seq, s = nodes[n]
+                    id, node_pos, node_right, kmer, seq = nodes[n]
                     if node_pos < pos:
                         min_n = n + 1
                         continue
@@ -1599,7 +1647,6 @@ class Graph:
                         break
 
                     assert len(kmer) == k
-                    num_id = id_to_num[id]
 
                     # Add a new node or update the De Bruijn graph
                     curr_vertices = debruijn[pos]
@@ -1608,7 +1655,7 @@ class Graph:
                     for v in range(len(curr_vertices)):
                         cmp_nt, cmp_k_m1_mer = curr_vertices[v][:2]
                         if kmer_seq == cmp_k_m1_mer + cmp_nt:                        
-                            curr_vertices[v][3].append(num_id)
+                            curr_vertices[v][3].append(n)
                             found = True
                             break
 
@@ -1623,31 +1670,39 @@ class Graph:
                         debruijn[pos].append([kmer_seq[-1],           # base
                                               ''.join(kmer_seq[:-1]), # (k-1)-mer
                                               predecessors,           # predecessors
-                                              [num_id]])              # numeric read IDs
+                                              [n]])              # numeric read IDs
 
                     # Update k-mer
-                    kmer = kmer[1:]
-                    while s < len(seq) and len(kmer) < k:
-                        nt_dic = seq[s] # {'C': [1, '']}
-                        nt = get_major_nt(nt_dic)
-                        if nt in "ACGTND":
-                            kmer.append(nt)
-                        else:
-                            assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
-                        s += 1
+                    if len(seq) > 0:
+                        kmer, seq = kmer[1:] + seq[:1], seq[1:]
+                        nodes[n] = [id, node_pos + 1, node_right, kmer, seq]
 
-                    if len(kmer) == k:
-                        nodes[n] = [id, node_pos + 1, node_right, kmer, seq, s]
+            # Average number of kmers
+            if DRB1_debug:
+                total_kmers = 0
+                for pos in range(len(debruijn)):
+                    vertices = debruijn[pos]
+                    for _, _, _, num_ids in vertices:
+                        total_kmers += len(num_ids)
+                avg_kmers = float(total_kmers) / len(debruijn)
 
             # Filter out reads
             for pos in range(len(debruijn)):
                 vertices = debruijn[pos]
                 num_vertices = 0
+                num_kmers = 0
                 for v in range(len(vertices)):
                     _, _, predecessors, num_ids = vertices[v]
                     if not (set(num_ids) <= delete_ids):
                         num_vertices += 1
+                        if DRB1_debug:
+                            num_kmers = len(set(num_ids) - delete_ids)
                 if num_vertices <= 1:
+                    if DRB1_debug:
+                        if pos > 300 and pos + 300 < len(debruijn):
+                            if num_vertices == 1 and num_kmers * 8  < avg_kmers:
+                                for _, _, _, num_ids in vertices:
+                                    delete_ids |= set(num_ids)
                     continue
                 
                 vertice_count = [0] * len(vertices)
@@ -1682,14 +1737,40 @@ class Graph:
                         relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
                         if len(vertices) == 2:
                             # DK - working on ...
-                            None
-                            """
-                            if vertice_count[v] * 6 < relative_avg:
-                                num_ids = vertices[v][3]
-                                delete_ids |= set(num_ids)
-                                if debug_msg:
-                                    print >> sys.stderr, v, "is removed with", num_ids
-                            """
+                            if DRB1_debug:
+                                if vertice_count[v] * 8 < relative_avg:
+                                    num_ids = vertices[v][3]
+                                    delete_ids |= set(num_ids)
+                                    if debug_msg:
+                                        print >> sys.stderr, v, "is removed with", num_ids
+                                elif vertice_count[v] * 8 < avg_kmers:
+                                    num_ids = vertices[v][3]
+                                    delete_ids |= set(num_ids)                              
+                                elif vertice_count[v] * 2 < relative_avg:
+                                    nt, kmer, _, num_ids = vertices[1-v]
+                                    if nt == 'D':
+                                        num_id = num_ids[0]
+                                        read_id = num_to_id[num_id]
+                                        left, seq = pos-self.nodes[read_id].left, node_seq[read_id]
+
+                                        seq_right = ''.join(seq[left+k:])
+                                        # print "ref:", ''.join(seq[left:left+k]), seq_right
+                                        # print "k  :", kmer, nt
+                                        seq_right = seq_right.replace('D', '')
+                                        success = True
+                                        for num_id2 in vertices[v][3]:
+                                            read_id2 = num_to_id[num_id2]
+                                            left2, seq2 = pos-self.nodes[read_id2].left, node_seq[read_id2]
+                                            seq2_right = ''.join(seq2[left2+k:])
+                                            # print "cmp:", ''.join(seq2[left2:left2+k]), seq2_right
+                                            # print seq_right.find(seq2_right) == 0
+                                            if seq_right.find(seq2_right) != 0:
+                                                success = False
+                                                break
+                                        if success:
+                                            delete_ids |= set(vertices[v][3])
+                                        # assert False
+                                        
                         else:
                             if vertice_count[v] * 3 < relative_avg:
                                 num_ids = vertices[v][3]
@@ -1706,7 +1787,6 @@ class Graph:
                     break
                 else:
                     try_hard = True
-            
 
             for num_id in delete_ids:
                 read_id = num_to_id[num_id]
@@ -1733,7 +1813,7 @@ class Graph:
 
             print >> sys.stderr, i
             for v in range(len(curr_vertices)):
-                nt, k_m1_mer, predecessors, read_ids = curr_vertices[v]
+                nt, k_m1_mer, predecessors, num_ids = curr_vertices[v]
                 kmer = k_m1_mer + nt
                 kmer_seq = ""
                 for j in range(k):
@@ -1744,7 +1824,8 @@ class Graph:
                     if len(consensus_seq[j]) >= 2:
                         kmer_seq += "\033[00m"
                     
-                print >> sys.stderr, "\t%d:" % v, kmer_seq, len(read_ids), predecessors, read_ids
+                print >> sys.stderr, "\t%d:" % v, kmer_seq, len(num_ids), predecessors, num_ids
+                    
 
         # """
 

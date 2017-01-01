@@ -807,51 +807,6 @@ def get_allele(gene_name, allele_name, Vars, Var_list, Links):
 
 
 """
-"""
-def calculate_allele_coverage(allele_haplotype,
-                              N_haplotypes,
-                              exons,
-                              partial,
-                              exonic_only,
-                              output):
-    _var_count = {}
-    for read_haplotypes in N_haplotypes.values():
-        for read_haplotype in read_haplotypes:
-            if haplotype_cmp(allele_haplotype, read_haplotype) <= 0:
-                _, assembled = assemble_two_haplotypes(allele_haplotype.split(','), read_haplotype.split(','))
-            else:
-                _, assembled = assemble_two_haplotypes(read_haplotype.split(','), allele_haplotype.split(','))
-            read_vars = read_haplotype.split(',')
-            for read_var in read_vars:
-                _type, _left, _data, _id = read_var.split('-')
-                if _type in ["left", "right", "unknown"]:
-                    continue
-                if _id not in _var_count:
-                    _var_count[_id] = 1
-                else:
-                    _var_count[_id] += 1
-    total_var, covered_var = 0, 0
-    for allele_var in allele_haplotype.split(',')[1:-1]:
-        _type, _left, _data, _id = allele_var.split('-')
-        _left = int(_left)
-        _count = 0
-
-        if partial and \
-                exonic_only and \
-                not var_in_exon([_type, _left, _data], exons):
-            continue
-        
-        total_var += 1
-        if _id in _var_count:
-            _count = _var_count[_id]
-            covered_var += 1
-        if output:
-            print "\t %d %s %s (%s - %d)" % (_left, _type, _data, _id, _count)
-            
-    return covered_var, total_var
-
-
-"""
 HISAT-genotype's mpileup
 """
 def get_mpileup(alignview_cmd,
@@ -1340,9 +1295,10 @@ def typing(ex_path,
             # Extract variants that are within exons
             exon_vars = get_exonic_vars(gene_vars, ref_exons)
 
-            # Compare two alleles
+            # Store nodes that represent alleles
             allele_nodes = {}
-            for allele_id, var_ids in allele_vars.items():
+            def create_allele_node(allele_name):
+                var_ids = allele_vars[allele_name]
                 seq = list(ref_seq)  # sequence that node represents
                 var = ["" for i in range(len(ref_seq))]  # how sequence is related to backbone
                 for var_id in var_ids:
@@ -1363,26 +1319,28 @@ def typing(ex_path,
                         None
 
                 qual = ' ' * len(seq)
-                allele_nodes[allele_id] = assembly_graph.Node(allele_id,
-                                                              0,
-                                                              seq,
-                                                              qual,
-                                                              var,
-                                                              ref_seq,
-                                                              gene_vars,
-                                                              mpileup,
-                                                              simulation)
+                allele_node = assembly_graph.Node(allele_id,
+                                                  0,
+                                                  seq,
+                                                  qual,
+                                                  var,
+                                                  ref_seq,
+                                                  gene_vars,
+                                                  mpileup,
+                                                  simulation)
+                allele_nodes[allele_name] = allele_node
+                return allele_node
 
             true_allele_nodes = {}
             if simulation:
                 for allele_name in test_HLA_names:
-                    true_allele_nodes[allele_name] = allele_nodes[allele_name]
+                    true_allele_nodes[allele_name] = create_allele_node(allele_name)
 
             display_allele_nodes = {}
             for display_allele in display_alleles:
                 if display_allele not in allele_nodes:
                     continue
-                display_allele_nodes[display_allele] = allele_nodes[display_allele]
+                display_allele_nodes[display_allele] = create_allele_node(display_allele)
 
             # Assembly graph
             asm_graph = assembly_graph.Graph(ref_seq,
@@ -2158,9 +2116,7 @@ def typing(ex_path,
                 for allele_name, prob in HLA_prob:
                     if prob < 0.1: # abundance of 10%
                         break
-                    assert allele_name in allele_nodes
-                    assert allele_name not in predicted_allele_nodes
-                    predicted_allele_nodes[allele_name] = allele_nodes[allele_name]
+                    predicted_allele_nodes[allele_name] = create_allele_node(allele_name)
                     allele_node_order.append([allele_name, prob])
                     if len(predicted_allele_nodes) >= 4:
                         break
@@ -2197,7 +2153,7 @@ def typing(ex_path,
                     def get_best_alleles(left, right, vars):
                         max_alleles, max_common = [], -sys.maxint
                         for allele_name, allele_node in predicted_allele_nodes.items():
-                            tmp_vars = allele_node.get_var_ids(gene_vars, left, right)
+                            tmp_vars = allele_node.get_var_ids(left, right)
                             tmp_common = len(set(vars) & set(tmp_vars))
                             tmp_common -= len(set(vars) | set(tmp_vars))
                             if max_common < tmp_common:
@@ -2266,7 +2222,7 @@ def typing(ex_path,
                     count += 1
                     if count > 10:
                         break
-                    node_vars = node.get_var_ids(gene_vars)
+                    node_vars = node.get_var_ids()
                     node.print_info(); print >> sys.stderr
                     if node.id in asm_graph.to_node:
                         for id2, at in asm_graph.to_node[node.id]:
@@ -2279,7 +2235,7 @@ def typing(ex_path,
                         
                     alleles, cmp_vars, max_common = "", [], -sys.maxint
                     for cmp_HLA_name in cmp_HLA_names:
-                        tmp_vars = allele_nodes[cmp_HLA_name].get_var_ids(gene_vars, node.left, node.right)
+                        tmp_vars = allele_nodes[cmp_HLA_name].get_var_ids(node.left, node.right)
                         tmp_common = len(set(node_vars) & set(tmp_vars))
                         tmp_common -= len(set(node_vars) | set(tmp_vars))
                         if max_common < tmp_common:
