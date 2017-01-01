@@ -425,8 +425,8 @@ class Node:
         print >> output, "Pos: [%d, %d], Avg. coverage: %.1f" % (self.left, self.right, self.get_avg_cov())
         print >> output, "\t", seq
         print >> output, "\t", var_str
-        print >> output, "mates:", sorted(self.mate_ids)
-        print >> output, "reads:", sorted(self.read_ids)
+        print >> output, "mates:", len(self.mate_ids) # sorted(self.mate_ids)
+        print >> output, "reads:", len(self.read_ids) # sorted(self.read_ids)
         print >> output
 
                 
@@ -1608,7 +1608,7 @@ class Graph:
             if DRB1_debug:
                 leftshift(seq, self.backbone[node.left:node.left + len(seq)])
             node_seq[id] = seq
-            
+
         try_hard = False
         while True:
             delete_ids = set()
@@ -1670,7 +1670,7 @@ class Graph:
                         debruijn[pos].append([kmer_seq[-1],           # base
                                               ''.join(kmer_seq[:-1]), # (k-1)-mer
                                               predecessors,           # predecessors
-                                              [n]])              # numeric read IDs
+                                              [n]])                   # numeric read IDs
 
                     # Update k-mer
                     if len(seq) > 0:
@@ -1678,13 +1678,12 @@ class Graph:
                         nodes[n] = [id, node_pos + 1, node_right, kmer, seq]
 
             # Average number of kmers
-            if DRB1_debug:
-                total_kmers = 0
-                for pos in range(len(debruijn)):
-                    vertices = debruijn[pos]
-                    for _, _, _, num_ids in vertices:
-                        total_kmers += len(num_ids)
-                avg_kmers = float(total_kmers) / len(debruijn)
+            total_kmers = 0
+            for pos in range(len(debruijn)):
+                vertices = debruijn[pos]
+                for _, _, _, num_ids in vertices:
+                    total_kmers += len(num_ids)
+            avg_kmers = float(total_kmers) / len(debruijn)
 
             # Filter out reads
             for pos in range(len(debruijn)):
@@ -1961,7 +1960,7 @@ class Graph:
                 classes = equiv_list[i]
                 for j in range(len(classes)):
                     ids, num_ids, all_ids = classes[j]
-                    print >> sys.stderr, i, j, ids, len(num_ids), sorted(list(num_ids))[:]
+                    print >> sys.stderr, i, j, ids, len(num_ids), sorted(list(num_ids))[:20]
 
                 print >> sys.stderr
             # """
