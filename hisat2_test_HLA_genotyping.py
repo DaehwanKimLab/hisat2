@@ -1298,6 +1298,8 @@ def typing(ex_path,
             # Store nodes that represent alleles
             allele_nodes = {}
             def create_allele_node(allele_name):
+                if allele_name in allele_nodes:
+                    return allele_nodes[allele_name]
                 var_ids = allele_vars[allele_name]
                 seq = list(ref_seq)  # sequence that node represents
                 var = ["" for i in range(len(ref_seq))]  # how sequence is related to backbone
@@ -1576,8 +1578,9 @@ def typing(ex_path,
                                     break
                                 MD_str_pos += 1
                             _var_id = "unknown"
-                            if read_pos == Zs_pos and Zs_i < len(Zs):
-                                assert Zs[Zs_i][1] == 'D'
+                            if read_pos == Zs_pos and \
+                               Zs_i < len(Zs) and \
+                               Zs[Zs_i][1] == 'D':
                                 _var_id = Zs[Zs_i][2]
                                 Zs_i += 1
                                 if Zs_i < len(Zs):
@@ -1614,6 +1617,7 @@ def typing(ex_path,
                         elif cigar_op == 'S':
                             if i == 0:
                                 softclip[0] = length
+                                Zs_pos += length
                             else:
                                 assert i + 1 == len(cigars)
                                 softclip[1] = length
@@ -2192,7 +2196,7 @@ def typing(ex_path,
                 if simulation and len(test_HLA_names) == 2:
                     allele_name1, allele_name2 = test_HLA_names
                     print >> sys.stderr, allele_name1, "vs.", allele_name2
-                    asm_graph.print_node_comparison(asm_graph.allele_nodes)
+                    asm_graph.print_node_comparison(asm_graph.true_allele_nodes)
 
                 def compare_alleles(vars1, vars2):
                     skip = True
@@ -2565,6 +2569,7 @@ def test_HLA_genotyping(base_fname,
         extract_cmd += ["--min-var-freq", "0.1"]
         
         # extract_cmd += ["--leftshift"]
+        # DK - debugging purposes
         # extract_cmd += ["--ext-seq", "300"]
         if verbose >= 1:
             print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)

@@ -254,6 +254,7 @@ def build_genotype_genome(reference,
         off = 0
         prev_right = 0
         for gene in chr_genes:
+            # DK - we need to consider strand information!
             left, right, length, name, family = gene
 
             chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(left, right, chr_genotype_vari, chr_genotype_hti, haplotype_num)

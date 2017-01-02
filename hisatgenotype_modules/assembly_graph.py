@@ -450,9 +450,6 @@ class Graph:
         self.display_allele_nodes = display_allele_nodes
         self.simulation = simulation
 
-        if simulation:
-            assert len(true_allele_nodes) == 0
-
         self.nodes = {}
         self.edges = {}
         self.to_node, self.from_node = {}, {}
@@ -1350,7 +1347,9 @@ class Graph:
             for n_ in range(len(allele_nodes)):
                 n = -1
                 prob = ""
-                if not display and len(self.allele_node_order) == len(allele_node_dic):
+                if not display and \
+                   not self.simulation and \
+                   len(self.allele_node_order) == len(allele_node_dic):
                     allele_id, prob = self.allele_node_order[n_]
                     for n2_ in range(len(allele_nodes)):
                         if allele_id == allele_nodes[n2_][0]:
