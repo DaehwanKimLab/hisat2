@@ -45,6 +45,19 @@ def create_map(seq):
 
 """
 """
+def reverse_complement(seq):
+    comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
+    rc_seq = ""
+    for s in reversed(seq):
+        if s in comp_table:
+            rc_seq += comp_table[s]
+        else:
+            rc_seq += s
+    return rc_seq
+
+
+"""
+"""
 def extract_vars(base_fname,
                  base_dname,
                  reference_type,
@@ -72,7 +85,7 @@ def extract_vars(base_fname,
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
     hla_ref_file = open(base_fullpath_name + ".ref", 'w')
-    left_ext_seq, right_ext_seq = "", ""
+    left_ext_seq_dic, right_ext_seq_dic = {}, {}
     if base_fname in ["hla"]:
         HLA_genes, HLA_gene_strand = {}, {}
 
@@ -105,11 +118,10 @@ def extract_vars(base_fname,
                     continue
                 line = line.strip()
                 cols = line.split()
-                t_allele_id, flag, chr, left, _, cigar_str = cols[:6]
+                allele_id, flag, chr, left, _, cigar_str = cols[:6]
                 assert cigar_str[-1] == 'M'
                 left = int(left)
                 right = left + int(cigar_str[:-1])
-                allele_id = t_allele_id
 
                 flag = int(flag)
                 strand = '-' if flag & 0x10 else '+'
@@ -140,6 +152,7 @@ def extract_vars(base_fname,
 
             assert chr != "" and left >= 0 and right > left
             if ext_seq_len > 0:
+                left_ext_seq, right_ext_seq = "", ""
                 left1, left2 = max(1, left - ext_seq_len), max(1, left - 1)
                 if left2 > 0:
                     extract_seq_cmd = ["samtools", "faidx", "genome.fa", "%s:%d-%d" % (chr, left1, left2)]
@@ -160,6 +173,11 @@ def extract_vars(base_fname,
                         continue
                     line = line.strip()
                     right_ext_seq += line
+
+                if strand == '-':
+                    left_ext_seq, right_ext_seq = reverse_complement(right_ext_seq), reverse_complement(left_ext_seq)
+                left_ext_seq_dic[gene], right_ext_seq_dic[gene] = left_ext_seq, right_ext_seq
+            
 
         # Extract exon information from hla.data
         HLA_gene_exons = {}
@@ -183,7 +201,11 @@ def extract_vars(base_fname,
                 exon_range = line.split()[2].split("..")
                 if not gene in HLA_gene_exons:
                     HLA_gene_exons[gene] = []
-                HLA_gene_exons[gene].append([int(exon_range[0]) - 1 + len(left_ext_seq), int(exon_range[1]) - 1 + len(left_ext_seq)])
+                if gene in left_ext_seq_dic:
+                    left_ext_seq_len = len(left_ext_seq_dic[gene])
+                else:
+                    left_ext_seq_len = 0
+                HLA_gene_exons[gene].append([int(exon_range[0]) - 1 + left_ext_seq_len, int(exon_range[1]) - 1 + left_ext_seq_len])
 
         tmp_hla_list = []
         for gene in hla_list:
@@ -240,7 +262,11 @@ def extract_vars(base_fname,
     num_vars, num_haplotypes = 0, 0
     HLA_full_alleles = {}
     for HLA_gene, HLA_ref_gene in HLA_genes.items():
-        strand = HLA_gene_strand[HLA_gene]        
+        strand = HLA_gene_strand[HLA_gene]
+        left_ext_seq, right_ext_seq = "", ""
+        if HLA_gene in left_ext_seq_dic:
+            left_ext_seq, right_ext_seq = left_ext_seq_dic[HLA_gene], right_ext_seq_dic[HLA_gene]
+
         def read_MSF_file(fname, left_ext_seq = "", right_ext_seq = ""):
             HLA_names = {} # HLA allele names to numeric IDs
             HLA_seqs = []  # HLA multiple alignment sequences
@@ -311,7 +337,7 @@ def extract_vars(base_fname,
         if not os.path.exists(HLA_MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
             continue
-        
+
         HLA_names, HLA_seqs = read_MSF_file(HLA_MSA_fname, left_ext_seq, right_ext_seq)
 
         # Identify a consensus sequence
@@ -577,15 +603,6 @@ def extract_vars(base_fname,
 
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
-            def reverse_complement(seq):
-                comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
-                rc_seq = ""
-                for s in reversed(seq):
-                    if s in comp_table:
-                        rc_seq += comp_table[s]
-                    else:
-                        rc_seq += s
-                return rc_seq
             for i in range(len(HLA_seqs)):
                 HLA_seqs[i] = reverse_complement(HLA_seqs[i])
             backbone_seq = reverse_complement(backbone_seq)
@@ -861,6 +878,9 @@ def extract_vars(base_fname,
                     right += (length - 1)
                 break            
             align_proc.communicate()
+            if left == right:
+                print >> sys.stderr, "Warning: %s (%s) is not remapped" % (HLA_gene, HLA_ref_gene)
+                continue
             assert left < right
 
             if reference_type == "gene":
