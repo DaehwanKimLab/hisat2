@@ -165,7 +165,7 @@ def build_genotype_genome(reference,
     # Read HLA genes
     if os.path.exists("hla.ref"):
         for line in open("hla.ref"):
-            HLA_name, chr, left, right, length, exon_str = line.strip().split()
+            HLA_name, chr, left, right, length, exon_str, strand = line.strip().split()
             left, right = int(left), int(right)
             length = int(length)
             if chr not in chr_names:
@@ -254,7 +254,6 @@ def build_genotype_genome(reference,
         off = 0
         prev_right = 0
         for gene in chr_genes:
-            # DK - we need to consider strand information!
             left, right, length, name, family = gene
 
             chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(left, right, chr_genotype_vari, chr_genotype_hti, haplotype_num)

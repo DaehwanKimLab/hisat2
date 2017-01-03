@@ -341,6 +341,7 @@ def get_exonic_vars(Vars, exons):
         for exon_left, exon_right in exons:
             if var_left >= exon_left and var_right <= exon_right:
                 vars.add(var_id)
+                
     return vars
 
 
@@ -845,7 +846,7 @@ def get_mpileup(alignview_cmd,
             concordant = False
 
         if not allow_discordant and not concordant:
-            continue                    
+            continue
 
         read_pos, left_pos = 0, pos
         right_pos = left_pos
@@ -1212,7 +1213,7 @@ def typing(ex_path,
             ref_allele = refHLAs[gene]
             ref_seq = HLAs[gene][ref_allele]
             ref_exons = refHLA_loci[gene][-1]
-
+            
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
             var_count = {}
@@ -2085,6 +2086,7 @@ def typing(ex_path,
                 gen_prob_sum += prob
                 for allele2 in allele_rep_groups[allele]:
                     gen_alleles.add(allele2)
+
             if len(gen_alleles) > 0:
                 HLA_gen_cmpt2 = {}
                 for cmpt, value in HLA_gen_cmpt.items():
@@ -2140,8 +2142,8 @@ def typing(ex_path,
                 # Apply De Bruijn graph
                 asm_graph.guided_DeBruijn()
                 asm_graph.generate_edges(0.01,
-                                         True, # jump_edge
-                                         True) # skipN
+                                         True, # also generate jump edges
+                                         True) # skip Ns
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Asssembly")
@@ -2201,21 +2203,44 @@ def typing(ex_path,
                 def compare_alleles(vars1, vars2):
                     skip = True
                     var_i, var_j = 0, 0
+                    exon_i = 0
                     while var_i < len(vars1) and var_j < len(vars2):
                         cmp_var_id, node_var_id = vars1[var_i], vars2[var_j]
+                        cmp_var, node_var = gene_vars[cmp_var_id], gene_vars[node_var_id]
+
+                        min_pos = min(cmp_var[1], node_var[1])
+                        cmp_var_in_exon, node_var_in_exon = False, False
+                        while exon_i < len(ref_exons):
+                            exon_left, exon_right = ref_exons[exon_i]
+                            if min_pos <= exon_right:
+                                if cmp_var[1] >= exon_left and cmp_var[1] <= exon_right:
+                                    cmp_var_in_exon = True
+                                else:
+                                    cmp_var_in_exon = False
+                                if node_var[1] >= exon_left and node_var[1] <= exon_right:
+                                    node_var_in_exon = True
+                                else:
+                                    node_var_in_exon = False                                
+                                break
+                            exon_i += 1
+                        
                         if cmp_var_id == node_var_id:
                             skip = False
-                            var = gene_vars[cmp_var_id]
-                            print >> sys.stderr, cmp_var_id, var, "\t\t\t", mpileup[var[1]]
+                            if cmp_var_in_exon:
+                                print >> sys.stderr, "\033[94mexon%d\033[00m" % (exon_i + 1),
+                            print >> sys.stderr, cmp_var_id, cmp_var, "\t\t\t", mpileup[cmp_var[1]]
                             var_i += 1; var_j += 1
                             continue
-                        cmp_var, node_var = gene_vars[cmp_var_id], gene_vars[node_var_id]
                         if cmp_var[1] <= node_var[1]:
                             if not skip:
                                 if (var_i > 0 and var_i + 1 < len(vars1)) or cmp_var[0] != "deletion":
+                                    if cmp_var_in_exon:
+                                        print >> sys.stderr, "\033[94mexon%d\033[00m" % (exon_i + 1),
                                     print >> sys.stderr, "***", cmp_var_id, cmp_var, "==", "\t\t\t", mpileup[cmp_var[1]]
                             var_i += 1
                         else:
+                            if node_var_in_exon:
+                                print >> sys.stderr, "\033[94mexon%d\033[00m" % (exon_i + 1),
                             print >> sys.stderr, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
                             var_j += 1
                     
@@ -2237,7 +2262,7 @@ def typing(ex_path,
                     else:
                         cmp_HLA_names = [allele_name for allele_name, _ in allele_node_order]
                         
-                    alleles, cmp_vars, max_common = "", [], -sys.maxint
+                    alleles, cmp_vars, max_common = [], [], -sys.maxint
                     for cmp_HLA_name in cmp_HLA_names:
                         tmp_vars = allele_nodes[cmp_HLA_name].get_var_ids(node.left, node.right)
                         tmp_common = len(set(node_vars) & set(tmp_vars))
@@ -2644,7 +2669,7 @@ def test_HLA_genotyping(base_fname,
     # Read HLA alleles (names and sequences)
     refHLAs, refHLA_loci = {}, {}
     for line in open("hla.ref"):
-        HLA_name, chr, left, right, length, exon_str = line.strip().split()
+        HLA_name, chr, left, right, length, exon_str, strand = line.strip().split()
         HLA_gene = HLA_name.split('*')[0]
         assert not HLA_gene in refHLAs
         refHLAs[HLA_gene] = HLA_name
