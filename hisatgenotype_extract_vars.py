@@ -195,17 +195,20 @@ def extract_vars(base_fname,
                     continue
                 skip = False
             elif not skip:
-                if not line.startswith("FT") or \
-                        line.find("exon") == -1:
+                if not line.startswith("FT"):
                     continue
-                exon_range = line.split()[2].split("..")
-                if not gene in HLA_gene_exons:
-                    HLA_gene_exons[gene] = []
-                if gene in left_ext_seq_dic:
-                    left_ext_seq_len = len(left_ext_seq_dic[gene])
-                else:
-                    left_ext_seq_len = 0
-                HLA_gene_exons[gene].append([int(exon_range[0]) - 1 + left_ext_seq_len, int(exon_range[1]) - 1 + left_ext_seq_len])
+                if line.find("exon") != -1:
+                    exon_range = line.split()[2].split("..")
+                    exon_left, exon_right = int(exon_range[0]) - 1, int(exon_range[1]) - 1
+                    assert exon_left >= 0
+                    assert exon_left < exon_right
+                    if not gene in HLA_gene_exons:
+                        HLA_gene_exons[gene] = []
+                    if gene in left_ext_seq_dic:
+                        left_ext_seq_len = len(left_ext_seq_dic[gene])
+                    else:
+                        left_ext_seq_len = 0
+                    HLA_gene_exons[gene].append([exon_left + left_ext_seq_len, exon_right + left_ext_seq_len])
 
         tmp_hla_list = []
         for gene in hla_list:
@@ -603,6 +606,16 @@ def extract_vars(base_fname,
 
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
+            # Reverse exons
+            ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
+            ref_seq = ref_seq.replace('.', '')
+            ref_seq_len = len(ref_seq)
+            exons = []
+            for left, right in reversed(HLA_gene_exons[HLA_gene]):
+                left, right = ref_seq_len - right - 1, ref_seq_len - left - 1
+                exons.append([left, right])
+            HLA_gene_exons[HLA_gene] = exons
+
             for i in range(len(HLA_seqs)):
                 HLA_seqs[i] = reverse_complement(HLA_seqs[i])
             backbone_seq = reverse_complement(backbone_seq)
@@ -884,19 +897,29 @@ def extract_vars(base_fname,
             assert left < right
 
             if reference_type == "gene":
-                base_locus = 0
-                backbone_seq_ = backbone_seq.replace('.', '')
-
+                base_locus = 0                
                 ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
                 ref_seq_map = create_map(ref_seq)
-                exons = HLA_gene_exons[HLA_gene]
                 exon_str = ""
-                for exon in exons:
+
+                del_count = []
+                for nt in backbone_seq:
+                    assert nt in "ACGT."
+                    add = 1 if nt == '.' else 0
+                    if len(del_count) == 0:
+                        del_count.append(add)
+                    else:
+                        del_count.append(del_count[-1] + add)
+                for exon_left, exon_right in HLA_gene_exons[HLA_gene]:
+                    exon_left, exon_right = ref_seq_map[exon_left], ref_seq_map[exon_right]
+                    exon_left -= del_count[exon_left]
+                    exon_right -= del_count[exon_right]
                     if exon_str != "":
                         exon_str += ','
-                    exon_str += ("%d-%d" % (ref_seq_map[exon[0]], ref_seq_map[exon[1]]))
+                    exon_str += ("%d-%d" % (exon_left, exon_right))
 
-                print >> hla_ref_file, "%s\t6\t%d\t%d\t%d\t%s" % (backbone_name, left, right, len(backbone_seq_), exon_str)
+                print >> hla_ref_file, "%s\t6\t%d\t%d\t%d\t%s\t%s" % \
+                    (backbone_name, left, right, len(backbone_seq.replace('.', '')), exon_str, HLA_gene_strand[HLA_gene])
             else:
                 exons = HLA_gene_exons[HLA_gene]
                 exon_str = ""
@@ -905,7 +928,8 @@ def extract_vars(base_fname,
                         exon_str += ','
                     exon_str += ("%d-%d" % (left + exon[0], left + exon[1]))
 
-                print >> hla_ref_file, "%s\t6\t%d\t%d\t%d\t%s" % (backbone_name, left, right, right - left + 1, exon_str)
+                print >> hla_ref_file, "%s\t6\t%d\t%d\t%d\t%s\t%s" % \
+                    (backbone_name, left, right, right - left + 1, exon_str, HLA_gene_strand[HLA_gene])
                 base_locus = left
         else:
             base_locus = 0
