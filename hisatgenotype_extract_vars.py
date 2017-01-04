@@ -26,7 +26,6 @@ import glob
 from argparse import ArgumentParser, FileType
 
 
-
 """
 Mapping from base pair to a location in MSF format
 """
@@ -900,8 +899,7 @@ def extract_vars(base_fname,
                 base_locus = 0                
                 ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
                 ref_seq_map = create_map(ref_seq)
-                exon_str = ""
-
+                
                 del_count = []
                 for nt in backbone_seq:
                     assert nt in "ACGT."
@@ -910,6 +908,8 @@ def extract_vars(base_fname,
                         del_count.append(add)
                     else:
                         del_count.append(del_count[-1] + add)
+
+                exon_str = ""
                 for exon_left, exon_right in HLA_gene_exons[HLA_gene]:
                     exon_left, exon_right = ref_seq_map[exon_left], ref_seq_map[exon_right]
                     exon_left -= del_count[exon_left]
@@ -918,8 +918,65 @@ def extract_vars(base_fname,
                         exon_str += ','
                     exon_str += ("%d-%d" % (exon_left, exon_right))
 
+                # Sanity check for exonic sequence
+                sanity_check = True
+                if sanity_check:
+                    exons_ = []
+                    for exon in exon_str.split(','):
+                        exon_left, exon_right = exon.split('-')
+                        exon_left, exon_right = int(exon_left), int(exon_right)
+                        exons_.append([exon_left, exon_right])
+                        
+                    backbone_seq_ = backbone_seq.replace('.', '')
+                    vars_ = HLA_Vars[HLA_ref_gene]
+                    seq_ = list(backbone_seq_)
+                    has_insertion = False
+                    for var_ in vars_:
+                        var_pos, var_type, var_data = var_.split('-')
+                        var_pos = int(var_pos)
+                        assert var_pos >= 0 and var_pos < len(backbone_seq_)
+                        if var_type == 'M':
+                            seq_[var_pos] = var_data
+                        elif var_type == 'D':
+                            del_len = int(var_data)
+                            assert var_pos + del_len <= len(ref_seq)
+                            seq_[var_pos:var_pos + del_len] = ['.'] * del_len
+                        else:
+                            assert var_type == 'I'
+                            has_insertion = True
+
+                    seq_ = ''.join(seq_)
+                    exon_seq_ = ""
+                    for exon_left, exon_right in exons_:
+                        exon_seq_ += seq_[exon_left:exon_right+1]
+                    exon_seq_ = exon_seq_.replace('.', '')
+                    if HLA_gene_strand[HLA_gene] == '-':
+                        exon_seq_ = reverse_complement(exon_seq_)
+
+                    cmp_exon_seq_, allele_name_ = "", ""
+                    for line in open("IMGTHLA/fasta/%s_nuc.fasta" % HLA_gene):
+                        if line.startswith(">"):
+                            if allele_name_ == HLA_ref_gene:
+                                break
+                            allele_name_ = line.strip().split()[1]
+                            cmp_exon_seq_ = ""
+                        else:
+                            cmp_exon_seq_ += line.strip()
+                    """
+                    print "Has insertions:", has_insertion
+                    print "constructed:", len(exon_seq_)
+                    for p in range(0, len(exon_seq_), 60):
+                        print exon_seq_[p:p+60]
+                    print "true:", len(cmp_exon_seq_)
+                    for p in range(0, len(cmp_exon_seq_), 60):
+                        print cmp_exon_seq_[p:p+60]
+                    """
+                    if exon_seq_ != cmp_exon_seq_:
+                        print >> sys.stderr, "Waring: exonic sequences do not match (%s)" % HLA_gene
+
                 print >> hla_ref_file, "%s\t6\t%d\t%d\t%d\t%s\t%s" % \
                     (backbone_name, left, right, len(backbone_seq.replace('.', '')), exon_str, HLA_gene_strand[HLA_gene])
+
             else:
                 exons = HLA_gene_exons[HLA_gene]
                 exon_str = ""

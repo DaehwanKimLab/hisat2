@@ -1312,13 +1312,13 @@ def typing(ex_path,
                         seq[var_pos] = var_data
                         var[var_pos] = var_id
                     elif var_type == "deletion":
-                        assert var_type == "deletion"
                         del_len = int(var_data)
                         assert var_pos + del_len <= len(ref_seq)
                         seq[var_pos:var_pos + del_len] = ['D'] * del_len
                         var[var_pos:var_pos + del_len] = [var_id] * del_len
                     else:
                         # DK - to be implemented for insertions
+                        assert var_type == "insertion"
                         None
 
                 qual = ' ' * len(seq)
