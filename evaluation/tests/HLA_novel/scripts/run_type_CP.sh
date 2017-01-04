@@ -7,4 +7,4 @@
 #SBATCH --time=12:0:0 
 #SBATCH --workdir=/home-1/dkim136@jhu.edu/infphilo/hisat2/evaluation/tests/HLA_CP_extract_genome_partial
 
-/home-1/dkim136@jhu.edu/infphilo/hisat2/evaluation/tests/HLA_CP_extract_genome_partial/hisat2_test_HLA_genotyping_CAAPA.py -p 24 > caapa_hla.txt
+/home-1/dkim136@jhu.edu/infphilo/hisat2/evaluation/tests/HLA_CP_extract_genome_partial/hisat2_test_HLA_genotyping_CP.py CP --num-editdist 2 -p 24 > cp_hla.txt

@@ -1,18 +1,16 @@
 #!/usr/bin/env python
 
 import sys, os
+from argparse import ArgumentParser, FileType
 use_message = '''
 '''
 
-if __name__ == "__main__":
+def compare(hisatgenotype_fname, omixon_fname):
     hla_list = ["A", "B", "C", "DQA1", "DQB1", "DRB1"]
     
     # Read HISAT-genotype predicted HLA alleles for the CAAPA genomes
     hisat_hla = {}
-    # hisat_fname = "hisat_old_caapa_hla_partial_Aug25.txt"
-    hisat_fname = "hisat_caapa_hla_Jul22.txt"
-    # hisat_fname = "HISAT_CAAPA_HLA_July22_2016.txt"
-    for line in open(hisat_fname):
+    for line in open(hisatgenotype_fname):
         line = line.strip()
         fields = line.split('\t')
         if len(fields) == 2:
@@ -37,7 +35,7 @@ if __name__ == "__main__":
 
     # Read Omixon predicted HLA alleles for the CAAPA genomes
     omixon_hla = {}
-    for line in open("omixon_caapa_hla.txt"):
+    for line in open(omixon_fname):
         line = line.strip()
         sample, allele1, allele2 = line.split('\t')
         gene1, allele1 = allele1.split('*')
@@ -63,9 +61,8 @@ if __name__ == "__main__":
                 continue
             hisat_sample = hisat_hla[sample]
             omixon_sample = omixon_hla[sample]
-            if gene not in omixon_sample:
+            if gene not in omixon_sample or gene not in hisat_sample:
                 continue
-            assert gene in hisat_sample
             hisat_gene = hisat_sample[gene]
             omixon_gene = omixon_sample[gene]
             num_match, num_match_10 = 0, 0
@@ -95,20 +92,42 @@ if __name__ == "__main__":
                             num_match += 1
                         num_match_10 += 1
                         break
+                    
             # DK - for debugging purposes
-            # """
+            """
             if gene == "A" and num_match == 0 and num_match_10 == 2:
             # if gene == "A" and num_match == 2 and hisat_gene[1][1] >= 10.0:
                 print sample
                 print "\t", omixon_gene
                 print "\t", hisat_gene
                 # sys.exit(1)
-            # """
+            """
                 
             assert num_match < len(count)
             count[num_match] += 1
             count_10[num_match_10] += 1
 
+        if sum(count) <= 0:
+            continue
+        
         print >> sys.stderr, "\tTop two\t0: %d, 1: %d, 2: %d (%.2f%%)" % (count[0], count[1], count[2], (count[1] + count[2] * 2) / float(sum(count) * 2) * 100.0)
         print >> sys.stderr, "\tTop ten\t0: %d, 1: %d, 2: %d (%.2f%%)" % (count_10[0], count_10[1], count_10[2], (count_10[1] + count_10[2] * 2) / float(sum(count_10) * 2) * 100.0)
         
+
+if __name__ == "__main__":
+    parser = ArgumentParser(
+        description='Compare HISAT-genotype and Omixon HLA typing results')
+    parser.add_argument('hisatgenotype_fname',
+                        nargs='?',
+                        type=str,
+                        help='hisatgenotype file name (e.g. cp_hla.txt)')
+    parser.add_argument('omixon_fname',
+                        nargs='?',
+                        type=str,
+                        help='omixon file name (e.g. omixon_caapa_hla.txt)')
+
+    args = parser.parse_args()
+
+    compare(args.hisatgenotype_fname,
+            args.omixon_fname)
+

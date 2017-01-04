@@ -2954,7 +2954,7 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="A seeding number for randomness (default: 1)")
-    parser.add_argument("--num-editdist", "--num-mismatch",
+    parser.add_argument("--num-editdist",
                         dest="num_editdist",
                         type=int,
                         default=0,

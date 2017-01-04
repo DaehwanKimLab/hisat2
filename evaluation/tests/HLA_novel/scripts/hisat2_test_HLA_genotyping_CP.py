@@ -36,7 +36,7 @@ class myThread(threading.Thread):
                  partial,
                  aligners,
                  exclude_allele_list,
-                 num_mismatch,
+                 num_editdist,
                  sample_frac,                       
                  verbose):
         threading.Thread.__init__(self)
@@ -48,7 +48,7 @@ class myThread(threading.Thread):
         self.partial = partial
         self.aligners = aligners
         self.exclude_allele_list = exclude_allele_list
-        self.num_mismatch = num_mismatch
+        self.num_editdist = num_editdist
         self.sample_frac = sample_frac
         self.verbose = verbose
 
@@ -69,7 +69,7 @@ class myThread(threading.Thread):
                    self.partial,
                    self.aligners,
                    self.exclude_allele_list,
-                   self.num_mismatch,
+                   self.num_editdist,
                    self.sample_frac,
                    self.verbose)
 
@@ -82,29 +82,32 @@ def worker(ex_path,
            partial,
            aligners,
            exclude_allele_list,
-           num_mismatch,
+           num_editdist,
            sample_frac,                 
            verbose):
     fq_name = path.split('/')[-1]
+    read_dir = '/'.join(path.split('/')[:-1])
     genome = fq_name.split('.')[0]
-    read_fname_1, read_fname_2 = "CP/%s.extracted.1.fq.gz" % genome, "CP/%s.extracted.2.fq.gz" % genome
+    read_fname_1, read_fname_2 = "%s/%s.extracted.1.fq.gz" % (read_dir, genome), "%s/%s.extracted.2.fq.gz" % (read_dir, genome)
+
     if not os.path.exists(read_fname_1) or not os.path.exists(read_fname_2):
         return
     lock.acquire()
     print >> sys.stderr, genome
     lock.release()
     cmd_aligners = ['.'.join(aligners[i]) for i in range(len(aligners))]
-    test_hla_script = os.path.join(ex_path, "hisat2_test_HLA_genotyping.py")
+    test_hla_script = os.path.join(ex_path, "../hisat2_test_HLA_genotyping.py")
     test_hla_cmd = [test_hla_script,
                     "--reference-type", reference_type,
                     "--hla-list", ','.join(hla_list),
                     "--aligner-list", ','.join(cmd_aligners),
                     "--reads", "%s,%s" % (read_fname_1, read_fname_2),
                     # "--exclude-allele-list", ','.join(exclude_allele_list),
-                    "--num-mismatch", str(num_mismatch)]
+                    "--num-editdist", str(num_editdist),
+                    "--no-assembly"]
 
-    if partial:
-        test_hla_cmd += ["--partial"]
+    if not partial:
+        test_hla_cmd += ["--no-partial"]
 
     if verbose:
         lock.acquire()
@@ -118,20 +121,22 @@ def worker(ex_path,
         line = line.strip()
         if line.find("abundance") == -1:
             continue
-        rank, _, allele, _, abundance, _, vars_covered = line.split()        
-        output_list.append([allele, abundance[:-2], vars_covered[:-1]])
+
+        rank, _, allele, _, abundance = line.split()        
+        output_list.append([allele, abundance[:-2]])
 
     lock.acquire()
     for output in output_list:
-        allele, abundance, vars_covered = output
-        print >> sys.stdout, "%s\t%s\t%s\t%s" % (genome, allele, abundance, vars_covered)
+        allele, abundance = output
+        print >> sys.stdout, "%s\t%s\t%s" % (genome, allele, abundance)
     sys.stdout.flush()
     lock.release()
 
 
 """
 """
-def test_HLA_genotyping(reference_type,
+def test_HLA_genotyping(read_dir,
+                        reference_type,
                         hla_list,
                         partial,
                         aligners,
@@ -144,12 +149,12 @@ def test_HLA_genotyping(reference_type,
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
     ex_path = os.path.dirname(curr_script)
 
-    if not os.path.exists("CP"):
-        print >> sys.stderr, "Error: CP data is needed."
+    if not os.path.exists(read_dir):
+        print >> sys.stderr, "Error: %s data is needed." % read_dir
         sys.exit(1)
 
     # fastq files
-    fq_fnames = glob.glob("CP/*.1.fq.gz")
+    fq_fnames = glob.glob("%s/*.extracted.1.fq.gz" % read_dir)
 
     lock = threading.Lock()
     threads = []
@@ -177,6 +182,10 @@ def test_HLA_genotyping(reference_type,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='test HLA genotyping for Genomes')
+    parser.add_argument('read_dir',
+                        nargs='?',
+                        type=str,
+                        help='read directory (e.g. CP)')
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
@@ -187,10 +196,10 @@ if __name__ == '__main__':
                         type=str,
                         default="A,B,C,DQA1,DQB1,DRB1",
                         help="A comma-separated list of HLA genes (default: A,B,C,DQA1,DQB1,DRB1)")
-    parser.add_argument('--partial',
+    parser.add_argument('--no-partial',
                         dest='partial',
-                        action='store_true',
-                        help='Include partial alleles (e.g. A_nuc.fasta)')
+                        action='store_false',
+                        help='Exclude partial alleles (e.g. A_nuc.fasta)')
     parser.add_argument("--aligner-list",
                         dest="aligners",
                         type=str,
@@ -201,8 +210,8 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of allleles to be excluded")
-    parser.add_argument("--num-mismatch",
-                        dest="num_mismatch",
+    parser.add_argument("--num-editdist",
+                        dest="num_editdist",
                         type=int,
                         default=0,
                         help="Maximum number of mismatches per read alignment to be considered (default: 0)")
@@ -235,12 +244,14 @@ if __name__ == '__main__':
         args.aligners[i] = args.aligners[i].split('.')
     args.exclude_allele_list = args.exclude_allele_list.split(',')
 
-    test_HLA_genotyping(args.reference_type,
+    test_HLA_genotyping(args.read_dir,
+                        args.reference_type,
                         args.hla_list,
                         args.partial,
                         args.aligners,
                         args.exclude_allele_list,
-                        args.num_mismatch,
+                        args.num_editdist,
                         args.threads,
                         args.sample_frac,
                         args.verbose)
+

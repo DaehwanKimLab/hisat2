@@ -32,6 +32,9 @@ HISAT-genotye on Illumina Platinum Genomes
 
    for i in `ls -l CP_80/LP**1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisat2_test_HLA_genotyping.py --hla-list A --aligner-list hisat2.graph --num-editdist 2 --reads CP_80/$i.extracted.1.fq.gz,CP_80/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
 
+   scripts/hisat2_test_HLA_genotyping_CP.py CP_80 -p 4 --num-editdist 2 > cp_80_hla.txt
+   scripts/compare_HLA_Omixon.py cp_80_hla.txt ../CAAPA/omixon_caapa_hla.txt 
+
 
 Stranded-seq
         ./hisat2_test_HLA_genotyping.py --hla-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/NA12892.extracted.1.fq.gz,ILMN/NA12892.extracted.2.fq.gz --stranded-seq NA12892,ILMN_StrandSeq/SraRunInfo.txt
