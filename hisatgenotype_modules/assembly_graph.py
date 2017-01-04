@@ -852,14 +852,6 @@ class Graph:
         mate = "mate" in params and params["mate"]
         allele_nodes = params["alleles"] if "alleles" in params else {}
         vars = self.gene_vars
-        if not mate:
-            assert len(allele_nodes) > 0 and len(vars) > 0
-            # DK - debugging purposes
-            """
-            if len(self.nodes) > 20:
-                print >> sys.stderr, "Warning: too many nodes (%d) for guided assembly using known alleles..." % (len(self.nodes))
-                return
-            """
 
         # Duplicate nodes when necessary
         iter = 0
@@ -1010,7 +1002,7 @@ class Graph:
                 # DK - debugging purposes
                 """
                 debug_id = "HSQ1009:116:C0J32ACXX:3:1204:7306:26074|R"
-                if debug_id in from_ids or debug_id in to_ids:
+                if debug_id in from_ids or debug_id in to_ids or True:
                     print >> sys.stderr, "to:", id, "has", to_ids
                     print >> sys.stderr, "from:", id, "has", from_ids
                     print >> sys.stderr, matches
@@ -1027,7 +1019,7 @@ class Graph:
                     #     print >> sys.stderr, "mates:", len(nodes[from_id].mate_ids)
                     # print >> sys.stderr, "mates common between from nodes", len(nodes[from_ids[0]].mate_ids & nodes[from_ids[1]].mate_ids)
                     print >> sys.stderr, "Iter:", iter
-                    # sys.exit(1)
+                    sys.exit(1)
                 """
 
             delete_nodes = set()
@@ -1698,7 +1690,7 @@ class Graph:
                 if num_vertices <= 1:
                     if DRB1_debug:
                         if pos > 300 and pos + 300 < len(debruijn):
-                            if num_vertices == 1 and num_kmers * 8  < avg_kmers:
+                            if num_vertices == 1 and num_kmers * 8 < avg_kmers:
                                 for _, _, _, num_ids in vertices:
                                     delete_ids |= set(num_ids)
                     continue
@@ -1743,7 +1735,7 @@ class Graph:
                                         print >> sys.stderr, v, "is removed with", num_ids
                                 elif vertice_count[v] * 8 < avg_kmers:
                                     num_ids = vertices[v][3]
-                                    delete_ids |= set(num_ids)                              
+                                    delete_ids |= set(num_ids)
                                 elif vertice_count[v] * 2 < relative_avg:
                                     nt, kmer, _, num_ids = vertices[1-v]
                                     if nt == 'D':
@@ -1767,8 +1759,6 @@ class Graph:
                                                 break
                                         if success:
                                             delete_ids |= set(vertices[v][3])
-                                        # assert False
-                                        
                         else:
                             if vertice_count[v] * 3 < relative_avg:
                                 num_ids = vertices[v][3]

@@ -1322,7 +1322,7 @@ def typing(ex_path,
                         None
 
                 qual = ' ' * len(seq)
-                allele_node = assembly_graph.Node(allele_id,
+                allele_node = assembly_graph.Node(allele_name,
                                                   0,
                                                   seq,
                                                   qual,
