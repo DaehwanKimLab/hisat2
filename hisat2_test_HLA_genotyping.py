@@ -184,19 +184,40 @@ def single_abundance(HLA_cmpt,
         normalize(HLA_prob_next)
         return HLA_prob_next
 
+
+    fast_EM = True
     diff, iter = 1.0, 0
     while diff > 0.0001 and iter < 1000:
         HLA_prob_next = next_prob(HLA_cmpt, HLA_prob, HLA_length)
+        if fast_EM:
+            # Accelerated version of EM - SQUAREM iteration
+            #    Varadhan, R. & Roland, C. Scand. J. Stat. 35, 335-353 (2008)
+            #    Also, this algorithm is used in Sailfish - http://www.nature.com/nbt/journal/v32/n5/full/nbt.2862.html
+            HLA_prob_next2 = next_prob(HLA_cmpt, HLA_prob_next, HLA_length)
+            sum_squared_r, sum_squared_v = 0.0, 0.0
+            p_r, p_v = {}, {}
+            for a in HLA_prob.keys():
+                p_r[a] = HLA_prob_next[a] - HLA_prob[a]
+                sum_squared_r += (p_r[a] * p_r[a])
+                p_v[a] = HLA_prob_next2[a] - HLA_prob_next[a] - p_r[a]
+                sum_squared_v += (p_v[a] * p_v[a])
+            if sum_squared_v > 0.0:
+                gamma = -math.sqrt(sum_squared_r / sum_squared_v)
+                for a in HLA_prob.keys():
+                    HLA_prob_next2[a] = max(0.0, HLA_prob[a] - 2 * gamma * p_r[a] + gamma * gamma * p_v[a]);
+                HLA_prob_next = next_prob(HLA_cmpt, HLA_prob_next2, HLA_length)
+
         diff = prob_diff(HLA_prob, HLA_prob_next)
         HLA_prob = HLA_prob_next
 
         # Accelerate convergence
         if iter >= 10:
             HLA_prob2 = {}
+            avg_prob = sum(HLA_prob.values()) / len(HLA_prob)
             for allele, prob in HLA_prob.items():
-                if prob >= 0.005:
+                if prob >= 0.005 or prob > avg_prob:
                     HLA_prob2[allele] = prob
-            HLA_prob = HLA_prob2
+                HLA_prob = HLA_prob2
 
         # DK - debugging purposes
         if iter % 10 == 0 and False:
@@ -1946,16 +1967,17 @@ def typing(ex_path,
                         assert False
 
                     # Node
-                    read_nodes.append([node_read_id,
-                                       assembly_graph.Node(node_read_id,
-                                                           read_node_pos,
-                                                           read_node_seq,
-                                                           read_node_qual,
-                                                           read_node_var,
-                                                           ref_seq,
-                                                           gene_vars,
-                                                           mpileup,
-                                                           simulation)])
+                    if assembly:
+                        read_nodes.append([node_read_id,
+                                           assembly_graph.Node(node_read_id,
+                                                               read_node_pos,
+                                                               read_node_seq,
+                                                               read_node_qual,
+                                                               read_node_var,
+                                                               ref_seq,
+                                                               gene_vars,
+                                                               mpileup,
+                                                               simulation)])
 
                     for positive_var in positive_vars:
                         if positive_var == "unknown" or positive_var.startswith("nv"):
@@ -2591,9 +2613,9 @@ def test_HLA_genotyping(base_fname,
                         "--intra-gap", "50"]
 
         # DK - debugging purposes
-        extract_cmd += ["--min-var-freq", "0.1"]
-        
+        extract_cmd += ["--min-var-freq", "0.1"]        
         # extract_cmd += ["--leftshift"]
+        
         # DK - debugging purposes
         # extract_cmd += ["--ext-seq", "300"]
         if verbose >= 1:

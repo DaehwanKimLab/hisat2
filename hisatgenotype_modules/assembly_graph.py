@@ -223,8 +223,8 @@ class Node:
                     count, var_id = value
                     if nt in nt_dic:
                         nt_dic[nt][0] += count
-                        if nt != 'D':
-                            assert nt_dic[nt][1] == var_id
+                        # if nt != 'D':
+                        #    assert nt_dic[nt][1] == var_id
                     else:
                         nt_dic[nt] = [count, var_id]
                 new_seq.append(nt_dic)

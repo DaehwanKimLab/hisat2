@@ -601,7 +601,8 @@ def extract_vars(base_fname,
 
         if leftshift:
             for seq_i in range(len(HLA_seqs)):
-                HLA_seqs[seq_i] = leftshift_deletions(backbone_seq, HLA_seqs[seq_i], seq_i == HLA_names["A*68:02:02"] and False)
+                HLA_seqs[seq_i] = leftshift_deletions(backbone_seq, HLA_seqs[seq_i])
+            backbone_seq, backbone_freq = create_consensus_seq(HLA_seqs, seq_len, min_var_freq, True)
 
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
