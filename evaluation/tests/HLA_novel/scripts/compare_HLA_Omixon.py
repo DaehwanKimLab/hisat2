@@ -23,9 +23,6 @@ def compare(hisatgenotype_fname, omixon_fname):
             assert len(fields) == 4
             sample, allele, abundance, vars_covered = fields
         abundance = float(abundance)
-        # DK - for debugging purposes
-        # if abundance < 5.0:
-        #    continue
         if sample not in hisat_hla:
             hisat_hla[sample] = {}
         gene, allele = allele.split('*')
@@ -72,7 +69,7 @@ def compare(hisatgenotype_fname, omixon_fname):
                     hisat_allele = hisat_gene[hisat_allele_idx]
                     hisat_allele = hisat_allele[0].split(':')
                     equal = True
-                    for i in range(min(len(omixon_allele), len(hisat_allele))):
+                    for i in range(min(len(omixon_allele), len(hisat_allele), 2)):
                         omixon_num = omixon_allele[i]
                         hisat_num = hisat_allele[i]
                         """
@@ -95,8 +92,7 @@ def compare(hisatgenotype_fname, omixon_fname):
                     
             # DK - for debugging purposes
             """
-            if gene == "A" and num_match == 0 and num_match_10 == 2:
-            # if gene == "A" and num_match == 2 and hisat_gene[1][1] >= 10.0:
+            if gene in ["A", "B", "C"] and num_match < 2:
                 print sample
                 print "\t", omixon_gene
                 print "\t", hisat_gene

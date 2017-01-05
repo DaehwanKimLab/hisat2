@@ -1362,8 +1362,6 @@ def typing(ex_path,
 
             display_allele_nodes = {}
             for display_allele in display_alleles:
-                if display_allele not in allele_nodes:
-                    continue
                 display_allele_nodes[display_allele] = create_allele_node(display_allele)
 
             # Assembly graph
@@ -2146,7 +2144,7 @@ def typing(ex_path,
                         break
                     predicted_allele_nodes[allele_name] = create_allele_node(allele_name)
                     allele_node_order.append([allele_name, prob])
-                    if len(predicted_allele_nodes) >= 4:
+                    if len(predicted_allele_nodes) >= 2:
                         break
                 asm_graph.predicted_allele_nodes = predicted_allele_nodes
                 asm_graph.allele_node_order = allele_node_order
@@ -2209,7 +2207,7 @@ def typing(ex_path,
                 asm_graph.assemble_with_alleles()
 
                 # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y, "Graph with alleles")
+                begin_y = asm_graph.draw(begin_y, "Assembly with known alleles")
 
                 # """
 
@@ -2301,6 +2299,51 @@ def typing(ex_path,
 
                     print >> sys.stderr
                     print >> sys.stderr
+
+            # Identify alleles that perfectly or closesly match assembled alleles
+            """
+            for node_name, node in asm_graph.nodes.items():
+                vars = set(node.get_var_ids())
+
+                max_allele_names, max_common = [], -sys.maxint
+                for allele_name, vars2 in allele_vars.items():
+                    vars2 = set(vars2)
+                    tmp_common = len(vars & vars2) - len(vars | vars2)
+                    if tmp_common > max_common:
+                        max_common = tmp_common
+                        max_allele_names = [allele_name]                        
+                    elif tmp_common == max_common:
+                        max_allele_names.append(allele_name)
+
+                print "Genomic:"
+                print "\t", node_name
+                print "\t\t", max_common, max_allele_names
+
+                allele_exon_vars = {}
+            for allele_name, vars in allele_vars.items():
+                allele_exon_vars[allele_name] = set(vars) & exon_vars
+
+
+            for node_name, node in asm_graph.nodes.items():
+                vars = []
+                for left, right in ref_exons:
+                    vars += node.get_var_ids(left, right)
+                vars = set(vars) & exon_vars
+
+                max_allele_names, max_common = [], -sys.maxint
+                for allele_name, vars2 in allele_exon_vars.items():
+                    tmp_common = len(vars & vars2) - len(vars | vars2)
+                    if tmp_common > max_common:
+                        max_common = tmp_common
+                        max_allele_names = [allele_name]                        
+                    elif tmp_common == max_common:
+                        max_allele_names.append(allele_name)
+
+                print "Exonic:"
+                print "\t", node_name
+                print "\t\t", max_common, max_allele_names
+            """
+                
 
             success = [False for i in range(len(test_HLA_names))]
             found_list = [False for i in range(len(test_HLA_names))]
