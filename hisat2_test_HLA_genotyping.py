@@ -2152,18 +2152,12 @@ def typing(ex_path,
                 # Start drawing assembly graph
                 asm_graph.begin_draw(assembly_base)
 
-                # Generate edges
-                # asm_graph.generate_edges()
-
                 # Draw assembly graph
                 begin_y = asm_graph.draw(0, "Initial graph")
                 begin_y += 200
                 
                 # Apply De Bruijn graph
                 asm_graph.guided_DeBruijn()
-                asm_graph.generate_edges(0.01,
-                                         True, # also generate jump edges
-                                         True) # skip Ns
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Asssembly")
@@ -2204,9 +2198,9 @@ def typing(ex_path,
                 # DK - debugging purposes
                 # """
 
-                asm_graph.assemble_with_alleles()
-
                 # Draw assembly graph
+                asm_graph.nodes = asm_graph.nodes2
+                asm_graph.to_node, asm_graph.from_node = {}, {}
                 begin_y = asm_graph.draw(begin_y, "Assembly with known alleles")
 
                 # """
