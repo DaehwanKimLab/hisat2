@@ -192,7 +192,7 @@ class Node:
                 print "at %d (%d) with overlap of %d and mismatch of %.2f" % (i, self.left + i, j, tmp_mm)
 
             if tmp_mm <= max_mm:
-                return i, len(seq) - i, tmp_mm
+                return i, min(len(seq) - i, len(other_seq)), tmp_mm
                 
         return -1, -1, sys.maxint
 
@@ -506,13 +506,24 @@ class Graph:
                 node2 = nodes[id2]
                 if left <= left2 and right2 <= right:
                     at, overlap, mm = node.overlap_with(node2, self.gene_vars)
-                    mult = overlap / float(max(right - left, right2 - left2))
-                    if mm <= 1.0:
+
+                    # DK - debugging purposes
+                    """
+                    print node.id, "vs.", node2.id
+                    print "at %d: overlap of %d with %d mismatches (mult: %.2f)" % \
+                        (at, overlap, mm, mult)
+                    """
+                    if mm < 1.0:
+                        mult = overlap / float(max(right - left, right2 - left2))
                         if node2.get_avg_cov() * mult * 10 < node.get_avg_cov():
                             delete_ids.add(id2)
-                        elif left == left2 and right == right2 and \
-                             node.get_avg_cov() * mult * 10 < node2.get_avg_cov():
-                            delete_ids.add(id)                        
+                        elif left == left2 and right == right2:
+                            delete_ids.add(id)
+                    elif overlap > 0:
+                        if node2.get_avg_cov() * 10 < node.get_avg_cov():
+                            delete_ids.add(id2)
+                        elif node.get_avg_cov() * 10 < node2.get_avg_cov():
+                            delete_ids.add(id)
                 i -= 1
 
         for delete_id in delete_ids:
@@ -824,6 +835,7 @@ class Graph:
                 for j2 in range(len(debruijn[j])):
                     _, _, predecessors, add_read_ids = debruijn[j][j2]
                     if len(predecessors) == 0:
+                        branch = True
                         path_queue.append("%d-%d" % (j, j2))
                     elif i2 in predecessors:
                         found = True
@@ -936,9 +948,6 @@ class Graph:
             # """
 
             if known_alleles:
-                # DK - debugging purposes
-                print self.nodes2.keys()
-                
                 for i in range(len(equiv_list)):
                     classes = equiv_list[i]
                     for j in range(len(classes)):
@@ -1113,9 +1122,13 @@ class Graph:
                 add_merge(classes, classes2, 0, 0, 0)
                 
             elif len(classes) == 1:
-                if 0 not in classes[0][0] and mat[0][0] > max(2, mat[0][1] * 6):
+                if 0 not in classes[0][0] and \
+                   mat[0][0] > max(2, mat[0][1] * 6) and \
+                   len(classes2[0][1]) > len(classes2[1][1]) * 2:
                     add_merge(classes, classes2, 0, 0, 0)
-                elif 0 not in classes[0][0] and mat[0][1] > max(2, mat[0][0] * 6):
+                elif 0 not in classes[0][0] and \
+                     mat[0][1] > max(2, mat[0][0] * 6) and \
+                     len(classes2[1][1]) > len(classes2[0][1]) * 2:
                     add_merge(classes, classes2, 0, 1, 0)
                 else:
                     classes.append(deepcopy(classes[0]))
