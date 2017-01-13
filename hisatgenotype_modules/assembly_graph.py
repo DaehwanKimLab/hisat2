@@ -1383,7 +1383,8 @@ class Graph:
         max_right = len(self.backbone)
 
         # display space
-        dspace = [[[begin_y, self.unscaled_height]]] * (max_right + 1)
+        end_y = self.unscaled_height if begin_y > 0 else self.unscaled_height * 0.8
+        dspace = [[[begin_y, end_y]]] * (max_right + 1)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
             range1 = dspace[left]
@@ -1402,7 +1403,7 @@ class Graph:
 
                 range1 = new_range
             if len(range1) <= 0:
-                return 0
+                return -1
 
             t, b = range1[0]
             assert b - t >= height
@@ -1580,6 +1581,8 @@ class Graph:
 
             # Get y position
             y = get_dspace(left, right, 14)
+            if y < 0:
+                continue
             node_to_y[id] = y
 
             node_vars = node.get_vars()
@@ -1675,7 +1678,8 @@ class Graph:
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (to_node_x + jitter2, to_node_y)
                 print >> js_file, r'ctx.stroke();'
 
-        return get_dspace(0, nodes[-1][2], 1)
+        curr_y = get_dspace(0, nodes[-1][2], 1)
+        return curr_y if curr_y > 0 else end_y
 
         
 class HtmlDraw:
