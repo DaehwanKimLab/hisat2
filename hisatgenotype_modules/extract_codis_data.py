@@ -67,8 +67,7 @@ Extract multiple sequence alignments
 def extract_msa(base_dname,
                 base_fname,
                 verbose):
-
-        # CODIS database base URL
+    # CODIS database base URL
     base_url = "http://www.cstl.nist.gov/biotech/strbase"
     
     # Refer to Python's regular expression at https://docs.python.org/2/library/re.html
@@ -195,7 +194,7 @@ def extract_msa(base_dname,
             for repeat, repeat_num in repeat_st:
                 sequence += (repeat * repeat_num)
             return sequence
-            
+
         allele_seqs = [[allele_id, to_sequence(repeat_st)] for allele_id, repeat_st in alleles]
         extended_ref_allele_seq = CODIS_seq[locus_name]
         for allele_id, allele_seq in allele_seqs:
@@ -204,25 +203,25 @@ def extract_msa(base_dname,
         if locus_name not in CODIS_ref_name:
             CODIS_ref_name[locus_name] = "undefined"
 
-        print >> sys.stderr, "%s: %d alleles with ref. allele as %s" % (locus_name, len(alleles), CODIS_ref_name[locus_name])
+        print >> sys.stderr, "%s: %d alleles with reference allele as %s" % (locus_name, len(alleles), CODIS_ref_name[locus_name])
         if verbose:
             print >> sys.stderr, "\t", extended_ref_allele_seq
             for allele_id, allele in alleles:
                 print >> sys.stderr, allele_id, "\t", allele
-
 
         ### Perform ClustalW multiple sequence alignment
 
         # Create a temporary allele sequence file
         seq_fname = "%s.tmp.fa" % locus_name
         msf_fname = "%s.tmp.aln" % locus_name
+        dnd_fname = "%s.tmp.dnd" % locus_name
         seq_file = open(seq_fname, 'w')
         for allele_id, allele_seq in allele_seqs:
             print >> seq_file, ">%s" % allele_id
             print >> seq_file, allele_seq
         seq_file.close()
 
-        # Run ClustalW
+        # Run ClustalW - see http://www.clustal.org/clustal2 for more details
         clustalw_cmd = ["clustalw2", seq_fname]
         try:
             clustalw_proc = subprocess.Popen(clustalw_cmd,
@@ -247,6 +246,7 @@ def extract_msa(base_dname,
                 continue
             
             allele_id, repeat = line.split()
+            repeat = repeat.replace('-', '.')
             if allele_id not in allele_repeat_msf:
                 allele_repeat_msf[allele_id] = repeat
             else:
@@ -269,20 +269,25 @@ def extract_msa(base_dname,
         allele_msf = {}
         for allele_id, repeat_msf in allele_repeat_msf.items():
             allele_msf[allele_id] = extended_ref_allele_seq[:replace_left] + repeat_msf + extended_ref_allele_seq[replace_right:]
+            
         os.remove(seq_fname)
         os.remove(msf_fname)
+        os.remove(dnd_fname)
 
+        # Make sure the length of allele ID is short, less than 20 characters
         max_allele_id_len = max([len(allele_id) for allele_id in allele_dic.keys()])
         assert max_allele_id_len < 20
 
+        # Write MSF (multiple sequence alignment file)
         msf_len = len(extended_ref_allele_seq) - len(ref_allele_seq) + repeat_len
         msf_fname = "%s.msf" % locus_name
         msf_file = open(msf_fname, 'w')
         for s in range(0, msf_len, 50):
             for allele_id, msf in allele_msf.items():
+                assert len(msf) == msf_len
                 print >> msf_file, "%20s" % allele_id,
                 for s2 in range(s, min(msf_len, s + 50), 10):
-                    print >> msf_file, " %s" % msf[s+s2:s+s2+10],
+                    print >> msf_file, " %s" % msf[s2:s2+10],
                 print >> msf_file
                 
             if s + 50 >= msf_len:
@@ -290,6 +295,17 @@ def extract_msa(base_dname,
             print >> msf_file
 
         msf_file.close()
+
+
+        # Write FASTA file
+        fasta_fname = "%s_gen.fasta" % locus_name
+        fasta_file = open(fasta_fname, 'w')
+        for allele_id, allele_seq in allele_seqs:
+            gen_seq = extended_ref_allele_seq[:replace_left] + allele_seq + extended_ref_allele_seq[replace_right:]
+            print >> fasta_file, ">%s*%s %d bp" % (locus_name, allele_id, len(gen_seq))
+            for s in range(0, len(gen_seq), 60):
+                print >> fasta_file, gen_seq[s:s+60]
+        fasta_file.close()
         
 
 
