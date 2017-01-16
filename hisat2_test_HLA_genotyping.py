@@ -2890,8 +2890,8 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="base filename for backbone HLA sequence, HLA variants, and HLA linking info")
-    parser.add_argument("--hla-list",
-                        dest="hla_list",
+    parser.add_argument("--locus-list", "--hla-list",
+                        dest="locus_list",
                         type=str,
                         default="",
                         help="A comma-separated list of HLA genes (default: empty, all HLA genes in IMGT/HLA database)")
@@ -3006,10 +3006,10 @@ if __name__ == '__main__':
                         help="Stranded-seq data (e.g.,: NA12892,ILMN_StrandSeq/SraRunInfo.txt")
 
     args = parser.parse_args()
-    if args.hla_list == "":
-        hla_list = []
+    if args.locus_list == "":
+        locus_list = []
     else:
-        hla_list = args.hla_list.split(',')
+        locus_list = args.locus_list.split(',')
     if args.aligners == "":
         print >> sys.stderr, "Error: --aligners must be non-empty."
         sys.exit(1)    
@@ -3069,7 +3069,7 @@ if __name__ == '__main__':
 
     random.seed(args.random_seed)
     test_HLA_genotyping(args.base_fname,
-                        hla_list,
+                        locus_list,
                         args.partial,
                         args.aligners,
                         args.read_fname,

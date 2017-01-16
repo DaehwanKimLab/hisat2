@@ -82,12 +82,12 @@ def extract_vars(base_fname,
 
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
-    hla_ref_file = open(base_fullpath_name + ".ref", 'w')
+    ref_file = open(base_fullpath_name + ".ref", 'w')
     left_ext_seq_dic, right_ext_seq_dic = {}, {}
-    HLA_genes, HLA_gene_strand = {}, {}
+    genes, gene_strand = {}, {}
 
     # Check HLA genes
-    HLA_gene_names = []
+    gene_names = []
     if base_fname == "hla":
         fasta_dname = "IMGTHLA/fasta"
         fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
@@ -95,14 +95,14 @@ def extract_vars(base_fname,
         assert base_fname in ["codis", "cyp"]
         fasta_dname = "hisatgenotype_db/%s/fasta" % base_fname.upper()
         fasta_fnames = glob.glob("%s/*.fasta" % fasta_dname)
-    for HLA_gen_fname in fasta_fnames:
-        HLA_gene_name = HLA_gen_fname.split('/')[-1].split('_')[0]
-        if HLA_gene_name == "hla":
+    for gen_fname in fasta_fnames:
+        gene_name = gen_fname.split('/')[-1].split('_')[0]
+        if gene_name == "hla":
             continue
-        HLA_gene_names.append(HLA_gene_name)
+        gene_names.append(gene_name)
 
     if locus_list == []:
-        locus_list = HLA_gene_names
+        locus_list = gene_names
 
     cigar_re = re.compile('\d+\w')
     remove_locus_list = []
@@ -166,8 +166,8 @@ def extract_vars(base_fname,
         else:
             allele_name = allele_id
         assert allele_name != "" and strand != ''
-        HLA_genes[gene] = allele_name
-        HLA_gene_strand[gene] = strand
+        genes[gene] = allele_name
+        gene_strand[gene] = strand
         print >> sys.stderr, "%s-%s's reference allele is %s on '%s' strand of chromosome %s" % \
             (base_fname.upper(), gene, allele_name, strand, chr)
 
@@ -201,7 +201,7 @@ def extract_vars(base_fname,
             
 
     # Extract exon information from hla.data
-    HLA_gene_exons = {}
+    gene_exons = {}
     if base_fname == "hla":        
         skip = False
         for line in open("IMGTHLA/hla.dat"):
@@ -211,8 +211,8 @@ def extract_vars(base_fname,
                     allele_name = allele_name[4:]
                 gene = allele_name.split('*')[0]
                 if line.find("partial") != -1 or \
-                        not gene in HLA_genes or \
-                        allele_name != HLA_genes[gene]:
+                        not gene in genes or \
+                        allele_name != genes[gene]:
                     skip = True
                     continue
                 skip = False
@@ -224,27 +224,27 @@ def extract_vars(base_fname,
                     exon_left, exon_right = int(exon_range[0]) - 1, int(exon_range[1]) - 1
                     assert exon_left >= 0
                     assert exon_left < exon_right
-                    if not gene in HLA_gene_exons:
-                        HLA_gene_exons[gene] = []
+                    if not gene in gene_exons:
+                        gene_exons[gene] = []
                     if gene in left_ext_seq_dic:
                         left_ext_seq_len = len(left_ext_seq_dic[gene])
                     else:
                         left_ext_seq_len = 0
-                    HLA_gene_exons[gene].append([exon_left + left_ext_seq_len, exon_right + left_ext_seq_len])
+                    gene_exons[gene].append([exon_left + left_ext_seq_len, exon_right + left_ext_seq_len])
 
     tmp_locus_list = []
     for gene in locus_list:
         if gene in remove_locus_list:
             continue
-        if base_fname == "hla" and gene not in HLA_gene_exons:
+        if base_fname == "hla" and gene not in gene_exons:
             continue
         tmp_locus_list.append(gene)
     locus_list = tmp_locus_list
-    for key in HLA_genes.keys():
+    for key in genes.keys():
         if key in locus_list:
             continue
-        del HLA_genes[key]
-        del HLA_gene_strand[key]
+        del genes[key]
+        del gene_strand[key]
 
     # Write the backbone sequences into a fasta file
     backbone_file = open(base_fullpath_name + "_backbone.fa", 'w')        
@@ -260,16 +260,16 @@ def extract_vars(base_fname,
     # Write all the sequences with dots removed into a file
     input_file = open(base_fullpath_name + "_sequences.fa", 'w')
     num_vars, num_haplotypes = 0, 0
-    HLA_full_alleles = {}
-    for HLA_gene, HLA_ref_gene in HLA_genes.items():
-        strand = HLA_gene_strand[HLA_gene]
+    full_alleles = {}
+    for gene, ref_gene in genes.items():
+        strand = gene_strand[gene]
         left_ext_seq, right_ext_seq = "", ""
-        if HLA_gene in left_ext_seq_dic:
-            left_ext_seq, right_ext_seq = left_ext_seq_dic[HLA_gene], right_ext_seq_dic[HLA_gene]
+        if gene in left_ext_seq_dic:
+            left_ext_seq, right_ext_seq = left_ext_seq_dic[gene], right_ext_seq_dic[gene]
 
         def read_MSF_file(fname, left_ext_seq = "", right_ext_seq = ""):
-            HLA_names = {} # HLA allele names to numeric IDs
-            HLA_seqs = []  # HLA multiple alignment sequences
+            names = {} # HLA allele names to numeric IDs
+            seqs = []  # HLA multiple alignment sequences
             for line in open(fname):
                 line = line.strip()
                 if not line or \
@@ -286,14 +286,14 @@ def extract_vars(base_fname,
                     except ValueError:
                         continue
 
-                    if name in HLA_names:
+                    if name in names:
                         print >> sys.stderr, "Warning: %s is found more than once in Names" % (name)
                         continue
 
-                    HLA_names[name] = len(HLA_names)
+                    names[name] = len(names)
                 else:
-                    if len(HLA_seqs) == 0:
-                        HLA_seqs = [left_ext_seq for i in range(len(HLA_names))]
+                    if len(seqs) == 0:
+                        seqs = [left_ext_seq for i in range(len(names))]
                     try:
                         cols = line.split()
                         name = cols[0]
@@ -302,15 +302,15 @@ def extract_vars(base_fname,
                     except ValueError:
                         continue
 
-                    if name not in HLA_names:
-                        HLA_names[name] = len(HLA_names)
+                    if name not in names:
+                        names[name] = len(names)
 
-                    id = HLA_names[name]
-                    if id >= len(HLA_seqs):
-                        assert id == len(HLA_seqs)
-                        HLA_seqs.append(left_ext_seq)
+                    id = names[name]
+                    if id >= len(seqs):
+                        assert id == len(seqs)
+                        seqs.append(left_ext_seq)
                         
-                    HLA_seqs[id] += ''.join(fives)
+                    seqs[id] += ''.join(fives)
 
                     # Add sub-names of the allele
                     sub_name = ""
@@ -318,30 +318,30 @@ def extract_vars(base_fname,
                         if sub_name != "":
                             sub_name += ":"
                         sub_name += group
-                        if sub_name not in HLA_full_alleles:
-                            HLA_full_alleles[sub_name] = [name]
+                        if sub_name not in full_alleles:
+                            full_alleles[sub_name] = [name]
                         else:
-                            HLA_full_alleles[sub_name].append(name)
+                            full_alleles[sub_name].append(name)
 
             if len(right_ext_seq) > 0:
-                for i_ in range(len(HLA_seqs)):
-                    HLA_seqs[i_] += right_ext_seq
+                for i_ in range(len(seqs)):
+                    seqs[i_] += right_ext_seq
 
-            return HLA_names, HLA_seqs
+            return names, seqs
 
         if base_fname == "hla":
-            HLA_MSA_fname = "IMGTHLA/msf/%s_gen.msf" % HLA_gene
+            MSA_fname = "IMGTHLA/msf/%s_gen.msf" % gene
         else:
-            HLA_MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), HLA_gene)
+            MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), gene)
             
-        if not os.path.exists(HLA_MSA_fname):
-            print >> sys.stderr, "Warning: %s does not exist" % HLA_MSA_fname
+        if not os.path.exists(MSA_fname):
+            print >> sys.stderr, "Warning: %s does not exist" % MSA_fname
             continue
 
-        HLA_names, HLA_seqs = read_MSF_file(HLA_MSA_fname, left_ext_seq, right_ext_seq)
+        names, seqs = read_MSF_file(MSA_fname, left_ext_seq, right_ext_seq)
 
         # Identify a consensus sequence
-        assert len(HLA_seqs) > 0
+        assert len(seqs) > 0
 
         # Check sequences are of equal length
         def find_seq_len(seqs):
@@ -443,29 +443,29 @@ def extract_vars(base_fname,
             assert len(consensus_seq) == len(consensus_freq)                
             return consensus_seq, consensus_freq
 
-        seq_len = find_seq_len(HLA_seqs)        
-        backbone_name = "%s*BACKBONE" % HLA_gene
-        backbone_seq, backbone_freq = create_consensus_seq(HLA_seqs,
+        seq_len = find_seq_len(seqs)        
+        backbone_name = "%s*BACKBONE" % gene
+        backbone_seq, backbone_freq = create_consensus_seq(seqs,
                                                            seq_len,
                                                            min_var_freq,
                                                            not partial) # Remove empty sequences?
         # Allele sequences can shrink, so readjust the sequence length
         if not partial:
-            seq_len = find_seq_len(HLA_seqs)
+            seq_len = find_seq_len(seqs)
 
         if partial and base_fname == "hla":
-            HLA_partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % HLA_gene
-            if not os.path.exists(HLA_partial_MSA_fname):
-                print >> sys.stderr, "Warning: %s does not exist" % HLA_partial_MSA_fname
+            partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % gene
+            if not os.path.exists(partial_MSA_fname):
+                print >> sys.stderr, "Warning: %s does not exist" % partial_MSA_fname
                 continue
-            HLA_partial_names, HLA_partial_seqs = read_MSF_file(HLA_partial_MSA_fname)
+            partial_names, partial_seqs = read_MSF_file(partial_MSA_fname)
 
             # DK - debugging purposes
             # Partial alleles vs. Full alleles
             """
             counts = [0, 0, 0, 0]
-            for partial_name in HLA_partial_names.keys():
-                if partial_name in HLA_names:
+            for partial_name in partial_names.keys():
+                if partial_name in names:
                     continue
                 name_group = partial_name.split(':')
                 for group_i in [3, 2, 1, 0]:
@@ -474,19 +474,19 @@ def extract_vars(base_fname,
                     if group_i > len(name_group):
                         continue
                     sub_name = ':'.join(name_group[:group_i])
-                    if sub_name in HLA_full_alleles:
-                        print partial_name, sub_name, HLA_full_alleles[sub_name][:5]
+                    if sub_name in full_alleles:
+                        print partial_name, sub_name, full_alleles[sub_name][:5]
                         counts[group_i] += 1
                         break
             print "DK: counts:", counts
             sys.exit(1)
             """
                 
-            ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
+            ref_seq = seqs[names[ref_gene]]
             ref_seq_map = create_map(ref_seq)
-            ref_partial_seq = HLA_partial_seqs[HLA_partial_names[HLA_ref_gene]]
+            ref_partial_seq = partial_seqs[partial_names[ref_gene]]
             ref_partial_seq_map = create_map(ref_partial_seq)
-            exons = HLA_gene_exons[HLA_gene]
+            exons = gene_exons[gene]
             exon_len = 0
             ref_exons = [] # converted exons to MSF file (e.g. A_gen.msf)
             ref_partial_exons = [] # converted exons to MSF file (e.g. A_nuc.msf)
@@ -497,7 +497,7 @@ def extract_vars(base_fname,
                 ref_exons.append([ref_seq_map[left], ref_seq_map[right]])
                 next_exon_len = right - left + exon_len
                 if next_exon_len >= len(ref_partial_seq_map):
-                    print >> sys.stderr, "Warning: partial sequences (%s) seem to be incomplete" % HLA_gene
+                    print >> sys.stderr, "Warning: partial sequences (%s) seem to be incomplete" % gene
                     complete = False
                     break
                 ref_partial_exons.append([ref_partial_seq_map[exon_len], ref_partial_seq_map[next_exon_len]])
@@ -508,15 +508,15 @@ def extract_vars(base_fname,
                 assert ref_exon_len == ref_partial_exon_len
 
             if complete:
-                partial_seq_len = find_seq_len(HLA_partial_seqs)
-                partial_backbone_seq, partial_backbone_freq = create_consensus_seq(HLA_partial_seqs,
+                partial_seq_len = find_seq_len(partial_seqs)
+                partial_backbone_seq, partial_backbone_freq = create_consensus_seq(partial_seqs,
                                                                                    partial_seq_len,
                                                                                    min_var_freq,
                                                                                    False) # Remove empty sequences?
-                for HLA_name, seq_id in HLA_partial_names.items():
-                    if HLA_name in HLA_names:
+                for name, seq_id in partial_names.items():
+                    if name in names:
                         continue
-                    seq = HLA_partial_seqs[seq_id]
+                    seq = partial_seqs[seq_id]
                     new_seq = ""
                     right = 0
                     for e in range(len(exons)):
@@ -530,14 +530,14 @@ def extract_vars(base_fname,
                         new_seq += exon_seq
                         right = ref_exon[1] + 1
                     new_seq += backbone_seq[right:]
-                    HLA_names[HLA_name] = len(HLA_seqs)
-                    HLA_seqs.append(new_seq)
+                    names[name] = len(seqs)
+                    seqs.append(new_seq)
 
-                backbone_seq, backbone_freq = create_consensus_seq(HLA_seqs,
+                backbone_seq, backbone_freq = create_consensus_seq(seqs,
                                                                    seq_len,
                                                                    min_var_freq,
                                                                    True) # Remove empty sequences?
-                seq_len = find_seq_len(HLA_seqs)
+                seq_len = find_seq_len(seqs)
                 
         if min_var_freq <= 0.0:
             assert '.' not in backbone_seq and 'E' not in backbone_seq
@@ -598,25 +598,25 @@ def extract_vars(base_fname,
             return ''.join(seq)
 
         if leftshift:
-            for seq_i in range(len(HLA_seqs)):
-                HLA_seqs[seq_i] = leftshift_deletions(backbone_seq, HLA_seqs[seq_i])
-            backbone_seq, backbone_freq = create_consensus_seq(HLA_seqs, seq_len, min_var_freq, True)
+            for seq_i in range(len(seqs)):
+                seqs[seq_i] = leftshift_deletions(backbone_seq, seqs[seq_i])
+            backbone_seq, backbone_freq = create_consensus_seq(seqs, seq_len, min_var_freq, True)
 
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
             # Reverse exons
-            ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
+            ref_seq = seqs[names[ref_gene]]
             ref_seq = ref_seq.replace('.', '')
             ref_seq_len = len(ref_seq)
             if base_fname == "hla":
                 exons = []
-                for left, right in reversed(HLA_gene_exons[HLA_gene]):
+                for left, right in reversed(gene_exons[gene]):
                     left, right = ref_seq_len - right - 1, ref_seq_len - left - 1
                     exons.append([left, right])
-                HLA_gene_exons[HLA_gene] = exons
+                gene_exons[gene] = exons
 
-            for i in range(len(HLA_seqs)):
-                HLA_seqs[i] = reverse_complement(HLA_seqs[i])
+            for i in range(len(seqs)):
+                seqs[i] = reverse_complement(seqs[i])
             backbone_seq = reverse_complement(backbone_seq)
             backbone_freq = backbone_freq[::-1]
             for i in range(len(backbone_freq)):
@@ -635,14 +635,14 @@ def extract_vars(base_fname,
                         freq_dic['.'] = freq
                 backbone_freq[i] = freq_dic
 
-        print >> sys.stderr, "%s: number of HLA alleles is %d." % (HLA_gene, len(HLA_names))
+        print >> sys.stderr, "%s: number of HLA alleles is %d." % (gene, len(names))
 
         Vars = {}
-        for cmp_name, id in HLA_names.items():
+        for cmp_name, id in names.items():
             if cmp_name == backbone_name:
                 continue
-            assert id < len(HLA_seqs)
-            cmp_seq = HLA_seqs[id]
+            assert id < len(seqs)
+            cmp_seq = seqs[id]
             if len(cmp_seq) != seq_len:
                 print >> sys.stderr, "Warning: the length of %s (%d) is different from %d" % \
                     (cmp_name, len(cmp_seq), seq_len)
@@ -652,7 +652,7 @@ def extract_vars(base_fname,
             """
             if cmp_name == "A*03:01:07":
                 print cmp_name
-                cmp_seq2 = HLA_seqs[HLA_names["A*32:29"]]
+                cmp_seq2 = seqs[names["A*32:29"]]
                 for s in range(0, seq_len, 100):
                     print s, backbone_seq[s:s+100]
                     print s, cmp_seq2[s:s+100]
@@ -774,21 +774,21 @@ def extract_vars(base_fname,
                 assert a_type == 'D'
                 return int(a_data) - int(b_data)            
 
-        HLA_Vars = {}
+        Vars_ = {}
         for key, values in Vars.items():
-            freq, names = values
-            for name in names:
-                if not name in HLA_Vars:
-                    HLA_Vars[name] = [key]
+            freq, names_ = values
+            for name in names_:
+                if not name in Vars_:
+                    Vars_[name] = [key]
                 else:
-                    HLA_Vars[name].append(key)
-        for name, vars in HLA_Vars.items():
-            HLA_Vars[name] = sorted(vars, cmp=cmp_varKey)
+                    Vars_[name].append(key)
+        for name, vars in Vars_.items():
+            Vars_[name] = sorted(vars, cmp=cmp_varKey)
 
         # Sanity check -
         #    (1) Reconstruct the other sequences from the backbone sequence and variants and
         #    (2) Confirm these constructed sequences are the same as those input sequences.
-        for cmp_name, id in HLA_names.items():
+        for cmp_name, id in names.items():
             if cmp_name == backbone_name:
                 continue
 
@@ -796,10 +796,10 @@ def extract_vars(base_fname,
             constr_seq = list(constr_seq)
             locus_diff = 0
 
-            if cmp_name not in HLA_Vars:
+            if cmp_name not in Vars_:
                 continue
             
-            for var in HLA_Vars[cmp_name]:
+            for var in Vars_[cmp_name]:
                 try:
                     locus, type, data = var.split('-')
                     locus = int(locus)
@@ -823,8 +823,8 @@ def extract_vars(base_fname,
                     locus_diff -= del_len
 
             constr_seq = "".join(constr_seq)
-            assert id < len(HLA_seqs)
-            cmp_seq = HLA_seqs[id].replace('.', '')
+            assert id < len(seqs)
+            cmp_seq = seqs[id].replace('.', '')
             if len(constr_seq) != len(cmp_seq):
                 print >> sys.stderr, "Error: reconstruction fails (%s)! Lengths different: %d vs. %d" % \
                     (cmp_name, len(constr_seq), len(cmp_seq))
@@ -850,8 +850,8 @@ def extract_vars(base_fname,
 
         # Remap the backbone allele, which is sometimes slighly different from
         #   IMGTHLA/fasta version
-        ref_backbone_id = HLA_names[HLA_ref_gene]
-        ref_backbone_seq = HLA_seqs[ref_backbone_id]
+        ref_backbone_id = names[ref_gene]
+        ref_backbone_seq = seqs[ref_backbone_id]
         hisat2 = os.path.join(ex_path, "hisat2")
         aligner_cmd = [hisat2]
         if base_fname == "hla":
@@ -892,12 +892,12 @@ def extract_vars(base_fname,
         chr, left, right = best_chr, best_left, best_right
         align_proc.communicate()
         if left == right:
-            print >> sys.stderr, "Warning: %s (%s) is not remapped" % (HLA_gene, HLA_ref_gene)
+            print >> sys.stderr, "Warning: %s (%s) is not remapped" % (gene, ref_gene)
             continue
         assert left < right
 
         base_locus = 0                
-        ref_seq = HLA_seqs[HLA_names[HLA_ref_gene]]
+        ref_seq = seqs[names[ref_gene]]
         ref_seq_map = create_map(ref_seq)
 
         del_count = []
@@ -911,7 +911,7 @@ def extract_vars(base_fname,
         
         if base_fname == "hla":
             exon_str = ""
-            for exon_left, exon_right in HLA_gene_exons[HLA_gene]:
+            for exon_left, exon_right in gene_exons[gene]:
                 exon_left, exon_right = ref_seq_map[exon_left], ref_seq_map[exon_right]
                 exon_left -= del_count[exon_left]
                 exon_right -= del_count[exon_right]
@@ -929,7 +929,7 @@ def extract_vars(base_fname,
                     exons_.append([exon_left, exon_right])
 
                 backbone_seq_ = backbone_seq.replace('.', '')
-                vars_ = HLA_Vars[HLA_ref_gene]
+                vars_ = Vars_[ref_gene]
                 seq_ = list(backbone_seq_)
                 has_insertion = False
                 for var_ in vars_:
@@ -951,13 +951,13 @@ def extract_vars(base_fname,
                 for exon_left, exon_right in exons_:
                     exon_seq_ += seq_[exon_left:exon_right+1]
                 exon_seq_ = exon_seq_.replace('.', '')
-                if HLA_gene_strand[HLA_gene] == '-':
+                if gene_strand[gene] == '-':
                     exon_seq_ = reverse_complement(exon_seq_)
 
                 cmp_exon_seq_, allele_name_ = "", ""
-                for line in open("IMGTHLA/fasta/%s_nuc.fasta" % HLA_gene):
+                for line in open("IMGTHLA/fasta/%s_nuc.fasta" % gene):
                     if line.startswith(">"):
-                        if allele_name_ == HLA_ref_gene:
+                        if allele_name_ == ref_gene:
                             break
                         allele_name_ = line.strip().split()[1]
                         cmp_exon_seq_ = ""
@@ -973,12 +973,12 @@ def extract_vars(base_fname,
                     print cmp_exon_seq_[p:p+60]
                 """
                 if exon_seq_ != cmp_exon_seq_:
-                    print >> sys.stderr, "Waring: exonic sequences do not match (%s)" % HLA_gene
+                    print >> sys.stderr, "Waring: exonic sequences do not match (%s)" % gene
         else:
             exon_str = "%d-%d" % (left, right)
 
-        print >> hla_ref_file, "%s\t%s\t%d\t%d\t%d\t%s\t%s" % \
-            (backbone_name, chr, left, right, len(backbone_seq.replace('.', '')), exon_str, HLA_gene_strand[HLA_gene])
+        print >> ref_file, "%s\t%s\t%d\t%d\t%d\t%s\t%s" % \
+            (backbone_name, chr, left, right, len(backbone_seq.replace('.', '')), exon_str, gene_strand[gene])
 
         # Write
         #       (1) variants w.r.t the backbone sequences into a SNP file
@@ -996,8 +996,8 @@ def extract_vars(base_fname,
                 assert type == 'D'
                 type_str = "deletion"
 
-            freq, names = Vars[keys[k]]
-            names = sorted(names)            
+            freq, names_ = Vars[keys[k]]
+            names_ = sorted(names_)            
             varID = "hv%d" % (num_vars)
             tmp_backbone_name = backbone_name
             print >> var_file, "%s\t%s\t%s\t%d\t%s" % \
@@ -1006,7 +1006,7 @@ def extract_vars(base_fname,
                 print >> var_index_file, "%s\t%s\t%s\t%d\t%s" % \
                     (varID, type_str, tmp_backbone_name, base_locus + locus, data)
             print >> var_freq_file, "%s\t%.2f" % (varID, freq)
-            print >> link_file, "%s\t%s" % (varID, ' '.join(names))
+            print >> link_file, "%s\t%s" % (varID, ' '.join(names_))
             var2ID[keys[k]] = num_vars
             num_vars += 1
 
@@ -1039,16 +1039,16 @@ def extract_vars(base_fname,
             alleles = set()
             for k in range(i, j):
                 key_k = keys[k]
-                freq, names = Vars[key_k]
+                freq, names_ = Vars[key_k]
                 if freq < min_var_freq:
                     continue
-                add_alleles = set(names)
+                add_alleles = set(names_)
                 alleles |= add_alleles
 
             haplotypes = set()
             cur_vars = set(keys[i:j]) - excluded_vars
             for allele in alleles:
-                allele_vars = set(HLA_Vars[allele]) - excluded_vars
+                allele_vars = set(Vars_[allele]) - excluded_vars
                 allele_cur_vars = '#'.join(sorted(list(cur_vars & allele_vars), cmp=cmp_varKey))
                 haplotypes.add(allele_cur_vars)
 
@@ -1153,15 +1153,15 @@ def extract_vars(base_fname,
         print >> sys.stderr, "Length of additional sequences for haplotypes:", add_seq_len
                     
         # Write all the sequences with dots removed into a file
-        for name, ID in HLA_names.items():
+        for name, ID in names.items():
             print >> input_file, ">%s" % (name)
-            assert ID < len(HLA_seqs)
-            seq = HLA_seqs[ID].replace('.', '')
+            assert ID < len(seqs)
+            seq = seqs[ID].replace('.', '')
             for s in range(0, len(seq), 60):
                 print >> input_file, seq[s:s+60]
 
     backbone_file.close()
-    hla_ref_file.close()
+    ref_file.close()
     var_file.close()
     var_index_file.close()
     var_freq_file.close()
@@ -1180,7 +1180,7 @@ if __name__ == '__main__':
                         type=str,
                         default="hla",
                         help="base filename for backbone sequence, variants, and linking info (Default: hla)")
-    parser.add_argument("--locus-list", "--hla-list",
+    parser.add_argument("--locus-list",
                         dest="locus_list",
                         type=str,
                         default="",
