@@ -38,8 +38,8 @@ Stranded-seq
 
 To extract HLA alleles and variants
 
-   ./hisatgenotype_extract_vars.py --reference-type gene --hla-list A --inter-gap 30 --intra-gap 50
-   ./hisatgenotype_extract_vars.py --reference-type gene --hla-list A --inter-gap 30 --intra-gap 50 --min-var-freq 0.1
+   ./hisatgenotype_extract_vars.py --hla-list A --inter-gap 30 --intra-gap 50
+   ./hisatgenotype_extract_vars.py --hla-list A --inter-gap 30 --intra-gap 50 --min-var-freq 0.1
 
 To build genotype genome
 

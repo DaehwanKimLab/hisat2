@@ -245,7 +245,20 @@ def extract_msa(base_dname,
                line.startswith("*"):
                 continue
             
-            allele_id, repeat = line.split()
+            tmp_allele_id, repeat = line.split()
+            # ClustalW sometimes changes allele names
+            allele_id = ""
+            parenthesis_open = True
+            for ch in tmp_allele_id:
+                if ch == '_':
+                    if parenthesis_open:
+                        allele_id += '('
+                    else:
+                        allele_id += ')'
+                    parenthesis_open = not parenthesis_open
+                else:
+                    allele_id += ch
+            assert parenthesis_open
             repeat = repeat.replace('-', '.')
             if allele_id not in allele_repeat_msf:
                 allele_repeat_msf[allele_id] = repeat
@@ -280,12 +293,13 @@ def extract_msa(base_dname,
 
         # Write MSF (multiple sequence alignment file)
         msf_len = len(extended_ref_allele_seq) - len(ref_allele_seq) + repeat_len
-        msf_fname = "%s.msf" % locus_name
+        msf_fname = "%s_gen.msf" % locus_name
         msf_file = open(msf_fname, 'w')
         for s in range(0, msf_len, 50):
             for allele_id, msf in allele_msf.items():
                 assert len(msf) == msf_len
-                print >> msf_file, "%20s" % allele_id,
+                allele_name = "%s*%s" % (locus_name, allele_id)
+                print >> msf_file, "%20s" % allele_name,
                 for s2 in range(s, min(msf_len, s + 50), 10):
                     print >> msf_file, " %s" % msf[s2:s2+10],
                 print >> msf_file
@@ -306,8 +320,6 @@ def extract_msa(base_dname,
             for s in range(0, len(gen_seq), 60):
                 print >> fasta_file, gen_seq[s:s+60]
         fasta_file.close()
-        
-
 
 
 """

@@ -1101,16 +1101,6 @@ def stranded_seq_alignment(genome_name,
                          out_fname]
         base_locus = 0
         alignview_cmd += [ref_allele]
-        
-        """
-        if reference_type == "gene":
-            alignview_cmd += [ref_allele]
-        else:
-            assert reference_type in ["chromosome", "genome"]
-            _, chr, left, right, _ = refHLA_loci[gene]
-            base_locus = left
-            alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
-        """
         alignview_proc = subprocess.Popen(alignview_cmd,
                                           stdout=subprocess.PIPE,
                                           stderr=open("/dev/null", 'w'))
@@ -1170,7 +1160,6 @@ def stranded_seq_alignment(genome_name,
 """
 def typing(ex_path,
            simulation,
-           reference_type,
            hla_list,
            partial,
            partial_alleles,
@@ -1202,7 +1191,7 @@ def typing(ex_path,
 
     for aligner, index_type in aligners:
         if index_type == "graph":
-            print >> sys.stderr, "\n\t\t%s %s on %s" % (aligner, index_type, reference_type)
+            print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
         else:
             print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
 
@@ -1275,14 +1264,7 @@ def typing(ex_path,
                              alignment_fname]
             base_locus = 0
             if index_type == "graph":
-                if reference_type == "gene":
-                    alignview_cmd += [ref_allele]
-                else:
-                    assert reference_type in ["chromosome", "genome"]
-                    _, chr, left, right, _ = refHLA_loci[gene]
-                    base_locus = left
-                    alignview_cmd += ["%s:%d-%d" % (chr, left + 1, right + 1)]
-
+                alignview_cmd += [ref_allele]
                 mpileup = get_mpileup(alignview_cmd,
                                       ref_seq,
                                       base_locus,
@@ -2470,23 +2452,11 @@ def read_HLA_alleles(fname, HLAs):
 
 """
 """
-def read_HLA_vars(fname, reference_type):
+def read_HLA_vars(fname):
     Vars, Var_list = {}, {}
     for line in open(fname):
         var_id, var_type, allele, pos, data = line.strip().split('\t')
         pos = int(pos)
-        if reference_type != "gene":
-            allele, dist = None, 0
-            for tmp_gene, values in refHLA_loci.items():
-                allele_name, chr, left, right, exons = values
-                if allele == None:
-                    allele = allele_name
-                    dist = abs(pos - left)
-                else:
-                    if dist > abs(pos - left):
-                        allele = allele_name
-                        dist = abs(pos - left)
-            
         gene = allele.split('*')[0]
         if not gene in Vars:
             Vars[gene] = {}
@@ -2495,8 +2465,6 @@ def read_HLA_vars(fname, reference_type):
             
         assert not var_id in Vars[gene]
         left = 0
-        if reference_type != "gene":
-            _, _, left, _, _ = refHLA_loci[gene]
         Vars[gene][var_id] = [var_type, pos - left, data]
         Var_list[gene].append([pos - left, var_id])
         
@@ -2545,7 +2513,6 @@ def construct_allele_seq(backbone_seq, var_ids, Vars):
 """
 """
 def test_HLA_genotyping(base_fname,
-                        reference_type,
                         hla_list,
                         partial,
                         aligners,
@@ -2603,14 +2570,8 @@ def test_HLA_genotyping(base_fname,
             HLA_gene = HLA_name.split('*')[0]
             HLA_genes.append(HLA_gene)
         delete_hla_files = False
-        if reference_type == "gene":
-            if not BACKBONE:
-                delete_hla_files = True
-        elif reference_type in ["chromosome", "genome"]:
-            if BACKBONE:
-                delete_hla_files = True
-        else:
-            assert False
+        if not BACKBONE:
+            delete_hla_files = True
         if len(hla_list) == 0:
             hla_list = HLA_genes
         if not set(hla_list).issubset(set(HLA_genes)):
@@ -2636,10 +2597,9 @@ def test_HLA_genotyping(base_fname,
     
     if not check_files(HLA_fnames):
         extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
-        extract_cmd = [extract_hla_script,
-                       "--reference-type", reference_type]
+        extract_cmd = [extract_hla_script]
         if len(hla_list) > 0:
-            extract_cmd += ["--hla-list", ','.join(hla_list)]
+            extract_cmd += ["--locus-list", ','.join(hla_list)]
 
         if len(base_fname) > 3:
             extract_cmd += ["--base", base_fname]
@@ -2688,7 +2648,7 @@ def test_HLA_genotyping(base_fname,
             else:
                 assert index_type == "linear"
                 HLA_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                if reference_type == "gene" and not check_files(HLA_hisat2_linear_index_fnames):
+                if not check_files(HLA_hisat2_linear_index_fnames):
                     hisat2_build = os.path.join(ex_path, "hisat2-build")
                     build_cmd = [hisat2_build,
                                  "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
@@ -2703,7 +2663,7 @@ def test_HLA_genotyping(base_fname,
             # Build Bowtie2 indexes based on the above information
             HLA_bowtie2_index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
             HLA_bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
-            if reference_type == "gene" and not check_files(HLA_bowtie2_index_fnames):
+            if not check_files(HLA_bowtie2_index_fnames):
                 build_cmd = ["bowtie2-build",
                              "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
                              base_fname]
@@ -2742,8 +2702,7 @@ def test_HLA_genotyping(base_fname,
     if len(hla_list) == 0:
         hla_list = refHLA_loci.keys()
 
-    if reference_type == "gene":
-        read_HLA_alleles(base_fname + "_backbone.fa", HLAs)
+    read_HLA_alleles(base_fname + "_backbone.fa", HLAs)
     read_HLA_alleles(base_fname + "_sequences.fa", HLAs)
 
     # HLA gene alleles
@@ -2759,7 +2718,7 @@ def test_HLA_genotyping(base_fname,
             HLA_lengths[HLA_gene][allele_name] = len(seq)
 
     # Read HLA variants, and link information
-    Vars, Var_list = read_HLA_vars("%s.snp" % base_fname, reference_type)
+    Vars, Var_list = read_HLA_vars("%s.snp" % base_fname)
     Links = read_HLA_links("%s.link" % base_fname)
     # Test HLA typing
     test_list = []
@@ -2849,7 +2808,6 @@ def test_HLA_genotyping(base_fname,
             fastq = False
             tmp_test_passed = typing(ex_path,
                                      simulation,
-                                     reference_type,
                                      test_HLA_list,
                                      partial,
                                      partial_alleles,
@@ -2894,7 +2852,6 @@ def test_HLA_genotyping(base_fname,
         fastq = True
         typing(ex_path,
                simulation,
-               reference_type,
                hla_list,
                partial,
                partial_alleles,
@@ -2933,11 +2890,6 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="base filename for backbone HLA sequence, HLA variants, and HLA linking info")
-    parser.add_argument("--reference-type",
-                        dest="reference_type",
-                        type=str,
-                        default="gene",
-                        help="Reference type: gene, chromosome, and genome (default: gene)")
     parser.add_argument("--hla-list",
                         dest="hla_list",
                         type=str,
@@ -3054,9 +3006,6 @@ if __name__ == '__main__':
                         help="Stranded-seq data (e.g.,: NA12892,ILMN_StrandSeq/SraRunInfo.txt")
 
     args = parser.parse_args()
-    if not args.reference_type in ["gene", "chromosome", "genome"]:
-        print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
-        sys.exit(1)
     if args.hla_list == "":
         hla_list = []
     else:
@@ -3120,7 +3069,6 @@ if __name__ == '__main__':
 
     random.seed(args.random_seed)
     test_HLA_genotyping(args.base_fname,
-                        args.reference_type,
                         hla_list,
                         args.partial,
                         args.aligners,
