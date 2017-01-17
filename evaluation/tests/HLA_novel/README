@@ -5,41 +5,41 @@ Important notes
 
 
 To run HISAT-genotype
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-editdist 2 --debug paired --skip-fragment-regions 1000-1020
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-editdist 2 --debug paired --skip-fragment-regions 1000-1020
 
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-editdist 2 --debug paired,full --random-seed 0
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-editdist 2 --debug paired,full --random-seed 0
 
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --hla-list A --simulate-interval 10 --debug paired,full --no-assembly
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --simulate-interval 10 --debug paired,full --no-assembly
 
 
 
 HISAT-genotype vs. Omixon
 
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads CP_80/LP6005106-DNA_H02.extracted.fq.1.gz,CP_80/LP6005106-DNA_H02.extracted.fq.2.gz --display-alleles A*23:17,A*02:02:01:01
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads CP_80/LP6005106-DNA_H02.extracted.fq.1.gz,CP_80/LP6005106-DNA_H02.extracted.fq.2.gz --display-alleles A*23:17,A*02:02:01:01
 
 HISAT-genotye on Illumina Platinum Genomes
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads illumina/NA12892.fished_1.fq,illumina/NA12892.fished_2.fq
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads illumina/NA12892.fished_1.fq,illumina/NA12892.fished_2.fq
    
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_A/NA12892.extracted.1.fq.gz,ILMN_A/NA12892.extracted.2.fq.gz --display-alleles A*02:01:01:01,A*11:01:01:01
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads ILMN_A/NA12892.extracted.1.fq.gz,ILMN_A/NA12892.extracted.2.fq.gz --display-alleles A*02:01:01:01,A*11:01:01:01
 
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --hla-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz
 
-   for i in `ls -l ILMN/NA128*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --hla-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/$i.extracted.1.fq.gz,ILMN/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
+   for i in `ls -l ILMN/NA128*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --locus-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/$i.extracted.1.fq.gz,ILMN/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
 
-   for i in `ls -l CP_80/LP*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --hla-list A --aligner-list hisat2.graph --num-editdist 2 --reads CP_80/$i.extracted.1.fq.gz,CP_80/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
+   for i in `ls -l CP_80/LP*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --locus-list A --aligner-list hisat2.graph --num-editdist 2 --reads CP_80/$i.extracted.1.fq.gz,CP_80/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
 
    scripts/hisatgenotype_locus_CP.py CP_80 -p 4 --num-editdist 2 > cp_80_hla.txt
    scripts/compare_HLA_Omixon.py cp_80_hla.txt ../CAAPA/omixon_caapa_hla.txt 
 
 
 Stranded-seq
-   ./hisatgenotype_locus.py --hla-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/NA12892.extracted.1.fq.gz,ILMN/NA12892.extracted.2.fq.gz --stranded-seq NA12892,ILMN_StrandSeq/SraRunInfo.txt
+   ./hisatgenotype_locus.py --locus-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/NA12892.extracted.1.fq.gz,ILMN/NA12892.extracted.2.fq.gz --stranded-seq NA12892,ILMN_StrandSeq/SraRunInfo.txt
 
 
 To extract HLA alleles and variants
 
-   ./hisatgenotype_extract_vars.py --hla-list A --inter-gap 30 --intra-gap 50
-   ./hisatgenotype_extract_vars.py --hla-list A --inter-gap 30 --intra-gap 50 --min-var-freq 0.1
+   ./hisatgenotype_extract_vars.py --locus-list A --inter-gap 30 --intra-gap 50
+   ./hisatgenotype_extract_vars.py --locus-list A --inter-gap 30 --intra-gap 50 --min-var-freq 0.1
 
 To build genotype genome
 

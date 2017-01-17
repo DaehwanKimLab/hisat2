@@ -136,10 +136,21 @@ def download_genome_and_index(ex_path):
 
 
 """
+"""
+def clone_hisatgenotpye_database():
+    os.system("git clone https://github.com/infphilo/hisatgenotype_db.git")
+    
+    # Check out one particular revision just to have the same data across multiple computers        
+    # revision = "d3b559b34b96ff9e7f0d97476222d8e4cdee63ad" # Revision on November 16, 2016
+    # os.system("cd IMGTHLA; git checkout %s; cd .." % revision)
+
+
+"""
 Simulate reads from alleles with headers (>) filled with mapping information.
   For an example, see hisat2_test_HLA_genotyping.py.
 """
 def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "ACGTCCG ..."
+                   base_fname,                    # hla, codis, cyp, or so on
                    allele_list,                   # ["A*32:29", "B*07:02:01"]
                    Vars,                          # Vars["A"]["hv326"] = ["single", 604, "C"]
                    Links,
@@ -381,7 +392,7 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
 
     # Write reads into a FASTA file
     def write_reads(reads, idx):
-        read_file = open('hla_input_%d.fa' % idx, 'w')
+        read_file = open('%s_input_%d.fa' % (base_fname, idx), 'w')
         for read_i in range(len(reads)):
             print >> read_file, ">%d|%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
             print >> read_file, reads[read_i][0]
