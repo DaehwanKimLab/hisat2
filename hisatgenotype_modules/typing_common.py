@@ -137,7 +137,7 @@ def download_genome_and_index(ex_path):
 
 """
 """
-def clone_hisatgenotpye_database():
+def clone_hisatgenotype_database():
     os.system("git clone https://github.com/infphilo/hisatgenotype_db.git")
     
     # Check out one particular revision just to have the same data across multiple computers        
