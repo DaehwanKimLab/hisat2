@@ -1750,14 +1750,14 @@ def typing(ex_path,
 
                     if read_id != prev_read_id:
                         if prev_read_id != None:
-                            cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
+                            if base_fname == "hla":
+                                cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
                             add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
                             for read_id_, read_node in read_nodes:
                                 asm_graph.add_node(read_id_,
                                                    read_node,
                                                    simulation)
                             read_nodes, read_var_list = [], []
-
                             if verbose >= 2:
                                 cur_cmpt = cur_cmpt.split('-')
                                 if not(set(cur_cmpt) & set(test_Gene_names)):
@@ -1988,7 +1988,8 @@ def typing(ex_path,
                 print >> sys.stderr, "\t\t\tNumber of reads aligned: %d" % num_reads
 
                 if prev_read_id != None:
-                    add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
+                    if base_fname == "hla":
+                        add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
                     add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
                     for read_id_, read_node in read_nodes:
                         asm_graph.add_node(read_id_,
@@ -2080,10 +2081,9 @@ def typing(ex_path,
             print >> sys.stderr
 
             # Calculate the abundance of representative alleles on exonic sequences
-            Gene_prob = single_abundance(Gene_cmpt, Gene_lengths[gene])
-
-            # Incorporate non representative alleles (full length alleles)
             if base_fname == "hla":
+                # Incorporate non representative alleles (full length alleles)
+                Gene_prob = single_abundance(Gene_cmpt, Gene_lengths[gene])
                 gen_alleles = set()
                 gen_prob_sum = 0.0
                 for prob_i in range(len(Gene_prob)):
@@ -2125,6 +2125,8 @@ def typing(ex_path,
                         Gene_combined_prob[allele] = prob * gen_prob_sum
                     Gene_prob = [[allele, prob] for allele, prob in Gene_combined_prob.items()]
                     Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
+            else:
+                Gene_prob = single_abundance(Gene_gen_cmpt, Gene_lengths[gene])
 
             if index_type == "graph" and assembly:
                 allele_node_order = []
