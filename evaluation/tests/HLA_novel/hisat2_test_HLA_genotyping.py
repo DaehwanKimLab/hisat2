@@ -1,1 +1,0 @@
-../../../hisat2_test_HLA_genotyping.py
