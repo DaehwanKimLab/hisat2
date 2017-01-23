@@ -25,7 +25,7 @@ import math
 from datetime import datetime, date, time
 from argparse import ArgumentParser, FileType
 from copy import deepcopy
-from hisatgenotype_modules import typing_common, HLA_typing, assembly_graph
+from hisatgenotype_modules import typing_common, Gene_typing, assembly_graph
 
 
 
@@ -2550,7 +2550,7 @@ def test_Gene_genotyping(base_fname,
 
     # Clone a git repository, IMGTHLA
     if not os.path.exists("IMGTHLA"):
-        Gene_typing.clone_IMGTGene_database()
+        Gene_typing.clone_IMGTHLA_database()
 
     if not os.path.exists("hisatgenotype_db"):
         typing_common.clone_hisatgenotype_database()
