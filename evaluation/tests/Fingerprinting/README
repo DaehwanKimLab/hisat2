@@ -22,3 +22,7 @@ To build genotype genome
 
    ./hisatgenotype_build_genome.py genome.fa genotype_genome -p 3 --verbose
 
+
+For DNA fingerprinting
+   ./hisatgenotype_locus.py --verbose --base codis --locus-list D13S317 --no-assembly --debug paired
+   
