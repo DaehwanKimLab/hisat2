@@ -793,21 +793,21 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         }
     }
     
-    // daehwan - for debugging purposes
-#if 0
-    cout << "num nodes: " << nodes.size() << endl;
-    for(index_t i = 0; i < nodes.size(); i++) {
-        const Node& n = nodes[i];
-        cout << i << "\t" << n.label << "\t" << n.value << endl;
+#ifndef NDEBUG
+    if(debug) {
+        cout << "num nodes: " << nodes.size() << endl;
+        for(index_t i = 0; i < nodes.size(); i++) {
+            const Node& n = nodes[i];
+            cout << i << "\t" << n.label << "\t" << n.value << endl;
+        }
+        
+        sort(edges.begin(), edges.end());
+        cout << "num edges: " << edges.size() << endl;
+        for(index_t i = 0; i < edges.size(); i++) {
+            const Edge& e = edges[i];
+            cout << i << "\t" << e.from << " --> " << e.to << endl;
+        }
     }
-    
-    sort(edges.begin(), edges.end());
-    cout << "num edges: " << edges.size() << endl;
-    for(index_t i = 0; i < edges.size(); i++) {
-        const Edge& e = edges[i];
-        cout << i << "\t" << e.from << " --> " << e.to << endl;
-    }
-    exit(1);
 #endif
 }
 
