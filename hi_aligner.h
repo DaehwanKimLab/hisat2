@@ -574,26 +574,23 @@ struct GenomeHit {
      * Extend the partial alignment (GenomeHit) bidirectionally
      */
     bool extend(
-                const Read&             rd,
-                const GFM<index_t>&     gfm,
-                const BitPairReference& ref,
-                const ALTDB<index_t>&   altdb,
-                SpliceSiteDB&           ssdb,
-                SwAligner&              swa,
-                SwMetrics&              swm,
-                PerReadMetrics&         prm,
-                const Scoring&          sc,
-                TAlScore                minsc,
-                RandomSource&           rnd,           // pseudo-random source
-                index_t                 minK_local,
-                index_t                 minIntronLen,
-                index_t                 maxIntronLen,
-                index_t                 minAnchorLen,
-                index_t                 minAnchorLen_noncan,
-                const index_t           maxAltsTried,
-                index_t&                leftext,
-                index_t&                rightext,
-                index_t                 mm = 0);
+                const Read&                rd,
+                const GFM<index_t>&        gfm,
+                const BitPairReference&    ref,
+                const ALTDB<index_t>&      altdb,
+                SpliceSiteDB&              ssdb,
+                SwAligner&                 swa,
+                SwMetrics&                 swm,
+                PerReadMetrics&            prm,
+                const Scoring&             sc,
+                TAlScore                   minsc,
+                RandomSource&              rnd,           // pseudo-random source
+                index_t                    minK_local,
+                const TranscriptomePolicy& tpol,
+                const GraphPolicy&         gpol,
+                index_t&                   leftext,
+                index_t&                   rightext,
+                index_t                    mm = 0);
     
     /**
      * Adjust alignment with respect to SNPs, usually updating Edits
@@ -609,7 +606,7 @@ struct GenomeHit {
                               const GFM<index_t>&         gfm,
                               const ALTDB<index_t>&       altdb,
                               const BitPairReference&     ref,
-                              const index_t               maxAltsTried);
+                              const GraphPolicy&          gpol);
     
     /**
      * Adjust alignment with respect to SNPs, usually updating Edits
@@ -620,7 +617,7 @@ struct GenomeHit {
                        const GFM<index_t>&     gfm,
                        const ALTDB<index_t>&   altdb,
                        const BitPairReference& ref,
-                       const index_t           maxAltsTried);
+                       const GraphPolicy&      gpol);
    
     /*
      *
@@ -647,6 +644,7 @@ struct GenomeHit {
      */
     static index_t alignWithALTs(
                                  const EList<ALT<index_t> >& alts,
+                                 const EList<Haplotype<index_t> >& haplotypes,
                                  index_t                     joinedOff,
                                  const BTDnaString&          rdseq,
                                  index_t                     base_rdoff,
@@ -658,7 +656,7 @@ struct GenomeHit {
                                  int                         rfoff,
                                  index_t                     rflen,
                                  bool                        left,
-                                 const index_t               max_numALTsTried,
+                                 const GraphPolicy&          gpol,
                                  EList<Edit>&                edits,
                                  ELList<Edit, 128, 4>*       candidate_edits = NULL,
                                  index_t                     mm = 0,
@@ -673,6 +671,7 @@ struct GenomeHit {
         if(candidate_edits != NULL) candidate_edits->clear();
         alignWithALTs_recur(
                             alts,
+                            haplotypes,
                             joinedOff,
                             rdseq,
                             rdoff - base_rdoff,
@@ -694,7 +693,7 @@ struct GenomeHit {
                             0, /* tmp_numNs */
                             numNs,
                             0,    /* dep */
-                            max_numALTsTried,
+                            gpol,
                             numALTsTried);
         index_t extlen = 0;
         if(left) {
@@ -741,6 +740,7 @@ struct GenomeHit {
      */
     static index_t alignWithALTs_recur(
                                        const EList<ALT<index_t> >& alts,
+                                       const EList<Haplotype<index_t> >& haplotypes,
                                        index_t                     joinedOff,
                                        const BTDnaString&          rdseq,
                                        index_t                     rdoff_add,
@@ -762,7 +762,7 @@ struct GenomeHit {
                                        index_t                     tmp_numNs,
                                        index_t*                    numNs,
                                        index_t                     dep,
-                                       const index_t               max_numALTsTried,
+                                       const GraphPolicy&          gpol,
                                        index_t&                    numALTsTried,
                                        ALT_TYPE                    prev_alt_type = ALT_NONE);
     
@@ -1848,26 +1848,23 @@ bool GenomeHit<index_t>::combineWith(
  */
 template <typename index_t>
 bool GenomeHit<index_t>::extend(
-                                const Read&             rd,
-                                const GFM<index_t>&     gfm,
-                                const BitPairReference& ref,
-                                const ALTDB<index_t>&   altdb,
-                                SpliceSiteDB&           ssdb,
-                                SwAligner&              swa,
-                                SwMetrics&              swm,
-                                PerReadMetrics&         prm,
-                                const Scoring&          sc,
-                                TAlScore                minsc,
-                                RandomSource&           rnd,           // pseudo-random source
-                                index_t                 minK_local,
-                                index_t                 minIntronLen,
-                                index_t                 maxIntronLen,
-                                index_t                 minAnchorLen,
-                                index_t                 minAnchorLen_noncan,
-                                const index_t           maxAltsTried,
-                                index_t&                leftext,
-                                index_t&                rightext,
-                                index_t                 mm)
+                                const Read&                rd,
+                                const GFM<index_t>&        gfm,
+                                const BitPairReference&    ref,
+                                const ALTDB<index_t>&      altdb,
+                                SpliceSiteDB&              ssdb,
+                                SwAligner&                 swa,
+                                SwMetrics&                 swm,
+                                PerReadMetrics&            prm,
+                                const Scoring&             sc,
+                                TAlScore                   minsc,
+                                RandomSource&              rnd,           // pseudo-random source
+                                index_t                    minK_local,
+                                const TranscriptomePolicy& tpol,
+                                const GraphPolicy&         gpol,
+                                index_t&                   leftext,
+                                index_t&                   rightext,
+                                index_t                    mm)
 {
     assert_lt(this->_tidx, ref.numRefs());
     index_t max_leftext = leftext, max_rightext = rightext;
@@ -1876,6 +1873,11 @@ bool GenomeHit<index_t>::extend(
     index_t rdlen = (index_t)rd.length();
     bool doLeftAlign = false;
     assert(_sharedVars != NULL);
+    
+    const index_t minIntronLen = tpol.minIntronLen();
+    const index_t maxIntronLen = tpol.maxIntronLen();
+    const index_t minAnchorLen = tpol.minAnchorLen();
+    const index_t minAnchorLen_noncan = tpol.minAnchorLen_noncan();
     
     // extend the alignment further in the left direction
     // with 'mm' mismatches allowed
@@ -1899,6 +1901,7 @@ bool GenomeHit<index_t>::extend(
         index_t num_prev_edits = (index_t)_edits->size();
         index_t best_ext = alignWithALTs(
                                          altdb.alts(),
+                                         altdb.haplotypes(),
                                          this->_joinedOff,
                                          seq,
                                          this->_rdoff - 1,
@@ -1910,7 +1913,7 @@ bool GenomeHit<index_t>::extend(
                                          rl,
                                          reflen,
                                          true, /* left? */
-                                         maxAltsTried,
+                                         gpol,
                                          *this->_edits,
                                          NULL,
                                          mm,
@@ -1975,6 +1978,7 @@ bool GenomeHit<index_t>::extend(
             }
             index_t best_ext = alignWithALTs(
                                              altdb.alts(),
+                                             altdb.haplotypes(),
                                              this->_joinedOff + ref_ext,
                                              seq,
                                              this->_rdoff,
@@ -1986,7 +1990,7 @@ bool GenomeHit<index_t>::extend(
                                              (int)rl,
                                              reflen,
                                              false,
-                                             maxAltsTried,
+                                             gpol,
                                              *this->_edits,
                                              NULL,
                                              mm);
@@ -2050,7 +2054,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                        const GFM<index_t>&         gfm,
                                        const ALTDB<index_t>&       altdb,
                                        const BitPairReference&     ref,
-                                       const index_t               maxAltsTried)
+                                       const GraphPolicy&          gpol)
 {
     if(gfm.gh().linearFM()) {
         genomeHits.expand();
@@ -2109,7 +2113,7 @@ bool GenomeHit<index_t>::adjustWithALT(
         bool found2 = false;
         // maxAltsTried is not directly related to the size of offDiffs,
         // but let's make the size of offDiffs is determined by maxAltsTried
-        const index_t max_offDiffs_size = max<index_t>(4, maxAltsTried / 4);
+        const index_t max_offDiffs_size = max<index_t>(4, gpol.maxAltsTried() / 4);
         if(offDiffs.size() > max_offDiffs_size) offDiffs.resize(max_offDiffs_size);
         for(index_t o = 0; o < offDiffs.size() && !found2; o++) {
             const pair<index_t, int>& offDiff = offDiffs[o];
@@ -2139,6 +2143,7 @@ bool GenomeHit<index_t>::adjustWithALT(
             index_t reflen = genomeHit._len + 10;
             index_t alignedLen = alignWithALTs(
                                                alts,
+                                               altdb.haplotypes(),
                                                genomeHit._joinedOff,
                                                seq,
                                                genomeHit._rdoff,
@@ -2150,7 +2155,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                                (int)genomeHit._toff,
                                                reflen,
                                                false, /* left? */
-                                               maxAltsTried,
+                                               gpol,
                                                *genomeHit._edits,
                                                &candidate_edits);
             if(alignedLen == genomeHit._len) {
@@ -2195,7 +2200,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                        const GFM<index_t>&     gfm,
                                        const ALTDB<index_t>&   altdb,
                                        const BitPairReference& ref,
-                                       const index_t           maxAltsTried)
+                                       const GraphPolicy&      gpol)
 {
     if(gfm.gh().linearFM()) return true;
     assert_lt(this->_tidx, ref.numRefs());
@@ -2213,7 +2218,7 @@ bool GenomeHit<index_t>::adjustWithALT(
     bool found = false;
     // maxAltsTried is not directly related to the size of offDiffs,
     // but let's make the size of offDiffs is determined by maxAltsTried
-    const index_t max_offDiffs_size = max<index_t>(4, maxAltsTried / 4);
+    const index_t max_offDiffs_size = max<index_t>(4, gpol.maxAltsTried() / 4);
     if(offDiffs.size() > max_offDiffs_size) offDiffs.resize(max_offDiffs_size);
     for(index_t o = 0; o < offDiffs.size() && !found; o++) {
         const pair<index_t, int>& offDiff = offDiffs[o];
@@ -2240,6 +2245,7 @@ bool GenomeHit<index_t>::adjustWithALT(
         index_t reflen = this->_len + 10;
         index_t alignedLen = alignWithALTs(
                                            alts,
+                                           altdb.haplotypes(),
                                            this->_joinedOff,
                                            seq,
                                            this->_rdoff,
@@ -2251,7 +2257,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            (int)this->_toff,
                                            reflen,
                                            false, /* left? */
-                                           maxAltsTried,
+                                           gpol,
                                            *this->_edits,
                                            &_sharedVars->candidate_edits);
         if(alignedLen == this->_len) {
@@ -2406,6 +2412,7 @@ void GenomeHit<index_t>::findOffDiffs(
 template <typename index_t>
 index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 const EList<ALT<index_t> >& alts,
+                                                const EList<Haplotype<index_t> >& haplotypes,
                                                 index_t                     joinedOff,
                                                 const BTDnaString&          rdseq,
                                                 index_t                     rdoff_add,
@@ -2427,11 +2434,11 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 index_t                     tmp_numNs,
                                                 index_t*                    numNs,
                                                 index_t                     dep,
-                                                const index_t               max_numALTsTried,
+                                                const GraphPolicy&          gpol,
                                                 index_t&                    numALTsTried,
                                                 ALT_TYPE                    prev_alt_type)
 {
-    if(numALTsTried > max_numALTsTried + dep) return 0;
+    if(numALTsTried > gpol.maxAltsTried() + dep) return 0;
     assert_gt(rdlen, 0);
     assert_gt(rflen, 0);
     if(raw_refbufs.size() <= dep) raw_refbufs.expand();
@@ -2489,6 +2496,41 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             tmp_edits.erase(0, tmp_mm);
             tmp_mm = 0;
         }
+#if 0
+        // Find Haplotypes
+        pair<int, int> ht_range(0, 0);
+        if(haplotypes.size() > 0) {
+            Haplotype<index_t> cmp_ht;
+            const index_t minK = 16;
+            assert_leq(mm_min_rd_i, rdoff);
+            index_t rd_diff = rdoff - mm_min_rd_i;
+            rd_diff = (rd_diff > minK ? rd_diff - minK : 0);
+            if(rd_diff >= joinedOff) {
+                cmp_ht.left = joinedOff;
+            } else {
+                cmp_ht.left = joinedOff - rd_diff;
+            }
+            ht_range.first = ht_range.second = (int)haplotypes.bsearchLoBound(cmp_ht);
+            if(ht_range.first >= haplotypes.size()) {
+                assert_gt(haplotypes.size(), 0);
+                ht_range.first = ht_range.second = ht_range.second - 1;
+            }
+            for(; ht_range.first >= 0; ht_range.first--) {
+                const Haplotype<index_t>& ht = haplotypes[ht_range.first];
+                if(ht.snp()) {
+                    if(alt.deletion() && !alt.reversed) continue;
+                    if(alt.pos + rdlen < joinedOff) break;
+                } else if(alt.splicesite()) {
+                    if(alt.left < alt.right) continue;
+                    if(alt.left + rdlen - 1 < joinedOff) break;
+                } else {
+                    assert(alt.exon());
+                    continue;
+                }
+            }
+        }
+#endif
+        
         // Find SNPs included in this region
         pair<int, int> alt_range(0, 0);
         if(alts.size() > 0) {
@@ -2696,6 +2738,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 }
                 index_t alignedLen = alignWithALTs_recur(
                                                          alts,
+                                                         haplotypes,
                                                          next_joinedOff,
                                                          rdseq,
                                                          rdoff_add,
@@ -2717,7 +2760,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          tmp_numNs,
                                                          numNs,
                                                          dep + 1,
-                                                         max_numALTsTried,
+                                                         gpol,
                                                          numALTsTried,
                                                          alt.type);
                 if(alignedLen == next_rdlen) return rdlen;
@@ -2983,6 +3026,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 }
                 index_t alignedLen = alignWithALTs_recur(
                                                          alts,
+                                                         haplotypes,
                                                          next_joinedOff,
                                                          rdseq,
                                                          rdoff_add + rd_i,
@@ -3004,7 +3048,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          tmp_numNs,
                                                          numNs,
                                                          dep + 1,
-                                                         max_numALTsTried,
+                                                         gpol,
                                                          numALTsTried,
                                                          alt.type);
                 if(alignedLen > 0) {
@@ -4095,7 +4139,7 @@ public:
                                                       gfm,
                                                       altdb,
                                                       ref,
-                                                      gpol.maxAltsTried());
+                                                      gpol);
                 }
                 if(partialHit._hit_type == CANDIDATE_HIT && genomeHits.size() >= maxGenomeHitSize) break;
             }
@@ -4469,7 +4513,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                       gfm,
                                                       altdb,
                                                       ref,
-                                                      gpol.maxAltsTried());
+                                                      gpol);
                 }
                 max_hitlen = hitlen;
             }
@@ -4507,11 +4551,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                          _minsc[ordi],
                          rnd,
                          (index_t)_minK_local,
-                         (index_t)tpol.minIntronLen(),
-                         (index_t)tpol.maxIntronLen(),
-                         tpol.minAnchorLen(),
-                         tpol.minAnchorLen_noncan(),
-                         gpol.maxAltsTried(),
+                         tpol,
+                         gpol,
                          leftext,
                          rightext);
         hybridSearch_recur(

@@ -181,6 +181,50 @@ public:
 
 
 template <typename index_t>
+struct Haplotype {
+    Haplotype() {
+        reset();
+    }
+    
+    void reset() {
+        left = right = 0;
+        alts.clear();
+    }
+    
+    index_t left;
+    index_t right;
+    EList<index_t, 1> alts;
+    
+    bool operator< (const Haplotype& o) const {
+        if(left != o.left) return left < o.left;
+        if(right != o.right) return right < o.right;
+        return false;
+    }
+    
+    bool write(ofstream& f_out, bool bigEndian) const {
+        writeIndex<index_t>(f_out, left, bigEndian);
+        writeIndex<index_t>(f_out, right, bigEndian);
+        writeIndex<index_t>(f_out, alts.size(), bigEndian);
+        for(index_t i = 0; i < alts.size(); i++) {
+            writeIndex<index_t>(f_out, alts[i], bigEndian);
+        }
+        return true;
+    }
+    
+    bool read(ifstream& f_in, bool bigEndian) {
+        left = readIndex<index_t>(f_in, bigEndian);
+        right = readIndex<index_t>(f_in, bigEndian);
+        index_t num_alts = readIndex<index_t>(f_in, bigEndian);
+        alts.resizeExact(num_alts); alts.clear();
+        for(index_t i = 0; i < num_alts; i++) {
+            alts.push_back(readIndex<index_t>(f_in, bigEndian));
+        }
+        return true;
+    }
+};
+
+
+template <typename index_t>
 class ALTDB {
 public:
     ALTDB() :
@@ -199,41 +243,23 @@ public:
     void setSpliceSites(bool ss) { _ss = ss; }
     void setExons(bool exon) { _exon = exon; }
     
-    EList<ALT<index_t> >& alts()     { return _alts; }
-    EList<string>&        altnames() { return _altnames; }
+    EList<ALT<index_t> >&       alts()       { return _alts; }
+    EList<string>&              altnames()   { return _altnames; }
+    EList<Haplotype<index_t> >& haplotypes() { return _haplotypes; }
     
-    const EList<ALT<index_t> >& alts() const     { return _alts; }
-    const EList<string>&        altnames() const { return _altnames; }
+    const EList<ALT<index_t> >&       alts() const       { return _alts; }
+    const EList<string>&              altnames() const   { return _altnames; }
+    const EList<Haplotype<index_t> >& haplotypes() const { return _haplotypes; }
 
 private:
     bool _snp;
     bool _ss;
     bool _exon;
     
-    EList<ALT<index_t> > _alts;
-    EList<string>        _altnames;
+    EList<ALT<index_t> >       _alts;
+    EList<string>              _altnames;
+    EList<Haplotype<index_t> > _haplotypes;
 };
 
-template <typename index_t>
-struct Haplotype {
-    Haplotype() {
-        reset();
-    }
-    
-    void reset() {
-        left = right = 0;
-        alts.clear();
-    }
-    
-    bool operator< (const Haplotype& o) const {
-        if(left != o.left) return left < o.left;
-        if(right != o.right) return right < o.right;
-        return false;
-    }
-    
-    index_t left;
-    index_t right;
-    EList<index_t, 4> alts;
-};
 
 #endif /*ifndef ALT_H_*/

@@ -632,7 +632,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         // Create nodes and edges for haplotypes
         for(index_t i = 0; i < haplotypes.size(); i++) {
             const Haplotype<index_t>& haplotype = haplotypes[i];
-            const EList<index_t, 4>& snpIDs = haplotype.alts;
+            const EList<index_t, 1>& snpIDs = haplotype.alts;
             assert_gt(snpIDs.size(), 0);
             assert_lt(haplotype.right, s.length());
             bool pass = true;
@@ -949,7 +949,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             const Haplotype<index_t>& haplotype = haplotypes[haplotype_idx];
             if(haplotype.left < curr_pos) continue;
             if(haplotype.right >= curr_pos + curr_len) break;
-            const EList<index_t, 4>& snpIDs = haplotype.alts;
+            const EList<index_t, 1>& snpIDs = haplotype.alts;
             assert_gt(snpIDs.size(), 0);
             bool pass = true;
             for(index_t s = 0; s < snpIDs.size(); s++) {
@@ -2290,7 +2290,7 @@ void PathGraph<index_t>::printInfo()
     if(verbose) {
         cerr << "Generation " << generation
         << " (" << temp_nodes << " -> " << nodes.size() << " nodes, "
-        << ranks << " ranks" << endl;
+        << ranks << " ranks)" << endl;
     }
 }
 

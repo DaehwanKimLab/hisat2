@@ -3800,7 +3800,8 @@ static void driver(
                                  tranAssm,
                                  xsOnly);
         
-        GraphPolicy gpol(max_alts_tried);
+        GraphPolicy gpol(max_alts_tried,
+                         altdb->haplotypes().size() > 0);
         
         init_junction_prob();
         bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;

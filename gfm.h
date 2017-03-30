@@ -706,6 +706,7 @@ public:
 
         // Read ALTs
         EList<ALT<index_t> >& alts = altdb->alts();
+        EList<Haplotype<index_t> >& haplotypes = altdb->haplotypes();
         EList<string>& altnames = altdb->altnames();
         alts.clear(); altnames.clear();
         string in7Str = in + ".7." + gfm_ext;
@@ -734,6 +735,17 @@ public:
             }
         }
         assert_eq(alts.size(), numAlts);
+        // Check if it hits the end of file, and this routine is needed for backward compatibility
+        if(in7.peek() != std::ifstream::traits_type::eof()) {
+            index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
+            if(numHaplotypes > 0) {
+                while(!in7.eof()) {
+                    haplotypes.expand();
+                    haplotypes.back().read(in7, this->toBe());
+                    if(haplotypes.size() == numHaplotypes) break;
+                }
+            }
+        }
         
         if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
         ifstream in8(in8Str.c_str(), ios::binary);
@@ -1333,7 +1345,7 @@ public:
                             assert_lt(bp, 4);
                             if((int)bp == s[pos]) {
                                 cerr << "Warning: single type should have a different base than " << "ACGTN"[(int)s[pos]]
-                                << " (" << snp_id << ") at " << genome_pos << " on " << chr << endl;
+                                     << " (" << snp_id << ") at " << genome_pos << " on " << chr << endl;
                                 _alts.pop_back();
                                 continue;
                                 // throw 1;
@@ -1703,7 +1715,7 @@ public:
                         buf3[before] = (index_t)i;
                     }
                     for(size_t h = 0; h < _haplotypes.size(); h++) {
-                        EList<index_t, 4>& alts = _haplotypes[h].alts;
+                        EList<index_t, 1>& alts = _haplotypes[h].alts;
                         for(size_t a = 0; a < alts.size(); a++) {
                             index_t before = alts[a];
                             assert_lt(before, buf3.size());
@@ -1734,6 +1746,11 @@ public:
                 for(index_t i = 0; i < _alts.size(); i++) {
                     _alts[i].write(fout7, this->toBe());
                     fout8 << _altnames[i] << endl;
+                }
+                
+                writeIndex<index_t>(fout7, (index_t)_haplotypes.size(), this->toBe());
+                for(index_t i = 0; i < _haplotypes.size(); i++) {
+                    _haplotypes[i].write(fout7, this->toBe());
                 }
                 
                 fout7.close();

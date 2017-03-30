@@ -152,11 +152,8 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                          this->_minsc[rdi],
                          rnd,
                          INDEX_MAX,
-                         (index_t)tpol.minIntronLen(),
-                         (index_t)tpol.maxIntronLen(),
-                         tpol.minAnchorLen(),
-                         tpol.minAnchorLen_noncan(),
-                         gpol.maxAltsTried(),
+                         tpol,
+                         gpol,
                          leftext,
                          rightext);
     }
@@ -352,11 +349,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                        this->_minsc[rdi],
                                        rnd,
                                        (index_t)this->_minK_local,
-                                       (index_t)tpol.minIntronLen(),
-                                       (index_t)tpol.maxIntronLen(),
-                                       tpol.minAnchorLen(),
-                                       tpol.minAnchorLen_noncan(),
-                                       gpol.maxAltsTried(),
+                                       tpol,
+                                       gpol,
                                        leftext,
                                        rightext);
                         if(tempHit.len() <= 0)
@@ -472,11 +466,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                            this->_minsc[rdi],
                                            rnd,
                                            (index_t)this->_minK_local,
-                                           (index_t)tpol.minIntronLen(),
-                                           (index_t)tpol.maxIntronLen(),
-                                           tpol.minAnchorLen(),
-                                           tpol.minAnchorLen_noncan(),
-                                           gpol.maxAltsTried(),
+                                           tpol,
+                                           gpol,
                                            leftext,
                                            rightext);
                             if(tempHit.len() <= 0)
@@ -613,11 +604,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                    this->_minsc[rdi],
                                    rnd,
                                    (index_t)this->_minK_local,
-                                   (index_t)tpol.minIntronLen(),
-                                   (index_t)tpol.maxIntronLen(),
-                                   tpol.minAnchorLen(),
-                                   tpol.minAnchorLen_noncan(),
-                                   gpol.maxAltsTried(),
+                                   tpol,
+                                   gpol,
                                    leftext,
                                    rightext);
                     if(tempHit.len() <= 0)
@@ -698,11 +686,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            this->_minsc[rdi],
                            rnd,
                            (index_t)this->_minK_local,
-                           (index_t)tpol.minIntronLen(),
-                           (index_t)tpol.maxIntronLen(),
-                           tpol.minAnchorLen(),
-                           tpol.minAnchorLen_noncan(),
-                           gpol.maxAltsTried(),
+                           tpol,
+                           gpol,
                            leftext,
                            rightext,
                            1);
@@ -814,7 +799,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  (index_t)coord.off(),
                                  (index_t)coord.joinedOff(),
                                  this->_sharedVars);
-                    if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref, gpol.maxAltsTried())) continue;
+                    if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref, gpol)) continue;
                     // check if the partial alignment is compatible with the new alignment using the local index
                     if(!tempHit.compatibleWith(hit, (index_t)tpol.minIntronLen(), (index_t)tpol.maxIntronLen(), tpol.no_spliced_alignment())) {
                         if(count == 1) continue;
@@ -836,11 +821,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                        this->_minsc[rdi],
                                        rnd,
                                        (index_t)this->_minK_local,
-                                       (index_t)tpol.minIntronLen(),
-                                       (index_t)tpol.maxIntronLen(),
-                                       tpol.minAnchorLen(),
-                                       tpol.minAnchorLen_noncan(),
-                                       gpol.maxAltsTried(),
+                                       tpol,
+                                       gpol,
                                        leftext,
                                        rightext);
                     }
@@ -1003,7 +985,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      (index_t)coord.off(),
                                      (index_t)coord.joinedOff(),
                                      this->_sharedVars);
-                        if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref, gpol.maxAltsTried())) continue;
+                        if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref, gpol)) continue;
                         if(!tempHit.compatibleWith(hit, (index_t)tpol.minIntronLen(), (index_t)tpol.maxIntronLen(), tpol.no_spliced_alignment())) continue;
                         if(uniqueStop) {
                             assert_eq(coords.size(), 1);
@@ -1021,11 +1003,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                            this->_minsc[rdi],
                                            rnd,
                                            (index_t)this->_minK_local,
-                                           (index_t)tpol.minIntronLen(),
-                                           (index_t)tpol.maxIntronLen(),
-                                           tpol.minAnchorLen(),
-                                           tpol.minAnchorLen_noncan(),
-                                           gpol.maxAltsTried(),
+                                           tpol,
+                                           gpol,
                                            leftext,
                                            rightext);
                         }
@@ -1150,11 +1129,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            this->_minsc[rdi],
                            rnd,
                            (index_t)this->_minK_local,
-                           (index_t)tpol.minIntronLen(),
-                           (index_t)tpol.maxIntronLen(),
-                           tpol.minAnchorLen(),
-                           tpol.minAnchorLen_noncan(),
-                           gpol.maxAltsTried(),
+                           tpol,
+                           gpol,
                            leftext,
                            rightext,
                            num_mismatch_allowed);
@@ -1284,11 +1260,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                    this->_minsc[rdi],
                                    rnd,
                                    (index_t)this->_minK_local,
-                                   (index_t)tpol.minIntronLen(),
-                                   (index_t)tpol.maxIntronLen(),
-                                   tpol.minAnchorLen(),
-                                   tpol.minAnchorLen_noncan(),
-                                   gpol.maxAltsTried(),
+                                   tpol,
+                                   gpol,
                                    leftext,
                                    rightext);
                     if(tempHit.len() <= 0)
@@ -1368,11 +1341,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            this->_minsc[rdi],
                            rnd,
                            (index_t)this->_minK_local,
-                           (index_t)tpol.minIntronLen(),
-                           (index_t)tpol.maxIntronLen(),
-                           tpol.minAnchorLen(),
-                           tpol.minAnchorLen_noncan(),
-                           gpol.maxAltsTried(),
+                           tpol,
+                           gpol,
                            leftext,
                            rightext,
                            1);
@@ -1491,7 +1461,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                  (index_t)coord.off(),
                                  (index_t)coord.joinedOff(),
                                  this->_sharedVars);
-                    if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref, gpol.maxAltsTried())) continue;
+                    if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref, gpol)) continue;
                     // check if the partial alignment is compatible with the new alignment using the local index
                     if(!hit.compatibleWith(tempHit, (index_t)tpol.minIntronLen(), (index_t)tpol.maxIntronLen(), tpol.no_spliced_alignment())) {
                         if(count == 1) continue;
@@ -1511,11 +1481,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                    this->_minsc[rdi],
                                    rnd,
                                    (index_t)this->_minK_local,
-                                   (index_t)tpol.minIntronLen(),
-                                   (index_t)tpol.maxIntronLen(),
-                                   tpol.minAnchorLen(),
-                                   tpol.minAnchorLen_noncan(),
-                                   gpol.maxAltsTried(),
+                                   tpol,
+                                   gpol,
                                    leftext,
                                    rightext);
                     GenomeHit<index_t> combinedHit = hit;
@@ -1678,7 +1645,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                      (index_t)coord.off(),
                                      (index_t)coord.joinedOff(),
                                      this->_sharedVars);
-                        if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref, gpol.maxAltsTried())) continue;
+                        if(!tempHit.adjustWithALT(*this->_rds[rdi], gfm, altdb, ref, gpol)) continue;
                         if(!hit.compatibleWith(tempHit, (index_t)tpol.minIntronLen(), (index_t)tpol.maxIntronLen(), tpol.no_spliced_alignment())) continue;
                         index_t leftext = (index_t)0, rightext = (index_t)INDEX_MAX;
                         tempHit.extend(
@@ -1694,11 +1661,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                        this->_minsc[rdi],
                                        rnd,
                                        (index_t)this->_minK_local,
-                                       (index_t)tpol.minIntronLen(),
-                                       (index_t)tpol.maxIntronLen(),
-                                       tpol.minAnchorLen(),
-                                       tpol.minAnchorLen_noncan(),
-                                       gpol.maxAltsTried(),
+                                       tpol,
+                                       gpol,
                                        leftext,
                                        rightext);
                         GenomeHit<index_t> combinedHit = hit;
@@ -1825,11 +1789,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            this->_minsc[rdi],
                            rnd,
                            (index_t)this->_minK_local,
-                           (index_t)tpol.minIntronLen(),
-                           (index_t)tpol.maxIntronLen(),
-                           tpol.minAnchorLen(),
-                           tpol.minAnchorLen_noncan(),
-                           gpol.maxAltsTried(),
+                           tpol,
+                           gpol,
                            leftext,
                            rightext,
                            num_mismatch_allowed);

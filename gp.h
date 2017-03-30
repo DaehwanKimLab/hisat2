@@ -37,29 +37,35 @@ public:
     
     GraphPolicy() { reset(); }
     
-    GraphPolicy(size_t maxAltsTried)
+    GraphPolicy(size_t maxAltsTried,
+                bool haplotypeOnly)
     {
-        init(maxAltsTried);
+        init(maxAltsTried,
+             haplotypeOnly);
     }
     
     /**
      */
     void reset() {
-        init(0);
+        init(0, false);
     }
     
     /**
      */
-    void init(size_t maxAltsTried)
+    void init(size_t maxAltsTried,
+              bool haplotypeOnly)
     {
         maxAltsTried_ = maxAltsTried;
+        haplotypeOnly_ = haplotypeOnly;
     }
     
     size_t maxAltsTried() const { return maxAltsTried_; }
+    bool   haplotypeOnly() const { return haplotypeOnly_; }
     
     
 private:
     size_t maxAltsTried_;
+    bool   haplotypeOnly_;
 };
 
 #endif /*ndef GP_H_*/

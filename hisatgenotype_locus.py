@@ -2813,7 +2813,7 @@ def test_Gene_genotyping(base_fname,
         # test_list = [[["A*26:25N"]]] # for allele that includes an insertion
         # test_list = [[["A*24:36N"]]] # for normal allele?
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
-        # test_list = [[["B*15:01:01:04", "B*56:01:01:03"]]]
+        test_list = [[["B*15:01:01:04", "B*56:01:01:03"]]]
         for test_i in range(len(test_list)):
             if "test_id" in daehwan_debug:
                 daehwan_test_ids = daehwan_debug["test_id"].split('-')
