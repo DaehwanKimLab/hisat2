@@ -1177,7 +1177,7 @@ def typing(ex_path,
            aligners,
            num_editdist,
            assembly,
-           assembly_base,
+           output_base,
            error_correction,
            allow_discordant,
            display_alleles,
@@ -1191,12 +1191,13 @@ def typing(ex_path,
            verbose):
     if simulation:
         test_passed = {}
-
+    report_file = open(output_base + ".report", 'w')
     for aligner, index_type in aligners:
-        if index_type == "graph":
-            print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
-        else:
-            print >> sys.stderr, "\n\t\t%s %s" % (aligner, index_type)
+        for f_ in [sys.stderr, report_file]:
+            if index_type == "graph":
+                print >> f_, "\n\t\t%s %s" % (aligner, index_type)
+            else:
+                print >> f_, "\n\t\t%s %s" % (aligner, index_type)
 
         remove_alignment_file = False
         if alignment_fname == "":
@@ -1985,7 +1986,8 @@ def typing(ex_path,
                 if num_reads <= 0:
                     continue
 
-                print >> sys.stderr, "\t\t\tNumber of reads aligned: %d" % num_reads
+                for f_ in [sys.stderr, report_file]:
+                    print >> f_, "\t\t\tNumber of reads aligned: %d" % num_reads
 
                 if prev_read_id != None:
                     if base_fname == "hla":
@@ -2063,7 +2065,8 @@ def typing(ex_path,
                     found = False
                     for test_Gene_name in test_Gene_names:
                         if count[0] == test_Gene_name:
-                            print >> sys.stderr, "\t\t\t*** %d ranked %s (count: %d)" % (count_i + 1, test_Gene_name, count[1])
+                            for f_ in [sys.stderr, report_file]:
+                                print >> f_, "\t\t\t*** %d ranked %s (count: %d)" % (count_i + 1, test_Gene_name, count[1])
                             found = True
                             """
                             if count_i > 0 and Gene_counts[0][1] > count[1]:
@@ -2073,12 +2076,15 @@ def typing(ex_path,
                                 test_passed += 1
                             """
                     if count_i < 5 and not found:
-                        print >> sys.stderr, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
+                        for f_ in [sys.stderr, report_file]:
+                            print >> f_, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
                 else:
-                    print >> sys.stderr, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
+                    for f_ in [sys.stderr, report_file]:
+                        print >> f_, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
                     if count_i >= 9:
                         break
-            print >> sys.stderr
+            for f_ in [sys.stderr, report_file]:
+                print >> f_
 
             # Calculate the abundance of representative alleles on exonic sequences
             if base_fname == "hla":
@@ -2142,7 +2148,7 @@ def typing(ex_path,
                 asm_graph.allele_node_order = allele_node_order
 
                 # Start drawing assembly graph
-                asm_graph.begin_draw(assembly_base)
+                asm_graph.begin_draw(output_base)
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(0, "Initial graph")
@@ -2206,10 +2212,11 @@ def typing(ex_path,
                     print >> sys.stderr, allele_name1, "vs.", allele_name2
                     asm_graph.print_node_comparison(asm_graph.true_allele_nodes)
 
-                def compare_alleles(vars1, vars2):
+                def compare_alleles(vars1, vars2, print_output = True):
                     skip = True
                     var_i, var_j = 0, 0
                     exon_i = 0
+                    mismatches = 0
                     while var_i < len(vars1) and var_j < len(vars2):
                         cmp_var_id, node_var_id = vars1[var_i], vars2[var_j]
                         cmp_var, node_var = gene_vars[cmp_var_id], gene_vars[node_var_id]
@@ -2232,23 +2239,34 @@ def typing(ex_path,
                         
                         if cmp_var_id == node_var_id:
                             skip = False
-                            if cmp_var_in_exon:
-                                print >> sys.stderr, "\033[94mexon%d\033[00m" % (exon_i + 1),
-                            print >> sys.stderr, cmp_var_id, cmp_var, "\t\t\t", mpileup[cmp_var[1]]
+                            if print_output:
+                                if cmp_var_in_exon:
+                                    print >> sys.stderr, "\033[94mexon%d\033[00m" % (exon_i + 1),
+                                print >> sys.stderr, cmp_var_id, cmp_var, "\t\t\t", mpileup[cmp_var[1]]
                             var_i += 1; var_j += 1
                             continue
                         if cmp_var[1] <= node_var[1]:
                             if not skip:
                                 if (var_i > 0 and var_i + 1 < len(vars1)) or cmp_var[0] != "deletion":
-                                    if cmp_var_in_exon:
-                                        print >> sys.stderr, "\033[94mexon%d\033[00m" % (exon_i + 1),
-                                    print >> sys.stderr, "***", cmp_var_id, cmp_var, "==", "\t\t\t", mpileup[cmp_var[1]]
+                                    if print_output:
+                                        if cmp_var_in_exon:
+                                            for f_ in [sys.stderr, report_file]:
+                                                print >> f_, "\033[94mexon%d\033[00m" % (exon_i + 1),
+                                        for f_ in [sys.stderr, report_file]:
+                                            print >> f_, "***", cmp_var_id, cmp_var, "==", "\t\t\t", mpileup[cmp_var[1]]
+                                    mismatches += 1
                             var_i += 1
                         else:
-                            if node_var_in_exon:
-                                print >> sys.stderr, "\033[94mexon%d\033[00m" % (exon_i + 1),
-                            print >> sys.stderr, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
+                            if print_output:
+                                if node_var_in_exon:
+                                    for f_ in [sys.stderr, report_file]:
+                                        print >> f_, "\033[94mexon%d\033[00m" % (exon_i + 1),
+                                for f_ in [sys.stderr, report_file]:
+                                    print >> f_, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
+                            mismatches += 1
                             var_j += 1
+                            
+                    return mismatches
                     
                 tmp_nodes = asm_graph.nodes
                 print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
@@ -2280,14 +2298,25 @@ def typing(ex_path,
                             alleles.append([cmp_Gene_name, tmp_vars])
 
                     for allele_name, cmp_vars in alleles:
-                        print >> sys.stderr, "vs.", allele_name
+                        for f_ in [sys.stderr, report_file]:
+                            print >> f_, "vs.", allele_name
                         compare_alleles(cmp_vars, node_vars)
 
                     print >> sys.stderr
                     print >> sys.stderr
 
+            # DK - debugging purposes
+            for allele_name, vars in allele_vars.items():
+                vars = set(vars)
+                # vars_ = set(["hv7453", "hv7454", "hv7456", "hv7457", "hv7458", "hv7460"])
+                vars_ = set(["hv7452", "hv7455", "hv7459", "hv7461"])
+                if vars >= vars_:
+                    print "DK:", allele_name
+            sys.exit(1)
+                
+
             # Identify alleles that perfectly or closesly match assembled alleles
-            """
+            # """
             for node_name, node in asm_graph.nodes.items():
                 vars = set(node.get_var_ids())
 
@@ -2301,14 +2330,26 @@ def typing(ex_path,
                     elif tmp_common == max_common:
                         max_allele_names.append(allele_name)
 
-                print "Genomic:"
-                print "\t", node_name
-                print "\t\t", max_common, max_allele_names
+                for f_ in [sys.stderr, report_file]:
+                    print >> f_, "Genomic:", node_name
+                    node_vars = node.get_var_ids()
+                    min_mismatches = sys.maxint
+                    for max_allele_name in max_allele_names:
+                        cmp_vars = allele_vars[max_allele_name]
+                        cmp_vars = sorted(cmp_vars, cmp=lambda a, b: int(a[2:]) - int(b[2:]))
+                        print_output = False
+                        tmp_mismatches = compare_alleles(cmp_vars, node_vars, print_output)
+                        print >> f_, "\t\t%s:" % max_allele_name, max_common, tmp_mismatches
+                        if tmp_mismatches < min_mismatches:
+                            min_mismatches = tmp_mismatches
+                    if min_mismatches > 0:
+                        print >> f_, "Novel allele"
+                    else:
+                        print >> f_, "Known allele"
 
                 allele_exon_vars = {}
             for allele_name, vars in allele_vars.items():
                 allele_exon_vars[allele_name] = set(vars) & exon_vars
-
 
             for node_name, node in asm_graph.nodes.items():
                 vars = []
@@ -2325,11 +2366,12 @@ def typing(ex_path,
                     elif tmp_common == max_common:
                         max_allele_names.append(allele_name)
 
-                print "Exonic:"
-                print "\t", node_name
-                print "\t\t", max_common, max_allele_names
-            """
-
+                for f_ in [sys.stderr, report_file]:
+                    print >> f_, "Exonic:", node_name
+                    for max_allele_name in max_allele_names:
+                        print >> f_, "\t\t%s:" % max_allele_name, max_common
+            # """
+            
             success = [False for i in range(len(test_Gene_names))]
             found_list = [False for i in range(len(test_Gene_names))]
             for prob_i in range(len(Gene_prob)):
@@ -2353,7 +2395,8 @@ def typing(ex_path,
                                     rank_i -= 1
                                 else:
                                     break
-                            print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (rank_i + 1, test_Gene_name, prob[1] * 100.0)
+                            for f_ in [sys.stderr, report_file]:
+                                print >> f_, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (rank_i + 1, test_Gene_name, prob[1] * 100.0)
                             if rank_i < len(success):
                                 success[rank_i] = True
                             found_list[name_i] = True
@@ -2362,9 +2405,11 @@ def typing(ex_path,
                     if not False in found_list and prob_i >= 10:
                         break
                 if not found:
-                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, _allele_rep, prob[1] * 100.0)
+                    for f_ in [sys.stderr, report_file]:
+                        print >> f_, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, _allele_rep, prob[1] * 100.0)
                     if best_alleles and prob_i < 2:
-                        print >> sys.stdout, "SingleModel %s (abundance: %.2f%%)" % (_allele_rep, prob[1] * 100.0)
+                        for f_ in [sys.stderr, report_file]:
+                            print >> f_, "SingleModel %s (abundance: %.2f%%)" % (_allele_rep, prob[1] * 100.0)
                 if not simulation and prob_i >= 9:
                     break
                 if prob_i >= 19:
@@ -2384,7 +2429,7 @@ def typing(ex_path,
                     allele_pair, prob = Gene_prob[prob_i]
                     allele1, allele2 = allele_pair.split('-')
                     if best_alleles and prob_i < 1:
-                        print >> sys.stdout, "PairModel %s (abundance: %.2f%%)" % (allele_pair, prob * 100.0)
+                        print >> sys.stderr, "PairModel %s (abundance: %.2f%%)" % (allele_pair, prob * 100.0)
                     if simulation:
                         if allele1 in test_Gene_names and allele2 in test_Gene_names:
                             rank_i = prob_i
@@ -2439,6 +2484,7 @@ def typing(ex_path,
         if remove_alignment_file and not simulation:
             os.system("rm %s*" % (alignment_fname))
 
+    report_file.close()
     if simulation:
         return test_passed
 
@@ -2537,7 +2583,7 @@ def test_Gene_genotyping(base_fname,
                          perbase_snprate,
                          skip_fragment_regions,
                          assembly,
-                         assembly_base,
+                         output_base,
                          error_correction,
                          discordant,
                          display_alleles,
@@ -2776,6 +2822,7 @@ def test_Gene_genotyping(base_fname,
         # test_list = [[["A*26:25N"]]] # for allele that includes an insertion
         # test_list = [[["A*24:36N"]]] # for normal allele?
         # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
+        test_list = [[["B*15:01:01:04", "B*56:01:01:03"]]]
         for test_i in range(len(test_list)):
             if "test_id" in daehwan_debug:
                 daehwan_test_ids = daehwan_debug["test_id"].split('-')
@@ -2831,7 +2878,7 @@ def test_Gene_genotyping(base_fname,
                                      aligners,
                                      num_editdist,
                                      assembly,
-                                     assembly_base,
+                                     output_base,
                                      error_correction,
                                      discordant,
                                      display_alleles,
@@ -2876,7 +2923,7 @@ def test_Gene_genotyping(base_fname,
                aligners,
                num_editdist,
                assembly,
-               assembly_base,
+               output_base,
                error_correction,
                discordant,
                display_alleles,
@@ -2987,8 +3034,8 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="e.g., test_id:10,read_id:10000,basic_test")
-    parser.add_argument("--assembly-base",
-                        dest="assembly_base",
+    parser.add_argument("--output-base", "--assembly-base",
+                        dest="output_base",
                         type=str,
                         default="assembly_graph",
                         help="base file name (default: assembly_graph)")
@@ -3094,7 +3141,7 @@ if __name__ == '__main__':
                          args.perbase_snprate,
                          skip_fragment_regions,
                          args.assembly,
-                         args.assembly_base,
+                         args.output_base,
                          args.error_correction,
                          args.discordant,
                          display_alleles,

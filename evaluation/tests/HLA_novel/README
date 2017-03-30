@@ -13,14 +13,8 @@ To run HISAT-genotype
 
 
 
-HISAT-genotype vs. Omixon
-
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads CP_80/LP6005106-DNA_H02.extracted.fq.1.gz,CP_80/LP6005106-DNA_H02.extracted.fq.2.gz --display-alleles A*23:17,A*02:02:01:01
-
 HISAT-genotye on Illumina Platinum Genomes
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads illumina/NA12892.fished_1.fq,illumina/NA12892.fished_2.fq
-   
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads ILMN_A/NA12892.extracted.1.fq.gz,ILMN_A/NA12892.extracted.2.fq.gz --display-alleles A*02:01:01:01,A*11:01:01:01
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --base hla --locus-list A --num-editdist 2 --reads ILMN/NA12892.extracted.1.fq.gz,ILMN/NA12892.extracted.2.fq.gz
 
    ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz
 
@@ -29,11 +23,19 @@ HISAT-genotye on Illumina Platinum Genomes
    for i in `ls -l CP_80/LP*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --locus-list A --aligner-list hisat2.graph --num-editdist 2 --reads CP_80/$i.extracted.1.fq.gz,CP_80/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
 
    scripts/hisatgenotype_locus_CP.py CP_80 -p 4 --num-editdist 2 > cp_80_hla.txt
-   scripts/compare_HLA_Omixon.py cp_80_hla.txt ../CAAPA/omixon_caapa_hla.txt 
+   scripts/compare_HLA_Omixon.py cp_80_hla.txt ../CAAPA/omixon_caapa_hla.txt
+
+
+
+HISAT-genotype vs. Omixon
+
+   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads CP_80/LP6005106-DNA_H02.extracted.fq.1.gz,CP_80/LP6005106-DNA_H02.extracted.fq.2.gz --display-alleles A*23:17,A*02:02:01:01
+
 
 
 Stranded-seq
    ./hisatgenotype_locus.py --locus-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/NA12892.extracted.1.fq.gz,ILMN/NA12892.extracted.2.fq.gz --stranded-seq NA12892,ILMN_StrandSeq/SraRunInfo.txt
+
 
 
 To extract HLA alleles and variants
@@ -41,20 +43,28 @@ To extract HLA alleles and variants
    ./hisatgenotype_extract_vars.py --locus-list A --inter-gap 30 --intra-gap 50
    ./hisatgenotype_extract_vars.py --locus-list A --inter-gap 30 --intra-gap 50 --min-var-freq 0.1
 
+
+
 To build genotype genome
 
    ./hisatgenotype_build_genome.py genome.fa genotype_genome -p 3 --verbose
 
+
+
 To extract reads that may have originated from HLA genes
    scripts/extract_reads.py --base-fname genotype_genome --reference-type genome --read-dir ILMN_12062016 --out-dir ILMN
 
-To genotype
+
+
+To perform genome-wide genotyping
 
    ./hisatgenotype.py --base-name genotype_6 -f -1 1.fa -2 2.fa
 
 
+
 HISAT2 alignment
    ../../../hisat2 --no-hd -x genotype_genome -c CAGCTGGGATGTGGAGTGGTGTGAGGAGTGGCCACAGGGGAGCAGAGGAGGTGGCAGAAGCCGGAGGTAAAGGTGTCTTAAA
+
 
 
 On MARCC - https://www.marcc.jhu.edu/getting-started/basic

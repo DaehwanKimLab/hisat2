@@ -1,22 +1,8 @@
-To run HISAT-genotype
-   ./hisatgenotype_locus.py --base hla --locus-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-editdist 2 --debug paired
-
-HISAT-genotype vs. Omixon
-
-   ./hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --reads ILMN_12062016/NA12892.extracted.1.fq.gz,ILMN_12062016/NA12892.extracted.2.fq.gz
-
-   for i in `ls -l ILMN/NA128*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --locus-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/$i.extracted.1.fq.gz,ILMN/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
-
-   for i in `ls -l CP_80/LP*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --locus-list A --aligner-list hisat2.graph --num-editdist 2 --reads CP_80/$i.extracted.1.fq.gz,CP_80/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
-
-   scripts/hisatgenotype_locus_CP.py CP_80 -p 4 --num-editdist 2 > cp_80_hla.txt
-   scripts/compare_HLA_Omixon.py cp_80_hla.txt ../CAAPA/omixon_caapa_hla.txt 
-
-
 To extract HLA alleles and variants
 
    ./hisatgenotype_extract_vars.py --base codis --inter-gap 30 --intra-gap 50 --min-var-freq 0.1
    ./hisatgenotype_extract_vars.py --base hla --locus-list A --inter-gap 30 --intra-gap 50 --min-var-freq 0.1
+
 
 To build genotype genome
 
@@ -25,4 +11,11 @@ To build genotype genome
 
 For DNA fingerprinting
    ./hisatgenotype_locus.py --verbose --base codis --locus-list D13S317 --no-assembly --debug paired
-   
+
+
+
+To run HISAT-genotype
+   ./hisatgenotype_locus.py --base hla --locus-list A --simulate-interval 10 --perbase-errorrate 0.3 --perbase-snprate 0.1 --num-editdist 2 --debug paired
+
+   for i in `ls -l ILMN/NA128*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --locus-list A --aligner-list hisat2.graph --num-editdist 2 --reads ILMN/$i.extracted.1.fq.gz,ILMN/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
+

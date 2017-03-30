@@ -619,7 +619,7 @@ class Graph:
                 id_to_num[id] = len(id_to_num)
                 num_to_id.append(id)
 
-            # Construct De Bruijn graph with 80-mer
+            # Construct De Bruijn graph with 60-mer
             self.debruijn = debruijn = [[] for i in range(len(self.backbone) - k + 1)]
             min_n = 0
             for pos in range(len(debruijn)):
