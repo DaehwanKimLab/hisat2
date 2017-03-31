@@ -764,7 +764,9 @@ struct GenomeHit {
                                        index_t                     dep,
                                        const GraphPolicy&          gpol,
                                        index_t&                    numALTsTried,
-                                       ALT_TYPE                    prev_alt_type = ALT_NONE);
+                                       ALT_TYPE                    prev_alt_type = ALT_NONE,
+                                       Haplotype<index_t>*         ht = NULL,
+                                       index_t                     ht_alti = 0);
     
     /**
      * For alignment involving indel, move the indels
@@ -2436,7 +2438,9 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 index_t                     dep,
                                                 const GraphPolicy&          gpol,
                                                 index_t&                    numALTsTried,
-                                                ALT_TYPE                    prev_alt_type)
+                                                ALT_TYPE                    prev_alt_type,
+                                                Haplotype<index_t>*         ht,
+                                                index_t                     ht_alti)
 {
     if(numALTsTried > gpol.maxAltsTried() + dep) return 0;
     assert_gt(rdlen, 0);
@@ -2496,19 +2500,20 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             tmp_edits.erase(0, tmp_mm);
             tmp_mm = 0;
         }
-#if 0
+
         // Find Haplotypes
         pair<int, int> ht_range(0, 0);
-        if(haplotypes.size() > 0) {
+#if 0
+        if(haplotypes.size() > 0 && ht == NULL) {
             Haplotype<index_t> cmp_ht;
             const index_t minK = 16;
             assert_leq(mm_min_rd_i, rdoff);
             index_t rd_diff = rdoff - mm_min_rd_i;
             rd_diff = (rd_diff > minK ? rd_diff - minK : 0);
             if(rd_diff >= joinedOff) {
-                cmp_ht.left = joinedOff;
+                cmp_ht.left = cmp_ht.right = joinedOff;
             } else {
-                cmp_ht.left = joinedOff - rd_diff;
+                cmp_ht.left = cmp_ht.right = joinedOff - rd_diff;
             }
             ht_range.first = ht_range.second = (int)haplotypes.bsearchLoBound(cmp_ht);
             if(ht_range.first >= haplotypes.size()) {
@@ -2517,7 +2522,8 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             }
             for(; ht_range.first >= 0; ht_range.first--) {
                 const Haplotype<index_t>& ht = haplotypes[ht_range.first];
-                if(ht.snp()) {
+                const ALT<index_t>& alt = alts[ht.alts.back()];
+                if(alt.snp()) {
                     if(alt.deletion() && !alt.reversed) continue;
                     if(alt.pos + rdlen < joinedOff) break;
                 } else if(alt.splicesite()) {
@@ -2531,243 +2537,255 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         }
 #endif
         
-        // Find SNPs included in this region
-        pair<int, int> alt_range(0, 0);
-        if(alts.size() > 0) {
-            ALT<index_t> cmp_alt;
-            const index_t minK = 16;
-            assert_leq(mm_min_rd_i, rdoff);
-            index_t rd_diff = rdoff - mm_min_rd_i;
-            rd_diff = (rd_diff > minK ? rd_diff - minK : 0);
-            if(rd_diff >= joinedOff) {
-                cmp_alt.pos = joinedOff;
-            } else {
-                cmp_alt.pos = joinedOff - rd_diff;
-            }
-            alt_range.first = alt_range.second = (int)alts.bsearchLoBound(cmp_alt);
-            if(alt_range.first >= alts.size()) {
-                assert_gt(alts.size(), 0);
-                alt_range.first = alt_range.second = alt_range.second - 1;
-            }
-            for(; alt_range.first >= 0; alt_range.first--) {
-                const ALT<index_t>& alt = alts[alt_range.first];
-                if(alt.snp()) {
-                    if(alt.deletion() && !alt.reversed) continue;
-                    if(alt.pos + rdlen < joinedOff) break;
-                } else if(alt.splicesite()) {
-                    if(alt.left < alt.right) continue;
-                    if(alt.left + rdlen - 1 < joinedOff) break;
-                } else {
-                    assert(alt.exon());
-                    continue;
-                }
-            }
-        }
-        assert_geq(rdoff, 0);
-        const index_t orig_nedits = (index_t)tmp_edits.size();
-        for(; alt_range.second > alt_range.first; alt_range.second--) {
-            ALT<index_t> alt = alts[alt_range.second];
-            if(alt.pos >= joinedOff) continue;
-            if(alt.splicesite()) {
-                if(alt.left < alt.right) continue;
-                index_t tmp = alt.left;
-                alt.left = alt.right;
-                alt.right = tmp;
-            }
-            if(alt.deletion()) {
-                if(!alt.reversed) continue;
-                alt.pos = alt.pos - alt.len + 1;
-            }
-            if(alt.exon()) continue;
-            bool alt_compatible = false;
-            int rf_i = (int)rflen - 1, rd_i = (int)rdoff;
-            int diff = 0;
-            if(alt.type == ALT_SNP_SGL) {
-                diff = joinedOff - alt.pos - 1;
-            } else if(alt.type == ALT_SNP_DEL) {
-                if(alt.pos + alt.len >= joinedOff) continue;
-                diff = joinedOff - (alt.pos + alt.len);
-            } else if(alt.type == ALT_SNP_INS) {
-                diff = joinedOff - alt.pos;
-            } else {
-                assert(alt.splicesite());
-                diff = joinedOff - (alt.right + 1);
-            }
-            if(rf_i < diff || rd_i < diff) continue;
-            rf_i -= diff;
-            rd_i -= diff;
-            int rd_bp = rdseq[rd_i];
-            if(rd_i < min_rd_i) {
-                if(alt.type == ALT_SNP_INS) {
-                    if(rd_i + 1 >= min_rd_i) continue;
-                }
-                break;
-            }
-            if(alt.type == ALT_SNP_SGL) {
-                if(rd_bp == (int)alt.seq) {
-                    int rf_bp = rfseq[rf_i];
-                    Edit e(
-                           rd_i,
-                           "ACGTN"[rf_bp],
-                           "ACGTN"[rd_bp],
-                           EDIT_TYPE_MM,
-                           true, /* chars? */
-                           alt_range.second);
-                    tmp_edits.insert(e, 0);
-                    rd_i--;
-                    rf_i--;
-                    alt_compatible = true;
-                }
-            } else if(alt.type == ALT_SNP_DEL) {
-                if(rfoff + rf_i > (int)alt.len) {
-                    if(rf_i > (int)alt.len) {
-                        for(index_t i = 0; i < alt.len; i++) {
-                            int rf_bp = rfseq[rf_i - i];
-                            Edit e(
-                                   rd_i + 1,
-                                   "ACGTN"[rf_bp],
-                                   '-',
-                                   EDIT_TYPE_READ_GAP,
-                                   true, /* chars? */
-                                   alt_range.second);
-                            tmp_edits.insert(e, 0);
-                        }
-                        
+        bool in_ht = false, look_alt = gpol.haplotypeOnly() || true;
+        for(; ht_range.second > ht_range.first || in_ht || look_alt; ht_range.second--) {
+            // Find SNPs included in this region
+            pair<int, int> alt_range(0, 0);
+            if(ht_range.second > ht_range.first) {
+                
+            } else if(in_ht) {
+                
+            } else if(look_alt) {
+                look_alt = false;
+                if(alts.size() > 0) {
+                    ALT<index_t> cmp_alt;
+                    const index_t minK = 16;
+                    assert_leq(mm_min_rd_i, rdoff);
+                    index_t rd_diff = rdoff - mm_min_rd_i;
+                    rd_diff = (rd_diff > minK ? rd_diff - minK : 0);
+                    if(rd_diff >= joinedOff) {
+                        cmp_alt.pos = joinedOff;
                     } else {
-                        // long deletions
-                        int new_rfoff = rfoff - alt.len;
-                        index_t new_rflen = rf_i + alt.len + 10;
-                        if(raw_refbufs.size() <= dep + 1) raw_refbufs.expand();
-                        SStringExpandable<char>& raw_refbuf = raw_refbufs[dep + 1];
-                        raw_refbuf.resize(new_rflen + 16 + 16);
-                        raw_refbuf.fill(0x4);
-                        int off = ref.getStretch(
-                                                 reinterpret_cast<uint32_t*>(raw_refbuf.wbuf() + 16),
-                                                 tidx,
-                                                 max<int>(new_rfoff, 0),
-                                                 new_rfoff > 0 ? new_rflen : new_rflen + new_rfoff
-                                                 ASSERT_ONLY(, destU32));
-                        assert_lt(off, 16);
-                        const char* new_rfseq = raw_refbuf.wbuf() + 16 + off + min<int>(new_rfoff, 0);
-                        for(int i = 0; i < alt.len; i++) {
-                            int rf_bp = new_rfseq[rf_i - i + alt.len];
-                            Edit e(
-                                   rd_i + 1,
-                                   "ACGTN"[rf_bp],
-                                   '-',
-                                   EDIT_TYPE_READ_GAP,
-                                   true, /* chars? */
-                                   alt_range.second);
-                            tmp_edits.insert(e, 0);
+                        cmp_alt.pos = joinedOff - rd_diff;
+                    }
+                    alt_range.first = alt_range.second = (int)alts.bsearchLoBound(cmp_alt);
+                    if(alt_range.first >= alts.size()) {
+                        assert_gt(alts.size(), 0);
+                        alt_range.first = alt_range.second = alt_range.second - 1;
+                    }
+                    for(; alt_range.first >= 0; alt_range.first--) {
+                        const ALT<index_t>& alt = alts[alt_range.first];
+                        if(alt.snp()) {
+                            if(alt.deletion() && !alt.reversed) continue;
+                            if(alt.pos + rdlen < joinedOff) break;
+                        } else if(alt.splicesite()) {
+                            if(alt.left < alt.right) continue;
+                            if(alt.left + rdlen - 1 < joinedOff) break;
+                        } else {
+                            assert(alt.exon());
+                            continue;
                         }
                     }
-                    rf_i -= (int)alt.len;
-                    alt_compatible = true;
                 }
-            } else if(alt.type == ALT_SNP_INS) {
-                if(rd_i > (int)alt.len) {
-                    bool same_seq = true;
-                    for(index_t i = 0; i < alt.len; i++) {
-                        rd_bp = rdseq[rd_i - i];
-                        int snp_bp = (alt.seq >> (i << 1)) & 0x3;
-                        if(rd_bp != snp_bp) {
-                            same_seq = false;
-                            break;
-                        }
+            }
+            assert_geq(rdoff, 0);
+            const index_t orig_nedits = (index_t)tmp_edits.size();
+            for(; alt_range.second > alt_range.first; alt_range.second--) {
+                ALT<index_t> alt = alts[alt_range.second];
+                if(alt.pos >= joinedOff) continue;
+                if(alt.splicesite()) {
+                    if(alt.left < alt.right) continue;
+                    index_t tmp = alt.left;
+                    alt.left = alt.right;
+                    alt.right = tmp;
+                }
+                if(alt.deletion()) {
+                    if(!alt.reversed) continue;
+                    alt.pos = alt.pos - alt.len + 1;
+                }
+                if(alt.exon()) continue;
+                bool alt_compatible = false;
+                int rf_i = (int)rflen - 1, rd_i = (int)rdoff;
+                int diff = 0;
+                if(alt.type == ALT_SNP_SGL) {
+                    diff = joinedOff - alt.pos - 1;
+                } else if(alt.type == ALT_SNP_DEL) {
+                    if(alt.pos + alt.len >= joinedOff) continue;
+                    diff = joinedOff - (alt.pos + alt.len);
+                } else if(alt.type == ALT_SNP_INS) {
+                    diff = joinedOff - alt.pos;
+                } else {
+                    assert(alt.splicesite());
+                    diff = joinedOff - (alt.right + 1);
+                }
+                if(rf_i < diff || rd_i < diff) continue;
+                rf_i -= diff;
+                rd_i -= diff;
+                int rd_bp = rdseq[rd_i];
+                if(rd_i < min_rd_i) {
+                    if(alt.type == ALT_SNP_INS) {
+                        if(rd_i + 1 >= min_rd_i) continue;
+                    }
+                    break;
+                }
+                if(alt.type == ALT_SNP_SGL) {
+                    if(rd_bp == (int)alt.seq) {
+                        int rf_bp = rfseq[rf_i];
                         Edit e(
-                               rd_i - i,
-                               '-',
+                               rd_i,
+                               "ACGTN"[rf_bp],
                                "ACGTN"[rd_bp],
-                               EDIT_TYPE_REF_GAP,
+                               EDIT_TYPE_MM,
                                true, /* chars? */
                                alt_range.second);
                         tmp_edits.insert(e, 0);
+                        rd_i--;
+                        rf_i--;
+                        alt_compatible = true;
                     }
-                    if(same_seq) {
-                        rd_i -= (int)alt.len;
+                } else if(alt.type == ALT_SNP_DEL) {
+                    if(rfoff + rf_i > (int)alt.len) {
+                        if(rf_i > (int)alt.len) {
+                            for(index_t i = 0; i < alt.len; i++) {
+                                int rf_bp = rfseq[rf_i - i];
+                                Edit e(
+                                       rd_i + 1,
+                                       "ACGTN"[rf_bp],
+                                       '-',
+                                       EDIT_TYPE_READ_GAP,
+                                       true, /* chars? */
+                                       alt_range.second);
+                                tmp_edits.insert(e, 0);
+                            }
+                            
+                        } else {
+                            // long deletions
+                            int new_rfoff = rfoff - alt.len;
+                            index_t new_rflen = rf_i + alt.len + 10;
+                            if(raw_refbufs.size() <= dep + 1) raw_refbufs.expand();
+                            SStringExpandable<char>& raw_refbuf = raw_refbufs[dep + 1];
+                            raw_refbuf.resize(new_rflen + 16 + 16);
+                            raw_refbuf.fill(0x4);
+                            int off = ref.getStretch(
+                                                     reinterpret_cast<uint32_t*>(raw_refbuf.wbuf() + 16),
+                                                     tidx,
+                                                     max<int>(new_rfoff, 0),
+                                                     new_rfoff > 0 ? new_rflen : new_rflen + new_rfoff
+                                                     ASSERT_ONLY(, destU32));
+                            assert_lt(off, 16);
+                            const char* new_rfseq = raw_refbuf.wbuf() + 16 + off + min<int>(new_rfoff, 0);
+                            for(int i = 0; i < alt.len; i++) {
+                                int rf_bp = new_rfseq[rf_i - i + alt.len];
+                                Edit e(
+                                       rd_i + 1,
+                                       "ACGTN"[rf_bp],
+                                       '-',
+                                       EDIT_TYPE_READ_GAP,
+                                       true, /* chars? */
+                                       alt_range.second);
+                                tmp_edits.insert(e, 0);
+                            }
+                        }
+                        rf_i -= (int)alt.len;
+                        alt_compatible = true;
+                    }
+                } else if(alt.type == ALT_SNP_INS) {
+                    if(rd_i > (int)alt.len) {
+                        bool same_seq = true;
+                        for(index_t i = 0; i < alt.len; i++) {
+                            rd_bp = rdseq[rd_i - i];
+                            int snp_bp = (alt.seq >> (i << 1)) & 0x3;
+                            if(rd_bp != snp_bp) {
+                                same_seq = false;
+                                break;
+                            }
+                            Edit e(
+                                   rd_i - i,
+                                   '-',
+                                   "ACGTN"[rd_bp],
+                                   EDIT_TYPE_REF_GAP,
+                                   true, /* chars? */
+                                   alt_range.second);
+                            tmp_edits.insert(e, 0);
+                        }
+                        if(same_seq) {
+                            rd_i -= (int)alt.len;
+                            alt_compatible = true;
+                        }
+                    }
+                } else if(alt.type == ALT_SPLICESITE) {
+                    bool add_splicesite = true;
+                    if(rd_i == rdoff && prev_alt_type == ALT_SPLICESITE) {
+                        add_splicesite = false;
+                    }
+                    if(add_splicesite) {
+                        assert_lt(rd_i, rflen);
+                        assert_lt(alt.left, alt.right);
+                        index_t intronLen = alt.right - alt.left + 1;
+                        Edit e(rd_i + 1,
+                               0,
+                               0,
+                               EDIT_TYPE_SPL,
+                               intronLen,
+                               alt.fw ? SPL_FW : SPL_RC,
+                               true,   /* known splice site? */
+                               false); /* chrs? */
+                        tmp_edits.insert(e, 0);
                         alt_compatible = true;
                     }
                 }
-            } else if(alt.type == ALT_SPLICESITE) {
-                bool add_splicesite = true;
-                if(rd_i == rdoff && prev_alt_type == ALT_SPLICESITE) {
-                    add_splicesite = false;
+                if(alt_compatible) {
+                    numALTsTried++;
+                    assert_leq(rd_i, (int)rdoff);
+                    if(rd_i < 0) {
+                        best_rdoff = rd_i;
+                        edits = tmp_edits;
+                        return rdlen;
+                    }
+                    index_t next_joinedOff = alt.pos;
+                    int next_rfoff = rfoff, next_rdoff = rd_i;
+                    const char* next_rfseq = rfseq;
+                    int next_rflen = rf_i + 1, next_rdlen = rd_i + 1;
+                    if(alt.splicesite()) {
+                        assert_lt(alt.left, alt.right);
+                        next_joinedOff = alt.left;
+                        index_t intronLen = alt.right - alt.left + 1;
+                        assert_geq(next_rfoff, intronLen);
+                        next_rfoff -= intronLen;
+                        next_rfseq = NULL;
+                    }
+                    if(next_rflen < next_rdlen) {
+                        int add_len = next_rdlen + 10 - next_rflen;
+                        if(next_rfoff < add_len) add_len = next_rfoff;
+                        next_rfoff -= add_len;
+                        next_rflen += add_len;
+                        next_rfseq = NULL;
+                    }
+                    index_t alignedLen = alignWithALTs_recur(
+                                                             alts,
+                                                             haplotypes,
+                                                             next_joinedOff,
+                                                             rdseq,
+                                                             rdoff_add,
+                                                             next_rdoff,
+                                                             next_rdlen,
+                                                             ref,
+                                                             raw_refbufs,
+                                                             ASSERT_ONLY(destU32,)
+                                                             tmp_edits,
+                                                             best_rdoff,
+                                                             next_rfseq,
+                                                             tidx,
+                                                             next_rfoff,
+                                                             next_rflen,
+                                                             left,
+                                                             edits,
+                                                             mm,
+                                                             candidate_edits,
+                                                             tmp_numNs,
+                                                             numNs,
+                                                             dep + 1,
+                                                             gpol,
+                                                             numALTsTried,
+                                                             alt.type,
+                                                             ht,
+                                                             ht_alti);
+                    if(alignedLen == next_rdlen) return rdlen;
                 }
-                if(add_splicesite) {
-                    assert_lt(rd_i, rflen);
-                    assert_lt(alt.left, alt.right);
-                    index_t intronLen = alt.right - alt.left + 1;
-                    Edit e(rd_i + 1,
-                           0,
-                           0,
-                           EDIT_TYPE_SPL,
-                           intronLen,
-                           alt.fw ? SPL_FW : SPL_RC,
-                           true,   /* known splice site? */
-                           false); /* chrs? */
-                    tmp_edits.insert(e, 0);
-                    alt_compatible = true;
-                }
+                // Restore to the earlier state
+                assert_leq(orig_nedits, tmp_edits.size());
+                if(orig_nedits < tmp_edits.size()) tmp_edits.erase(0, tmp_edits.size() - orig_nedits);
             }
-            if(alt_compatible) {
-                numALTsTried++;
-                assert_leq(rd_i, (int)rdoff);
-                if(rd_i < 0) {
-                    best_rdoff = rd_i;
-                    edits = tmp_edits;
-                    return rdlen;
-                }
-                index_t next_joinedOff = alt.pos;
-                int next_rfoff = rfoff, next_rdoff = rd_i;
-                const char* next_rfseq = rfseq;
-                int next_rflen = rf_i + 1, next_rdlen = rd_i + 1;
-                if(alt.splicesite()) {
-                    assert_lt(alt.left, alt.right);
-                    next_joinedOff = alt.left;
-                    index_t intronLen = alt.right - alt.left + 1;
-                    assert_geq(next_rfoff, intronLen);
-                    next_rfoff -= intronLen;
-                    next_rfseq = NULL;
-                }
-                if(next_rflen < next_rdlen) {
-                    int add_len = next_rdlen + 10 - next_rflen;
-                    if(next_rfoff < add_len) add_len = next_rfoff;
-                    next_rfoff -= add_len;
-                    next_rflen += add_len;
-                    next_rfseq = NULL;
-                }
-                index_t alignedLen = alignWithALTs_recur(
-                                                         alts,
-                                                         haplotypes,
-                                                         next_joinedOff,
-                                                         rdseq,
-                                                         rdoff_add,
-                                                         next_rdoff,
-                                                         next_rdlen,
-                                                         ref,
-                                                         raw_refbufs,
-                                                         ASSERT_ONLY(destU32,)
-                                                         tmp_edits,
-                                                         best_rdoff,
-                                                         next_rfseq,
-                                                         tidx,
-                                                         next_rfoff,
-                                                         next_rflen,
-                                                         left,
-                                                         edits,
-                                                         mm,
-                                                         candidate_edits,
-                                                         tmp_numNs,
-                                                         numNs,
-                                                         dep + 1,
-                                                         gpol,
-                                                         numALTsTried,
-                                                         alt.type);
-                if(alignedLen == next_rdlen) return rdlen;
-            }
-            // Restore to the earlier state
-            assert_leq(orig_nedits, tmp_edits.size());
-            if(orig_nedits < tmp_edits.size()) tmp_edits.erase(0, tmp_edits.size() - orig_nedits);
         }
         return 0;
     } else {
@@ -3050,7 +3068,9 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                          dep + 1,
                                                          gpol,
                                                          numALTsTried,
-                                                         alt.type);
+                                                         alt.type,
+                                                         ht,
+                                                         ht_alti);
                 if(alignedLen > 0) {
                     assert_leq(rdoff + rd_i + alignedLen, best_rdoff);
                     bool search_further = false;
