@@ -1409,7 +1409,7 @@ def typing(ex_path,
                     if flag & 0x4 != 0:
                         if simulation and verbose >= 2:
                             print "Unaligned"
-                            print "\t", line                            
+                            print "\t", line
                         continue
 
                     # Concordantly mapped?
@@ -1431,6 +1431,11 @@ def typing(ex_path,
                             NH = int(col[5:])
 
                     if NM > num_editdist:
+
+                        # DK - debugging purposes
+                        print "DK1:", "concordant:", concordant
+                        print line
+
                         continue
 
                     # Only consider unique alignment
@@ -1662,6 +1667,11 @@ def typing(ex_path,
                         continue
 
                     if likely_misalignment:
+
+                        # DK - debugging purposes
+                        print "DK2:", "concordant:", concordant
+                        print line
+
                         continue
 
                     # Add novel variants
@@ -2980,8 +2990,8 @@ if __name__ == '__main__':
     parser.add_argument("--fragment-len",
                         dest="fragment_len",
                         type=int,
-                        default=250,
-                        help="Length of fragments (default: 250)")
+                        default=350,
+                        help="Length of fragments (default: 350)")
     parser.add_argument("--best-alleles",
                         dest="best_alleles",
                         action='store_true',

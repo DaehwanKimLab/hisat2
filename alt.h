@@ -124,6 +124,31 @@ public:
         return true;
     }
     
+    bool isSame(const ALT& o) const {
+        if(type != o.type)
+            return false;
+        if(type == ALT_SNP_SGL) {
+            return pos == o.pos && seq == o.seq;
+        } else if(type == ALT_SNP_DEL || type == ALT_SNP_INS || type == ALT_SPLICESITE) {
+            if(type == ALT_SNP_INS) {
+                if(seq != o.seq)
+                    return false;
+            }
+            if(reversed == o.reversed) {
+                return pos == o.pos && len == o.len;
+            } else {
+                if(reversed) {
+                    return pos - len + 1 == o.pos && len == o.len;
+                } else {
+                    return pos == o.pos - o.len + 1 && len == o.len;
+                }
+            }       
+        } else {
+            assert(false);
+        }
+        return true;
+    }
+    
 #ifndef NDEBUG
     bool repOk() const {
         if(type == ALT_SNP_SGL) {
@@ -214,6 +239,7 @@ struct Haplotype {
     bool read(ifstream& f_in, bool bigEndian) {
         left = readIndex<index_t>(f_in, bigEndian);
         right = readIndex<index_t>(f_in, bigEndian);
+        assert_leq(left, right);
         index_t num_alts = readIndex<index_t>(f_in, bigEndian);
         alts.resizeExact(num_alts); alts.clear();
         for(index_t i = 0; i < num_alts; i++) {
