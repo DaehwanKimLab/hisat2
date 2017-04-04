@@ -672,6 +672,7 @@ struct GenomeHit {
     static index_t alignWithALTs(
                                  const EList<ALT<index_t> >&       alts,
                                  const EList<Haplotype<index_t> >& haplotypes,
+                                 const EList<index_t>&             haplotype_maxrights,
                                  index_t                           joinedOff,
                                  const BTDnaString&                rdseq,
                                  index_t                           base_rdoff,
@@ -705,6 +706,7 @@ struct GenomeHit {
         alignWithALTs_recur(
                             alts,
                             haplotypes,
+                            haplotype_maxrights,
                             joinedOff,
                             rdseq,
                             rdoff - base_rdoff,
@@ -776,6 +778,7 @@ struct GenomeHit {
     static index_t alignWithALTs_recur(
                                        const EList<ALT<index_t> >&       alts,
                                        const EList<Haplotype<index_t> >& haplotypes,
+                                       const EList<index_t>&             haplotype_maxrights,
                                        index_t                           joinedOff,
                                        const BTDnaString&                rdseq,
                                        index_t                           rdoff_add,
@@ -1941,6 +1944,7 @@ bool GenomeHit<index_t>::extend(
         index_t best_ext = alignWithALTs(
                                          altdb.alts(),
                                          altdb.haplotypes(),
+                                         altdb.haplotype_maxrights(),
                                          this->_joinedOff,
                                          seq,
                                          this->_rdoff - 1,
@@ -2021,6 +2025,7 @@ bool GenomeHit<index_t>::extend(
             index_t best_ext = alignWithALTs(
                                              altdb.alts(),
                                              altdb.haplotypes(),
+                                             altdb.haplotype_maxrights(),
                                              this->_joinedOff + ref_ext,
                                              seq,
                                              this->_rdoff,
@@ -2189,6 +2194,7 @@ bool GenomeHit<index_t>::adjustWithALT(
             index_t alignedLen = alignWithALTs(
                                                alts,
                                                altdb.haplotypes(),
+                                               altdb.haplotype_maxrights(),
                                                genomeHit._joinedOff,
                                                seq,
                                                genomeHit._rdoff,
@@ -2294,6 +2300,7 @@ bool GenomeHit<index_t>::adjustWithALT(
         index_t alignedLen = alignWithALTs(
                                            alts,
                                            altdb.haplotypes(),
+                                           altdb.haplotype_maxrights(),
                                            this->_joinedOff,
                                            seq,
                                            this->_rdoff,
@@ -2465,6 +2472,7 @@ template <typename index_t>
 void add_haplotypes(
                     const EList<ALT<index_t> >&       alts,
                     const EList<Haplotype<index_t> >& haplotypes,
+                    const EList<index_t>&             haplotype_maxrights,
                     Haplotype<index_t>&               cmp_ht,
                     EList<pair<index_t, index_t> >&   ht_list,
                     index_t                           rdlen,
@@ -2479,10 +2487,10 @@ void add_haplotypes(
     if(left_ext) {
         for(; ht_range.first >= 0; ht_range.first--) {
             const Haplotype<index_t>& ht = haplotypes[ht_range.first];
-            if(!ht.reversed) continue;
-            index_t ht_right = ht.left;
-            if(ht_right >= cmp_ht.left) continue;
-            if(ht_right + rdlen - 1 < cmp_ht.left) break;
+            if(ht.right >= cmp_ht.left) continue;
+            index_t ht_maxright = haplotype_maxrights[ht_range.first];
+            assert_geq(ht_maxright, ht.right);
+            if(ht_maxright + rdlen - 1 < cmp_ht.left) break;
             if(ht.alts.size() <= 0) continue;
             bool added = false;
             for(index_t h = 0; h < ht_list.size(); h++) {
@@ -2505,11 +2513,8 @@ void add_haplotypes(
         if(initial) {
             for(; ht_range.first < haplotypes.size(); ht_range.first++) {
                 const Haplotype<index_t>& ht = haplotypes[ht_range.first];
-                if(!ht.reversed) continue;
-                index_t ht_right = ht.left;
-                if(ht_right < cmp_ht.left) continue;
-                
-                if(ht_right + rdlen - 1 < cmp_ht.left) break;
+                if(ht.right < cmp_ht.left) continue;                
+                if(ht.right + rdlen - 1 < cmp_ht.left) break;
                 if(ht.alts.size() <= 0) continue;
                 
                 bool added = false;
@@ -2529,7 +2534,6 @@ void add_haplotypes(
         
         for(; ht_range.second < haplotypes.size(); ht_range.second++) {
                 const Haplotype<index_t>& ht = haplotypes[ht_range.second];
-                if(ht.reversed) continue;
                 if(ht.left < cmp_ht.right) continue;
                 if(ht.left >= cmp_ht.right + rdlen) break;
                 if(ht.alts.size() <= 0) continue;
@@ -2557,6 +2561,7 @@ template <typename index_t>
 index_t GenomeHit<index_t>::alignWithALTs_recur(
                                                 const EList<ALT<index_t> >&       alts,
                                                 const EList<Haplotype<index_t> >& haplotypes,
+                                                const EList<index_t>&             haplotype_maxrights,
                                                 index_t                           joinedOff,
                                                 const BTDnaString&                rdseq,
                                                 index_t                           rdoff_add,
@@ -2696,6 +2701,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                         cmp_ht.left = cmp_ht.right = joinedOff;
                         add_haplotypes(alts,
                                        haplotypes,
+                                       haplotype_maxrights,
                                        cmp_ht,
                                        ht_list,
                                        rdlen);
@@ -2709,6 +2715,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 cmp_ht.left = cmp_ht.right = joinedOff;
                 add_haplotypes(alts,
                                haplotypes,
+                               haplotype_maxrights,
                                cmp_ht,
                                ht_list,
                                rdlen);
@@ -2909,6 +2916,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 index_t alignedLen = alignWithALTs_recur(
                                                          alts,
                                                          haplotypes,
+                                                         haplotype_maxrights,
                                                          next_joinedOff,
                                                          rdseq,
                                                          rdoff_add,
@@ -3041,6 +3049,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                         cmp_ht.left = cmp_ht.right = joinedOff;
                         add_haplotypes(alts,
                                        haplotypes,
+                                       haplotype_maxrights,
                                        cmp_ht,
                                        ht_list,
                                        rdlen,
@@ -3055,6 +3064,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 cmp_ht.left = cmp_ht.right = joinedOff;
                 add_haplotypes(alts,
                                haplotypes,
+                               haplotype_maxrights,
                                cmp_ht,
                                ht_list,
                                rdlen,
@@ -3260,6 +3270,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 index_t alignedLen = alignWithALTs_recur(
                                                          alts,
                                                          haplotypes,
+                                                         haplotype_maxrights,
                                                          next_joinedOff,
                                                          rdseq,
                                                          rdoff_add + rd_i,

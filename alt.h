@@ -213,19 +213,16 @@ struct Haplotype {
     
     void reset() {
         left = right = 0;
-        reversed = false;
         alts.clear();
     }
     
     index_t left;
     index_t right;
-    bool reversed;
     EList<index_t, 1> alts;
     
     bool operator< (const Haplotype& o) const {
         if(left != o.left) return left < o.left;
         if(right != o.right) return right < o.right;
-        if(reversed != o.reversed) return !reversed;
         return false;
     }
     
@@ -275,10 +272,12 @@ public:
     EList<ALT<index_t> >&       alts()       { return _alts; }
     EList<string>&              altnames()   { return _altnames; }
     EList<Haplotype<index_t> >& haplotypes() { return _haplotypes; }
+    EList<index_t>&             haplotype_maxrights() { return _haplotype_maxrights; }
     
     const EList<ALT<index_t> >&       alts() const       { return _alts; }
     const EList<string>&              altnames() const   { return _altnames; }
     const EList<Haplotype<index_t> >& haplotypes() const { return _haplotypes; }
+    const EList<index_t>&             haplotype_maxrights() const { return _haplotype_maxrights; }
 
 private:
     bool _snp;
@@ -288,6 +287,7 @@ private:
     EList<ALT<index_t> >       _alts;
     EList<string>              _altnames;
     EList<Haplotype<index_t> > _haplotypes;
+    EList<index_t>             _haplotype_maxrights;
 };
 
 
