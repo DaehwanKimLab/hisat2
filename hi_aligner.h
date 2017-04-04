@@ -701,8 +701,8 @@ struct GenomeHit {
         index_t nedits = (index_t)edits.size();
         if(candidate_edits != NULL) candidate_edits->clear();
         ht_llist.clear();
-        ht_llist.expand();
-        ht_llist[0] = ht_list;
+        // ht_llist.expand();
+        // ht_llist[0] = ht_list;
         alignWithALTs_recur(
                             alts,
                             haplotypes,
@@ -2506,17 +2506,14 @@ void add_haplotypes(
             ht_list.back().second = ht.alts.size() - 1;
         }
     } else {
-        // DK - debugging purposes
-        return;
-        
-        // DK - debugging purposes
         if(initial) {
-            for(; ht_range.first < haplotypes.size(); ht_range.first++) {
+            for(; ht_range.first >= 0; ht_range.first--) {
                 const Haplotype<index_t>& ht = haplotypes[ht_range.first];
-                if(ht.right < cmp_ht.left) continue;                
-                if(ht.right + rdlen - 1 < cmp_ht.left) break;
+                if(ht.right < cmp_ht.left || ht.left > cmp_ht.left) continue;
+                index_t ht_maxright = haplotype_maxrights[ht_range.first];
+                assert_geq(ht_maxright, ht.right);
+                if(ht_maxright < cmp_ht.left) break;
                 if(ht.alts.size() <= 0) continue;
-                
                 bool added = false;
                 for(index_t h = 0; h < ht_list.size(); h++) {
                     if(ht_list[h].first == ht_range.first) {
@@ -2528,7 +2525,18 @@ void add_haplotypes(
                 ht_list.expand();
                 ht_list.back().first = ht_range.first;
                 assert_gt(ht.alts.size(), 0);
-                ht_list.back().second = 0;
+                ht_list.back().second = ht.alts.size();
+                for(index_t a = 0; a < ht.alts.size(); a++) {
+                    index_t alti = ht.alts[a];
+                    assert_lt(alti, alts.size());
+                    const ALT<index_t>& alt = alts[alti];
+                    assert(alt.snp());
+                    ht_list.back().second = a;
+                    if(cmp_ht.left <= alt.pos) break;
+                }
+                if(ht_list.back().second == ht.alts.size()) {
+                    ht_list.pop_back();
+                }
             }
         }
         
