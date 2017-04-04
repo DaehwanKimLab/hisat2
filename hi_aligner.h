@@ -415,6 +415,7 @@ struct SharedTempVars {
     ASSERT_ONLY(EList<index_t> refoffs);
     
     LinkedEList<EList<Edit> > raw_edits;
+    LinkedEList<EList<pair<index_t, index_t> > > raw_ht_lists;
 };
 
 /**
@@ -434,18 +435,22 @@ struct GenomeHit {
     _toff((index_t)INDEX_MAX),
     _joinedOff((index_t)INDEX_MAX),
     _edits(NULL),
+    _ht_list(NULL),
     _score(MIN_I64),
     _localscore(MIN_I64),
     _hitcount(1),
     _edits_node(NULL),
+    _ht_list_node(NULL),
     _sharedVars(NULL)
     {
     }
     
     GenomeHit(const GenomeHit& otherHit) :
     _edits(NULL),
+    _ht_list(NULL),
     _hitcount(1),
     _edits_node(NULL),
+    _ht_list_node(NULL),
     _sharedVars(NULL)
     {
         init(otherHit._fw,
@@ -458,6 +463,7 @@ struct GenomeHit {
              otherHit._joinedOff,
              *(otherHit._sharedVars),
              otherHit._edits,
+             otherHit._ht_list,
              otherHit._score,
              otherHit._localscore,
              otherHit._splicescore);
@@ -475,6 +481,7 @@ struct GenomeHit {
              otherHit._joinedOff,
              *(otherHit._sharedVars),
              otherHit._edits,
+             otherHit._ht_list,
              otherHit._score,
              otherHit._localscore,
              otherHit._splicescore);
@@ -489,8 +496,15 @@ struct GenomeHit {
             _sharedVars->raw_edits.delete_node(_edits_node);
             _edits = NULL;
             _edits_node = NULL;
-            _sharedVars = NULL;
         }
+        if(_ht_list_node != NULL) {
+            assert(_ht_list != NULL);
+            assert(_sharedVars != NULL);
+            _sharedVars->raw_ht_lists.delete_node(_ht_list_node);
+            _ht_list = NULL;
+            _ht_list_node = NULL;
+        }
+        _sharedVars = NULL;
     }
 	
 	void init(
@@ -504,6 +518,7 @@ struct GenomeHit {
               index_t                   joinedOff,
               SharedTempVars<index_t>&  sharedVars,
               EList<Edit>*              edits = NULL,
+              EList<pair<index_t, index_t> >* ht_list = NULL,
               int64_t                   score = 0,
               int64_t                   localscore = 0,
               double                    splicescore = 0.0)
@@ -530,8 +545,18 @@ struct GenomeHit {
         }
         assert(_edits != NULL);
         _edits->clear();
-        
         if(edits != NULL) *_edits = *edits;
+        
+        if(_ht_list == NULL) {
+            assert(_ht_list_node == NULL);
+            _ht_list_node = _sharedVars->raw_ht_lists.new_node();
+            assert(_ht_list_node != NULL);
+            _ht_list = &(_ht_list_node->payload);
+        }
+        assert(_ht_list != NULL);
+        _ht_list->clear();
+        if(ht_list != NULL) *_ht_list = *ht_list;
+        
         _hitcount = 1;
 	}
     
@@ -661,6 +686,7 @@ struct GenomeHit {
                                  const GraphPolicy&                gpol,
                                  EList<Edit>&                      edits,
                                  ELList<pair<index_t, index_t> >&  ht_llist,
+                                 EList<pair<index_t, index_t> >&   ht_list,
                                  Haplotype<index_t>&               cmp_ht,
                                  ELList<Edit, 128, 4>*             candidate_edits = NULL,
                                  index_t                           mm = 0,
@@ -674,6 +700,8 @@ struct GenomeHit {
         index_t nedits = (index_t)edits.size();
         if(candidate_edits != NULL) candidate_edits->clear();
         ht_llist.clear();
+        ht_llist.expand();
+        ht_llist[0] = ht_list;
         alignWithALTs_recur(
                             alts,
                             haplotypes,
@@ -1191,6 +1219,7 @@ public:
     index_t         _toff;
     index_t         _joinedOff;
 	EList<Edit>*    _edits;
+    EList<pair<index_t, index_t> >* _ht_list;
     int64_t         _score;
     int64_t         _localscore;
     double          _splicescore;
@@ -1198,6 +1227,7 @@ public:
     index_t         _hitcount;  // for selection purposes
     
     LinkedEListNode<EList<Edit> >*  _edits_node;
+    LinkedEListNode<EList<pair<index_t, index_t> > >*  _ht_list_node;
     SharedTempVars<index_t>* _sharedVars;
 };
 
@@ -1925,6 +1955,7 @@ bool GenomeHit<index_t>::extend(
                                          gpol,
                                          *this->_edits,
                                          _sharedVars->ht_llist,
+                                         *this->_ht_list,
                                          _sharedVars->cmp_ht,
                                          NULL,
                                          mm,
@@ -2004,6 +2035,7 @@ bool GenomeHit<index_t>::extend(
                                              gpol,
                                              *this->_edits,
                                              _sharedVars->ht_llist,
+                                             *this->_ht_list,
                                              _sharedVars->cmp_ht,
                                              NULL,
                                              mm);
@@ -2171,6 +2203,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                                gpol,
                                                *genomeHit._edits,
                                                sharedVars.ht_llist,
+                                               *genomeHit._ht_list,
                                                sharedVars.cmp_ht,
                                                &candidate_edits);
             if(alignedLen == genomeHit._len) {
@@ -2275,6 +2308,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            gpol,
                                            *this->_edits,
                                            _sharedVars->ht_llist,
+                                           *this->_ht_list,
                                            _sharedVars->cmp_ht,
                                            &_sharedVars->candidate_edits);
         if(alignedLen == this->_len) {
@@ -2434,11 +2468,9 @@ void add_haplotypes(
                     Haplotype<index_t>&               cmp_ht,
                     EList<pair<index_t, index_t> >&   ht_list,
                     index_t                           rdlen,
-                    bool                              left_ext = true)
+                    bool                              left_ext = true,
+                    bool                              initial = false)
 {
-    // DK - debugging purposes
-    // return;
-    
     pair<int, int> ht_range;
     ht_range.first = ht_range.second = (int)haplotypes.bsearchLoBound(cmp_ht);
     if(ht_range.first >= haplotypes.size())
@@ -2447,8 +2479,11 @@ void add_haplotypes(
     if(left_ext) {
         for(; ht_range.first >= 0; ht_range.first--) {
             const Haplotype<index_t>& ht = haplotypes[ht_range.first];
-            if(ht.right >= cmp_ht.left) continue;
-            if(ht.right + rdlen - 1 < cmp_ht.left) break;
+            if(!ht.reversed) continue;
+            index_t ht_right = ht.left;
+            if(ht_right >= cmp_ht.left) continue;
+            if(ht_right + rdlen - 1 < cmp_ht.left) break;
+            if(ht.alts.size() <= 0) continue;
             bool added = false;
             for(index_t h = 0; h < ht_list.size(); h++) {
                 if(ht_list[h].first == ht_range.first) {
@@ -2463,22 +2498,53 @@ void add_haplotypes(
             ht_list.back().second = ht.alts.size() - 1;
         }
     } else {
-        for(; ht_range.second < haplotypes.size(); ht_range.second++) {
-            const Haplotype<index_t>& ht = haplotypes[ht_range.second];
-            if(ht.left < cmp_ht.right) continue;
-            if(ht.left >= cmp_ht.right + rdlen) break;
-            bool added = false;
-            for(index_t h = 0; h < ht_list.size(); h++) {
-                if(ht_list[h].first == ht_range.second) {
-                    added = true;
-                    break;
+        // DK - debugging purposes
+        return;
+        
+        // DK - debugging purposes
+        if(initial) {
+            for(; ht_range.first < haplotypes.size(); ht_range.first++) {
+                const Haplotype<index_t>& ht = haplotypes[ht_range.first];
+                if(!ht.reversed) continue;
+                index_t ht_right = ht.left;
+                if(ht_right < cmp_ht.left) continue;
+                
+                if(ht_right + rdlen - 1 < cmp_ht.left) break;
+                if(ht.alts.size() <= 0) continue;
+                
+                bool added = false;
+                for(index_t h = 0; h < ht_list.size(); h++) {
+                    if(ht_list[h].first == ht_range.first) {
+                        added = true;
+                        break;
+                    }
                 }
+                if(added) continue;
+                ht_list.expand();
+                ht_list.back().first = ht_range.first;
+                assert_gt(ht.alts.size(), 0);
+                ht_list.back().second = 0;
             }
-            if(added) continue;
-            ht_list.expand();
-            ht_list.back().first = ht_range.second;
-            assert_gt(ht.alts.size(), 0);
-            ht_list.back().second = 0;
+        }
+        
+        for(; ht_range.second < haplotypes.size(); ht_range.second++) {
+                const Haplotype<index_t>& ht = haplotypes[ht_range.second];
+                if(ht.reversed) continue;
+                if(ht.left < cmp_ht.right) continue;
+                if(ht.left >= cmp_ht.right + rdlen) break;
+                if(ht.alts.size() <= 0) continue;
+                bool added = false;
+                for(index_t h = 0; h < ht_list.size(); h++) {
+                    if(ht_list[h].first == ht_range.second) {
+                        added = true;
+                        break;
+                    }
+                }
+                if(added) continue;
+                ht_list.expand();
+                ht_list.back().first = ht_range.second;
+                assert_gt(ht.alts.size(), 0);
+                ht_list.back().second = 0;
         }
     }
 }
@@ -2577,7 +2643,40 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             tmp_edits.erase(0, tmp_mm);
             tmp_mm = 0;
         }
-
+        
+        // Find SNPs included in this region
+        pair<int, int> alt_range(0, 0);
+        if(alts.size() > 0) {
+            ALT<index_t> cmp_alt;
+            const index_t minK = 16;
+            assert_leq(mm_min_rd_i, rdoff);
+            index_t rd_diff = rdoff - mm_min_rd_i;
+            rd_diff = (rd_diff > minK ? rd_diff - minK : 0);
+            if(rd_diff >= joinedOff) {
+                cmp_alt.pos = joinedOff;
+            } else {
+                cmp_alt.pos = joinedOff - rd_diff;
+            }
+            alt_range.first = alt_range.second = (int)alts.bsearchLoBound(cmp_alt);
+            if(alt_range.first >= alts.size()) {
+                assert_gt(alts.size(), 0);
+                alt_range.first = alt_range.second = alt_range.second - 1;
+            }
+            for(; alt_range.first >= 0; alt_range.first--) {
+                const ALT<index_t>& alt = alts[alt_range.first];
+                if(alt.snp()) {
+                    if(alt.deletion() && !alt.reversed) continue;
+                    if(alt.pos + rdlen < joinedOff) break;
+                } else if(alt.splicesite()) {
+                    if(alt.left < alt.right) continue;
+                    if(alt.left + rdlen - 1 < joinedOff) break;
+                } else {
+                    assert(alt.exon());
+                    continue;
+                }
+            }
+        }
+        
         // Update and find Haplotypes
         EList<pair<index_t, index_t> >& ht_list = ht_llist[dep];
         ht_list.clear();
@@ -2616,38 +2715,6 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             }
         }
         
-        // Find SNPs included in this region
-        pair<int, int> alt_range(0, 0);
-        if(alts.size() > 0) {
-            ALT<index_t> cmp_alt;
-            const index_t minK = 16;
-            assert_leq(mm_min_rd_i, rdoff);
-            index_t rd_diff = rdoff - mm_min_rd_i;
-            rd_diff = (rd_diff > minK ? rd_diff - minK : 0);
-            if(rd_diff >= joinedOff) {
-                cmp_alt.pos = joinedOff;
-            } else {
-                cmp_alt.pos = joinedOff - rd_diff;
-            }
-            alt_range.first = alt_range.second = (int)alts.bsearchLoBound(cmp_alt);
-            if(alt_range.first >= alts.size()) {
-                assert_gt(alts.size(), 0);
-                alt_range.first = alt_range.second = alt_range.second - 1;
-            }
-            for(; alt_range.first >= 0; alt_range.first--) {
-                const ALT<index_t>& alt = alts[alt_range.first];
-                if(alt.snp()) {
-                    if(alt.deletion() && !alt.reversed) continue;
-                    if(alt.pos + rdlen < joinedOff) break;
-                } else if(alt.splicesite()) {
-                    if(alt.left < alt.right) continue;
-                    if(alt.left + rdlen - 1 < joinedOff) break;
-                } else {
-                    assert(alt.exon());
-                    continue;
-                }
-            }
-        }
         assert_geq(rdoff, 0);
         const index_t orig_nedits = (index_t)tmp_edits.size();
         for(; alt_range.second > alt_range.first; alt_range.second--) {
@@ -2688,19 +2755,10 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 }
                 break;
             }
-            // DK - debugging purposes
-#if 1
+            
+            // Check to see if there is a haplotype that supports this alt
             if(ht_list.size() > 0 && alt.snp()) {
                 bool ht_found = false;
-                
-                // DK - debugging purposes
-                if(dep == 1) {
-                    if(alt_range.second == 54) {
-                        int kk = 20;
-                        kk += 10;
-                    }
-                }
-                
                 for(index_t h = 0; h < ht_list.size(); h++) {
                     const pair<index_t, index_t>& ht_ref = ht_list[h];
                     const Haplotype<index_t>& ht = haplotypes[ht_ref.first];
@@ -2714,7 +2772,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 }
                 if(!ht_found) continue;
             }
-#endif
+
             if(alt.type == ALT_SNP_SGL) {
                 if(rd_bp == (int)alt.seq) {
                     int rf_bp = rfseq[rf_i];
@@ -2928,46 +2986,6 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             return mm_max_rd_i;
         }
         
-        // Update and find Haplotypes
-        EList<pair<index_t, index_t> >& ht_list = ht_llist[dep];
-        ht_list.clear();
-        if(haplotypes.size() > 0) {
-            if(dep > 0) {
-                EList<pair<index_t, index_t> >& ht_prev_list = ht_llist[dep-1];
-                for(index_t p = 0; p < ht_prev_list.size(); p++) {
-                    const pair<index_t, index_t>& ht_ref = ht_prev_list[p];
-                    const Haplotype<index_t>& ht = haplotypes[ht_ref.first];
-                    assert_lt(ht_ref.second, ht.alts.size());
-                    index_t alt_id = ht.alts[ht_ref.second];
-                    assert_gt(tmp_edits.size(), 0);
-                    const ALT<index_t>& alt = alts[tmp_edits[0].snpID];
-                    const ALT<index_t>& ht_alt = alts[alt_id];
-                    if(!alt.isSame(ht_alt)) continue;
-                    if(ht_ref.second + 1 == ht.alts.size()) {
-                        cmp_ht.left = cmp_ht.right = joinedOff;
-                        add_haplotypes(alts,
-                                       haplotypes,
-                                       cmp_ht,
-                                       ht_list,
-                                       rdlen,
-                                       false); // left_ext?
-                    } else {
-                        ht_list.push_back(ht_ref);
-                        ht_list.back().second++;
-                    }
-                }
-            }
-            if(ht_list.size() <= 0) {
-                cmp_ht.left = cmp_ht.right = joinedOff;
-                add_haplotypes(alts,
-                               haplotypes,
-                               cmp_ht,
-                               ht_list,
-                               rdlen,
-                               false); // left_ext?
-            }
-        }
-        
         // Find SNPs included in this region
         pair<index_t, index_t> alt_range;
         {
@@ -3003,6 +3021,48 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             tmp_edits.resize(tmp_edits.size() - tmp_mm);
             tmp_mm = 0;
         }
+        
+        // Update and find Haplotypes
+        EList<pair<index_t, index_t> >& ht_list = ht_llist[dep];
+        ht_list.clear();
+        if(haplotypes.size() > 0) {
+            if(dep > 0) {
+                EList<pair<index_t, index_t> >& ht_prev_list = ht_llist[dep-1];
+                for(index_t p = 0; p < ht_prev_list.size(); p++) {
+                    const pair<index_t, index_t>& ht_ref = ht_prev_list[p];
+                    const Haplotype<index_t>& ht = haplotypes[ht_ref.first];
+                    assert_lt(ht_ref.second, ht.alts.size());
+                    index_t alt_id = ht.alts[ht_ref.second];
+                    assert_gt(tmp_edits.size(), 0);
+                    const ALT<index_t>& alt = alts[tmp_edits.back().snpID];
+                    const ALT<index_t>& ht_alt = alts[alt_id];
+                    if(!alt.isSame(ht_alt)) continue;
+                    if(ht_ref.second + 1 == ht.alts.size()) {
+                        cmp_ht.left = cmp_ht.right = joinedOff;
+                        add_haplotypes(alts,
+                                       haplotypes,
+                                       cmp_ht,
+                                       ht_list,
+                                       rdlen,
+                                       false); // left_ext?
+                    } else {
+                        ht_list.push_back(ht_ref);
+                        ht_list.back().second++;
+                    }
+                }
+            }
+            if(ht_list.size() <= 0) {
+                cmp_ht.left = cmp_ht.right = joinedOff;
+                add_haplotypes(alts,
+                               haplotypes,
+                               cmp_ht,
+                               ht_list,
+                               rdlen,
+                               false, // left_ext?
+                               dep == 0 && rdoff_add == 0); // initial?
+            }
+        }
+        
         const index_t orig_nedits = (index_t)tmp_edits.size();
         for(; alt_range.first < alt_range.second; alt_range.first++) {
             const ALT<index_t>& alt = alts[alt_range.first];
@@ -3022,8 +3082,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             int rf_bp = rfseq[rf_i];
             int rd_bp = rdseq[rdoff + rd_i];
             
-            // DK - debugging purposes
-#if 0
+            // Check to see if there is a haplotype that supports this alt
             if(ht_list.size() > 0 && alt.snp()) {
                 bool ht_found = false;
                 for(index_t h = 0; h < ht_list.size(); h++) {
@@ -3032,14 +3091,13 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                     assert_lt(ht_ref.second, ht.alts.size());
                     index_t ht_alti = ht.alts[ht_ref.second];
                     const ALT<index_t>& ht_alt = alts[ht_alti];
-                    if(alts[alt_range.second].isSame(ht_alt)) {
+                    if(alts[alt_range.first].isSame(ht_alt)) {
                         ht_found = true;
                         break;
                     }
                 }
                 if(!ht_found) continue;
             }
-#endif
             
             if(alt.type == ALT_SNP_SGL) {
                 if(rd_bp == (int)alt.seq) {

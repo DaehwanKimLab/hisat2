@@ -825,6 +825,18 @@ public:
                 ht.alts[h2] = to_alti[ht.alts[h2]];
             }
         }
+        index_t num_haplotypes = haplotypes.size();
+        for(index_t h = 0; h < num_haplotypes; h++) {
+            const Haplotype<index_t>& ht = haplotypes[h];
+            haplotypes.expand();
+            haplotypes.back().left = ht.right;
+            haplotypes.back().right = ht.left;
+            haplotypes.back().reversed = true;
+            haplotypes.back().alts.resizeExact(ht.alts.size());
+            haplotypes.back().alts = ht.alts;
+            // haplotypes.back().alts.reverse();
+        }
+        haplotypes.sort();
         
         assert(repOk());
 	}

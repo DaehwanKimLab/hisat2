@@ -213,16 +213,19 @@ struct Haplotype {
     
     void reset() {
         left = right = 0;
+        reversed = false;
         alts.clear();
     }
     
     index_t left;
     index_t right;
+    bool reversed;
     EList<index_t, 1> alts;
     
     bool operator< (const Haplotype& o) const {
         if(left != o.left) return left < o.left;
         if(right != o.right) return right < o.right;
+        if(reversed != o.reversed) return !reversed;
         return false;
     }
     
