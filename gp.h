@@ -38,34 +38,46 @@ public:
     GraphPolicy() { reset(); }
     
     GraphPolicy(size_t maxAltsTried,
-                bool haplotypeOnly)
+                bool useHaplotype,
+                bool haplotypeOnly,
+                bool enableCODIS)
     {
         init(maxAltsTried,
-             haplotypeOnly);
+             useHaplotype,
+             haplotypeOnly,
+             enableCODIS);
     }
     
     /**
      */
     void reset() {
-        init(0, false);
+        init(0);
     }
     
     /**
      */
     void init(size_t maxAltsTried,
-              bool haplotypeOnly)
+              bool useHaplotype = false,
+              bool haplotypeOnly = false,
+              bool enableCODIS = false)
     {
         maxAltsTried_ = maxAltsTried;
+        useHaplotype_ = useHaplotype;
         haplotypeOnly_ = haplotypeOnly;
+        enableCODIS_ = enableCODIS;
     }
     
     size_t maxAltsTried() const { return maxAltsTried_; }
+    bool   useHaplotype() const { return useHaplotype_; }
     bool   haplotypeOnly() const { return haplotypeOnly_; }
+    bool   enableCODIS() const { return enableCODIS_; }
     
     
 private:
     size_t maxAltsTried_;
+    bool   useHaplotype_;
     bool   haplotypeOnly_;
+    bool   enableCODIS_;
 };
 
 #endif /*ndef GP_H_*/

@@ -8,6 +8,19 @@ from copy import deepcopy
 
 """
 """
+def reverse_complement(seq):
+    comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
+    rc_seq = ""
+    for s in reversed(seq):
+        if s in comp_table:
+            rc_seq += comp_table[s]
+        else:
+            rc_seq += s
+    return rc_seq
+
+
+"""
+"""
 def read_genome(genome_file):
     chr_dic, chr_names, chr_full_names = {}, [], []
     chr_name, chr_full_name, sequence = "", "", ""

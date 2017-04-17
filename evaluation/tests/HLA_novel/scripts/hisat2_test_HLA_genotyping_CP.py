@@ -35,10 +35,13 @@ class myThread(threading.Thread):
                  hla_list,
                  partial,
                  aligners,
-                 exclude_allele_list,
                  num_editdist,
-                 sample_frac,                       
-                 verbose):
+                 max_sample,
+                 assembly,
+                 sample_frac,
+                 out_dir,
+                 verbose,
+                 exclude_allele_list):
         threading.Thread.__init__(self)
         self.ex_path = ex_path
         self.lock = lock
@@ -47,10 +50,13 @@ class myThread(threading.Thread):
         self.hla_list = hla_list
         self.partial = partial
         self.aligners = aligners
-        self.exclude_allele_list = exclude_allele_list
         self.num_editdist = num_editdist
+        self.max_sample = max_sample
+        self.assembly = assembly
         self.sample_frac = sample_frac
+        self.out_dir = out_dir
         self.verbose = verbose
+        self.exclude_allele_list = exclude_allele_list
 
     def run(self):
         global work_idx
@@ -59,7 +65,8 @@ class myThread(threading.Thread):
             my_work_idx = work_idx
             work_idx += 1
             self.lock.release()
-            if my_work_idx >= len(self.paths):
+            if my_work_idx >= len(self.paths) or \
+               my_work_idx >= self.max_sample:
                 return
             worker(self.ex_path,
                    self.lock,
@@ -68,10 +75,12 @@ class myThread(threading.Thread):
                    self.hla_list,
                    self.partial,
                    self.aligners,
-                   self.exclude_allele_list,
                    self.num_editdist,
+                   self.assembly,
                    self.sample_frac,
-                   self.verbose)
+                   self.out_dir,
+                   self.verbose,
+                   self.exclude_allele_list)
 
 work_idx = 0
 def worker(ex_path,
@@ -81,10 +90,12 @@ def worker(ex_path,
            hla_list,
            partial,
            aligners,
-           exclude_allele_list,
            num_editdist,
-           sample_frac,                 
-           verbose):
+           assembly,
+           sample_frac,
+           out_dir,
+           verbose,
+           exclude_allele_list):
     fq_name = path.split('/')[-1]
     read_dir = '/'.join(path.split('/')[:-1])
     genome = fq_name.split('.')[0]
@@ -96,18 +107,25 @@ def worker(ex_path,
     print >> sys.stderr, genome
     lock.release()
     cmd_aligners = ['.'.join(aligners[i]) for i in range(len(aligners))]
-    test_hla_script = os.path.join(ex_path, "../hisat2_test_HLA_genotyping.py")
+    test_hla_script = os.path.join(ex_path, "../hisatgenotype_locus.py")
     test_hla_cmd = [test_hla_script,
-                    "--reference-type", reference_type,
-                    "--hla-list", ','.join(hla_list),
+                    # "--reference-type", reference_type,
+                    "--base", "hla",
+                    "--locus", ','.join(hla_list),
                     "--aligner-list", ','.join(cmd_aligners),
                     "--reads", "%s,%s" % (read_fname_1, read_fname_2),
-                    # "--exclude-allele-list", ','.join(exclude_allele_list),
-                    "--num-editdist", str(num_editdist),
-                    "--no-assembly"]
+                    "--num-editdist", str(num_editdist)]
+    test_hla_cmd += ["--assembly-base"]
+    if out_dir != "":
+        test_hla_cmd += ["%s/%s" % (out_dir, genome)]
+    else:
+        test_hla_cmd += [genome]
 
-    if not partial:
-        test_hla_cmd += ["--no-partial"]
+    if not assembly:
+        test_hla_cmd += ["--no-assembly"]
+
+    if len(exclude_allele_list) > 0:
+        test_hla_cmd += ["--exclude-allele-list", ','.join(exclude_allele_list)]
 
     if verbose:
         lock.acquire()
@@ -140,11 +158,14 @@ def test_HLA_genotyping(read_dir,
                         hla_list,
                         partial,
                         aligners,
-                        exclude_allele_list,
                         num_mismatch,
                         nthreads,
+                        max_sample,
+                        assembly,
                         sample_frac,
-                        verbose):
+                        out_dir,
+                        verbose,
+                        exclude_allele_list):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_HLA_genotyping))
     ex_path = os.path.dirname(curr_script)
@@ -152,6 +173,9 @@ def test_HLA_genotyping(read_dir,
     if not os.path.exists(read_dir):
         print >> sys.stderr, "Error: %s data is needed." % read_dir
         sys.exit(1)
+
+    if out_dir != "" and not os.path.exists(out_dir):
+        os.mkdir(out_dir)        
 
     # fastq files
     fq_fnames = glob.glob("%s/*.extracted.1.fq.gz" % read_dir)
@@ -166,10 +190,13 @@ def test_HLA_genotyping(read_dir,
                           hla_list,
                           partial,
                           aligners,
-                          exclude_allele_list,
                           num_mismatch,
+                          max_sample,
+                          assembly,
                           sample_frac,
-                          verbose)
+                          out_dir,
+                          verbose,
+                          exclude_allele_list)
         thread.start()
         threads.append(thread)
 
@@ -205,11 +232,6 @@ if __name__ == '__main__':
                         type=str,
                         default="hisat2.graph",
                         help="A comma-separated list of aligners (default: hisat2.graph)")
-    parser.add_argument("--exclude-allele-list",
-                        dest="exclude_allele_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of allleles to be excluded")
     parser.add_argument("--num-editdist",
                         dest="num_editdist",
                         type=int,
@@ -220,15 +242,35 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Number of threads")
+    parser.add_argument('--assembly',
+                        dest='assembly',
+                        action='store_true',
+                        help='Perform assembly')
+    parser.add_argument("--max-sample",
+                        dest="max_sample",
+                        type=int,
+                        default=sys.maxint,
+                        help="Number of samples to be analyzed (default: sys.maxint)")
     parser.add_argument("--sample",
                         dest="sample_frac",
                         type=float,
                         default=1.1,
                         help="Reads sample rate (default: 1.1)")
+    parser.add_argument("--out-dir",
+                        dest="out_dir",
+                        type=str,
+                        default="",
+                        help='Output directory (default: (empty))')
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
                         help='also print some statistics to stderr')
+    parser.add_argument("--exclude-allele-list",
+                        dest="exclude_allele_list",
+                        type=str,
+                        default="",
+                        help="A comma-separated list of allleles to be excluded")
+
 
     args = parser.parse_args()
 
@@ -242,16 +284,22 @@ if __name__ == '__main__':
     args.aligners = args.aligners.split(',')
     for i in range(len(args.aligners)):
         args.aligners[i] = args.aligners[i].split('.')
-    args.exclude_allele_list = args.exclude_allele_list.split(',')
+    if args.exclude_allele_list != "":
+        args.exclude_allele_list = args.exclude_allele_list.split(',')
+    else:
+        args.exclude_allele_list = []        
 
     test_HLA_genotyping(args.read_dir,
                         args.reference_type,
                         args.hla_list,
                         args.partial,
                         args.aligners,
-                        args.exclude_allele_list,
                         args.num_editdist,
                         args.threads,
+                        args.max_sample,
+                        args.assembly,
                         args.sample_frac,
-                        args.verbose)
+                        args.out_dir,
+                        args.verbose,
+                        args.exclude_allele_list)
 

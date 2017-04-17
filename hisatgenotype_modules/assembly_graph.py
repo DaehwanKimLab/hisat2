@@ -1694,13 +1694,13 @@ class HtmlDraw:
         print >> html_file, r'<html>'
         print >> html_file, r'<head>'
         print >> html_file, r'<title>HISAT-genotyping HLA</title>'
-        print >> html_file, r'<link rel="stylesheet" type="text/css" href="%s.css"/>' % base_fname
+        print >> html_file, r'<link rel="stylesheet" type="text/css" href="%s.css"/>' % (base_fname.split("/")[-1])
         print >> html_file, r'</head>'
         print >> html_file, r'<body>'
         print >> html_file, r'<canvas id="a" width="%d" height="%d">' % (width, height)
         print >> html_file, r'This text is displayed if your browser does not support HTML5 Canvas.'
         print >> html_file, r'</canvas>'
-        print >> html_file, r'<script type="text/javascript" src="%s.js"></script>' % base_fname
+        print >> html_file, r'<script type="text/javascript" src="%s.js"></script>' % (base_fname.split("/")[-1])
         print >> html_file, r'</body>'
         print >> html_file, r'</html>'
         html_file.close()

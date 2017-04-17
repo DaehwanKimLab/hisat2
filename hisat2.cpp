@@ -280,6 +280,8 @@ static bool rmChrName;  // remove "chr" from reference names (e.g., chr18 to 18)
 static bool addChrName; // add "chr" to reference names (e.g., 18 to chr18)
 
 static size_t max_alts_tried;
+static bool use_haplotype;
+static bool enable_codis;
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -499,6 +501,8 @@ static void resetOptions() {
     addChrName = false;
     
     max_alts_tried = 16;
+    use_haplotype = false;
+    enable_codis = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -714,6 +718,8 @@ static struct option long_options[] = {
     {(char*)"remove-chrname",  no_argument,        0,        ARG_REMOVE_CHRNAME},
     {(char*)"add-chrname",     no_argument,        0,        ARG_ADD_CHRNAME},
     {(char*)"max-altstried",   required_argument,  0,        ARG_MAX_ALTSTRIED},
+    {(char*)"haplotype",       no_argument,        0,        ARG_HAPLOTYPE},
+    {(char*)"enable-codis",    no_argument,        0,        ARG_CODIS},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -1665,6 +1671,14 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_MAX_ALTSTRIED: {
             max_alts_tried = parseInt(8, "--max-altstried arg must be at least 8", arg);
+            break;
+        }
+        case ARG_HAPLOTYPE: {
+            use_haplotype = true;
+            break;
+        }
+        case ARG_CODIS: {
+            enable_codis = true;
             break;
         }
 		default:
@@ -3615,7 +3629,8 @@ static void driver(
                                      gVerbose, // whether to be talkative
                                      startVerbose, // talkative during initialization
                                      false /*passMemExc*/,
-                                     sanityCheck);
+                                     sanityCheck,
+                                     use_haplotype); //use haplotypes?
 	if(sanityCheck && !os.empty()) {
 		// Sanity check number of patterns and pattern lengths in GFM
 		// against original strings
@@ -3801,7 +3816,9 @@ static void driver(
                                  xsOnly);
         
         GraphPolicy gpol(max_alts_tried,
-                         altdb->haplotypes().size() > 0);
+                         use_haplotype,
+                         altdb->haplotypes().size() > 0 && use_haplotype,
+                         enable_codis);
         
         init_junction_prob();
         bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;

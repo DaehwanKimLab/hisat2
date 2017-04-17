@@ -367,7 +367,8 @@ static void print_snps(
                      verbose,              // be talkative?
                      verbose,              // be talkative at startup?
                      false,                // pass up memory exceptions?
-                     false);               // sanity check?
+                     false,                // sanity check?
+                     false);               // use haplotypes?
     gfm.loadIntoMemory(
                        -1,     // need entire reverse
                        true,   // load SA sample
@@ -444,11 +445,12 @@ static void print_splicesites(
                      false,                // load SA sample?
                      false,                // load ftab?
                      false,                // load rstarts?
-                     true,                // load splice sites?
+                     true,                 // load splice sites?
                      verbose,              // be talkative?
                      verbose,              // be talkative at startup?
                      false,                // pass up memory exceptions?
-                     false);               // sanity check?
+                     false,                // sanity check?
+                     false);               // use haplotypes?
     gfm.loadIntoMemory(
                        -1,     // need entire reverse
                        true,   // load SA sample
@@ -519,7 +521,8 @@ static void print_exons(
                      verbose,              // be talkative?
                      verbose,              // be talkative at startup?
                      false,                // pass up memory exceptions?
-                     false);               // sanity check?
+                     false,                // sanity check?
+                     false);               // use haplotypes?
     gfm.loadIntoMemory(
                        -1,     // need entire reverse
                        true,   // load SA sample
@@ -588,11 +591,12 @@ static void print_index_summary(
                      false,                // load SA sample?
                      false,                // load ftab?
                      false,                // load rstarts?
-                     true,                // load splice sites?
+                     true,                 // load splice sites?
                      verbose,              // be talkative?
                      verbose,              // be talkative at startup?
                      false,                // pass up memory exceptions?
-                     false);               // sanity check?
+                     false,                // sanity check?
+                     false);               // use haplotypes?
 	EList<string> p_refnames;
 	readEbwtRefnames<index_t>(fname, p_refnames);
     cout << "Index version" << "\t2." << major << '.' << minor;
@@ -674,7 +678,8 @@ static void driver(
                                        false,                // be talkative?
                                        false,                // be talkative at startup?
                                        false,                // pass up memory exceptions?
-                                       false);               // sanity check?
+                                       false,                // sanity check?
+                                       false);               // use haplotypes?
         
         gfm.loadIntoMemory(
                            -1,     // need entire reverse

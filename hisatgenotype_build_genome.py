@@ -23,7 +23,7 @@
 import os, sys, subprocess, re
 import inspect
 from argparse import ArgumentParser, FileType
-from hisatgenotype_modules import HLA_typing, typing_common
+from hisatgenotype_modules import typing_common, Gene_typing
 
 
 """
@@ -40,10 +40,10 @@ def read_clnsig(fname):
 """
 def build_genotype_genome(reference,
                           base_fname,                          
-                          partial,
                           inter_gap,
                           intra_gap,
                           threads,
+                          database_list,
                           use_clinvar,
                           use_commonvar,
                           verbose):    
@@ -51,17 +51,11 @@ def build_genotype_genome(reference,
     curr_script = os.path.realpath(inspect.getsourcefile(build_genotype_genome))
     ex_path = os.path.dirname(curr_script)
 
-    def check_files(fnames):
-        for fname in fnames:
-            if not os.path.exists(fname):
-                return False
-        return True
-
     # Download HISAT2 index
     HISAT2_fnames = ["grch38",
                      "genome.fa",
                      "genome.fa.fai"]
-    if not check_files(HISAT2_fnames):
+    if not typing_common.check_files(HISAT2_fnames):
         typing_common.download_genome_and_index(ex_path)
 
     # Load genomic sequences
@@ -75,7 +69,7 @@ def build_genotype_genome(reference,
                           "clinvar.haplotype",
                           "clinvar.clnsig"]
 
-        if not check_files(CLINVAR_fnames):
+        if not typing_common.check_files(CLINVAR_fnames):
             if not os.path.exists("clinvar.vcf.gz"):
                 os.system("wget ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz")
             assert os.path.exists("clinvar.vcf.gz")
@@ -90,7 +84,7 @@ def build_genotype_genome(reference,
                 print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
             proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
             proc.communicate()
-            if not check_files(CLINVAR_fnames):
+            if not typing_common.check_files(CLINVAR_fnames):
                 print >> sys.stderr, "Error: extract variants from clinvar failed!"
                 sys.exit(1)
 
@@ -108,7 +102,7 @@ def build_genotype_genome(reference,
         commonvar_fbase = "snp144Common"
         commonvar_fnames = ["%s.snp" % commonvar_fbase,
                             "%s.haplotype" % commonvar_fbase]
-        if not check_files(commonvar_fnames):
+        if not typing_common.check_files(commonvar_fnames):
             if not os.path.exists("%s.txt.gz" % commonvar_fbase):
                 os.system("wget http://hgdownload.cse.ucsc.edu/goldenPath/hg38/database/%s.txt.gz" % commonvar_fbase)
             assert os.path.exists("%s.txt.gz" % commonvar_fbase)
@@ -122,7 +116,7 @@ def build_genotype_genome(reference,
                 print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
             proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
             proc.communicate()
-            if not check_files(commonvar_fnames):
+            if not typing_common.check_files(commonvar_fnames):
                 print >> sys.stderr, "Error: extract variants from clinvar failed!"
                 sys.exit(1)
 
@@ -135,36 +129,34 @@ def build_genotype_genome(reference,
     # Genes to be genotyped
     genotype_genes = {}
 
-    # Clone a git repository, IMGTHLA
-    if not os.path.exists("IMGTHLA"):
-        HLA_typing.clone_IMGTHLA_database()
+    # Read genes or genomics regions
+    for database_name in database_list:
+        # Extract HLA variants, backbone sequence, and other sequeces
+        gene_fnames = ["%s_backbone.fa" % database_name,
+                       "%s.ref" % database_name,
+                       "%s.snp" % database_name,
+                       "%s.index.snp" % database_name,
+                       "%s.haplotype" % database_name,
+                       "%s.link" % database_name]
+        if not typing_common.check_files(gene_fnames):
+            extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
+            extract_cmd = [extract_hla_script]
+            extract_cmd += ["--base", database_name,
+                            "--inter-gap", str(inter_gap),
+                            "--intra-gap", str(intra_gap)]
+            if database_name == "hla":
+                extract_cmd += ["--min-var-freq", "0.1"]
+            if verbose:
+                print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
+            proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+            proc.communicate()
+            if not typing_common.check_files(gene_fnames):
+                print >> sys.stderr, "Error: extract_HLA_vars failed!"
+                sys.exit(1)
 
-    # Extract HLA variants, backbone sequence, and other sequeces
-    HLA_fnames = ["hla_backbone.fa",
-                  "hla.ref",
-                  "hla.snp",
-                  "hla.index.snp",
-                  "hla.haplotype",
-                  "hla.link"]
-    if not check_files(HLA_fnames):
-        extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
-        extract_cmd = [extract_hla_script]
-        if not partial:
-            extract_cmd += ["--no-partial"]
-        extract_cmd += ["--inter-gap", str(inter_gap),
-                        "--intra-gap", str(intra_gap),
-                        "--min-var-freq", "0.1"]
-        if verbose:
-            print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-        proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-        proc.communicate()
-        if not check_files(HLA_fnames):
-            print >> sys.stderr, "Error: extract_HLA_vars failed!"
-            sys.exit(1)
-
-    # Read HLA genes
-    if os.path.exists("hla.ref"):
-        for line in open("hla.ref"):
+        ref_fname = "%s.ref" % database_name
+        assert os.path.exists(ref_fname)
+        for line in open(ref_fname):
             HLA_name, chr, left, right, length, exon_str, strand = line.strip().split()
             left, right = int(left), int(right)
             length = int(length)
@@ -172,13 +164,14 @@ def build_genotype_genome(reference,
                 continue
             if chr not in genotype_genes:
                 genotype_genes[chr] = []
-            genotype_genes[chr].append([left, right, length, HLA_name, "hla"])
+            genotype_genes[chr].append([left, right, length, HLA_name, database_name])
 
     # Write genotype genome
     var_num, haplotype_num = 0, 0
     genome_out_file = open("%s.fa" % base_fname, 'w')
     gene_out_file = open("%s.gene" % base_fname, 'w')
     var_out_file = open("%s.snp" % base_fname, 'w')
+    index_var_out_file = open("%s.index.snp" % base_fname, 'w')
     haplotype_out_file = open("%s.haplotype" % base_fname, 'w')
     link_out_file = open("%s.link" % base_fname, 'w')
     coord_out_file = open("%s.coord" % base_fname, 'w')
@@ -262,8 +255,9 @@ def build_genotype_genome(reference,
             allele_seqs = typing_common.read_allele_sequences("%s_backbone.fa" % family)
 
             # Read HLA variants
-            allele_vars = typing_common.read_variants("%s.index.snp" % family)
-
+            allele_vars = typing_common.read_variants("%s.snp" % family)
+            allele_index_vars = typing_common.read_variants("%s.index.snp" % family)
+                
             # Read HLA haplotypes
             allele_haplotypes = typing_common.read_haplotypes("%s.haplotype" % family)
 
@@ -275,7 +269,11 @@ def build_genotype_genome(reference,
                     name not in allele_haplotypes:
                 continue
             allele_seq = allele_seqs[name]
-            vars = allele_vars[name]
+            vars, index_vars = allele_vars[name], allele_index_vars[name]
+            index_var_ids = set()
+            for _, _, _, var_id in index_vars:
+                index_var_ids.add(var_id)
+
             haplotypes = allele_haplotypes[name]
             assert length == len(allele_seq)
             assert left < chr_len and right < chr_len
@@ -291,8 +289,6 @@ def build_genotype_genome(reference,
             assert prev_length <= length
 
             if prev_right < left:
-                # print >> coord_out_file, "%d\t%d\t%d" % \
-                #    (len(out_chr_seq), prev_right, left - prev_right)
                 out_chr_seq += chr_seq[prev_right:left]
 
             # Output gene (genotype_genome.gene)
@@ -304,22 +300,25 @@ def build_genotype_genome(reference,
                 (chr, len(out_chr_seq), left, right - left + 1)
             out_chr_seq += allele_seq
 
-            # Output variants (genotype_genome.snp)
+            # Output variants (genotype_genome.snp and genotype_genome.index.snp)
             for var in vars:
                 var_left, var_type, var_data, var_id = var
                 new_var_id = "hv%d" % var_num
                 varID2htID[var_id] = new_var_id
                 new_var_left = var_left + left + off
-                assert var_type in ["single", "deletion"]
+                assert var_type in ["single", "deletion", "insertion"]
                 assert new_var_left < len(out_chr_seq)
                 if var_type == "single":                    
                     assert out_chr_seq[new_var_left] != var_data
-                else:
-                    assert var_type == "deletion"
+                elif var_type == "deletion":
                     assert new_var_left + var_data <= len(out_chr_seq)
-                    
-                print >> var_out_file, "%s\t%s\t%s\t%d\t%s" % \
-                    (new_var_id, var_type, chr, new_var_left, var_data)
+                else:
+                    assert var_type == "insertion"
+
+                out_str = "%s\t%s\t%s\t%d\t%s" % (new_var_id, var_type, chr, new_var_left, var_data)
+                print >> var_out_file, out_str
+                if var_id in index_var_ids:
+                    print >> index_var_out_file, out_str
                 var_num += 1
                 
             # Output haplotypes (genotype_genome.haplotype)
@@ -368,6 +367,7 @@ def build_genotype_genome(reference,
     genome_out_file.close()
     gene_out_file.close()
     var_out_file.close()
+    index_var_out_file.close()
     haplotype_out_file.close()
     link_out_file.close()
     coord_out_file.close()
@@ -378,12 +378,13 @@ def build_genotype_genome(reference,
     hisat2_build = os.path.join(ex_path, "hisat2-build")
     build_cmd = [hisat2_build,
                  "-p", str(threads),
-                 "--snp", "%s.snp" % base_fname,
+                 "--snp", "%s.index.snp" % base_fname,
                  "--haplotype", "%s.haplotype" % base_fname,
                  "%s.fa" % base_fname,
                  "%s" % base_fname]
     if verbose:
         print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
+        
     proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
     proc.communicate()        
     if not check_files(hisat2_index_fnames):
@@ -404,10 +405,6 @@ if __name__ == '__main__':
                         nargs='?',
                         type=str,
                         help="base filename for genotype genome")
-    parser.add_argument('--no-partial',
-                        dest='partial',
-                        action='store_false',
-                        help='Include partial alleles (e.g. A_nuc.fasta)')
     parser.add_argument("--inter-gap",
                         dest="inter_gap",
                         type=int,
@@ -422,7 +419,12 @@ if __name__ == '__main__':
                         dest="threads",
                         type=int,
                         default=1,
-                        help="Number of threads") 
+                        help="Number of threads")
+    parser.add_argument("--database-list",
+                        dest="database_list",
+                        type=str,
+                        default="",
+                        help="A comma-separated list of databases (default: hla)")
     parser.add_argument("--clinvar",
                         dest="use_clinvar",
                         action="store_true",
@@ -443,16 +445,23 @@ if __name__ == '__main__':
     if args.inter_gap > args.intra_gap:
         print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
+        
+    if args.database_list == "":
+        database_list = []
+    else:
+        database_list = args.database_list.split(',')
+
     if args.use_clinvar and args.use_commonvar:
         print >> sys.stderr, "Error: both --clinvar and --commonvar cannot be used together."
         sys.exit(1)
         
+        
     build_genotype_genome(args.reference,
                           args.base_fname,
-                          args.partial,
                           args.inter_gap,
                           args.intra_gap,
                           args.threads,
+                          database_list,
                           args.use_clinvar,
                           args.use_commonvar,
                           args.verbose)

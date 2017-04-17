@@ -48,8 +48,7 @@ def read_genome(genome_file):
 
 """
 """
-def genotype(reference_type,
-             base_fname,
+def genotype(base_fname,
              fastq,
              read_fnames,
              threads,
@@ -207,31 +206,12 @@ def genotype(reference_type,
         
         assert var_id in var_genes
         gene_name = var_genes[var_id]
-        """
-        if reference_type != "gene":
-            allele, dist = None, 0
-            for tmp_gene, values in refHLA_loci.items():
-                allele_name, chr, left, right, exons = values
-                if allele == None:
-                    allele = allele_name
-                    dist = abs(pos - left)
-                else:
-                    if dist > abs(pos - left):
-                        allele = allele_name
-                        dist = abs(pos - left)
-        """
-            
         if not gene_name in Vars:
             Vars[gene_name] = {}
             assert not gene_name in Var_list
             Var_list[gene_name] = []
             
         assert not var_id in Vars[gene_name]
-        """
-        left = 0
-        if reference_type != "gene":
-            _, _, left, _, _ = refHLA_loci[gene]
-        """
         Vars[gene_name][var_id] = [var_type, pos, data]
         Var_list[gene_name].append([pos, var_id])
 
@@ -1019,12 +999,7 @@ def genotype(reference_type,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='HISAT2 genotyping')
-    parser.add_argument("--reference-type",
-                        dest="reference_type",
-                        type=str,
-                        default="genome",
-                        help="Reference type: gene, chromosome, and genome (default: genome)")
-    parser.add_argument("--base-name",
+    parser.add_argument("--base", "--base-name",
                         dest="base_fname",
                         type=str,
                         default="genotype_genome",
@@ -1069,9 +1044,6 @@ if __name__ == '__main__':
                         help="e.g., test_id:10,read_id:10000,basic_test")
 
     args = parser.parse_args()
-    if not args.reference_type in ["gene", "chromosome", "genome"]:
-        print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
-        sys.exit(1)
     daehwan_debug = {}
     if args.daehwan_debug != "":
         for item in args.daehwan_debug.split(','):
@@ -1090,8 +1062,7 @@ if __name__ == '__main__':
         read_fnames = [args.read_fname_1, args.read_fname_2] 
 
     random.seed(1)
-    genotype(args.reference_type,
-             args.base_fname,
+    genotype(args.base_fname,
              args.fastq,
              read_fnames,
              args.threads,

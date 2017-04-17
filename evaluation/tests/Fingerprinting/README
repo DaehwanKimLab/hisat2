@@ -10,7 +10,7 @@ To build genotype genome
 
 
 For DNA fingerprinting
-   ./hisatgenotype_locus.py --verbose --base codis --locus-list D13S317 --no-assembly --debug paired
+   ./hisatgenotype_locus.py --verbose --base codis --locus-list D13S317 --fragment-len 200 --no-assembly --debug paired
 
 
 

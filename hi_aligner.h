@@ -2487,7 +2487,9 @@ void add_haplotypes(
     if(left_ext) {
         for(; ht_range.first >= 0; ht_range.first--) {
             const Haplotype<index_t>& ht = haplotypes[ht_range.first];
-            if(ht.right >= cmp_ht.left) continue;
+            if(!initial) {
+                if(ht.right >= cmp_ht.left) continue;
+            }
             index_t ht_maxright = haplotype_maxrights[ht_range.first];
             assert_geq(ht_maxright, ht.right);
             if(ht_maxright + rdlen - 1 < cmp_ht.left) break;
@@ -2503,7 +2505,23 @@ void add_haplotypes(
             ht_list.expand();
             ht_list.back().first = ht_range.first;
             assert_gt(ht.alts.size(), 0);
-            ht_list.back().second = ht.alts.size() - 1;
+            if(ht.right < cmp_ht.left) {
+                ht_list.back().second = ht.alts.size() - 1;
+            } else {
+                assert(initial);
+                ht_list.back().second = ht.alts.size();
+                for(int a = (int)ht.alts.size() - 1; a >= 0; a--) {
+                    index_t alti = ht.alts[a];
+                    assert_lt(alti, alts.size());
+                    const ALT<index_t>& alt = alts[alti];
+                    assert(alt.snp());
+                    ht_list.back().second = (index_t)a;
+                    if(cmp_ht.left > alt.pos) break;
+                }
+                if(ht_list.back().second == ht.alts.size()) {
+                    ht_list.pop_back();
+                }
+            }
         }
     } else {
         if(initial) {
@@ -2665,6 +2683,9 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             assert_leq(mm_min_rd_i, rdoff);
             index_t rd_diff = rdoff - mm_min_rd_i;
             rd_diff = (rd_diff > minK ? rd_diff - minK : 0);
+            if(gpol.enableCODIS()) {
+                rd_diff = 0;
+            }
             if(rd_diff >= joinedOff) {
                 cmp_alt.pos = joinedOff;
             } else {
@@ -2693,7 +2714,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         // Update and find Haplotypes
         EList<pair<index_t, index_t> >& ht_list = ht_llist[dep];
         ht_list.clear();
-        if(haplotypes.size() > 0) {
+        if(gpol.useHaplotype() && haplotypes.size() > 0) {
             if(dep > 0) {
                 EList<pair<index_t, index_t> >& ht_prev_list = ht_llist[dep-1];
                 for(index_t p = 0; p < ht_prev_list.size(); p++) {
@@ -2726,7 +2747,9 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                                haplotype_maxrights,
                                cmp_ht,
                                ht_list,
-                               rdlen);
+                               rdlen,
+                               true, // left_ext?
+                               dep == 0); // initial?
             }
         }
         
@@ -3008,6 +3031,9 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             ALT<index_t> cmp_alt;
             const index_t minK = 16;
             index_t rd_diff = (max_rd_i > minK ? max_rd_i - minK : 0);
+            if(gpol.enableCODIS()) {
+                rd_diff = 0;
+            }
             cmp_alt.pos = joinedOff + rd_diff;
             alt_range.first = alt_range.second = (index_t)alts.bsearchLoBound(cmp_alt);
             if(alt_range.first >= alts.size()) return 0;
@@ -3041,7 +3067,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         // Update and find Haplotypes
         EList<pair<index_t, index_t> >& ht_list = ht_llist[dep];
         ht_list.clear();
-        if(haplotypes.size() > 0) {
+        if(gpol.useHaplotype() && haplotypes.size() > 0) {
             if(dep > 0) {
                 EList<pair<index_t, index_t> >& ht_prev_list = ht_llist[dep-1];
                 for(index_t p = 0; p < ht_prev_list.size(); p++) {

@@ -56,7 +56,9 @@ def align_reads(ex_path,
         else:
             aligner_cmd += ["--max-altstried", "64"]
             # DK - debugging purposes
-            # aligner_cmd += ["--max-seeds", "100"]
+            aligner_cmd += ["--haplotype"]
+            if base_fname == "codis":
+                aligner_cmd += ["--enable-codis"]
         aligner_cmd += ["-x", "%s.%s" % (base_fname, index_type)]
     elif aligner == "bowtie2":
         aligner_cmd = [aligner,
@@ -238,77 +240,6 @@ def single_abundance(Gene_cmpt,
     # normalize(Gene_prob)
     normalize2(Gene_prob, Gene_length)
     Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]
-    Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
-    return Gene_prob
-
-    
-"""
-"""
-def joint_abundance(Gene_cmpt,
-                    Gene_length):
-    allele_names = set()
-    for cmpt in Gene_cmpt.keys():
-        allele_names |= set(cmpt.split('-'))
-    
-    Gene_prob, Gene_prob_next = {}, {}
-    for cmpt, count in Gene_cmpt.items():
-        alleles = cmpt.split('-')
-        for allele1 in alleles:
-            for allele2 in allele_names:
-                if allele1 < allele2:
-                    allele_pair = "%s-%s" % (allele1, allele2)
-                else:
-                    allele_pair = "%s-%s" % (allele2, allele1)
-                if not allele_pair in Gene_prob:
-                    Gene_prob[allele_pair] = 0.0
-                Gene_prob[allele_pair] += (float(count) / len(alleles))
-
-    if len(Gene_prob) <= 0:
-        return Gene_prob
-
-    # Choose top allele pairs
-    def choose_top_alleles(Gene_prob):
-        Gene_prob_list = [[allele_pair, prob] for allele_pair, prob in Gene_prob.items()]
-        Gene_prob_list = sorted(Gene_prob_list, cmp=Gene_prob_cmp)
-        Gene_prob = {}
-        best_prob = Gene_prob_list[0][1]
-        for i in range(len(Gene_prob_list)):
-            allele_pair, prob = Gene_prob_list[i]
-            if prob * 2 <= best_prob:
-                break                        
-            Gene_prob[allele_pair] = prob
-        normalize(Gene_prob)
-        return Gene_prob
-    Gene_prob = choose_top_alleles(Gene_prob)
-
-    def next_prob(Gene_cmpt, Gene_prob):
-        Gene_prob_next = {}
-        for cmpt, count in Gene_cmpt.items():
-            alleles = cmpt.split('-')
-            prob = 0.0
-            for allele in alleles:
-                for allele_pair in Gene_prob.keys():
-                    if allele in allele_pair:
-                        prob += Gene_prob[allele_pair]
-            for allele in alleles:
-                for allele_pair in Gene_prob.keys():
-                    if not allele in allele_pair:
-                        continue
-                    if allele_pair not in Gene_prob_next:
-                        Gene_prob_next[allele_pair] = 0.0
-                    Gene_prob_next[allele_pair] += (float(count) * Gene_prob[allele_pair] / prob)
-        normalize(Gene_prob_next)
-        return Gene_prob_next
-
-    diff, iter = 1.0, 0
-    while diff > 0.0001 and iter < 1000:
-        Gene_prob_next = next_prob(Gene_cmpt, Gene_prob)
-        diff = prob_diff(Gene_prob, Gene_prob_next)
-        Gene_prob = Gene_prob_next
-        Gene_prob = choose_top_alleles(Gene_prob)
-        iter += 1
-
-    Gene_prob = [[allele_pair, prob] for allele_pair, prob in Gene_prob.items()]
     Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
     return Gene_prob
 
@@ -520,10 +451,11 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                     if ref_seq[latest_pos + 1] != ref_seq[var_pos + del_len - 1 - (latest_pos - var_pos)]:
                         break
                     latest_pos += 1
-                    add_alt(Alts, alt_list, var_id, str(latest_pos))
+                    add_alt(Alts, alt_list, var_id, str(latest_pos))                   
+
                 if latest_pos + 1 < j_pos:
                     return
-                if j_pos == latest_pos + 1:
+                if j_pos == latest_pos + 1:                    
                     j_type, _, j_data = Vars[j_id]
                     if j_type == "single":
                         if debug: print Vars[j_id]
@@ -531,7 +463,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                         if debug: print var_pos + off, ref_seq[var_pos + off]
                         if debug: print var_pos + del_len + off, ref_seq[var_pos + del_len + off]
 
-                        # DK - for debugging purposes
+                        # DK - debugging purposes
                         if var_pos + del_len + off >= len(ref_seq):
                             print >> sys.stderr, var_id, var
                             print >> sys.stderr, "var_pos: %d, del_len: %d, off: %d" % (var_pos, del_len, off)
@@ -541,7 +473,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                         if j_data == ref_seq[var_pos + del_len + off]:
                             add_alt(Alts, alt_list, var_id, j_id)
                             latest_pos = j_pos
-                    elif j_type == "deletion":
+                    elif j_type == "deletion":                        
                         j_del_len = int(j_data)
                         if j_pos + j_del_len < var_pos + del_len:
                             alt_list2 = alt_list[:] + [j_id]
@@ -591,7 +523,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
         if var_pos + del_len >= len(ref_seq):
             assert var_pos + del_len == len(ref_seq)
             continue
-        debug = (var_id == "hv1096a")
+        debug = (var_id == "hv1a")
         if debug:
             print Vars[var_id]
 
@@ -665,6 +597,7 @@ Identify ambigious differences that may account for other alleles,
 """
 def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list, verbose):
     cmp_left, cmp_right = 0, len(cmp_list) - 1
+
     i = 0
     while i < len(cmp_list):
         cmp_i = cmp_list[i]
@@ -1431,11 +1364,6 @@ def typing(ex_path,
                             NH = int(col[5:])
 
                     if NM > num_editdist:
-
-                        # DK - debugging purposes
-                        print "DK1:", "concordant:", concordant
-                        print line
-
                         continue
 
                     # Only consider unique alignment
@@ -1667,11 +1595,6 @@ def typing(ex_path,
                         continue
 
                     if likely_misalignment:
-
-                        # DK - debugging purposes
-                        print "DK2:", "concordant:", concordant
-                        print line
-
                         continue
 
                     # Add novel variants
@@ -1769,7 +1692,7 @@ def typing(ex_path,
                                                    read_node,
                                                    simulation)
                             read_nodes, read_var_list = [], []
-                            if verbose >= 2:
+                            if verbose >= 2 and base_fname == "hla":
                                 cur_cmpt = cur_cmpt.split('-')
                                 if not(set(cur_cmpt) & set(test_Gene_names)):
                                     print "%s are chosen instead of %s" % ('-'.join(cur_cmpt), '-'.join(test_Gene_names))
@@ -1830,6 +1753,16 @@ def typing(ex_path,
                                                                              cmp_list,
                                                                              verbose)
 
+                    # DK - debugging purposes
+                    DK_debug = False
+                    if orig_read_id == "46|L_451_88M12D12M_88|D|hv2":
+                        DK_debug = True
+                        print line
+                        print cmp_list
+                        print "positive vars:", positive_vars
+                        print "negative vars:", negative_vars
+                        print "cmp_list[%d, %d]" % (cmp_list_left, cmp_list_right)
+
                     # Deletions at 5' and 3' ends
                     for var_id, data in gene_vars.items():
                         var_type, var_pos, var_data = data
@@ -1868,8 +1801,12 @@ def typing(ex_path,
                                     elif var_type == "deletion":
                                         del_len = int(var_data)
                                         if ref_pos < var_pos and ref_pos + length > var_pos + del_len:
+                                            if base_fname == "codis":
+                                                cmp_left, cmp_right = left_pos, right_pos
+                                            else:
+                                                cmp_left, cmp_right = cmp[1], cmp[1] + cmp[2]
+                                                
                                             # Check if this might be one of the two tandem repeats (the same left coordinate)
-                                            cmp_left, cmp_right = cmp[1], cmp[1] + cmp[2]
                                             test1_seq1 = ref_seq[cmp_left:cmp_right]
                                             test1_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos + del_len:cmp_right + del_len]
                                             # Check if this happens due to small repeats (the same right coordinate - e.g. 19 times of TTTC in DQA1*05:05:01:02)
@@ -1877,6 +1814,7 @@ def typing(ex_path,
                                             cmp_right += (len(read_seq) - read_pos - cmp[2])
                                             test2_seq1 = ref_seq[cmp_left+int(var_data):cmp_right]
                                             test2_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos+int(var_data):cmp_right]
+                                            
                                             if test1_seq1 != test1_seq2 and test2_seq1 != test2_seq2:
                                                 negative_vars.add(var_id)
                                     else:
@@ -1951,7 +1889,7 @@ def typing(ex_path,
                             ref_pos += length
 
                         cmp_i += 1
-                
+             
                     if cigar_match_len > 0:
                         cmp_cigar_str += ("%dM" % cigar_match_len)
                     cmp_MD += ("%d" % MD_match_len)
@@ -1963,6 +1901,11 @@ def typing(ex_path,
                         print >> sys.stderr, "\tcomputed:", cmp_cigar_str, cmp_MD
                         print >> sys.stderr, "\tcmp list:", cmp_list
                         assert False
+
+                    # DK - debugging purposes
+                    if DK_debug:
+                        print "positive:", positive_vars
+                        print "negative:", negative_vars
 
                     # Node
                     if assembly:
@@ -2059,6 +2002,8 @@ def typing(ex_path,
                 if alleles:
                     add_alleles(alleles)
 
+            if base_fname != "hla":
+                Gene_counts = Gene_gen_counts
             Gene_counts = [[allele, count] for allele, count in Gene_counts.items()]
             def Gene_count_cmp(a, b):
                 if a[1] != b[1]:
@@ -2317,7 +2262,6 @@ def typing(ex_path,
 
 
             # Identify alleles that perfectly or closesly match assembled alleles
-            # """
             for node_name, node in asm_graph.nodes.items():
                 vars = set(node.get_var_ids())
 
@@ -2348,7 +2292,8 @@ def typing(ex_path,
                     else:
                         print >> f_, "Known allele"
 
-                allele_exon_vars = {}
+            """
+            allele_exon_vars = {}
             for allele_name, vars in allele_vars.items():
                 allele_exon_vars[allele_name] = set(vars) & exon_vars
 
@@ -2371,7 +2316,7 @@ def typing(ex_path,
                     print >> f_, "Exonic:", node_name
                     for max_allele_name in max_allele_names:
                         print >> f_, "\t\t%s:" % max_allele_name, max_common
-            # """
+            """
             
             success = [False for i in range(len(test_Gene_names))]
             found_list = [False for i in range(len(test_Gene_names))]
@@ -2416,64 +2361,6 @@ def typing(ex_path,
                 if prob_i >= 19:
                     break
             print >> sys.stderr
-            
-            # DK - debugging purposes
-            # sys.exit(1)
-
-            # DK - for debugging purposes
-            if False and (len(test_Gene_names) == 2 or not simulation):
-                Gene_prob = joint_abundance(Gene_cmpt, Gene_lengths[gene])
-                if len(Gene_prob) <= 0:
-                    continue
-                success = [False]
-                for prob_i in range(len(Gene_prob)):
-                    allele_pair, prob = Gene_prob[prob_i]
-                    allele1, allele2 = allele_pair.split('-')
-                    if best_alleles and prob_i < 1:
-                        print >> sys.stderr, "PairModel %s (abundance: %.2f%%)" % (allele_pair, prob * 100.0)
-                    if simulation:
-                        if allele1 in test_Gene_names and allele2 in test_Gene_names:
-                            rank_i = prob_i
-                            while rank_i > 0:
-                                if Gene_prob[rank_i-1][1] == prob:                                        
-                                    rank_i -= 1
-                                else:
-                                    break
-                            print >> sys.stderr, "\t\t\t*** %d ranked %s (abundance: %.2f%%)" % (rank_i + 1, allele_pair, prob * 100.0)
-                            if rank_i == 0:
-                                success[0] = True
-                            break
-                    print >> sys.stderr, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, allele_pair, prob * 100.0)
-                    if not simulation and prob_i >= 9:
-                        break
-                print >> sys.stderr
-
-                # Li's method
-                """
-                li_hla = os.path.join(ex_path, "li_hla/hla")
-                if os.path.exists(li_hla):
-                    li_hla_cmd = [li_hla,
-                                  base_fname,
-                                  "%s_input.bam" % base_fname,
-                                  "-b", "%s*BACKBONE" % gene]
-                    li_hla_proc = subprocess.Popen(li_hla_cmd,
-                                                   stdout=subprocess.PIPE,
-                                                   stderr=open("/dev/null", 'w'))
-
-                    # read in the result of Li's hla
-                    for line in li_hla_proc.stdout:
-                        allele1, allele2, score = line.strip().split()
-                        score = float(score)
-                        if simulation:
-                            if allele1 in test_Gene_names and allele2 in test_Gene_names:
-                                print >> sys.stderr, "\t\t\t*** 1 ranked %s-%s (score: %.2f)" % (allele1, allele2, score)
-                                success[0] = True
-                            else:
-                                print >> sys.stderr, "\t\t\tLiModel fails"
-                        if best_alleles:
-                            print >> sys.stdout, "LiModel %s-%s (score: %.2f)" % (allele1, allele2, score)
-                    li_hla_proc.communicate()
-                """
 
             if simulation and not False in success:
                 aligner_type = "%s %s" % (aligner, index_type)
@@ -2590,7 +2477,7 @@ def test_Gene_genotyping(base_fname,
                          display_alleles,
                          stranded_seq,
                          verbose,
-                         daehwan_debug):
+                         debug_instr):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(test_Gene_genotyping))
     ex_path = os.path.dirname(curr_script)
@@ -2604,17 +2491,11 @@ def test_Gene_genotyping(base_fname,
 
     simulation = (read_fname == [] and alignment_fname == "")
 
-    def check_files(fnames):
-        for fname in fnames:
-            if not os.path.exists(fname):
-                return False
-        return True
-
     # Download human genome and HISAT2 index
     HISAT2_fnames = ["grch38",
                      "genome.fa",
                      "genome.fa.fai"]
-    if not check_files(HISAT2_fnames):
+    if not typing_common.check_files(HISAT2_fnames):
         typing_common.download_genome_and_index(ex_path)
 
     # Check if the pre-existing files (hla*) are compatible with the current parameter setting
@@ -2650,7 +2531,7 @@ def test_Gene_genotyping(base_fname,
     if verbose >= 1:
         print >> sys.stderr, Gene_fnames
     
-    if not check_files(Gene_fnames):
+    if not typing_common.check_files(Gene_fnames):
         extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
         extract_cmd = [extract_hla_script]
         if len(locus_list) > 0:
@@ -2664,8 +2545,10 @@ def test_Gene_genotyping(base_fname,
                         "--intra-gap", "50"]
 
         # DK - debugging purposes
-        extract_cmd += ["--min-var-freq", "0.1"]        
-        # extract_cmd += ["--leftshift"]
+        extract_cmd += ["--min-var-freq", "0.1"]
+        
+        if base_fname == "codis":
+            extract_cmd += ["--leftshift"]
         
         # DK - debugging purposes
         # extract_cmd += ["--ext-seq", "300"]
@@ -2674,7 +2557,7 @@ def test_Gene_genotyping(base_fname,
         proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
         proc.communicate()
         
-        if not check_files(Gene_fnames):
+        if not typing_common.check_files(Gene_fnames):
             print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
             sys.exit(1)
 
@@ -2683,7 +2566,7 @@ def test_Gene_genotyping(base_fname,
             # Build HISAT2 graph indexes based on the above information
             if index_type == "graph":
                 Gene_hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                if not check_files(Gene_hisat2_graph_index_fnames):
+                if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
                     hisat2_build = os.path.join(ex_path, "hisat2-build")
                     build_cmd = [hisat2_build,
                                  "-p", str(threads),
@@ -2695,21 +2578,21 @@ def test_Gene_genotyping(base_fname,
                         print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
                     proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
                     proc.communicate()        
-                    if not check_files(Gene_hisat2_graph_index_fnames):
+                    if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
                         print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
                         sys.exit(1)
             # Build HISAT2 linear indexes based on the above information
             else:
                 assert index_type == "linear"
                 Gene_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                if not check_files(Gene_hisat2_linear_index_fnames):
+                if not typing_common.check_files(Gene_hisat2_linear_index_fnames):
                     hisat2_build = os.path.join(ex_path, "hisat2-build")
                     build_cmd = [hisat2_build,
                                  "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
                                  "%s.linear" % base_fname]
                     proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
                     proc.communicate()        
-                    if not check_files(Gene_hisat2_linear_index_fnames):
+                    if not typing_common.check_files(Gene_hisat2_linear_index_fnames):
                         print >> sys.stderr, "Error: indexing HLA failed!"
                         sys.exit(1)
         else:
@@ -2717,13 +2600,13 @@ def test_Gene_genotyping(base_fname,
             # Build Bowtie2 indexes based on the above information
             Gene_bowtie2_index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
             Gene_bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
-            if not check_files(Gene_bowtie2_index_fnames):
+            if not typing_common.check_files(Gene_bowtie2_index_fnames):
                 build_cmd = ["bowtie2-build",
                              "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
                              base_fname]
                 proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
                 proc.communicate()        
-                if not check_files(Gene_bowtie2_index_fnames):
+                if not typing_common.check_files(Gene_bowtie2_index_fnames):
                     print >> sys.stderr, "Error: indexing HLA failed!"
                     sys.exit(1)
 
@@ -2778,8 +2661,8 @@ def test_Gene_genotyping(base_fname,
     test_list = []
     if simulation:
         basic_test, pair_test = True, False
-        if daehwan_debug:
-            if "basic_test" in daehwan_debug:
+        if debug_instr:
+            if "basic_test" in debug_instr:
                 basic_test, pair_test = True, False
             else:
                 basic_test, pair_test = False, True
@@ -2816,18 +2699,13 @@ def test_Gene_genotyping(base_fname,
                     test_pairs.append(sorted([Gene_gene_alleles[nums[i]] for i in range(allele_count)]))
                 test_list.append(test_pairs)
 
-        # DK - for debugging purposes
-        # test_list = [[["A*01:01:01:01"]], [["A*32:29"]]]
-        # test_list = [[["A*01:01:01:01", "A*03:01:01:01"]]]
-        # test_list = [[["A*24:36N", "A*30:03"]]]
-        # test_list = [[["A*26:25N"]]] # for allele that includes an insertion
-        # test_list = [[["A*24:36N"]]] # for normal allele?
-        # test_list = [[["A*02:01:21"]], [["A*03:01:01:01"]], [["A*03:01:01:04"]], [["A*02:521"]]]
-        test_list = [[["B*15:01:01:04", "B*56:01:01:03"]]]
+        if "test_list" in debug_instr:
+            test_list = [[debug_instr["test_list"].split('-')]]
+            
         for test_i in range(len(test_list)):
-            if "test_id" in daehwan_debug:
-                daehwan_test_ids = daehwan_debug["test_id"].split('-')
-                if str(test_i + 1) not in daehwan_test_ids:
+            if "test_id" in debug_instr:
+                test_ids = debug_instr["test_id"].split('-')
+                if str(test_i + 1) not in test_ids:
                     continue
 
             print >> sys.stderr, "Test %d" % (test_i + 1), str(datetime.now())
@@ -2856,7 +2734,7 @@ def test_Gene_genotyping(base_fname,
                     seq_type = "partial" if test_Gene_name in partial_alleles else "full"
                     print >> sys.stderr, "\t%s - %d bp (%s sequence, %d pairs)" % (test_Gene_name, len(test_Gene_seq), seq_type, num_frag_list_i[j_])
 
-            if "single-end" in daehwan_debug:
+            if "single-end" in debug_instr:
                 read_fname = ["%s_input_1.fa" % base_fname]
             else:
                 read_fname = ["%s_input_1.fa" % base_fname, "%s_input_2.fa" % base_fname]
@@ -2937,7 +2815,7 @@ def test_Gene_genotyping(base_fname,
                best_alleles,
                verbose)
 
-        
+
 """
 """
 if __name__ == '__main__':

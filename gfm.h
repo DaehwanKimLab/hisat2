@@ -648,7 +648,7 @@ public:
 	    mmFile2_(NULL), \
         _nthreads(1)
 
-	/// Construct an Ebwt from the given input file
+	/// Construct a GFM from the given input file
 	GFM(const string& in,
         ALTDB<index_t>* altdb,
         int needEntireReverse,
@@ -667,6 +667,7 @@ public:
         bool startVerbose, // = false,
         bool passMemExc, // = false,
         bool sanityCheck, // = false)
+        bool useHaplotype, // = false
         bool skipLoading = false) :
         GFM_INITS
 	{
@@ -744,20 +745,22 @@ public:
         }
         assert_eq(alts.size(), numAlts);
         assert_eq(to_alti_far, numAlts);
-        // Check if it hits the end of file, and this routine is needed for backward compatibility
-        if(in7.peek() != std::ifstream::traits_type::eof()) {
-            index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
-            if(numHaplotypes > 0) {
-                haplotypes.resizeExact(numHaplotypes);
-                haplotypes.clear();
-                while(!in7.eof()) {
-                    haplotypes.expand();
-                    haplotypes.back().read(in7, this->toBe());
-                    Haplotype<index_t>& ht = haplotypes.back();
-                    for(index_t h = 0; h < ht.alts.size(); h++) {
-                        ht.alts[h] = to_alti[ht.alts[h]];
+        if(useHaplotype) {
+            // Check if it hits the end of file, and this routine is needed for backward compatibility
+            if(in7.peek() != std::ifstream::traits_type::eof()) {
+                index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
+                if(numHaplotypes > 0) {
+                    haplotypes.resizeExact(numHaplotypes);
+                    haplotypes.clear();
+                    while(!in7.eof()) {
+                        haplotypes.expand();
+                        haplotypes.back().read(in7, this->toBe());
+                        Haplotype<index_t>& ht = haplotypes.back();
+                        for(index_t h = 0; h < ht.alts.size(); h++) {
+                            ht.alts[h] = to_alti[ht.alts[h]];
+                        }
+                        if(haplotypes.size() == numHaplotypes) break;
                     }
-                    if(haplotypes.size() == numHaplotypes) break;
                 }
             }
         }
@@ -819,20 +822,22 @@ public:
                 }
             }
         }
-        EList<index_t>& haplotype_maxrights = altdb->haplotype_maxrights();
-        haplotype_maxrights.resizeExact(haplotypes.size());
-        for(index_t h = 0; h < haplotypes.size(); h++) {
-            Haplotype<index_t>& ht = haplotypes[h];
-            for(index_t h2 = 0; h2 < ht.alts.size(); h2++) {
-                ht.alts[h2] = to_alti[ht.alts[h2]];
-            }
-            if(h == 0) {
-                haplotype_maxrights[h] = ht.right;
-            } else {
-                haplotype_maxrights[h] = std::max<index_t>(haplotype_maxrights[h - 1], ht.right);
+        
+        if(useHaplotype) {
+            EList<index_t>& haplotype_maxrights = altdb->haplotype_maxrights();
+            haplotype_maxrights.resizeExact(haplotypes.size());
+            for(index_t h = 0; h < haplotypes.size(); h++) {
+                Haplotype<index_t>& ht = haplotypes[h];
+                for(index_t h2 = 0; h2 < ht.alts.size(); h2++) {
+                    ht.alts[h2] = to_alti[ht.alts[h2]];
+                }
+                if(h == 0) {
+                    haplotype_maxrights[h] = ht.right;
+                } else {
+                    haplotype_maxrights[h] = std::max<index_t>(haplotype_maxrights[h - 1], ht.right);
+                }
             }
         }
-        
         
         assert(repOk());
 	}

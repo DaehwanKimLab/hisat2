@@ -24,6 +24,7 @@ import os, sys, subprocess, re
 import inspect
 import glob
 from argparse import ArgumentParser, FileType
+from hisatgenotype_modules import typing_common, Gene_typing
 
 
 """
@@ -44,15 +45,146 @@ def create_map(seq):
 
 """
 """
-def reverse_complement(seq):
-    comp_table = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
-    rc_seq = ""
-    for s in reversed(seq):
-        if s in comp_table:
-            rc_seq += comp_table[s]
+def create_consensus_seq(seqs,
+                         seq_len,
+                         min_var_freq,
+                         remove_empty = True):
+    consensus_freq = [[0, 0, 0, 0, 0] for i in range(seq_len)]
+    for i in range(len(seqs)):                
+        seq = seqs[i]
+        if len(seq) != seq_len:
+            continue                    
+        for j in range(seq_len):
+            nt = seq[j]
+            assert nt in "ACGT.E"
+            if nt == 'A':
+                consensus_freq[j][0] += 1
+            elif nt == 'C':
+                consensus_freq[j][1] += 1
+            elif nt == 'G':
+                consensus_freq[j][2] += 1
+            elif nt == 'T':
+                consensus_freq[j][3] += 1
+            else:
+                assert nt in ".E"
+                consensus_freq[j][4] += 1
+
+    for j in range(len(consensus_freq)):
+        for k in range(len(consensus_freq[j])):
+            consensus_freq[j][k] /= float(len(seqs))
+            consensus_freq[j][k] *= 100.0
+
+    consensus_seq = ""
+    has_empty = False
+    for c in range(len(consensus_freq)):
+        freq = consensus_freq[c]
+        A, C, G, T, E = freq
+        # No alleles have bases at this particular location
+        if E >= 100.0:
+            has_empty = True
+            consensus_seq += 'E'
+            continue
+        if E >= 100.0 - min_var_freq:
+            idx = 4
         else:
-            rc_seq += s
-    return rc_seq
+            idx = freq.index(max(freq[:4]))
+        assert idx < 5
+        consensus_seq += "ACGT."[idx]
+    consensus_seq = ''.join(consensus_seq)
+
+    # Remove dots (deletions)
+    skip_pos = set()
+    if has_empty and remove_empty:
+        for seq_i in range(len(seqs)):
+            seqs[seq_i] = list(seqs[seq_i])
+        for i in range(len(consensus_seq)):
+            if consensus_seq[i] != 'E':
+                continue
+            skip_pos.add(i)
+            for seq_i in range(len(seqs)):
+                if i >= len(seqs[seq_i]):
+                    continue
+                seqs[seq_i][i] = 'E'
+        for seq_i in range(len(seqs)):
+            seqs[seq_i] = ''.join(seqs[seq_i])
+            seqs[seq_i] = seqs[seq_i].replace('E', '')
+        consensus_seq = consensus_seq.replace('E', '')
+
+    # Convert a list form of consensus_freq to a dictionary form
+    temp_freq = []
+    for j in range(len(consensus_freq)):
+        if j in skip_pos:
+            continue
+        freq_dic = {}
+        for k in range(len(consensus_freq[j])):
+            freq = consensus_freq[j][k]
+            if freq <= 0.0:
+                continue
+            nt = "ACGT."[k]                    
+            freq_dic[nt] = freq
+        temp_freq.append(freq_dic)
+    consensus_freq = temp_freq
+
+    assert len(consensus_seq) == len(consensus_freq)                
+    return consensus_seq, consensus_freq
+
+
+
+"""
+Left-shift deletions if poissble
+"""
+def leftshift_deletions(backbone_seq, seq, debug = False):
+    if len(seq) != len(backbone_seq):
+        return seq
+    seq = list(seq)
+    seq_len = len(seq)
+    bp_i = 0
+    # Skip the first deletion
+    while bp_i < seq_len:
+        if seq[bp_i] in "ACGT":
+            break
+        bp_i += 1
+
+    while bp_i < seq_len:
+        bp = seq[bp_i]
+        if bp != '.':
+            bp_i += 1
+            continue
+        bp_j = bp_i + 1
+        while bp_j < seq_len:
+            bp2 = seq[bp_j]
+            if bp2 != '.':
+                break
+            else:
+                bp_j += 1
+
+        if bp_j >= seq_len:
+            bp_i = bp_j
+            break
+
+        if debug:
+            print >> sys.stderr, bp_i, bp_j, backbone_seq[bp_i-10:bp_i], backbone_seq[bp_i:bp_j], backbone_seq[bp_j:bp_j+10]
+            print >> sys.stderr, bp_i, bp_j, ''.join(seq[bp_i-10:bp_i]), ''.join(seq[bp_i:bp_j]), ''.join(seq[bp_j:bp_j+10])
+        prev_i, prev_j = bp_i, bp_j
+
+        while bp_i > 0 and seq[bp_i-1] in "ACGT" and backbone_seq[bp_j-1] in "ACGT":
+            if seq[bp_i-1] != backbone_seq[bp_j-1]:
+                break
+            seq[bp_j-1] = seq[bp_i-1]
+            seq[bp_i-1] = '.'
+            bp_i -= 1
+            bp_j -= 1
+        bp_i = bp_j
+        while bp_i < seq_len:
+            if seq[bp_i] in "ACGT":
+                break
+            bp_i += 1
+
+        # DK - debugging purposes
+        if debug:
+            print prev_i, prev_j, ''.join(seq[prev_i-10:prev_i]), ''.join(seq[prev_i:prev_j]), ''.join(seq[prev_j:prev_j+10])
+
+    return ''.join(seq)
 
 
 """
@@ -89,9 +221,16 @@ def extract_vars(base_fname,
     # Check HLA genes
     gene_names = []
     if base_fname == "hla":
+        # Clone a git repository, IMGTHLA
+        if not os.path.exists("IMGTHLA"):
+            Gene_typing.clone_IMGTHLA_database()
         fasta_dname = "IMGTHLA/fasta"
         fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
     else:
+        # Clone a git repository, hisatgenotype_db
+        if not os.path.exists("hisatgenotype_db"):
+            typing_common.clone_hisatgenotype_database()
+
         assert base_fname in ["codis", "cyp"]
         fasta_dname = "hisatgenotype_db/%s/fasta" % base_fname.upper()
         fasta_fnames = glob.glob("%s/*.fasta" % fasta_dname)
@@ -196,7 +335,7 @@ def extract_vars(base_fname,
                 right_ext_seq += line
 
             if strand == '-':
-                left_ext_seq, right_ext_seq = reverse_complement(right_ext_seq), reverse_complement(left_ext_seq)
+                left_ext_seq, right_ext_seq = typing_common.reverse_complement(right_ext_seq), typing_common.reverse_complement(left_ext_seq)
             left_ext_seq_dic[gene], right_ext_seq_dic[gene] = left_ext_seq, right_ext_seq
             
 
@@ -360,89 +499,6 @@ def extract_vars(base_fname,
                     max_seq_count = tmp_seq_count
             return seq_len
 
-        def create_consensus_seq(seqs,
-                                 seq_len,
-                                 min_var_freq,
-                                 remove_empty = True):
-            consensus_freq = [[0, 0, 0, 0, 0] for i in range(seq_len)]
-            for i in range(len(seqs)):                
-                seq = seqs[i]
-                if len(seq) != seq_len:
-                    continue                    
-                for j in range(seq_len):
-                    nt = seq[j]
-                    assert nt in "ACGT.E"
-                    if nt == 'A':
-                        consensus_freq[j][0] += 1
-                    elif nt == 'C':
-                        consensus_freq[j][1] += 1
-                    elif nt == 'G':
-                        consensus_freq[j][2] += 1
-                    elif nt == 'T':
-                        consensus_freq[j][3] += 1
-                    else:
-                        assert nt in ".E"
-                        consensus_freq[j][4] += 1
-
-            for j in range(len(consensus_freq)):
-                for k in range(len(consensus_freq[j])):
-                    consensus_freq[j][k] /= float(len(seqs))
-                    consensus_freq[j][k] *= 100.0
-
-            consensus_seq = ""
-            has_empty = False
-            for c in range(len(consensus_freq)):
-                freq = consensus_freq[c]
-                A, C, G, T, E = freq
-                # No alleles have bases at this particular location
-                if E >= 100.0:
-                    has_empty = True
-                    consensus_seq += 'E'
-                    continue
-                if E >= 100.0 - min_var_freq:
-                    idx = 4
-                else:
-                    idx = freq.index(max(freq[:4]))
-                assert idx < 5
-                consensus_seq += "ACGT."[idx]
-            consensus_seq = ''.join(consensus_seq)
-
-            # Remove dots (deletions)
-            skip_pos = set()
-            if has_empty and remove_empty:
-                for seq_i in range(len(seqs)):
-                    seqs[seq_i] = list(seqs[seq_i])
-                for i in range(len(consensus_seq)):
-                    if consensus_seq[i] != 'E':
-                        continue
-                    skip_pos.add(i)
-                    for seq_i in range(len(seqs)):
-                        if i >= len(seqs[seq_i]):
-                            continue
-                        seqs[seq_i][i] = 'E'
-                for seq_i in range(len(seqs)):
-                    seqs[seq_i] = ''.join(seqs[seq_i])
-                    seqs[seq_i] = seqs[seq_i].replace('E', '')
-                consensus_seq = consensus_seq.replace('E', '')
-
-            # Convert a list form of consensus_freq to a dictionary form
-            temp_freq = []
-            for j in range(len(consensus_freq)):
-                if j in skip_pos:
-                    continue
-                freq_dic = {}
-                for k in range(len(consensus_freq[j])):
-                    freq = consensus_freq[j][k]
-                    if freq <= 0.0:
-                        continue
-                    nt = "ACGT."[k]                    
-                    freq_dic[nt] = freq
-                temp_freq.append(freq_dic)
-            consensus_freq = temp_freq
-
-            assert len(consensus_seq) == len(consensus_freq)                
-            return consensus_seq, consensus_freq
-
         seq_len = find_seq_len(seqs)        
         backbone_name = "%s*BACKBONE" % gene
         backbone_seq, backbone_freq = create_consensus_seq(seqs,
@@ -541,67 +597,7 @@ def extract_vars(base_fname,
                 
         if min_var_freq <= 0.0:
             assert '.' not in backbone_seq and 'E' not in backbone_seq
-
-        # Left-shift deletions if poissble
-        def leftshift_deletions(backbone_seq, seq, debug = False):
-            if len(seq) != len(backbone_seq):
-                return seq
-            seq = list(seq)
-            seq_len = len(seq)
-            bp_i = 0
-            # Skip the first deletion
-            while bp_i < seq_len:
-                if seq[bp_i] in "ACGT":
-                    break
-                bp_i += 1
-
-            while bp_i < seq_len:
-                bp = seq[bp_i]
-                if bp != '.':
-                    bp_i += 1
-                    continue
-                bp_j = bp_i + 1
-                while bp_j < seq_len:
-                    bp2 = seq[bp_j]
-                    if bp2 != '.':
-                        break
-                    else:
-                        bp_j += 1
-
-                if bp_j >= seq_len:
-                    bp_i = bp_j
-                    break
-                
-                # DK - debugging purposes
-                if debug:
-                    print bp_i, bp_j, backbone_seq[bp_i-10:bp_i], backbone_seq[bp_i:bp_j], backbone_seq[bp_j:bp_j+10]
-                    print bp_i, bp_j, ''.join(seq[bp_i-10:bp_i]), ''.join(seq[bp_i:bp_j]), ''.join(seq[bp_j:bp_j+10])
-                prev_i, prev_j = bp_i, bp_j
-
-                while bp_i > 0 and seq[bp_i-1] in "ACGT" and backbone_seq[bp_j-1] in "ACGT":
-                    if seq[bp_i-1] != backbone_seq[bp_j-1]:
-                        break
-                    seq[bp_j-1] = seq[bp_i-1]
-                    seq[bp_i-1] = '.'
-                    bp_i -= 1
-                    bp_j -= 1
-                bp_i = bp_j
-                while bp_i < seq_len:
-                    if seq[bp_i] in "ACGT":
-                        break
-                    bp_i += 1
-
-                # DK - debugging purposes
-                if debug:
-                    print prev_i, prev_j, ''.join(seq[prev_i-10:prev_i]), ''.join(seq[prev_i:prev_j]), ''.join(seq[prev_j:prev_j+10])
-                  
-            return ''.join(seq)
-
-        if leftshift:
-            for seq_i in range(len(seqs)):
-                seqs[seq_i] = leftshift_deletions(backbone_seq, seqs[seq_i])
-            backbone_seq, backbone_freq = create_consensus_seq(seqs, seq_len, min_var_freq, True)
-
+        
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
             # Reverse exons
@@ -616,24 +612,13 @@ def extract_vars(base_fname,
                 gene_exons[gene] = exons
 
             for i in range(len(seqs)):
-                seqs[i] = reverse_complement(seqs[i])
-            backbone_seq = reverse_complement(backbone_seq)
-            backbone_freq = backbone_freq[::-1]
-            for i in range(len(backbone_freq)):
-                freq_dic = {}
-                for nt, freq in backbone_freq[i].items():
-                    if nt == 'A':
-                        freq_dic['T'] = freq
-                    elif nt == 'C':
-                        freq_dic['G'] = freq
-                    elif nt == 'G':
-                        freq_dic['C'] = freq
-                    elif nt == 'T':
-                        freq_dic['A'] = freq
-                    else:
-                        assert nt == '.'
-                        freq_dic['.'] = freq
-                backbone_freq[i] = freq_dic
+                seqs[i] = typing_common.reverse_complement(seqs[i])
+            backbone_seq, backbone_freq = create_consensus_seq(seqs, seq_len, min_var_freq, True)
+
+        if leftshift:
+            for seq_i in range(len(seqs)):
+                seqs[seq_i] = leftshift_deletions(backbone_seq, seqs[seq_i])
+            backbone_seq, backbone_freq = create_consensus_seq(seqs, seq_len, min_var_freq, True)
 
         print >> sys.stderr, "%s: number of HLA alleles is %d." % (gene, len(names))
 
@@ -952,7 +937,7 @@ def extract_vars(base_fname,
                     exon_seq_ += seq_[exon_left:exon_right+1]
                 exon_seq_ = exon_seq_.replace('.', '')
                 if gene_strand[gene] == '-':
-                    exon_seq_ = reverse_complement(exon_seq_)
+                    exon_seq_ = typing_common.reverse_complement(exon_seq_)
 
                 cmp_exon_seq_, allele_name_ = "", ""
                 for line in open("IMGTHLA/fasta/%s_nuc.fasta" % gene):
@@ -975,10 +960,10 @@ def extract_vars(base_fname,
                 if exon_seq_ != cmp_exon_seq_:
                     print >> sys.stderr, "Waring: exonic sequences do not match (%s)" % gene
         else:
-            exon_str = "%d-%d" % (left, right)
+            exon_str = "%d-%d" % (left, right - 1)
 
         print >> ref_file, "%s\t%s\t%d\t%d\t%d\t%s\t%s" % \
-            (backbone_name, chr, left, right, len(backbone_seq.replace('.', '')), exon_str, gene_strand[gene])
+            (backbone_name, chr, left, right - 1, len(backbone_seq.replace('.', '')), exon_str, gene_strand[gene])
 
         # Write
         #       (1) variants w.r.t the backbone sequences into a SNP file

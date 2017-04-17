@@ -91,13 +91,13 @@ def compare(hisatgenotype_fname, omixon_fname):
                         break
                     
             # DK - for debugging purposes
-            """
-            if gene in ["A", "B", "C"] and num_match < 2:
+            # """
+            if gene in ["A", "B", "C", "DQA1", "DQB1", "DRB1"] and num_match < 2:
                 print sample
                 print "\t", omixon_gene
                 print "\t", hisat_gene
                 # sys.exit(1)
-            """
+            # """
                 
             assert num_match < len(count)
             count[num_match] += 1
