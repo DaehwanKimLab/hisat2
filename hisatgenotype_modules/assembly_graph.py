@@ -199,6 +199,12 @@ class Node:
     
     # Combine two nodes with considering deletions
     def combine_with(self, other):
+
+        # DK - debugging purposes
+        if self.left > other.left:
+            self.print_info()
+            other.print_info()
+        
         assert self.left <= other.left
 
         # Merge two sequences
@@ -1180,8 +1186,12 @@ class Graph:
                 exclude_ids = set()
                 new_nodes = {}
                 for node_id1, node_id2, node_id3 in merge_list:
-                    node = deepcopy(self.nodes2[node_id1])
-                    node2 = self.nodes2[node_id2]
+                    if self.nodes2[node_id1].left <= self.nodes2[node_id2].left:
+                        node = deepcopy(self.nodes2[node_id1])
+                        node2 = self.nodes2[node_id2]
+                    else:                        
+                        node = deepcopy(self.nodes2[node_id2])
+                        node2 = self.nodes2[node_id1]
                     node.combine_with(node2)
                     node.id = node_id3
                     new_nodes[node_id3] = node
