@@ -1120,7 +1120,7 @@ class Graph:
                     num_ids = sorted(list(num_ids))
                     num_id = num_ids[0]
                     node_id = "(%d-%d)%s" % (best_i, i, num_to_id[num_id])
-                    copy_list.append([node_id])
+                    remove_list.append([node_id])
 
                 classes = [classes[1-i]]
                          
@@ -1178,10 +1178,10 @@ class Graph:
 
             for c in range(len(classes)):
                 classes[c][2] = classes[c][1] | get_mate_num_ids(classes[c][1])
-                
+
             equiv_list[best_i] = classes            
             equiv_list = equiv_list[:best_i2] + equiv_list[best_i2+1:]
-
+            
             if known_alleles:
                 exclude_ids = set()
                 new_nodes = {}
