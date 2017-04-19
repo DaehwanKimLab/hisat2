@@ -341,6 +341,8 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                                Var_list,
                                Alts,
                                var_id,
+                               del_len,
+                               other_del_len,
                                left,
                                alt_list,
                                var_j,
@@ -372,7 +374,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                     Alts[alts] = [[var_id]]
                 else:
                     Alts[alts].append([var_id])
-                
+
         var_type, var_pos, var_data = Vars[var_id]
         if left: # Look in left direction
             if var_j < 0:
@@ -382,8 +384,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
             if var_id != j_id and j_pos < var_pos + del_len:
                 # Check bases between SNPs
                 while latest_pos > j_pos:
-                    if debug: print latest_pos - 1, ref_seq[latest_pos - 1], latest_pos - 1 - del_len, ref_seq[latest_pos - 1 - del_len]
-                    if ref_seq[latest_pos - 1] != ref_seq[latest_pos - 1 - del_len]:
+                    if ref_seq[latest_pos - 1] != ref_seq[latest_pos - 1 - del_len + other_del_len]:
                         break
                     latest_pos -= 1
                     add_alt(Alts, alt_list, var_id, str(latest_pos))
@@ -392,11 +393,12 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                 if j_pos == latest_pos - 1:
                     j_type, _, j_data = Vars[j_id]
                     if j_type == "single":
-                        if debug: print Vars[j_id]
-                        off = var_pos + del_len - j_pos
-                        if debug: print var_pos - off, ref_seq[var_pos - off]
-                        if debug: print j_pos, ref_seq[j_pos]
-                        if j_data == ref_seq[var_pos - off]:
+                        j_cmp_pos = j_pos - del_len + other_del_len
+                        if debug:
+                            print Vars[j_id]
+                            print j_pos, ref_seq[j_pos]
+                            print j_cmp_pos, ref_seq[j_cmp_pos]
+                        if j_data == ref_seq[j_cmp_pos]:
                             add_alt(Alts, alt_list, var_id, j_id)
                             latest_pos = j_pos
                     elif j_type == "deletion":
@@ -411,6 +413,8 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                                    Var_list,
                                    Alts,
                                    var_id,
+                                   del_len,
+                                   other_del_len,
                                    left,
                                    alt_list,
                                    var_j - 1,
@@ -429,6 +433,8 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                                        Var_list,
                                        Alts,
                                        var_id,
+                                       del_len,
+                                       other_del_len + j_del_len,
                                        left,
                                        alt_list2,
                                        var_j - 1,
@@ -448,43 +454,50 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
             if var_id != j_id and j_pos >= var_pos:
                 # Check bases between SNPs
                 while latest_pos < j_pos:
-                    if ref_seq[latest_pos + 1] != ref_seq[var_pos + del_len - 1 - (latest_pos - var_pos)]:
+                    if ref_seq[latest_pos + 1] != ref_seq[latest_pos + 1 + del_len - other_del_len]:
                         break
+
+                    # DK - debugging purposes
+                    if debug:
+                        pos2_ = latest_pos + 1 + del_len - other_del_len
+                        print "DK: latest_pos:", latest_pos + 1, pos2_
+                        print "DK: var_pos:", var_pos, "del_len:", del_len, "other_del_len:", other_del_len
+                        print "DK:", ref_seq[latest_pos + 1], ref_seq[pos2_]
+                    
                     latest_pos += 1
-                    add_alt(Alts, alt_list, var_id, str(latest_pos))                   
+                    add_alt(Alts, alt_list, var_id, str(latest_pos))
+
+                # DK - debugging purposes
+                if debug:
+                    print "DK:", j_id, j_pos
 
                 if latest_pos + 1 < j_pos:
                     return
-                if j_pos == latest_pos + 1:                    
-                    j_type, _, j_data = Vars[j_id]
-                    if j_type == "single":
-                        if debug: print Vars[j_id]
-                        off = j_pos - var_pos
-                        if debug: print var_pos + off, ref_seq[var_pos + off]
-                        if debug: print var_pos + del_len + off, ref_seq[var_pos + del_len + off]
+                j_type, _, j_data = Vars[j_id]
+                if j_type == "single" and j_pos == latest_pos + 1:
+                    j_cmp_pos = j_pos + del_len - other_del_len
+                    if debug:
+                        print Vars[j_id]
+                        print j_pos, ref_seq[j_pos]
+                        print j_cmp_pos, ref_seq[j_cmp_pos]
 
-                        # DK - debugging purposes
-                        if var_pos + del_len + off >= len(ref_seq):
-                            print >> sys.stderr, var_id, var
-                            print >> sys.stderr, "var_pos: %d, del_len: %d, off: %d" % (var_pos, del_len, off)
-                            print >> sys.stderr, "ref_seq: %d, %d" % (len(ref_seq), var_pos + del_len + off)
-                            sys.exit(1)
-                        
-                        if j_data == ref_seq[var_pos + del_len + off]:
-                            add_alt(Alts, alt_list, var_id, j_id)
-                            latest_pos = j_pos
-                    elif j_type == "deletion":                        
-                        j_del_len = int(j_data)
-                        if j_pos + j_del_len < var_pos + del_len:
-                            alt_list2 = alt_list[:] + [j_id]
-                            latest_pos2 = j_pos + j_del_len - 1
-                            alt_del = [alt_list2, latest_pos2]
+                    if j_data == ref_seq[j_cmp_pos]:
+                        add_alt(Alts, alt_list, var_id, j_id)
+                        latest_pos = j_pos
+                elif j_type == "deletion" and j_pos == latest_pos + 1:                        
+                    j_del_len = int(j_data)
+                    if j_pos + j_del_len < var_pos + del_len:
+                        alt_list2 = alt_list[:] + [j_id]
+                        latest_pos2 = j_pos + j_del_len - 1
+                        alt_del = [alt_list2, latest_pos2]
 
             get_alternatives_recur(ref_seq,
                                    Vars,
                                    Var_list,
                                    Alts,
                                    var_id,
+                                   del_len,
+                                   other_del_len,
                                    left,
                                    alt_list,
                                    var_j + 1,
@@ -503,6 +516,8 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                                        Var_list,
                                        Alts,
                                        var_id,
+                                       del_len,
+                                       other_del_len + j_del_len,
                                        left,
                                        alt_list2,
                                        var_j + 1,
@@ -523,7 +538,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
         if var_pos + del_len >= len(ref_seq):
             assert var_pos + del_len == len(ref_seq)
             continue
-        debug = (var_id == "hv1a")
+        debug = (var_id == "hv2a")
         if debug:
             print Vars[var_id]
 
@@ -536,6 +551,8 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                                    Var_list,
                                    Alts_left,
                                    var_id,
+                                   del_len,
+                                   0,
                                    True, # left
                                    alt_list,
                                    var_j,
@@ -550,6 +567,8 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                                Var_list,
                                Alts_right,
                                var_id,
+                               del_len,
+                               0,
                                False, # right
                                alt_list,
                                var_j,
@@ -560,17 +579,76 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
             print "DK :-)"
             sys.exit(1)
 
-    def debug_print_alts(Alts, dir):
+    def assert_print_alts(Alts, dir):
+        def get_seq_pos(alt_list):
+            seq = ""
+            seq_left, seq_right = -1, -1
+            for i in range(len(alt_list)):
+                alt = alt_list[i]
+                if alt.isdigit():
+                    assert i + 1 == len(alt_list)
+                    if dir == "left":
+                        if i == 0:
+                            seq = alt
+                            break
+
+                        alt = int(alt)
+                        seq = ref_seq[seq_left-alt+1:seq_left+1] + seq
+                        seq_left -= alt
+                    else:
+                        alt = int(alt)
+                        seq += ref_seq[seq_right:seq_right+alt]
+                        seq_right += alt
+                    break
+
+                var_type, var_pos, var_data = Vars[alt]
+                if dir == "left" and var_type == "deletion":
+                    var_pos = var_pos + int(var_data) - 1
+
+                if i == 0:
+                    if dir == "left":
+                        seq_left, seq_right = var_pos, var_pos
+                    else:
+                        seq_left, seq_right = var_pos, var_pos
+                       
+                if dir == "left":
+                    assert seq_left >= var_pos
+                    if i > 0:
+                        seq = ref_seq[var_pos+1:seq_left+1] + seq
+                    if var_type == "single":
+                        seq = var_data + seq
+                        seq_left = var_pos - 1
+                    elif var_type == "deletion":
+                        seq_left = var_pos - int(var_data)
+                    else:
+                        assert var_type == "insertion"
+                        seq = var_data + seq
+                else:
+                    assert seq_right <= var_pos
+                    if i > 0:
+                        seq += ref_seq[seq_right:var_pos]
+                    if var_type == "single":
+                        seq += var_data
+                        seq_right = var_pos + 1
+                    elif var_type == "deletion":
+                        seq_right = var_pos + int(var_data)
+                    else:
+                        assert var_type == "insertion"
+                        seq += var_data
+                        
+            return seq, seq_left, seq_right
+        
         for alt_list1, alt_list2 in Alts.items():
-            print "\t", dir, ":", alt_list1, alt_list2
+            if verbose >= 2: print >> sys.stderr, "\t", dir, ":", alt_list1, alt_list2
             out_str = "\t\t"
-            alt_list1 = alt_list1.split('-')
+            alt_list1 = alt_list1.split('-')            
             for i in range(len(alt_list1)):
                 alt = alt_list1[i]
                 var_type, var_pos, var_data = Vars[alt]
                 out_str += ("%s-%d-%s" % (var_type, var_pos, var_data))
                 if i + 1 < len(alt_list1):
                     out_str += " "
+            
             for i in range(len(alt_list2)):
                 alt_list3 = alt_list2[i]
                 out_str += "\t["
@@ -584,9 +662,51 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                     if j + 1 < len(alt_list3):
                         out_str += ", "
                 out_str += "]"
-            print out_str
-    if verbose >= 2: debug_print_alts(Alts_left, "left")
-    if verbose >= 2: debug_print_alts(Alts_right, "right")
+            if verbose >= 2: print >> sys.stderr, out_str
+
+            for i in range(len(alt_list2)):
+                alt_list3 = alt_list2[i]
+                seq1, seq1_left, seq1_right = get_seq_pos(alt_list1)
+                seq2, seq2_left, seq2_right = get_seq_pos(alt_list3)
+                if seq1.isdigit():
+                    assert not seq2.isdigit()
+                    seq1_left, seq1_right = seq2_right - int(seq1), seq2_right
+                    seq1 = ref_seq[seq1_left+1:seq1_right+1]
+                elif seq2.isdigit():
+                    seq2_left, seq2_right = seq1_right - int(seq2), seq1_right
+                    seq2 = ref_seq[seq2_left+1:seq2_right+1]
+                    
+                if dir == "left":
+                    if seq1_right < seq2_right:
+                        seq1 += ref_seq[seq1_right+1:seq2_right+1]
+                    elif seq2_right < seq1_right:
+                        seq2 += ref_seq[seq2_right+1:seq1_right+1]
+                else:
+                    if seq1_left < seq2_left:
+                        seq2 = ref_seq[seq1_left:seq2_left] + seq2
+                    elif seq2_left < seq1_left:
+                        seq1 = ref_seq[seq2_left:seq1_left] + seq1
+                seq1_len, seq2_len = len(seq1), len(seq2)
+                if seq1_len != seq2_len:
+                    len_diff = abs(seq1_len - seq2_len)
+                    if dir == "left":
+                        if seq1_len < seq2_len:
+                            seq1 = ref_seq[seq1_left-len_diff+1:seq1_left+1] + seq1
+                        else:
+                            seq2 = ref_seq[seq2_left-len_diff+1:seq2_left+1] + seq2
+                    else:
+                        if seq1_len < seq2_len:
+                            seq1 += ref_seq[seq1_right:seq1_right+len_diff]
+                        else:
+                            seq2 += ref_seq[seq2_right:seq2_right+len_diff]
+                if verbose >= 3:
+                    print >> sys.stderr, "\t\t", alt_list1, alt_list3
+                    print >> sys.stderr, "\t\t\t", seq1, seq1_left, seq1_right
+                    print >> sys.stderr, "\t\t\t", seq2, seq2_left, seq2_right
+                assert seq1 == seq2            
+            
+    assert_print_alts(Alts_left, "left")
+    assert_print_alts(Alts_right, "right")
 
     return Alts_left, Alts_right
 
@@ -2968,7 +3088,9 @@ if __name__ == '__main__':
     if args.debug != "":
         for item in args.debug.split(','):
             if ':' in item:
-                key, value = item.split(':')
+                fields = item.split(':')
+                assert len(fields) >= 2
+                key, value = fields[0], ':'.join(fields[1:])
                 debug[key] = value
             else:
                 debug[item] = 1
