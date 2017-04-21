@@ -375,6 +375,9 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                 else:
                     Alts[alts].append([var_id])
 
+        if del_len == other_del_len:
+            return
+                
         var_type, var_pos, var_data = Vars[var_id]
         if left: # Look in left direction
             if var_j < 0:
@@ -382,31 +385,31 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
             j_pos, j_id = Var_list[var_j]
             alt_del = []
             if var_id != j_id and j_pos < var_pos + del_len:
+                prev_latest_pos = latest_pos
                 # Check bases between SNPs
-                while latest_pos > j_pos:
+                while latest_pos - max(0, del_len - other_del_len) > 0:
                     if ref_seq[latest_pos - 1] != ref_seq[latest_pos - 1 - del_len + other_del_len]:
                         break
                     latest_pos -= 1
                     add_alt(Alts, alt_list, var_id, str(latest_pos))
                 if latest_pos - 1 > j_pos:
                     return
-                if j_pos == latest_pos - 1:
-                    j_type, _, j_data = Vars[j_id]
-                    if j_type == "single":
-                        j_cmp_pos = j_pos - del_len + other_del_len
-                        if debug:
-                            print Vars[j_id]
-                            print j_pos, ref_seq[j_pos]
-                            print j_cmp_pos, ref_seq[j_cmp_pos]
-                        if j_data == ref_seq[j_cmp_pos]:
-                            add_alt(Alts, alt_list, var_id, j_id)
-                            latest_pos = j_pos
-                    elif j_type == "deletion":
-                        j_del_len = int(j_data)
-                        if var_pos < j_pos and var_pos + del_len >= j_pos + j_del_len:
-                            alt_list2 = alt_list[:] + [j_id]
-                            latest_pos2 = j_pos
-                            alt_del = [alt_list2, latest_pos2]
+                j_type, _, j_data = Vars[j_id]
+                if j_type == "deletion":
+                    j_del_len = int(j_data)
+                if j_type == "single" and j_pos == latest_pos - 1:
+                    j_cmp_pos = j_pos - del_len + other_del_len
+                    if debug:
+                        print Vars[j_id]
+                        print j_pos, ref_seq[j_pos]
+                        print j_cmp_pos, ref_seq[j_cmp_pos]
+                    if j_data == ref_seq[j_cmp_pos]:
+                        add_alt(Alts, alt_list, var_id, j_id)
+                        latest_pos = j_pos
+                elif j_type == "deletion" and j_pos + j_del_len - 1 == prev_latest_pos - 1:
+                    alt_list2 = alt_list[:] + [j_id]
+                    latest_pos2 = j_pos
+                    alt_del = [alt_list2, latest_pos2]
                 
             get_alternatives_recur(ref_seq,
                                    Vars,
@@ -442,7 +445,6 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                                        debug)
                 # Remove this Deletion if not supported by additional bases?
                 assert alt_idx < len(Alts[var_id])
-                # DK - for debugging purposes
                 if Alts[var_id][alt_idx][-1] == j_id:
                     Alts[var_id] = Alts[var_id][:alt_idx] + Alts[var_id][alt_idx+1:]
               
@@ -453,7 +455,8 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
             alt_del = []
             if var_id != j_id and j_pos >= var_pos:
                 # Check bases between SNPs
-                while latest_pos < j_pos:
+                prev_latest_pos = latest_pos
+                while latest_pos + 1 + max(0, del_len - other_del_len) < len(ref_seq):
                     if ref_seq[latest_pos + 1] != ref_seq[latest_pos + 1 + del_len - other_del_len]:
                         break
 
@@ -467,12 +470,9 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                     latest_pos += 1
                     add_alt(Alts, alt_list, var_id, str(latest_pos))
 
-                # DK - debugging purposes
-                if debug:
-                    print "DK:", j_id, j_pos
-
                 if latest_pos + 1 < j_pos:
-                    return
+                    return               
+                
                 j_type, _, j_data = Vars[j_id]
                 if j_type == "single" and j_pos == latest_pos + 1:
                     j_cmp_pos = j_pos + del_len - other_del_len
@@ -484,12 +484,11 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                     if j_data == ref_seq[j_cmp_pos]:
                         add_alt(Alts, alt_list, var_id, j_id)
                         latest_pos = j_pos
-                elif j_type == "deletion" and j_pos == latest_pos + 1:                        
+                elif j_type == "deletion" and j_pos == prev_latest_pos + 1:                        
                     j_del_len = int(j_data)
-                    if j_pos + j_del_len < var_pos + del_len:
-                        alt_list2 = alt_list[:] + [j_id]
-                        latest_pos2 = j_pos + j_del_len - 1
-                        alt_del = [alt_list2, latest_pos2]
+                    alt_list2 = alt_list[:] + [j_id]
+                    latest_pos2 = j_pos + j_del_len - 1
+                    alt_del = [alt_list2, latest_pos2]
 
             get_alternatives_recur(ref_seq,
                                    Vars,
@@ -523,6 +522,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
                                        var_j + 1,
                                        latest_pos2,
                                        debug)
+
                 # Remove this Deletion if not supported by additional bases?
                 assert alt_idx < len(Alts[var_id])
                 if Alts[var_id][alt_idx][-1] == j_id:
@@ -538,7 +538,7 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
         if var_pos + del_len >= len(ref_seq):
             assert var_pos + del_len == len(ref_seq)
             continue
-        debug = (var_id == "hv2a")
+        debug = (var_id == "hv454a")
         if debug:
             print Vars[var_id]
 
