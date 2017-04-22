@@ -538,7 +538,8 @@ class Graph:
             
     #
     # 
-    def guided_DeBruijn(self):
+    def guided_DeBruijn(self,
+                        print_msg = False):
         assert len(self.nodes) > 0
         k = 60 # k-mer
 
@@ -796,7 +797,7 @@ class Graph:
                     else:
                         consensus_seq[j][nt] += 1
 
-            print >> sys.stderr, i
+            if print_msg: print >> sys.stderr, i
             for v in range(len(curr_vertices)):
                 nt, k_m1_mer, predecessors, num_ids = curr_vertices[v]
                 kmer = k_m1_mer + nt
@@ -809,7 +810,7 @@ class Graph:
                     if len(consensus_seq[j]) >= 2:
                         kmer_seq += "\033[00m"
                     
-                print >> sys.stderr, "\t%d:" % v, kmer_seq, len(num_ids), predecessors, num_ids
+                if print_msg: print >> sys.stderr, "\t%d:" % v, kmer_seq, len(num_ids), predecessors, num_ids
                     
 
         # """
@@ -902,7 +903,7 @@ class Graph:
 
         # DK - debugging purposes
         for p in range(len(paths)):
-            print >> sys.stderr, "path:", p, paths[p]
+            if print_msg: print >> sys.stderr, "path:", p, paths[p]
 
         excl_num_ids = set() # exclusive num ids
         equiv_list = []
@@ -948,9 +949,9 @@ class Graph:
                 classes = equiv_list[i]
                 for j in range(len(classes)):
                     ids, num_ids, all_ids, alleles = classes[j]
-                    print >> sys.stderr, i, j, ids, len(num_ids), sorted(list(num_ids))[:20], alleles
+                    if print_msg: print >> sys.stderr, i, j, ids, len(num_ids), sorted(list(num_ids))[:20], alleles
 
-                print >> sys.stderr
+                if print_msg: print >> sys.stderr
             # """
 
             if known_alleles:
@@ -1010,9 +1011,10 @@ class Graph:
 
             # DK - debugging purposes
             # """
-            print >> sys.stderr, "best:", best_i, best_i2, best_stat, best_common_mat
-            print >> sys.stderr
-            print >> sys.stderr
+            if print_msg:
+                print >> sys.stderr, "best:", best_i, best_i2, best_stat, best_common_mat
+                print >> sys.stderr
+                print >> sys.stderr
             # """
 
             if known_alleles and best_stat < 0:
@@ -1028,7 +1030,7 @@ class Graph:
                         num_ids = sorted(list(num_ids))
 
                         # DK - debugging purposes
-                        print >> sys.stderr, i, j, num_ids
+                        if print_msg: print >> sys.stderr, i, j, num_ids
 
                         assert (num_ids) > 0
                         read_id = num_to_id[num_ids[0]]

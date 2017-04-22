@@ -715,7 +715,12 @@ def get_alternatives(ref_seq, Vars, Var_list, verbose):
 Identify ambigious differences that may account for other alleles,
   given a list of differences (cmp_list) between a read and a potential allele   
 """
-def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list, verbose):
+def identify_ambigious_diffs(Vars,
+                             Alts_left,
+                             Alts_right,
+                             cmp_list,
+                             verbose,
+                             debug = False):
     cmp_left, cmp_right = 0, len(cmp_list) - 1
 
     i = 0
@@ -789,6 +794,13 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list, verbose):
                                 print "\t", type, "id_str:", id_str, "=>", alts_id_str, "=>", back_alts, "left_pos:", left_pos, "alt_left_pos:", alt_left_pos
                             cmp_left = i + 1
                             break
+
+            # DK - debugging purposes
+            if debug:
+                print "DK: var_id:", var_id
+                print "DK: cmp_list:", cmp_list
+                print "DK: cmp_right:", cmp_right
+                # sys.exit(1)
     
             # Right direction
             if cmp_right + 1 == len(cmp_list):
@@ -807,6 +819,11 @@ def identify_ambigious_diffs(Vars, Alts_left, Alts_right, cmp_list, verbose):
                 last_type, last_pos, last_len = cmp_list[-1][:3]
                 assert last_type in ["match", "mismatch"]
                 right_pos = last_pos + last_len - 1 - total_del_len
+
+                # DK - debugging purposes
+                if debug:
+                    print "DK: id_str:", id_str
+                
                 if id_str in Alts_right:
                     orig_alts = id_str.split('-')
                     alts_list = Alts_right[id_str]
@@ -1871,11 +1888,12 @@ def typing(ex_path,
                                                                              Alts_left,
                                                                              Alts_right,
                                                                              cmp_list,
-                                                                             verbose)
+                                                                             verbose,
+                                                                             orig_read_id == "a45|L_441_89M8D11M_89|D|hv1,7|S|hv15") # debug?
 
                     # DK - debugging purposes
                     DK_debug = False
-                    if orig_read_id == "46|L_451_88M12D12M_88|D|hv2":
+                    if orig_read_id == "a46|L_451_88M12D12M_88|D|hv2":
                         DK_debug = True
                         print line
                         print cmp_list
