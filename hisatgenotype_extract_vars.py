@@ -207,32 +207,23 @@ def extract_vars(base_fname,
     if base_dname != "" and not os.path.exists(base_dname):
         os.mkdir(base_dname)
         base_fullpath_name = "%s/%s" % (base_dname, base_fname)
-
-    # Samples of HLA_MSA_file are found in
-    #    ftp://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/msf/
-    #    git clone https://github.com/jrob119/IMGTHLA.git
-
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
-    #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f IMGTHLA/fasta/A_gen.fasta
+    #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f hisatgenotype_db/HLA/fasta/A_gen.fasta
     ref_file = open(base_fullpath_name + ".ref", 'w')
     left_ext_seq_dic, right_ext_seq_dic = {}, {}
     genes, gene_strand = {}, {}
 
+    # Clone a git repository, hisatgenotype_db
+    if not os.path.exists("hisatgenotype_db"):
+        typing_common.clone_hisatgenotype_database()
+    fasta_dname = "hisatgenotype_db/%s/fasta" % base_fname.upper()
+
     # Check HLA genes
     gene_names = []
     if base_fname == "hla":
-        # Clone a git repository, IMGTHLA
-        if not os.path.exists("IMGTHLA"):
-            Gene_typing.clone_IMGTHLA_database()
-        fasta_dname = "IMGTHLA/fasta"
         fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
     else:
-        # Clone a git repository, hisatgenotype_db
-        if not os.path.exists("hisatgenotype_db"):
-            typing_common.clone_hisatgenotype_database()
-
         assert base_fname in ["codis", "cyp"]
-        fasta_dname = "hisatgenotype_db/%s/fasta" % base_fname.upper()
         fasta_fnames = glob.glob("%s/*.fasta" % fasta_dname)
     for gen_fname in fasta_fnames:
         gene_name = gen_fname.split('/')[-1].split('_')[0]
@@ -343,7 +334,7 @@ def extract_vars(base_fname,
     gene_exons = {}
     if base_fname == "hla":        
         skip = False
-        for line in open("IMGTHLA/hla.dat"):
+        for line in open("hisatgenotype_db/%s/hla.dat" % base_fname.upper()):
             if line.startswith("DE"):
                 allele_name = line.split()[1][:-1]
                 if allele_name.startswith("HLA-"):
@@ -469,7 +460,7 @@ def extract_vars(base_fname,
             return names, seqs
 
         if base_fname == "hla":
-            MSA_fname = "IMGTHLA/msf/%s_gen.msf" % gene
+            MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), gene)
         else:
             MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), gene)
             
@@ -510,7 +501,7 @@ def extract_vars(base_fname,
             seq_len = find_seq_len(seqs)
 
         if partial and base_fname == "hla":
-            partial_MSA_fname = "IMGTHLA/msf/%s_nuc.msf" % gene
+            partial_MSA_fname = "hisatgenotype_db/HLA/msf/%s_nuc.msf" % gene
             if not os.path.exists(partial_MSA_fname):
                 print >> sys.stderr, "Warning: %s does not exist" % partial_MSA_fname
                 continue
@@ -834,7 +825,7 @@ def extract_vars(base_fname,
             print >> backbone_file, backbone_seq_[s:s+60]
 
         # Remap the backbone allele, which is sometimes slighly different from
-        #   IMGTHLA/fasta version
+        #   fasta version
         ref_backbone_id = names[ref_gene]
         ref_backbone_seq = seqs[ref_backbone_id]
         hisat2 = os.path.join(ex_path, "hisat2")
@@ -940,7 +931,7 @@ def extract_vars(base_fname,
                     exon_seq_ = typing_common.reverse_complement(exon_seq_)
 
                 cmp_exon_seq_, allele_name_ = "", ""
-                for line in open("IMGTHLA/fasta/%s_nuc.fasta" % gene):
+                for line in open("hisatgenotype_db/HLA/fasta/%s_nuc.fasta" % gene):
                     if line.startswith(">"):
                         if allele_name_ == ref_gene:
                             break
@@ -1169,7 +1160,7 @@ if __name__ == '__main__':
                         dest="locus_list",
                         type=str,
                         default="",
-                        help="A comma-separated list of HLA genes (default: empty, all HLA genes in IMGT/HLA database)")
+                        help="A comma-separated list of gene names (default: empty, all genes)")
     parser.add_argument("--no-partial",
                         dest="partial",
                         action="store_false",
