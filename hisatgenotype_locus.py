@@ -866,7 +866,7 @@ def typing(ex_path,
             allele_rep_set = set(allele_reps.values())
 
             # For checking alternative alignments near the ends of alignments
-            new_alt_impl = True
+            new_alt_impl = False
             if new_alt_impl:
                 Alts_left, Alts_right = typing_common.get_alternatives2(ref_seq,
                                                                         allele_vars,
