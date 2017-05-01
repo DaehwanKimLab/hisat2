@@ -865,16 +865,25 @@ def typing(ex_path,
             allele_reps, allele_rep_groups = get_rep_alleles(Links, exon_vars)
             allele_rep_set = set(allele_reps.values())
 
-            # DK - in the middle of implementing...
-            Alts_left, Alts_right = typing_common.get_alternatives2(ref_seq,
-                                                                    allele_vars,
-                                                                    gene_vars,
-                                                                    gene_var_list,
-                                                                    verbose)
-            sys.exit(1)
-
             # For checking alternative alignments near the ends of alignments
-            Alts_left, Alts_right = typing_common.get_alternatives(ref_seq, gene_vars, gene_var_list, verbose)
+            new_alt_impl = True
+            if new_alt_impl:
+                Alts_left, Alts_right = typing_common.get_alternatives2(ref_seq,
+                                                                        allele_vars,
+                                                                        gene_vars,
+                                                                        gene_var_list,
+                                                                        verbose)
+
+                def haplotype_alts_list(haplotype_alts):
+                    haplotype_list = []
+                    for haplotype in haplotype_alts.keys():
+                        pos = int(haplotype.split('-')[0])
+                        haplotype_list.append([pos, haplotype])
+                    return sorted(haplotype_list, cmp=lambda a, b: a[0] - b[0])
+
+                Alts_left_list, Alts_right_list = haplotype_alts_list(Alts_left), haplotype_alts_list(Alts_right)
+            else:            
+                Alts_left, Alts_right = typing_common.get_alternatives(ref_seq, gene_vars, gene_var_list, verbose)
 
             # Count alleles
             Gene_counts, Gene_cmpt = {}, {}
@@ -1319,12 +1328,22 @@ def typing(ex_path,
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
 
-                    cmp_list_left, cmp_list_right = typing_common.identify_ambigious_diffs(gene_vars,
-                                                                                           Alts_left,
-                                                                                           Alts_right,
-                                                                                           cmp_list,
-                                                                                           verbose,
-                                                                                           orig_read_id == "a45|L_441_89M8D11M_89|D|hv1,7|S|hv15") # debug?
+                    if new_alt_impl:
+                        cmp_list_left, cmp_list_right = typing_common.identify_ambigious_diffs2(gene_vars,
+                                                                                                Alts_left,
+                                                                                                Alts_right,
+                                                                                                Alts_left_list,
+                                                                                                Alts_right_list,
+                                                                                                cmp_list,
+                                                                                                verbose,
+                                                                                                orig_read_id == "a45|L_441_89M8D11M_89|D|hv1,7|S|hv15") # debug?
+                    else:
+                        cmp_list_left, cmp_list_right = typing_common.identify_ambigious_diffs(gene_vars,
+                                                                                               Alts_left,
+                                                                                               Alts_right,
+                                                                                               cmp_list,
+                                                                                               verbose,
+                                                                                               orig_read_id == "a45|L_441_89M8D11M_89|D|hv1,7|S|hv15") # debug?
 
                     # DK - debugging purposes
                     DK_debug = False

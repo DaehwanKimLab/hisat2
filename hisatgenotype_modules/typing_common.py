@@ -996,6 +996,9 @@ def identify_ambigious_diffs(Vars,
 Identify alternative haplotypes
    insertions are not considered...
 
+   INPUT: see the function's parameters below
+   OUPUT: 529-hv8-hv22-606: set(['529-hv13-570', '529-hv4-hv18-590', '529-hv2-hv16-582'])
+          529-hv3-hv17-598: set(['529-hv6-hv21-hv26-610'])
 """
 def get_alternatives2(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATACATACATACATACATACATACAGGATAGATAACTAGG...
                       allele_vars, # {'VWA*20(22)': ['hv231', 'hv245'], "VWA*16(18')": ['hv235', 'hv250', 'hv256'], ...}
@@ -1150,7 +1153,7 @@ def get_alternatives2(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATAC
                                       next_haplotype_alt,
                                       left,
                                       dep + 1)            
-    
+  
         if dep > 0:
             if not found:
                 def to_haplotype_str(haplotype):
@@ -1164,10 +1167,11 @@ def get_alternatives2(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATAC
                 haplotype_alts = haplotype_alts_left if left else haplotype_alts_right
                 if haplotype not in haplotype_alts:
                     haplotype_alts[haplotype] = set()
-                assert haplotype_alt not in haplotype_alts[haplotype]
                 haplotype_alts[haplotype].add(haplotype_alt)
 
-
+                if haplotype_alt not in haplotype_alts:
+                    haplotype_alts[haplotype_alt] = set()
+                haplotype_alts[haplotype_alt].add(haplotype)
 
     # Search alternative haplotypes in both left and right directions
     for var_i in range(len(Var_list)):
@@ -1192,11 +1196,10 @@ def get_alternatives2(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATAC
                               [var_pos, var_pos - 1],
                               False)
 
-
     # Print alternative haplotypes / Sanity check
     def print_haplotype_alts(haplotype_alts):
         for haplotype, haplotype_set in haplotype_alts.items():
-            if verbose: print "%s:" % haplotype, haplotype_set
+            if verbose: print "\t%s:" % haplotype, haplotype_set
             haplotype_seq = get_haplotype_seq(haplotype.split('-'))
             for haplotype_alt in haplotype_set:
                 haplotype_alt_seq = get_haplotype_seq(haplotype_alt.split('-'))
@@ -1210,384 +1213,72 @@ def get_alternatives2(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATAC
     return haplotype_alts_left, haplotype_alts_right
 
 
-
 """
-Identify alternative haplotypes
-   insertions are not considered...
-
+Identify ambigious differences that may account for other alleles,
+  given a list of differences (cmp_list) between a read and a potential allele   
 """
-def get_alternatives3(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATACATACATACATACATACATACAGGATAGATAACTAGG...
-                      allele_vars, # {'VWA*20(22)': ['hv231', 'hv245'], "VWA*16(18')": ['hv235', 'hv250', 'hv256'], ...}
-                      Vars,        # {'hv241': ['deletion', 529, '52'], 'hv240': ['deletion', 529, '48'], ... }
-                      Var_list,    # [[529, 'hv230'], [529, 'hv231'], [529, 'hv232'], [529, 'hv233'], ...]
-                      verbose):
-    haplotype_alts_left, haplotype_alts_right = {}, {}
+def identify_ambigious_diffs2(Vars,
+                              Alts_left,
+                              Alts_right,
+                              Alts_left_list,
+                              Alts_right_list,
+                              cmp_list,
+                              verbose,
+                              debug = False):
+    cmp_left, cmp_right = 0, len(cmp_list) - 1
+    left, right = cmp_list[0][1], cmp_list[-1][1] + cmp_list[-1][2] - 1
 
-    allele_vars_list = []
-    for allele_name, vars in allele_vars.items():
-        allele_vars_list.append([allele_name, vars])
-    allele_vars = allele_vars_list
+    # DK - impl ... - Right direction
+    for i in range(len(cmp_list)):
+        cmp_i = cmp_list[i]
+        type, pos, length = cmp_i[:3]
+        var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
 
-    def print_allele(vars, var_i, left = True):
-        if left:
-            pos = -1
-            for i in range(0, var_i + 1):
-                var_id = vars[i]
-                var_type, var_pos, var_data = Vars[var_id]
-                if i == 0:
-                    assert var_pos >= 0
-                    print ref_seq[var_pos-50:var_pos],
-                else:
-                    assert pos > 0
-                    if pos < var_pos:
-                        print ref_seq[var_pos+1:pos+1],
-                if var_type in ["single", "insertion"]:
-                    pos = var_pos + 1
-                else:
-                    assert var_type == "deletion"
-                    pos = var_pos + int(var_data)
-
-                print Vars[var_id],
-                if i == var_i:
-                    print
-        else:
-            pos = -1
-            for i in range(var_i, len(vars)):
-                var_id = vars[i]
-                var_type, var_pos, var_data = Vars[var_id]
-                if i > var_i:
-                    assert pos > 0
-                    if pos < var_pos:
-                        print ref_seq[pos:var_pos],
-                if var_type in ["single", "insertion"]:
-                    pos = var_pos + 1
-                else:
-                    assert var_type == "deletion"
-                    pos = var_pos + int(var_data)
-
-                print Vars[var_id],
-
-                if i + 1 == len(vars):
-                    assert pos >= 0
-                    print ref_seq[pos:pos+50]
-
-    def next_base(vars, var_i, pos, left = True):
-        base = ""
-        if left:
-            assert pos >= 0
-            while var_i >= 0:
-                var_type, var_pos, var_data = Vars[vars[var_i]]
-                if var_type == "deletion":
-                    var_pos = var_pos + int(var_data) - 1
-                if pos > var_pos:
-                    break
-                assert pos == var_pos
-                var_i -= 1
-                if var_type == "single":
-                    base = var_data
-                    pos -= 1
-                    break
-                elif var_type == "insertion":
+        def get_haplotype(cmp_list):
+            cur_ht = []
+            for i in range(len(cmp_list)):
+                cmp_i = cmp_list[i]
+                if len(cmp_i) <= 3:
                     continue
-                else:
-                    assert var_type == "deletion"
-                    pos -= int(var_data)
+                var_id = cmp_i[3]
+                if var_id == "unknown":
                     continue
-        else:
-            assert pos < len(ref_seq)
-            while var_i < len(vars):
-                var_type, var_pos, var_data = Vars[vars[var_i]]
-                if pos < var_pos:
-                    break
-                assert pos == var_pos
-                var_i += 1
-                if var_type == "single":
-                    base = var_data
-                    pos += 1
-                    break
-                elif var_type == "insertion":
-                    continue
-                else:
-                    assert var_type == "deletion"
-                    pos += int(var_data)
+                cur_ht.append(var_id)
+            return cur_ht
+
+        cur_ht = get_haplotype(cmp_list[i:])
+
+        ht_i = lower_bound(Alts_right_list, pos)
+        for ht_j in range(ht_i, len(Alts_right_list)):
+            ht_pos, ht = Alts_right_list[ht_j]
+            if ht_pos > right:
+                break
+            if ht_pos < pos:
+                continue
+
+            if len(cur_ht) > 0:
+                cur_ht_str = '-'.join(cur_ht)
+                if ht.find(cur_ht_str) == -1:
                     continue
 
-        if base == "" and \
-           pos >= 0 and \
-           pos < len(ref_seq):
-            base = ref_seq[pos]
-            pos = pos - 1 if left else pos + 1
-
-        return var_i, pos, base
-
-    def get_seq(vars, var_i, pos, pos_end, left = True):
-        haplotype, seq = str(pos), ""
-        if left:
-            for i in reversed(range(0, var_i + 1)):
-                var_id = vars[i]
-                var_type, var_pos, var_data = Vars[var_id]
-                if var_type == "single":
-                    pos_next = var_pos - 1
-                elif var_type == "deletion":
-                    pos_next = var_pos - 1
-                    var_pos = var_pos + int(var_data) - 1
-                else:
-                    assert var_type == "insertion"
-                    continue
-                if pos_next < pos_end:
-                    break
-
-                if pos > var_pos:
-                    seq = ref_seq[var_pos+1:pos+1] + seq
-                haplotype = var_id + "-" + haplotype
-                if var_type == "single":
-                    seq = var_data + seq
-                elif var_type == "insertion":
-                    continue
-                else:
-                    assert var_type == "deletion"
-                pos = pos_next
-
-            seq = ref_seq[pos_end+1:pos+1] + seq
-            haplotype = ("%d-" % (pos_end + 1)) + haplotype
-        else:
-            for i in range(var_i, len(vars)):
-                var_id = vars[i]
-                var_type, var_pos, var_data = Vars[var_id]
-                if var_type == "single":
-                    pos_next = var_pos + 1
-                elif var_type == "deletion":
-                    pos_next = var_pos + int(var_data)
-                else:
-                    assert var_type == "insertion"
-                    continue
-                if pos_next > pos_end:
-                    break
-                
-                if pos < var_pos:
-                    seq += ref_seq[pos:var_pos]
-                haplotype = haplotype + "-" + var_id
-                if var_type == "single":
-                    seq += var_data
-                elif var_type == "insertion":
-                    continue
-                else:
-                    assert var_type == "deletion"
-                pos = pos_next
-
-            seq += ref_seq[pos:pos_end]
-            haplotype += ("-%d" % (pos_end - 1))
-
-        return haplotype, seq
-
-    def is_searched(haplotype_alts, vars, var_i, left = True):
-        assert var_i < len(vars)
-        var_id = vars[var_i]
-        var_type, var_pos, var_data = Vars[var_id]
-        assert var_type == "deletion"
-        del_len = int(var_data)
-        if var_pos not in haplotype_alts:
-            return False
-        haplotypes = haplotype_alts[var_pos]
-
-        for haplotype in haplotypes:
-            cmp_vars, cmp_var_i, cmp_var_i2 = haplotype
-            num_vars = cmp_var_i2 - cmp_var_i + 1
-            if left:
-                None
+            ht = ht.split('-')[1:]
+            if len(cur_ht) + 1 == len(ht):
+                ht_pos = ht[-1]
             else:
-                if cmp_vars[cmp_var_i:cmp_var_i+num_vars] == \
-                   vars[var_i:var_i+num_vars]:
-                    return True
-        return False
+                var_id2 = ht[len(cur_ht)]
+                _, ht_pos, _ = Vars[var_id2]
 
-    _haplotype_alts = {}
-
-    # DK - initial - left direction
-    for allele_i in range(len(allele_vars)):
-        allele_name, vars = allele_vars[allele_i]
-        var_j_list = [sys.maxint for _ in range(len(allele_vars))]
-        for var_i in range(len(vars)):
-            var_id = vars[var_i]
-            var_type, var_pos, var_data = Vars[var_id]
-            if var_type != "deletion":
-                continue
-            del_len = int(var_data)
-            var_pos = var_pos + del_len - 1
-            if is_searched(_haplotype_alts, vars, var_i):
+            if right >= ht_pos:
                 continue
 
-            for allele_j in range(len(allele_vars)):
-                if allele_j == allele_i:
-                    continue
-                allele_name2, vars2 = allele_vars[allele_j]
-                if var_j_list[allele_j] > len(vars2):
-                    var_j_list[allele_j] = len(vars2) - 1
+            print cmp_list
+            print "\t", cur_ht, "vs", Alts_right_list[ht_j], ht_pos
+            print cmp_list[:i]
+            if len(cmp_list) > 2:
+                return cmp_left, i - 1
 
-                skip = False
-                var_j = var_j_list[allele_j]
-                while var_j >= 0:
-                    var_id2 = vars2[var_j]
-                    if var_id2 == var_id:
-                        skip = True
-                        break
-                    var_type2, var_pos2, var_data2 = Vars[var_id2]
-                    if var_type2 == "deletion":
-                        var_pos2 = var_pos2 + int(var_data2) - 1
-                    if var_pos2 <= var_pos:
-                        break
-                    var_j_list[allele_j] = var_j
-                    var_j -= 1
-                    if var_type2 in ["single", "insertion"]:
-                        continue
-                    assert var_type2 == "deletion"
-                    del_len2 = int(var_data2)
-                    if var_pos2 - del_len2 >= var_pos:
-                        continue
-                    else:
-                        skip = True
-                        break
-                if skip:
-                    continue
-
-                # DK - debugging purposes
-                # print allele_name,  ":",; print_allele(vars, var_i)
-                # print allele_name2, ":",; print_allele(vars2, var_j)
-
-                seq_len = 0
-                init_pos1 = var_pos
-                pos1, pos2 = var_pos, var_pos
-                var_i2, var_j2 = var_i, var_j
-                while pos1 >= 0 and pos2 >= 0:
-                    var_i2_, pos1_, base1 = next_base(vars,  var_i2, pos1)
-                    var_j2_, pos2_, base2 = next_base(vars2, var_j2, pos2)
-                    if base1 != base2:
-                        break
-
-                    var_i2, pos1 = var_i2_, pos1_
-                    var_j2, pos2 = var_j2_, pos2_
-
-                if pos1 < init_pos1:
-                    haplotype1, seq1 = get_seq(vars,  var_i, init_pos1, pos1)
-                    haplotype2, seq2 = get_seq(vars2, var_j, init_pos1, pos2)
-                    assert seq1 == seq2
-
-    _haplotype_alts = {}
-
-    # DK - initial - right direction
-    max_time = None
-    for allele_i in range(len(allele_vars)):
-        # DK - debugging purposes
-        start_time = datetime.now()
-        allele_name, vars = allele_vars[allele_i]
-        var_j_list = [0 for _ in range(len(allele_vars))]
-        for var_i in range(len(vars)):
-            var_id = vars[var_i]
-            var_type, var_pos, var_data = Vars[var_id]
-            if var_type != "deletion":
-                continue
-            if var_pos <= 0:
-                continue
-            del_len = int(var_data)
-
-            # DK - debugging purposes
-            if allele_name == "A*24:359N" and var_pos == 1600:
-                continue
-            
-            if is_searched(_haplotype_alts, vars, var_i, False):
-                continue
-
-            max_var_i2 = var_i
-            for allele_j in range(len(allele_vars)):
-                if allele_j == allele_i:
-                    continue
-                allele_name2, vars2 = allele_vars[allele_j]
-
-                skip = False
-                var_j = var_j_list[allele_j]
-                var_j = 0
-                while var_j < len(vars2):
-                    var_id2 = vars2[var_j]
-                    if var_id2 == var_id:
-                        skip = True
-                        break
-                    var_type2, var_pos2, var_data2 = Vars[var_id2]
-                    if var_pos2 >= var_pos:
-                        break
-                    var_j_list[allele_j] = var_j
-                    var_j += 1
-                    if var_type2 in ["single", "insertion"]:
-                        continue
-                    assert var_type2 == "deletion"
-                    del_len2 = int(var_data2)
-                    if var_pos2 + del_len2 > var_pos:
-                        skip = True
-                        break
-                if skip:
-                    continue
-
-                # DK - debugging purposes
-                # print allele_name,  ":",; print_allele(vars, var_i, False)
-                # print allele_name2, ":",; print_allele(vars2, var_j, False)
-                            
-                seq_len = 0
-                init_pos1 = var_pos
-                pos1, pos2 = var_pos, var_pos
-                var_i2, var_j2 = var_i, var_j
-                while pos1 < len(ref_seq) and pos2 < len(ref_seq):
-                    var_i2_, pos1_, base1 = next_base(vars,  var_i2, pos1, False)
-                    var_j2_, pos2_, base2 = next_base(vars2, var_j2, pos2, False)
-                    if base1 != base2:
-                        break
-
-                    var_i2, pos1 = var_i2_, pos1_
-                    var_j2, pos2 = var_j2_, pos2_
-
-                if init_pos1 < pos1:
-                    haplotype1, seq1 = get_seq(vars,  var_i, init_pos1, pos1, False)
-                    haplotype2, seq2 = get_seq(vars2, var_j, init_pos1, pos2, False)
-
-                    if allele_name == "A*24:359N":
-                        print "R ", allele_name, "vs.", allele_name2
-                        print "\t", allele_name, haplotype1
-                        print "\t", allele_name2, haplotype2
-
-                    # DK - debugging purposes
-                    if seq1 != seq2:
-                        print "\t", seq1, allele_name, pos1, ref_seq[pos1-4:pos1+1]
-                        print "\t", seq2, allele_name2, pos2, ref_seq[pos2-4:pos2+1]
-                    
-                    assert seq1 == seq2
-
-                    if max_var_i2 < var_i2:
-                        max_var_i2 = var_i2
-
-                    if haplotype1 not in haplotype_alts_right:
-                        haplotype_alts_right[haplotype1] = set()
-                    haplotype_alts_right[haplotype1].add(haplotype2)
-
-            if max_var_i2 > var_i:
-                if var_pos not in _haplotype_alts:
-                    _haplotype_alts[var_pos] = []
-                _haplotype_alts[var_pos].append([vars, var_i, max_var_i2])
+    # sys.exit(1)
 
 
-        tmp_time = datetime.now() - start_time
-        if not max_time or tmp_time > max_time or allele_name == "A*24:359N":
-            max_time = tmp_time
-            print >> sys.stderr, max_time, allele_name
-
-            
-            # DK - debugging purposes
-            # sys.exit(1)
-
-    # DK - debugging purposes
-    print >> sys.stderr, "num of left haplotypes:", len(haplotype_alts_left)
-    for haplotype, haplotype_set in haplotype_alts_left.items():
-        print >> sys.stderr,  haplotype, haplotype_set
-    print >> sys.stderr, "num of right haplotypes:", len(haplotype_alts_right)
-    for haplotype, haplotype_set in haplotype_alts_right.items():
-        print >> sys.stderr,  haplotype, haplotype_set
-
-    return haplotype_alts_left, haplotype_alts_right
+    return cmp_left, cmp_right
 
