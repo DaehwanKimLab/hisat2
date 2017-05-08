@@ -192,12 +192,13 @@ def leftshift_deletions(backbone_seq, seq, debug = False):
 def extract_vars(base_fname,
                  base_dname,
                  locus_list,
-                 partial,
                  inter_gap,
                  intra_gap,
+                 whole_haplotype,
                  min_var_freq,
                  ext_seq_len,
                  leftshift,
+                 partial,
                  verbose):
     # Current script directory
     curr_script = os.path.realpath(inspect.getsourcefile(extract_vars))
@@ -237,8 +238,7 @@ def extract_vars(base_fname,
     cigar_re = re.compile('\d+\w')
     remove_locus_list = []
     for gene in locus_list:
-        hisat2 = os.path.join(ex_path, "hisat2")
-        aligner_cmd = [hisat2]
+        aligner_cmd = ["hisat2"]
         if base_fname == "hla":
             aligner_cmd += ["--score-min", "C,0"]
         aligner_cmd += ["--no-unal",
@@ -989,28 +989,44 @@ def extract_vars(base_fname,
         add_seq_len = 0
         # Write haplotypes
         excluded_vars = set()
-        for key in keys:
+        var_leftmost, var_rightmost = sys.maxint, -1
+        for k in range(len(keys)):
+            key = keys[k]
             if Vars[key][0] < min_var_freq:
                 excluded_vars.add(key)
+
+            # Update leftmost and rightmost of Vars
+            locus, type, data = key.split('-')
+            left = right = int(locus)
+            if type == 'D':
+                right = left + int(data) - 1
+            if k == 0:
+                var_leftmost = left
+            if var_rightmost < right:
+                var_rightmost = right
+
         i = 0
         while i < len(keys):
             key_i = keys[i]
             locus, type, data = key_i.split('-')
             locus = int(locus)
             if type == 'D':
-                locus += (int(data)- 1)
+                locus += (int(data) - 1)
             prev_locus = locus
-            j = i + 1
-            while j < len(keys):
-                key_j = keys[j]
-                locus2, type2, data2 = key_j.split('-')
-                locus2 = int(locus2)
-                if prev_locus + inter_gap < locus2:
-                    break
-                prev_locus = locus2
-                if type == 'D':
-                    prev_locus += (int(data)- 1)                
-                j += 1
+            if whole_haplotype:
+                j = len(keys)
+            else:
+                j = i + 1
+                while j < len(keys):
+                    key_j = keys[j]
+                    locus2, type2, data2 = key_j.split('-')
+                    locus2 = int(locus2)
+                    if prev_locus + inter_gap < locus2:
+                        break
+                    prev_locus = locus2
+                    if type == 'D':
+                        prev_locus += (int(data) - 1)
+                    j += 1
 
             alleles = set()
             for k in range(i, j):
@@ -1052,7 +1068,8 @@ def extract_vars(base_fname,
                             split_haplotypes.add('#'.join(haplotype[prev_s:s]))
                 return split_haplotypes
 
-            haplotypes2 = split_haplotypes(haplotypes)
+            if not whole_haplotype:
+                haplotypes = split_haplotypes(haplotypes)
 
             def cmp_haplotype(a, b):
                 a = a.split('#')
@@ -1072,7 +1089,6 @@ def extract_vars(base_fname,
                 return a_end - b_end
 
             haplotypes = sorted(list(haplotypes), cmp=cmp_haplotype)
-            haplotypes2 = sorted(list(haplotypes2), cmp=cmp_haplotype)
             
             # DK - for debugging purposes
             """
@@ -1090,38 +1106,42 @@ def extract_vars(base_fname,
 
             # Write haplotypes
             sanity_vars = set()
-            for h_i in range(len(haplotypes2)):
-                h = haplotypes2[h_i].split('#')
-                h1_locus, _, _ = h[0].split('-')
-                h2_locus, h2_type, h2_data = h[-1].split('-')
-                h_begin, h_end = int(h1_locus), int(h2_locus)
-                if h2_type == 'D':
-                    h_end += (int(h2_data) - 1)
-                assert h_begin <= h_end
+            for h_i in range(len(haplotypes)):
+                h = haplotypes[h_i].split('#')
                 varIDs = []
                 for var in h:
                     varIDs.append("hv%s" % var2ID[var])
                     # DK - for debugging purposes
                     # varIDs.append(var)
                     sanity_vars.add(var2ID[var])
-                h_new_begin = h_begin
-                for h_j in reversed(range(0, h_i)):
-                    hc = haplotypes2[h_j].split('#')
-                    hc_begin, hc_type, hc_data = hc[-1].split('-')
-                    hc_begin = int(hc_begin)
-                    hc_end = hc_begin
-                    if hc_type == 'D':
-                        hc_end += (int(hc_data) - 1)
-                    if hc_end + inter_gap < h_begin:
-                        break
-                    if h_new_begin > hc_end:
-                        h_new_begin = hc_end
-                assert h_new_begin <= h_begin
+                if whole_haplotype:
+                    h_begin, h_end = var_leftmost, var_rightmost
+                else:
+                    h1_locus, _, _ = h[0].split('-')
+                    h2_locus, h2_type, h2_data = h[-1].split('-')
+                    h_begin, h_end = int(h1_locus), int(h2_locus)
+                    if h2_type == 'D':
+                        h_end += (int(h2_data) - 1)
+                    assert h_begin <= h_end
+                    h_new_begin = h_begin
+                    for h_j in reversed(range(0, h_i)):
+                        hc = haplotypes[h_j].split('#')
+                        hc_begin, hc_type, hc_data = hc[-1].split('-')
+                        hc_begin = int(hc_begin)
+                        hc_end = hc_begin
+                        if hc_type == 'D':
+                            hc_end += (int(hc_data) - 1)
+                        if hc_end + inter_gap < h_begin:
+                            break
+                        if h_new_begin > hc_end:
+                            h_new_begin = hc_end
+                    assert h_new_begin <= h_begin
+                    h_begin = h_new_begin
                 tmp_backbone_name = backbone_name
                 print >> haplotype_file, "ht%d\t%s\t%d\t%d\t%s" % \
-                    (num_haplotypes, tmp_backbone_name, base_locus + h_new_begin, base_locus + h_end, ','.join(varIDs))
+                    (num_haplotypes, tmp_backbone_name, base_locus + h_begin, base_locus + h_end, ','.join(varIDs))
                 num_haplotypes += 1
-                add_seq_len += (h_end - h_new_begin + 1)
+                add_seq_len += (h_end - h_begin + 1)
             assert len(sanity_vars) == len(cur_vars)
                     
             i = j
@@ -1161,10 +1181,6 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of gene names (default: empty, all genes)")
-    parser.add_argument("--no-partial",
-                        dest="partial",
-                        action="store_false",
-                        help="Include partial alleles (e.g. A_nuc.fasta)")
     parser.add_argument("--inter-gap",
                         dest="inter_gap",
                         type=int,
@@ -1175,6 +1191,10 @@ if __name__ == '__main__':
                         type=int,
                         default=50,
                         help="Break a haplotype into several haplotypes")
+    parser.add_argument("--whole-haplotype",
+                        dest="whole_haplotype",
+                        action="store_true",
+                        help="Include partial alleles (e.g. A_nuc.fasta)")
     parser.add_argument("--min-var-freq",
                         dest="min_var_freq",
                         type=float,
@@ -1189,6 +1209,10 @@ if __name__ == '__main__':
                         dest="leftshift",
                         action="store_true",
                         help="Shift deletions to the leftmost")
+    parser.add_argument("--no-partial",
+                        dest="partial",
+                        action="store_false",
+                        help="Exclude partial alleles, exon-only sequences in HLA")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -1214,11 +1238,12 @@ if __name__ == '__main__':
     extract_vars(base_fname,
                  base_dname,
                  locus_list,
-                 args.partial,
                  args.inter_gap,
                  args.intra_gap,
+                 args.whole_haplotype,
                  args.min_var_freq,
                  args.ext_seq_len,
                  args.leftshift,
+                 args.partial,
                  args.verbose)
 

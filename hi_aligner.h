@@ -3073,13 +3073,14 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 for(index_t p = 0; p < ht_prev_list.size(); p++) {
                     const pair<index_t, index_t>& ht_ref = ht_prev_list[p];
                     const Haplotype<index_t>& ht = haplotypes[ht_ref.first];
-                    assert_lt(ht_ref.second, ht.alts.size());
-                    index_t alt_id = ht.alts[ht_ref.second];
-                    assert_gt(tmp_edits.size(), 0);
-                    const ALT<index_t>& alt = alts[tmp_edits.back().snpID];
-                    const ALT<index_t>& ht_alt = alts[alt_id];
-                    if(!alt.isSame(ht_alt)) continue;
-                    if(ht_ref.second + 1 == ht.alts.size()) {
+                    if(ht_ref.second < ht.alts.size()) {
+                        index_t alt_id = ht.alts[ht_ref.second];
+                        assert_gt(tmp_edits.size(), 0);
+                        const ALT<index_t>& alt = alts[tmp_edits.back().snpID];
+                        const ALT<index_t>& ht_alt = alts[alt_id];
+                        if(!alt.isSame(ht_alt)) continue;
+                    }
+                    if(ht_ref.second + 1 >= ht.alts.size() && joinedOff > ht.right) {
                         cmp_ht.left = cmp_ht.right = joinedOff;
                         add_haplotypes(alts,
                                        haplotypes,
@@ -3132,7 +3133,8 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 for(index_t h = 0; h < ht_list.size(); h++) {
                     const pair<index_t, index_t>& ht_ref = ht_list[h];
                     const Haplotype<index_t>& ht = haplotypes[ht_ref.first];
-                    assert_lt(ht_ref.second, ht.alts.size());
+                    if(ht_ref.second >= ht.alts.size())
+                        continue;
                     index_t ht_alti = ht.alts[ht_ref.second];
                     const ALT<index_t>& ht_alt = alts[ht_alti];
                     if(alts[alt_range.first].isSame(ht_alt)) {

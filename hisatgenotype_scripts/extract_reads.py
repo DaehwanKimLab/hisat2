@@ -105,8 +105,8 @@ def extract_reads(base_fname,
     ex_path = "../../.."
 
     # Clone a git repository, IMGTHLA
-    if not os.path.exists("IMGTHLA"):
-        os.system("git clone https://github.com/jrob119/IMGTHLA.git")
+    if not os.path.exists("hisatgenotype_db"):
+        os.system("git clone https://github.com/infphilo/hisatgenotype_db")
 
     def check_files(fnames):
         for fname in fnames:
@@ -120,8 +120,7 @@ def extract_reads(base_fname,
                      "genome.fa.fai"]
     if not check_files(HISAT2_fnames):
         os.system("wget ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz; tar xvzf grch38.tar.gz; rm grch38.tar.gz")
-        hisat2_inspect = os.path.join(ex_path, "hisat2-inspect")
-        os.system("%s grch38/genome > genome.fa" % hisat2_inspect)
+        os.system("hisat2-inspect grch38/genome > genome.fa" % hisat2_inspect)
         os.system("samtools faidx genome.fa")
 
     if reference_type == "gene":
@@ -152,8 +151,7 @@ def extract_reads(base_fname,
         # Build HISAT2 graph indexes based on the above information
         HLA_hisat2_graph_index_fnames = ["hla.graph.%d.ht2" % (i+1) for i in range(8)]
         if not check_files(HLA_hisat2_graph_index_fnames):
-            hisat2_build = os.path.join(ex_path, "hisat2-build")
-            build_cmd = [hisat2_build,
+            build_cmd = ["hisat2-build",
                          "--snp", "hla.snp",
                          "--haplotype", "hla.haplotype",
                          "hla_backbone.fa",
@@ -176,8 +174,7 @@ def extract_reads(base_fname,
         # hisat2 graph index files
         genotype_fnames += ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
         if not check_files(genotype_fnames):        
-            build_script = os.path.join(ex_path, "hisatgenotype_build_genome.py")
-            build_cmd = [build_script]
+            build_cmd = ["hisatgenotype_build_genome.py"]
             if not partial:
                 build_cmd += ["--no-partial"]
             build_cmd += ["--inter-gap", "30",
@@ -251,8 +248,7 @@ def extract_reads(base_fname,
                  fq_fname2, 
                  reference_type, 
                  ranges):
-            hisat2 = os.path.join(ex_path, "hisat2")
-            aligner_cmd = [hisat2]
+            aligner_cmd = ["hisat2"]
             if reference_type == "gene":
                 aligner_cmd += ["--al-conc-disc-gz", "%s/%s.extracted.fq.gz" % (out_dir, fq_fname_base)]
                 aligner_cmd += ["-x", "hla.graph"]

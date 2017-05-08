@@ -107,9 +107,7 @@ def worker(ex_path,
     print >> sys.stderr, genome
     lock.release()
     cmd_aligners = ['.'.join(aligners[i]) for i in range(len(aligners))]
-    test_hla_script = os.path.join(ex_path, "../hisatgenotype_locus.py")
-    test_hla_cmd = [test_hla_script,
-                    # "--reference-type", reference_type,
+    test_hla_cmd = ["hisatgenotype_locus.py",,
                     "--base", "hla",
                     "--locus", ','.join(hla_list),
                     "--aligner-list", ','.join(cmd_aligners),

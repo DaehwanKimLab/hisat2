@@ -28,88 +28,6 @@ from copy import deepcopy
 from hisatgenotype_modules import typing_common, Gene_typing, assembly_graph
 
 
-
-"""
-Align reads, and sort the alignments into a BAM file
-"""
-def align_reads(ex_path,
-                aligner,
-                simulation,
-                base_fname,
-                index_type,
-                read_fname,
-                fastq,
-                threads,
-                out_fname,
-                verbose):
-    if aligner == "hisat2":
-        hisat2 = os.path.join(ex_path, "hisat2")
-        aligner_cmd = [hisat2, "--mm"]
-        if not simulation:
-            aligner_cmd += ["--no-unal"]            
-        DNA = True
-        if DNA:
-            aligner_cmd += ["--no-spliced-alignment"] # no spliced alignment
-            aligner_cmd += ["-X", "1000"] # max fragment length
-        if index_type == "linear":
-            aligner_cmd += ["-k", "10"]
-        else:
-            aligner_cmd += ["--max-altstried", "64"]
-            # DK - debugging purposes
-            aligner_cmd += ["--haplotype"]
-            if base_fname == "codis":
-                aligner_cmd += ["--enable-codis"]
-        aligner_cmd += ["-x", "%s.%s" % (base_fname, index_type)]
-    elif aligner == "bowtie2":
-        aligner_cmd = [aligner,
-                       "--no-unal",
-                       "-k", "10",
-                       "-x", base_fname]
-    else:
-        assert False
-    assert len(read_fname) in [1,2]
-    aligner_cmd += ["-p", str(threads)]
-    if not fastq:
-        aligner_cmd += ["-f"]
-    if len(read_fname) == 1:
-        aligner_cmd += ["-U", read_fname[0]]
-    else:
-        aligner_cmd += ["-1", "%s" % read_fname[0],
-                        "-2", "%s" % read_fname[1]]
-    if verbose >= 1:
-        print >> sys.stderr, ' '.join(aligner_cmd)
-    align_proc = subprocess.Popen(aligner_cmd,
-                                  stdout=subprocess.PIPE,
-                                  stderr=open("/dev/null", 'w'))
-
-    sambam_cmd = ["samtools",
-                  "view",
-                  "-bS",
-                  "-"]
-    sambam_proc = subprocess.Popen(sambam_cmd,
-                                   stdin=align_proc.stdout,
-                                   stdout=open(out_fname + ".unsorted", 'w'),
-                                   stderr=open("/dev/null", 'w'))
-    sambam_proc.communicate()
-    if index_type == "graph":
-        bamsort_cmd = ["samtools",
-                       "sort",
-                       out_fname + ".unsorted",
-                       "-o", out_fname]
-        bamsort_proc = subprocess.Popen(bamsort_cmd,
-                                        stderr=open("/dev/null", 'w'))
-        bamsort_proc.communicate()
-
-        bamindex_cmd = ["samtools",
-                        "index",
-                        out_fname]
-        bamindex_proc = subprocess.Popen(bamindex_cmd,
-                                         stderr=open("/dev/null", 'w'))
-        bamindex_proc.communicate()
-
-    os.system("rm %s" % (out_fname + ".unsorted"))            
-
-
 """
 """ 
 def normalize(prob):
@@ -582,16 +500,15 @@ def stranded_seq_alignment(genome_name,
     run_alignments = []
     for run in runs:
         read_fname, out_fname = "%s/%s.extracted.fq.gz" % (read_dir, run), "%s/%s.bam" % (read_dir, run)
-        align_reads(ex_path,
-                    "hisat2",
-                    False,         # simulation?
-                    "hla",
-                    "graph",
-                    [read_fname],
-                    True,          # fastq?
-                    1,             # number of threads
-                    out_fname,
-                    False)         # verbose?
+        typing_common.align_reads("hisat2",
+                                  False,         # simulation?
+                                  "hla",
+                                  "graph",
+                                  [read_fname],
+                                  True,          # fastq?
+                                  1,             # number of threads
+                                  out_fname,
+                                  False)         # verbose?
 
         # Read alignments
         alignview_cmd = ["samtools",
@@ -705,16 +622,15 @@ def typing(ex_path,
                 alignment_fname = read_fname[0].split('/')[-1]
                 alignment_fname = alignment_fname.split('.')[0] + ".bam"
                 
-            align_reads(ex_path,
-                        aligner,
-                        simulation,
-                        base_fname,
-                        index_type,
-                        read_fname,
-                        fastq,
-                        threads,
-                        alignment_fname,
-                        verbose)
+            typing_common.align_reads(aligner,
+                                      simulation,
+                                      base_fname,
+                                      index_type,
+                                      read_fname,
+                                      fastq,
+                                      threads,
+                                      alignment_fname,
+                                      verbose)
             
         for test_Gene_names in locus_list:
             if simulation:
@@ -866,7 +782,7 @@ def typing(ex_path,
             allele_rep_set = set(allele_reps.values())
 
             # For checking alternative alignments near the ends of alignments
-            new_alt_impl = False
+            new_alt_impl = True
             if new_alt_impl:
                 Alts_left, Alts_right = typing_common.get_alternatives2(ref_seq,
                                                                         allele_vars,
@@ -874,14 +790,17 @@ def typing(ex_path,
                                                                         gene_var_list,
                                                                         verbose)
 
-                def haplotype_alts_list(haplotype_alts):
+                def haplotype_alts_list(haplotype_alts, left = True):
                     haplotype_list = []
                     for haplotype in haplotype_alts.keys():
-                        pos = int(haplotype.split('-')[0])
+                        if left:
+                            pos = int(haplotype.split('-')[-1])
+                        else:
+                            pos = int(haplotype.split('-')[0])
                         haplotype_list.append([pos, haplotype])
-                    return sorted(haplotype_list, cmp=lambda a, b: a[0] - b[0])
+                    return sorted(haplotype_list, cmp = lambda a, b: a[0] - b[0])
 
-                Alts_left_list, Alts_right_list = haplotype_alts_list(Alts_left), haplotype_alts_list(Alts_right)
+                Alts_left_list, Alts_right_list = haplotype_alts_list(Alts_left, True), haplotype_alts_list(Alts_right, False)
             else:            
                 Alts_left, Alts_right = typing_common.get_alternatives(ref_seq, gene_vars, gene_var_list, verbose)
 
@@ -1267,13 +1186,15 @@ def typing(ex_path,
                         if prev_read_id != None:
                             if base_fname == "hla":
                                 cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
-                            add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
+                                add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
+                            else:
+                                cur_cmpt = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
                             for read_id_, read_node in read_nodes:
                                 asm_graph.add_node(read_id_,
                                                    read_node,
                                                    simulation)
                             read_nodes, read_var_list = [], []
-                            if verbose >= 2 and base_fname == "hla":
+                            if verbose >= 2 and base_fname in ["hla", "codis"]:
                                 cur_cmpt = cur_cmpt.split('-')
                                 if not(set(cur_cmpt) & set(test_Gene_names)):
                                     print "%s are chosen instead of %s" % ('-'.join(cur_cmpt), '-'.join(test_Gene_names))
@@ -1291,19 +1212,50 @@ def typing(ex_path,
 
                     prev_lines.append(line)
 
-                    def add_count(count_per_read, var_id, add):
-                        alleles = Links[var_id]
-                        if verbose >= 2:
+                    def add_count(count_per_read, ht, add):
+                        ht = ht.split('-')
+                        for i in range(len(ht)):
+                            var_id = ht[i]
+                            if var_id[0].isdigit():
+                                tmp_alleles = set()
+                                left, right = var_id.split('|')
+                                left, right = int(left), int(right)
+                                var_idx = typing_common.lower_bound(gene_var_list, left)
+                                while var_idx < len(gene_var_list):
+                                    var_pos, var_id2 = gene_var_list[var_idx]
+                                    if var_pos > right:
+                                        break
+                                    if var_pos < left:
+                                        continue
+                                    tmp_alleles |= set(Links[var_id2])
+                                    var_idx += 1
+                                tmp_alleles = set(Genes[gene].keys()) - tmp_alleles - set([ref_allele])
+                            else:
+                                tmp_alleles = set(Links[var_id])
+                            if i == 0:
+                                alleles = tmp_alleles
+                            else:
+                                alleles &= tmp_alleles
+                            
+                        if verbose >= 2 and alleles:
                             if add > 0 and not (set(alleles) & debug_allele_names):
-                                print "Add:", add, debug_allele_names, "-", var_id
-                                print "\t", line
+                                """
+                                print "Add:", add, debug_allele_names, "-", ht
+                                for prev_line in prev_lines:
+                                    print "\t", prev_line
                                 print "\t", alleles
+                                """
                             if add < 0 and set(alleles) & debug_allele_names:
-                                print "Add:", add, debug_allele_names, "-", var_id
-                                print "\t", line
+                                """
+                                print "Add:", add, debug_allele_names, "-", ht
+                                for prev_line in prev_lines:
+                                    print "\t", prev_line
+                                """
 
                         for allele in alleles:
                             count_per_read[allele] += add
+
+                        return len(alleles)
 
                     # Decide which allele(s) a read most likely came from
                     for var_id, data in gene_vars.items():
@@ -1322,21 +1274,51 @@ def typing(ex_path,
                     read_vars = []
 
                     # Positive and negative evidence
-                    positive_vars, negative_vars = set(), set()
+                    positive_hts, negative_hts = set(), set()
 
                     # Sanity check - read length, cigar string, and MD string
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
 
                     if new_alt_impl:
-                        cmp_list_left, cmp_list_right = typing_common.identify_ambigious_diffs2(gene_vars,
-                                                                                                Alts_left,
-                                                                                                Alts_right,
-                                                                                                Alts_left_list,
-                                                                                                Alts_right_list,
-                                                                                                cmp_list,
-                                                                                                verbose,
-                                                                                                orig_read_id == "a45|L_441_89M8D11M_89|D|hv1,7|S|hv15") # debug?
+                        cmp_list_left, cmp_list_right, cmp_left_alts, cmp_right_alts = \
+                        typing_common.identify_ambigious_diffs2(ref_seq,
+                                                                gene_vars,
+                                                                Alts_left,
+                                                                Alts_right,
+                                                                Alts_left_list,
+                                                                Alts_right_list,
+                                                                cmp_list,
+                                                                verbose,
+                                                                orig_read_id.startswith("a58|L"))  # debug?
+
+                        mid_ht = []
+                        for cmp in cmp_list[cmp_list_left:cmp_list_right+1]:
+                            type = cmp[0]
+                            if type not in ["mismatch", "deletion", "insertion"]:
+                                continue                            
+                            var_id = cmp[3]
+                            if var_id == "unknown" or var_id.startswith("nv"):
+                                continue
+                            mid_ht.append(var_id)
+
+                        for l in range(-1, len(cmp_left_alts)):
+                            if l < 0 or cmp_left_alts[l] == "":
+                                left_ht = []
+                            else:
+                                left_ht = cmp_left_alts[l].split('-')
+                            left_ht += mid_ht
+                            for r in range(-1, len(cmp_right_alts)):
+                                if r < 0 or cmp_right_alts[r] == "":
+                                    right_ht = []
+                                else:
+                                    right_ht = cmp_right_alts[r].split('-')
+                                ht = left_ht + right_ht
+                                if len(ht) <= 0:
+                                    continue
+                                ht_str = '-'.join(ht)
+                                positive_hts.add(ht_str)
+                        
                     else:
                         cmp_list_left, cmp_list_right = typing_common.identify_ambigious_diffs(gene_vars,
                                                                                                Alts_left,
@@ -1347,12 +1329,12 @@ def typing(ex_path,
 
                     # DK - debugging purposes
                     DK_debug = False
-                    if orig_read_id == "a46|L_451_88M12D12M_88|D|hv2":
+                    if orig_read_id.startswith("a58|L"):
                         DK_debug = True
                         print line
                         print cmp_list
-                        print "positive vars:", positive_vars
-                        print "negative vars:", negative_vars
+                        print "positive hts:", positive_hts
+                        print "negative hts:", negative_hts
                         print "cmp_list[%d, %d]" % (cmp_list_left, cmp_list_right)
 
                     # Deletions at 5' and 3' ends
@@ -1361,8 +1343,8 @@ def typing(ex_path,
                         if var_type != "deletion":
                             continue
                         if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
-                            negative_vars.add(var_id)
-                    
+                            negative_hts.add(var_id)
+
                     cmp_i = 0
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
@@ -1379,39 +1361,43 @@ def typing(ex_path,
                             read_node_seq += list(read_seq[read_pos:read_pos+length])
                             read_node_qual += list(read_qual[read_pos:read_pos+length])
                             read_node_var += ([''] * length)
-                            
-                            var_idx = typing_common.lower_bound(gene_var_list, ref_pos)
-                            while var_idx < len(gene_var_list):
-                                var_pos, var_id = gene_var_list[var_idx]
-                                if ref_pos + length <= var_pos:
-                                    break
-                                if ref_pos <= var_pos:
-                                    var_type, _, var_data = gene_vars[var_id]
-                                    if var_type == "insertion":
-                                        if ref_pos < var_pos and ref_pos + length > var_pos + len(var_data):
-                                            negative_vars.add(var_id)
-                                    elif var_type == "deletion":
-                                        del_len = int(var_data)
-                                        if ref_pos < var_pos and ref_pos + length > var_pos + del_len:
-                                            if base_fname == "codis":
-                                                cmp_left, cmp_right = left_pos, right_pos
-                                            else:
+
+                            if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
+                                var_idx = typing_common.lower_bound(gene_var_list, ref_pos)
+                                while var_idx < len(gene_var_list):
+                                    var_pos, var_id = gene_var_list[var_idx]
+                                    if ref_pos + length <= var_pos:
+                                        break
+                                    if ref_pos <= var_pos:
+                                        var_type, _, var_data = gene_vars[var_id]
+                                        if var_type == "insertion":
+                                            if ref_pos < var_pos and ref_pos + length > var_pos + len(var_data):
+                                                negative_hts.add(var_id)
+                                        elif var_type == "deletion":
+                                            del_len = int(var_data)
+                                            if ref_pos < var_pos and ref_pos + length > var_pos + del_len:
                                                 cmp_left, cmp_right = cmp[1], cmp[1] + cmp[2]
-                                                
-                                            # Check if this might be one of the two tandem repeats (the same left coordinate)
-                                            test1_seq1 = ref_seq[cmp_left:cmp_right]
-                                            test1_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos + del_len:cmp_right + del_len]
-                                            # Check if this happens due to small repeats (the same right coordinate - e.g. 19 times of TTTC in DQA1*05:05:01:02)
-                                            cmp_left -= read_pos
-                                            cmp_right += (len(read_seq) - read_pos - cmp[2])
-                                            test2_seq1 = ref_seq[cmp_left+int(var_data):cmp_right]
-                                            test2_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos+int(var_data):cmp_right]
-                                            
-                                            if test1_seq1 != test1_seq2 and test2_seq1 != test2_seq2:
-                                                negative_vars.add(var_id)
-                                    else:
-                                        negative_vars.add(var_id)
-                                var_idx += 1
+
+                                                # Check if this might be one of the two tandem repeats (the same left coordinate)
+                                                test1_seq1 = ref_seq[cmp_left:cmp_right]
+                                                test1_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos + del_len:cmp_right + del_len]
+                                                # Check if this happens due to small repeats (the same right coordinate - e.g. 19 times of TTTC in DQA1*05:05:01:02)
+                                                cmp_left -= read_pos
+                                                cmp_right += (len(read_seq) - read_pos - cmp[2])
+                                                test2_seq1 = ref_seq[cmp_left+int(var_data):cmp_right]
+                                                test2_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos+int(var_data):cmp_right]
+
+                                                if base_fname == "codis":
+                                                    negative_hts.add(var_id)
+                                                else:
+                                                    if test1_seq1 != test1_seq2 and test2_seq1 != test2_seq2:
+                                                        negative_hts.add(var_id)                                              
+
+                                        else:
+                                            negative_hts.add(var_id)
+
+                                    var_idx += 1
+                                    
                             read_pos += length
                             ref_pos += length
                             cigar_match_len += length
@@ -1424,7 +1410,7 @@ def typing(ex_path,
                             read_node_var.append(var_id)
                             if var_id != "unknown":
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
-                                    positive_vars.add(var_id)
+                                    if not new_alt_impl: positive_hts.add(var_id)
                             
                             cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
                             MD_match_len = 0
@@ -1439,7 +1425,7 @@ def typing(ex_path,
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
                                     # Require at least 5bp match before and after a deletion
                                     if read_pos >= 5 and read_pos + 5 <= len(read_seq):
-                                        positive_vars.add(var_id)
+                                        if not new_alt_impl: positive_hts.add(var_id)
                             read_node_seq += ["I%s" % nt for nt in ins_seq]
                             read_node_qual += list(read_qual[read_pos:read_pos+ins_len])
                             read_node_var += ([var_id] * ins_len)                                        
@@ -1458,7 +1444,7 @@ def typing(ex_path,
                                 if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
                                     # Require at least 5bp match before and after a deletion
                                     if read_pos >= 5 and read_pos + 5 <= len(read_seq):
-                                        positive_vars.add(var_id)
+                                        if not new_alt_impl: positive_hts.add(var_id)
 
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + del_len
@@ -1494,11 +1480,6 @@ def typing(ex_path,
                         print >> sys.stderr, "\tcmp list:", cmp_list
                         assert False
 
-                    # DK - debugging purposes
-                    if DK_debug:
-                        print "positive:", positive_vars
-                        print "negative:", negative_vars
-
                     # Node
                     if assembly:
                         read_nodes.append([node_read_id,
@@ -1512,18 +1493,25 @@ def typing(ex_path,
                                                                mpileup,
                                                                simulation)])
 
-                    for positive_var in positive_vars:
-                        if positive_var == "unknown" or positive_var.startswith("nv"):
+                    for positive_ht in positive_hts:
+                        if positive_ht == "unknown" or positive_ht.startswith("nv"):
                             continue
-                        if positive_var in exon_vars:
-                            add_count(Gene_count_per_read, positive_var, 1)
-                        add_count(Gene_gen_count_per_read, positive_var, 1)
-                    for negative_var in negative_vars:
-                        if negative_var == "unknown" or negative_var.startswith("nv"):
+                        if set(positive_ht.split('-')) & exon_vars:
+                            add_count(Gene_count_per_read, positive_ht, 1)
+                        add_count(Gene_gen_count_per_read, positive_ht, 1)
+
+                    for negative_ht in negative_hts:
+                        if negative_ht == "unknown" or negative_ht.startswith("nv"):
                             continue
-                        if negative_var in exon_vars:
-                            add_count(Gene_count_per_read, negative_var, -1)
-                        add_count(Gene_gen_count_per_read, negative_var, -1)
+                        if set(negative_ht.split('-')) & exon_vars:
+                            add_count(Gene_count_per_read, negative_ht, -1)
+                        add_count(Gene_gen_count_per_read, negative_ht, -1)
+
+                    # DK - debugging purposes
+                    if DK_debug:
+                        print "positive:", positive_hts
+                        print "negative:", negative_hts
+                        print "count_per_read:", Gene_gen_count_per_read
 
                     prev_read_id = read_id
                     prev_right_pos = right_pos
@@ -2121,17 +2109,19 @@ def test_Gene_genotyping(base_fname,
         print >> sys.stderr, Gene_fnames
     
     if not typing_common.check_files(Gene_fnames):
-        extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
-        extract_cmd = [extract_hla_script]
+        extract_cmd = ["hisatgenotype_extract_vars.py"]
         if len(only_locus_list) > 0:
             extract_cmd += ["--locus-list", ','.join(only_locus_list)]
 
         extract_cmd += ["--base", base_fname]
-
         if not partial:
             extract_cmd += ["--no-partial"]
-        extract_cmd += ["--inter-gap", "30",
-                        "--intra-gap", "50"]
+
+        if base_fname == "codis":
+            extract_cmd += ["--whole-haplotype"]
+        else:
+            extract_cmd += ["--inter-gap", "30",
+                            "--intra-gap", "50"]
 
         # DK - debugging purposes
         extract_cmd += ["--min-var-freq", "0.1"]

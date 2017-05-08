@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os
+import sys, os, subprocess
 import math
 import random
 from copy import deepcopy
@@ -437,6 +437,85 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
     write_reads(reads_2, 2)
 
     return num_pairs
+
+
+"""
+Align reads, and sort the alignments into a BAM file
+"""
+def align_reads(aligner,
+                simulation,
+                base_fname,
+                index_type,
+                read_fname,
+                fastq,
+                threads,
+                out_fname,
+                verbose):
+    if aligner == "hisat2":
+        aligner_cmd = [aligner, "--mm"]
+        if not simulation:
+            aligner_cmd += ["--no-unal"]            
+        DNA = True
+        if DNA:
+            aligner_cmd += ["--no-spliced-alignment"] # no spliced alignment
+            aligner_cmd += ["-X", "1000"] # max fragment length
+        if index_type == "linear":
+            aligner_cmd += ["-k", "10"]
+        else:
+            aligner_cmd += ["--max-altstried", "64"]
+            # DK - debugging purposes
+            aligner_cmd += ["--haplotype"]
+            if base_fname == "codis":
+                aligner_cmd += ["--enable-codis"]
+        aligner_cmd += ["-x", "%s.%s" % (base_fname, index_type)]
+    elif aligner == "bowtie2":
+        aligner_cmd = [aligner,
+                       "--no-unal",
+                       "-k", "10",
+                       "-x", base_fname]
+    else:
+        assert False
+    assert len(read_fname) in [1,2]
+    aligner_cmd += ["-p", str(threads)]
+    if not fastq:
+        aligner_cmd += ["-f"]
+    if len(read_fname) == 1:
+        aligner_cmd += ["-U", read_fname[0]]
+    else:
+        aligner_cmd += ["-1", "%s" % read_fname[0],
+                        "-2", "%s" % read_fname[1]]
+    if verbose >= 1:
+        print >> sys.stderr, ' '.join(aligner_cmd)
+    align_proc = subprocess.Popen(aligner_cmd,
+                                  stdout=subprocess.PIPE,
+                                  stderr=open("/dev/null", 'w'))
+
+    sambam_cmd = ["samtools",
+                  "view",
+                  "-bS",
+                  "-"]
+    sambam_proc = subprocess.Popen(sambam_cmd,
+                                   stdin=align_proc.stdout,
+                                   stdout=open(out_fname + ".unsorted", 'w'),
+                                   stderr=open("/dev/null", 'w'))
+    sambam_proc.communicate()
+    if index_type == "graph":
+        bamsort_cmd = ["samtools",
+                       "sort",
+                       out_fname + ".unsorted",
+                       "-o", out_fname]
+        bamsort_proc = subprocess.Popen(bamsort_cmd,
+                                        stderr=open("/dev/null", 'w'))
+        bamsort_proc.communicate()
+
+        bamindex_cmd = ["samtools",
+                        "index",
+                        out_fname]
+        bamindex_proc = subprocess.Popen(bamindex_cmd,
+                                         stderr=open("/dev/null", 'w'))
+        bamindex_proc.communicate()
+
+    os.system("rm %s" % (out_fname + ".unsorted"))            
 
 
 """
@@ -1217,7 +1296,8 @@ def get_alternatives2(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATAC
 Identify ambigious differences that may account for other alleles,
   given a list of differences (cmp_list) between a read and a potential allele   
 """
-def identify_ambigious_diffs2(Vars,
+def identify_ambigious_diffs2(ref_seq,
+                              Vars,
                               Alts_left,
                               Alts_right,
                               Alts_left_list,
@@ -1227,33 +1307,147 @@ def identify_ambigious_diffs2(Vars,
                               debug = False):
     cmp_left, cmp_right = 0, len(cmp_list) - 1
     left, right = cmp_list[0][1], cmp_list[-1][1] + cmp_list[-1][2] - 1
+    left_alt_set, right_alt_set = set(), set()
 
-    # DK - impl ... - Right direction
-    for i in range(len(cmp_list)):
-        cmp_i = cmp_list[i]
-        type, pos, length = cmp_i[:3]
-        var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
-
-        def get_haplotype(cmp_list):
-            cur_ht = []
-            for i in range(len(cmp_list)):
-                cmp_i = cmp_list[i]
-                if len(cmp_i) <= 3:
-                    continue
+    def get_haplotype_and_seq(cmp_list):
+        ht, seq = [], ""
+        for i in range(len(cmp_list)):
+            cmp_i = cmp_list[i]
+            type, pos, length = cmp_i[:3]
+            data = length
+            if len(cmp_i) <= 3:
+                var_id = ""
+            else:
                 var_id = cmp_i[3]
-                if var_id == "unknown":
+            if type == "match":
+                seq += ref_seq[pos:pos+length]
+            elif type == "mismatch":
+                seq += ref_seq[pos]
+            elif type == "insertion":
+                seq += data
+            else:
+                assert type == "deletion"
+
+            if var_id != "" and var_id != "unknown":
+                ht.append(var_id)
+        return ht, seq
+
+    # Left direction
+    for i in reversed(range(len(cmp_list))):
+        cmp_i = cmp_list[i]
+        type, cur_left, length = cmp_i[:3]
+        var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
+        if type in ["match", "deletion"]:
+            cur_right = cur_left + length - 1
+        else:
+            cur_right = cur_left
+
+        cur_ht, cur_seq = get_haplotype_and_seq(cmp_list[:i+1])
+        if len(cur_ht) == 0:
+            cur_ht_str = "%d|%d" % (left, cur_right)
+        else:
+            cur_ht_str = '-'.join(cur_ht)
+
+        found = False
+        ht_i = lower_bound(Alts_left_list, cur_right + 1)
+        for ht_j in reversed(range(0, min(ht_i + 1, len(Alts_left_list)))):
+            ht_pos, ht = Alts_left_list[ht_j]
+            if ht_pos < cur_left:
+                break
+            if ht_pos > cur_right:
+                continue
+
+            if len(cur_ht) > 0:
+                cur_ht_str = '-'.join(cur_ht)
+                if ht.find(cur_ht_str) == -1:
                     continue
-                cur_ht.append(var_id)
-            return cur_ht
 
-        cur_ht = get_haplotype(cmp_list[i:])
+            ht = ht.split('-')[:-1]
+            if len(cur_ht) + 1 == len(ht):
+                ht_pos = int(ht[0])
+            else:
+                var_id2 = ht[len(ht) - len(cur_ht) - 1]
+                ht_type, ht_pos, ht_data = Vars[var_id2]
+                if ht_type == "deletion":
+                    ht_pos = ht_pos + int(ht_data) - 1
+                    
+            if left <= ht_pos:
+                continue
 
-        ht_i = lower_bound(Alts_right_list, pos)
+            found = True
+
+            if debug:
+                print cmp_list[:i+1]
+                print "\t", cur_ht, "vs", Alts_left_list[ht_j], ht_pos
+
+            _, rep_ht = Alts_left_list[ht_j]
+
+            if debug:
+                print "\t\t", rep_ht, Alts_left[rep_ht], cur_seq
+
+            for alt_ht_str in Alts_left[rep_ht]:
+                alt_ht = alt_ht_str.split('-')
+                alt_ht_left, alt_ht_right = int(alt_ht[0]), int(alt_ht[-1])
+                assert alt_ht_right <= cur_right
+                seq_pos = cur_right - alt_ht_right
+                cur_pos = alt_ht_right
+                part_alt_ht = []
+                for var_id_ in reversed(alt_ht[1:-1]):
+                    var_type_, var_pos_, var_data_ = Vars[var_id_]
+                    if var_type_ == "deletion":
+                        del_len = int(var_data_)
+                        var_pos_ = var_pos_ + del_len - 1
+                    assert var_pos_ <= cur_pos
+                    seq_pos += (cur_pos - var_pos_)
+                    if var_type_ == "single":
+                        seq_pos += 1
+                        cur_pos = var_pos_ - 1
+                    elif var_type_ == "deletion":
+                        cur_pos = var_pos_ - del_len
+                    else:
+                        assert var_type_ == "insertion"
+                        assert False
+
+                    if seq_pos >= len(cur_seq):
+                        break
+                    part_alt_ht.insert(0, var_id_)
+
+                if len(part_alt_ht) > 0:
+                    part_alt_ht_str = '-'.join(part_alt_ht)
+                    left_alt_set.add(part_alt_ht_str)
+                        
+                if debug:
+                    print "\t\t", cur_left, alt_ht_str
+
+        if found:
+            cmp_left = i + 1
+            left_alt_set.add(cur_ht_str)
+            break
+
+
+    # Right direction
+    for i in range(cmp_left, len(cmp_list)):
+        cmp_i = cmp_list[i]
+        type, cur_left, length = cmp_i[:3]
+        var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
+        if type in ["match", "deletion"]:
+            cur_right = cur_left + length - 1
+        else:
+            cur_right = cur_left
+
+        cur_ht, cur_seq = get_haplotype_and_seq(cmp_list[i:])
+        if len(cur_ht) == 0:
+            cur_ht_str = "%d|%d" % (cur_left, right)
+        else:
+            cur_ht_str = '-'.join(cur_ht)
+
+        found = False
+        ht_i = lower_bound(Alts_right_list, cur_left)
         for ht_j in range(ht_i, len(Alts_right_list)):
             ht_pos, ht = Alts_right_list[ht_j]
-            if ht_pos > right:
+            if ht_pos > cur_right:
                 break
-            if ht_pos < pos:
+            if ht_pos < cur_left:
                 continue
 
             if len(cur_ht) > 0:
@@ -1263,7 +1457,7 @@ def identify_ambigious_diffs2(Vars,
 
             ht = ht.split('-')[1:]
             if len(cur_ht) + 1 == len(ht):
-                ht_pos = ht[-1]
+                ht_pos = int(ht[-1])
             else:
                 var_id2 = ht[len(cur_ht)]
                 _, ht_pos, _ = Vars[var_id2]
@@ -1271,14 +1465,51 @@ def identify_ambigious_diffs2(Vars,
             if right >= ht_pos:
                 continue
 
-            print cmp_list
-            print "\t", cur_ht, "vs", Alts_right_list[ht_j], ht_pos
-            print cmp_list[:i]
-            if len(cmp_list) > 2:
-                return cmp_left, i - 1
+            # DK - debugging purposes
+            if debug:
+                print "DK1:", cmp_i
+                print "DK2:", Alts_right_list[ht_j][1]
+                print "DK3:", left, right, ht_pos
 
-    # sys.exit(1)
+            found = True
+            _, rep_ht = Alts_right_list[ht_j]
+            for alt_ht_str in Alts_right[rep_ht]:
+                alt_ht = alt_ht_str.split('-')
+                alt_ht_left, alt_ht_right = int(alt_ht[0]), int(alt_ht[-1])
+                assert cur_left <= alt_ht_left
+                seq_pos = alt_ht_left - cur_left
+                cur_pos = alt_ht_left
+                part_alt_ht = []
+                for var_id_ in alt_ht[1:-1]:
+                    var_type_, var_pos_, var_data_ = Vars[var_id_]
+                    assert var_pos_ >= cur_pos
+                    seq_pos += (var_pos_ - cur_pos)
+                    if var_type_ == "single":
+                        seq_pos += 1
+                        cur_pos = var_pos_ + 1
+                    elif var_type_ == "deletion":
+                        cur_pos = var_pos_ + int(var_data_)
+                    else:
+                        assert var_type_ == "insertion"
+                        assert False
 
+                    if seq_pos >= len(cur_seq):
+                        break
+                    part_alt_ht.append(var_id_)
 
-    return cmp_left, cmp_right
+                if len(part_alt_ht) > 0:
+                    part_alt_ht_str = '-'.join(part_alt_ht)
+                    right_alt_set.add(part_alt_ht_str)
+                        
+        if found:
+            cmp_right = i - 1
+            right_alt_set.add(cur_ht_str)
+            break
+
+    if debug:
+        print "cmp_list_range: [%d, %d]" % (cmp_left, cmp_right)
+        print "left  alt set:", left_alt_set
+        print "right alt set:", right_alt_set
+    
+    return cmp_left, cmp_right, list(left_alt_set), list(right_alt_set)
 
