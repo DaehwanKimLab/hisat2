@@ -953,6 +953,7 @@ def identify_ambigious_diffs(ref_seq,
         return ht, seq
 
     # Left direction
+    found = False
     for i in reversed(range(len(cmp_list))):
         cmp_i = cmp_list[i]
         type, cur_left, length = cmp_i[:3]
@@ -964,9 +965,9 @@ def identify_ambigious_diffs(ref_seq,
 
         cur_ht, cur_seq = get_haplotype_and_seq(cmp_list[:i+1])
         if len(cur_ht) == 0:
-            cur_ht_str = "%d|%d" % (left, cur_right)
+            cur_ht_str = str(left)
         else:
-            cur_ht_str = '-'.join(cur_ht)
+            cur_ht_str = "%d-%s" % (left, '-'.join(cur_ht))
 
         found = False
         ht_i = lower_bound(Alts_left_list, cur_right + 1)
@@ -978,8 +979,7 @@ def identify_ambigious_diffs(ref_seq,
                 continue
 
             if len(cur_ht) > 0:
-                cur_ht_str = '-'.join(cur_ht)
-                if ht.find(cur_ht_str) == -1:
+                if ht.find('-'.join(cur_ht)) == -1:
                     continue
 
             ht = ht.split('-')[:-1]
@@ -993,8 +993,6 @@ def identify_ambigious_diffs(ref_seq,
                     
             if left <= ht_pos:
                 continue
-
-            found = True
 
             if debug:
                 print cmp_list[:i+1]
@@ -1033,7 +1031,8 @@ def identify_ambigious_diffs(ref_seq,
                     part_alt_ht.insert(0, var_id_)
 
                 if len(part_alt_ht) > 0:
-                    part_alt_ht_str = '-'.join(part_alt_ht)
+                    seq_left = len(cur_seq) - seq_pos - 1
+                    part_alt_ht_str = "%d-%s" % (cur_pos - seq_left, '-'.join(part_alt_ht))
                     left_alt_set.add(part_alt_ht_str)
                         
                 if debug:
@@ -1044,8 +1043,11 @@ def identify_ambigious_diffs(ref_seq,
             left_alt_set.add(cur_ht_str)
             break
 
+    if not found:
+        left_alt_set.add(str(left))
 
     # Right direction
+    found = False
     for i in range(cmp_left, len(cmp_list)):
         cmp_i = cmp_list[i]
         type, cur_left, length = cmp_i[:3]
@@ -1057,11 +1059,10 @@ def identify_ambigious_diffs(ref_seq,
 
         cur_ht, cur_seq = get_haplotype_and_seq(cmp_list[i:])
         if len(cur_ht) == 0:
-            cur_ht_str = "%d|%d" % (cur_left, right)
+            cur_ht_str = str(right)
         else:
-            cur_ht_str = '-'.join(cur_ht)
+            cur_ht_str = "%s-%d" % ('-'.join(cur_ht), right)
 
-        found = False
         ht_i = lower_bound(Alts_right_list, cur_left)
         for ht_j in range(ht_i, len(Alts_right_list)):
             ht_pos, ht = Alts_right_list[ht_j]
@@ -1071,8 +1072,7 @@ def identify_ambigious_diffs(ref_seq,
                 continue
 
             if len(cur_ht) > 0:
-                cur_ht_str = '-'.join(cur_ht)
-                if ht.find(cur_ht_str) == -1:
+                if ht.find('-'.join(cur_ht)) == -1:
                     continue
 
             ht = ht.split('-')[1:]
@@ -1118,7 +1118,8 @@ def identify_ambigious_diffs(ref_seq,
                     part_alt_ht.append(var_id_)
 
                 if len(part_alt_ht) > 0:
-                    part_alt_ht_str = '-'.join(part_alt_ht)
+                    seq_left = len(cur_seq) - seq_pos - 1
+                    part_alt_ht_str = "%s-%d" % ('-'.join(part_alt_ht), cur_pos + seq_left)
                     right_alt_set.add(part_alt_ht_str)
                         
         if found:
@@ -1126,6 +1127,10 @@ def identify_ambigious_diffs(ref_seq,
             right_alt_set.add(cur_ht_str)
             break
 
+    if not found:
+        right_alt_set.add(str(right))
+
+    # DK - debugging purposes
     if debug:
         print "cmp_list_range: [%d, %d]" % (cmp_left, cmp_right)
         print "left  alt set:", left_alt_set

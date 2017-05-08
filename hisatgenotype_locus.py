@@ -643,6 +643,12 @@ def typing(ex_path,
             
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
+            gene_del_var_list = []
+            for var_id, var_data in gene_vars.items():
+                var_type, var_pos, var_data = var_data
+                if var_type != "deletion":
+                    continue
+                gene_del_var_list.append([var_pos, var_pos + int(var_data) - 1, var_id])
             var_count = {}
             def add_novel_var(gene_vars,
                               gene_var_list,
@@ -1049,9 +1055,11 @@ def typing(ex_path,
                                     del_count += count
                                 else:
                                     nt_count += count
+                                    
                             # DK - debugging purposes
-                            if del_count * 6 < nt_count: # and nt_count >= 15:
-                                likely_misalignment = True
+                            if base_fname == "hla":
+                                if del_count * 6 < nt_count: # and nt_count >= 15:
+                                    likely_misalignment = True
                             
                         elif cigar_op == 'S':
                             if i == 0:
@@ -1086,7 +1094,7 @@ def typing(ex_path,
                         for type, length in cigars:
                             cigar_str += str(length)
                             cigar_str += type
-                    
+                   
                     if right_pos > len(ref_seq):
                         continue
 
@@ -1209,68 +1217,70 @@ def typing(ex_path,
                     prev_lines.append(line)
 
                     def add_count(count_per_read, ht, add):
+                        ht_orig = ht
                         ht = ht.split('-')
+
+                        assert len(ht) >= 2
+                        left, right = int(ht[0]), int(ht[-1])
+                        assert left <= right
+
+                        ht = ht[1:-1]
+                        alleles = set(Genes[gene].keys()) - set([ref_allele])
                         for i in range(len(ht)):
                             var_id = ht[i]
-                            if var_id[0].isdigit():
-                                tmp_alleles = set()
-                                left, right = var_id.split('|')
-                                left, right = int(left), int(right)
-                                var_idx = typing_common.lower_bound(gene_var_list, left)
-                                while var_idx < len(gene_var_list):
-                                    var_pos, var_id2 = gene_var_list[var_idx]
-                                    if var_pos > right:
-                                        break
-                                    if var_pos < left:
-                                        continue
-                                    tmp_alleles |= set(Links[var_id2])
-                                    var_idx += 1
-                                tmp_alleles = set(Genes[gene].keys()) - tmp_alleles - set([ref_allele])
-                            else:
-                                tmp_alleles = set(Links[var_id])
-                            if i == 0:
-                                alleles = tmp_alleles
-                            else:
-                                alleles &= tmp_alleles
+                            if var_id.startswith("nv"):
+                                continue
+                            alleles &= set(Links[var_id])
+                        ht = set(ht)
+
+                        tmp_alleles = set()
+                        var_idx = typing_common.lower_bound(gene_var_list, left)
+                        for var_idx in range(var_idx, len(gene_var_list)):
+                            var_pos, var_id = gene_var_list[var_idx]
+                            if var_pos > right:
+                                break
+                            if var_pos < left or var_id in ht:
+                                continue
+                            if var_id in ht:
+                                continue
+                            if var_id.startswith("nv"):
+                                continue
+                            tmp_alleles |= set(Links[var_id])
+
+                        for var_idx in range(var_idx, len(gene_del_var_list)):
+                            var_left, var_right, var_id = gene_del_var_list[var_idx]
+                            if var_id in ht:
+                                continue
+                            if var_right < left or var_left > right:
+                                continue
+                            tmp_alleles |= set(Links[var_id])
                             
+                        alleles -= tmp_alleles
+
+                        """
                         if verbose >= 2 and alleles:
                             if add > 0 and not (set(alleles) & debug_allele_names):
-                                """
-                                print "Add:", add, debug_allele_names, "-", ht
+                                print "Add:", add, debug_allele_names, "-", ht_orig
                                 for prev_line in prev_lines:
                                     print "\t", prev_line
                                 print "\t", alleles
-                                """
                             if add < 0 and set(alleles) & debug_allele_names:
-                                """
-                                print "Add:", add, debug_allele_names, "-", ht
+                                print "Add:", add, debug_allele_names, "-", ht_orig
                                 for prev_line in prev_lines:
                                     print "\t", prev_line
-                                """
+                        """
 
                         for allele in alleles:
                             count_per_read[allele] += add
 
                         return len(alleles)
 
-                    # Decide which allele(s) a read most likely came from
-                    for var_id, data in gene_vars.items():
-                        if var_id == "unknown" or var_id.startswith("nv"):
-                            continue
-                        var_type, var_pos, var_data = data
-                        if var_type != "deletion":
-                            continue
-                        if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
-                            if var_id in exon_vars:
-                                add_count(Gene_count_per_read, var_id, -1)
-                            add_count(Gene_gen_count_per_read, var_id, -1)
-
                     # Node
                     read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
                     read_vars = []
 
-                    # Positive and negative evidence
-                    positive_hts, negative_hts = set(), set()
+                    # Positive evidence
+                    positive_hts = set()
 
                     # Sanity check - read length, cigar string, and MD string
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
@@ -1285,7 +1295,7 @@ def typing(ex_path,
                                                            Alts_right_list,
                                                            cmp_list,
                                                            verbose,
-                                                           orig_read_id.startswith("a58|L"))  # debug?
+                                                           orig_read_id.startswith("a37|L"))  # debug?
 
                     mid_ht = []
                     for cmp in cmp_list[cmp_list_left:cmp_list_right+1]:
@@ -1297,41 +1307,25 @@ def typing(ex_path,
                             continue
                         mid_ht.append(var_id)
 
-                    for l in range(-1, len(cmp_left_alts)):
-                        if l < 0 or cmp_left_alts[l] == "":
-                            left_ht = []
-                        else:
-                            left_ht = cmp_left_alts[l].split('-')
+                    for l in range(len(cmp_left_alts)):
+                        left_ht = cmp_left_alts[l].split('-')
                         left_ht += mid_ht
-                        for r in range(-1, len(cmp_right_alts)):
-                            if r < 0 or cmp_right_alts[r] == "":
-                                right_ht = []
-                            else:
-                                right_ht = cmp_right_alts[r].split('-')
+                        for r in range(len(cmp_right_alts)):
+                            right_ht = cmp_right_alts[r].split('-')
                             ht = left_ht + right_ht
                             if len(ht) <= 0:
                                 continue
                             ht_str = '-'.join(ht)
                             positive_hts.add(ht_str)
-                        
 
                     # DK - debugging purposes
                     DK_debug = False
-                    if orig_read_id.startswith("a58|L"):
+                    if orig_read_id.startswith("a37|L"):
                         DK_debug = True
                         print line
                         print cmp_list
                         print "positive hts:", positive_hts
-                        print "negative hts:", negative_hts
                         print "cmp_list[%d, %d]" % (cmp_list_left, cmp_list_right)
-
-                    # Deletions at 5' and 3' ends
-                    for var_id, data in gene_vars.items():
-                        var_type, var_pos, var_data = data
-                        if var_type != "deletion":
-                            continue
-                        if left_pos >= var_pos and right_pos <= var_pos + int(var_data):
-                            negative_hts.add(var_id)
 
                     cmp_i = 0
                     while cmp_i < len(cmp_list):
@@ -1349,43 +1343,6 @@ def typing(ex_path,
                             read_node_seq += list(read_seq[read_pos:read_pos+length])
                             read_node_qual += list(read_qual[read_pos:read_pos+length])
                             read_node_var += ([''] * length)
-
-                            if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
-                                var_idx = typing_common.lower_bound(gene_var_list, ref_pos)
-                                while var_idx < len(gene_var_list):
-                                    var_pos, var_id = gene_var_list[var_idx]
-                                    if ref_pos + length <= var_pos:
-                                        break
-                                    if ref_pos <= var_pos:
-                                        var_type, _, var_data = gene_vars[var_id]
-                                        if var_type == "insertion":
-                                            if ref_pos < var_pos and ref_pos + length > var_pos + len(var_data):
-                                                negative_hts.add(var_id)
-                                        elif var_type == "deletion":
-                                            del_len = int(var_data)
-                                            if ref_pos < var_pos and ref_pos + length > var_pos + del_len:
-                                                cmp_left, cmp_right = cmp[1], cmp[1] + cmp[2]
-
-                                                # Check if this might be one of the two tandem repeats (the same left coordinate)
-                                                test1_seq1 = ref_seq[cmp_left:cmp_right]
-                                                test1_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos + del_len:cmp_right + del_len]
-                                                # Check if this happens due to small repeats (the same right coordinate - e.g. 19 times of TTTC in DQA1*05:05:01:02)
-                                                cmp_left -= read_pos
-                                                cmp_right += (len(read_seq) - read_pos - cmp[2])
-                                                test2_seq1 = ref_seq[cmp_left+int(var_data):cmp_right]
-                                                test2_seq2 = ref_seq[cmp_left:var_pos] + ref_seq[var_pos+int(var_data):cmp_right]
-
-                                                if base_fname == "codis":
-                                                    negative_hts.add(var_id)
-                                                else:
-                                                    if test1_seq1 != test1_seq2 and test2_seq1 != test2_seq2:
-                                                        negative_hts.add(var_id)                                              
-
-                                        else:
-                                            negative_hts.add(var_id)
-
-                                    var_idx += 1
-                                    
                             read_pos += length
                             ref_pos += length
                             cigar_match_len += length
@@ -1473,17 +1430,10 @@ def typing(ex_path,
                             add_count(Gene_count_per_read, positive_ht, 1)
                         add_count(Gene_gen_count_per_read, positive_ht, 1)
 
-                    for negative_ht in negative_hts:
-                        if negative_ht == "unknown" or negative_ht.startswith("nv"):
-                            continue
-                        if set(negative_ht.split('-')) & exon_vars:
-                            add_count(Gene_count_per_read, negative_ht, -1)
-                        add_count(Gene_gen_count_per_read, negative_ht, -1)
 
                     # DK - debugging purposes
                     if DK_debug:
                         print "positive:", positive_hts
-                        print "negative:", negative_hts
                         print "count_per_read:", Gene_gen_count_per_read
 
                     prev_read_id = read_id
