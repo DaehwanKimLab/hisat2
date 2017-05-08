@@ -782,27 +782,23 @@ def typing(ex_path,
             allele_rep_set = set(allele_reps.values())
 
             # For checking alternative alignments near the ends of alignments
-            new_alt_impl = True
-            if new_alt_impl:
-                Alts_left, Alts_right = typing_common.get_alternatives2(ref_seq,
-                                                                        allele_vars,
-                                                                        gene_vars,
-                                                                        gene_var_list,
-                                                                        verbose)
+            Alts_left, Alts_right = typing_common.get_alternatives(ref_seq,
+                                                                   allele_vars,
+                                                                   gene_vars,
+                                                                   gene_var_list,
+                                                                   verbose)
 
-                def haplotype_alts_list(haplotype_alts, left = True):
-                    haplotype_list = []
-                    for haplotype in haplotype_alts.keys():
-                        if left:
-                            pos = int(haplotype.split('-')[-1])
-                        else:
-                            pos = int(haplotype.split('-')[0])
-                        haplotype_list.append([pos, haplotype])
-                    return sorted(haplotype_list, cmp = lambda a, b: a[0] - b[0])
+            def haplotype_alts_list(haplotype_alts, left = True):
+                haplotype_list = []
+                for haplotype in haplotype_alts.keys():
+                    if left:
+                        pos = int(haplotype.split('-')[-1])
+                    else:
+                        pos = int(haplotype.split('-')[0])
+                    haplotype_list.append([pos, haplotype])
+                return sorted(haplotype_list, cmp = lambda a, b: a[0] - b[0])
 
-                Alts_left_list, Alts_right_list = haplotype_alts_list(Alts_left, True), haplotype_alts_list(Alts_right, False)
-            else:            
-                Alts_left, Alts_right = typing_common.get_alternatives(ref_seq, gene_vars, gene_var_list, verbose)
+            Alts_left_list, Alts_right_list = haplotype_alts_list(Alts_left, True), haplotype_alts_list(Alts_right, False)
 
             # Count alleles
             Gene_counts, Gene_cmpt = {}, {}
@@ -1280,52 +1276,44 @@ def typing(ex_path,
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
                     cigar_match_len, MD_match_len = 0, 0
 
-                    if new_alt_impl:
-                        cmp_list_left, cmp_list_right, cmp_left_alts, cmp_right_alts = \
-                        typing_common.identify_ambigious_diffs2(ref_seq,
-                                                                gene_vars,
-                                                                Alts_left,
-                                                                Alts_right,
-                                                                Alts_left_list,
-                                                                Alts_right_list,
-                                                                cmp_list,
-                                                                verbose,
-                                                                orig_read_id.startswith("a58|L"))  # debug?
+                    cmp_list_left, cmp_list_right, cmp_left_alts, cmp_right_alts = \
+                    typing_common.identify_ambigious_diffs(ref_seq,
+                                                           gene_vars,
+                                                           Alts_left,
+                                                           Alts_right,
+                                                           Alts_left_list,
+                                                           Alts_right_list,
+                                                           cmp_list,
+                                                           verbose,
+                                                           orig_read_id.startswith("a58|L"))  # debug?
 
-                        mid_ht = []
-                        for cmp in cmp_list[cmp_list_left:cmp_list_right+1]:
-                            type = cmp[0]
-                            if type not in ["mismatch", "deletion", "insertion"]:
-                                continue                            
-                            var_id = cmp[3]
-                            if var_id == "unknown" or var_id.startswith("nv"):
-                                continue
-                            mid_ht.append(var_id)
+                    mid_ht = []
+                    for cmp in cmp_list[cmp_list_left:cmp_list_right+1]:
+                        type = cmp[0]
+                        if type not in ["mismatch", "deletion", "insertion"]:
+                            continue                            
+                        var_id = cmp[3]
+                        if var_id == "unknown" or var_id.startswith("nv"):
+                            continue
+                        mid_ht.append(var_id)
 
-                        for l in range(-1, len(cmp_left_alts)):
-                            if l < 0 or cmp_left_alts[l] == "":
-                                left_ht = []
+                    for l in range(-1, len(cmp_left_alts)):
+                        if l < 0 or cmp_left_alts[l] == "":
+                            left_ht = []
+                        else:
+                            left_ht = cmp_left_alts[l].split('-')
+                        left_ht += mid_ht
+                        for r in range(-1, len(cmp_right_alts)):
+                            if r < 0 or cmp_right_alts[r] == "":
+                                right_ht = []
                             else:
-                                left_ht = cmp_left_alts[l].split('-')
-                            left_ht += mid_ht
-                            for r in range(-1, len(cmp_right_alts)):
-                                if r < 0 or cmp_right_alts[r] == "":
-                                    right_ht = []
-                                else:
-                                    right_ht = cmp_right_alts[r].split('-')
-                                ht = left_ht + right_ht
-                                if len(ht) <= 0:
-                                    continue
-                                ht_str = '-'.join(ht)
-                                positive_hts.add(ht_str)
+                                right_ht = cmp_right_alts[r].split('-')
+                            ht = left_ht + right_ht
+                            if len(ht) <= 0:
+                                continue
+                            ht_str = '-'.join(ht)
+                            positive_hts.add(ht_str)
                         
-                    else:
-                        cmp_list_left, cmp_list_right = typing_common.identify_ambigious_diffs(gene_vars,
-                                                                                               Alts_left,
-                                                                                               Alts_right,
-                                                                                               cmp_list,
-                                                                                               verbose,
-                                                                                               orig_read_id == "a45|L_441_89M8D11M_89|D|hv1,7|S|hv15") # debug?
 
                     # DK - debugging purposes
                     DK_debug = False
@@ -1408,10 +1396,6 @@ def typing(ex_path,
                             read_node_seq += [read_base]
                             read_node_qual += [qual]
                             read_node_var.append(var_id)
-                            if var_id != "unknown":
-                                if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
-                                    if not new_alt_impl: positive_hts.add(var_id)
-                            
                             cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
                             MD_match_len = 0
                             cigar_match_len += 1
@@ -1421,11 +1405,6 @@ def typing(ex_path,
                             var_id = cmp[3]
                             ins_len = length
                             ins_seq = read_seq[read_pos:read_pos+ins_len]
-                            if var_id != "unknown" or not var_id.startswith("nv"):
-                                if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
-                                    # Require at least 5bp match before and after a deletion
-                                    if read_pos >= 5 and read_pos + 5 <= len(read_seq):
-                                        if not new_alt_impl: positive_hts.add(var_id)
                             read_node_seq += ["I%s" % nt for nt in ins_seq]
                             read_node_qual += list(read_qual[read_pos:read_pos+ins_len])
                             read_node_var += ([var_id] * ins_len)                                        
@@ -1440,12 +1419,6 @@ def typing(ex_path,
                             del_len = length
                             read_node_seq += (['D'] * del_len)
                             read_node_qual += ([''] * del_len)
-                            if var_id != "unknown" or not var_id.statswith("nv"):
-                                if cmp_i >= cmp_list_left and cmp_i <= cmp_list_right:
-                                    # Require at least 5bp match before and after a deletion
-                                    if read_pos >= 5 and read_pos + 5 <= len(read_seq):
-                                        if not new_alt_impl: positive_hts.add(var_id)
-
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + del_len
                                 read_node_var += ([var_id] * del_len)
