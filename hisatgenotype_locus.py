@@ -1198,6 +1198,7 @@ def typing(ex_path,
                                                    read_node,
                                                    simulation)
                             read_nodes, read_var_list = [], []
+                            
                             if verbose >= 2 and base_fname in ["hla", "codis"]:
                                 cur_cmpt = cur_cmpt.split('-')
                                 if not(set(cur_cmpt) & set(test_Gene_names)):
@@ -1217,7 +1218,7 @@ def typing(ex_path,
                     prev_lines.append(line)
 
                     def add_count(count_per_read, ht, add):
-                        ht_orig = ht
+                        orig_ht = ht
                         ht = ht.split('-')
 
                         assert len(ht) >= 2
@@ -1295,7 +1296,7 @@ def typing(ex_path,
                                                            Alts_right_list,
                                                            cmp_list,
                                                            verbose,
-                                                           orig_read_id.startswith("a37|L"))  # debug?
+                                                           orig_read_id.startswith("a34|R"))  # debug?
 
                     mid_ht = []
                     for cmp in cmp_list[cmp_list_left:cmp_list_right+1]:
@@ -1320,7 +1321,7 @@ def typing(ex_path,
 
                     # DK - debugging purposes
                     DK_debug = False
-                    if orig_read_id.startswith("a37|L"):
+                    if orig_read_id.startswith("a34|R"):
                         DK_debug = True
                         print line
                         print cmp_list
@@ -1433,7 +1434,6 @@ def typing(ex_path,
 
                     # DK - debugging purposes
                     if DK_debug:
-                        print "positive:", positive_hts
                         print "count_per_read:", Gene_gen_count_per_read
 
                     prev_read_id = read_id

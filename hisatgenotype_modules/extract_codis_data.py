@@ -377,7 +377,27 @@ def extract_msa(base_dname,
                 sequence += (repeat * repeat_num)
             return sequence
 
+        def remove_redundant_alleles(alleles):
+            seq_to_ids = {}
+            new_alleles = []
+            for allele_id, repeat_st in alleles:
+                allele_seq = to_sequence(repeat_st)
+                if allele_seq in seq_to_ids:
+                    print >> sys.stderr, "Warning) %s: %s has the same sequence as %s" % \
+                        (locus_name, allele_id, seq_to_ids[allele_seq])
+                    continue
+                if allele_seq not in seq_to_ids:
+                    seq_to_ids[allele_seq] = [allele_id]
+                else:
+                    seq_to_ids[allele_seq].append(allele_id)         
+                new_alleles.append([allele_id, repeat_st])
+
+            return new_alleles
+
+        alleles = remove_redundant_alleles(alleles)
+
         allele_seqs = [[allele_id, to_sequence(repeat_st)] for allele_id, repeat_st in alleles]
+
         _, ref_allele_left, ref_allele, ref_allele_right = CODIS_seq[locus_name]
         for allele_id, allele_seq in allele_seqs:
             if ref_allele == allele_seq:
@@ -386,7 +406,7 @@ def extract_msa(base_dname,
         if locus_name not in CODIS_ref_name:
             CODIS_ref_name[locus_name] = "GRCh38"
             # Add GRCh38 allele
-            allele_seqs = [["GRCh38" % locus_name, ref_allele]] + allele_seqs
+            allele_seqs = [["%s*GRCh38" % locus_name, ref_allele]] + allele_seqs
 
         print >> sys.stderr, "%s: %d alleles with reference allele as %s" % (locus_name, len(alleles), CODIS_ref_name[locus_name])
         if verbose:

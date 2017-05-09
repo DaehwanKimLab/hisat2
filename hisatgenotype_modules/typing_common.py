@@ -728,7 +728,8 @@ def get_alternatives(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATACA
             pos = int(haplotype[0]) - 1
         else:
             pos = haplotype[-1] + 1
-        assert pos >= 0 and pos < len(ref_seq)
+        if pos < 0 or pos >= len(ref_seq):
+            return []
 
         if left:
             bases = [[[pos] + haplotype[1:], ref_seq[pos]]]
@@ -837,12 +838,6 @@ def get_alternatives(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATACA
             next_haplotype, bp = base1
             for base2 in bases2:
                 next_haplotype_alt, bp2 = base2
-                if left:
-                    if next_haplotype[0] == next_haplotype_alt[0]:
-                        continue
-                else:
-                    if next_haplotype[-1] == next_haplotype_alt[-1]:
-                        continue
                 if bp != bp2:
                     continue
 
@@ -908,7 +903,7 @@ def get_alternatives(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATACA
     print_haplotype_alts(haplotype_alts_left)
     if verbose: print "number of right haplotypes:", len(haplotype_alts_right)
     print_haplotype_alts(haplotype_alts_right)
-    
+
     return haplotype_alts_left, haplotype_alts_right
 
 
@@ -969,7 +964,6 @@ def identify_ambigious_diffs(ref_seq,
         else:
             cur_ht_str = "%d-%s" % (left, '-'.join(cur_ht))
 
-        found = False
         ht_i = lower_bound(Alts_left_list, cur_right + 1)
         for ht_j in reversed(range(0, min(ht_i + 1, len(Alts_left_list)))):
             ht_pos, ht = Alts_left_list[ht_j]
@@ -994,6 +988,8 @@ def identify_ambigious_diffs(ref_seq,
             if left <= ht_pos:
                 continue
 
+            found = True
+
             if debug:
                 print cmp_list[:i+1]
                 print "\t", cur_ht, "vs", Alts_left_list[ht_j], ht_pos
@@ -1010,15 +1006,18 @@ def identify_ambigious_diffs(ref_seq,
                 seq_pos = cur_right - alt_ht_right
                 cur_pos = alt_ht_right
                 part_alt_ht = []
-                for var_id_ in reversed(alt_ht[1:-1]):
+                alt_ht = alt_ht[1:-1]
+                for var_id_ in reversed(alt_ht):
                     var_type_, var_pos_, var_data_ = Vars[var_id_]
                     if var_type_ == "deletion":
                         del_len = int(var_data_)
                         var_pos_ = var_pos_ + del_len - 1
                     assert var_pos_ <= cur_pos
-                    seq_pos += (cur_pos - var_pos_)
+                    next_seq_pos = seq_pos + (cur_pos - var_pos_)
+                    if next_seq_pos >= len(cur_seq):
+                        break
                     if var_type_ == "single":
-                        seq_pos += 1
+                        next_seq_pos += 1
                         cur_pos = var_pos_ - 1
                     elif var_type_ == "deletion":
                         cur_pos = var_pos_ - del_len
@@ -1026,9 +1025,10 @@ def identify_ambigious_diffs(ref_seq,
                         assert var_type_ == "insertion"
                         assert False
 
-                    if seq_pos >= len(cur_seq):
+                    if next_seq_pos >= len(cur_seq):
                         break
                     part_alt_ht.insert(0, var_id_)
+                    seq_pos = next_seq_pos
 
                 if len(part_alt_ht) > 0:
                     seq_left = len(cur_seq) - seq_pos - 1
@@ -1085,14 +1085,15 @@ def identify_ambigious_diffs(ref_seq,
             if right >= ht_pos:
                 continue
 
-            # DK - debugging purposes
-            if debug:
-                print "DK1:", cmp_i
-                print "DK2:", Alts_right_list[ht_j][1]
-                print "DK3:", left, right, ht_pos
-
             found = True
             _, rep_ht = Alts_right_list[ht_j]
+
+            # DK - debugging purposes
+            if debug:
+                print "DK1:", cmp_i, cmp_list
+                print "DK2:", rep_ht, Alts_right[rep_ht]
+                print "DK3:", left, right, ht_pos
+
             for alt_ht_str in Alts_right[rep_ht]:
                 alt_ht = alt_ht_str.split('-')
                 alt_ht_left, alt_ht_right = int(alt_ht[0]), int(alt_ht[-1])
@@ -1100,12 +1101,16 @@ def identify_ambigious_diffs(ref_seq,
                 seq_pos = alt_ht_left - cur_left
                 cur_pos = alt_ht_left
                 part_alt_ht = []
-                for var_id_ in alt_ht[1:-1]:
+                alt_ht = alt_ht[1:-1]
+                for var_id_ in alt_ht:
                     var_type_, var_pos_, var_data_ = Vars[var_id_]
                     assert var_pos_ >= cur_pos
-                    seq_pos += (var_pos_ - cur_pos)
+                    next_seq_pos = seq_pos + (var_pos_ - cur_pos)
+                    if next_seq_pos >= len(cur_seq):
+                        break
+                    
                     if var_type_ == "single":
-                        seq_pos += 1
+                        next_seq_pos += 1
                         cur_pos = var_pos_ + 1
                     elif var_type_ == "deletion":
                         cur_pos = var_pos_ + int(var_data_)
@@ -1113,9 +1118,10 @@ def identify_ambigious_diffs(ref_seq,
                         assert var_type_ == "insertion"
                         assert False
 
-                    if seq_pos >= len(cur_seq):
+                    if next_seq_pos >= len(cur_seq):
                         break
                     part_alt_ht.append(var_id_)
+                    seq_pos = next_seq_pos
 
                 if len(part_alt_ht) > 0:
                     seq_left = len(cur_seq) - seq_pos - 1
@@ -1129,6 +1135,25 @@ def identify_ambigious_diffs(ref_seq,
 
     if not found:
         right_alt_set.add(str(right))
+
+    # Sanity check
+    ht_set_ = set()
+    for ht in left_alt_set:
+        ht = '-'.join(ht.split('-')[1:])
+        if ht == "":
+            continue
+        if ht in ht_set_:
+            print >> sys.stderr, "Error) %s should not be in" % ht, ht_set_
+            assert False
+        ht_set_.add(ht)
+    for ht in right_alt_set:
+        ht = '-'.join(ht.split('-')[:-1])
+        if ht == "":
+            continue
+        if ht in ht_set_:
+            print >> sys.stderr, "Error) %s should not be in" % ht, ht_set_
+            assert False
+        ht_set_.add(ht)
 
     # DK - debugging purposes
     if debug:
