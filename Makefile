@@ -186,6 +186,7 @@ HISAT2_BIN_LIST_AUX = hisat2-build-s-debug \
 GENERAL_LIST = $(wildcard scripts/*.sh) \
 	$(wildcard scripts/*.pl) \
 	$(wildcard *.py) \
+	$(wildcard hisat2_modules/*.py) \
 	doc/manual.inc.html \
 	doc/README \
 	doc/style.css \
