@@ -599,6 +599,8 @@ def typing(ex_path,
            read_fname,
            alignment_fname,
            num_frag_list,
+           read_len,
+           fragment_len,
            threads,
            best_alleles,
            verbose):
@@ -823,6 +825,89 @@ def typing(ex_path,
                 # nodes for reads
                 read_nodes = []
                 read_vars_list = []
+
+                # 
+                def add_count(count_per_read, ht, add):
+                    orig_ht = ht
+                    ht = ht.split('-')
+
+                    assert len(ht) >= 2
+                    left, right = int(ht[0]), int(ht[-1])
+                    assert left <= right
+
+                    ht = ht[1:-1]
+                    alleles = set(Genes[gene].keys()) - set([ref_allele])
+                    for i in range(len(ht)):
+                        var_id = ht[i]
+                        if var_id.startswith("nv"):
+                            continue
+                        alleles &= set(Links[var_id])
+                    ht = set(ht)
+
+                    tmp_alleles = set()
+                    var_idx = typing_common.lower_bound(gene_var_list, left)
+                    for var_idx in range(var_idx, len(gene_var_list)):
+                        var_pos, var_id = gene_var_list[var_idx]
+                        if var_pos > right:
+                            break
+                        if var_pos < left or var_id in ht:
+                            continue
+                        if var_id in ht:
+                            continue
+                        if var_id.startswith("nv"):
+                            continue
+                        tmp_alleles |= set(Links[var_id])
+
+                    for var_idx in range(var_idx, len(gene_del_var_list)):
+                        var_left, var_right, var_id = gene_del_var_list[var_idx]
+                        if var_id in ht:
+                            continue
+                        if var_right < left or var_left > right:
+                            continue
+                        tmp_alleles |= set(Links[var_id])
+                    alleles -= tmp_alleles
+                    
+                    for allele in alleles:
+                        count_per_read[allele] += add
+
+                    return len(alleles)
+
+                # Identify best pairs
+                def choose_pairs(left_positive_hts, right_positive_hts):
+                    if base_fname == "codis" and \
+                            gene == "D18S51" and \
+                            len(left_positive_hts) > 0 and \
+                            len(right_positive_hts) > 0 and \
+                            max(len(left_positive_hts), len(right_positive_hts)) >= 2:
+                        expected_inter_dist = fragment_len - read_len * 2
+
+                        best_diff = sys.maxint
+                        picked = []                                
+                        for left_ht_str in left_positive_hts:
+                            left_ht = left_ht_str.split('-')
+                            l_left, l_right = int(left_ht[0]), int(left_ht[-1])
+                            for right_ht_str in right_positive_hts:
+                                right_ht = right_ht_str.split('-')
+                                r_left, r_right = int(right_ht[0]), int(right_ht[-1])
+                                if l_right < r_right:
+                                    inter_dist = r_left - l_right - 1
+                                else:
+                                    inter_dist = l_left - r_right - 1
+
+                                cur_diff = abs(expected_inter_dist - inter_dist)
+                                if best_diff > cur_diff:
+                                    best_diff = cur_diff
+                                    picked = [[left_ht_str, right_ht_str]]
+                                elif best_diff == cur_diff:
+                                    picked.append([left_ht_str, right_ht_str])
+
+                        assert len(picked) > 0
+                        left_positive_hts, right_positive_hts = set(), set()
+                        for left_ht_str, right_ht_str in picked:
+                            left_positive_hts.add(left_ht_str)
+                            right_positive_hts.add(right_ht_str)
+
+                    return left_positive_hts, right_positive_hts                
                 
                 # Cigar regular expression
                 cigar_re = re.compile('\d+\w')
@@ -877,7 +962,8 @@ def typing(ex_path,
                         continue
 
                     # Left read?
-                    if flag & 0x40 != 0:
+                    is_left_read = flag & 0x40 != 0
+                    if is_left_read:
                         if read_id in left_read_ids:
                             continue
                         left_read_ids.add(read_id)
@@ -1188,6 +1274,14 @@ def typing(ex_path,
 
                     if read_id != prev_read_id:
                         if prev_read_id != None:
+                            
+                            for positive_ht in left_positive_hts | right_positive_hts:
+                                if positive_ht == "unknown" or positive_ht.startswith("nv"):
+                                    continue
+                                if set(positive_ht.split('-')) & exon_vars:
+                                    add_count(Gene_count_per_read, positive_ht, 1)
+                                add_count(Gene_gen_count_per_read, positive_ht, 1)
+
                             if base_fname == "hla":
                                 cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
                                 add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
@@ -1217,71 +1311,17 @@ def typing(ex_path,
 
                     prev_lines.append(line)
 
-                    def add_count(count_per_read, ht, add):
-                        orig_ht = ht
-                        ht = ht.split('-')
-
-                        assert len(ht) >= 2
-                        left, right = int(ht[0]), int(ht[-1])
-                        assert left <= right
-
-                        ht = ht[1:-1]
-                        alleles = set(Genes[gene].keys()) - set([ref_allele])
-                        for i in range(len(ht)):
-                            var_id = ht[i]
-                            if var_id.startswith("nv"):
-                                continue
-                            alleles &= set(Links[var_id])
-                        ht = set(ht)
-
-                        tmp_alleles = set()
-                        var_idx = typing_common.lower_bound(gene_var_list, left)
-                        for var_idx in range(var_idx, len(gene_var_list)):
-                            var_pos, var_id = gene_var_list[var_idx]
-                            if var_pos > right:
-                                break
-                            if var_pos < left or var_id in ht:
-                                continue
-                            if var_id in ht:
-                                continue
-                            if var_id.startswith("nv"):
-                                continue
-                            tmp_alleles |= set(Links[var_id])
-
-                        for var_idx in range(var_idx, len(gene_del_var_list)):
-                            var_left, var_right, var_id = gene_del_var_list[var_idx]
-                            if var_id in ht:
-                                continue
-                            if var_right < left or var_left > right:
-                                continue
-                            tmp_alleles |= set(Links[var_id])
-                            
-                        alleles -= tmp_alleles
-
-                        """
-                        if verbose >= 2 and alleles:
-                            if add > 0 and not (set(alleles) & debug_allele_names):
-                                print "Add:", add, debug_allele_names, "-", ht_orig
-                                for prev_line in prev_lines:
-                                    print "\t", prev_line
-                                print "\t", alleles
-                            if add < 0 and set(alleles) & debug_allele_names:
-                                print "Add:", add, debug_allele_names, "-", ht_orig
-                                for prev_line in prev_lines:
-                                    print "\t", prev_line
-                        """
-
-                        for allele in alleles:
-                            count_per_read[allele] += add
-
-                        return len(alleles)
-
                     # Node
                     read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
                     read_vars = []
 
                     # Positive evidence
-                    positive_hts = set()
+                    if prev_read_id == "":
+                        left_positive_hts, right_positive_hts = set(), set()
+                    elif is_left_read:
+                        left_positive_hts = set()
+                    else:
+                        right_positive_hts = set()
 
                     # Sanity check - read length, cigar string, and MD string
                     ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
@@ -1317,7 +1357,10 @@ def typing(ex_path,
                             if len(ht) <= 0:
                                 continue
                             ht_str = '-'.join(ht)
-                            positive_hts.add(ht_str)
+                            if is_left_read:
+                                left_positive_hts.add(ht_str)
+                            else:
+                                right_positive_hts.add(ht_str)
 
                     # DK - debugging purposes
                     DK_debug = False
@@ -1423,14 +1466,6 @@ def typing(ex_path,
                                                                gene_vars,
                                                                mpileup,
                                                                simulation)])
-
-                    for positive_ht in positive_hts:
-                        if positive_ht == "unknown" or positive_ht.startswith("nv"):
-                            continue
-                        if set(positive_ht.split('-')) & exon_vars:
-                            add_count(Gene_count_per_read, positive_ht, 1)
-                        add_count(Gene_gen_count_per_read, positive_ht, 1)
-
 
                     # DK - debugging purposes
                     if DK_debug:
@@ -1650,16 +1685,10 @@ def typing(ex_path,
                             
                     assert False
 
-
-                # DK - debugging purposes
-                # """
-
                 # Draw assembly graph
                 asm_graph.nodes = asm_graph.nodes2
                 asm_graph.to_node, asm_graph.from_node = {}, {}
                 begin_y = asm_graph.draw(begin_y, "Assembly with known alleles")
-
-                # """
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
@@ -1995,6 +2024,7 @@ def test_Gene_genotyping(base_fname,
     HISAT2_fnames = ["grch38",
                      "genome.fa",
                      "genome.fa.fai"]
+
     if not typing_common.check_files(HISAT2_fnames):
         typing_common.download_genome_and_index(ex_path)
 
@@ -2268,6 +2298,8 @@ def test_Gene_genotyping(base_fname,
                                      read_fname,
                                      alignment_fname,
                                      num_frag_list,
+                                     read_len,
+                                     fragment_len,
                                      threads,
                                      best_alleles,
                                      verbose)
@@ -2313,6 +2345,8 @@ def test_Gene_genotyping(base_fname,
                read_fname,
                alignment_fname,
                [],
+               read_len,
+               fragment_len,
                threads,
                best_alleles,
                verbose)
@@ -2541,4 +2575,3 @@ if __name__ == '__main__':
                          stranded_seq,
                          args.verbose_level,
                          debug)
-
