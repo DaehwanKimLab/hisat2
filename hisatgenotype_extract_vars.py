@@ -610,6 +610,7 @@ def extract_vars(base_fname,
             for seq_i in range(len(seqs)):
                 seqs[seq_i] = leftshift_deletions(backbone_seq, seqs[seq_i])
             backbone_seq, backbone_freq = create_consensus_seq(seqs, seq_len, min_var_freq, True)
+            seq_len = find_seq_len(seqs)
 
         print >> sys.stderr, "%s: number of HLA alleles is %d." % (gene, len(names))
 
