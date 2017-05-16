@@ -751,7 +751,6 @@ def typing(ex_path,
                     else:
                         # DK - to be implemented for insertions
                         assert var_type == "insertion"
-                        None
 
                 qual = ' ' * len(seq)
                 allele_node = assembly_graph.Node(allele_name,
@@ -874,13 +873,10 @@ def typing(ex_path,
 
                 # Identify best pairs
                 def choose_pairs(left_positive_hts, right_positive_hts):
-                    if base_fname == "codis" and \
-                            gene == "D18S51" and \
-                            len(left_positive_hts) > 0 and \
-                            len(right_positive_hts) > 0 and \
-                            max(len(left_positive_hts), len(right_positive_hts)) >= 2:
+                    if len(left_positive_hts) > 0 and \
+                       len(right_positive_hts) > 0 and \
+                       max(len(left_positive_hts), len(right_positive_hts)) >= 2:
                         expected_inter_dist = fragment_len - read_len * 2
-
                         best_diff = sys.maxint
                         picked = []                                
                         for left_ht_str in left_positive_hts:
@@ -902,6 +898,7 @@ def typing(ex_path,
                                     picked.append([left_ht_str, right_ht_str])
 
                         assert len(picked) > 0
+
                         left_positive_hts, right_positive_hts = set(), set()
                         for left_ht_str, right_ht_str in picked:
                             left_positive_hts.add(left_ht_str)
@@ -1274,7 +1271,8 @@ def typing(ex_path,
 
                     if read_id != prev_read_id:
                         if prev_read_id != None:
-                            
+                            if base_fname == "codis" and gene == "D18S51":
+                                left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)                            
                             for positive_ht in left_positive_hts | right_positive_hts:
                                 if positive_ht == "unknown" or positive_ht.startswith("nv"):
                                     continue
@@ -1336,7 +1334,7 @@ def typing(ex_path,
                                                            Alts_right_list,
                                                            cmp_list,
                                                            verbose,
-                                                           orig_read_id.startswith("a34|R"))  # debug?
+                                                           orig_read_id.startswith("a59|L"))  # debug?
 
                     mid_ht = []
                     for cmp in cmp_list[cmp_list_left:cmp_list_right+1]:
@@ -1364,11 +1362,11 @@ def typing(ex_path,
 
                     # DK - debugging purposes
                     DK_debug = False
-                    if orig_read_id.startswith("a34|R"):
+                    if orig_read_id.startswith("a59|L"):
                         DK_debug = True
                         print line
                         print cmp_list
-                        print "positive hts:", positive_hts
+                        print "positive hts:", left_positive_hts, right_positive_hts
                         print "cmp_list[%d, %d]" % (cmp_list_left, cmp_list_right)
 
                     cmp_i = 0
@@ -1481,6 +1479,15 @@ def typing(ex_path,
                     print >> f_, "\t\t\tNumber of reads aligned: %d" % num_reads
 
                 if prev_read_id != None:
+                    if base_fname == "codis" and gene == "D18S51":
+                        left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)                            
+                    for positive_ht in left_positive_hts | right_positive_hts:
+                        if positive_ht == "unknown" or positive_ht.startswith("nv"):
+                            continue
+                        if set(positive_ht.split('-')) & exon_vars:
+                            add_count(Gene_count_per_read, positive_ht, 1)
+                        add_count(Gene_gen_count_per_read, positive_ht, 1)
+
                     if base_fname == "hla":
                         add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
                     add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)

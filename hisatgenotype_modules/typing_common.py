@@ -1046,9 +1046,10 @@ def identify_ambigious_diffs(ref_seq,
     if not found:
         left_alt_set.add(str(left))
 
+
     # Right direction
     found = False
-    for i in range(cmp_left, len(cmp_list)):
+    for i in range(0, len(cmp_list)):
         cmp_i = cmp_list[i]
         type, cur_left, length = cmp_i[:3]
         var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
@@ -1135,6 +1136,10 @@ def identify_ambigious_diffs(ref_seq,
 
     if not found:
         right_alt_set.add(str(right))
+
+    if cmp_right < cmp_left:
+        cmp_left = 0
+        left_alt_set = set([str(left)])
 
     # Sanity check
     ht_set_ = set()

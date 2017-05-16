@@ -22,12 +22,13 @@
 
 import os, sys, subprocess, re
 import inspect, operator
+from copy import deepcopy
 from argparse import ArgumentParser, FileType
 import typing_common
 
 # sequences for DNA fingerprinting loci are available at http://www.cstl.nist.gov/biotech/strbase/seq_ref.htm
 
-CODIS_seq = {
+orig_CODIS_seq = {
     "CSF1PO" :
     # http://www.cstl.nist.gov/biotech/strbase/str_CSF1PO.htm
     # allele 13: 5:150076172-150076490 - (samtools faidx genome.fa - GRCh38)
@@ -221,11 +222,171 @@ def get_flanking_seqs(ex_path,
     return left_flank_seq, right_flank_seq
 
 
+
+"""
+"""
+def get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j):
+    if repeat_i == repeat_j:
+        return 0
+    elif repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1]):
+        return -1
+    else:
+        return -2
+
+    
+"""
+"""
+def SW_alignment(allele_i, allele_j):
+    n, m = len(allele_i), len(allele_j)
+    a = [[0 for j in range(m)] for i in range(n)]
+
+    # Fill 2D array
+    for i in range(n):
+        repeat_i, repeat_nums_i = allele_i[i]
+        for j in range(m):
+            repeat_j, repeat_nums_j = allele_j[j]
+            if i == 0:
+                if j == 0:
+                    if repeat_i == repeat_j:
+                        a[i][j] = 0
+                    else:
+                        a[i][j] = -1
+                else:
+                    assert j > 0
+                    a[i][j] = a[i][j-1] - 1
+            elif j == 0:
+                assert i > 0
+                a[i][j] = a[i-1][j] - 1
+            else:
+                equal_score = get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j)
+                a[i][j] = max(a[i-1][j] - 1, a[i][j-1] - 1, a[i-1][j-1] + equal_score)
+
+    return a, n, m
+
+
+"""
+"""
+def combine_alleles(backbone_allele, add_allele):
+    allele_i, allele_j = backbone_allele, add_allele
+    a, n, m = SW_alignment(allele_i, allele_j)
+
+    # Back tracking
+    new_backbone_allele = []
+    i, j = n - 1, m - 1
+    while i >= 0 and j >= 0:
+        repeat_i, repeat_nums_i = allele_i[i]
+        repeat_j, repeat_nums_j = allele_j[j]
+        if i == 0:
+            if j == 0:
+                if repeat_i == repeat_j:
+                    new_backbone_allele.append([repeat_i, repeat_nums_i | repeat_nums_j])
+                else:
+                    assert repeat_nums_i == repeat_nums_j
+                    assert repeat_nums_i == set([1])
+                    new_backbone_allele.append([repeat_i | repeat_j, repeat_nums_i | repeat_nums_j])
+            else:
+                new_backbone_allele.append([repeat_j, repeat_nums_j | set([0])])
+            j -= 1
+        elif j == 0:
+            assert i > 0
+            new_backbone_allele.append([repeat_i, repeat_nums_i | set([0])])
+            i -= 1
+        else:
+            equal_score = get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j)
+            if a[i-1][j] - 1 == a[i][j]:
+                new_backbone_allele.append([repeat_i, repeat_nums_i | set([0])])
+                i -= 1
+            elif a[i][j-1] - 1 == a[i][j]:
+                new_backbone_allele.append([repeat_j, repeat_nums_j | set([0])])
+                j -= 1
+            else:
+                assert a[i-1][j-1] + equal_score == a[i][j]
+                if repeat_i == repeat_j:
+                    new_backbone_allele.append([repeat_i, repeat_nums_i | repeat_nums_j])
+                else:
+                    assert repeat_nums_i == repeat_nums_j
+                    assert repeat_nums_i == set([1])
+                    new_backbone_allele.append([repeat_i | repeat_j, repeat_nums_i | repeat_nums_j])
+                i -= 1
+                j -= 1
+
+    new_backbone_allele = new_backbone_allele[::-1]
+
+    return new_backbone_allele
+
+
+"""
+"""
+def msf_alignment(backbone_allele, allele):
+    allele_i, allele_j = backbone_allele, allele
+    a, n, m = SW_alignment(allele_i, allele_j)
+
+    # Back tracking
+    allele_seq, backbone_seq = "", ""
+    i, j = n - 1, m - 1
+    while i >= 0 and j >= 0:
+        repeats_i, repeat_nums_i = allele_i[i]
+        repeat_i = ""
+        max_repeat = ""
+        for repeat_str in repeats_i:
+            if len(repeat_str) > len(repeat_i):
+                repeat_i = repeat_str
+        repeat_num_i = max(repeat_nums_i)
+        repeats_j, repeat_nums_j = allele_j[j]
+        assert len(repeats_j) == 1 and len(repeat_nums_j) == 1
+        repeat_j, repeat_num_j = list(repeats_j)[0], list(repeat_nums_j)[0]
+        if i == 0:
+            assert j == 0
+            if repeats_i == repeats_j:
+                add_seq = repeat_i * repeat_num_j
+                dot_seq = '.' * (len(repeat_i) * (repeat_num_i - repeat_num_j))
+                allele_seq = add_seq + dot_seq + allele_seq
+                add_seq = repeat_i * repeat_num_i
+                backbone_seq = add_seq + backbone_seq
+            else:
+                assert repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1])
+                dot_seq = '.' * (len(repeat_i) - len(repeat_j))
+                allele_seq = repeat_j + dot_seq + allele_seq
+                backbone_seq = repeat_i + backbone_seq                    
+            j -= 1
+        elif j == 0:
+            assert i > 0
+            allele_seq = '.' * (len(repeat_i) * repeat_num_i) + allele_seq
+            backbone_seq = repeat_i * repeat_num_i + backbone_seq
+            i -= 1
+        else:
+            equal_score = get_equal_score(repeats_i, repeat_nums_i, repeats_j, repeat_nums_j)
+            if a[i-1][j] - 1 == a[i][j]:
+                allele_seq = '.' * (len(repeat_i) * repeat_num_i) + allele_seq
+                backbone_seq = repeat_i * repeat_num_i + backbone_seq
+                i -= 1
+            elif a[i][j-1] - 1 == a[i][j]:
+                assert False
+            else:
+                assert a[i-1][j-1] + equal_score == a[i][j]
+                if repeat_i == repeat_j:
+                    add_seq = repeat_i * repeat_num_j
+                    dot_seq = '.' * (len(repeat_i) * (repeat_num_i - repeat_num_j))
+                    allele_seq = add_seq + dot_seq + allele_seq
+                    add_seq = repeat_i * repeat_num_i
+                    backbone_seq = add_seq + backbone_seq
+                else:
+                    assert repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1])
+                    dot_seq = '.' * (len(repeat_i) - len(repeat_j))
+                    allele_seq = repeat_j + dot_seq + allele_seq
+                    backbone_seq = repeat_i + backbone_seq                    
+                i -= 1
+                j -= 1
+
+    return allele_seq, backbone_seq
+
+
 """
 Extract multiple sequence alignments
 """
 def extract_msa(base_dname,
                 base_fname,
+                locus_list,
                 verbose):    
 
     # Current script directory
@@ -238,6 +399,14 @@ def extract_msa(base_dname,
                      "genome.fa.fai"]
     if not typing_common.check_files(HISAT2_fnames):
         typing_common.download_genome_and_index(ex_path)
+
+    CODIS_seq = orig_CODIS_seq
+    if len(locus_list) > 0:
+        new_CODIS_seq = {}
+        for locus_name, fields in CODIS_seq.items():
+            if locus_name in locus_list:
+                new_CODIS_seq[locus_name] = fields
+        CODIS_seq = new_CODIS_seq        
 
     # Add some additional sequences to allele sequences to make them reasonably long for typing and assembly
     for locus_name, fields in CODIS_seq.items():
@@ -315,7 +484,7 @@ def extract_msa(base_dname,
             continue
 
         # From   [TTTC]3TTTTTTCT[CTTT]20CTCC[TTCC]2
-        # To     [['TTTC', 3], ['TTTTTTCT', 1], ['CTTT', 20], ['CTCC', 1], ['TTCC', 2]]
+        # To     [['TTTC', [3]], ['TTTTTTCT', [1]], ['CTTT', [20]], ['CTCC', [1]], ['TTCC', [2]]]
         def read_allele(repeat_st):
             allele = []
             s = 0
@@ -344,7 +513,7 @@ def extract_msa(base_dname,
                         else:
                             break
                     assert num > 0
-                    allele.append([repeat, num])
+                    allele.append([set([repeat]), set([num])])
                 else:
                     repeat = ""
                     while s < len(repeat_st):
@@ -355,11 +524,13 @@ def extract_msa(base_dname,
                         else:
                             assert nt == '['
                             break
-                    allele.append([repeat, 1])
+                    allele.append([set([repeat]), set([1])])
 
             # Sanity check
             cmp_repeat_st = ""
-            for repeat, repeat_num in allele:
+            for repeats, repeat_nums in allele:
+                repeat = list(repeats)[0]
+                repeat_num = list(repeat_nums)[0]
                 if repeat_num > 1 or locus_name == "D8S1179":
                     cmp_repeat_st += "["
                 cmp_repeat_st += repeat
@@ -373,7 +544,9 @@ def extract_msa(base_dname,
 
         def to_sequence(repeat_st):
             sequence = ""
-            for repeat, repeat_num in repeat_st:
+            for repeats, repeat_nums in repeat_st:
+                repeat = list(repeats)[0]
+                repeat_num = list(repeat_nums)[0]
                 sequence += (repeat * repeat_num)
             return sequence
 
@@ -414,61 +587,92 @@ def extract_msa(base_dname,
             for allele_id, allele in alleles:
                 print >> sys.stderr, allele_id, "\t", allele
 
-        ### Perform ClustalW multiple sequence alignment
+        # DK - create a backbone sequence
+        assert len(alleles) > 0
+        backbone_allele = deepcopy(alleles[-1][1])
+        for allele in reversed(alleles[:-1]):
+            allele = allele[1]
+            if verbose:
+                print >> sys.stderr, "backbone         :", backbone_allele
+                print >> sys.stderr, "allele           :", allele
+            backbone_allele = combine_alleles(backbone_allele, allele)
+            msf_allele_seq, msf_backbone_seq = msf_alignment(backbone_allele, allele)
+            if verbose:                
+                print >> sys.stderr, "combined backbone:", backbone_allele
+                print >> sys.stderr, "msf_allele_seq  :", msf_allele_seq
+                print >> sys.stderr, "msf_backbone_seq:", msf_backbone_seq
+                print >> sys.stderr
 
-        # Create a temporary allele sequence file
-        seq_fname = "%s.tmp.fa" % locus_name
-        msf_fname = "%s.tmp.aln" % locus_name
-        dnd_fname = "%s.tmp.dnd" % locus_name
-        seq_file = open(seq_fname, 'w')
-        for allele_id, allele_seq in allele_seqs:
-            print >> seq_file, ">%s" % allele_id
-            print >> seq_file, allele_seq
-        seq_file.close()
+        if True:
+            allele_dic = {}
+            for allele_id, allele_seq in allele_seqs:
+                allele_dic[allele_id] = allele_seq
 
-        # Run ClustalW - see http://www.clustal.org/clustal2 for more details
-        clustalw_cmd = ["clustalw2", seq_fname]
-        try:
-            clustalw_proc = subprocess.Popen(clustalw_cmd,
-                                             stdout=open("/dev/null", 'w'),
-                                             stderr=open("/dev/null", 'w'))
-            clustalw_proc.communicate()
-            if not os.path.exists(msf_fname):
-                print >> sys.stderr, "Error: running ClustalW failed."
-        except:
-            print >> sys.stderr, "Error: please install the latest version of ClustalW."
+            allele_repeat_msf = {}
+            for allele_id, allele_st in alleles:
+                msf_allele_seq, msf_backbone_seq = msf_alignment(backbone_allele, allele_st)
+                allele_repeat_msf[allele_id] = msf_allele_seq
 
-        allele_dic = {}
-        for allele_id, allele_seq in allele_seqs:
-            allele_dic[allele_id] = allele_seq
+        else:
+            ### Perform ClustalW multiple sequence alignment
 
-        allele_repeat_msf = {}
-        for line in open(msf_fname):
-            line = line.strip()
-            if len(line) == 0 or \
-               line.startswith("CLUSTAL") or \
-               line.startswith("*"):
-                continue
-            
-            tmp_allele_id, repeat = line.split()
-            # ClustalW sometimes changes allele names
-            allele_id = ""
-            parenthesis_open = True
-            for ch in tmp_allele_id:
-                if ch == '_':
-                    if parenthesis_open:
-                        allele_id += '('
+            # Create a temporary allele sequence file
+            seq_fname = "%s.tmp.fa" % locus_name
+            msf_fname = "%s.tmp.aln" % locus_name
+            dnd_fname = "%s.tmp.dnd" % locus_name
+            seq_file = open(seq_fname, 'w')
+            for allele_id, allele_seq in allele_seqs:
+                print >> seq_file, ">%s" % allele_id
+                print >> seq_file, allele_seq
+            seq_file.close()
+
+            # Run ClustalW - see http://www.clustal.org/clustal2 for more details
+            clustalw_cmd = ["clustalw2", seq_fname]
+            try:
+                clustalw_proc = subprocess.Popen(clustalw_cmd,
+                                                 stdout=open("/dev/null", 'w'),
+                                                 stderr=open("/dev/null", 'w'))
+                clustalw_proc.communicate()
+                if not os.path.exists(msf_fname):
+                    print >> sys.stderr, "Error: running ClustalW failed."
+            except:
+                print >> sys.stderr, "Error: please install the latest version of ClustalW."
+
+            allele_dic = {}
+            for allele_id, allele_seq in allele_seqs:
+                allele_dic[allele_id] = allele_seq
+
+            allele_repeat_msf = {}
+            for line in open(msf_fname):
+                line = line.strip()
+                if len(line) == 0 or \
+                   line.startswith("CLUSTAL") or \
+                   line.startswith("*"):
+                    continue
+
+                tmp_allele_id, repeat = line.split()
+                # ClustalW sometimes changes allele names
+                allele_id = ""
+                parenthesis_open = True
+                for ch in tmp_allele_id:
+                    if ch == '_':
+                        if parenthesis_open:
+                            allele_id += '('
+                        else:
+                            allele_id += ')'
+                        parenthesis_open = not parenthesis_open
                     else:
-                        allele_id += ')'
-                    parenthesis_open = not parenthesis_open
+                        allele_id += ch
+                assert parenthesis_open
+                repeat = repeat.replace('-', '.')
+                if allele_id not in allele_repeat_msf:
+                    allele_repeat_msf[allele_id] = repeat
                 else:
-                    allele_id += ch
-            assert parenthesis_open
-            repeat = repeat.replace('-', '.')
-            if allele_id not in allele_repeat_msf:
-                allele_repeat_msf[allele_id] = repeat
-            else:
-                allele_repeat_msf[allele_id] += repeat
+                    allele_repeat_msf[allele_id] += repeat
+
+            os.remove(seq_fname)
+            os.remove(msf_fname)
+            os.remove(dnd_fname)
 
         # Sanity check
         assert len(allele_dic) == len(allele_repeat_msf)
@@ -484,10 +688,6 @@ def extract_msa(base_dname,
         allele_msf = {}
         for allele_id, repeat_msf in allele_repeat_msf.items():
             allele_msf[allele_id] = ref_allele_left + repeat_msf + ref_allele_right
-            
-        os.remove(seq_fname)
-        os.remove(msf_fname)
-        os.remove(dnd_fname)
 
         # Make sure the length of allele ID is short, less than 20 characters
         max_allele_id_len = max([len(allele_id) for allele_id in allele_dic.keys()])
@@ -505,11 +705,10 @@ def extract_msa(base_dname,
                 for s2 in range(s, min(msf_len, s + 50), 10):
                     print >> msf_file, " %s" % msf[s2:s2+10],
                 print >> msf_file
-                
+
             if s + 50 >= msf_len:
                 break
             print >> msf_file
-
         msf_file.close()
 
 
@@ -534,6 +733,11 @@ if __name__ == '__main__':
                         type=str,
                         default="codis",
                         help="base filename (default: codis)")
+    parser.add_argument("--locus-list",
+                        dest="locus_list",
+                        type=str,
+                        default="",
+                        help="base filename (default: empty)")    
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -547,8 +751,13 @@ if __name__ == '__main__':
     else:
         base_fname = args.base_fname
         base_dname = ""
+    if args.locus_list != "":
+        locus_list = args.locus_list.split(',')
+    else:
+        locus_list = []
         
     extract_msa(base_dname,
-                base_fname,                
+                base_fname,
+                locus_list,
                 args.verbose)
 
