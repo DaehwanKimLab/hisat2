@@ -841,6 +841,11 @@ def get_alternatives(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATACA
                 if bp != bp2:
                     continue
 
+                # DK - debugging purpose
+                print "DK:", haplotype, next_haplotype
+                print "DK:", haplotype_alt, next_haplotype_alt
+                sys.exit(1)
+
                 found = True
                 get_alternative_recur(var_orig_id,
                                       next_haplotype,
