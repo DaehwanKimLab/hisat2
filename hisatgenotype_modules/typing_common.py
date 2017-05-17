@@ -879,16 +879,24 @@ def get_alternatives(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATACA
         if var_pos + del_len >= len(ref_seq):
             continue
 
+
+        # DK - debugging purpose
+        """
+        
         # Left direction
         get_alternative_recur(var_id,
                               [var_pos, var_id, var_pos + del_len - 1],
                               [var_pos + del_len, var_pos + del_len - 1])
+
+        """
+
 
         # Right direction    
         get_alternative_recur(var_id,
                               [var_pos, var_id, var_pos + del_len - 1],
                               [var_pos, var_pos - 1],
                               False)
+
 
     # Print alternative haplotypes / Sanity check
     def print_haplotype_alts(haplotype_alts):
@@ -1045,7 +1053,6 @@ def identify_ambigious_diffs(ref_seq,
 
     if not found:
         left_alt_set.add(str(left))
-
 
     # Right direction
     found = False

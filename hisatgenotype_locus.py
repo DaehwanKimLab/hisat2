@@ -1314,7 +1314,7 @@ def typing(ex_path,
                     read_vars = []
 
                     # Positive evidence
-                    if prev_read_id == "":
+                    if prev_read_id == None:
                         left_positive_hts, right_positive_hts = set(), set()
                     elif is_left_read:
                         left_positive_hts = set()
@@ -2528,7 +2528,7 @@ if __name__ == '__main__':
                 debug[item] = 1
 
     if not args.partial:
-        print >> sys.stderr, "Warning: --no-partial will be no longer supported!"
+        print >> sys.stderr, "Warning: --no-partial should be used for debugging purpose only."
 
     if args.read_len * 2 > args.fragment_len:
         print >> sys.stderr, "Warning: fragment might be too short (%d)" % (args.fragment_len)
@@ -2552,7 +2552,7 @@ if __name__ == '__main__':
     if args.stranded_seq != "":
         stranded_seq = args.stranded_seq.split(',')
         if len(stranded_seq) != 2:
-            print >> sys.stderr, "Error: --stranded-seq is incorrectly specified"
+            print >> sys.stderr, "Error: --stranded-seq is incorrectly specified."
             sys.exit(1)
     else:
         stranded_seq = []
@@ -2582,3 +2582,4 @@ if __name__ == '__main__':
                          stranded_seq,
                          args.verbose_level,
                          debug)
+
