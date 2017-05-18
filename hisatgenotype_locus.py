@@ -1806,11 +1806,8 @@ def test_Gene_genotyping(base_fname,
     test_list = []
     if simulation:
         basic_test, pair_test = True, False
-        if debug_instr:
-            if "basic_test" in debug_instr:
-                basic_test, pair_test = True, False
-            else:
-                basic_test, pair_test = False, True
+        if debug_instr and "pair" in debug_instr:
+            basic_test, pair_test = False, True
 
         test_passed = {}
         test_list = []
@@ -1818,10 +1815,11 @@ def test_Gene_genotyping(base_fname,
         if basic_test:
             for gene in genes:
                 Gene_gene_alleles = Gene_names[gene]
-                for Gene_name in Gene_gene_alleles:
-                    if Gene_name.find("BACKBONE") != -1:
+                for allele in Gene_gene_alleles:
+                    if allele.find("BACKBONE") != -1:
                         continue
-                    test_list.append([[Gene_name]])
+                    test_list.append([[allele]])
+                random.shuffle(test_list)
         if pair_test:
             test_size = 500
             allele_count = 2
