@@ -430,7 +430,10 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
     def write_reads(reads, idx):
         read_file = open('%s_input_%d.fa' % (base_fname, idx), 'w')
         for read_i in range(len(reads)):
-            print >> read_file, ">%d|%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
+            query_name = "%d|%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
+            if len(query_name) > 254:
+                query_name = query_name[:254]
+            print >> read_file, ">%s" % query_name
             print >> read_file, reads[read_i][0]
         read_file.close()
     write_reads(reads_1, 1)
@@ -841,10 +844,15 @@ def get_alternatives(ref_seq,     # GATAACTAGATACATGAGATAGATTTGATAGATAGATAGATACA
                 if bp != bp2:
                     continue
 
-                # DK - debugging purpose
-                print "DK:", haplotype, next_haplotype
-                print "DK:", haplotype_alt, next_haplotype_alt
-                sys.exit(1)
+                # Todo: implement a routine to handle haplotypes ending with the same coordinate
+                if left:
+                    left1, left2 = int(next_haplotype[0]), int(next_haplotype_alt[0])
+                    if left1 == left2:
+                        continue
+                else:
+                    right1, right2 = int(next_haplotype[-1]), int(next_haplotype_alt[-1])
+                    if right1 == right2:
+                        continue
 
                 found = True
                 get_alternative_recur(var_orig_id,
@@ -934,7 +942,6 @@ def identify_ambigious_diffs(ref_seq,
         for i in range(len(cmp_list)):
             cmp_i = cmp_list[i]
             type, pos, length = cmp_i[:3]
-            data = length
             if len(cmp_i) <= 3:
                 var_id = ""
             else:
@@ -944,7 +951,8 @@ def identify_ambigious_diffs(ref_seq,
             elif type == "mismatch":
                 seq += ref_seq[pos]
             elif type == "insertion":
-                seq += data
+                None
+                # seq += data
             else:
                 assert type == "deletion"
 

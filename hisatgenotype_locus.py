@@ -481,97 +481,6 @@ def error_correct(ref_seq,
 
 
 """
-Use Stranded-seq reads to resolve assembly ambiguity
-"""
-def stranded_seq_alignment(genome_name,
-                           sra_run_info,
-                           ex_path,
-                           ref_allele):
-    read_dir = sra_run_info.split('/')[:-1]
-    read_dir = '/'.join(read_dir)
-    runs = []
-    for line in open(sra_run_info):
-        line = line.strip()
-        fields = line.split('\t')
-        genome_name_, run = fields[4], fields[0]
-        if genome_name == genome_name_:
-            runs.append(run)
-
-    run_alignments = []
-    for run in runs:
-        read_fname, out_fname = "%s/%s.extracted.fq.gz" % (read_dir, run), "%s/%s.bam" % (read_dir, run)
-        typing_common.align_reads("hisat2",
-                                  False,         # simulation?
-                                  "hla",
-                                  "graph",
-                                  [read_fname],
-                                  True,          # fastq?
-                                  1,             # number of threads
-                                  out_fname,
-                                  False)         # verbose?
-
-        # Read alignments
-        alignview_cmd = ["samtools",
-                         "view",
-                         out_fname]
-        base_locus = 0
-        alignview_cmd += [ref_allele]
-        alignview_proc = subprocess.Popen(alignview_cmd,
-                                          stdout=subprocess.PIPE,
-                                          stderr=open("/dev/null", 'w'))
-
-        plus, minus = [], []
-        # Cigar regular expression
-        cigar_re = re.compile('\d+\w')
-        pos_added = set()
-        for line in alignview_proc.stdout:
-            line = line.strip()
-            fields = line.split('\t')
-            read_id, flag, ref, pos, _, cigar_str = fields[:6]
-            flag = int(flag)
-            assert run == read_id.split('.')[0]
-
-            if flag & 0x4 != 0:
-                continue
-
-            Zs = ""
-            for i in range(11, len(fields)):
-                field = fields[i]
-                if field.startswith("Zs"):
-                    Zs = field[5:]
-
-            vars = []
-            if Zs != "":
-                for var in Zs.split(','):
-                    _, _, var = var.split('|')
-                    vars.append(var)
-
-            left_pos = int(pos) - 1
-            if left_pos in pos_added:
-                continue
-            pos_added.add(left_pos)
-            right_pos = left_pos
-            cigars = cigar_re.findall(cigar_str)
-            cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
-            for i in range(len(cigars)):
-                cigar_op, length = cigars[i]
-                if cigar_op in "MND":
-                    right_pos += length
-
-            entry = [left_pos, right_pos, vars]
-            if flag & 0x10 == 0:
-                plus.append(entry)
-            else:
-                minus.append(entry)
-
-        if len(plus) > 0 and len(minus) > 0:
-            if len(plus) > 1 or len(minus) > 1:
-                run_alignments.append([run, plus, minus])
-
-    return run_alignments
-
-
-"""
 """
 def typing(ex_path,
            simulation,
@@ -594,7 +503,6 @@ def typing(ex_path,
            error_correction,
            allow_discordant,
            display_alleles,
-           stranded_seq,
            fastq,
            read_fname,
            alignment_fname,
@@ -1272,7 +1180,8 @@ def typing(ex_path,
                     if read_id != prev_read_id:
                         if prev_read_id != None:
                             if base_fname == "codis" and gene == "D18S51":
-                                left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)                            
+                                left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)
+
                             for positive_ht in left_positive_hts | right_positive_hts:
                                 if positive_ht == "unknown" or positive_ht.startswith("nv"):
                                     continue
@@ -1282,7 +1191,7 @@ def typing(ex_path,
 
                             if base_fname == "hla":
                                 cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
-                                add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
+                                cur_cmpt_gen = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
                             else:
                                 cur_cmpt = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
                             for read_id_, read_node in read_nodes:
@@ -1290,11 +1199,19 @@ def typing(ex_path,
                                                    read_node,
                                                    simulation)
                             read_nodes, read_var_list = [], []
-                            
                             if verbose >= 2 and base_fname in ["hla", "codis"]:
-                                cur_cmpt = cur_cmpt.split('-')
-                                if not(set(cur_cmpt) & set(test_Gene_names)):
-                                    print "%s are chosen instead of %s" % ('-'.join(cur_cmpt), '-'.join(test_Gene_names))
+                                cur_cmpt = cur_cmpt.split('-') if cur_cmpt != "" else set()
+                                cur_cmpt_gen = cur_cmpt_gen.split('-') if cur_cmpt_gen != "" else set()
+                                show_debug = (partial and cur_cmpt != "" and not set(cur_cmpt) & set(test_Gene_names)) or \
+                                              (not partial and cur_cmpt_gen != "" and not set(cur_cmpt_gen) & set(test_Gene_names))
+                                              
+                                if show_debug:
+                                    print "%s are chosen instead of %s" % (cur_cmpt if partial else cur_cmpt_gen, '-'.join(test_Gene_names))
+
+                                    # DK - debugging purpose
+                                    print "DK:", cur_cmpt
+                                    print "DK:", cur_cmpt_gen
+                                    
                                     for prev_line in prev_lines:
                                         print "\t", prev_line
 
@@ -1373,10 +1290,6 @@ def typing(ex_path,
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
                         type, length = cmp[0], cmp[2]
-                        # Disable the following sanity check due to error correction
-                        # if num_editdist == 0 and type in ["mismatch", "deletion", "insertion"]:
-                        #     assert cmp[3] != "unknown"
-
                         if type in ["match", "mismatch"]:
                             if read_node_pos < 0:
                                 read_node_pos = ref_pos
@@ -1386,20 +1299,13 @@ def typing(ex_path,
                             read_node_qual += list(read_qual[read_pos:read_pos+length])
                             read_node_var += ([''] * length)
                             read_pos += length
-                            ref_pos += length
-                            cigar_match_len += length
-                            MD_match_len += length
                         elif type == "mismatch":
                             var_id = cmp[3]
                             read_base, qual = read_seq[read_pos], read_qual[read_pos]
                             read_node_seq += [read_base]
                             read_node_qual += [qual]
                             read_node_var.append(var_id)
-                            cmp_MD += ("%d%s" % (MD_match_len, ref_seq[ref_pos]))
-                            MD_match_len = 0
-                            cigar_match_len += 1
                             read_pos += 1
-                            ref_pos += 1
                         elif type == "insertion":
                             var_id = cmp[3]
                             ins_len = length
@@ -1407,11 +1313,7 @@ def typing(ex_path,
                             read_node_seq += ["I%s" % nt for nt in ins_seq]
                             read_node_qual += list(read_qual[read_pos:read_pos+ins_len])
                             read_node_var += ([var_id] * ins_len)                                        
-                            if cigar_match_len > 0:
-                                cmp_cigar_str += ("%dM" % cigar_match_len)
-                                cigar_match_len = 0
                             read_pos += length
-                            cmp_cigar_str += ("%dI" % length)
                         elif type == "deletion":
                             var_id = cmp[3]
                             alt_match = False
@@ -1421,36 +1323,10 @@ def typing(ex_path,
                             if len(read_node_seq) > len(read_node_var):
                                 assert len(read_node_seq) == len(read_node_var) + del_len
                                 read_node_var += ([var_id] * del_len)
-
-                            if cigar_match_len > 0:
-                                cmp_cigar_str += ("%dM" % cigar_match_len)
-                                cigar_match_len = 0
-                            cmp_MD += ("%d" % MD_match_len)
-                            MD_match_len = 0
-                            cmp_cigar_str += ("%dD" % length)
-                            cmp_MD += ("^%s" % ref_seq[ref_pos:ref_pos+length])
-                            ref_pos += length
                         else:
                             assert type == "intron"
-                            if cigar_match_len > 0:
-                                cmp_cigar_str += ("%dM" % cigar_match_len)
-                                cigar_match_len = 0
-                            cmp_cigar_str += ("%dN" % length)
-                            ref_pos += length
 
                         cmp_i += 1
-             
-                    if cigar_match_len > 0:
-                        cmp_cigar_str += ("%dM" % cigar_match_len)
-                    cmp_MD += ("%d" % MD_match_len)
-                    # Sanity check
-                    if read_pos != len(read_seq) or \
-                            cmp_cigar_str != cigar_str:
-                            # cmp_MD != MD: # Disabled due to error correction
-                        print >> sys.stderr, "Error:", cigar_str, MD
-                        print >> sys.stderr, "\tcomputed:", cmp_cigar_str, cmp_MD
-                        print >> sys.stderr, "\tcmp list:", cmp_list
-                        assert False
 
                     # Node
                     if assembly:
@@ -1547,7 +1423,9 @@ def typing(ex_path,
                 if alleles:
                     add_alleles(alleles)
 
-            if base_fname != "hla":
+            # DK - debugging purposes
+            # if base_fname != "hla":
+            if base_fname != "hla" or True:
                 Gene_counts = Gene_gen_counts
             Gene_counts = [[allele, count] for allele, count in Gene_counts.items()]
             def Gene_count_cmp(a, b):
@@ -1660,37 +1538,6 @@ def typing(ex_path,
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Asssembly")
                 begin_y += 200
-
-                # Stranded-seq read analysis
-                if len(stranded_seq) == 2:
-                    run_alignments = stranded_seq_alignment(stranded_seq[0],
-                                                            stranded_seq[1],
-                                                            ex_path,
-                                                            ref_allele)
-
-                    def get_best_alleles(left, right, vars):
-                        max_alleles, max_common = [], -sys.maxint
-                        for allele_name, allele_node in predicted_allele_nodes.items():
-                            tmp_vars = allele_node.get_var_ids(left, right)
-                            tmp_common = len(set(vars) & set(tmp_vars))
-                            tmp_common -= len(set(vars) | set(tmp_vars))
-                            if max_common < tmp_common:
-                                max_common = tmp_common
-                                max_alleles = [[allele_name, max_common]]
-                            elif max_common == tmp_common:
-                                max_alleles.append([allele_name, max_common])
-                        return max_alleles
-
-                    for run, plus, minus in run_alignments:
-                        print run
-                        print "\tplus:"
-                        for left, right, vars in plus:
-                            print "\t\t", left, right, vars, get_best_alleles(left, right, vars)
-                        print "\tminus:"
-                        for left, right, vars in minus:
-                            print "\t\t", left, right, vars, get_best_alleles(left, right, vars)
-                            
-                    assert False
 
                 # Draw assembly graph
                 asm_graph.nodes = asm_graph.nodes2
@@ -2015,7 +1862,6 @@ def test_Gene_genotyping(base_fname,
                          error_correction,
                          discordant,
                          display_alleles,
-                         stranded_seq,
                          verbose,
                          debug_instr):
     # Current script directory
@@ -2300,7 +2146,6 @@ def test_Gene_genotyping(base_fname,
                                      error_correction,
                                      discordant,
                                      display_alleles,
-                                     stranded_seq,
                                      fastq,
                                      read_fname,
                                      alignment_fname,
@@ -2347,7 +2192,6 @@ def test_Gene_genotyping(base_fname,
                error_correction,
                discordant,
                display_alleles,
-               stranded_seq,
                fastq,
                read_fname,
                alignment_fname,
@@ -2483,11 +2327,6 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of alleles to display in HTML (default: empty)")
-    parser.add_argument("--stranded-seq",
-                        dest="stranded_seq",
-                        type=str,
-                        default="",
-                        help="Stranded-seq data (e.g.,: NA12892,ILMN_StrandSeq/SraRunInfo.txt")
 
     args = parser.parse_args()
     if args.locus_list == "":
@@ -2549,14 +2388,6 @@ if __name__ == '__main__':
     else:
         display_alleles = args.display_alleles.split(',')
 
-    if args.stranded_seq != "":
-        stranded_seq = args.stranded_seq.split(',')
-        if len(stranded_seq) != 2:
-            print >> sys.stderr, "Error: --stranded-seq is incorrectly specified."
-            sys.exit(1)
-    else:
-        stranded_seq = []
-
     random.seed(args.random_seed)
     test_Gene_genotyping(args.base_fname,
                          locus_list,
@@ -2579,7 +2410,6 @@ if __name__ == '__main__':
                          args.error_correction,
                          args.discordant,
                          display_alleles,
-                         stranded_seq,
                          args.verbose_level,
                          debug)
 
