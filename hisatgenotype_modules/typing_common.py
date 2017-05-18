@@ -7,6 +7,11 @@ from copy import deepcopy
 from datetime import datetime
 
 
+##################################################
+#   Sequence processing routines
+##################################################
+
+
 """
 """
 def reverse_complement(seq):
@@ -41,6 +46,11 @@ def read_genome(genome_file):
         chr_names.append(chr_name)
         chr_full_names.append(chr_full_name)
     return chr_dic, chr_names, chr_full_names
+
+
+##################################################
+#   Alleles, variants, haplotypes, etc.
+##################################################
 
 
 """
@@ -155,7 +165,12 @@ def check_files(fnames):
         if not os.path.exists(fname):
             return False
     return True
-   
+
+
+##################################################
+#   Database releated routines
+##################################################
+
     
 """
 Download GRCh38 human reference and HISAT2 indexes
@@ -179,6 +194,11 @@ def clone_hisatgenotype_database():
     # Check out one particular revision just to have the same data across multiple computers        
     # revision = "d3b559b34b96ff9e7f0d97476222d8e4cdee63ad" # Revision on November 16, 2016
     # os.system("cd IMGTHLA; git checkout %s; cd .." % revision)
+
+
+##################################################
+#   Read simulation and alignment
+##################################################
 
 
 """
@@ -518,180 +538,148 @@ def align_reads(aligner,
                                          stderr=open("/dev/null", 'w'))
         bamindex_proc.communicate()
 
-    os.system("rm %s" % (out_fname + ".unsorted"))            
+    os.system("rm %s" % (out_fname + ".unsorted"))
+
+
+
+##################################################
+#   Statistical routines
+##################################################
+
+"""
+"""
+def prob_diff(prob1, prob2):
+    diff = 0.0
+    for allele in prob1.keys():
+        if allele in prob2:
+            diff += abs(prob1[allele] - prob2[allele])
+        else:
+            diff += prob1[allele]
+    return diff
 
 
 """
-Identify ambigious differences that may account for other alleles,
-  given a list of differences (cmp_list) between a read and a potential allele   
 """
-def identify_ambigious_diffs(Vars,
-                             Alts_left,
-                             Alts_right,
-                             cmp_list,
-                             verbose,
-                             debug = False):
-    cmp_left, cmp_right = 0, len(cmp_list) - 1
+def Gene_prob_cmp(a, b):
+    if a[1] != b[1]:
+        if a[1] < b[1]:
+            return 1
+        else:
+            return -1
+    assert a[0] != b[0]
+    if a[0] < b[0]:
+        return -1
+    else:
+        return 1
 
-    i = 0
-    while i < len(cmp_list):
-        cmp_i = cmp_list[i]
-        type, pos, length = cmp_i[:3]
-        # Check alternative alignments
-        if type in ["mismatch", "deletion"]:
-            var_id = cmp_i[3]
-            if var_id == "unknown":
-                i += 1
+
+"""
+"""
+def single_abundance(Gene_cmpt, Gene_length):
+    def normalize(prob):
+        total = sum(prob.values())
+        for allele, mass in prob.items():
+            prob[allele] = mass / total        
+
+    def normalize2(prob, length):
+        total = 0
+        for allele, mass in prob.items():
+            assert allele in length
+            total += (mass / length[allele])
+        for allele, mass in prob.items():
+            assert allele in length
+            prob[allele] = mass / length[allele] / total
+
+    Gene_prob, Gene_prob_next = {}, {}
+    for cmpt, count in Gene_cmpt.items():
+        alleles = cmpt.split('-')
+        for allele in alleles:
+            if allele not in Gene_prob:
+                Gene_prob[allele] = 0.0
+            Gene_prob[allele] += (float(count) / len(alleles))
+
+    normalize(Gene_prob)
+    def next_prob(Gene_cmpt, Gene_prob, Gene_length):
+        Gene_prob_next = {}
+        for cmpt, count in Gene_cmpt.items():
+            alleles = cmpt.split('-')
+            alleles_prob = 0.0
+            for allele in alleles:
+                if allele not in Gene_prob:
+                    continue
+                alleles_prob += Gene_prob[allele]
+            if alleles_prob <= 0.0:
                 continue
-            
-            # Left direction
-            id_str = var_id
-            total_del_len = length if type == "deletion" else 0
-            for j in reversed(range(0, i)):
-                cmp_j = cmp_list[j]
-                j_type, j_pos, j_len = cmp_j[:3]
-                if j_type != "match":
-                    if len(cmp_j) < 4:
-                        continue
-                    j_var_id = cmp_j[3]
-                    id_str += ("-%s" % j_var_id)
-                    if j_type == "deletion":
-                        total_del_len += j_len
-            last_type, last_pos, last_len = cmp_list[0][:3]
-            assert last_type in ["match", "mismatch"]
-            left_pos = last_pos + total_del_len
-            if id_str in Alts_left:
-                orig_alts = id_str.split('-')
-                alts_list = Alts_left[id_str]
-                for alts in alts_list:
-                    if alts[-1].isdigit():
-                        assert type == "deletion"
-                        assert len(orig_alts) == 1
-                        alts_id_str = '-'.join(alts[:-1])
-                        alt_left_pos = pos
-                        alt_total_del_len = 0
-                        for alt in alts[:-1]:
-                            assert alt in Vars
-                            alt_type, alt_pos, alt_data = Vars[alt]
-                            alt_left_pos = alt_pos - 1
-                            if alt_type == "deletion":
-                                alt_total_del_len += int(alt_data)
-                        alt_left_pos = alt_left_pos + alt_total_del_len - int(alts[-1]) + 1
-                    else:
-                        alts_id_str = '-'.join(alts)
-                        assert alts_id_str in Alts_left
-                        for back_alts in Alts_left[alts_id_str]:
-                            back_id_str = '-'.join(back_alts)
-                            if back_id_str.find(id_str) != 0:
-                                continue
-                            assert len(orig_alts) < len(back_alts)
-                            assert back_alts[-1].isdigit()
-                            alt_left_pos = pos
-                            alt_total_del_len = 0
-                            for alt in back_alts[:len(orig_alts) + 1]:
-                                if alt.isdigit():
-                                    alt_left_pos = alt_left_pos - int(alt) + 1
-                                else:
-                                    assert alt in Vars
-                                    alt_type, alt_pos, alt_data = Vars[alt]
-                                    alt_left_pos = alt_pos - 1
-                                    if alt_type == "deletion":
-                                        alt_total_del_len += int(alt_data)
-                            alt_left_pos += alt_total_del_len
-                        if left_pos >= alt_left_pos:
-                            if verbose >= 2:
-                                print "LEFT:", cmp_list
-                                print "\t", type, "id_str:", id_str, "=>", alts_id_str, "=>", back_alts, "left_pos:", left_pos, "alt_left_pos:", alt_left_pos
-                            cmp_left = i + 1
-                            break
+            for allele in alleles:
+                if allele not in Gene_prob:
+                    continue
+                if allele not in Gene_prob_next:
+                    Gene_prob_next[allele] = 0.0
+                Gene_prob_next[allele] += (float(count) * Gene_prob[allele] / alleles_prob)
+        normalize(Gene_prob_next)
+        return Gene_prob_next
 
-            # DK - debugging purposes
-            if debug:
-                print "DK: var_id:", var_id
-                print "DK: cmp_list:", cmp_list
-                print "DK: cmp_right:", cmp_right
-                # sys.exit(1)
+
+    fast_EM = True
+    diff, iter = 1.0, 0
+    while diff > 0.0001 and iter < 1000:
+        Gene_prob_next = next_prob(Gene_cmpt, Gene_prob, Gene_length)
+        if fast_EM:
+            # Accelerated version of EM - SQUAREM iteration
+            #    Varadhan, R. & Roland, C. Scand. J. Stat. 35, 335-353 (2008)
+            #    Also, this algorithm is used in Sailfish - http://www.nature.com/nbt/journal/v32/n5/full/nbt.2862.html
+            Gene_prob_next2 = next_prob(Gene_cmpt, Gene_prob_next, Gene_length)
+            sum_squared_r, sum_squared_v = 0.0, 0.0
+            p_r, p_v = {}, {}
+            for a in Gene_prob.keys():
+                p_r[a] = Gene_prob_next[a] - Gene_prob[a]
+                sum_squared_r += (p_r[a] * p_r[a])
+                p_v[a] = Gene_prob_next2[a] - Gene_prob_next[a] - p_r[a]
+                sum_squared_v += (p_v[a] * p_v[a])
+            if sum_squared_v > 0.0:
+                gamma = -math.sqrt(sum_squared_r / sum_squared_v)
+                for a in Gene_prob.keys():
+                    Gene_prob_next2[a] = max(0.0, Gene_prob[a] - 2 * gamma * p_r[a] + gamma * gamma * p_v[a]);
+                Gene_prob_next = next_prob(Gene_cmpt, Gene_prob_next2, Gene_length)
+
+        diff = prob_diff(Gene_prob, Gene_prob_next)
+        Gene_prob = Gene_prob_next
+
+        # Accelerate convergence
+        if iter >= 10:
+            Gene_prob2 = {}
+            avg_prob = sum(Gene_prob.values()) / len(Gene_prob)
+            for allele, prob in Gene_prob.items():
+                if prob >= 0.005 or prob > avg_prob:
+                    Gene_prob2[allele] = prob
+                Gene_prob = Gene_prob2
+
+        # DK - debugging purposes
+        if iter % 10 == 0 and False:
+            print "iter", iter
+            for allele, prob in Gene_prob.items():
+                if prob >= 0.01:
+                    print >> sys.stderr, "\t", iter, allele, prob, str(datetime.now())
+        
+        iter += 1
+        
+    """
+    for allele, prob in Gene_prob.items():
+        allele_len = Gene_length[allele]
+        Gene_prob[allele] /= float(allele_len)
+    """
     
-            # Right direction
-            if cmp_right + 1 == len(cmp_list):
-                id_str = var_id
-                total_del_len = length if type == "deletion" else 0
-                for j in range(i + 1, len(cmp_list)):
-                    cmp_j = cmp_list[j]
-                    j_type, j_pos, j_len = cmp_j[:3]
-                    if j_type != "match":
-                        if len(cmp_j) < 4:
-                            continue
-                        j_var_id = cmp_j[3]
-                        id_str += ("-%s" % j_var_id)
-                        if j_type == "deletion":
-                            total_del_len += j_len                        
-                last_type, last_pos, last_len = cmp_list[-1][:3]
-                assert last_type in ["match", "mismatch"]
-                right_pos = last_pos + last_len - 1 - total_del_len
+    # normalize(Gene_prob)
+    normalize2(Gene_prob, Gene_length)
+    Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]
+    Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
+    return Gene_prob
 
-                # DK - debugging purposes
-                if debug:
-                    print "DK: id_str:", id_str
-                
-                if id_str in Alts_right:
-                    orig_alts = id_str.split('-')
-                    alts_list = Alts_right[id_str]
-                    for alts in alts_list:
-                        if alts[-1].isdigit():
-                            assert type == "deletion"
-                            assert len(orig_alts) == 1
-                            alts_id_str = '-'.join(alts[:-1])
-                            alt_right_pos = pos
-                            alt_total_del_len = 0
-                            for alt in alts[:-1]:
-                                assert alt in Vars
-                                alt_type, alt_pos, alt_data = Vars[alt]
-                                alt_right_pos = alt_pos
-                                if alt_type == "single":
-                                    alt_right_pos += 1
-                                else:
-                                    assert alt_type == "deletion"
-                                    alt_del_len = int(alt_data)
-                                    alt_right_pos += alt_del_len
-                                    alt_total_del_len += alt_del_len
-                            alt_right_pos = alt_right_pos - alt_total_del_len + int(alts[-1]) - 1
-                        else:
-                            alts_id_str = '-'.join(alts)
-                            assert alts_id_str in Alts_right
-                            for back_alts in Alts_right[alts_id_str]:
-                                back_id_str = '-'.join(back_alts)
-                                if back_id_str.find(id_str) != 0:
-                                    continue
-                                assert len(orig_alts) < len(back_alts)
-                                assert back_alts[-1].isdigit()
-                                alt_right_pos = pos
-                                alt_total_del_len = 0
-                                for alt in back_alts[:len(orig_alts) + 1]:
-                                    if alt.isdigit():
-                                        alt_right_pos = alt_right_pos + int(alt) - 1
-                                    else:
-                                        assert alt in Vars
-                                        alt_type, alt_pos, alt_data = Vars[alt]
-                                        alt_right_pos = alt_pos
-                                        if alt_type == "single":
-                                            alt_right_pos += 1
-                                        else:
-                                            assert alt_type == "deletion"
-                                            alt_del_len = int(alt_data)
-                                            alt_right_pos += alt_del_len
-                                            alt_total_del_len += alt_del_len
-                                alt_right_pos -= alt_total_del_len
-                                    
-                        if right_pos <= alt_right_pos:
-                            if verbose >= 2:
-                                print "RIGHT:", cmp_list
-                                print "\t", type, "id_str:", id_str, "=>", alts_id_str, "right_pos:", right_pos, "alt_right_pos:", alt_right_pos
-                            cmp_right = i - 1
-                            break
-        i += 1
 
-    return cmp_left, cmp_right
+
+##################################################
+#   Realignment, alternative alignments
+##################################################
 
 
 """

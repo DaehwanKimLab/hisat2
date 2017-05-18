@@ -29,140 +29,6 @@ from hisatgenotype_modules import typing_common, Gene_typing, assembly_graph
 
 
 """
-""" 
-def normalize(prob):
-    total = sum(prob.values())
-    for allele, mass in prob.items():
-        prob[allele] = mass / total
-
-        
-"""
-"""
-def prob_diff(prob1, prob2):
-    diff = 0.0
-    for allele in prob1.keys():
-        if allele in prob2:
-            diff += abs(prob1[allele] - prob2[allele])
-        else:
-            diff += prob1[allele]
-    return diff
-
-
-"""
-"""
-def Gene_prob_cmp(a, b):
-    if a[1] != b[1]:
-        if a[1] < b[1]:
-            return 1
-        else:
-            return -1
-    assert a[0] != b[0]
-    if a[0] < b[0]:
-        return -1
-    else:
-        return 1
-
-
-"""
-"""
-def single_abundance(Gene_cmpt,
-                     Gene_length):
-    def normalize2(prob, length):
-        total = 0
-        for allele, mass in prob.items():
-            assert allele in length
-            total += (mass / length[allele])
-        for allele, mass in prob.items():
-            assert allele in length
-            prob[allele] = mass / length[allele] / total
-
-    Gene_prob, Gene_prob_next = {}, {}
-    for cmpt, count in Gene_cmpt.items():
-        alleles = cmpt.split('-')
-        for allele in alleles:
-            if allele not in Gene_prob:
-                Gene_prob[allele] = 0.0
-            Gene_prob[allele] += (float(count) / len(alleles))
-
-    normalize(Gene_prob)
-    def next_prob(Gene_cmpt, Gene_prob, Gene_length):
-        Gene_prob_next = {}
-        for cmpt, count in Gene_cmpt.items():
-            alleles = cmpt.split('-')
-            alleles_prob = 0.0
-            for allele in alleles:
-                if allele not in Gene_prob:
-                    continue
-                alleles_prob += Gene_prob[allele]
-            if alleles_prob <= 0.0:
-                continue
-            for allele in alleles:
-                if allele not in Gene_prob:
-                    continue
-                if allele not in Gene_prob_next:
-                    Gene_prob_next[allele] = 0.0
-                Gene_prob_next[allele] += (float(count) * Gene_prob[allele] / alleles_prob)
-        normalize(Gene_prob_next)
-        return Gene_prob_next
-
-
-    fast_EM = True
-    diff, iter = 1.0, 0
-    while diff > 0.0001 and iter < 1000:
-        Gene_prob_next = next_prob(Gene_cmpt, Gene_prob, Gene_length)
-        if fast_EM:
-            # Accelerated version of EM - SQUAREM iteration
-            #    Varadhan, R. & Roland, C. Scand. J. Stat. 35, 335-353 (2008)
-            #    Also, this algorithm is used in Sailfish - http://www.nature.com/nbt/journal/v32/n5/full/nbt.2862.html
-            Gene_prob_next2 = next_prob(Gene_cmpt, Gene_prob_next, Gene_length)
-            sum_squared_r, sum_squared_v = 0.0, 0.0
-            p_r, p_v = {}, {}
-            for a in Gene_prob.keys():
-                p_r[a] = Gene_prob_next[a] - Gene_prob[a]
-                sum_squared_r += (p_r[a] * p_r[a])
-                p_v[a] = Gene_prob_next2[a] - Gene_prob_next[a] - p_r[a]
-                sum_squared_v += (p_v[a] * p_v[a])
-            if sum_squared_v > 0.0:
-                gamma = -math.sqrt(sum_squared_r / sum_squared_v)
-                for a in Gene_prob.keys():
-                    Gene_prob_next2[a] = max(0.0, Gene_prob[a] - 2 * gamma * p_r[a] + gamma * gamma * p_v[a]);
-                Gene_prob_next = next_prob(Gene_cmpt, Gene_prob_next2, Gene_length)
-
-        diff = prob_diff(Gene_prob, Gene_prob_next)
-        Gene_prob = Gene_prob_next
-
-        # Accelerate convergence
-        if iter >= 10:
-            Gene_prob2 = {}
-            avg_prob = sum(Gene_prob.values()) / len(Gene_prob)
-            for allele, prob in Gene_prob.items():
-                if prob >= 0.005 or prob > avg_prob:
-                    Gene_prob2[allele] = prob
-                Gene_prob = Gene_prob2
-
-        # DK - debugging purposes
-        if iter % 10 == 0 and False:
-            print "iter", iter
-            for allele, prob in Gene_prob.items():
-                if prob >= 0.01:
-                    print >> sys.stderr, "\t", iter, allele, prob, str(datetime.now())
-        
-        iter += 1
-        
-    """
-    for allele, prob in Gene_prob.items():
-        allele_len = Gene_length[allele]
-        Gene_prob[allele] /= float(allele_len)
-    """
-    
-    # normalize(Gene_prob)
-    normalize2(Gene_prob, Gene_length)
-    Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]
-    Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
-    return Gene_prob
-
-
-"""
    var: ['single', 3300, 'G']
    exons: [[301, 373], [504, 822], [1084, 1417], [2019, 2301], [2404, 2520], [2965, 2997], [3140, 3187], [3357, 3361]]
 """
@@ -1467,7 +1333,7 @@ def typing(ex_path,
             # Calculate the abundance of representative alleles on exonic sequences
             if base_fname == "hla":
                 # Incorporate non representative alleles (full length alleles)
-                Gene_prob = single_abundance(Gene_cmpt, Gene_lengths[gene])
+                Gene_prob = typing_common.single_abundance(Gene_cmpt, Gene_lengths[gene])
                 gen_alleles = set()
                 gen_prob_sum = 0.0
                 for prob_i in range(len(Gene_prob)):
@@ -1496,7 +1362,7 @@ def typing(ex_path,
                         else:
                             Gene_gen_cmpt2[cmpt2] += value
                     Gene_gen_cmpt = Gene_gen_cmpt2
-                    Gene_gen_prob = single_abundance(Gene_gen_cmpt, Gene_lengths[gene])
+                    Gene_gen_prob = typing_common.single_abundance(Gene_gen_cmpt, Gene_lengths[gene])
 
                     Gene_combined_prob = {}
                     for allele, prob in Gene_prob:
@@ -1508,9 +1374,9 @@ def typing(ex_path,
                     for allele, prob in Gene_gen_prob:
                         Gene_combined_prob[allele] = prob * gen_prob_sum
                     Gene_prob = [[allele, prob] for allele, prob in Gene_combined_prob.items()]
-                    Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
+                    Gene_prob = sorted(Gene_prob, cmp=typing_common.Gene_prob_cmp)
             else:
-                Gene_prob = single_abundance(Gene_gen_cmpt, Gene_lengths[gene])
+                Gene_prob = typing_common.single_abundance(Gene_gen_cmpt, Gene_lengths[gene])
 
             if index_type == "graph" and assembly:
                 allele_node_order = []
