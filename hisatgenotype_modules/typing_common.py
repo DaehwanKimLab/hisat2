@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os, subprocess
+import sys, os, subprocess, re
 import math
 import random
 from copy import deepcopy
@@ -541,10 +541,139 @@ def align_reads(aligner,
     os.system("rm %s" % (out_fname + ".unsorted"))
 
 
+"""
+HISAT-genotype's mpileup
+"""
+def get_mpileup(alignview_cmd,
+                ref_seq,
+                base_locus,
+                vars,
+                allow_discordant):
+    ref_seq_len = len(ref_seq)
+    mpileup = []
+    for i in range(ref_seq_len):
+        mpileup.append([[], {}])
+        
+    proc = subprocess.Popen(alignview_cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=open("/dev/null", 'w'))
+
+    prev_pos = -1
+    cigar_re = re.compile('\d+\w')
+    for line in proc.stdout:
+        line = line.strip()
+        cols = line.split()
+        read_id, flag, _, pos, _, cigar_str = cols[:6]
+        read_seq = cols[9]
+        flag, pos = int(flag), int(pos)
+        # Unalined?
+        if flag & 0x4 != 0:
+            continue
+        pos -= (base_locus + 1)
+        if pos < 0:
+            continue
+
+        # Concordantly mapped?
+        if flag & 0x2 != 0:
+            concordant = True
+        else:
+            concordant = False
+
+        if not allow_discordant and not concordant:
+            continue
+
+        read_pos, left_pos = 0, pos
+        right_pos = left_pos
+        cigars = cigar_re.findall(cigar_str)
+        cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+        for i in range(len(cigars)):
+            cigar_op, length = cigars[i]
+            if cigar_op in "MD":
+                for j in range(length):
+                    if cigar_op == 'M':
+                        read_nt = read_seq[read_pos + j]
+                    else:
+                        read_nt = 'D'
+                    if read_nt not in mpileup[right_pos + j][1]:
+                        mpileup[right_pos + j][1][read_nt] = 1
+                    else:
+                        mpileup[right_pos + j][1][read_nt] += 1
+
+            if cigar_op in "MND":
+                right_pos += length
+
+            if cigar_op in "MIS":
+                read_pos += length
+
+    # Choose representative bases or 'D'
+    for i in range(len(mpileup)):
+        nt_dic = mpileup[i][1]
+        num_nt = sum(nt_dic.values())
+        nt_set = []
+        if num_nt >= 20:
+            for nt, count in nt_dic.items():
+                if nt not in "ACGT":
+                    continue
+                if count >= num_nt * 0.2 or count >= 7:
+                    nt_set.append(nt)
+        mpileup[i][0] = nt_set
+
+    # Sort variants
+    var_list = [[] for i in range(len(mpileup))]
+    for var_id, value in vars.items():
+        var_type, var_pos, var_data = value
+        assert var_pos < len(var_list)
+        var_list[var_pos].append([var_id, var_type, var_data])
+
+    # Assign known or unknown variants
+    skip_i, prev_del_var_id = -1, ""
+    for i in range(len(mpileup)):
+        nt_dic = mpileup[i][1]
+        ref_nt = ref_seq[i]
+        new_nt_dic = {}
+        for nt, count in nt_dic.items():
+            var_id = ""
+            if nt == 'D':
+                if i <= skip_i:
+                    assert prev_del_var_id != ""
+                    var_id = prev_del_var_id
+                else:
+                    for var_id_, var_type, var_data in var_list[i]:
+                        if var_type != "deletion":
+                            continue
+                        del_len = int(var_data)
+                        del_exist = True
+                        for j in range(i + 1, i + del_len):
+                            assert j < len(mpileup)
+                            nt_dic2 = mpileup[j][1]
+                            if 'D' not in nt_dic2:
+                                del_exist = False
+                                break
+                        if del_exist:
+                            var_id = var_id_
+                            prev_del_var_id = var_id
+                            skip_i = i + del_len - 1
+                            break                                                
+            elif nt != 'N' and nt != ref_nt:
+                assert nt in "ACGT"
+                id = "unknown"
+                for var_id_, var_type, var_data in var_list[i]:
+                    if var_type != "single":
+                        continue
+                    if nt == var_data:
+                        var_id = var_id_
+                        break
+            new_nt_dic[nt] = [count, var_id]
+                        
+        mpileup[i][1] = new_nt_dic
+
+    return mpileup
+
 
 ##################################################
 #   Statistical routines
 ##################################################
+
 
 """
 """
@@ -674,7 +803,6 @@ def single_abundance(Gene_cmpt, Gene_length):
     Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]
     Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
     return Gene_prob
-
 
 
 ##################################################

@@ -95,150 +95,6 @@ def get_rep_alleles(Links, exon_vars):
     
 
 """
-Example,
-   gene_name, allele_name (input): A, A*32:01:01
-   allele (output): single-136-G-hv47,deletion-285-1-hv57, ... ,single-3473-T-hv1756,deletion-3495-1-hv1763,single-3613-C-hv1799 
-"""
-def get_allele(gene_name, allele_name, Vars, Var_list, Links):    
-    allele_haplotype = []
-    for _var_pos, _var_id in Var_list[gene_name]:
-        if allele_name in Links[_var_id]:
-            _var = Vars[gene_name][_var_id]
-            allele_haplotype.append("%s-%d-%s-%s" % (_var[0], _var[1], _var[2], _var_id))                                
-    allele_haplotype = ','.join(allele_haplotype)
-    return allele_haplotype
-
-
-"""
-HISAT-genotype's mpileup
-"""
-def get_mpileup(alignview_cmd,
-                ref_seq,
-                base_locus,
-                vars,
-                allow_discordant):
-    ref_seq_len = len(ref_seq)
-    mpileup = []
-    for i in range(ref_seq_len):
-        mpileup.append([[], {}])
-        
-    proc = subprocess.Popen(alignview_cmd,
-                            stdout=subprocess.PIPE,
-                            stderr=open("/dev/null", 'w'))
-
-    prev_pos = -1
-    cigar_re = re.compile('\d+\w')
-    for line in proc.stdout:
-        line = line.strip()
-        cols = line.split()
-        read_id, flag, _, pos, _, cigar_str = cols[:6]
-        read_seq = cols[9]
-        flag, pos = int(flag), int(pos)
-        # Unalined?
-        if flag & 0x4 != 0:
-            continue
-        pos -= (base_locus + 1)
-        if pos < 0:
-            continue
-
-        # Concordantly mapped?
-        if flag & 0x2 != 0:
-            concordant = True
-        else:
-            concordant = False
-
-        if not allow_discordant and not concordant:
-            continue
-
-        read_pos, left_pos = 0, pos
-        right_pos = left_pos
-        cigars = cigar_re.findall(cigar_str)
-        cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
-        for i in range(len(cigars)):
-            cigar_op, length = cigars[i]
-            if cigar_op in "MD":
-                for j in range(length):
-                    if cigar_op == 'M':
-                        read_nt = read_seq[read_pos + j]
-                    else:
-                        read_nt = 'D'
-                    if read_nt not in mpileup[right_pos + j][1]:
-                        mpileup[right_pos + j][1][read_nt] = 1
-                    else:
-                        mpileup[right_pos + j][1][read_nt] += 1
-
-            if cigar_op in "MND":
-                right_pos += length
-
-            if cigar_op in "MIS":
-                read_pos += length
-
-    # Choose representative bases or 'D'
-    for i in range(len(mpileup)):
-        nt_dic = mpileup[i][1]
-        num_nt = sum(nt_dic.values())
-        nt_set = []
-        if num_nt >= 20:
-            for nt, count in nt_dic.items():
-                if nt not in "ACGT":
-                    continue
-                if count >= num_nt * 0.2 or count >= 7:
-                    nt_set.append(nt)
-        mpileup[i][0] = nt_set
-
-    # Sort variants
-    var_list = [[] for i in range(len(mpileup))]
-    for var_id, value in vars.items():
-        var_type, var_pos, var_data = value
-        assert var_pos < len(var_list)
-        var_list[var_pos].append([var_id, var_type, var_data])
-
-    # Assign known or unknown variants
-    skip_i, prev_del_var_id = -1, ""
-    for i in range(len(mpileup)):
-        nt_dic = mpileup[i][1]
-        ref_nt = ref_seq[i]
-        new_nt_dic = {}
-        for nt, count in nt_dic.items():
-            var_id = ""
-            if nt == 'D':
-                if i <= skip_i:
-                    assert prev_del_var_id != ""
-                    var_id = prev_del_var_id
-                else:
-                    for var_id_, var_type, var_data in var_list[i]:
-                        if var_type != "deletion":
-                            continue
-                        del_len = int(var_data)
-                        del_exist = True
-                        for j in range(i + 1, i + del_len):
-                            assert j < len(mpileup)
-                            nt_dic2 = mpileup[j][1]
-                            if 'D' not in nt_dic2:
-                                del_exist = False
-                                break
-                        if del_exist:
-                            var_id = var_id_
-                            prev_del_var_id = var_id
-                            skip_i = i + del_len - 1
-                            break                                                
-            elif nt != 'N' and nt != ref_nt:
-                assert nt in "ACGT"
-                id = "unknown"
-                for var_id_, var_type, var_data in var_list[i]:
-                    if var_type != "single":
-                        continue
-                    if nt == var_data:
-                        var_id = var_id_
-                        break
-            new_nt_dic[nt] = [count, var_id]
-                        
-        mpileup[i][1] = new_nt_dic
-
-    return mpileup
-
-
-"""
 """
 def error_correct(ref_seq,
                   read_seq,
@@ -464,11 +320,11 @@ def typing(ex_path,
             base_locus = 0
             if index_type == "graph":
                 alignview_cmd += [ref_allele]
-                mpileup = get_mpileup(alignview_cmd,
-                                      ref_seq,
-                                      base_locus,
-                                      gene_vars,
-                                      allow_discordant)
+                mpileup = typing_common.get_mpileup(alignview_cmd,
+                                                    ref_seq,
+                                                    base_locus,
+                                                    gene_vars,
+                                                    allow_discordant)
 
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
@@ -678,7 +534,73 @@ def typing(ex_path,
                             left_positive_hts.add(left_ht_str)
                             right_positive_hts.add(right_ht_str)
 
-                    return left_positive_hts, right_positive_hts                
+                    return left_positive_hts, right_positive_hts
+
+                def get_exon_haplotypes(ht, exons):
+                    debug_ht = deepcopy(ht)
+                    ht = ht.split('-')
+                    assert len(ht) >= 2
+                    ht[0], ht[-1] = int(ht[0]), int(ht[-1])
+                    exon_hts = []
+                    for e_left, e_right in exons:
+                        assert len(ht) >= 2
+                        ht_left, ht_right = ht[0], ht[-1]
+                        if e_left > ht_right or e_right < ht_left:
+                            continue
+
+                        new_ht = deepcopy(ht)
+                        if ht_left < e_left:
+                            i = 1
+                            while i < len(new_ht) - 1:
+                                var_id = new_ht[i]
+                                type, left, data = gene_vars[var_id]
+                                if left >= e_left:
+                                    ht_left = e_left
+                                    new_ht = [ht_left] + new_ht[i:]
+                                    break
+                                if type == "deletion":
+                                    right = left + int(data)
+                                    if right >= e_left:
+                                        ht_left = right
+                                        new_ht = [right] + new_ht[i+1:]
+                                        break
+                                i += 1
+                            if i == len(new_ht) - 1:
+                                ht_left = e_left
+                                new_ht = [ht_left, ht_right]
+                        assert ht_left >= e_left
+                        if ht_right > e_right:
+                            i = len(new_ht) - 2
+                            while i > 1:
+                                var_id = new_ht[i]
+                                type, right, data = gene_vars[var_id]
+                                if type == "deletion":
+                                    right = right + int(data) - 1
+                                if right <= e_right:
+                                    ht_right = e_right
+                                    new_ht = new_ht[:i+1] + [ht_right]
+                                    break
+                                if type == "deletion":
+                                    left = right - int(data)
+                                    if left <= e_right:
+                                        ht_right = left
+                                        new_ht = new_ht[:i] + [ht_right]
+                                        break
+                                i -= 1
+                            if i == 1:
+                                ht_right = e_right
+                                new_ht = [ht_left, ht_right]
+
+                        if len(new_ht) == 2:
+                            new_ht = "%d-%d" % (new_ht[0], new_ht[-1])
+                        else:
+                            assert len(new_ht) > 2
+                            new_ht = "%d-%s-%d" % (new_ht[0], '-'.join(new_ht[1:-1]), new_ht[-1])
+                            
+                        exon_hts.append(new_ht)
+                        # print "DK: exon:", e_left, e_right, "new_ht:", new_ht, "ht:", ht
+
+                    return exon_hts
                 
                 # Cigar regular expression
                 cigar_re = re.compile('\d+\w')
@@ -1051,8 +973,9 @@ def typing(ex_path,
                             for positive_ht in left_positive_hts | right_positive_hts:
                                 if positive_ht == "unknown" or positive_ht.startswith("nv"):
                                     continue
-                                if set(positive_ht.split('-')) & exon_vars:
-                                    add_count(Gene_count_per_read, positive_ht, 1)
+                                exon_hts = get_exon_haplotypes(positive_ht, ref_exons)
+                                for exon_ht in exon_hts:
+                                    add_count(Gene_count_per_read, exon_ht, 1)
                                 add_count(Gene_gen_count_per_read, positive_ht, 1)
 
                             if base_fname == "hla":
@@ -1092,10 +1015,6 @@ def typing(ex_path,
 
                     prev_lines.append(line)
 
-                    # Node
-                    read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
-                    read_vars = []
-
                     # Positive evidence
                     if prev_read_id == None:
                         left_positive_hts, right_positive_hts = set(), set()
@@ -1103,10 +1022,6 @@ def typing(ex_path,
                         left_positive_hts = set()
                     else:
                         right_positive_hts = set()
-
-                    # Sanity check - read length, cigar string, and MD string
-                    ref_pos, read_pos, cmp_cigar_str, cmp_MD = left_pos, 0, "", ""
-                    cigar_match_len, MD_match_len = 0, 0
 
                     cmp_list_left, cmp_list_right, cmp_left_alts, cmp_right_alts = \
                     typing_common.identify_ambigious_diffs(ref_seq,
@@ -1152,6 +1067,10 @@ def typing(ex_path,
                         print "positive hts:", left_positive_hts, right_positive_hts
                         print "cmp_list[%d, %d]" % (cmp_list_left, cmp_list_right)
 
+                    # Node
+                    read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
+                    read_vars = []
+                    ref_pos, read_pos = left_pos, 0
                     cmp_i = 0
                     while cmp_i < len(cmp_list):
                         cmp = cmp_list[cmp_i]
@@ -1159,7 +1078,6 @@ def typing(ex_path,
                         if type in ["match", "mismatch"]:
                             if read_node_pos < 0:
                                 read_node_pos = ref_pos
-
                         if type == "match":
                             read_node_seq += list(read_seq[read_pos:read_pos+length])
                             read_node_qual += list(read_qual[read_pos:read_pos+length])
@@ -1182,7 +1100,6 @@ def typing(ex_path,
                             read_pos += length
                         elif type == "deletion":
                             var_id = cmp[3]
-                            alt_match = False
                             del_len = length
                             read_node_seq += (['D'] * del_len)
                             read_node_qual += ([''] * del_len)
@@ -1191,7 +1108,6 @@ def typing(ex_path,
                                 read_node_var += ([var_id] * del_len)
                         else:
                             assert type == "intron"
-
                         cmp_i += 1
 
                     # Node
@@ -1214,20 +1130,15 @@ def typing(ex_path,
                     prev_read_id = read_id
                     prev_right_pos = right_pos
 
-                if num_reads <= 0:
-                    continue
-
-                for f_ in [sys.stderr, report_file]:
-                    print >> f_, "\t\t\tNumber of reads aligned: %d" % num_reads
-
                 if prev_read_id != None:
                     if base_fname == "codis" and gene == "D18S51":
                         left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)                            
                     for positive_ht in left_positive_hts | right_positive_hts:
                         if positive_ht == "unknown" or positive_ht.startswith("nv"):
                             continue
-                        if set(positive_ht.split('-')) & exon_vars:
-                            add_count(Gene_count_per_read, positive_ht, 1)
+                        exon_hts = get_exon_haplotypes(positive_ht, ref_exons)
+                        for exon_ht in exon_hts:
+                            add_count(Gene_count_per_read, exon_ht, 1)
                         add_count(Gene_gen_count_per_read, positive_ht, 1)
 
                     if base_fname == "hla":
@@ -1238,6 +1149,14 @@ def typing(ex_path,
                                            read_node,
                                            simulation)
                     read_nodes, read_var_list = [], []
+
+                if num_reads <= 0:
+                    continue
+
+                for f_ in [sys.stderr, report_file]:
+                    print >> f_, "\t\t\tNumber of reads aligned: %d" % num_reads
+
+                
                 
             else:
                 assert index_type == "linear"
@@ -1289,10 +1208,9 @@ def typing(ex_path,
                 if alleles:
                     add_alleles(alleles)
 
-            # DK - debugging purposes
-            # if base_fname != "hla":
-            if base_fname != "hla" or True:
+            if base_fname != "hla":
                 Gene_counts = Gene_gen_counts
+                
             Gene_counts = [[allele, count] for allele, count in Gene_counts.items()]
             def Gene_count_cmp(a, b):
                 if a[1] != b[1]:
@@ -1680,29 +1598,6 @@ def read_Gene_links(fname):
         Links[var_id] = alleles
 
     return Links
-
-
-"""
-"""
-def construct_allele_seq(backbone_seq, var_ids, Vars):
-    allele_seq = list(backbone_seq)
-    for id in var_ids:
-        assert id in Vars
-        type, pos, data = Vars[id]
-        assert pos < len(allele_seq)
-        if type == "single":
-            assert allele_seq[pos] != data
-            allele_seq[pos] = data
-        else:
-            assert type == "deletion"
-            del_len = int(data)
-            assert pos + del_len <= len(allele_seq)
-            for i in range(pos, pos + del_len):
-                allele_seq[i] = '.'
-
-    allele_seq = ''.join(allele_seq)
-    allele_seq = allele_seq.replace('.', '')
-    return allele_seq
 
 
 """
