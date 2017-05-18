@@ -1,4 +1,23 @@
 #!/usr/bin/env python
+#
+# Copyright 2017, Daehwan Kim <infphilo@gmail.com>
+#
+# This file is part of HISAT-genotype.
+#
+# HISAT-genotype is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# HISAT-genotype is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
+#
+
 
 import sys, os, subprocess, re
 import math
@@ -726,8 +745,8 @@ def single_abundance(Gene_cmpt, Gene_length):
             if allele not in Gene_prob:
                 Gene_prob[allele] = 0.0
             Gene_prob[allele] += (float(count) / len(alleles))
-
     normalize(Gene_prob)
+    
     def next_prob(Gene_cmpt, Gene_prob, Gene_length):
         Gene_prob_next = {}
         for cmpt, count in Gene_cmpt.items():
@@ -747,7 +766,6 @@ def single_abundance(Gene_cmpt, Gene_length):
                 Gene_prob_next[allele] += (float(count) * Gene_prob[allele] / alleles_prob)
         normalize(Gene_prob_next)
         return Gene_prob_next
-
 
     fast_EM = True
     diff, iter = 1.0, 0
@@ -785,19 +803,13 @@ def single_abundance(Gene_cmpt, Gene_length):
 
         # DK - debugging purposes
         if iter % 10 == 0 and False:
-            print "iter", iter
+            print >> sys.stderr, "iter", iter
             for allele, prob in Gene_prob.items():
                 if prob >= 0.01:
-                    print >> sys.stderr, "\t", iter, allele, prob, str(datetime.now())
+                    print >> sys.stderr, "\t", iter, allele, prob
         
         iter += 1
         
-    """
-    for allele, prob in Gene_prob.items():
-        allele_len = Gene_length[allele]
-        Gene_prob[allele] /= float(allele_len)
-    """
-    
     # normalize(Gene_prob)
     normalize2(Gene_prob, Gene_length)
     Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]

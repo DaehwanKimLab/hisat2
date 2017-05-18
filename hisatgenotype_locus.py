@@ -440,7 +440,7 @@ def typing(ex_path,
             # Count alleles
             Gene_counts, Gene_cmpt = {}, {}
             Gene_gen_counts, Gene_gen_cmpt = {}, {}
-            num_reads, total_read_len = 0, 0
+            num_reads, num_pairs = 0, 0
 
             # For debugging purposes
             debug_allele_names = set(test_Gene_names) if simulation and verbose >= 2 else set()
@@ -537,6 +537,9 @@ def typing(ex_path,
                     return left_positive_hts, right_positive_hts
 
                 def get_exon_haplotypes(ht, exons):
+                    if len(exons) <= 0:
+                        return []
+                    
                     debug_ht = deepcopy(ht)
                     ht = ht.split('-')
                     assert len(ht) >= 2
@@ -571,7 +574,7 @@ def typing(ex_path,
                         assert ht_left >= e_left
                         if ht_right > e_right:
                             i = len(new_ht) - 2
-                            while i > 1:
+                            while i > 0:
                                 var_id = new_ht[i]
                                 type, right, data = gene_vars[var_id]
                                 if type == "deletion":
@@ -587,7 +590,7 @@ def typing(ex_path,
                                         new_ht = new_ht[:i] + [ht_right]
                                         break
                                 i -= 1
-                            if i == 1:
+                            if i == 0:
                                 ht_right = e_right
                                 new_ht = [ht_left, ht_right]
 
@@ -612,7 +615,6 @@ def typing(ex_path,
                     if simulation:
                         read_id = read_id.split('|')[0]
                     read_seq, read_qual = cols[9], cols[10]
-                    total_read_len += len(read_seq)
                     flag, pos = int(flag), int(pos)
                     pos -= (base_locus + 1)
                     if pos < 0:
@@ -922,7 +924,6 @@ def typing(ex_path,
                         for allele, count in Gene_count_per_read.items():
                             if count < max_count:
                                 continue
-
                             if len(include_alleles) > 0 and allele not in include_alleles:
                                 continue
                             
@@ -935,26 +936,24 @@ def typing(ex_path,
                         if len(cur_cmpt) == 0:
                             return ""
 
-                        # DK - for debugging purposes                            
-                        alleles = ["", ""]
-                        # alleles = ["A*24:36N", "A*24:359N"]
-                        allele1_found, allele2_found = False, False
-                        if alleles[0] != "":
-                            for allele, count in Gene_count_per_read.items():
-                                if count < max_count:
-                                    continue
-                                if allele == alleles[0]:
-                                    allele1_found = True
-                                elif allele == alleles[1]:
-                                    allele2_found = True
-                            if allele1_found != allele2_found:
-                                print alleles[0], Gene_count_per_read[alleles[0]]
-                                print alleles[1], Gene_count_per_read[alleles[1]]
-                                if allele1_found:
-                                    print ("%s\tread_id %s - %d vs. %d]" % (alleles[0], prev_read_id, max_count, Gene_count_per_read[alleles[1]]))
-                                else:
-                                    print ("%s\tread_id %s - %d vs. %d]" % (alleles[1], prev_read_id, max_count, Gene_count_per_read[alleles[0]]))
-                                print read_seq
+                        if verbose >= 2:
+                            alleles = ["", ""]
+                            allele1_found, allele2_found = False, False
+                            if alleles[0] != "":
+                                for allele, count in Gene_count_per_read.items():
+                                    if count < max_count:
+                                        continue
+                                    if allele == alleles[0]:
+                                        allele1_found = True
+                                    elif allele == alleles[1]:
+                                        allele2_found = True
+                                if allele1_found != allele2_found:
+                                    print >> sys.stderr, alleles[0], Gene_count_per_read[alleles[0]]
+                                    print >> sys.stderr, alleles[1], Gene_count_per_read[alleles[1]]
+                                    if allele1_found:
+                                        print >> sys.stderr, ("%s\tread_id %s - %d vs. %d]" % (alleles[0], prev_read_id, max_count, Gene_count_per_read[alleles[1]]))
+                                    else:
+                                        print >> sys.stderr, ("%s\tread_id %s - %d vs. %d]" % (alleles[1], prev_read_id, max_count, Gene_count_per_read[alleles[0]]))
 
                         cur_cmpt = sorted(list(cur_cmpt))
                         cur_cmpt = '-'.join(cur_cmpt)
@@ -967,6 +966,7 @@ def typing(ex_path,
 
                     if read_id != prev_read_id:
                         if prev_read_id != None:
+                            num_pairs += 1                            
                             if base_fname == "codis" and gene == "D18S51":
                                 left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)
 
@@ -1131,6 +1131,7 @@ def typing(ex_path,
                     prev_right_pos = right_pos
 
                 if prev_read_id != None:
+                    num_pairs += 1
                     if base_fname == "codis" and gene == "D18S51":
                         left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)                            
                     for positive_ht in left_positive_hts | right_positive_hts:
@@ -1154,9 +1155,7 @@ def typing(ex_path,
                     continue
 
                 for f_ in [sys.stderr, report_file]:
-                    print >> f_, "\t\t\tNumber of reads aligned: %d" % num_reads
-
-                
+                    print >> f_, "\t\t\t%d reads and %d pairs are aligned" % (num_reads, num_pairs)
                 
             else:
                 assert index_type == "linear"
@@ -1209,7 +1208,7 @@ def typing(ex_path,
                     add_alleles(alleles)
 
             if base_fname != "hla":
-                Gene_counts = Gene_gen_counts
+                Gene_cmpt, Gene_counts = Gene_gen_cmpt, Gene_gen_counts
                 
             Gene_counts = [[allele, count] for allele, count in Gene_counts.items()]
             def Gene_count_cmp(a, b):
@@ -1294,7 +1293,7 @@ def typing(ex_path,
                     Gene_prob = [[allele, prob] for allele, prob in Gene_combined_prob.items()]
                     Gene_prob = sorted(Gene_prob, cmp=typing_common.Gene_prob_cmp)
             else:
-                Gene_prob = typing_common.single_abundance(Gene_gen_cmpt, Gene_lengths[gene])
+                Gene_prob = typing_common.single_abundance(Gene_cmpt, Gene_lengths[gene])
 
             if index_type == "graph" and assembly:
                 allele_node_order = []
