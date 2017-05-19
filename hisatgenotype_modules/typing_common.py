@@ -505,9 +505,8 @@ def align_reads(aligner,
             aligner_cmd += ["-k", "10"]
         else:
             aligner_cmd += ["--max-altstried", "64"]
-            # DK - debugging purposes
-            aligner_cmd += ["--haplotype"]
             if base_fname == "codis":
+                aligner_cmd += ["--haplotype"]
                 aligner_cmd += ["--enable-codis"]
         aligner_cmd += ["-x", "%s.%s" % (base_fname, index_type)]
     elif aligner == "bowtie2":
@@ -746,7 +745,8 @@ def single_abundance(Gene_cmpt, Gene_length):
                 Gene_prob[allele] = 0.0
             Gene_prob[allele] += (float(count) / len(alleles))
     normalize(Gene_prob)
-    
+    # normalize2(Gene_prob, Gene_length)
+
     def next_prob(Gene_cmpt, Gene_prob, Gene_length):
         Gene_prob_next = {}
         for cmpt, count in Gene_cmpt.items():
@@ -765,6 +765,7 @@ def single_abundance(Gene_cmpt, Gene_length):
                     Gene_prob_next[allele] = 0.0
                 Gene_prob_next[allele] += (float(count) * Gene_prob[allele] / alleles_prob)
         normalize(Gene_prob_next)
+        # normalize2(Gene_prob_next, Gene_length)
         return Gene_prob_next
 
     fast_EM = True
@@ -810,8 +811,8 @@ def single_abundance(Gene_cmpt, Gene_length):
         
         iter += 1
         
-    # normalize(Gene_prob)
-    normalize2(Gene_prob, Gene_length)
+    normalize(Gene_prob)
+    # normalize2(Gene_prob, Gene_length)
     Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]
     Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
     return Gene_prob
@@ -1094,10 +1095,16 @@ def identify_ambigious_diffs(ref_seq,
         cmp_i = cmp_list[i]
         type, cur_left, length = cmp_i[:3]
         var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
+
+        # DK - debugging purpose
+        if type in ["mismatch", "deletion", "insertion"]:
+            if not var_id.startswith("hv"):
+                continue
+        
         if type in ["match", "deletion"]:
             cur_right = cur_left + length - 1
         else:
-            cur_right = cur_left
+            cur_right = cur_left            
 
         cur_ht, cur_seq = get_haplotype_and_seq(cmp_list[:i+1])
         if len(cur_ht) == 0:
@@ -1193,6 +1200,12 @@ def identify_ambigious_diffs(ref_seq,
         cmp_i = cmp_list[i]
         type, cur_left, length = cmp_i[:3]
         var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
+
+        # DK - debugging purpose
+        if type in ["mismatch", "deletion", "insertion"]:
+            if not var_id.startswith("hv"):
+                continue
+
         if type in ["match", "deletion"]:
             cur_right = cur_left + length - 1
         else:

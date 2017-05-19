@@ -423,7 +423,7 @@ def typing(ex_path,
                                                                    allele_vars,
                                                                    gene_vars,
                                                                    gene_var_list,
-                                                                   verbose)
+                                                                   verbose >= 2)
 
             def haplotype_alts_list(haplotype_alts, left = True):
                 haplotype_list = []
@@ -1229,13 +1229,6 @@ def typing(ex_path,
                             for f_ in [sys.stderr, report_file]:
                                 print >> f_, "\t\t\t*** %d ranked %s (count: %d)" % (count_i + 1, test_Gene_name, count[1])
                             found = True
-                            """
-                            if count_i > 0 and Gene_counts[0][1] > count[1]:
-                                print >> sys.stderr, "Warning: %s ranked first (count: %d)" % (Gene_counts[0][0], Gene_counts[0][1])
-                                assert False
-                            else:
-                                test_passed += 1
-                            """
                     if count_i < 5 and not found:
                         for f_ in [sys.stderr, report_file]:
                             print >> f_, "\t\t\t\t%d %s (count: %d)" % (count_i + 1, count[0], count[1])
@@ -1261,8 +1254,7 @@ def typing(ex_path,
                         continue
 
                     gen_prob_sum += prob
-                    for allele2 in allele_rep_groups[allele]:
-                        gen_alleles.add(allele2)
+                    gen_alleles |= set(allele_rep_groups[allele])
 
                 if len(gen_alleles) > 0:
                     Gene_gen_cmpt2 = {}
@@ -1280,7 +1272,7 @@ def typing(ex_path,
                             Gene_gen_cmpt2[cmpt2] += value
                     Gene_gen_cmpt = Gene_gen_cmpt2
                     Gene_gen_prob = typing_common.single_abundance(Gene_gen_cmpt, Gene_lengths[gene])
-
+                    
                     Gene_combined_prob = {}
                     for allele, prob in Gene_prob:
                         assert allele not in Gene_combined_prob
