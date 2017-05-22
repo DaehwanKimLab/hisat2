@@ -244,26 +244,23 @@ def extract_vars(base_fname,
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",
                         "-f", "%s/%s_gen.fasta" % (fasta_dname, gene)]
-
-        # DK - debugging purpose
-        print "DK:", ' '.join(aligner_cmd)
-        
-        
         align_proc = subprocess.Popen(aligner_cmd,
                                       stdout=subprocess.PIPE,
                                       stderr=open("/dev/null", 'w'))
-        allele_id, strand = "", ''
-        best_chr, best_left, best_right, best_AS = "", -1, -1, -sys.maxint
+        allele_id = ""
+        best_chr, best_left, best_right, best_AS, best_strand = "", -1, -1, -sys.maxint, ''
         for line in align_proc.stdout:
             if line.startswith('@'):
                 continue
             line = line.strip()
             cols = line.split()
-            allele_id, flag, chr, left, _, cigar_str = cols[:6]
+            temp_allele_id, flag, chr, left, _, cigar_str = cols[:6]
             left = int(left) - 1
             right = left
             cigars = cigar_re.findall(cigar_str)
             cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+            if len(cigars) > 1 or cigars[0][0] != 'M':
+                continue
             for i in range(len(cigars)):
                 cigar_op, length = cigars[i]
                 if cigar_op in "MND":
@@ -279,9 +276,10 @@ def extract_vars(base_fname,
             assert AS != ""
             AS = int(AS)
             if AS > best_AS:
-                best_chr, best_left, best_right, best_AS = chr, left, right, AS
+                allele_id = temp_allele_id
+                best_chr, best_left, best_right, best_AS, best_strand = chr, left, right, AS, strand
 
-        chr, left, right = best_chr, best_left, best_right
+        chr, left, right, strand = best_chr, best_left, best_right, best_strand
         align_proc.communicate()
         if allele_id == "":
             remove_locus_list.append(gene)
