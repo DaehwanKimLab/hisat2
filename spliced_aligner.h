@@ -240,6 +240,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
     const Read& rd = *(this->_rds[rdi]);
     index_t rdlen = (index_t)rd.length();
     if(hit.score() < this->_minsc[rdi]) return maxsc;
+    if(dep >= 128) return maxsc;
     
     // if it's already examined, just return
     if(hitoff == hit.rdoff() - hit.trim5() && hitlen == hit.len() + hit.trim5() + hit.trim3()) {
@@ -256,7 +257,6 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
         this->_spliceSites.expand();
     }
     EList<Coord>& coords = this->_coords[dep];
-    EList<GenomeHit<index_t> >& local_genomeHits = this->_local_genomeHits[dep];
     EList<SpliceSite>& spliceSites = this->_spliceSites[dep];
     
     // daehwan - for debugging purposes
@@ -282,11 +282,11 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             bool another_spliced = false;
             if(!ssdb.empty()) {
                 int64_t best_score = hit.score();
-                local_genomeHits.clear();
+                this->_local_genomeHits[dep].clear();
                 this->_anchors_added.clear();
                 
-                local_genomeHits.expand();
-                local_genomeHits.back() = hit;
+                this->_local_genomeHits[dep].expand();
+                this->_local_genomeHits[dep].back() = hit;
                 this->_anchors_added.push_back(0);
                 
                 index_t fragoff = 0, fraglen = 0, left = 0, right = 0;
@@ -394,8 +394,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                 another_spliced = true;
                                 if(tempHit.score() > best_score)
                                     best_score = tempHit.score();
-                                local_genomeHits.expand();
-                                local_genomeHits.back() = tempHit;
+                                this->_local_genomeHits[dep].expand();
+                                this->_local_genomeHits[dep].back() = tempHit;
                                 this->_anchors_added.push_back(1);
                                 index_t temp_fragoff = 0, temp_fraglen = 0, temp_left = 0;
                                 tempHit.getLeft(temp_fragoff, temp_fraglen, temp_left);
@@ -406,19 +406,19 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     }
                 }
                 
-                size_t num_local_genomeHits = local_genomeHits.size();
+                size_t num_local_genomeHits = this->_local_genomeHits[dep].size();
                 for(size_t i = 0; i < num_local_genomeHits; i++) {
-                    local_genomeHits[i].getRight(fragoff, fraglen, right);
-                    if(local_genomeHits[i].score() < best_score) continue;
+                    this->_local_genomeHits[dep][i].getRight(fragoff, fraglen, right);
+                    if(this->_local_genomeHits[dep][i].score() < best_score) continue;
                     // make use of a list of known or novel splice sites to further align the read
                     if(fraglen >= minMatchLen &&
-                       local_genomeHits[i].trim3() == 0 &&
+                       this->_local_genomeHits[dep][i].trim3() == 0 &&
                        !tpol.no_spliced_alignment()) {
                         spliceSites.clear();
                         assert_gt(fraglen, 0);
-                        ssdb.getRightSpliceSites(local_genomeHits[i].ref(), right + fraglen - minMatchLen, minMatchLen, spliceSites);
+                        ssdb.getRightSpliceSites(this->_local_genomeHits[dep][i].ref(), right + fraglen - minMatchLen, minMatchLen, spliceSites);
                         for(size_t si = 0; si < spliceSites.size(); si++) {
-                            const GenomeHit<index_t>& canHit = local_genomeHits[i];
+                            const GenomeHit<index_t>& canHit = this->_local_genomeHits[dep][i];
                             const SpliceSite& ss = spliceSites[si];
                             if(!ss._fromfile && ss._readid + this->_thread_rids_mindist > rd.rdid) continue;
                             if(right > ss.left()) continue;
@@ -507,8 +507,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                     another_spliced = true;
                                     if(combinedHit.score() > best_score)
                                         best_score = tempHit.score();
-                                    local_genomeHits.expand();
-                                    local_genomeHits.back() = combinedHit;
+                                    this->_local_genomeHits[dep].expand();
+                                    this->_local_genomeHits[dep].back() = combinedHit;
                                     this->_anchors_added.push_back(this->_anchors_added[i] + 1);
                                     
                                     index_t temp_fragoff = 0, temp_fraglen = 0, temp_right = 0;
@@ -521,9 +521,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     }
                 }
                 
-                assert_eq(local_genomeHits.size(), this->_anchors_added.size());
-                for(size_t i = 0; i < local_genomeHits.size(); i++) {
-                    const GenomeHit<index_t>& canHit = local_genomeHits[i];
+                assert_eq(this->_local_genomeHits[dep].size(), this->_anchors_added.size());
+                for(size_t i = 0; i < this->_local_genomeHits[dep].size(); i++) {
+                    const GenomeHit<index_t>& canHit = this->_local_genomeHits[dep][i];
                     if(!this->_secondary && canHit.score() < best_score) continue;
                     // if(min(min_left_anchor, min_right_anchor) <= this->_minK_local) {
                     
@@ -705,7 +705,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
         // Use at most two local indexes
         const index_t max_count = 2;
         int64_t prev_score = hit.score();
-        local_genomeHits.clear();
+        this->_local_genomeHits[dep].clear();
         while(!success && count++ < max_count && use_localindex) {
             if(him.localindexatts >= this->max_localindexatts) break;
             if(first) {
@@ -880,7 +880,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    dep + 1);
                             maxsc = max<int64_t>(maxsc, tmp_maxsc);
                         } else {
-                            local_genomeHits.push_back(tempHit);
+                            this->_local_genomeHits[dep].push_back(tempHit);
                         }
                     }
                 }
@@ -888,8 +888,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             if(maxsc >= prev_score - sc.mmpMax) success = true;
             if(!success &&
                (him.localindexatts >= this->max_localindexatts || count == max_count || hGFM->prevLocalGFM(lGFM) == NULL)) {
-                for(index_t ti = 0; ti < local_genomeHits.size(); ti++) {
-                    GenomeHit<index_t>& tempHit = local_genomeHits[ti];
+                for(index_t ti = 0; ti < this->_local_genomeHits[dep].size(); ti++) {
+                    GenomeHit<index_t>& tempHit = this->_local_genomeHits[dep][ti];
                     int64_t minsc = this->_minsc[rdi];
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
@@ -1359,7 +1359,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
         // Use at most two local indexes
         const index_t max_count = 2;
         int64_t prev_score = hit.score();
-        local_genomeHits.clear();
+        this->_local_genomeHits[dep].clear();
         while(!success && count++ < max_count && use_localindex) {
             if(him.localindexatts >= this->max_localindexatts) break;
             if(first) {
@@ -1539,7 +1539,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    dep + 1);
                             maxsc = max<int64_t>(maxsc, tmp_maxsc);
                         } else {
-                            local_genomeHits.push_back(combinedHit);
+                            this->_local_genomeHits[dep].push_back(combinedHit);
                         }
                     }
                 }
@@ -1548,8 +1548,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             if(maxsc >= prev_score - sc.mmpMax) success = true;
             if(!success &&
                (him.localindexatts >= this->max_localindexatts || count == max_count || hGFM->nextLocalGFM(lGFM) == NULL) ) {
-                for(index_t ti = 0; ti < local_genomeHits.size(); ti++) {
-                    GenomeHit<index_t>& tempHit = local_genomeHits[ti];
+                for(index_t ti = 0; ti < this->_local_genomeHits[dep].size(); ti++) {
+                    GenomeHit<index_t>& tempHit = this->_local_genomeHits[dep][ti];
                     int64_t minsc = this->_minsc[rdi];
                     if(!this->_secondary) {
                         if(rdi == 0) minsc = max(minsc, sink.bestUnp1());

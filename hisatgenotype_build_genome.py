@@ -143,7 +143,7 @@ def build_genotype_genome(base_fname,
             proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
             proc.communicate()
             if not typing_common.check_files(gene_fnames):
-                print >> sys.stderr, "Error: extract_HLA_vars failed!"
+                print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
                 sys.exit(1)
 
         ref_fname = "%s.ref" % database_name

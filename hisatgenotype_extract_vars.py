@@ -239,11 +239,16 @@ def extract_vars(base_fname,
     remove_locus_list = []
     for gene in locus_list:
         aligner_cmd = ["hisat2"]
-        if base_fname == "hla":
+        if base_fname in ["hla", "coids"]:
             aligner_cmd += ["--score-min", "C,0"]
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",
                         "-f", "%s/%s_gen.fasta" % (fasta_dname, gene)]
+
+        # DK - debugging purpose
+        print "DK:", ' '.join(aligner_cmd)
+        
+        
         align_proc = subprocess.Popen(aligner_cmd,
                                       stdout=subprocess.PIPE,
                                       stderr=open("/dev/null", 'w'))
@@ -255,10 +260,8 @@ def extract_vars(base_fname,
             line = line.strip()
             cols = line.split()
             allele_id, flag, chr, left, _, cigar_str = cols[:6]
-            assert cigar_str[-1] == 'M'
             left = int(left) - 1
             right = left
-
             cigars = cigar_re.findall(cigar_str)
             cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
             for i in range(len(cigars)):
