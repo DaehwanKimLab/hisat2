@@ -1,1 +1,0 @@
-../../../hisatgenotype_hla_cyp.py

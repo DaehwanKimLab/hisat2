@@ -23,7 +23,7 @@
 import os, sys, subprocess, re
 import inspect
 from argparse import ArgumentParser, FileType
-from hisatgenotype_modules import typing_common, Gene_typing
+import hisatgenotype_typing_common as typing_common, hisatgenotype_gene_typing as gene_typing
 
 
 """
@@ -38,8 +38,7 @@ def read_clnsig(fname):
 
 """
 """
-def build_genotype_genome(reference,
-                          base_fname,                          
+def build_genotype_genome(base_fname,                          
                           inter_gap,
                           intra_gap,
                           threads,
@@ -47,19 +46,15 @@ def build_genotype_genome(reference,
                           use_clinvar,
                           use_commonvar,
                           verbose):    
-    # Current script directory
-    curr_script = os.path.realpath(inspect.getsourcefile(build_genotype_genome))
-    ex_path = os.path.dirname(curr_script)
-
     # Download HISAT2 index
     HISAT2_fnames = ["grch38",
                      "genome.fa",
                      "genome.fa.fai"]
     if not typing_common.check_files(HISAT2_fnames):
-        typing_common.download_genome_and_index(ex_path)
+        typing_common.download_genome_and_index()
 
     # Load genomic sequences
-    chr_dic, chr_names, chr_full_names = typing_common.read_genome(open(reference))
+    chr_dic, chr_names, chr_full_names = typing_common.read_genome(open("genome.fa"))
 
     genotype_vars, genotype_haplotypes, genotype_clnsig = {}, {}, {}
     if use_clinvar:
@@ -71,15 +66,14 @@ def build_genotype_genome(reference,
 
         if not typing_common.check_files(CLINVAR_fnames):
             if not os.path.exists("clinvar.vcf.gz"):
-                os.system("wget ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz")
+                os.system("wget ftp://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/archive/2017/clinvar_20170404.vcf.gz")
             assert os.path.exists("clinvar.vcf.gz")
 
-            extract_clinvar_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes_VCF.py")
-            extract_cmd = [extract_clinvar_script]
+            extract_cmd = ["hisat2_extract_snps_haplotypes_VCF.py"]
             extract_cmd += ["--inter-gap", str(inter_gap),
                             "--intra-gap", str(intra_gap),
                             "--genotype-vcf", "clinvar.vcf.gz",
-                            reference, "/dev/null", "clinvar"]
+                            "genome.fa", "/dev/null", "clinvar"]
             if verbose:
                 print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
             proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -107,11 +101,10 @@ def build_genotype_genome(reference,
                 os.system("wget http://hgdownload.cse.ucsc.edu/goldenPath/hg38/database/%s.txt.gz" % commonvar_fbase)
             assert os.path.exists("%s.txt.gz" % commonvar_fbase)
             os.system("gzip -cd %s.txt.gz | awk 'BEGIN{OFS=\"\t\"} {if($2 ~ /^chr/) {$2 = substr($2, 4)}; if($2 == \"M\") {$2 = \"MT\"} print}' > %s.txt" % (commonvar_fbase, commonvar_fbase))
-            extract_commonvar_script = os.path.join(ex_path, "hisat2_extract_snps_haplotypes_UCSC.py")
-            extract_cmd = [extract_commonvar_script,
+            extract_cmd = ["hisat2_extract_snps_haplotypes_UCSC.py",
                            "--inter-gap", str(inter_gap),
                            "--intra-gap", str(intra_gap),
-                           reference, "%s.txt" % commonvar_fbase, commonvar_fbase]
+                           "genome.fa", "%s.txt" % commonvar_fbase, commonvar_fbase]
             if verbose:
                 print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
             proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -139,8 +132,7 @@ def build_genotype_genome(reference,
                        "%s.haplotype" % database_name,
                        "%s.link" % database_name]
         if not typing_common.check_files(gene_fnames):
-            extract_hla_script = os.path.join(ex_path, "hisatgenotype_extract_vars.py")
-            extract_cmd = [extract_hla_script]
+            extract_cmd = ["hisatgenotype_extract_vars.py"]
             extract_cmd += ["--base", database_name,
                             "--inter-gap", str(inter_gap),
                             "--intra-gap", str(intra_gap)]
@@ -375,8 +367,7 @@ def build_genotype_genome(reference,
 
     # Build HISAT2 graph indexes based on the above information
     hisat2_index_fnames = ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
-    hisat2_build = os.path.join(ex_path, "hisat2-build")
-    build_cmd = [hisat2_build,
+    build_cmd = ["hisat2-build",
                  "-p", str(threads),
                  "--snp", "%s.index.snp" % base_fname,
                  "--haplotype", "%s.haplotype" % base_fname,
@@ -396,25 +387,12 @@ def build_genotype_genome(reference,
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description="Extract HLA variants from HLA multiple sequence alignments")
-    parser.add_argument("reference",
-                        nargs='?',
+        description="Build genotype genome")
+    parser.add_argument("--base", "--base-fname",
+                        dest="base_fname",
                         type=str,
-                        help="Reference genome")
-    parser.add_argument("base_fname",
-                        nargs='?',
-                        type=str,
-                        help="base filename for genotype genome")
-    parser.add_argument("--inter-gap",
-                        dest="inter_gap",
-                        type=int,
-                        default=30,
-                        help="Maximum distance for variants to be in the same haplotype")
-    parser.add_argument("--intra-gap",
-                        dest="intra_gap",
-                        type=int,
-                        default=50,
-                        help="Break a haplotype into several haplotypes")
+                        default="genotype_genome",
+                        help="base filename for genotype genome (default: genotype_genome)")
     parser.add_argument("-p", "--threads",
                         dest="threads",
                         type=int,
@@ -424,24 +402,31 @@ if __name__ == '__main__':
                         dest="database_list",
                         type=str,
                         default="",
-                        help="A comma-separated list of databases (default: hla)")
-    parser.add_argument("--clinvar",
-                        dest="use_clinvar",
-                        action="store_true",
-                        help="Include variants from ClinVar database")
+                        help="A comma-separated list of databases (default: hla,codis,cyp)")
     parser.add_argument("--commonvar",
                         dest="use_commonvar",
                         action="store_true",
                         help="Include common variants from dbSNP")
+    parser.add_argument("--clinvar",
+                        dest="use_clinvar",
+                        action="store_true",
+                        help="Include variants from ClinVar database")
+    parser.add_argument("--inter-gap",
+                        dest="inter_gap",
+                        type=int,
+                        default=30,
+                        help="Maximum distance for variants to be in the same haplotype")
+    parser.add_argument("--intra-gap",
+                        dest="intra_gap",
+                        type=int,
+                        default=50,
+                        help="Break a haplotype into several haplotypes")    
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
                         help="also print some statistics to stderr")
 
     args = parser.parse_args()
-    if not args.reference or not args.base_fname:
-        parser.print_help()
-        sys.exit(1)
     if args.inter_gap > args.intra_gap:
         print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
@@ -456,8 +441,7 @@ if __name__ == '__main__':
         sys.exit(1)
         
         
-    build_genotype_genome(args.reference,
-                          args.base_fname,
+    build_genotype_genome(args.base_fname,
                           args.inter_gap,
                           args.intra_gap,
                           args.threads,

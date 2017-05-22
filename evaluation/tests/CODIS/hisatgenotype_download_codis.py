@@ -1,1 +1,0 @@
-../../../hisatgenotype_modules/extract_codis_data.py

@@ -24,7 +24,7 @@ import os, sys, subprocess, re
 import inspect
 import glob
 from argparse import ArgumentParser, FileType
-from hisatgenotype_modules import typing_common, Gene_typing
+import hisatgenotype_typing_common as typing_common, hisatgenotype_gene_typing as gene_typing
 
 
 """

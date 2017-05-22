@@ -194,14 +194,13 @@ def check_files(fnames):
 """
 Download GRCh38 human reference and HISAT2 indexes
 """
-def download_genome_and_index(ex_path):
+def download_genome_and_index():
     HISAT2_fnames = ["grch38",
                      "genome.fa",
                      "genome.fa.fai"]
     if not check_files(HISAT2_fnames):
         os.system("wget ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz; tar xvzf grch38.tar.gz; rm grch38.tar.gz")
-        hisat2_inspect = os.path.join(ex_path, "hisat2-inspect")
-        os.system("%s grch38/genome > genome.fa" % hisat2_inspect)
+        os.system("hisat2-inspect grch38/genome > genome.fa")
         os.system("samtools faidx genome.fa")
 
 
@@ -505,8 +504,9 @@ def align_reads(aligner,
             aligner_cmd += ["-k", "10"]
         else:
             aligner_cmd += ["--max-altstried", "64"]
-            if base_fname == "codis":
-                aligner_cmd += ["--haplotype"]
+            # DK - check this out
+            aligner_cmd += ["--haplotype"]
+            if base_fname == "codis":                
                 aligner_cmd += ["--enable-codis"]
         aligner_cmd += ["-x", "%s.%s" % (base_fname, index_type)]
     elif aligner == "bowtie2":
@@ -722,13 +722,13 @@ def Gene_prob_cmp(a, b):
 
 """
 """
-def single_abundance(Gene_cmpt, Gene_length):
+def single_abundance(Gene_cmpt, Gene_length, exonic = False):
     def normalize(prob):
         total = sum(prob.values())
         for allele, mass in prob.items():
             prob[allele] = mass / total        
 
-    def normalize2(prob, length):
+    def normalize_len(prob, length):
         total = 0
         for allele, mass in prob.items():
             assert allele in length
@@ -744,8 +744,10 @@ def single_abundance(Gene_cmpt, Gene_length):
             if allele not in Gene_prob:
                 Gene_prob[allele] = 0.0
             Gene_prob[allele] += (float(count) / len(alleles))
-    normalize(Gene_prob)
-    # normalize2(Gene_prob, Gene_length)
+    if exonic:
+        normalize(Gene_prob)
+    else:
+        normalize_len(Gene_prob, Gene_length)
 
     def next_prob(Gene_cmpt, Gene_prob, Gene_length):
         Gene_prob_next = {}
@@ -764,9 +766,19 @@ def single_abundance(Gene_cmpt, Gene_length):
                 if allele not in Gene_prob_next:
                     Gene_prob_next[allele] = 0.0
                 Gene_prob_next[allele] += (float(count) * Gene_prob[allele] / alleles_prob)
-        normalize(Gene_prob_next)
-        # normalize2(Gene_prob_next, Gene_length)
+        if exonic:
+            normalize(Gene_prob_next)
+        else:
+            normalize_len(Gene_prob_next, Gene_length)
         return Gene_prob_next
+
+    def select_alleles(Gene_prob):
+        Gene_prob2 = {}
+        max_prob = max(Gene_prob.values())
+        for allele, prob in Gene_prob.items():
+            if prob >= max_prob / 10.0:
+                Gene_prob2[allele] = prob
+        return Gene_prob2
 
     fast_EM = True
     diff, iter = 1.0, 0
@@ -795,12 +807,7 @@ def single_abundance(Gene_cmpt, Gene_length):
 
         # Accelerate convergence
         if iter >= 10:
-            Gene_prob2 = {}
-            avg_prob = sum(Gene_prob.values()) / len(Gene_prob)
-            for allele, prob in Gene_prob.items():
-                if prob >= 0.005 or prob > avg_prob:
-                    Gene_prob2[allele] = prob
-                Gene_prob = Gene_prob2
+            Gene_prob = select_alleles(Gene_prob)
 
         # DK - debugging purposes
         if iter % 10 == 0 and False:
@@ -811,8 +818,11 @@ def single_abundance(Gene_cmpt, Gene_length):
         
         iter += 1
         
-    normalize(Gene_prob)
-    # normalize2(Gene_prob, Gene_length)
+    Gene_prob = select_alleles(Gene_prob)
+    if exonic:
+        normalize(Gene_prob)
+    else:
+        normalize_len(Gene_prob, Gene_length)
     Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]
     Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
     return Gene_prob
