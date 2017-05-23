@@ -379,7 +379,7 @@ def build_genotype_genome(base_fname,
         
     proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
     proc.communicate()        
-    if not check_files(hisat2_index_fnames):
+    if not typing_common.check_files(hisat2_index_fnames):
         print >> sys.stderr, "Error: indexing failed!  Perhaps, you may have forgotten to build hisat2 executables?"
         sys.exit(1)
 
