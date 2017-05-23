@@ -208,8 +208,9 @@ def build_genotype_genome(base_fname,
                     chr_genotype_vari += 1
                     continue
 
-                print >> var_out_file, "%s\t%s\t%s\t%d\t%s" % \
-                    (var_id, var_type, chr, var_left + off, var_data)
+                out_str = "%s\t%s\t%s\t%d\t%s" % (var_id, var_type, chr, var_left + off, var_data)
+                print >> var_out_file, out_str
+                print >> index_var_out_file, out_str
 
                 if var_id in genotype_clnsig:
                     var_gene, clnsig = genotype_clnsig[var_id]
