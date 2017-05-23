@@ -408,15 +408,34 @@ if __name__ == '__main__':
                         type=str,
                         default="fq.gz",
                         help="Read file suffix (Default: fq.gz)")
+    parser.add_argument('-f', '--fasta',
+                        dest='fastq',
+                        action='store_false',
+                        help='FASTA format')
+    parser.add_argument("-U",
+                        dest="read_fname_U",
+                        type=str,
+                        default="",
+                        help="filename for single-end reads")
+    parser.add_argument("-1",
+                        dest="read_fname_1",
+                        type=str,
+                        default="",
+                        help="filename for paired-end reads")
+    parser.add_argument("-2",
+                        dest="read_fname_2",
+                        type=str,
+                        default="",
+                        help="filename for paired-end reads")    
     parser.add_argument('--single',
                         dest='paired',
                         action='store_false',
                         help='Single-end reads (Default: False)')
-    parser.add_argument("--hla-list",
-                        dest="hla_list",
+    parser.add_argument("--database-list",
+                        dest="database_list",
                         type=str,
                         default="",
-                        help="A comma-separated list of HLA genes (default: empty)")
+                        help="A comma-separated list of loci (default: empty)")
     parser.add_argument('--no-partial',
                         dest='partial',
                         action='store_false',
@@ -446,10 +465,19 @@ if __name__ == '__main__':
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
         sys.exit(1)
-    if args.hla_list == "":
-        hla_list = []
+    if args.database_list == "":
+        database_list = []
     else:
-        hla_list = args.hla_list.split(',')
+        database_list = args.database_list.split(',')
+    if args.read_fname_U != "":
+        args.read_fname = [args.read_fname_U]
+    elif args.read_fname_1 != "" or args.read_fname_2 != "":
+        if args.read_fname_1 == "" or args.read_fname_2 == "":
+            print >> sys.stderr, "Error: please specify both -1 and -2."
+            sys.exit(1)
+        args.read_fname = [args.read_fname_1, args.read_fname_2]
+    else:
+        args.read_fname = []    
     if args.read_dir == "" or not os.path.exists(args.read_dir):
         print >> sys.stderr, "Error: please specify --read-dir with an existing directory."
         sys.exit(1)

@@ -1028,11 +1028,11 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Number of threads")
-    parser.add_argument("--num-mismatch",
-                        dest="num_mismatch",
+    parser.add_argument("--num-editdist",
+                        dest="num_editdist",
                         type=int,
-                        default=0,
-                        help="Maximum number of mismatches per read alignment to be considered (default: 0)")
+                        default=2,
+                        help="Maximum number of mismatches per read alignment to be considered (default: 2)")
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -1066,6 +1066,6 @@ if __name__ == '__main__':
              args.fastq,
              read_fnames,
              args.threads,
-             args.num_mismatch,
+             args.num_editdist,
              args.verbose,
              daehwan_debug)

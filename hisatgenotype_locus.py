@@ -207,8 +207,7 @@ def error_correct(ref_seq,
 
 """
 """
-def typing(ex_path,
-           simulation,
+def typing(simulation,
            base_fname,
            locus_list,
            partial,
@@ -1661,33 +1660,29 @@ def read_Gene_links(fname):
 
 """
 """
-def test_Gene_genotyping(base_fname,
-                         locus_list,
-                         only_locus_list,
-                         partial,
-                         aligners,
-                         read_fname,
-                         alignment_fname,
-                         threads,
-                         simulate_interval,
-                         read_len,
-                         fragment_len,
-                         best_alleles,
-                         num_editdist,
-                         perbase_errorrate,
-                         perbase_snprate,
-                         skip_fragment_regions,
-                         assembly,
-                         output_base,
-                         error_correction,
-                         discordant,
-                         display_alleles,
-                         verbose,
-                         debug_instr):
-    # Current script directory
-    curr_script = os.path.realpath(inspect.getsourcefile(test_Gene_genotyping))
-    ex_path = os.path.dirname(curr_script)
-
+def test_genotyping(base_fname,
+                    locus_list,
+                    only_locus_list,
+                    partial,
+                    aligners,
+                    read_fname,
+                    alignment_fname,
+                    threads,
+                    simulate_interval,
+                    read_len,
+                    fragment_len,
+                    best_alleles,
+                    num_editdist,
+                    perbase_errorrate,
+                    perbase_snprate,
+                    skip_fragment_regions,
+                    assembly,
+                    output_base,
+                    error_correction,
+                    discordant,
+                    display_alleles,
+                    verbose,
+                    debug_instr):
     if not os.path.exists("hisatgenotype_db"):
         typing_common.clone_hisatgenotype_database()
 
@@ -1772,8 +1767,7 @@ def test_Gene_genotyping(base_fname,
             if index_type == "graph":
                 Gene_hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base_fname, i+1) for i in range(8)]
                 if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
-                    hisat2_build = os.path.join(ex_path, "hisat2-build")
-                    build_cmd = [hisat2_build,
+                    build_cmd = ["hisat2-build",
                                  "-p", str(threads),
                                  "--snp", "%s.index.snp" % base_fname,
                                  "--haplotype", "%s.haplotype" % base_fname,
@@ -1791,8 +1785,7 @@ def test_Gene_genotyping(base_fname,
                 assert index_type == "linear"
                 Gene_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
                 if not typing_common.check_files(Gene_hisat2_linear_index_fnames):
-                    hisat2_build = os.path.join(ex_path, "hisat2-build")
-                    build_cmd = [hisat2_build,
+                    build_cmd = ["hisat2-build",
                                  "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
                                  "%s.linear" % base_fname]
                     proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -1943,8 +1936,7 @@ def test_Gene_genotyping(base_fname,
                 read_fname = ["%s_input_1.fa" % base_fname, "%s_input_2.fa" % base_fname]
 
             fastq = False
-            tmp_test_passed = typing(ex_path,
-                                     simulation,
+            tmp_test_passed = typing(simulation,
                                      base_fname,
                                      test_locus_list,
                                      partial,
@@ -1989,8 +1981,7 @@ def test_Gene_genotyping(base_fname,
     else: # With real reads or BAMs
         print >> sys.stderr, "\t", ' '.join(locus_list)
         fastq = True
-        typing(ex_path,
-               simulation,
+        typing(simulation,
                base_fname,
                locus_list,
                partial,
@@ -2025,7 +2016,7 @@ def test_Gene_genotyping(base_fname,
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='test HLA genotyping')
+        description='hisatgenotype_locus')
     parser.add_argument("--base", "--base-fname",
                         dest="base_fname",
                         type=str,
@@ -2036,20 +2027,25 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of genes (default: empty, all genes)")
-    parser.add_argument('--no-partial',
-                        dest='partial',
+    parser.add_argument('-f', '--fasta',
+                        dest='fastq',
                         action='store_false',
-                        help='Include partial alleles (e.g. A_nuc.fasta)')
-    parser.add_argument("--aligner-list",
-                        dest="aligners",
-                        type=str,
-                        default="hisat2.graph",
-                        help="A comma-separated list of aligners such as hisat2.graph,hisat2.linear,bowtie2.linear (default: hisat2.graph)")
-    parser.add_argument("--reads",
-                        dest="read_fname",
+                        help='FASTA format')
+    parser.add_argument("-U",
+                        dest="read_fname_U",
                         type=str,
                         default="",
-                        help="Fastq read file name")
+                        help="filename for single-end reads")
+    parser.add_argument("-1",
+                        dest="read_fname_1",
+                        type=str,
+                        default="",
+                        help="filename for paired-end reads")
+    parser.add_argument("-2",
+                        dest="read_fname_2",
+                        type=str,
+                        default="",
+                        help="filename for paired-end reads")    
     parser.add_argument("--alignment",
                         dest="alignment_fname",
                         type=str,
@@ -2060,6 +2056,15 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Number of threads")
+    parser.add_argument('--no-partial',
+                        dest='partial',
+                        action='store_false',
+                        help='Include partial alleles (e.g. A_nuc.fasta)')
+    parser.add_argument("--aligner-list",
+                        dest="aligners",
+                        type=str,
+                        default="hisat2.graph",
+                        help="A comma-separated list of aligners such as hisat2.graph,hisat2.linear,bowtie2.linear (default: hisat2.graph)")
     parser.add_argument("--simulate-interval",
                         dest="simulate_interval",
                         type=int,
@@ -2087,8 +2092,8 @@ if __name__ == '__main__':
     parser.add_argument("--num-editdist",
                         dest="num_editdist",
                         type=int,
-                        default=0,
-                        help="Maximum number of mismatches per read alignment to be considered (default: 0)")
+                        default=2,
+                        help="Maximum number of mismatches per read alignment to be considered (default: 2)")
     parser.add_argument("--perbase-errorrate",
                         dest="perbase_errorrate",
                         type=float,
@@ -2161,8 +2166,13 @@ if __name__ == '__main__':
     args.aligners = args.aligners.split(',')
     for i in range(len(args.aligners)):
         args.aligners[i] = args.aligners[i].split('.')
-    if args.read_fname:
-        args.read_fname = args.read_fname.split(',')
+    if args.read_fname_U != "":
+        args.read_fname = [args.read_fname_U]
+    elif args.read_fname_1 != "" or args.read_fname_2 != "":
+        if args.read_fname_1 == "" or args.read_fname_2 == "":
+            print >> sys.stderr, "Error: please specify both -1 and -2."
+            sys.exit(1)
+        args.read_fname = [args.read_fname_1, args.read_fname_2]
     else:
         args.read_fname = []
     if args.alignment_fname != "" and \
@@ -2207,27 +2217,27 @@ if __name__ == '__main__':
         display_alleles = args.display_alleles.split(',')
 
     random.seed(args.random_seed)
-    test_Gene_genotyping(args.base_fname,
-                         locus_list,
-                         only_locus_list,
-                         args.partial,
-                         args.aligners,
-                         args.read_fname,
-                         args.alignment_fname,
-                         args.threads,
-                         args.simulate_interval,
-                         args.read_len,
-                         args.fragment_len,
-                         args.best_alleles,
-                         args.num_editdist,
-                         args.perbase_errorrate,
-                         args.perbase_snprate,
-                         skip_fragment_regions,
-                         args.assembly,
-                         args.output_base,
-                         args.error_correction,
-                         args.discordant,
-                         display_alleles,
-                         args.verbose_level,
-                         debug)
+    test_genotyping(args.base_fname,
+                    locus_list,
+                    only_locus_list,
+                    args.partial,
+                    args.aligners,
+                    args.read_fname,
+                    args.alignment_fname,
+                    args.threads,
+                    args.simulate_interval,
+                    args.read_len,
+                    args.fragment_len,
+                    args.best_alleles,
+                    args.num_editdist,
+                    args.perbase_errorrate,
+                    args.perbase_snprate,
+                    skip_fragment_regions,
+                    args.assembly,
+                    args.output_base,
+                    args.error_correction,
+                    args.discordant,
+                    display_alleles,
+                    args.verbose_level,
+                    debug)
 
