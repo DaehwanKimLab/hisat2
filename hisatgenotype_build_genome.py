@@ -161,7 +161,7 @@ def build_genotype_genome(base_fname,
     # Write genotype genome
     var_num, haplotype_num = 0, 0
     genome_out_file = open("%s.fa" % base_fname, 'w')
-    gene_out_file = open("%s.gene" % base_fname, 'w')
+    locus_out_file = open("%s.locus" % base_fname, 'w')
     var_out_file = open("%s.snp" % base_fname, 'w')
     index_var_out_file = open("%s.index.snp" % base_fname, 'w')
     haplotype_out_file = open("%s.haplotype" % base_fname, 'w')
@@ -284,7 +284,7 @@ def build_genotype_genome(base_fname,
                 out_chr_seq += chr_seq[prev_right:left]
 
             # Output gene (genotype_genome.gene)
-            print >> gene_out_file, "%s\t%s\t%s\t%d\t%d" % \
+            print >> locus_out_file, "%s\t%s\t%s\t%d\t%d" % \
                 (family.upper(), name, chr, len(out_chr_seq), len(out_chr_seq) + length - 1)
 
             # Output coord (genotype_genome.coord)
@@ -357,7 +357,7 @@ def build_genotype_genome(base_fname,
             print >> genome_out_file, out_chr_seq[s:s+line_width]
 
     genome_out_file.close()
-    gene_out_file.close()
+    locus_out_file.close()
     var_out_file.close()
     index_var_out_file.close()
     haplotype_out_file.close()

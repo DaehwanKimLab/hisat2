@@ -165,7 +165,7 @@ def extract_reads(base_fname,
     else:
         assert reference_type == "genome"
         genotype_fnames = ["%s.fa" % base_fname,
-                           "%s.gene" % base_fname,
+                           "%s.locus" % base_fname,
                            "%s.snp" % base_fname,
                            "%s.haplotype" % base_fname,
                            "%s.link" % base_fname,
@@ -191,7 +191,7 @@ def extract_reads(base_fname,
 
     ranges = []
     genes, gene_loci = {}, {}
-    for line in open("%s.gene" % base_fname):
+    for line in open("%s.locus" % base_fname):
         family, allele_name, chr, left, right = line.strip().split()
         gene_name = "%s-%s" % (family, allele_name.split('*')[0])
         assert gene_name not in genes
