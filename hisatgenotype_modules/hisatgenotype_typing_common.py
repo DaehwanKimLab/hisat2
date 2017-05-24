@@ -504,9 +504,8 @@ def align_reads(aligner,
             aligner_cmd += ["-k", "10"]
         else:
             aligner_cmd += ["--max-altstried", "64"]
-            # DK - check this out
             aligner_cmd += ["--haplotype"]
-            if base_fname == "codis":                
+            if base_fname == "codis":
                 aligner_cmd += ["--enable-codis"]
         aligner_cmd += ["-x", "%s.%s" % (base_fname, index_type)]
     elif aligner == "bowtie2":

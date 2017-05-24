@@ -32,11 +32,12 @@ import hisatgenotype_typing_common as typing_common
 """
 def parallel_work(pids, 
                   work, 
-                  ex_path,
                   fq_fname_base, 
                   fq_fname, 
                   fq_fname2, 
-                  ranges):
+                  ranges,
+                  simulation,
+                  verbose):
     child = -1
     for i in range(len(pids)):
         if pids[i] == 0:
@@ -53,11 +54,12 @@ def parallel_work(pids,
 
     child_id = os.fork()
     if child_id == 0:
-        work(ex_path,
-             fq_fname_base, 
+        work(fq_fname_base, 
              fq_fname, 
              fq_fname2, 
-             ranges)
+             ranges,
+             simulation,
+             verbose)
         os._exit(os.EX_OK)
     else:
         # print >> sys.stderr, '\t\t>> thread %d: %d' % (child, child_id)
@@ -79,8 +81,10 @@ def extract_reads(base_fname,
                   read_dir,
                   out_dir,
                   suffix,
+                  read_fname,
+                  fastq,
                   paired,
-                  database_list,
+                  simulation,
                   threads,
                   max_sample,
                   job_range,
@@ -100,10 +104,14 @@ def extract_reads(base_fname,
             print >> sys.stderr, "\t%s" % fname
         sys.exit(1)
 
+    filter_region = len(database_list) > 0
+    add_region = len(database_list) == 0
     ranges = []
     regions, region_loci = {}, {}
     for line in open("%s.locus" % base_fname):
         family, allele_name, chr, left, right = line.strip().split()
+        if filter_region and family.lower() not in database_list:
+            continue
         region_name = "%s-%s" % (family, allele_name.split('*')[0])
         assert region_name not in regions
         regions[region_name] = allele_name
@@ -116,27 +124,24 @@ def extract_reads(base_fname,
         """
         if chr not in region_loci:
             region_loci[chr] = {}
-        region_loci[region_name] = [allele_name, chr, left, right]
+        region_loci[chr][region_name] = [allele_name, chr, left, right]
+        database_list.add(family.lower())
 
-    if len(database_list) == 0:
-        database_list = region_loci.keys()
-    else:
-        None
-
-    # DK - debugging purpose
-    print database_list
-    for region_name, loci in region_loci.items():
-        print region_name, loci
-    sys.exit(1)
-
-    if not os.path.exists(out_dir):
+    if out_dir != "" and not os.path.exists(out_dir):
         os.mkdir(out_dir)
 
     # Extract reads
-    if paired:
-        fq_fnames = glob.glob("%s/*.1.%s" % (read_dir, suffix))
+    if len(read_fname) > 0:
+        if paired:
+            fq_fnames = [read_fname[0]]
+            fq_fnames2 = [read_fname[1]]
+        else:
+            fq_fnames = read_fname
     else:
-        fq_fnames = glob.glob("%s/*.%s" % (read_dir, suffix))
+        if paired:
+            fq_fnames = glob.glob("%s/*.1.%s" % (read_dir, suffix))
+        else:
+            fq_fnames = glob.glob("%s/*.%s" % (read_dir, suffix))
     count = 0
     pids = [0 for i in range(threads)]
     for file_i in range(len(fq_fnames)):
@@ -150,7 +155,10 @@ def extract_reads(base_fname,
         fq_fname_base = fq_fname.split('/')[-1]
         fq_fname_base = fq_fname_base.split('.')[0]
         if paired:
-            fq_fname2 = "%s/%s.2.%s" % (read_dir, fq_fname_base, suffix)
+            if read_dir == "":
+                fq_fname2 = fq_fnames2[file_i]
+            else:
+                fq_fname2 = "%s/%s.2.%s" % (read_dir, fq_fname_base, suffix)
             if not os.path.exists(fq_fname2):
                 print >> sys.stderr, "%s does not exist." % fq_fname2
                 continue
@@ -158,21 +166,25 @@ def extract_reads(base_fname,
             fq_fname2 = ""
 
         if paired:
-            if os.path.exists("%s/%s.extracted.1.fq.gz" % (out_dir, fq_fname_base)):
-                continue
+            if out_dir != "":
+                if os.path.exists("%s/%s.extracted.1.fq.gz" % (out_dir, fq_fname_base)):
+                    continue
         else:
-            if os.path.exists("%s/%s.extracted.fq.gz" % (out_dir, fq_fname_base)):
-                continue
+            if out_dir != "":
+                if os.path.exists("%s/%s.extracted.fq.gz" % (out_dir, fq_fname_base)):
+                    continue
         count += 1
 
         print >> sys.stderr, "\t%d: Extracting reads from %s" % (count, fq_fname_base)
-        def work(ex_path,
-                 fq_fname_base,
+        def work(fq_fname_base,
                  fq_fname, 
                  fq_fname2, 
-                 reference_type, 
-                 ranges):
+                 ranges,
+                 simulation,
+                 verbose):
             aligner_cmd = ["hisat2"]
+            if not fastq:
+                aligner_cmd += ["-f"]
             aligner_cmd += ["-x", base_fname]
             aligner_cmd += ["--no-spliced-alignment",
                             "--max-altstried", "64"]
@@ -181,28 +193,46 @@ def extract_reads(base_fname,
                                 "-2", fq_fname2]
             else:
                 aligner_cmd += ["-U", fq_fname]
-            # print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)
+            if verbose:
+                print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)
             align_proc = subprocess.Popen(aligner_cmd,
                                           stdout=subprocess.PIPE,
-                                          stderr=open("/dev/null", 'w'))                
-            if paired:
-                # LP6005041-DNA_A01.extracted.1.fq.gz
-                gzip1_proc = subprocess.Popen(["gzip"],
-                                              stdin=subprocess.PIPE,
-                                              stdout=open("%s/%s.extracted.1.fq.gz" % (out_dir, fq_fname_base), 'w'),
-                                              stderr=open("/dev/null", 'w'))
+                                          stderr=open("/dev/null", 'w'))
 
-                # LP6005041-DNA_A01.extracted.2.fq.gz
-                gzip2_proc = subprocess.Popen(["gzip"],
-                                              stdin=subprocess.PIPE,
-                                              stdout=open("%s/%s.extracted.2.fq.gz" % (out_dir, fq_fname_base), 'w'),
-                                              stderr=open("/dev/null", 'w'))
-            else:
-                # LP6005041-DNA_A01.extracted.fq.gz
-                gzip1_proc = subprocess.Popen(["gzip"],
-                                              stdin=subprocess.PIPE,
-                                              stdout=open("%s/%s.extracted.fq.gz" % (out_dir, fq_fname_base), 'w'),
-                                              stderr=open("/dev/null", 'w'))
+            gzip_dic = {}
+            out_dir_slash = out_dir
+            if out_dir != "":
+                out_dir_slash += "/"
+            for database in database_list:
+                if paired:
+                    # LP6005041-DNA_A01.extracted.1.fq.gz
+                    gzip1_proc = subprocess.Popen(["gzip"],
+                                                  stdin=subprocess.PIPE,
+                                                  stdout=open("%s%s.%s.extracted.1.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
+                                                  stderr=open("/dev/null", 'w'))
+
+                    # LP6005041-DNA_A01.extracted.2.fq.gz
+                    gzip2_proc = subprocess.Popen(["gzip"],
+                                                  stdin=subprocess.PIPE,
+                                                  stdout=open("%s%s.%s.extracted.2.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
+                                                  stderr=open("/dev/null", 'w'))
+                else:
+                    # LP6005041-DNA_A01.extracted.fq.gz
+                    gzip1_proc = subprocess.Popen(["gzip"],
+                                                  stdin=subprocess.PIPE,
+                                                  stdout=open("%s%s.%s.extracted.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
+                                                  stderr=open("/dev/null", 'w'))
+                gzip_dic[database] = [gzip1_proc, gzip2_proc if paired else None]
+
+            def write_read(gzip_proc, read_name, seq, qual):
+                if fastq:
+                    gzip_proc.stdin.write("@%s\n" % read_name)
+                    gzip_proc.stdin.write("%s\n" % seq)
+                    gzip_proc.stdin.write("+\n")
+                    gzip_proc.stdin.write("%s\n" % qual)
+                else:
+                    gzip_proc.stdin.write(">%s\n" % prev_read_name)
+                    gzip_proc.stdin.write("%s\n" % seq)                    
 
             prev_read_name, extract_read, read1, read2 = "", False, [], []
             for line in align_proc.stdout:
@@ -221,24 +251,19 @@ def extract_reads(base_fname,
                     elif col.startswith("NH"):
                         NH = int(col[5:])
 
-                if read_name != prev_read_name:
+                if (not simulation and read_name != prev_read_name) or \
+                   (simulation and read_name.split('|')[0] != prev_read_name.split('|')[0]):
                     if extract_read:
-                        gzip1_proc.stdin.write("@%s\n" % prev_read_name)
-                        gzip1_proc.stdin.write("%s\n" % read1[0])
-                        gzip1_proc.stdin.write("+\n")
-                        gzip1_proc.stdin.write("%s\n" % read1[1])
+                        write_read(gzip_dic[region][0], prev_read_name, read1[0], read1[1])
                         if paired:
-                            gzip2_proc.stdin.write("@%s\n" % prev_read_name)
-                            gzip2_proc.stdin.write("%s\n" % read2[0])
-                            gzip2_proc.stdin.write("+\n")
-                            gzip2_proc.stdin.write("%s\n" % read2[1])
-
+                            write_read(gzip_dic[region][1], prev_read_name, read2[0], read2[1])
                     prev_read_name, extract_read, read1, read2 = read_name, False, [], []
 
-                if flag & 0x4 == 0 and NH == 1:
-                    for loci in region_loci.values():
-                        _, loci_chr, loci_left, loci_right = loci
-                        if chr == loci_chr and pos >= loci_left and pos < loci_right:
+                if flag & 0x4 == 0 and NH == 1 and chr in region_loci:                    
+                    for region, loci in region_loci[chr].items():
+                        region = region.split('-')[0].lower()
+                        _, _, loci_left, loci_right = loci
+                        if pos >= loci_left and pos < loci_right:
                             extract_read = True
                             break
 
@@ -256,34 +281,31 @@ def extract_reads(base_fname,
                         read2 = [read, qual]
 
             if extract_read:
-                gzip1_proc.stdin.write("@%s\n" % prev_read_name)
-                gzip1_proc.stdin.write("%s\n" % read1[0])
-                gzip1_proc.stdin.write("+\n")
-                gzip1_proc.stdin.write("%s\n" % read1[1])
+                write_read(gzip_dic[region][0], prev_read_name, read1[0], read1[1])
                 if paired:
-                    gzip2_proc.stdin.write("@%s\n" % prev_read_name)
-                    gzip2_proc.stdin.write("%s\n" % read2[0])
-                    gzip2_proc.stdin.write("+\n")
-                    gzip2_proc.stdin.write("%s\n" % read2[1])                            
+                    write_read(gzip_dic[region][1], prev_read_name, read2[0], read2[1])
 
-            gzip1_proc.stdin.close()
-            if paired:
-                gzip2_proc.stdin.close()                        
+            for gzip1_proc, gzip2_proc in gzip_dic.values():
+                gzip1_proc.stdin.close()
+                if paired:
+                    gzip2_proc.stdin.close()                        
 
         if threads <= 1:
-            work(ex_path, 
-                 fq_fname_base, 
+            work(fq_fname_base, 
                  fq_fname, 
-                 fq_fname2, 
-                 ranges)
+                 fq_fname2,
+                 ranges,
+                 simulation,
+                 verbose)
         else:
             parallel_work(pids, 
                           work, 
-                          ex_path, 
                           fq_fname_base, 
                           fq_fname, 
                           fq_fname2, 
-                          ranges)
+                          ranges,
+                          simulation,
+                          verbose)
 
     if threads > 1:
         wait_pids(pids)
@@ -294,7 +316,7 @@ def extract_reads(base_fname,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Extract reads')
-    parser.add_argument("--base-fname",
+    parser.add_argument("--base", "--base-fname",
                         dest="base_fname",
                         type=str,
                         default="genotype_genome",
@@ -342,10 +364,10 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of loci (default: empty)")
-    parser.add_argument('--no-partial',
-                        dest='partial',
-                        action='store_false',
-                        help='Include partial alleles (e.g. A_nuc.fasta)')
+    parser.add_argument('--simulation',
+                        dest='simulation',
+                        action='store_true',
+                        help='Simulated reads (Default: False)')    
     parser.add_argument("-p", "--threads",
                         dest="threads",
                         type=int,
@@ -368,10 +390,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.database_list == "":
-        database_list = []
-    else:
-        database_list = args.database_list.split(',')
+    database_list = set()
+    if args.database_list != "":
+        for region in args.database_list.split(','):
+            database_list.add(region)
     if args.read_fname_U != "":
         args.read_fname = [args.read_fname_U]
     elif args.read_fname_1 != "" or args.read_fname_2 != "":
@@ -380,25 +402,27 @@ if __name__ == '__main__':
             sys.exit(1)
         args.read_fname = [args.read_fname_1, args.read_fname_2]
     else:
-        args.read_fname = []    
-    if args.read_dir == "" or not os.path.exists(args.read_dir):
-        print >> sys.stderr, "Error: please specify --read-dir with an existing directory."
-        sys.exit(1)
-    if args.out_dir == "":
-        print >> sys.stderr, "Error: please specify --out-dir with a directory name."
-        sys.exit(1)
+        args.read_fname = []
+    if len(args.read_fname) == 0:
+        if args.read_dir == "" or not os.path.exists(args.read_dir):
+            print >> sys.stderr, "Error: please specify --read-dir with an existing directory."
+            sys.exit(1)
+        if args.out_dir == "":
+            print >> sys.stderr, "Error: please specify --out-dir with a directory name."
+            sys.exit(1)
     job_range = []
     for num in args.job_range.split(','):
         job_range.append(int(num))
         
     extract_reads(args.base_fname,
-                  args.database_list,
+                  database_list,
                   args.read_dir,
                   args.out_dir,
                   args.suffix,
+                  args.read_fname,
+                  args.fastq,
                   args.paired,
-                  hla_list,
-                  args.partial,
+                  args.simulation,
                   args.threads,
                   args.max_sample,
                   job_range,
