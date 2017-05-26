@@ -1604,6 +1604,13 @@ def typing(simulation,
     if simulation:
         return test_passed
 
+
+"""
+"""
+def read_Gene_alleles_from_vars(backbone_seq, Vars, Links, Genes):
+    None
+
+
     
 """
 """
@@ -1660,30 +1667,31 @@ def read_Gene_links(fname):
 
 """
 """
-def test_genotyping(base_fname,
-                    locus_list,
-                    only_locus_list,
-                    partial,
-                    aligners,
-                    read_fname,
-                    fastq,
-                    alignment_fname,
-                    threads,
-                    simulate_interval,
-                    read_len,
-                    fragment_len,
-                    best_alleles,
-                    num_editdist,
-                    perbase_errorrate,
-                    perbase_snprate,
-                    skip_fragment_regions,
-                    assembly,
-                    output_base,
-                    error_correction,
-                    discordant,
-                    display_alleles,
-                    verbose,
-                    debug_instr):
+def genotyping_locus(base_fname,
+                     locus_list,
+                     genotype_genome,
+                     only_locus_list,
+                     partial,
+                     aligners,
+                     read_fname,
+                     fastq,
+                     alignment_fname,
+                     threads,
+                     simulate_interval,
+                     read_len,
+                     fragment_len,
+                     best_alleles,
+                     num_editdist,
+                     perbase_errorrate,
+                     perbase_snprate,
+                     skip_fragment_regions,
+                     assembly,
+                     output_base,
+                     error_correction,
+                     discordant,
+                     display_alleles,
+                     verbose,
+                     debug_instr):
     if not os.path.exists("hisatgenotype_db"):
         typing_common.clone_hisatgenotype_database()
 
@@ -1698,132 +1706,152 @@ def test_genotyping(base_fname,
         typing_common.download_genome_and_index()
 
     # Check if the pre-existing files (hla*) are compatible with the current parameter setting
-    if os.path.exists("%s.ref" % base_fname):
-        left = 0
-        Gene_genes = []
-        BACKBONE = False
-        for line in open("%s.ref" % base_fname):
-            Gene_name = line.strip().split()[0]
-            if Gene_name.find("BACKBONE") != -1:
-                BACKBONE = True
-            Gene_gene = Gene_name.split('*')[0]
-            Gene_genes.append(Gene_gene)
-        delete_hla_files = False
-        if not BACKBONE:
-            delete_hla_files = True
-        if len(locus_list) == 0:
-            locus_list = Gene_genes
-        if not set(locus_list).issubset(set(Gene_genes)):
-            delete_hla_files = True
-        if delete_hla_files:
-            os.system("rm %s*" % base_fname)
+    if genotype_genome != "":
+        if os.path.exists("%s.locus" % base_fname):
+            left = 0
+            Gene_genes = []
+            BACKBONE = False
+            for line in open("%s.locus" % base_fname):
+                Gene_name = line.strip().split()[0]
+                if Gene_name.find("BACKBONE") != -1:
+                    BACKBONE = True
+                Gene_gene = Gene_name.split('*')[0]
+                Gene_genes.append(Gene_gene)
+            delete_hla_files = False
+            if not BACKBONE:
+                delete_hla_files = True
+            if len(locus_list) == 0:
+                locus_list = Gene_genes
+            if not set(locus_list).issubset(set(Gene_genes)):
+                delete_hla_files = True
+            if delete_hla_files:
+                os.system("rm %s*" % base_fname)
 
-    # Extract HLA variants, backbone sequence, and other sequeces  
-    Gene_fnames = [base_fname + "_backbone.fa",
-                   base_fname + "_sequences.fa",
-                   base_fname + ".ref",
-                   base_fname + ".snp",
-                   base_fname + ".index.snp",
-                   base_fname + ".haplotype",
-                   base_fname + ".link"]
-    
-    if verbose >= 1:
-        print >> sys.stderr, Gene_fnames
-    
-    if not typing_common.check_files(Gene_fnames):
-        extract_cmd = ["hisatgenotype_extract_vars.py"]
-        if len(only_locus_list) > 0:
-            extract_cmd += ["--locus-list", ','.join(only_locus_list)]
+    # Extract variants, backbone sequence, and other sequeces  
+    if genotype_genome != "":
+        genome_fnames = [genotype_genome + ".fa",
+                         genotype_genome + ".locus",
+                         genotype_genome + ".snp",
+                         genotype_genome + ".index.snp",
+                         genotype_genome + ".haplotype",
+                         genotype_genome + ".link",
+                         genotype_genome + ".clnsig",
+                         genotype_genome + ".coord",
+                         genotype_genome + ".partial"]
+        for i in range(8):
+            genome_fnames.append(genotype_genome + ".%d.ht2" % (i+1))
 
-        extract_cmd += ["--base", base_fname]
-        if not partial:
-            extract_cmd += ["--no-partial"]
-
-        if base_fname == "codis":
-            extract_cmd += ["--whole-haplotype"]
-        else:
-            extract_cmd += ["--inter-gap", "30",
-                            "--intra-gap", "50"]
-
-        # DK - debugging purposes
-        extract_cmd += ["--min-var-freq", "0.1"]
-        
-        if base_fname == "codis":
-            extract_cmd += ["--leftshift"]
-        
-        # DK - debugging purposes
-        # extract_cmd += ["--ext-seq", "300"]
         if verbose >= 1:
-            print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-        proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-        proc.communicate()
-        
-        if not typing_common.check_files(Gene_fnames):
-            print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
+            print >> sys.stderr, genome_fnames
+        if not typing_common.check_files(genome_fnames):
+            print >> sys.stderr, "Error: some of the following files are not available:", ' '.join(genome_fnames)
             sys.exit(1)
+            
+        assert False
+    else:
+        gene_fnames = [base_fname + "_backbone.fa",
+                       base_fname + "_sequences.fa",
+                       base_fname + ".locus",
+                       base_fname + ".snp",
+                       base_fname + ".index.snp",
+                       base_fname + ".haplotype",
+                       base_fname + ".link",
+                       base_fname + ".partial"]
 
-    for aligner, index_type in aligners:
-        if aligner == "hisat2":
-            # Build HISAT2 graph indexes based on the above information
-            if index_type == "graph":
-                Gene_hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
-                    build_cmd = ["hisat2-build",
-                                 "-p", str(threads),
-                                 "--snp", "%s.index.snp" % base_fname,
-                                 "--haplotype", "%s.haplotype" % base_fname,
-                                 "%s_backbone.fa" % base_fname,
-                                 "%s.graph" % base_fname]
-                    if verbose >= 1:
-                        print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
-                    proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-                    proc.communicate()        
-                    if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
-                        print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
-                        sys.exit(1)
-            # Build HISAT2 linear indexes based on the above information
+        if verbose >= 1:
+            print >> sys.stderr, gene_fnames
+
+        if not typing_common.check_files(gene_fnames):
+            extract_cmd = ["hisatgenotype_extract_vars.py"]
+            if len(only_locus_list) > 0:
+                extract_cmd += ["--locus-list", ','.join(only_locus_list)]
+            extract_cmd += ["--base", base_fname]
+            if not partial:
+                extract_cmd += ["--no-partial"]
+
+            if base_fname == "codis":
+                extract_cmd += ["--whole-haplotype"]
             else:
-                assert index_type == "linear"
-                Gene_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                if not typing_common.check_files(Gene_hisat2_linear_index_fnames):
-                    build_cmd = ["hisat2-build",
-                                 "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
-                                 "%s.linear" % base_fname]
-                    proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-                    proc.communicate()        
+                extract_cmd += ["--inter-gap", "30",
+                                "--intra-gap", "50"]
+            if base_fname == "hla":
+                extract_cmd += ["--min-var-freq", "0.1"]
+            if base_fname == "codis":
+                extract_cmd += ["--leftshift"]
+
+            # DK - debugging purposes
+            # extract_cmd += ["--ext-seq", "300"]
+            if verbose >= 1:
+                print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
+            proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+            proc.communicate()
+
+            if not typing_common.check_files(gene_fnames):
+                print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
+                sys.exit(1)
+
+        for aligner, index_type in aligners:
+            if aligner == "hisat2":
+                # Build HISAT2 graph indexes based on the above information
+                if index_type == "graph":
+                    Gene_hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base_fname, i+1) for i in range(8)]
+                    if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
+                        build_cmd = ["hisat2-build",
+                                     "-p", str(threads),
+                                     "--snp", "%s.index.snp" % base_fname,
+                                     "--haplotype", "%s.haplotype" % base_fname,
+                                     "%s_backbone.fa" % base_fname,
+                                     "%s.graph" % base_fname]
+                        if verbose >= 1:
+                            print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
+                        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+                        proc.communicate()        
+                        if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
+                            print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
+                            sys.exit(1)
+                # Build HISAT2 linear indexes based on the above information
+                else:
+                    assert index_type == "linear"
+                    Gene_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
                     if not typing_common.check_files(Gene_hisat2_linear_index_fnames):
+                        build_cmd = ["hisat2-build",
+                                     "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
+                                     "%s.linear" % base_fname]
+                        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+                        proc.communicate()        
+                        if not typing_common.check_files(Gene_hisat2_linear_index_fnames):
+                            print >> sys.stderr, "Error: indexing HLA failed!"
+                            sys.exit(1)
+            else:
+                assert aligner == "bowtie2" and index_type == "linear"
+                # Build Bowtie2 indexes based on the above information
+                Gene_bowtie2_index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
+                Gene_bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
+                if not typing_common.check_files(Gene_bowtie2_index_fnames):
+                    build_cmd = ["bowtie2-build",
+                                 "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
+                                 base_fname]
+                    proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
+                    proc.communicate()        
+                    if not typing_common.check_files(Gene_bowtie2_index_fnames):
                         print >> sys.stderr, "Error: indexing HLA failed!"
                         sys.exit(1)
-        else:
-            assert aligner == "bowtie2" and index_type == "linear"
-            # Build Bowtie2 indexes based on the above information
-            Gene_bowtie2_index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
-            Gene_bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
-            if not typing_common.check_files(Gene_bowtie2_index_fnames):
-                build_cmd = ["bowtie2-build",
-                             "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
-                             base_fname]
-                proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
-                proc.communicate()        
-                if not typing_common.check_files(Gene_bowtie2_index_fnames):
-                    print >> sys.stderr, "Error: indexing HLA failed!"
-                    sys.exit(1)
 
-    # Read partial alleles from hla.data (temporary)
+    # Read partial alleles
     partial_alleles = set()
-    for line in open("hisatgenotype_db/HLA/hla.dat"):
-        if not line.startswith("DE"):
-            continue
-        allele_name = line.split()[1][:-1]
-        if allele_name.startswith("HLA-"):
-            allele_name = allele_name[4:]
-        gene = allele_name.split('*')[0]
-        if line.find("partial") != -1:
-            partial_alleles.add(allele_name)
+    if genotype_genome != "":
+        for line in open("%s.partial" % genotype_genome):
+            family, allele_name = line.strip().split('\t')
+            if family == base_fname:
+                partial_alleles.add(allele_name)
 
-    # Read HLA alleles (names and sequences)
+    else:
+        for line in open("%s.partial" % base_fname):
+            partial_alleles.add(line.strip())
+
+    # Read alleles (names and sequences)
     refGenes, refGene_loci = {}, {}
-    for line in open("%s.ref" % base_fname):
+    for line in open("%s.locus" % base_fname):
         Gene_name, chr, left, right, length, exon_str, strand = line.strip().split()
         Gene_gene = Gene_name.split('*')[0]
         assert not Gene_gene in refGenes
@@ -1936,6 +1964,7 @@ def test_genotyping(base_fname,
             else:
                 read_fname = ["%s_input_1.fa" % base_fname, "%s_input_2.fa" % base_fname]
 
+            fastq = False
             tmp_test_passed = typing(simulation,
                                      base_fname,
                                      test_locus_list,
@@ -2026,6 +2055,11 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of genes (default: empty, all genes)")
+    parser.add_argument("--genotype-genome",
+                        dest="genotype_genome",
+                        type=str,
+                        default="",
+                        help="Base name for genotype genome, which the program will use instead of region-based small indexes (default: empty)")
     parser.add_argument("-f", "--fasta",
                         dest='fastq',
                         action='store_false',
@@ -2216,28 +2250,29 @@ if __name__ == '__main__':
         display_alleles = args.display_alleles.split(',')
 
     random.seed(args.random_seed)
-    test_genotyping(args.base_fname,
-                    locus_list,
-                    only_locus_list,
-                    args.partial,
-                    args.aligners,
-                    args.read_fname,
-                    args.fastq,
-                    args.alignment_fname,
-                    args.threads,
-                    args.simulate_interval,
-                    args.read_len,
-                    args.fragment_len,
-                    args.best_alleles,
-                    args.num_editdist,
-                    args.perbase_errorrate,
-                    args.perbase_snprate,
-                    skip_fragment_regions,
-                    args.assembly,
-                    args.output_base,
-                    args.error_correction,
-                    args.discordant,
-                    display_alleles,
-                    args.verbose_level,
-                    debug)
+    genotyping_locus(args.base_fname,
+                     locus_list,
+                     args.genotype_genome,
+                     only_locus_list,
+                     args.partial,
+                     args.aligners,
+                     args.read_fname,
+                     args.fastq,
+                     args.alignment_fname,
+                     args.threads,
+                     args.simulate_interval,
+                     args.read_len,
+                     args.fragment_len,
+                     args.best_alleles,
+                     args.num_editdist,
+                     args.perbase_errorrate,
+                     args.perbase_snprate,
+                     skip_fragment_regions,
+                     args.assembly,
+                     args.output_base,
+                     args.error_correction,
+                     args.discordant,
+                     display_alleles,
+                     args.verbose_level,
+                     debug)
 

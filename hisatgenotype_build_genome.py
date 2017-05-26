@@ -126,18 +126,24 @@ def build_genotype_genome(base_fname,
     for database_name in database_list:
         # Extract HLA variants, backbone sequence, and other sequeces
         gene_fnames = ["%s_backbone.fa" % database_name,
-                       "%s.ref" % database_name,
+                       "%s.locus" % database_name,
                        "%s.snp" % database_name,
                        "%s.index.snp" % database_name,
                        "%s.haplotype" % database_name,
-                       "%s.link" % database_name]
+                       "%s.link" % database_name,
+                       "%s.partial" % database_name]
         if not typing_common.check_files(gene_fnames):
             extract_cmd = ["hisatgenotype_extract_vars.py"]
-            extract_cmd += ["--base", database_name,
-                            "--inter-gap", str(inter_gap),
-                            "--intra-gap", str(intra_gap)]
+            extract_cmd += ["--base", database_name]
+            if database_name == "codis":
+                extract_cmd += ["--whole-haplotype"]
+            else:
+                extract_cmd += ["--inter-gap", str(inter_gap),
+                                "--intra-gap", str(intra_gap)]
             if database_name == "hla":
                 extract_cmd += ["--min-var-freq", "0.1"]
+            if database_name == "codis":
+                extract_cmd += ["--leftshift"]
             if verbose:
                 print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
             proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
@@ -146,9 +152,9 @@ def build_genotype_genome(base_fname,
                 print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
                 sys.exit(1)
 
-        ref_fname = "%s.ref" % database_name
-        assert os.path.exists(ref_fname)
-        for line in open(ref_fname):
+        locus_fname = "%s.locus" % database_name
+        assert os.path.exists(locus_fname)
+        for line in open(locus_fname):
             HLA_name, chr, left, right, length, exon_str, strand = line.strip().split()
             left, right = int(left), int(right)
             length = int(length)
@@ -167,7 +173,7 @@ def build_genotype_genome(base_fname,
     haplotype_out_file = open("%s.haplotype" % base_fname, 'w')
     link_out_file = open("%s.link" % base_fname, 'w')
     coord_out_file = open("%s.coord" % base_fname, 'w')
-    clnsig_out_file = open("%s.clnsig" % base_fname, 'w')    
+    clnsig_out_file = open("%s.clnsig" % base_fname, 'w')
     for c in range(len(chr_names)):
         chr = chr_names[c]
         chr_full_name = chr_full_names[c]
@@ -365,6 +371,14 @@ def build_genotype_genome(base_fname,
     link_out_file.close()
     coord_out_file.close()
     clnsig_out_file.close()
+
+    partial_out_file = open("%s.partial" % base_fname, 'w')
+    for database in database_list:
+        for line in open("%s.partial" % database):
+            allele_name = line.strip()
+            print >> partial_out_file, "%s\t%s" % (database, allele_name)
+    partial_out_file.close()
+    
 
     # Build HISAT2 graph indexes based on the above information
     hisat2_index_fnames = ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]

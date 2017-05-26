@@ -200,17 +200,22 @@ def extract_vars(base_fname,
                  leftshift,
                  partial,
                  verbose):
-    # Current script directory
-    curr_script = os.path.realpath(inspect.getsourcefile(extract_vars))
-    ex_path = os.path.dirname(curr_script)
-
     base_fullpath_name = base_fname
     if base_dname != "" and not os.path.exists(base_dname):
         os.mkdir(base_dname)
         base_fullpath_name = "%s/%s" % (base_dname, base_fname)
+
+    # Download human genome and HISAT2 index
+    HISAT2_fnames = ["grch38",
+                     "genome.fa",
+                     "genome.fa.fai"]
+
+    if not typing_common.check_files(HISAT2_fnames):
+        typing_common.download_genome_and_index()
+    
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f hisatgenotype_db/HLA/fasta/A_gen.fasta
-    ref_file = open(base_fullpath_name + ".ref", 'w')
+    locus_file = open(base_fullpath_name + ".locus", 'w')
     left_ext_seq_dic, right_ext_seq_dic = {}, {}
     genes, gene_strand = {}, {}
 
@@ -830,8 +835,7 @@ def extract_vars(base_fname,
         #   fasta version
         ref_backbone_id = names[ref_gene]
         ref_backbone_seq = seqs[ref_backbone_id]
-        hisat2 = os.path.join(ex_path, "hisat2")
-        aligner_cmd = [hisat2]
+        aligner_cmd = ["hisat2"]
         if base_fname == "hla":
             aligner_cmd += ["--score-min", "C,0"]
         aligner_cmd += ["--no-unal",
@@ -955,7 +959,7 @@ def extract_vars(base_fname,
         else:
             exon_str = "%d-%d" % (left, right - 1)
 
-        print >> ref_file, "%s\t%s\t%d\t%d\t%d\t%s\t%s" % \
+        print >> locus_file, "%s\t%s\t%d\t%d\t%d\t%s\t%s" % \
             (backbone_name, chr, left, right - 1, len(backbone_seq.replace('.', '')), exon_str, gene_strand[gene])
 
         # Write
@@ -1159,13 +1163,32 @@ def extract_vars(base_fname,
                 print >> input_file, seq[s:s+60]
 
     backbone_file.close()
-    ref_file.close()
+    locus_file.close()
     var_file.close()
     var_index_file.close()
     var_freq_file.close()
     haplotype_file.close()
     link_file.close()
     input_file.close()
+
+    # Read partial alleles from hla.data, and write them into a file
+    partial_allele_list = []
+    if base_fname == "hla":
+        for line in open("hisatgenotype_db/HLA/hla.dat"):
+            if not line.startswith("DE"):
+                continue
+            allele_name = line.split()[1][:-1]
+            if allele_name.startswith("HLA-"):
+                allele_name = allele_name[4:]
+            gene = allele_name.split('*')[0]
+            if line.find("partial") != -1:
+                partial_allele_list.append(allele_name)
+
+    partial_file = open("%s.partial" % base_fullpath_name, 'w')
+    for partial_allele in partial_allele_list:
+        print >> partial_file, partial_allele
+    partial_file.close()
+   
     
         
 """
