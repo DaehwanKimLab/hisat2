@@ -378,9 +378,12 @@ def build_genotype_genome(base_fname,
             allele_name = line.strip()
             print >> partial_out_file, "%s\t%s" % (database.upper(), allele_name)
     partial_out_file.close()
-    
 
-    # Build HISAT2 graph indexes based on the above information
+    # Index genotype_genome.fa
+    index_cmd = ["samtools", "faidx", "%s.fa" % base_fname]
+    subprocess.call(index_cmd)
+
+    # Build HISAT-genotype graph indexes based on the above information
     hisat2_index_fnames = ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
     build_cmd = ["hisat2-build",
                  "-p", str(threads),
@@ -391,8 +394,7 @@ def build_genotype_genome(base_fname,
     if verbose:
         print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
         
-    proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-    proc.communicate()        
+    subprocess.call(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
     if not typing_common.check_files(hisat2_index_fnames):
         print >> sys.stderr, "Error: indexing failed!  Perhaps, you may have forgotten to build hisat2 executables?"
         sys.exit(1)

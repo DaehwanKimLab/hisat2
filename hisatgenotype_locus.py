@@ -1607,13 +1607,35 @@ def typing(simulation,
 """
 """
 def read_backbone_alleles(genotype_genome, refGene_loci, Genes):
-    None
-    
+    for gene_name in refGene_loci:
+        allele_name, chr, left, right = refGene_loci[gene_name][:4]
+        seq_extract_cmd = ["samtools",
+                           "faidx",
+                           "%s.fa" % genotype_genome,
+                           "%s:%d-%d" % (chr, left+1, right+1)]
 
+        length = right - left + 1
+        proc = subprocess.Popen(seq_extract_cmd, stdout=subprocess.PIPE, stderr=open("/dev/null", 'w'))
+        seq = ""
+        for line in proc.stdout:
+            line = line.strip()
+            if line.startswith('>'):
+                continue
+            seq += line
+        assert len(seq) == length
+        assert gene_name not in Genes
+        Genes[gene_name] = {}
+        Genes[gene_name][allele_name] = seq
+
+        
 """
 """
 def read_Gene_alleles_from_vars(Vars, Links, Genes):
-    None
+    for gene_name in Genes:
+        # Assert there is only one allele per gene, which is a backbone allele
+        assert len(Genes[gene_name]) == 1
+        backbone_allele_name = Genes[gene_name].keys()[0]
+        
 
 
     
@@ -1622,14 +1644,14 @@ def read_Gene_alleles_from_vars(Vars, Links, Genes):
 def read_Gene_alleles(fname, Genes):
     for line in open(fname):
         if line.startswith(">"):
-            Gene_name = line.strip().split()[0][1:]
-            Gene_gene = Gene_name.split('*')[0]
-            if not Gene_gene in Genes:
-                Genes[Gene_gene] = {}
-            if not Gene_name in Genes[Gene_gene]:
-                Genes[Gene_gene][Gene_name] = ""
+            allele_name = line.strip().split()[0][1:]
+            gene_name = allele_name.split('*')[0]
+            if not gene_name in Genes:
+                Genes[gene_name] = {}
+            if not allele_name in Genes[gene_name]:
+                Genes[gene_name][allele_name] = ""
         else:
-            Genes[Gene_gene][Gene_name] += line.strip()
+            Genes[gene_name][allele_name] += line.strip()
     return Genes
 
 
@@ -1647,7 +1669,46 @@ def read_Gene_vars(fname):
             Var_list[gene] = []
             
         assert not var_id in Vars[gene]
-        left = 0
+        Vars[gene][var_id] = [var_type, pos, data]
+        Var_list[gene].append([pos, var_id])
+        
+    for gene, in_var_list in Var_list.items():
+        Var_list[gene] = sorted(in_var_list)
+
+    return Vars, Var_list
+
+
+"""
+"""
+def read_Gene_vars_genotype_genome(fname, refGene_loci):
+    loci = {}
+    for gene, values in refGene_loci.items():
+        allele_name, chr, left, right = values[:4]
+        if chr not in loci:
+            loci[chr] = []
+        loci[chr].append([allele_name, left, right])
+        
+    Vars, Var_list = {}, {}
+    for line in open(fname):
+        var_id, var_type, var_chr, pos, data = line.strip().split('\t')
+        if var_chr not in loci:
+            continue
+        pos = int(pos)
+        found = False
+        for allele_name, left, right in loci[var_chr]:
+            if pos >= left and pos < right:
+                found = True
+                break
+        if not found:
+            continue
+        
+        gene = allele_name.split('*')[0]
+        if not gene in Vars:
+            Vars[gene] = {}
+            assert not gene in Var_list
+            Var_list[gene] = []
+            
+        assert not var_id in Vars[gene]
         Vars[gene][var_id] = [var_type, pos - left, data]
         Var_list[gene].append([pos - left, var_id])
         
@@ -1735,6 +1796,7 @@ def genotyping_locus(base_fname,
     # Extract variants, backbone sequence, and other sequeces  
     if genotype_genome != "":
         genome_fnames = [genotype_genome + ".fa",
+                         genotype_genome + ".fa.fai",
                          genotype_genome + ".locus",
                          genotype_genome + ".snp",
                          genotype_genome + ".index.snp",
@@ -1876,9 +1938,14 @@ def genotyping_locus(base_fname,
         locus_list = refGene_loci.keys()
 
     # Read HLA variants, and link information
-    Vars, Var_list = read_Gene_vars("%s.snp" % base_fname)
-    Links = read_Gene_links("%s.link" % base_fname)
-    
+    if genotype_genome:
+        Vars, Var_list = read_Gene_vars_genotype_genome("%s.snp" % genotype_genome, refGene_loci)
+        Links = read_Gene_links("%s.link" % genotype_genome)
+    else:
+        Vars, Var_list = read_Gene_vars("%s.snp" % base_fname)
+        Links = read_Gene_links("%s.link" % base_fname)
+
+    # Read allele sequences
     if genotype_genome != "":
         read_backbone_alleles(genotype_genome, refGene_loci, Genes)
         read_Gene_alleles_from_vars(Vars, Links, Genes)
