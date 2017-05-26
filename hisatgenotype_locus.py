@@ -1666,6 +1666,7 @@ def test_genotyping(base_fname,
                     partial,
                     aligners,
                     read_fname,
+                    fastq,
                     alignment_fname,
                     threads,
                     simulate_interval,
@@ -1935,7 +1936,6 @@ def test_genotyping(base_fname,
             else:
                 read_fname = ["%s_input_1.fa" % base_fname, "%s_input_2.fa" % base_fname]
 
-            fastq = False
             tmp_test_passed = typing(simulation,
                                      base_fname,
                                      test_locus_list,
@@ -1980,7 +1980,6 @@ def test_genotyping(base_fname,
     
     else: # With real reads or BAMs
         print >> sys.stderr, "\t", ' '.join(locus_list)
-        fastq = True
         typing(simulation,
                base_fname,
                locus_list,
@@ -2027,7 +2026,7 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of genes (default: empty, all genes)")
-    parser.add_argument('-f', '--fasta',
+    parser.add_argument("-f", "--fasta",
                         dest='fastq',
                         action='store_false',
                         help='FASTA format')
@@ -2128,9 +2127,9 @@ if __name__ == '__main__':
                         type=str,
                         default="assembly_graph",
                         help="base file name (default: assembly_graph)")
-    parser.add_argument("--no-assembly",
+    parser.add_argument("--assembly",
                         dest="assembly",
-                        action="store_false",
+                        action="store_true",
                         help="Perform assembly")
     parser.add_argument("--no-error-correction",
                         dest="error_correction",
@@ -2223,6 +2222,7 @@ if __name__ == '__main__':
                     args.partial,
                     args.aligners,
                     args.read_fname,
+                    args.fastq,
                     args.alignment_fname,
                     args.threads,
                     args.simulate_interval,

@@ -15,7 +15,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
+# along with HISAT-genotype.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 
@@ -772,6 +772,8 @@ def single_abundance(Gene_cmpt, Gene_length, exonic = False):
         return Gene_prob_next
 
     def select_alleles(Gene_prob):
+        if len(Gene_prob) == 0:
+            return Gene_prob
         Gene_prob2 = {}
         max_prob = max(Gene_prob.values())
         for allele, prob in Gene_prob.items():

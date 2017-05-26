@@ -1187,12 +1187,12 @@ if __name__ == '__main__':
                         dest="inter_gap",
                         type=int,
                         default=30,
-                        help="Maximum distance for variants to be in the same haplotype")
+                        help="Maximum distance for variants to be in the same haplotype (default: 30)")
     parser.add_argument("--intra-gap",
                         dest="intra_gap",
                         type=int,
                         default=50,
-                        help="Break a haplotype into several haplotypes")
+                        help="Break a haplotype into several haplotypes (default: 50)")
     parser.add_argument("--whole-haplotype",
                         dest="whole_haplotype",
                         action="store_true",

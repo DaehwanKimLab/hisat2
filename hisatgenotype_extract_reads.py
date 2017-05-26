@@ -105,7 +105,6 @@ def extract_reads(base_fname,
         sys.exit(1)
 
     filter_region = len(database_list) > 0
-    add_region = len(database_list) == 0
     ranges = []
     regions, region_loci = {}, {}
     for line in open("%s.locus" % base_fname):
@@ -153,7 +152,12 @@ def extract_reads(base_fname,
                 continue
 
         fq_fname_base = fq_fname.split('/')[-1]
-        fq_fname_base = fq_fname_base.split('.')[0]
+        one_suffix = ".1." + suffix
+        if fq_fname_base.find(one_suffix) != -1:
+            fq_fname_base = fq_fname_base[:fq_fname_base.find(one_suffix)]
+        else:
+            fq_fname_base = fq_fname_base.split('.')[0]
+            
         if paired:
             if read_dir == "":
                 fq_fname2 = fq_fnames2[file_i]
@@ -325,12 +329,12 @@ if __name__ == '__main__':
                         dest="read_dir",
                         type=str,
                         default="",
-                        help="Directory for reads")
+                        help="Directory name for read files")
     parser.add_argument("--out-dir",
                         dest="out_dir",
                         type=str,
                         default="",
-                        help="Directory for extracted reads")
+                        help="Directory name for extracted read files")
     parser.add_argument("--suffix",
                         dest="suffix",
                         type=str,
@@ -355,15 +359,11 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="filename for paired-end reads")    
-    parser.add_argument('--single',
-                        dest='paired',
-                        action='store_false',
-                        help='Single-end reads (Default: False)')
     parser.add_argument("--database-list",
                         dest="database_list",
                         type=str,
                         default="",
-                        help="A comma-separated list of loci (default: empty)")
+                        help="A comma-separated list of database (default: empty)")
     parser.add_argument('--simulation',
                         dest='simulation',
                         action='store_true',
