@@ -162,7 +162,7 @@ def build_genotype_genome(base_fname,
                 continue
             if chr not in genotype_genes:
                 genotype_genes[chr] = []
-            genotype_genes[chr].append([left, right, length, HLA_name, database_name])
+            genotype_genes[chr].append([left, right, length, HLA_name, database_name, exon_str, strand])
 
     # Write genotype genome
     var_num, haplotype_num = 0, 0
@@ -246,7 +246,7 @@ def build_genotype_genome(base_fname,
         off = 0
         prev_right = 0
         for gene in chr_genes:
-            left, right, length, name, family = gene
+            left, right, length, name, family, exon_str, strand = gene
 
             chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(left, right, chr_genotype_vari, chr_genotype_hti, haplotype_num)
 
@@ -291,8 +291,8 @@ def build_genotype_genome(base_fname,
                 out_chr_seq += chr_seq[prev_right:left]
 
             # Output gene (genotype_genome.gene)
-            print >> locus_out_file, "%s\t%s\t%s\t%d\t%d" % \
-                (family.upper(), name, chr, len(out_chr_seq), len(out_chr_seq) + length - 1)
+            print >> locus_out_file, "%s\t%s\t%s\t%d\t%d\t%s\t%s" % \
+                (family.upper(), name, chr, len(out_chr_seq), len(out_chr_seq) + length - 1, exon_str, strand)
 
             # Output coord (genotype_genome.coord)
             print >> coord_out_file, "%s\t%d\t%d\t%d" % \
@@ -376,7 +376,7 @@ def build_genotype_genome(base_fname,
     for database in database_list:
         for line in open("%s.partial" % database):
             allele_name = line.strip()
-            print >> partial_out_file, "%s\t%s" % (database, allele_name)
+            print >> partial_out_file, "%s\t%s" % (database.upper(), allele_name)
     partial_out_file.close()
     
 

@@ -1604,10 +1604,15 @@ def typing(simulation,
     if simulation:
         return test_passed
 
+"""
+"""
+def read_backbone_alleles(genotype_genome, refGene_loci, Genes):
+    None
+    
 
 """
 """
-def read_Gene_alleles_from_vars(backbone_seq, Vars, Links, Genes):
+def read_Gene_alleles_from_vars(Vars, Links, Genes):
     None
 
 
@@ -1746,8 +1751,6 @@ def genotyping_locus(base_fname,
         if not typing_common.check_files(genome_fnames):
             print >> sys.stderr, "Error: some of the following files are not available:", ' '.join(genome_fnames)
             sys.exit(1)
-            
-        assert False
     else:
         gene_fnames = [base_fname + "_backbone.fa",
                        base_fname + "_sequences.fa",
@@ -1851,8 +1854,14 @@ def genotyping_locus(base_fname,
 
     # Read alleles (names and sequences)
     refGenes, refGene_loci = {}, {}
-    for line in open("%s.locus" % base_fname):
-        Gene_name, chr, left, right, length, exon_str, strand = line.strip().split()
+    for line in open("%s.locus" % (genotype_genome if genotype_genome != "" else base_fname)):
+        fields = line.strip().split()
+        if genotype_genome != "" and base_fname != fields[0].lower():
+            continue
+        if genotype_genome != "":
+            _, Gene_name, chr, left, right, exon_str, strand = fields
+        else:
+            Gene_name, chr, left, right, _, exon_str, strand = fields
         Gene_gene = Gene_name.split('*')[0]
         assert not Gene_gene in refGenes
         refGenes[Gene_gene] = Gene_name
@@ -1866,8 +1875,26 @@ def genotyping_locus(base_fname,
     if len(locus_list) == 0:
         locus_list = refGene_loci.keys()
 
-    read_Gene_alleles(base_fname + "_backbone.fa", Genes)
-    read_Gene_alleles(base_fname + "_sequences.fa", Genes)
+    # Read HLA variants, and link information
+    Vars, Var_list = read_Gene_vars("%s.snp" % base_fname)
+    Links = read_Gene_links("%s.link" % base_fname)
+    
+    if genotype_genome != "":
+        read_backbone_alleles(genotype_genome, refGene_loci, Genes)
+        read_Gene_alleles_from_vars(Vars, Links, Genes)
+
+        # DK - just for now - Sanity Check
+        Genes2 = {}
+        read_Gene_alleles(base_fname + "_backbone.fa", Genes2)
+        read_Gene_alleles(base_fname + "_sequences.fa", Genes2)
+
+        for gene_name, alleles in Genes.items():
+            print gene_name
+
+        assert False
+    else:
+        read_Gene_alleles(base_fname + "_backbone.fa", Genes)
+        read_Gene_alleles(base_fname + "_sequences.fa", Genes)
 
     # HLA gene alleles
     Gene_names = {}
@@ -1881,9 +1908,6 @@ def genotyping_locus(base_fname,
         for allele_name, seq in Gene_alleles.items():
             Gene_lengths[Gene_gene][allele_name] = len(seq)
 
-    # Read HLA variants, and link information
-    Vars, Var_list = read_Gene_vars("%s.snp" % base_fname)
-    Links = read_Gene_links("%s.link" % base_fname)
     # Test HLA typing
     test_list = []
     if simulation:
