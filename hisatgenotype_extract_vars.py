@@ -903,7 +903,8 @@ def extract_vars(base_fname,
 
             # Sanity check for exonic sequence
             sanity_check = True
-            if sanity_check:
+            if sanity_check and \
+               os.path.exists("hisatgenotype_db/HLA/fasta/%s_nuc.fasta" % gene):
                 exons_ = []
                 for exon in exon_str.split(','):
                     exon_left, exon_right = exon.split('-')
@@ -911,7 +912,10 @@ def extract_vars(base_fname,
                     exons_.append([exon_left, exon_right])
 
                 backbone_seq_ = backbone_seq.replace('.', '')
-                vars_ = Vars_[ref_gene]
+                if ref_gene in Vars:
+                    vars_ = Vars_[ref_gene]
+                else:
+                    vars_ = []
                 seq_ = list(backbone_seq_)
                 has_insertion = False
                 for var_ in vars_:

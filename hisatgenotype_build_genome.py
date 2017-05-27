@@ -125,7 +125,12 @@ def build_genotype_genome(base_fname,
     # Read genes or genomics regions
     for database_name in database_list:
         # Extract HLA variants, backbone sequence, and other sequeces
-        typing_common.extract_database_if_not_exists(database_name)
+        typing_common.extract_database_if_not_exists(database_name,
+                                                     [],            # locus_list
+                                                     inter_gap,
+                                                     intra_gap,
+                                                     True,          # partial?
+                                                     verbose)
         locus_fname = "%s.locus" % database_name
         assert os.path.exists(locus_fname)
         for line in open(locus_fname):

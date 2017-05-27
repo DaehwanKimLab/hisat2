@@ -217,19 +217,20 @@ def clone_hisatgenotype_database():
 """
 """
 def extract_database_if_not_exists(base,
-                                   locus_list = [],
-                                   partial = False,
+                                   locus_list,
+                                   inter_gap = 30,
+                                   intra_gap = 50,
+                                   partial = True,
                                    verbose = False):
-    gene_fnames = [base + "_backbone.fa",
-                   base + "_sequences.fa",
-                   base + ".locus",
-                   base + ".snp",
-                   base + ".index.snp",
-                   base + ".haplotype",
-                   base + ".link",
-                   base + ".partial"]
-
-    if check_files(gene_fnames):
+    fnames = [base + "_backbone.fa",
+              base + "_sequences.fa",
+              base + ".locus",
+              base + ".snp",
+              base + ".index.snp",
+              base + ".haplotype",
+              base + ".link",
+              base + ".partial"]
+    if check_files(fnames):
         return
 
     extract_cmd = ["hisatgenotype_extract_vars.py"]
@@ -241,8 +242,8 @@ def extract_database_if_not_exists(base,
     if base == "codis":
         extract_cmd += ["--whole-haplotype"]
     else:
-        extract_cmd += ["--inter-gap", "30",
-                        "--intra-gap", "50"]
+        extract_cmd += ["--inter-gap", str(inter_gap),
+                        "--intra-gap", str(intra_gap)]
     if base == "hla":
         extract_cmd += ["--min-var-freq", "0.1"]
     if base == "codis":
@@ -255,7 +256,7 @@ def extract_database_if_not_exists(base,
     proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
     proc.communicate()
 
-    if not check_files(gene_fnames):
+    if not check_files(fnames):
         print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
         sys.exit(1)
 

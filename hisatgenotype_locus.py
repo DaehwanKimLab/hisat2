@@ -1604,6 +1604,7 @@ def typing(simulation,
     if simulation:
         return test_passed
 
+    
 """
 """
 def read_backbone_alleles(genotype_genome, refGene_loci, Genes):
@@ -1842,6 +1843,8 @@ def genotyping_locus(base_fname,
     else:
         typing_common.extract_database_if_not_exists(base_fname,
                                                      only_locus_list,
+                                                     30,              # inter_gap
+                                                     50,              # intra_gap
                                                      partial,
                                                      verbose >= 1)        
         for aligner, index_type in aligners:

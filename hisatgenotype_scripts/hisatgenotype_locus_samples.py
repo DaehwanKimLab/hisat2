@@ -144,14 +144,15 @@ def genotyping(read_dir,
                assembly,
                out_dir,
                verbose):
-    for database_name, locus_list in region_list.itmes():
+    for database_name, locus_list in region_list.items():
         # Extract variants, backbone sequence, and other sequeces
         typing_common.extract_database_if_not_exists(database_name,
                                                      locus_list)
         # Build HISAT2's graph index
-        typing_common.build_index_if_not_exists(datbase_name,
+        typing_common.build_index_if_not_exists(database_name,
                                                 "hisat2",
                                                 "graph",
+                                                1,            # threads
                                                 verbose)
     
     if not os.path.exists(read_dir):
@@ -188,10 +189,6 @@ def genotyping(read_dir,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='genotyping on many samples')
-    parser.add_argument('read_dir',
-                        nargs='?',
-                        type=str,
-                        help='read directory (e.g. CP)')
     parser.add_argument("--reference-type",
                         dest="reference_type",
                         type=str,
@@ -202,6 +199,11 @@ if __name__ == '__main__':
                         type=str,
                         default="",
                         help="A comma-separated list of regions (default: empty)")
+    parser.add_argument('--read-dir',
+                        dest="read_dir",
+                        type=str,
+                        default="",
+                        help='read directory (e.g. read_input)')
     parser.add_argument("--num-editdist",
                         dest="num_editdist",
                         type=int,
@@ -232,6 +234,10 @@ if __name__ == '__main__':
                         help='also print some statistics to stderr')
 
     args = parser.parse_args()
+
+    if args.read_dir == "":
+        print >> sys.stderr, "Error: please specify --read-dir."
+        sys.exit(1)
 
     if not args.reference_type in ["gene", "chromosome", "genome"]:
         print >> sys.stderr, "Error: --reference-type (%s) must be one of gene, chromosome, and genome." % (args.reference_type)
