@@ -125,33 +125,7 @@ def build_genotype_genome(base_fname,
     # Read genes or genomics regions
     for database_name in database_list:
         # Extract HLA variants, backbone sequence, and other sequeces
-        gene_fnames = ["%s_backbone.fa" % database_name,
-                       "%s.locus" % database_name,
-                       "%s.snp" % database_name,
-                       "%s.index.snp" % database_name,
-                       "%s.haplotype" % database_name,
-                       "%s.link" % database_name,
-                       "%s.partial" % database_name]
-        if not typing_common.check_files(gene_fnames):
-            extract_cmd = ["hisatgenotype_extract_vars.py"]
-            extract_cmd += ["--base", database_name]
-            if database_name == "codis":
-                extract_cmd += ["--whole-haplotype"]
-            else:
-                extract_cmd += ["--inter-gap", str(inter_gap),
-                                "--intra-gap", str(intra_gap)]
-            if database_name == "hla":
-                extract_cmd += ["--min-var-freq", "0.1"]
-            if database_name == "codis":
-                extract_cmd += ["--leftshift"]
-            if verbose:
-                print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-            proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-            proc.communicate()
-            if not typing_common.check_files(gene_fnames):
-                print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
-                sys.exit(1)
-
+        typing_common.extract_database_if_not_exists(database_name)
         locus_fname = "%s.locus" % database_name
         assert os.path.exists(locus_fname)
         for line in open(locus_fname):

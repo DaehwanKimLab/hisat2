@@ -25,6 +25,7 @@ import inspect
 import random
 import glob
 from argparse import ArgumentParser, FileType
+import hisatgenotype_typing_common as typing_common
 
 
 """
@@ -143,6 +144,16 @@ def genotyping(read_dir,
                assembly,
                out_dir,
                verbose):
+    for database_name, locus_list in region_list.itmes():
+        # Extract variants, backbone sequence, and other sequeces
+        typing_common.extract_database_if_not_exists(database_name,
+                                                     locus_list)
+        # Build HISAT2's graph index
+        typing_common.build_index_if_not_exists(datbase_name,
+                                                "hisat2",
+                                                "graph",
+                                                verbose)
+    
     if not os.path.exists(read_dir):
         print >> sys.stderr, "Error: %s does not exist." % read_dir
         sys.exit(1)
@@ -176,7 +187,7 @@ def genotyping(read_dir,
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='test HLA genotyping for Genomes')
+        description='genotyping on many samples')
     parser.add_argument('read_dir',
                         nargs='?',
                         type=str,

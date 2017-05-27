@@ -214,6 +214,107 @@ def clone_hisatgenotype_database():
     # os.system("cd IMGTHLA; git checkout %s; cd .." % revision)
 
 
+"""
+"""
+def extract_database_if_not_exists(base,
+                                   locus_list = [],
+                                   partial = False,
+                                   verbose = False):
+    gene_fnames = [base + "_backbone.fa",
+                   base + "_sequences.fa",
+                   base + ".locus",
+                   base + ".snp",
+                   base + ".index.snp",
+                   base + ".haplotype",
+                   base + ".link",
+                   base + ".partial"]
+
+    if check_files(gene_fnames):
+        return
+
+    extract_cmd = ["hisatgenotype_extract_vars.py"]
+    if len(locus_list) > 0:
+        extract_cmd += ["--locus-list", ','.join(locus_list)]
+    extract_cmd += ["--base", base]
+    if not partial:
+        extract_cmd += ["--no-partial"]
+    if base == "codis":
+        extract_cmd += ["--whole-haplotype"]
+    else:
+        extract_cmd += ["--inter-gap", "30",
+                        "--intra-gap", "50"]
+    if base == "hla":
+        extract_cmd += ["--min-var-freq", "0.1"]
+    if base == "codis":
+        extract_cmd += ["--leftshift"]
+
+    # DK - debugging purposes
+    # extract_cmd += ["--ext-seq", "300"]
+    if verbose:
+        print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
+    proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+    proc.communicate()
+
+    if not check_files(gene_fnames):
+        print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
+        sys.exit(1)
+
+        
+"""
+"""
+def build_index_if_not_exists(base,
+                              aligner,
+                              index_type,
+                              threads = 1,
+                              verbose = False):
+    if aligner == "hisat2":
+        # Build HISAT2 graph indexes based on the above information
+        if index_type == "graph":
+            hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base, i+1) for i in range(8)]
+            if not check_files(hisat2_graph_index_fnames):
+                build_cmd = ["hisat2-build",
+                             "-p", str(threads),
+                             "--snp", "%s.index.snp" % base,
+                             "--haplotype", "%s.haplotype" % base,
+                             "%s_backbone.fa" % base,
+                             "%s.graph" % base]
+                if verbose:
+                    print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
+                proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+                proc.communicate()        
+                if not check_files(hisat2_graph_index_fnames):
+                    print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
+                    sys.exit(1)
+        # Build HISAT2 linear indexes based on the above information
+        else:
+            assert index_type == "linear"
+            hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base, i+1) for i in range(8)]
+            if not check_files(hisat2_linear_index_fnames):
+                build_cmd = ["hisat2-build",
+                             "%s_backbone.fa,%s_sequences.fa" % (base, base),
+                             "%s.linear" % base]
+                proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+                proc.communicate()        
+                if not check_files(hisat2_linear_index_fnames):
+                    print >> sys.stderr, "Error: indexing HLA failed!"
+                    sys.exit(1)                    
+    else:
+        # Build Bowtie2 indexes based on the above information
+        assert aligner == "bowtie2" and index_type == "linear"        
+        bowtie2_index_fnames = ["%s.%d.bt2" % (base, i+1) for i in range(4)]
+        bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base, i+1) for i in range(2)]
+        if not tcheck_files(bowtie2_index_fnames):
+            build_cmd = ["bowtie2-build",
+                         "%s_backbone.fa,%s_sequences.fa" % (base, base),
+                         base]
+            proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
+            proc.communicate()        
+            if not check_files(bowtie2_index_fnames):
+                print >> sys.stderr, "Error: indexing HLA failed!"
+                sys.exit(1)
+
+                    
+
 ##################################################
 #   Read simulation and alignment
 ##################################################

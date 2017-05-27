@@ -1630,14 +1630,40 @@ def read_backbone_alleles(genotype_genome, refGene_loci, Genes):
         
 """
 """
-def read_Gene_alleles_from_vars(Vars, Links, Genes):
+def read_Gene_alleles_from_vars(Vars, Var_list, Links, Genes):
     for gene_name in Genes:
         # Assert there is only one allele per gene, which is a backbone allele
         assert len(Genes[gene_name]) == 1
-        backbone_allele_name = Genes[gene_name].keys()[0]
-        
+        backbone_allele_name, backbone_seq = Genes[gene_name].items()[0]
+        gene_vars, gene_var_list = Vars[gene_name], Var_list[gene_name]
+        allele_vars = {}
+        for _, var_id in gene_var_list:
+            for allele_name in Links[var_id]:
+                if allele_name not in allele_vars:
+                    allele_vars[allele_name] = []
+                allele_vars[allele_name].append(var_id)
 
-
+        for allele_name, vars in allele_vars.items():
+            seq = ""
+            prev_pos = 0
+            for var_id in vars:
+                type, pos, data = gene_vars[var_id]
+                assert prev_pos <= pos
+                if pos > prev_pos:
+                    seq += backbone_seq[prev_pos:pos]
+                if type == "single":
+                    prev_pos = pos + 1
+                    seq += data
+                elif type == "deletion":
+                    prev_pos = pos + int(data)
+                else:
+                    assert type == "insertion"
+                    seq += data
+                    prev_pos = pos
+            if prev_pos < len(backbone_seq):
+                seq += backbone_seq[prev_pos:]
+            Genes[gene_name][allele_name] = seq
+            
     
 """
 """
@@ -1696,7 +1722,7 @@ def read_Gene_vars_genotype_genome(fname, refGene_loci):
         pos = int(pos)
         found = False
         for allele_name, left, right in loci[var_chr]:
-            if pos >= left and pos < right:
+            if pos >= left and pos <= right:
                 found = True
                 break
         if not found:
@@ -1814,93 +1840,16 @@ def genotyping_locus(base_fname,
             print >> sys.stderr, "Error: some of the following files are not available:", ' '.join(genome_fnames)
             sys.exit(1)
     else:
-        gene_fnames = [base_fname + "_backbone.fa",
-                       base_fname + "_sequences.fa",
-                       base_fname + ".locus",
-                       base_fname + ".snp",
-                       base_fname + ".index.snp",
-                       base_fname + ".haplotype",
-                       base_fname + ".link",
-                       base_fname + ".partial"]
-
-        if verbose >= 1:
-            print >> sys.stderr, gene_fnames
-
-        if not typing_common.check_files(gene_fnames):
-            extract_cmd = ["hisatgenotype_extract_vars.py"]
-            if len(only_locus_list) > 0:
-                extract_cmd += ["--locus-list", ','.join(only_locus_list)]
-            extract_cmd += ["--base", base_fname]
-            if not partial:
-                extract_cmd += ["--no-partial"]
-
-            if base_fname == "codis":
-                extract_cmd += ["--whole-haplotype"]
-            else:
-                extract_cmd += ["--inter-gap", "30",
-                                "--intra-gap", "50"]
-            if base_fname == "hla":
-                extract_cmd += ["--min-var-freq", "0.1"]
-            if base_fname == "codis":
-                extract_cmd += ["--leftshift"]
-
-            # DK - debugging purposes
-            # extract_cmd += ["--ext-seq", "300"]
-            if verbose >= 1:
-                print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-            proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-            proc.communicate()
-
-            if not typing_common.check_files(gene_fnames):
-                print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
-                sys.exit(1)
-
+        typing_common.extract_database_if_not_exists(base_fname,
+                                                     only_locus_list,
+                                                     partial,
+                                                     verbose >= 1)        
         for aligner, index_type in aligners:
-            if aligner == "hisat2":
-                # Build HISAT2 graph indexes based on the above information
-                if index_type == "graph":
-                    Gene_hisat2_graph_index_fnames = ["%s.graph.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                    if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
-                        build_cmd = ["hisat2-build",
-                                     "-p", str(threads),
-                                     "--snp", "%s.index.snp" % base_fname,
-                                     "--haplotype", "%s.haplotype" % base_fname,
-                                     "%s_backbone.fa" % base_fname,
-                                     "%s.graph" % base_fname]
-                        if verbose >= 1:
-                            print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
-                        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-                        proc.communicate()        
-                        if not typing_common.check_files(Gene_hisat2_graph_index_fnames):
-                            print >> sys.stderr, "Error: indexing HLA failed!  Perhaps, you may have forgotten to build hisat2 executables?"
-                            sys.exit(1)
-                # Build HISAT2 linear indexes based on the above information
-                else:
-                    assert index_type == "linear"
-                    Gene_hisat2_linear_index_fnames = ["%s.linear.%d.ht2" % (base_fname, i+1) for i in range(8)]
-                    if not typing_common.check_files(Gene_hisat2_linear_index_fnames):
-                        build_cmd = ["hisat2-build",
-                                     "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
-                                     "%s.linear" % base_fname]
-                        proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-                        proc.communicate()        
-                        if not typing_common.check_files(Gene_hisat2_linear_index_fnames):
-                            print >> sys.stderr, "Error: indexing HLA failed!"
-                            sys.exit(1)
-            else:
-                assert aligner == "bowtie2" and index_type == "linear"
-                # Build Bowtie2 indexes based on the above information
-                Gene_bowtie2_index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
-                Gene_bowtie2_index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
-                if not typing_common.check_files(Gene_bowtie2_index_fnames):
-                    build_cmd = ["bowtie2-build",
-                                 "%s_backbone.fa,%s_sequences.fa" % (base_fname, base_fname),
-                                 base_fname]
-                    proc = subprocess.Popen(build_cmd, stdout=open("/dev/null", 'w'))
-                    proc.communicate()        
-                    if not typing_common.check_files(Gene_bowtie2_index_fnames):
-                        print >> sys.stderr, "Error: indexing HLA failed!"
-                        sys.exit(1)
+            typing_common.build_index_if_not_exists(base_fname,
+                                                    aligner,
+                                                    index_type,
+                                                    threads,
+                                                    verbose >= 1)
 
     # Read partial alleles
     partial_alleles = set()
@@ -1948,20 +1897,23 @@ def genotyping_locus(base_fname,
     # Read allele sequences
     if genotype_genome != "":
         read_backbone_alleles(genotype_genome, refGene_loci, Genes)
-        read_Gene_alleles_from_vars(Vars, Links, Genes)
+        read_Gene_alleles_from_vars(Vars, Var_list, Links, Genes)        
+    else:
+        read_Gene_alleles(base_fname + "_backbone.fa", Genes)
+        read_Gene_alleles_from_vars(Vars, Var_list, Links, Genes)
 
-        # DK - just for now - Sanity Check
+    # Sanity Check
+    if os.path.exists(base_fname + "_backbone.fa") and \
+       os.path.exists(base_fname + "_sequences.fa"):
         Genes2 = {}
         read_Gene_alleles(base_fname + "_backbone.fa", Genes2)
         read_Gene_alleles(base_fname + "_sequences.fa", Genes2)
-
         for gene_name, alleles in Genes.items():
-            print gene_name
-
-        assert False
-    else:
-        read_Gene_alleles(base_fname + "_backbone.fa", Genes)
-        read_Gene_alleles(base_fname + "_sequences.fa", Genes)
+            assert gene_name in Genes2
+            for allele_name, allele_seq in alleles.items():
+                assert allele_name in Genes2[gene_name]
+                allele_seq2 = Genes2[gene_name][allele_name]
+                assert allele_seq == allele_seq2
 
     # HLA gene alleles
     Gene_names = {}
