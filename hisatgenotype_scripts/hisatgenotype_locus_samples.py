@@ -86,7 +86,11 @@ def worker(lock,
     fq_name = path.split('/')[-1]
     read_dir = '/'.join(path.split('/')[:-1])
     genome = fq_name.split('.')[0]
-    read_fname_1, read_fname_2 = "%s/%s.extracted.1.fq.gz" % (read_dir, genome), "%s/%s.extracted.2.fq.gz" % (read_dir, genome)
+    if not fq_name.endswith("extracted.1.fq.gz"):
+        return
+    read_basename = fq_name[:fq_name.find("extracted.1.fq.gz")]
+    read_fname_1, read_fname_2 = "%s/%sextracted.1.fq.gz" % \
+                                 (read_dir, read_basename), "%s/%sextracted.2.fq.gz" % (read_dir, read_basename)
 
     if not os.path.exists(read_fname_1) or not os.path.exists(read_fname_2):
         return
@@ -138,16 +142,16 @@ def worker(lock,
 def genotyping(read_dir,
                reference_type,
                region_list,
-               num_mismatch,
+               num_editdist,
                nthreads,
                max_sample,
                assembly,
                out_dir,
                verbose):
-    for database_name, locus_list in region_list.items():
+    for database_name in region_list:
         # Extract variants, backbone sequence, and other sequeces
         typing_common.extract_database_if_not_exists(database_name,
-                                                     locus_list)
+                                                     [])            # locus_list
         # Build HISAT2's graph index
         typing_common.build_index_if_not_exists(database_name,
                                                 "hisat2",
@@ -172,7 +176,7 @@ def genotyping(read_dir,
                           fq_fnames,
                           reference_type,
                           region_list,
-                          num_mismatch,
+                          num_editdist,
                           max_sample,
                           assembly,
                           out_dir,
