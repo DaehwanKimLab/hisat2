@@ -88,7 +88,7 @@ def align_reads(base_fname,
                                    stderr=open("/dev/null", 'w'))
 
     # DK - debugging purpose
-    os.remove(unsorted_bam_fname)
+    # os.remove(unsorted_bam_fname)
 
     print >> sys.stderr, "%s Indexing %s ..." % (str(datetime.now()), bam_fname)
     bamindex_cmd = ["samtools",
@@ -288,7 +288,7 @@ def genotype(base_fname,
     # Read region alleles (names and sequences)
     regions, region_loci = {}, {}
     for line in open("%s.locus" % base_fname):
-        family, allele_name, chr, left, right = line.strip().split()
+        family, allele_name, chr, left, right = line.strip().split()[:5]
         family = family.lower()
         if len(target_region_list) > 0 and \
            family not in target_region_list:

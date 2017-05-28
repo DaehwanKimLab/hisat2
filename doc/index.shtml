@@ -24,7 +24,7 @@
           <ul> 
             <li>This major version includes the first release of HISAT-genotype, which currently performs HLA typing, DNA fingerprinting analysis, CYP typing on whole genome sequencing (WGS) reads.  We plan to extend the system to analyze a whole human genome, not just a few genes.  Please refer to <a href="http://ccb.jhu.edu/hisat-genotype">the HISAT-genotype website</a> for more details.</li>
             <li>Implemented --new-summary to output a new style of alignment summary, which is easier to parse or machine friendly.</li>
-            <li>Implemented --no-template-length-adjustment option to disable automaitc template length adjustment for RNA-seq reads.</li>
+            <li>Implemented --no-templatelen-adjustment option to disable automaitc template length adjustment for RNA-seq reads.</li>
 	  </ul>
 	  <br/>	  
 	  

@@ -1064,7 +1064,8 @@ public:
 		const PerReadMetrics& prm,       // per-read metrics
 		const Scoring& sc,               // scoring scheme
 		bool suppressSeedSummary = true,
-		bool suppressAlignments = false);
+		bool suppressAlignments = false,
+        bool templateLenAdjustment = true);
 	
 	/**
 	 * Called by the aligner when a new unpaired or paired alignment is
@@ -1792,7 +1793,8 @@ void AlnSinkWrap<index_t>::finishRead(
 									  const PerReadMetrics& prm,       // per-read metrics
 									  const Scoring& sc,               // scoring scheme
 									  bool suppressSeedSummary,        // = true
-                                      bool suppressAlignments)         // = false
+                                      bool suppressAlignments,         // = false
+                                      bool templateLenAdjustment)      // = true
 {
 	obuf_.clear();
 	OutputQueueMark qqm(g_.outq(), obuf_, rdid_, threadid_);
@@ -1900,8 +1902,13 @@ void AlnSinkWrap<index_t>::finishRead(
             }
 			for(size_t i = 0; i < rs1_.size(); i++) {
                 spliceSites_.clear();
-				rs1_[i].setMateParams(ALN_RES_TYPE_MATE1, &rs2_[i], flags1, ssdb_, threads_rids_mindist_, &spliceSites_);
-				rs2_[i].setMateParams(ALN_RES_TYPE_MATE2, &rs1_[i], flags2, ssdb_, threads_rids_mindist_, &spliceSites_);
+                if(templateLenAdjustment) {
+                    rs1_[i].setMateParams(ALN_RES_TYPE_MATE1, &rs2_[i], flags1, ssdb_, threads_rids_mindist_, &spliceSites_);
+                    rs2_[i].setMateParams(ALN_RES_TYPE_MATE2, &rs1_[i], flags2, ssdb_, threads_rids_mindist_, &spliceSites_);
+                } else {
+                    rs1_[i].setMateParams(ALN_RES_TYPE_MATE1, &rs2_[i], flags1);
+                    rs2_[i].setMateParams(ALN_RES_TYPE_MATE2, &rs1_[i], flags2);
+                }
 				assert_eq(abs(rs1_[i].fragmentLength()), abs(rs2_[i].fragmentLength()));
 			}
 			assert(!select1_.empty());

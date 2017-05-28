@@ -893,6 +893,17 @@ HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
 
 </td></tr>
 
+<tr><td id="hisat2-options-no-templatelen-adjustment">
+[`--no-templatelen-adjustment`]: #hisat2-options-no-templatelen-adjustment
+
+    --no-templatelen-adjustment
+
+</td><td>
+
+Disables template length adjustment for RNA-seq reads.
+
+</td></tr>
+
 </table>
 
 #### Reporting options
@@ -1174,6 +1185,19 @@ in the same order as they did in the inputs.
 Print nothing besides alignments and serious errors.
 
 </td></tr>
+
+<tr><td id="hisat2-new-summary">
+
+[`--new-summary`]: #hisat2-options-new-summary
+
+    --new-summary
+
+</td><td>
+
+Print alignment summary in a new style, which is more machine-friendly.
+
+</td></tr>
+
 <tr><td id="hisat2-options-met-file">
 
 [`--met-file`]: #hisat2-options-met-file

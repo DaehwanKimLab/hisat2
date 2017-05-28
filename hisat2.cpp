@@ -283,6 +283,9 @@ static size_t max_alts_tried;
 static bool use_haplotype;
 static bool enable_codis;
 
+static bool templateLenAdjustment;
+static bool newAlignSummary;
+
 #define DMAX std::numeric_limits<double>::max()
 
 static void resetOptions() {
@@ -503,6 +506,9 @@ static void resetOptions() {
     max_alts_tried = 16;
     use_haplotype = false;
     enable_codis = false;
+    
+    templateLenAdjustment = true;
+    newAlignSummary = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -720,6 +726,9 @@ static struct option long_options[] = {
     {(char*)"max-altstried",   required_argument,  0,        ARG_MAX_ALTSTRIED},
     {(char*)"haplotype",       no_argument,        0,        ARG_HAPLOTYPE},
     {(char*)"enable-codis",    no_argument,        0,        ARG_CODIS},
+    
+    {(char*)"no-templatelen-adjustment",    no_argument,        0,        ARG_NO_TEMPLATELEN_ADJUSTMENT},
+    {(char*)"new-summary",     no_argument,        0,        ARG_NEW_SUMMARY},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -856,10 +865,11 @@ static void printUsage(ostream& out) {
         << "  --novel-splicesite-infile <path>   provide a list of novel splice sites" << endl
         << "  --no-temp-splicesite               disable the use of splice sites found" << endl
         << "  --no-spliced-alignment             disable spliced alignment" << endl
-        << "  --rna-strandness <string>          Specify strand-specific information (unstranded)" << endl
-        << "  --tmo                              Reports only those alignments within known transcriptome" << endl
-        << "  --dta                              Reports alignments tailored for transcript assemblers" << endl
-        << "  --dta-cufflinks                    Reports alignments tailored specifically for cufflinks" << endl
+        << "  --rna-strandness <string>          specify strand-specific information (unstranded)" << endl
+        << "  --tmo                              reports only those alignments within known transcriptome" << endl
+        << "  --dta                              reports alignments tailored for transcript assemblers" << endl
+        << "  --dta-cufflinks                    reports alignments tailored specifically for cufflinks" << endl
+        << "  --no-templatelen-adjustment        disables template length adjustment for RNA-seq reads" << endl
         << endl
 		<< " Scoring:" << endl
 		//<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
@@ -899,7 +909,8 @@ static void printUsage(ostream& out) {
 	    << "  (Note: for --un, --al, --un-conc, or --al-conc, add '-gz' to the option name, e.g." << endl
 		<< "  --un-gz <path>, to gzip compress output, or add '-bz2' to bzip2 compress output.)" << endl;
 	}
-	out << "  --quiet            print nothing to stderr except serious errors" << endl
+    out << "  --new-summary      print alignment summary in a new style, which is more machine-friendly." << endl
+        << "  --quiet            print nothing to stderr except serious errors" << endl
 	//  << "  --refidx           refer to ref. seqs by 0-based index rather than name" << endl
 		<< "  --met-file <path>  send metrics to file at <path> (off)" << endl
 		<< "  --met-stderr       send metrics to stderr (off)" << endl
@@ -1679,6 +1690,14 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_CODIS: {
             enable_codis = true;
+            break;
+        }
+        case ARG_NO_TEMPLATELEN_ADJUSTMENT: {
+            templateLenAdjustment = false;
+            break;
+        }
+        case ARG_NEW_SUMMARY: {
+            newAlignSummary = true;
             break;
         }
 		default:
@@ -3468,7 +3487,8 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                      prm,                  // per-read metrics
                                      sc,                   // scoring scheme
                                      !seedSumm,            // suppress seed summaries?
-                                     seedSumm);            // suppress alignments?
+                                     seedSumm,             // suppress alignments?
+                                     templateLenAdjustment);
 				assert(!retry || msinkwrap.empty());
 			} // while(retry)
 		} // if(rdid >= skipReads && rdid < qUpto)
