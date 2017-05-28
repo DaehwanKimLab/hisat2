@@ -58,7 +58,7 @@
     <table width="100%">
       <tr>
       <td colspan="2">
-         <i>H. sapiens</i>, Ensembl GRCh38
+         <i>H. sapiens</i>, GRCh38
         </td>
       </tr>
       <tr>
@@ -110,7 +110,7 @@
 
       <tr>
 	<td colspan="2">
-          <i>H. sapiens</i>, UCSC hg38 and gene annotations referred to in <a href="">the Nature Protocol paper</a>
+          <i>H. sapiens</i>, UCSC hg38 and Refseq gene annotations referred to in <a href="">the Nature Protocol paper</a>
         </td>
       </tr>
       <tr>
@@ -124,7 +124,7 @@
 
       <tr>
         <td colspan="2">
-         <i>H. sapiens</i>, Ensembl GRCh37
+         <i>H. sapiens</i>, GRCh37
         </td>
       </tr>
       <tr>
@@ -175,7 +175,7 @@
 
       <tr>
       <td colspan="2">
-         <i>M. musculus</i>, Ensembl GRCm38
+         <i>M. musculus</i>, GRCm38
         </td>
       </tr>
       <tr>
@@ -238,7 +238,7 @@
       </tr>
       <tr>
       <td colspan="2">
-         <i>D. melanogaster</i>, Ensembl BDGP6
+         <i>D. melanogaster</i>, BDGP6
         </td>
       </tr>
       <tr>
@@ -273,7 +273,7 @@
       
       <tr>
       <td colspan="2">
-         <i>C. elegans</i>, Ensembl WBcel235
+         <i>C. elegans</i>, WBcel235
         </td>
       </tr>
       <tr>
@@ -308,7 +308,7 @@
       
       <tr>
       <td colspan="2">
-         <i>S. cerevisiae</i>, Ensembl R64-1-1
+         <i>S. cerevisiae</i>, R64-1-1
         </td>
       </tr>
       <tr>

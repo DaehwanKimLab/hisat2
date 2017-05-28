@@ -587,8 +587,9 @@ Align reads, and sort the alignments into a BAM file
 """
 def align_reads(aligner,
                 simulation,
-                base_fname,
+                index_name,
                 index_type,
+                base_fname,
                 read_fname,
                 fastq,
                 threads,
@@ -608,15 +609,14 @@ def align_reads(aligner,
             aligner_cmd += ["--max-altstried", "64"]
             aligner_cmd += ["--haplotype"]
             if base_fname == "codis":
-                aligner_cmd += ["--enable-codis"]
-        aligner_cmd += ["-x", "%s.%s" % (base_fname, index_type)]
+                aligner_cmd += ["--enable-codis"]        
     elif aligner == "bowtie2":
         aligner_cmd = [aligner,
                        "--no-unal",
-                       "-k", "10",
-                       "-x", base_fname]
+                       "-k", "10"]
     else:
         assert False
+    aligner_cmd += ["-x", index_name]
     assert len(read_fname) in [1,2]
     aligner_cmd += ["-p", str(threads)]
     if not fastq:

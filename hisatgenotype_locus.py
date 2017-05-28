@@ -210,6 +210,7 @@ def error_correct(ref_seq,
 def typing(simulation,
            base_fname,
            locus_list,
+           genotype_genome,
            partial,
            partial_alleles,
            refGenes,
@@ -258,8 +259,9 @@ def typing(simulation,
                 
             typing_common.align_reads(aligner,
                                       simulation,
-                                      base_fname,
+                                      genotype_genome if genotype_genome != "" else (base_fname + "." + index_type),
                                       index_type,
+                                      base_fname,
                                       read_fname,
                                       fastq,
                                       threads,
@@ -273,7 +275,8 @@ def typing(simulation,
                 gene = test_Gene_names
             ref_allele = refGenes[gene]
             ref_seq = Genes[gene][ref_allele]
-            ref_exons = refGene_loci[gene][-1]
+            ref_locus = refGene_loci[gene]
+            ref_exons = ref_locus[-1]
             
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
@@ -320,6 +323,11 @@ def typing(simulation,
                              "view",
                              alignment_fname]
             base_locus = 0
+            if genotype_genome != "":
+                _, chr, left, right = ref_locus[:4]
+                alignview_cmd += ["%s:%d-%d" % (chr, left+1, right+1)]
+                base_locus = left
+
             if index_type == "graph":
                 alignview_cmd += [ref_allele]
                 mpileup = typing_common.get_mpileup(alignview_cmd,
@@ -605,16 +613,8 @@ def typing(simulation,
                         else:
                             assert len(new_ht) > 2
                             new_ht = "%d-%s-%d" % (new_ht[0], '-'.join(new_ht[1:-1]), new_ht[-1])
-
-                        # DK - debugging purpose
-                        if ht_left > ht_right:
-                            print "DK1:", ht, new_ht, "[%d, %d]" % (e_left, e_right)
-                            print "DK2:", ht_left, ht_right
-                            assert False
-                            
-                            
+                        assert ht_left <= ht_right
                         exon_hts.append(new_ht)
-                        # print "DK2: exon:", e_left, e_right, "new_ht:", new_ht, "ht:", ht
 
                     return exon_hts
 
@@ -1835,8 +1835,6 @@ def genotyping_locus(base_fname,
         for i in range(8):
             genome_fnames.append(genotype_genome + ".%d.ht2" % (i+1))
 
-        if verbose >= 1:
-            print >> sys.stderr, genome_fnames
         if not typing_common.check_files(genome_fnames):
             print >> sys.stderr, "Error: some of the following files are not available:", ' '.join(genome_fnames)
             sys.exit(1)
@@ -2014,6 +2012,7 @@ def genotyping_locus(base_fname,
             tmp_test_passed = typing(simulation,
                                      base_fname,
                                      test_locus_list,
+                                     genotype_genome,
                                      partial,
                                      partial_alleles,
                                      refGenes,
@@ -2058,6 +2057,7 @@ def genotyping_locus(base_fname,
         typing(simulation,
                base_fname,
                locus_list,
+               genotype_genome,
                partial,
                partial_alleles,
                refGenes,
