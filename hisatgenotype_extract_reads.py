@@ -108,7 +108,7 @@ def extract_reads(base_fname,
     ranges = []
     regions, region_loci = {}, {}
     for line in open("%s.locus" % base_fname):
-        family, allele_name, chr, left, right = line.strip().split()
+        family, allele_name, chr, left, right = line.strip().split()[:5]
         if filter_region and family.lower() not in database_list:
             continue
         region_name = "%s-%s" % (family, allele_name.split('*')[0])
@@ -421,7 +421,7 @@ if __name__ == '__main__':
                   args.suffix,
                   args.read_fname,
                   args.fastq,
-                  args.paired,
+                  False if args.read_fname_U != "" else True,
                   args.simulation,
                   args.threads,
                   args.max_sample,
