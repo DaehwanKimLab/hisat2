@@ -284,6 +284,7 @@ static bool use_haplotype;
 static bool enable_codis;
 
 static bool templateLenAdjustment;
+static string alignSumFile; // write alignment summary stat. to this file
 static bool newAlignSummary;
 
 #define DMAX std::numeric_limits<double>::max()
@@ -508,6 +509,7 @@ static void resetOptions() {
     enable_codis = false;
     
     templateLenAdjustment = true;
+    alignSumFile = "";
     newAlignSummary = false;
 }
 
@@ -718,6 +720,7 @@ static struct option long_options[] = {
     {(char*)"downstream-transcriptome-assembly",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
     {(char*)"dta",             no_argument,        0,        ARG_TRANSCRIPTOME_ASSEMBLY},
     {(char*)"dta-cufflinks",   no_argument,        0,        ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS},
+    {(char*)"no-templatelen-adjustment",    no_argument,        0,        ARG_NO_TEMPLATELEN_ADJUSTMENT},
 #ifdef USE_SRA
     {(char*)"sra-acc",         required_argument,  0,        ARG_SRA_ACC},
 #endif
@@ -726,8 +729,7 @@ static struct option long_options[] = {
     {(char*)"max-altstried",   required_argument,  0,        ARG_MAX_ALTSTRIED},
     {(char*)"haplotype",       no_argument,        0,        ARG_HAPLOTYPE},
     {(char*)"enable-codis",    no_argument,        0,        ARG_CODIS},
-    
-    {(char*)"no-templatelen-adjustment",    no_argument,        0,        ARG_NO_TEMPLATELEN_ADJUSTMENT},
+    {(char*)"summary-file",    required_argument,  0,        ARG_SUMMARY_FILE},
     {(char*)"new-summary",     no_argument,        0,        ARG_NEW_SUMMARY},
 	{(char*)0, 0, 0, 0} // terminator
 };
@@ -909,7 +911,8 @@ static void printUsage(ostream& out) {
 	    << "  (Note: for --un, --al, --un-conc, or --al-conc, add '-gz' to the option name, e.g." << endl
 		<< "  --un-gz <path>, to gzip compress output, or add '-bz2' to bzip2 compress output.)" << endl;
 	}
-    out << "  --new-summary      print alignment summary in a new style, which is more machine-friendly." << endl
+    out << "  --summary-file     print alignment summary to this file." << endl
+        << "  --new-summary      print alignment summary in a new style, which is more machine-friendly." << endl
         << "  --quiet            print nothing to stderr except serious errors" << endl
 	//  << "  --refidx           refer to ref. seqs by 0-based index rather than name" << endl
 		<< "  --met-file <path>  send metrics to file at <path> (off)" << endl
@@ -1694,6 +1697,10 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_NO_TEMPLATELEN_ADJUSTMENT: {
             templateLenAdjustment = false;
+            break;
+        }
+        case ARG_SUMMARY_FILE: {
+            alignSumFile = arg;
             break;
         }
         case ARG_NEW_SUMMARY: {
@@ -3916,11 +3923,24 @@ static void driver(
 			if(repThresh == 0) {
 				repThresh = std::numeric_limits<size_t>::max();
 			}
-			mssink->finish(
-				repThresh,
-				gReportDiscordant,
-				gReportMixed,
-				hadoopOut);
+			mssink->finish(cerr,
+                           repThresh,
+                           gReportDiscordant,
+                           gReportMixed,
+                           newAlignSummary,
+                           hadoopOut);
+            if(alignSumFile != "") {
+                ofstream sumfile(alignSumFile.c_str(), ios::out);
+                if(sumfile.is_open()) {
+                    mssink->finish(sumfile,
+                                   repThresh,
+                                   gReportDiscordant,
+                                   gReportMixed,
+                                   newAlignSummary,
+                                   false); // hadoopOut
+                    sumfile.close();
+                }
+            }
 		}
         if(ssdb != NULL) {
             if(novelSpliceSiteOutfile != "") {

@@ -1186,6 +1186,18 @@ Print nothing besides alignments and serious errors.
 
 </td></tr>
 
+<tr><td id="hisat2-summary-file">
+
+[`--summary-file`]: #hisat2-options-summary-file
+
+    --summary-file
+
+</td><td>
+
+Print alignment summary to this file.
+
+</td></tr>
+
 <tr><td id="hisat2-new-summary">
 
 [`--new-summary`]: #hisat2-options-new-summary

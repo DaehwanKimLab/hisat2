@@ -223,7 +223,8 @@ def extract_reads(bam_fname,
 
 """
 """
-def perform_genotyping(database,
+def perform_genotyping(base_fname,
+                       database,
                        locus_list,
                        read_fnames,
                        fastq,
@@ -232,7 +233,8 @@ def perform_genotyping(database,
                        threads,
                        verbose):
     genotype_cmd = ["hisatgenotype_locus.py",
-                               "--base", database]
+                    "--genotype-genome", base_fname,
+                    "--base", database]
     if len(locus_list) > 0:
         genotype_cmd += ["--locus-list", ','.join(locus_list)]
     genotype_cmd += ["-p", str(threads),
@@ -334,7 +336,8 @@ def genotype(base_fname,
                                                   fastq,
                                                   verbose)
 
-            perform_genotyping(family,
+            perform_genotyping(base_fname,
+                               family,
                                [locus_name],
                                extracted_read_fnames,
                                fastq,
