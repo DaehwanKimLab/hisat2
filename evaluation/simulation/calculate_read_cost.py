@@ -143,6 +143,8 @@ def to_junction(junction_str):
     return [chr, int(left), int(right)]
 
 
+"""
+"""
 def junction_cmp(a, b):
     if a[0] != b[0]:
         if a[0] < b[0]:
@@ -165,7 +167,9 @@ def junction_cmp(a, b):
     return 0
 
 
+"""
 # chr and pos are assumed to be integers
+"""
 def get_junctions(chr, pos, cigar_str, min_anchor_len = 0, read_len = 100):
     junctions = []    
     right_pos = pos
@@ -232,6 +236,9 @@ def get_cigar_chars(cigars):
 
     return cigar_chars
 
+
+"""
+"""
 def get_cigar_chars_MN(cigars):
     cigars = cigar_re.findall(cigars)
     cigar_chars = ""
@@ -243,6 +250,9 @@ def get_cigar_chars_MN(cigars):
 
     return cigar_chars
 
+
+"""
+"""
 def is_small_anchor_junction_read(cigars):
     cigar_list = []
     for cigar in cigar_re.findall(cigars):
@@ -265,6 +275,8 @@ def is_small_anchor_junction_read(cigars):
     return True
 
 
+"""
+"""
 def is_canonical_junction(chr_dic, junction):
     chr, left, right = junction
     donor = chr_dic[chr][left:left+2]
@@ -279,6 +291,8 @@ def is_canonical_junction(chr_dic, junction):
     return False
 
 
+"""
+"""
 def is_small_exon_junction_read(cigars, min_exon_len = 23):
     cigars = cigar_re.findall(cigars)
     for i in range(1, len(cigars) - 1):
@@ -296,12 +310,14 @@ def is_small_exon_junction_read(cigars, min_exon_len = 23):
     return False
 
 
+"""
+"""
 def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
     infile = open(infilename)
     outfile = open(outfilename, "w")
     prev_read_id = ""
-    debug_NH = "NH" in debug_dic and aligner == "hisat2"
-    if debug_NH:
+    num_reads, num_aligned_reads, num_ualigned_reads = 0, 0, 0
+    if aligner == "hisat2":
         prev_NH, NH_real = 0, 0
     for line in infile:
         if line[0] == '@':
@@ -319,37 +335,43 @@ def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
         if aligner == "gsnap":
             chr = chr.replace("_", ":")
 
+        if read_id != prev_read_id:
+            num_reads += 1
+
         flag = int(flag)
         pos = int(pos)
-
         if flag & 0x4 != 0:
+            prev_read_id = read_id
             continue
 
-        if debug_NH:
-            NH = ""
+        NH = ""
         NM = ""
         for i in range(11, len(cols)):
             col = cols[i]
             # "nM" from STAR
-            if col[:2] == "NM" or col[:2] == "nM":
+            if col.startswith("NM") or col.startswith("nM"):
                 NM = col
-            if debug_NH:
-                if col[:2] == "NH":
-                    NH = col
+            elif col.startswith("NH"):
+                NH = col
         assert NM != ""
         NM = int(NM[5:])
-        if debug_NH:
-            assert NH != ""
+        if NH != "":
             NH = int(NH[5:])
-            if prev_read_id == read_id:
-                assert prev_NH == NH
+            if aligner == "hisat2":
+                if prev_read_id == read_id:
+                    assert prev_NH == NH
 
+        if read_id != prev_read_id:
+            num_aligned_reads += 1
+            if aligner == "hisat2" and \
+               NH == 1:
+                num_ualigned_reads += 1
+                
         read_pos, right_pos = 0, pos - 1
         cigars = cigar_re.findall(cigar_str)
         cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
         for i in range(len(cigars)):
-            cigar_op, length = cigars[i]
-            
+            cigar_op, length = cigars[i]            
             if cigar_op == "S":
                 assert i == 0 or i == len(cigars) - 1
                 if i == 0:
@@ -366,10 +388,8 @@ def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
                             NM += 1
                 else:
                     NM += length
-
             if cigar_op in "MND":
                 right_pos += length
-
             if cigar_op in "MIS":
                 read_pos += length
 
@@ -393,7 +413,7 @@ def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
         
         print >> outfile, p_str
 
-        if debug_NH:
+        if aligner == "hisat2":
             if prev_read_id != read_id:
                 if prev_read_id != "":
                     assert prev_NH == NH_real
@@ -403,23 +423,53 @@ def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
             prev_NH = NH
         prev_read_id = read_id
 
-    if debug_NH:
+    if aligner == "hisat2":
         if prev_read_id != "":
             assert prev_NH == NH_real
 
     outfile.close()
     infile.close()
+
+    # Sanity check for HISAT2's alignment summary
+    if aligner == "hisat2" and os.path.exists(infilename + ".summary"):
+        hisat2_reads, hisat2_0aligned_reads, hisat2_ualigned_reads, hisat2_maligned_reads = 0, 0, 0, 0
+        for line in open(infilename + ".summary"):
+            line = line.strip()
+            if line.startswith("Summary") or \
+               line.startswith("Overall"):
+                continue
+            category, num = line.split(':')
+            num = num.strip()
+            num = int(num.split(' ')[0])
+            if category.startswith("Total reads"):
+                hisat2_reads = num
+            elif category.startswith("Aligned 0 time"):
+                hisat2_0aligned_reads = num
+            elif category.startswith("Aligned 1 time"):
+                hisat2_ualigned_reads = num
+            else:
+                assert category.startswith("Aligned >1 time")
+                assert hisat2_reads == hisat2_0aligned_reads + hisat2_ualigned_reads + num                
+
+        hisat2_aligned_reads = hisat2_reads - hisat2_0aligned_reads
+        assert hisat2_reads == num_reads
+        assert hisat2_aligned_reads == num_aligned_reads
+        assert hisat2_ualigned_reads == num_ualigned_reads
     
 
+"""
+"""
 def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
     read_dic = {}
     pair_reported = set()
 
     infile = open(infilename)
     outfile = open(outfilename, "w")
-    prev_read_id = ""
-    debug_NH = "NH" in debug_dic and aligner == "hisat2"
-    if debug_NH:
+    num_pairs, num_conc_aligned_pairs, num_conc_ualigned_pairs, num_disc_aligned_pairs = 0, 0, 0, 0
+    num_aligned_reads, num_ualigned_reads = 0, 0
+    
+    prev_read_id, pair_list = "", set()
+    if aligner == "hisat2":
         prev_NH1, prev_NH2 = 0, 0
         NH1_real, NH2_real = 0, 0
     for line in infile:
@@ -439,43 +489,63 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
             chr1 = chr1.replace("_", ":")
             chr2 = chr2.replace("_", ":")
 
+        if read_id != prev_read_id:
+            num_pairs += 1
+            pair_list = set()
+        
         flag = int(flag)
         canonical_pos1, canonical_pos2 = int(pos1), int(pos2)
+        left_read = (flag & 0x40 != 0)
         pos1 = canonical_pos1
-
         if flag & 0x4 != 0:
+            prev_read_id, is_prev_read_left = read_id, left_read
             continue
 
-        left_read = (flag & 0x40 != 0)
-        concordant = (flag & 0x2 != 0)
-        if debug_NH:
-            NH = ""
-        NM1 = ""
+        concordant = (flag & 0x2 != 0)        
+        NH, NM1, YT = "", "", ""
         for i in range(11, len(cols)):
             col = cols[i]
             # "nM" from STAR
-            if col[:2] == "NM" or col[:2] == "nM":
+            if col.startswith("NM") or col.startswith("nM"):
                 NM1 = col
-            if debug_NH:
-                if col[:2] == "NH":
-                    NH = col
+            elif col.startswith("NH"):
+                NH = col
+            elif col.startswith("YT"):
+                YT = col[5:]
         assert NM1 != ""
         NM1 = int(NM1[5:])
-        if debug_NH:
-            assert NH != ""
-            NH = int(NH[5:])
+        assert NH != ""
+        NH = int(NH[5:])
+        if aligner == "hisat2":
             if prev_read_id == read_id:
                 if left_read:
                     assert prev_NH1 == 0 or prev_NH1 == NH
                 else:
                     assert prev_NH2 == 0 or prev_NH2 == NH
 
+        unpaired = (flag & 0x8 != 0) or (YT in ["UU", "UP"])
+        if unpaired:
+            if left_read not in pair_list:
+                pair_list.add(left_read)
+                num_aligned_reads += 1
+                if aligner == "hisat2" and NH == 1:
+                    num_ualigned_reads += 1                
+        else:
+            if read_id != prev_read_id:
+                if concordant:
+                    num_conc_aligned_pairs += 1
+                    if aligner == "hisat2" and NH == 1:
+                        num_conc_ualigned_pairs += 1
+                else:
+                    if aligner == "hisat2":
+                        assert YT == "DP"
+                    num_disc_aligned_pairs += 1
+                        
         read_pos, right_pos = 0, pos1 - 1
         cigars = cigar_re.findall(cigar1_str)
         cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
         for i in range(len(cigars)):
-            cigar_op, length = cigars[i]
-            
+            cigar_op, length = cigars[i]            
             if cigar_op == "S":
                 assert i == 0 or i == len(cigars) - 1
                 if i == 0:
@@ -492,10 +562,8 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
                             NM1 += 1
                 else:
                     NM1 += length
-
             if cigar_op in "MND":
                 right_pos += length
-
             if cigar_op in "MIS":
                 read_pos += length
 
@@ -542,15 +610,9 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
             read_dic[me] = []
 
         read_dic[me].append([partner, cigar1_str, NM1, pos1])
-        if debug_NH:
+        if aligner == "hisat2":
             if prev_read_id != read_id:
                 if prev_read_id != "":
-                    # daehwan - for debugging purposes
-                    if prev_NH1 != NH1_real or prev_NH2 != NH2_real:
-                        print prev_read_id, read_id
-                        print line,
-                        print prev_NH1, NH1_real
-                        print prev_NH2, NH2_real
                     assert prev_NH1 == NH1_real
                     assert prev_NH2 == NH2_real
                     prev_NH1, prev_NH2 = 0, 0
@@ -569,16 +631,61 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
                 prev_NH2 = NH
         prev_read_id = read_id
 
-    if debug_NH:
+    if aligner == "hisat2":
         if prev_read_id != "":
             assert prev_NH1 == NH1_real
             assert prev_NH2 == NH2_real
 
-
     outfile.close()
     infile.close()
 
+    # Sanity check for HISAT2's alignment summary
+    if aligner == "hisat2" and os.path.exists(infilename + ".summary"):
+        hisat2_pairs, hisat2_0aligned_pairs, hisat2_conc_ualigned_pairs, hisat2_conc_maligned_pairs, hisat2_disc_aligned_pairs = 0, 0, 0, 0, 0
+        hisat2_reads, hisat2_0aligned_reads, hisat2_ualigned_reads, hisat2_maligned_reads = 0, 0, 0, 0
 
+        for line in open(infilename + ".summary"):
+            line = line.strip()
+            if line.startswith("Summary") or \
+               line.startswith("Overall"):
+                continue
+            category, num = line.split(':')
+            num = num.strip()
+            num = int(num.split(' ')[0])
+            if category.startswith("Total pairs"):
+                hisat2_pairs = num
+            elif category.startswith("Aligned concordantly 0 time"):
+                hisat2_conc_0aligned_pairs = num
+            elif category.startswith("Aligned concordantly 1 time"):
+                hisat2_conc_ualigned_pairs = num
+            elif category.startswith("Aligned concordantly >1 time"):
+                hisat2_conc_maligned_pairs = num
+                assert hisat2_pairs == hisat2_conc_0aligned_pairs + hisat2_conc_ualigned_pairs + hisat2_conc_maligned_pairs
+            elif category.startswith("Aligned discordantly"):
+                hisat2_disc_aligned_pairs = num
+                assert hisat2_disc_aligned_pairs <= hisat2_conc_0aligned_pairs
+            elif category.startswith("Total unpaired reads"):
+                hisat2_reads = num
+                assert hisat2_reads == (hisat2_conc_0aligned_pairs - hisat2_disc_aligned_pairs) * 2
+            elif category.startswith("Aligned 0 time"):
+                hisat2_0aligned_reads = num
+            elif category.startswith("Aligned 1 time"):
+                hisat2_ualigned_reads = num
+            else:
+                assert category.startswith("Aligned >1 times")
+                hisat2_maligned_reads = num
+                assert hisat2_reads == hisat2_0aligned_reads + hisat2_ualigned_reads + hisat2_maligned_reads
+
+        assert hisat2_pairs == num_pairs
+        assert hisat2_conc_ualigned_pairs == num_conc_ualigned_pairs
+        assert hisat2_conc_maligned_pairs == num_conc_aligned_pairs - num_conc_ualigned_pairs
+        assert hisat2_disc_aligned_pairs == num_disc_aligned_pairs
+        assert hisat2_ualigned_reads == num_ualigned_reads
+        assert hisat2_maligned_reads == num_aligned_reads - num_ualigned_reads
+    
+
+"""
+"""
 def is_junction_read(junctions_dic, chr, pos, cigar_str):
     result_junctions = []
     junctions = get_junctions(chr, pos, cigar_str)
@@ -589,6 +696,8 @@ def is_junction_read(junctions_dic, chr, pos, cigar_str):
     return result_junctions
 
 
+"""
+"""
 def is_junction_pair(junctions_dic, chr, pos, cigar_str, mate_chr, mate_pos, mate_cigar_str):
     junctions = is_junction_read(junctions_dic, chr, pos, cigar_str)
     mate_junctions = is_junction_read(junctions_dic, mate_chr, mate_pos, mate_cigar_str)
@@ -596,6 +705,8 @@ def is_junction_pair(junctions_dic, chr, pos, cigar_str, mate_chr, mate_pos, mat
     return junctions
 
 
+"""
+"""
 def find_in_gtf_junctions(chr_dic, gtf_junctions, junction, relax_dist = 5):
     def find_in_gtf_junctions(gtf_junctions, junction):
         l, u = 0, len(gtf_junctions)
@@ -637,6 +748,8 @@ def find_in_gtf_junctions(chr_dic, gtf_junctions, junction, relax_dist = 5):
 
     return -1
 
+"""
+"""
 def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set, ex_gtf_junctions):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic = {}, {}
@@ -828,6 +941,8 @@ def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf
     return mapped, unique_mapped, unmapped, aligned, multi_aligned, len(temp_junctions), len(temp_gtf_junctions), mapping_point
 
 
+"""
+"""
 def compare_paired_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set, ex_gtf_junctions):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic, junction_pair_dic = {}, {}, {}
@@ -1046,6 +1161,8 @@ def compare_paired_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf
     return mapped, unique_mapped, unmapped, aligned, multi_aligned, len(temp_junctions), len(temp_gtf_junctions), mapping_point
 
 
+"""
+"""
 def extract_mapped_unmapped(read_fname, mapped_id_fname, mapped_fname, unmapped_fname, read2_fname = "", mapped2_fname = "", unmapped2_fname = ""):
     mapped_ids = set()
     mapped_id_file = open(mapped_id_fname)
@@ -1081,6 +1198,8 @@ def extract_mapped_unmapped(read_fname, mapped_id_fname, mapped_fname, unmapped_
         write_reads(read2_fname, mapped2_fname, unmapped2_fname)
 
 
+"""
+"""
 def sql_execute(sql_db, sql_query):
     sql_cmd = [
         "sqlite3", sql_db,
@@ -1093,6 +1212,8 @@ def sql_execute(sql_db, sql_query):
     return output
 
 
+"""
+"""
 def create_sql_db(sql_db):
     if os.path.exists(sql_db):
         print >> sys.stderr, sql_db, "already exists!"
@@ -1130,6 +1251,8 @@ def create_sql_db(sql_db):
     sql_execute(sql_db, sql_create_table)
 
 
+"""
+"""
 def write_analysis_data(sql_db, genome_name, database_name):
     if not os.path.exists(sql_db):
         return
@@ -1172,8 +1295,9 @@ def write_analysis_data(sql_db, genome_name, database_name):
         database_file.close()
 
 
-def calculate_read_cost(test_NH,
-                        verbose):
+"""
+"""
+def calculate_read_cost(verbose):
     sql_db_name = "analysis.db"
     if not os.path.exists(sql_db_name):
         create_sql_db(sql_db_name)
@@ -1210,7 +1334,7 @@ def calculate_read_cost(test_NH,
      
     aligners = [
         # ["hisat", "", "", ""],
-        ["hisat2", "", "", "205"],
+        # ["hisat2", "", "", "205"],
         # ["hisat2", "", "snp", "203b"],
         # ["hisat2", "", "snp", "205"],
         ["hisat2", "", "", ""],
@@ -1262,8 +1386,8 @@ def calculate_read_cost(test_NH,
     chr_dic = read_genome("../../data/%s.fa" % genome)
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     align_stat = []
-    # for paired in [False, True]:
-    for paired in [False]:
+    for paired in [False, True]:
+    # for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
@@ -1365,10 +1489,11 @@ def calculate_read_cost(test_NH,
                         cmd += ["--no-temp-splicesite"]
 
                     # cmd += ["--no-anchorstop"]
-                    if version == "204": # due to a bug in a version, 204
-                        cmd += ["--sp", "2,1"]
-
-                    # daehwan - for debugging purposes
+                    if version == "" or \
+                       (version != "" and int(version) >= 210):
+                        cmd += ["--new-summary",
+                                "--summary-file", out_fname + ".summary"]
+                        
                     # cmd += ["--dta"]
                     # cmd += ["--dta-cufflinks"]
 
@@ -1588,7 +1713,7 @@ def calculate_read_cost(test_NH,
                     if not two_step:
                         align_stat.append([readtype, aligner_name])
 
-                    # dummy commands for caching
+                    # dummy commands for caching index and simulated reads
                     if aligner != "tophat2":
                         dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../one.fa", "../two.fa", "/dev/null")
                         if verbose:
@@ -1601,7 +1726,7 @@ def calculate_read_cost(test_NH,
                         if verbose:
                             print >> sys.stderr, "\t", datetime.now(), "finished"
 
-                    # align all reads
+                    # Align all reads
                     aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
                     start_time = datetime.now()
                     if verbose:
@@ -1685,8 +1810,6 @@ def calculate_read_cost(test_NH,
 
                 if not os.path.exists(out_fname2):
                     debug_dic = {}
-                    if test_NH:
-                        debug_dic["NH"] = True
                     if paired:
                         extract_pair(out_fname, out_fname2, chr_dic, aligner, debug_dic)
                     else:
@@ -1759,18 +1882,17 @@ def calculate_read_cost(test_NH,
         
 
 
+"""
+"""
 if __name__ == "__main__":
     parser = ArgumentParser(
-        description='test HISAT2')
-    parser.add_argument('--test-NH',
-                        dest='test_NH',
-                        action='store_true',
-                        help='check NH in the SAM output')
+        description='test HISAT2, and compare HISAT2 with other popular aligners such as TopHat2, STAR, Bowtie1/2, GSNAP, BWA-mem, etc.')
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
                         help='also print some statistics to stderr')
 
     args = parser.parse_args()
-    calculate_read_cost(args.test_NH,
-                        args.verbose)
+    calculate_read_cost(args.verbose)
+
+    

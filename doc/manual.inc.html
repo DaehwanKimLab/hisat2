@@ -398,7 +398,7 @@
 <pre><code>--novel-splicesite-outfile &lt;path&gt;</code></pre>
 </td><td>
 
-<p>In this mode, HISAT2 reports a list of splice sites in the file <path>:<br /> chromosome name <code>&lt;tab&gt;</code> genomic position of the flanking base on the left side of an intron <code>&lt;tab&gt;</code> genomic position of the flanking base on the right <code>&lt;tab&gt;</code> strand</p>
+<p>In this mode, HISAT2 reports a list of splice sites in the file <path>:<br /> chromosome name <code>&lt;tab&gt;</code> genomic position of the flanking base on the left side of an intron <code>&lt;tab&gt;</code> genomic position of the flanking base on the right <code>&lt;tab&gt;</code> strand (+, -, and .) '.' indicates an unknown strand for non-canonical splice sites.</p>
 </td></tr>
 
 <tr><td id="hisat2-options-novel-splicesite-infile">
@@ -455,6 +455,13 @@
 <p>Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta), With this option, HISAT2 looks for novel splice sites with three signals (GT/AG, GC/AG, AT/AC), but all user-provided splice sites are used irrespective of their signals. HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.</p>
 </td></tr>
 
+<tr><td id="hisat2-options-no-templatelen-adjustment">
+<pre><code>--no-templatelen-adjustment</code></pre>
+</td><td>
+
+<p>Disables template length adjustment for RNA-seq reads.</p>
+</td></tr>
+
 </table>
 
 <h4 id="reporting-options">Reporting options</h4>
@@ -473,7 +480,7 @@
 <pre><code>--max-seeds &lt;int&gt;</code></pre>
 </td><td>
 
-<p>HISAT2, like other aligners, uses seed-and-extend approaches. HISAT2 tries to extend seeds to full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that will be extended. HISAT2 extends up to these many seeds and skips the rest of the seeds. Large values for <code>--max-seeds</code> may improve alignment sensitivity, but HISAT2 is not designed with large values for <code>--max-seeds</code> in mind, and when aligning reads to long, repetitive genomes large <code>--max-seeds</code> can be very, very slow. The default value is the same as with <code>-k</code>.</p>
+<p>HISAT2, like other aligners, uses seed-and-extend approaches. HISAT2 tries to extend seeds to full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that will be extended. HISAT2 extends up to these many seeds and skips the rest of the seeds. Large values for <code>--max-seeds</code> may improve alignment sensitivity, but HISAT2 is not designed with large values for <code>--max-seeds</code> in mind, and when aligning reads to long, repetitive genomes large <code>--max-seeds</code> can be very, very slow. The default value is the maximum of 5 and the value that comes with<code>-k</code>.</p>
 </td></tr>
 
 <tr><td id="hisat2-options-secondary">
@@ -582,6 +589,23 @@
 
 <p>Print nothing besides alignments and serious errors.</p>
 </td></tr>
+
+<tr><td id="hisat2-summary-file">
+
+<pre><code>--summary-file</code></pre>
+</td><td>
+
+<p>Print alignment summary to this file.</p>
+</td></tr>
+
+<tr><td id="hisat2-new-summary">
+
+<pre><code>--new-summary</code></pre>
+</td><td>
+
+<p>Print alignment summary in a new style, which is more machine-friendly.</p>
+</td></tr>
+
 <tr><td id="hisat2-options-met-file">
 
 <pre><code>--met-file &lt;path&gt;</code></pre>

@@ -793,7 +793,8 @@ than using this option.  It has no effect to provide splice sites that are alrea
 </td><td>
 
 In this mode, HISAT2 reports a list of splice sites in the file <path>:  
-   chromosome name `<tab>` genomic position of the flanking base on the left side of an intron `<tab>` genomic position of the flanking base on the right `<tab>` strand
+   chromosome name `<tab>` genomic position of the flanking base on the left side of an intron `<tab>` genomic position of the flanking base on the right `<tab>` strand (+, -, and .)
+   '.' indicates an unknown strand for non-canonical splice sites.
 
 </td></tr>
 

@@ -20,7 +20,7 @@
 #
 
 
-import sys, os, subprocess, re
+import sys, os, subprocess, re, resource
 import inspect, random
 import math
 from datetime import datetime, date, time
@@ -71,10 +71,12 @@ def align_reads(base_fname,
                   "-"]
     sambam_proc = subprocess.Popen(sambam_cmd,
                                    stdin=align_proc.stdout,
-                                   stdout=open(unsorted_bam_fname, 'w'),
-                                   stderr=open("/dev/null", 'w'))
+                                   stdout=open(unsorted_bam_fname, 'w'))
     sambam_proc.communicate()
 
+    # Increase the maximum number of files that can be opened
+    resource.setrlimit(resource.RLIMIT_NOFILE, (10000, 10240))
+    
     print >> sys.stderr, "%s Sorting %s ..." % (str(datetime.now()), unsorted_bam_fname)
     bam_fname = "%s.bam" % out_base_fname
     bamsort_cmd = ["samtools",
@@ -84,11 +86,8 @@ def align_reads(base_fname,
                    "-o", bam_fname]    
     if verbose:
         print >> sys.stderr, "\t%s" % ' '.join(bamsort_cmd)
-    bamsort_proc = subprocess.call(bamsort_cmd,
-                                   stderr=open("/dev/null", 'w'))
-
-    # DK - debugging purpose
-    # os.remove(unsorted_bam_fname)
+    bamsort_proc = subprocess.call(bamsort_cmd)
+    os.remove(unsorted_bam_fname)
 
     print >> sys.stderr, "%s Indexing %s ..." % (str(datetime.now()), bam_fname)
     bamindex_cmd = ["samtools",

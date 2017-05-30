@@ -1512,15 +1512,15 @@ void AlnSink<index_t>::printAlSumm(
             out << "\t\tAligned discordantly 1 time: " << met.ndiscord << " ("; printPct(out, met.ndiscord, met.nconcord_0); out << ")" << endl;
             
             uint64_t ncondiscord_0 = met.nconcord_0 - met.ndiscord;
-            out << "\tTotal reads mapped independatly: " << ncondiscord_0 * 2 << endl;
+            out << "\tTotal unpaired reads: " << ncondiscord_0 * 2 << endl;
             out << "\t\tAligned 0 time: " << met.nunp_0_0 << " ("; printPct(out, met.nunp_0_0, ncondiscord_0 * 2); out << ")" << endl;
             out << "\t\tAligned 1 time: " << met.nunp_0_uni1 << " ("; printPct(out, met.nunp_0_uni1, ncondiscord_0 * 2); out << ")" << endl;
             out << "\t\tAligned >1 times: " << met.nunp_0_uni2 << " ("; printPct(out, met.nunp_0_uni2, ncondiscord_0 * 2); out << ")" << endl;
         } else {
             out << "\tTotal reads: " << totread << endl;
-            out << "\t\tAligned 0 time: " << met.nunp_0_0 << " ("; printPct(out, met.nunp_0, met.nunpaired); out << ")" << endl;
-            out << "\t\tAligned 1 time: " << met.nunp_0_uni1 << " ("; printPct(out, met.nunp_uni1, met.nunpaired); out << ")" << endl;
-            out << "\t\tAligned >1 times: " << met.nunp_0_uni2 << " ("; printPct(out, met.nunp_uni2, met.nunpaired); out << ")" << endl;
+            out << "\t\tAligned 0 time: " << met.nunp_0 << " ("; printPct(out, met.nunp_0, met.nunpaired); out << ")" << endl;
+            out << "\t\tAligned 1 time: " << met.nunp_uni1 << " ("; printPct(out, met.nunp_uni1, met.nunpaired); out << ")" << endl;
+            out << "\t\tAligned >1 times: " << met.nunp_uni2 << " ("; printPct(out, met.nunp_uni2, met.nunpaired); out << ")" << endl;
         }
         out << "\tOverall alignment rate: "; printPct(out, tot_al, tot_al_cand); out << endl;
         
@@ -1900,7 +1900,7 @@ void AlnSinkWrap<index_t>::finishRead(
 							rs1->fw()); // opp fw
 			// Issue: we only set the flags once, but some of the flags might
 			// vary from pair to pair among the pairs we're reporting.  For
-			// instance, whether the a given mate aligns to the forward strand.
+			// instance, whether a given mate aligns to the forward strand.
 			SeedAlSumm ssm1, ssm2;
             if(sr1 != NULL && sr2 != NULL) {
                 sr1->toSeedAlSumm(ssm1);
@@ -1943,7 +1943,7 @@ void AlnSinkWrap<index_t>::finishRead(
 			} else {
 				met.nconcord_uni++;
 				assert(!rs1_.empty());
-				if(rs1_.size() == 1) {
+				if(select1_.size() == 1) {
 					met.nconcord_uni1++;
 				} else {
 					met.nconcord_uni2++;
@@ -2041,84 +2041,7 @@ void AlnSinkWrap<index_t>::finishRead(
 		// the mates having more than one.
 		//assert(nunpair1 == 0 || nunpair2 == 0);
 		assert(!pairMax);
-		
-		// Update counters given that one mate didn't align
-		if(readIsPair()) {
-			met.nconcord_0++;
-		}
-		if(rd1_ != NULL) {
-			if(nunpair1 > 0) {
-				// Update counters
-				if(readIsPair()) {
-					if(unpair1Max) met.nunp_0_rep++;
-					else {
-						met.nunp_0_uni++;
-						assert(!rs1u_.empty());
-						if(rs1u_.size() == 1) {
-							met.nunp_0_uni1++;
-						} else {
-							met.nunp_0_uni2++;
-						}
-					}
-				} else {
-					if(unpair1Max) met.nunp_rep++;
-					else {
-						met.nunp_uni++;
-						assert(!rs1u_.empty());
-						if(rs1u_.size() == 1) {
-							met.nunp_uni1++;
-						} else {
-							met.nunp_uni2++;
-						}
-					}
-				}
-			} else if(unpair1Max) {
-				// Update counters
-				if(readIsPair())   met.nunp_0_rep++;
-				else               met.nunp_rep++;
-			} else {
-				// Update counters
-				if(readIsPair())   met.nunp_0_0++;
-				else               met.nunp_0++;
-			}
-		}
-		if(rd2_ != NULL) {
-			if(nunpair2 > 0) {
-				// Update counters
-				if(readIsPair()) {
-					if(unpair2Max) met.nunp_0_rep++;
-					else {
-						assert(!rs2u_.empty());
-						met.nunp_0_uni++;
-						if(rs2u_.size() == 1) {
-							met.nunp_0_uni1++;
-						} else {
-							met.nunp_0_uni2++;
-						}
-					}
-				} else {
-					if(unpair2Max) met.nunp_rep++;
-					else {
-						assert(!rs2u_.empty());
-						met.nunp_uni++;
-						if(rs2u_.size() == 1) {
-							met.nunp_uni1++;
-						} else {
-							met.nunp_uni2++;
-						}
-					}
-				}
-			} else if(unpair2Max) {
-				// Update counters
-				if(readIsPair())   met.nunp_0_rep++;
-				else               met.nunp_rep++;
-			} else {
-				// Update counters
-				if(readIsPair())   met.nunp_0_0++;
-				else               met.nunp_0++;
-			}
-		}
-		
+			
 		const AlnRes *repRs1 = NULL, *repRs2 = NULL;
 		AlnSetSumm summ1, summ2;
 		AlnFlags flags1, flags2;
@@ -2185,6 +2108,83 @@ void AlnSinkWrap<index_t>::finishRead(
 			// summary
 			assert(!unpair2Max);
 		}
+        
+        // Update counters given that one mate didn't align
+        if(readIsPair()) {
+            met.nconcord_0++;
+        }
+        if(rd1_ != NULL) {
+            if(nunpair1 > 0) {
+                // Update counters
+                if(readIsPair()) {
+                    if(unpair1Max) met.nunp_0_rep++;
+                    else {
+                        met.nunp_0_uni++;
+                        assert(!rs1u_.empty());
+                        if(select1_.size() == 1) {
+                            met.nunp_0_uni1++;
+                        } else {
+                            met.nunp_0_uni2++;
+                        }
+                    }
+                } else {
+                    if(unpair1Max) met.nunp_rep++;
+                    else {
+                        met.nunp_uni++;
+                        assert(!rs1u_.empty());
+                        if(select1_.size() == 1) {
+                            met.nunp_uni1++;
+                        } else {
+                            met.nunp_uni2++;
+                        }
+                    }
+                }
+            } else if(unpair1Max) {
+                // Update counters
+                if(readIsPair())   met.nunp_0_rep++;
+                else               met.nunp_rep++;
+            } else {
+                // Update counters
+                if(readIsPair())   met.nunp_0_0++;
+                else               met.nunp_0++;
+            }
+        }
+        if(rd2_ != NULL) {
+            if(nunpair2 > 0) {
+                // Update counters
+                if(readIsPair()) {
+                    if(unpair2Max) met.nunp_0_rep++;
+                    else {
+                        assert(!rs2u_.empty());
+                        met.nunp_0_uni++;
+                        if(select2_.size() == 1) {
+                            met.nunp_0_uni1++;
+                        } else {
+                            met.nunp_0_uni2++;
+                        }
+                    }
+                } else {
+                    if(unpair2Max) met.nunp_rep++;
+                    else {
+                        assert(!rs2u_.empty());
+                        met.nunp_uni++;
+                        if(select2_.size() == 1) {
+                            met.nunp_uni1++;
+                        } else {
+                            met.nunp_uni2++;
+                        }
+                    }
+                }
+            } else if(unpair2Max) {
+                // Update counters
+                if(readIsPair())   met.nunp_0_rep++;
+                else               met.nunp_rep++;
+            } else {
+                // Update counters
+                if(readIsPair())   met.nunp_0_0++;
+                else               met.nunp_0++;
+            }
+        }
 		
 		// Now set up flags
 		if(rep1) {
