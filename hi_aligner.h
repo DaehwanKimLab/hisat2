@@ -5173,7 +5173,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
         if(hit.splicing_dir() == SPL_UNKNOWN)
             return false;
     }
-    if(tpol.no_spliced_alignment()) {
+    if(!tpol.no_spliced_alignment() && tpol.avoid_pseudogene()) {
         if(!spliced.first) {
             assert(!spliced.second);
             const index_t max_exon_size = 10000;

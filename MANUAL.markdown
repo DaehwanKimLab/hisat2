@@ -894,6 +894,17 @@ HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
 
 </td></tr>
 
+<tr><td id="hisat2-options-avoid-pseudogene">
+[`--avoid-pseudogene`]: #hisat2-options-avoid-pseudogene
+
+    --avoid-pseudogene
+
+</td><td>
+
+Try to avoid aligning reads to pseudogenes.  Note this option is experimental and needs further investigation.
+
+</td></tr>
+
 <tr><td id="hisat2-options-no-templatelen-adjustment">
 [`--no-templatelen-adjustment`]: #hisat2-options-no-templatelen-adjustment
 

@@ -263,6 +263,7 @@ static bool pseudogeneStop;
 static bool tranMapOnly; // transcriptome mapping only
 static bool tranAssm;    // alignments selected for downstream transcript assembly such as StringTie and Cufflinks
 static string tranAssm_program;
+static bool avoid_pseudogene;
 
 #ifdef USE_SRA
 static EList<string> sra_accs;
@@ -496,6 +497,7 @@ static void resetOptions() {
     tranMapOnly = false;
     tranAssm = false;
     tranAssm_program = "";
+    avoid_pseudogene = false;
     
 #ifdef USE_SRA
     sra_accs.clear();
@@ -720,6 +722,7 @@ static struct option long_options[] = {
     {(char*)"downstream-transcriptome-assembly",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
     {(char*)"dta",             no_argument,        0,        ARG_TRANSCRIPTOME_ASSEMBLY},
     {(char*)"dta-cufflinks",   no_argument,        0,        ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS},
+    {(char*)"avoid-pseudogene",no_argument,        0,        ARG_AVOID_PSEUDOGENE},
     {(char*)"no-templatelen-adjustment",    no_argument,        0,        ARG_NO_TEMPLATELEN_ADJUSTMENT},
 #ifdef USE_SRA
     {(char*)"sra-acc",         required_argument,  0,        ARG_SRA_ACC},
@@ -871,6 +874,7 @@ static void printUsage(ostream& out) {
         << "  --tmo                              reports only those alignments within known transcriptome" << endl
         << "  --dta                              reports alignments tailored for transcript assemblers" << endl
         << "  --dta-cufflinks                    reports alignments tailored specifically for cufflinks" << endl
+        << "  --avoid-pseudogene                 tries to avoid aligning reads to pseudogenes (experimental option)" << endl
         << "  --no-templatelen-adjustment        disables template length adjustment for RNA-seq reads" << endl
         << endl
 		<< " Scoring:" << endl
@@ -1667,6 +1671,10 @@ static void parseOption(int next_option, const char *arg) {
         case ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS: {
             tranAssm = true;
             tranAssm_program = "cufflinks";
+            break;
+        }
+        case ARG_AVOID_PSEUDOGENE: {
+            avoid_pseudogene = true;
             break;
         }
 #ifdef USE_SRA
@@ -3840,7 +3848,8 @@ static void driver(
                                  no_spliced_alignment,
                                  tranMapOnly,
                                  tranAssm,
-                                 xsOnly);
+                                 xsOnly,
+                                 avoid_pseudogene);
         
         GraphPolicy gpol(max_alts_tried,
                          use_haplotype,
