@@ -1503,15 +1503,15 @@ void AlnSink<index_t>::printAlSumm(
     uint64_t tot_al = (met.nconcord_uni + met.nconcord_rep) * 2 + (met.ndiscord) * 2 + met.nunp_0_uni + met.nunp_0_rep + met.nunp_uni + met.nunp_rep;
     assert_leq(tot_al, tot_al_cand);
     if(newSummary) {
-        out << "Summary stats:" << endl;
+        out << "HISAT2 summary stats:" << endl;
         if(totpair > 0) {
+            uint64_t ncondiscord_0 = met.nconcord_0 - met.ndiscord;
             out << "\tTotal pairs: " << totpair << endl;
-            out << "\t\tAligned concordantly 0 time: " << met.nconcord_0 << " ("; printPct(out, met.nconcord_0, met.npaired); out << ")" << endl;
+            out << "\t\tAligned concordantly or discordantly 0 time: " << ncondiscord_0 << " ("; printPct(out, ncondiscord_0, met.npaired); out << ")" << endl;
             out << "\t\tAligned concordantly 1 time: " << met.nconcord_uni1 << " ("; printPct(out, met.nconcord_uni1, met.npaired); out << ")" << endl;
             out << "\t\tAligned concordantly >1 times: " << met.nconcord_uni2 << " ("; printPct(out, met.nconcord_uni2, met.npaired); out << ")" << endl;
-            out << "\t\tAligned discordantly 1 time: " << met.ndiscord << " ("; printPct(out, met.ndiscord, met.nconcord_0); out << ")" << endl;
+            out << "\t\tAligned discordantly 1 time: " << met.ndiscord << " ("; printPct(out, met.ndiscord, met.npaired); out << ")" << endl;
             
-            uint64_t ncondiscord_0 = met.nconcord_0 - met.ndiscord;
             out << "\tTotal unpaired reads: " << ncondiscord_0 * 2 << endl;
             out << "\t\tAligned 0 time: " << met.nunp_0_0 << " ("; printPct(out, met.nunp_0_0, ncondiscord_0 * 2); out << ")" << endl;
             out << "\t\tAligned 1 time: " << met.nunp_0_uni1 << " ("; printPct(out, met.nunp_0_uni1, ncondiscord_0 * 2); out << ")" << endl;

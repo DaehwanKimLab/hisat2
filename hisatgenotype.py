@@ -82,6 +82,7 @@ def align_reads(base_fname,
     bamsort_cmd = ["samtools",
                    "sort",
                    "--threads", str(threads),
+                   "-m", "1536M",
                    unsorted_bam_fname,
                    "-o", bam_fname]    
     if verbose:

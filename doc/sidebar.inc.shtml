@@ -371,7 +371,8 @@
 
 <h2>Related Tools</h2>
 <div class="box">
- <ul>
+  <ul>
+    <li><a href="http://www.ccb.jhu.edu/hisat-genotype">HISAT-genotype</a>: Next-generation analysis of human genomes</li>
    <li><a href="http://www.ccb.jhu.edu/software/hisat">HISAT</a>: Fast and sensitive spliced alignment</li>
    <li><a href="http://bowtie-bio.sourceforge.net/bowtie2">Bowtie2</a>: Ultrafast read alignment</li>
    <li><a href="http://www.ccb.jhu.edu/software/tophat">TopHat2</a>: Spliced read mapper for RNA-Seq</li>

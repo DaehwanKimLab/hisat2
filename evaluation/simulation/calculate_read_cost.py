@@ -312,7 +312,7 @@ def is_small_exon_junction_read(cigars, min_exon_len = 23):
 
 """
 """
-def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
+def extract_single(infilename, outfilename, chr_dic, aligner, version, debug_dic):
     infile = open(infilename)
     outfile = open(outfilename, "w")
     prev_read_id = ""
@@ -338,8 +338,7 @@ def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
         if read_id != prev_read_id:
             num_reads += 1
 
-        flag = int(flag)
-        pos = int(pos)
+        flag, pos, mapQ = int(flag), int(pos), int(mapQ)
         if flag & 0x4 != 0:
             prev_read_id = read_id
             continue
@@ -360,7 +359,9 @@ def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
             if aligner == "hisat2":
                 if prev_read_id == read_id:
                     assert prev_NH == NH
-
+                if NH == 1 or mapQ == 60:
+                    assert NH == 1 and mapQ == 60
+                    
         if read_id != prev_read_id:
             num_aligned_reads += 1
             if aligner == "hisat2" and \
@@ -435,7 +436,7 @@ def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
         hisat2_reads, hisat2_0aligned_reads, hisat2_ualigned_reads, hisat2_maligned_reads = 0, 0, 0, 0
         for line in open(infilename + ".summary"):
             line = line.strip()
-            if line.startswith("Summary") or \
+            if line.startswith("HISAT2 summary") or \
                line.startswith("Overall"):
                 continue
             category, num = line.split(':')
@@ -459,7 +460,7 @@ def extract_single(infilename, outfilename, chr_dic, aligner, debug_dic):
 
 """
 """
-def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
+def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
     read_dic = {}
     pair_reported = set()
 
@@ -497,6 +498,7 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
         canonical_pos1, canonical_pos2 = int(pos1), int(pos2)
         left_read = (flag & 0x40 != 0)
         pos1 = canonical_pos1
+        mapQ = int(mapQ)
         if flag & 0x4 != 0:
             prev_read_id, is_prev_read_left = read_id, left_read
             continue
@@ -522,6 +524,8 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
                     assert prev_NH1 == 0 or prev_NH1 == NH
                 else:
                     assert prev_NH2 == 0 or prev_NH2 == NH
+            if NH == 1 or mapQ == 60:
+                assert NH == 1 and mapQ == 60
 
         unpaired = (flag & 0x8 != 0) or (YT in ["UU", "UP"])
         if unpaired:
@@ -529,13 +533,14 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
                 pair_list.add(left_read)
                 num_aligned_reads += 1
                 if aligner == "hisat2" and NH == 1:
-                    num_ualigned_reads += 1                
+                    num_ualigned_reads += 1
+                    assert mapQ == 60
         else:
             if read_id != prev_read_id:
                 if concordant:
                     num_conc_aligned_pairs += 1
                     if aligner == "hisat2" and NH == 1:
-                        num_conc_ualigned_pairs += 1
+                        num_conc_ualigned_pairs += 1                        
                 else:
                     if aligner == "hisat2":
                         assert YT == "DP"
@@ -646,7 +651,7 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
 
         for line in open(infilename + ".summary"):
             line = line.strip()
-            if line.startswith("Summary") or \
+            if line.startswith("HISAT2 summary") or \
                line.startswith("Overall"):
                 continue
             category, num = line.split(':')
@@ -654,19 +659,18 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, debug_dic):
             num = int(num.split(' ')[0])
             if category.startswith("Total pairs"):
                 hisat2_pairs = num
-            elif category.startswith("Aligned concordantly 0 time"):
-                hisat2_conc_0aligned_pairs = num
+            elif category.startswith("Aligned concordantly or discordantly 0 time"):
+                hisat2_0aligned_pairs = num
             elif category.startswith("Aligned concordantly 1 time"):
                 hisat2_conc_ualigned_pairs = num
             elif category.startswith("Aligned concordantly >1 time"):
                 hisat2_conc_maligned_pairs = num
-                assert hisat2_pairs == hisat2_conc_0aligned_pairs + hisat2_conc_ualigned_pairs + hisat2_conc_maligned_pairs
             elif category.startswith("Aligned discordantly"):
                 hisat2_disc_aligned_pairs = num
-                assert hisat2_disc_aligned_pairs <= hisat2_conc_0aligned_pairs
+                assert hisat2_pairs == hisat2_0aligned_pairs + hisat2_conc_ualigned_pairs + hisat2_conc_maligned_pairs + hisat2_disc_aligned_pairs
             elif category.startswith("Total unpaired reads"):
                 hisat2_reads = num
-                assert hisat2_reads == (hisat2_conc_0aligned_pairs - hisat2_disc_aligned_pairs) * 2
+                assert hisat2_reads == hisat2_0aligned_pairs * 2
             elif category.startswith("Aligned 0 time"):
                 hisat2_0aligned_reads = num
             elif category.startswith("Aligned 1 time"):
@@ -1334,7 +1338,7 @@ def calculate_read_cost(verbose):
      
     aligners = [
         # ["hisat", "", "", ""],
-        # ["hisat2", "", "", "205"],
+        ["hisat2", "", "", "205"],
         # ["hisat2", "", "snp", "203b"],
         # ["hisat2", "", "snp", "205"],
         ["hisat2", "", "", ""],
@@ -1811,9 +1815,9 @@ def calculate_read_cost(verbose):
                 if not os.path.exists(out_fname2):
                     debug_dic = {}
                     if paired:
-                        extract_pair(out_fname, out_fname2, chr_dic, aligner, debug_dic)
+                        extract_pair(out_fname, out_fname2, chr_dic, aligner, version, debug_dic)
                     else:
-                        extract_single(out_fname, out_fname2, chr_dic, aligner, debug_dic)
+                        extract_single(out_fname, out_fname2, chr_dic, aligner, version, debug_dic)
 
                 for readtype2 in readtypes:
                     if not two_step and readtype != readtype2:
