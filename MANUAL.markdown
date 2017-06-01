@@ -1610,7 +1610,7 @@ left to right, the fields are:
 4.  1-based offset into the forward reference strand where leftmost
     character of the alignment occurs
 
-5.  Mapping quality
+5.  Mapping quality.  Mapping quality of HISAT2 
 
 6.  CIGAR string representation of alignment
 
