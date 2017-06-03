@@ -1338,15 +1338,19 @@ def calculate_read_cost(verbose):
      
     aligners = [
         # ["hisat", "", "", ""],
+        # ["hisat2", "", "", "204"],
         ["hisat2", "", "", "205"],
         # ["hisat2", "", "snp", "203b"],
         # ["hisat2", "", "snp", "205"],
+        ["hisat2", "", "tran", "205"],
+        ["hisat2", "", "snp_tran", "205"],
         ["hisat2", "", "", ""],
         # ["hisat2", "", "snp", ""],
         # ["hisat2", "", "snp_noht", ""],
         # ["hisat2", "x2", "", ""],
         # ["hisat2", "x1", "tran", ""],
-        # ["hisat2", "", "tran", ""],
+        ["hisat2", "", "tran", ""],
+        ["hisat2", "", "snp_tran", ""],
         # ["hisat2", "", "", "201b"],
         # ["hisat2", "", "", ""],
         # ["hisat2", "x1", "tran", "201b"],
@@ -1390,8 +1394,8 @@ def calculate_read_cost(verbose):
     chr_dic = read_genome("../../data/%s.fa" % genome)
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     align_stat = []
-    for paired in [False, True]:
-    # for paired in [False]:
+    # for paired in [False, True]:
+    for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
@@ -1679,7 +1683,7 @@ def calculate_read_cost(verbose):
             init_time["tophat2"] = 0.0
             for aligner, type, index_type, version in aligners:
                 aligner_name = aligner + type
-                if version:
+                if version != "":
                     aligner_name += ("_%s" % version)
                 if aligner == "hisat2" and index_type != "":
                     aligner_name += ("_" + index_type)

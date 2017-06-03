@@ -113,10 +113,16 @@ def error_correct(ref_seq,
     while i < len(cmp_list):
         type, left, length = cmp_list[i][:3]
         assert length > 0
+        if left >= len(ref_seq):
+            break
         if type == "match":
             middle_cmp_list = []
             last_j = 0
             for j in range(length):
+                if read_pos + j >= len(read_seq) or \
+                   left + j >= len(ref_seq):
+                    continue
+                
                 read_bp, ref_bp = read_seq[read_pos + j], ref_seq[left + j]
                 assert left + j < len(mpileup)
                 nt_set = mpileup[left + j][0]
@@ -336,6 +342,13 @@ def typing(simulation,
                                                     gene_vars,
                                                     allow_discordant)
 
+                if base_fname == "codis":
+                    pair_interdist = typing_common.get_pair_interdist(alignview_cmd,
+                                                                      simulation,
+                                                                      verbose)
+                else:
+                    pair_interdist = None
+
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 stdout=subprocess.PIPE,
                                                 stderr=open("/dev/null", 'w'))
@@ -516,7 +529,12 @@ def typing(simulation,
                     if len(left_positive_hts) > 0 and \
                        len(right_positive_hts) > 0 and \
                        max(len(left_positive_hts), len(right_positive_hts)) >= 2:
-                        expected_inter_dist = fragment_len - read_len * 2
+                        expected_inter_dist = pair_interdist
+                        """
+                        if simulation:
+                            expected_inter_dist = fragment_len - read_len * 2
+                        """
+                            
                         best_diff = sys.maxint
                         picked = []                                
                         for left_ht_str in left_positive_hts:
@@ -845,19 +863,19 @@ def typing(simulation,
                             cmp_list.append(["deletion", right_pos, length, _var_id])
 
                             # Check if this deletion is artificial alignment
-                            assert right_pos < mpileup
-                            del_count, nt_count = 0, 0
-                            for nt, value in mpileup[right_pos][1].items():
-                                count = value[0]
-                                if nt == 'D':
-                                    del_count += count
-                                else:
-                                    nt_count += count
-                                    
-                            # DK - debugging purposes
-                            if base_fname == "hla":
-                                if del_count * 6 < nt_count: # and nt_count >= 15:
-                                    likely_misalignment = True
+                            if right_pos < len(mpileup):
+                                del_count, nt_count = 0, 0
+                                for nt, value in mpileup[right_pos][1].items():
+                                    count = value[0]
+                                    if nt == 'D':
+                                        del_count += count
+                                    else:
+                                        nt_count += count
+
+                                # DK - debugging purposes
+                                if base_fname == "hla":
+                                    if del_count * 6 < nt_count: # and nt_count >= 15:
+                                        likely_misalignment = True
                             
                         elif cigar_op == 'S':
                             if i == 0:
@@ -986,7 +1004,7 @@ def typing(simulation,
 
                     if read_id != prev_read_id:
                         if prev_read_id != None:
-                            num_pairs += 1                            
+                            num_pairs += 1
                             if base_fname == "codis" and gene == "D18S51":
                                 left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)
 

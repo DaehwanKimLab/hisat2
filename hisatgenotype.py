@@ -89,7 +89,13 @@ def align_reads(base_fname,
         print >> sys.stderr, "\t%s" % ' '.join(bamsort_cmd)
     bamsort_proc = subprocess.call(bamsort_cmd)
     os.remove(unsorted_bam_fname)
+    
+    return bam_fname
 
+
+"""
+"""
+def index_bam(bam_fname):
     print >> sys.stderr, "%s Indexing %s ..." % (str(datetime.now()), bam_fname)
     bamindex_cmd = ["samtools",
                     "index",
@@ -97,8 +103,6 @@ def align_reads(base_fname,
     if verbose:
         print >> sys.stderr, "\t%s" % ' '.join(bamindex_cmd)
     bamindex_proc = subprocess.call(bamindex_cmd)
-
-    return bam_fname
 
 
 """
@@ -230,11 +234,13 @@ def perform_genotyping(base_fname,
                        fastq,
                        num_editdist,
                        assembly,
+                       local_database,
                        threads,
                        verbose):
-    genotype_cmd = ["hisatgenotype_locus.py",
-                    "--genotype-genome", base_fname,
-                    "--base", database]
+    genotype_cmd = ["hisatgenotype_locus.py"]
+    if not local_database:
+        genotype_cmd += ["--genotype-genome", base_fname]
+    genotype_cmd += ["--base", database]
     if len(locus_list) > 0:
         genotype_cmd += ["--locus-list", ','.join(locus_list)]
     genotype_cmd += ["-p", str(threads),
@@ -246,7 +252,7 @@ def perform_genotyping(base_fname,
         genotype_cmd += ["-1", read_fnames[0],
                          "-2", read_fnames[1]]
     elif len(read_fnames) == 1:
-        genotype_cmd += ["-U", read_fname[0]] 
+        genotype_cmd += ["-U", read_fnames[0]] 
     else:
         assert len(read_fnames) == 0
 
@@ -265,9 +271,11 @@ def genotype(base_fname,
              target_region_list,
              fastq,
              read_fnames,
+             alignment_fname,
              threads,
              num_editdist,
              assembly,
+             local_database,
              verbose,
              debug):
     # variants, backbone sequence, and other sequeces
@@ -312,11 +320,16 @@ def genotype(base_fname,
         sys.exit(1)
 
     # Align reads, and sort the alignments into a BAM file
-    bam_fname = align_reads(base_fname,
-                            read_fnames,
-                            fastq,
-                            threads,
-                            verbose)
+    if len(read_fnames) > 0:
+        alignment_fname = align_reads(base_fname,
+                                      read_fnames,
+                                      fastq,
+                                      threads,
+                                      verbose)
+    assert alignment_fname != "" and os.path.exists(alignment_fname)
+    if not os.path.exists(alignment_fname + ".bai"):
+        index_bam(alignment_fname)
+    assert os.path.exists(alignment_fname + ".bai")
 
     # Extract reads and perform genotyping
     for family, loci in region_loci.items():
@@ -327,12 +340,12 @@ def genotype(base_fname,
                 print >> sys.stderr, "\tExtracting reads beloning to %s-%s ..." % \
                     (family, locus_name)
 
-            extracted_read_fnames = extract_reads(bam_fname,
+            extracted_read_fnames = extract_reads(alignment_fname,
                                                   chr,
                                                   left,
                                                   right,
                                                   out_read_fname,
-                                                  len(read_fnames) == 2, # paired?
+                                                  len(read_fnames) != 1, # paired?
                                                   fastq,
                                                   verbose)
 
@@ -343,6 +356,7 @@ def genotype(base_fname,
                                fastq,
                                num_editdist,
                                assembly,
+                               local_database,
                                threads,
                                verbose)
         print >> sys.stderr
@@ -382,7 +396,12 @@ if __name__ == '__main__':
                         dest="read_fname_2",
                         type=str,
                         default="",
-                        help="filename for paired-end reads")    
+                        help="filename for paired-end reads")
+    parser.add_argument("--alignment-file",
+                        dest="alignment_fname",
+                        type=str,
+                        default="",
+                        help="Sorted BAM alignment file name")
     parser.add_argument("-p", "--threads",
                         dest="threads",
                         type=int,
@@ -396,7 +415,11 @@ if __name__ == '__main__':
     parser.add_argument('--assembly',
                         dest='assembly',
                         action='store_true',
-                        help='Perform assembly')    
+                        help='Perform assembly')
+    parser.add_argument('--local-database',
+                        dest='local_database',
+                        action='store_true',
+                        help='Use local database')    
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -423,8 +446,12 @@ if __name__ == '__main__':
                 region_list[family] = set()
             if len(region) == 2:
                 region_list[family].add(locus_name)
-    
-    if args.read_fname_U != "":
+
+    read_fnames = []
+    if args.alignment_fname != "":
+        if not os.path.exists(args.alignment_fname):
+            print >> sys.stderr, "Error: %s does not exist." % args.alignment_fname
+    elif args.read_fname_U != "":
         read_fnames = [args.read_fname_U]
     else:
         if args.read_fname_1 == "" or args.read_fname_2 == "":
@@ -445,9 +472,11 @@ if __name__ == '__main__':
              region_list,
              args.fastq,
              read_fnames,
+             args.alignment_fname,
              args.threads,
              args.num_editdist,
              args.assembly,
+             args.local_database,
              args.verbose,
              debug)
 

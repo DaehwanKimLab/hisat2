@@ -26,7 +26,7 @@
             <li>HISAT2 can be directly compiled and executed on Windows system using Visual Studio, thanks to <a href="http://www2.warwick.ac.uk/fac/sci/systemsbiology/staff/dyer/"Nigel Dyer.</a> </li>
             <li>Implemented --new-summary option to output a new style of alignment summary, which is easier to parse for programming purposes.</li>
             <li>Implemented --summary-file option to output alignment summary to a file in addition to the terminal (e.g. stderr).</li>
-            <li>Implemented --no-templatelen-adjustment option to disable automaticc template length adjustment for RNA-seq reads.</li>
+            <li>Implemented --no-templatelen-adjustment option to disable automatic template length adjustment for RNA-seq reads.</li>
 	  </ul>
 	  <br/>	  
 	  

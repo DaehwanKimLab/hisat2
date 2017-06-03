@@ -713,10 +713,11 @@ def get_mpileup(alignview_cmd,
                         read_nt = read_seq[read_pos + j]
                     else:
                         read_nt = 'D'
-                    if read_nt not in mpileup[right_pos + j][1]:
-                        mpileup[right_pos + j][1][read_nt] = 1
-                    else:
-                        mpileup[right_pos + j][1][read_nt] += 1
+                    if right_pos + j < len(mpileup):
+                        if read_nt not in mpileup[right_pos + j][1]:
+                            mpileup[right_pos + j][1][read_nt] = 1
+                        else:
+                            mpileup[right_pos + j][1][read_nt] += 1
 
             if cigar_op in "MND":
                 right_pos += length
@@ -787,6 +788,86 @@ def get_mpileup(alignview_cmd,
         mpileup[i][1] = new_nt_dic
 
     return mpileup
+
+
+"""
+"""
+def get_pair_interdist(alignview_cmd,
+                       simulation,
+                       verbose):
+    bamview_proc = subprocess.Popen(alignview_cmd,
+                                    stdout=subprocess.PIPE,
+                                    stderr=open("/dev/null", 'w'))
+    sort_read_cmd = ["sort", "-k", "1,1", "-s"] # -s for stable sorting
+    alignview_proc = subprocess.Popen(sort_read_cmd,
+                                      stdin=bamview_proc.stdout,
+                                      stdout=subprocess.PIPE,
+                                      stderr=open("/dev/null", 'w'))
+
+    dist_list = []
+    prev_read_id = None
+    cigar_re = re.compile('\d+\w')
+    reads = []
+    for line in alignview_proc.stdout:
+        line = line.strip()
+        cols = line.split()
+        read_id, flag, _, pos, _, cigar_str = cols[:6]
+        read_seq = cols[9]
+        flag, pos = int(flag), int(pos)
+        # Unalined?
+        if flag & 0x4 != 0:
+            continue
+
+        if simulation:
+            read_id = read_id.split('|')[0]
+
+        # Concordantly mapped?
+        if flag & 0x2 != 0:
+            concordant = True
+        else:
+            concordant = False
+
+        NH, YT = sys.maxint, ""
+        for i in range(11, len(cols)):
+             col = cols[i]
+             if col.startswith("NH"):
+                 NH = int(col[5:])
+             elif col.startswith("YT"):
+                 YT = col[5:]
+        if NH > 1 or YT != "CP":
+            continue
+
+        if prev_read_id != None and read_id != prev_read_id:
+            if len(reads) == 2:
+                left1, right1 = reads[0]
+                left2, right2 = reads[1]
+                if left1 <= left2:
+                    dist = left2 - right1 - 1
+                else:
+                    dist = left1 - right2 - 1
+                dist_list.append(dist)
+            reads = []
+
+        left_pos = right_pos =  pos
+        cigars = cigar_re.findall(cigar_str)
+        cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+        for i in range(len(cigars)):
+            cigar_op, length = cigars[i]
+            if cigar_op in "MND":
+                right_pos += length
+
+        reads.append([left_pos, right_pos - 1])
+        
+        prev_read_id = read_id
+
+    dist_list = sorted(dist_list)
+    dist_avg = sum(dist_list) / max(1, len(dist_list))
+    if len(dist_list) > 0:
+        dist_median = dist_list[len(dist_list)/2]
+    else:
+        dist_median = -1
+
+    return dist_median
 
 
 ##################################################
