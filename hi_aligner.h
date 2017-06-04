@@ -2527,10 +2527,10 @@ void add_haplotypes(
         if(initial) {
             for(; ht_range.first >= 0; ht_range.first--) {
                 const Haplotype<index_t>& ht = haplotypes[ht_range.first];
-                if(ht.right < cmp_ht.left || ht.left > cmp_ht.left) continue;
                 index_t ht_maxright = haplotype_maxrights[ht_range.first];
                 assert_geq(ht_maxright, ht.right);
                 if(ht_maxright < cmp_ht.left) break;
+                if(ht.right < cmp_ht.left || ht.left > cmp_ht.left) continue;
                 if(ht.alts.size() <= 0) continue;
                 bool added = false;
                 for(index_t h = 0; h < ht_list.size(); h++) {
@@ -2557,7 +2557,7 @@ void add_haplotypes(
                 }
             }
         }
-        
+
         for(; ht_range.second < haplotypes.size(); ht_range.second++) {
                 const Haplotype<index_t>& ht = haplotypes[ht_range.second];
                 if(ht.left < cmp_ht.right) continue;
