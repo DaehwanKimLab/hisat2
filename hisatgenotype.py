@@ -89,13 +89,17 @@ def align_reads(base_fname,
         print >> sys.stderr, "\t%s" % ' '.join(bamsort_cmd)
     bamsort_proc = subprocess.call(bamsort_cmd)
     os.remove(unsorted_bam_fname)
+
+    index_bam(bam_fname,
+              verbose)
     
     return bam_fname
 
 
 """
 """
-def index_bam(bam_fname):
+def index_bam(bam_fname,
+              verbose):
     print >> sys.stderr, "%s Indexing %s ..." % (str(datetime.now()), bam_fname)
     bamindex_cmd = ["samtools",
                     "index",
@@ -182,6 +186,7 @@ def extract_reads(bam_fname,
             elif col.startswith("NH"):
                 NH = int(col[5:])
 
+        # DK - check this out
         simulation = True
         if (not simulation and read_name != prev_read_name) or \
            (simulation and read_name.split('|')[0] != prev_read_name.split('|')[0]):
@@ -328,7 +333,8 @@ def genotype(base_fname,
                                       verbose)
     assert alignment_fname != "" and os.path.exists(alignment_fname)
     if not os.path.exists(alignment_fname + ".bai"):
-        index_bam(alignment_fname)
+        index_bam(alignment_fname,
+                  verbose)
     assert os.path.exists(alignment_fname + ".bai")
 
     # Extract reads and perform genotyping
