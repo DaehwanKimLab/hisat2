@@ -333,7 +333,7 @@ def genotype(base_fname,
 
     # Extract reads and perform genotyping
     for family, loci in region_loci.items():
-        print >> sys.stderr, "Anaylzing %s ..." % family.upper()
+        print >> sys.stderr, "Analyzing %s ..." % family.upper()
         for locus_name, allele_name, chr, left, right in loci:
             out_read_fname = "%s.%s" % (family, locus_name)
             if verbose:
