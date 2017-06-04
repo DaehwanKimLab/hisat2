@@ -1286,6 +1286,7 @@ def identify_ambigious_diffs(ref_seq,
     # Left direction
     found = False
     for i in reversed(range(len(cmp_list))):
+        i_found = False
         cmp_i = cmp_list[i]
         type, cur_left, length = cmp_i[:3]
         var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
@@ -1298,22 +1299,20 @@ def identify_ambigious_diffs(ref_seq,
         if type in ["match", "deletion"]:
             cur_right = cur_left + length - 1
         else:
-            cur_right = cur_left            
+            cur_right = cur_left
 
         cur_ht, cur_seq = get_haplotype_and_seq(cmp_list[:i+1])
         if len(cur_ht) == 0:
             cur_ht_str = str(left)
         else:
             cur_ht_str = "%d-%s" % (left, '-'.join(cur_ht))
-
         ht_i = lower_bound(Alts_left_list, cur_right + 1)
         for ht_j in reversed(range(0, min(ht_i + 1, len(Alts_left_list)))):
             ht_pos, ht = Alts_left_list[ht_j]
             if ht_pos < cur_left:
-                break
+                break            
             if ht_pos > cur_right:
                 continue
-
             if len(cur_ht) > 0:
                 if ht.find('-'.join(cur_ht)) == -1:
                     continue
@@ -1327,10 +1326,10 @@ def identify_ambigious_diffs(ref_seq,
                 if ht_type == "deletion":
                     ht_pos = ht_pos + int(ht_data) - 1
                     
-            if left <= ht_pos:
+            if left < ht_pos:
                 continue
 
-            found = True
+            i_found = True
 
             if debug:
                 print cmp_list[:i+1]
@@ -1374,16 +1373,28 @@ def identify_ambigious_diffs(ref_seq,
 
                 if len(part_alt_ht) > 0:
                     seq_left = len(cur_seq) - seq_pos - 1
-                    part_alt_ht_str = "%d-%s" % (cur_pos - seq_left, '-'.join(part_alt_ht))
+                    part_alt_ht_str = ""
+                    if found:
+                        var_id_list = []
+                        for j in range(i + 1, cmp_j):
+                            cmp_j = cmp_list[j]
+                            if cmp_j[0] in ["mismatch", "deletion", "insertion"]:
+                                var_id_ = cmp_j[3]
+                                if var_id_.startswith("hv"):
+                                    var_id_list.append(var_id_)
+                        if len(var_id_list) > 0:
+                            part_alt_ht_str = '-' + '-'.join(var_id_list)
+                    part_alt_ht_str = ("%d-%s" % (cur_pos - seq_left, '-'.join(part_alt_ht))) + part_alt_ht_str
                     left_alt_set.add(part_alt_ht_str)
                         
                 if debug:
                     print "\t\t", cur_left, alt_ht_str
 
-        if found:
-            cmp_left = i + 1
-            left_alt_set.add(cur_ht_str)
-            break
+        if i_found:
+            if not found:
+                cmp_left = i + 1
+                left_alt_set.add(cur_ht_str)
+            found = True
 
     if not found:
         left_alt_set.add(str(left))
@@ -1391,6 +1402,7 @@ def identify_ambigious_diffs(ref_seq,
     # Right direction
     found = False
     for i in range(0, len(cmp_list)):
+        i_found = False
         cmp_i = cmp_list[i]
         type, cur_left, length = cmp_i[:3]
         var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
@@ -1430,10 +1442,10 @@ def identify_ambigious_diffs(ref_seq,
                 var_id2 = ht[len(cur_ht)]
                 _, ht_pos, _ = Vars[var_id2]
 
-            if right >= ht_pos:
+            if right > ht_pos:
                 continue
 
-            found = True
+            i_found = True
             _, rep_ht = Alts_right_list[ht_j]
 
             # DK - debugging purposes
@@ -1473,13 +1485,25 @@ def identify_ambigious_diffs(ref_seq,
 
                 if len(part_alt_ht) > 0:
                     seq_left = len(cur_seq) - seq_pos - 1
-                    part_alt_ht_str = "%s-%d" % ('-'.join(part_alt_ht), cur_pos + seq_left)
+                    part_alt_ht_str = ""
+                    if found:
+                        var_id_list = []
+                        for j in range(cmp_right + 1, i):
+                            cmp_j = cmp_list[j]
+                            if cmp_j[0] in ["mismatch", "deletion", "insertion"]:
+                                var_id_ = cmp_j[3]
+                                if var_id_.startswith("hv"):
+                                    var_id_list.append(var_id_)
+                        if len(var_id_list) > 0:
+                            part_alt_ht_str = '-'.join(var_id_list) + '-'
+                    part_alt_ht_str += ("%s-%d" % ('-'.join(part_alt_ht), cur_pos + seq_left))
                     right_alt_set.add(part_alt_ht_str)
                         
-        if found:
-            cmp_right = i - 1
-            right_alt_set.add(cur_ht_str)
-            break
+        if i_found:            
+            if not found:
+                cmp_right = i - 1
+                right_alt_set.add(cur_ht_str)
+            found = True
 
     if not found:
         right_alt_set.add(str(right))

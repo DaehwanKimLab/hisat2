@@ -287,8 +287,8 @@ def typing(simulation,
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
             gene_del_var_list = []
-            for var_id, var_data in gene_vars.items():
-                var_type, var_pos, var_data = var_data
+            for var_pos, var_id in gene_var_list:
+                var_type, var_pos, var_data = gene_vars[var_id]
                 if var_type != "deletion":
                     continue
                 gene_del_var_list.append([var_pos, var_pos + int(var_data) - 1, var_id])
@@ -510,15 +510,20 @@ def typing(simulation,
                             continue
                         tmp_alleles |= set(Links[var_id])
 
+                    # DK - check this out
+                    # var_idx = typing_common.lower_bound(gene_del_var_list, left)
+                    var_idx = 0
                     for var_idx in range(var_idx, len(gene_del_var_list)):
                         var_left, var_right, var_id = gene_del_var_list[var_idx]
+                        assert var_left <= var_right
+                        if var_left > right:
+                            break
                         if var_id in ht:
                             continue
                         if var_right < left or var_left > right:
                             continue
                         tmp_alleles |= set(Links[var_id])
                     alleles -= tmp_alleles
-                    
                     for allele in alleles:
                         count_per_read[allele] += add
 
@@ -1018,7 +1023,11 @@ def typing(simulation,
                                     add_count(Gene_count_per_read, exon_ht, 1)
                                 add_count(Gene_gen_count_per_read, positive_ht, 1)
 
-                            # DK - debugging purpose
+                            # DK - debugging purposes
+                            if prev_read_id.startswith("a30"):
+                                print Gene_gen_count_per_read
+
+                            # DK - debugging purposes
                             """
                             debug_allele_id = "A*02:406"
                             assert debug_allele_id in Gene_count_per_read
@@ -1046,6 +1055,7 @@ def typing(simulation,
                             """
                                 
 
+                            cur_cmpt, cur_cmpt_gen = "", ""
                             if base_fname == "hla":
                                 cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
                                 cur_cmpt_gen = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
@@ -1109,7 +1119,7 @@ def typing(simulation,
                                                            Alts_right_list,
                                                            cmp_list2,
                                                            verbose,
-                                                           orig_read_id.startswith("aHSQ1008:175:C0JVFACXX:5:1109:17665:21583"))  # debug?
+                                                           orig_read_id.startswith("a30|R"))  # debug?
 
                     mid_ht = []
                     for cmp in cmp_list2[cmp_list_left:cmp_list_right+1]:
@@ -1135,22 +1145,14 @@ def typing(simulation,
                             else:
                                 right_positive_hts.add(ht_str)
 
-                    # DK - debugging purpose
-                    if read_id == "aHSQ1008:175:C0JVFACXX:5:1109:17665:21583":
-                        print cmp_list, cmp_list_left, cmp_list_right
-                        print line
-                        print "left:", left_positive_hts
-                        print "right:", right_positive_hts
-
-
                     # DK - debugging purposes
                     DK_debug = False
-                    if orig_read_id.startswith("a59|L"):
+                    if orig_read_id.startswith("a30|R"):
                         DK_debug = True
                         print line
                         print cmp_list
                         print "positive hts:", left_positive_hts, right_positive_hts
-                        print "cmp_list[%d, %d]" % (cmp_list_left, cmp_list_right)
+                        print "cmp_list [%d, %d]" % (cmp_list_left, cmp_list_right)
 
                     # Node
                     read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
@@ -1207,10 +1209,6 @@ def typing(simulation,
                                                                gene_vars,
                                                                mpileup,
                                                                simulation)])
-
-                    # DK - debugging purposes
-                    if DK_debug:
-                        print "count_per_read:", Gene_gen_count_per_read
 
                     prev_read_id = read_id
                     prev_right_pos = right_pos
