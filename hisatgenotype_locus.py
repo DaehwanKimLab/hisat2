@@ -286,15 +286,14 @@ def typing(simulation,
             
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
-            gene_var_maxright_list = []
+            cur_maxright = -1
+            gene_var_maxrights = {}
             for var_pos, var_id in gene_var_list:
                 var_type, var_pos, var_data = gene_vars[var_id]
                 if var_type == "deletion":
                     var_pos = var_pos + int(var_data) - 1
-                if len(gene_var_maxright_list) == 0:
-                    gene_var_maxright_list.append(var_pos)
-                else:
-                    gene_var_maxright_list.append(max(var_pos, gene_var_maxright_list[-1]))
+                cur_maxright = max(cur_maxright, var_pos)
+                gene_var_maxrights[var_id] = cur_maxright
                     
             var_count = {}
             def add_novel_var(gene_vars,
@@ -504,12 +503,12 @@ def typing(simulation,
                     var_idx = typing_common.lower_bound(gene_var_list, right + 1)
                     var_idx = min(var_idx, len(gene_var_list) - 1)
                     while var_idx >= 0:
-                        if gene_var_maxright_list[var_idx] < left:
-                            break
                         _, var_id = gene_var_list[var_idx]
                         if var_id.startswith("nv") or var_id in ht:
                             var_idx -= 1
                             continue
+                        if var_id in gene_var_maxrights and gene_var_maxrights[var_id] < left:
+                            break
                         var_type, var_left, var_data = gene_vars[var_id]
                         var_right = var_left
                         if var_type == "deletion":
@@ -1959,7 +1958,7 @@ def genotyping_locus(base_fname,
                     test_list.append([[allele]])
                 random.shuffle(test_list)
         if pair_test:
-            test_size = 500
+            test_size = 200
             allele_count = 2
             for test_i in range(test_size):
                 test_pairs = []

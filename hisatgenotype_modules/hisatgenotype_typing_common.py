@@ -1338,7 +1338,9 @@ def identify_ambigious_diffs(ref_seq,
             _, rep_ht = Alts_left_list[ht_j]
 
             if debug:
-                print "\t\t", rep_ht, Alts_left[rep_ht], cur_seq
+                print "DK1:", cmp_i, cmp_list
+                print "DK2:", rep_ht, Alts_left[rep_ht]
+                print "DK3:", left, right, ht_pos
 
             for alt_ht_str in Alts_left[rep_ht]:
                 alt_ht = alt_ht_str.split('-')
@@ -1359,24 +1361,24 @@ def identify_ambigious_diffs(ref_seq,
                         break
                     if var_type_ == "single":
                         next_seq_pos += 1
-                        cur_pos = var_pos_ - 1
+                        next_cur_pos = var_pos_ - 1
                     elif var_type_ == "deletion":
-                        cur_pos = var_pos_ - del_len
+                        next_cur_pos = var_pos_ - del_len
                     else:
                         assert var_type_ == "insertion"
                         assert False
 
+                    part_alt_ht.insert(0, var_id_)
                     if next_seq_pos >= len(cur_seq):
                         break
-                    part_alt_ht.insert(0, var_id_)
-                    seq_pos = next_seq_pos
+                    seq_pos, cur_pos = next_seq_pos, next_cur_pos
 
                 if len(part_alt_ht) > 0:
                     seq_left = len(cur_seq) - seq_pos - 1
                     part_alt_ht_str = ""
                     if found:
                         var_id_list = []
-                        for j in range(i + 1, cmp_j):
+                        for j in range(i + 1, cmp_left):
                             cmp_j = cmp_list[j]
                             if cmp_j[0] in ["mismatch", "deletion", "insertion"]:
                                 var_id_ = cmp_j[3]
@@ -1448,7 +1450,6 @@ def identify_ambigious_diffs(ref_seq,
             i_found = True
             _, rep_ht = Alts_right_list[ht_j]
 
-            # DK - debugging purposes
             if debug:
                 print "DK1:", cmp_i, cmp_list
                 print "DK2:", rep_ht, Alts_right[rep_ht]
@@ -1471,20 +1472,21 @@ def identify_ambigious_diffs(ref_seq,
                     
                     if var_type_ == "single":
                         next_seq_pos += 1
-                        cur_pos = var_pos_ + 1
+                        next_cur_pos = var_pos_ + 1
                     elif var_type_ == "deletion":
-                        cur_pos = var_pos_ + int(var_data_)
+                        next_cur_pos = var_pos_ + int(var_data_)
                     else:
                         assert var_type_ == "insertion"
                         assert False
 
+                    part_alt_ht.append(var_id_)
                     if next_seq_pos >= len(cur_seq):
                         break
-                    part_alt_ht.append(var_id_)
-                    seq_pos = next_seq_pos
+                    seq_pos, cur_pos = next_seq_pos, next_cur_pos
 
                 if len(part_alt_ht) > 0:
                     seq_left = len(cur_seq) - seq_pos - 1
+                    assert seq_left >= 0
                     part_alt_ht_str = ""
                     if found:
                         var_id_list = []
@@ -1520,6 +1522,12 @@ def identify_ambigious_diffs(ref_seq,
             continue
         if ht in ht_set_:
             print >> sys.stderr, "Error) %s should not be in" % ht, ht_set_
+
+            # DK - debugging purposes
+            print "DK: cmp_list_range: [%d, %d]" % (cmp_left, cmp_right)
+            print "DK: cmp_list:", cmp_list
+            print "DK: left_alt_set:", left_alt_set, "right_alt_set:", right_alt_set
+            
             assert False
         ht_set_.add(ht)
     for ht in right_alt_set:
@@ -1531,7 +1539,6 @@ def identify_ambigious_diffs(ref_seq,
             assert False
         ht_set_.add(ht)
 
-    # DK - debugging purposes
     if debug:
         print "cmp_list_range: [%d, %d]" % (cmp_left, cmp_right)
         print "left  alt set:", left_alt_set
