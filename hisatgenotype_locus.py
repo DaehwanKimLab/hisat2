@@ -286,12 +286,16 @@ def typing(simulation,
             
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
-            gene_del_var_list = []
+            gene_var_maxright_list = []
             for var_pos, var_id in gene_var_list:
                 var_type, var_pos, var_data = gene_vars[var_id]
-                if var_type != "deletion":
-                    continue
-                gene_del_var_list.append([var_pos, var_pos + int(var_data) - 1, var_id])
+                if var_type == "deletion":
+                    var_pos = var_pos + int(var_data) - 1
+                if len(gene_var_maxright_list) == 0:
+                    gene_var_maxright_list.append(var_pos)
+                else:
+                    gene_var_maxright_list.append(max(var_pos, gene_var_maxright_list[-1]))
+                    
             var_count = {}
             def add_novel_var(gene_vars,
                               gene_var_list,
@@ -497,33 +501,25 @@ def typing(simulation,
                     ht = set(ht)
 
                     tmp_alleles = set()
-                    var_idx = typing_common.lower_bound(gene_var_list, left)
-                    for var_idx in range(var_idx, len(gene_var_list)):
-                        var_pos, var_id = gene_var_list[var_idx]
-                        if var_pos > right:
+                    var_idx = typing_common.lower_bound(gene_var_list, right + 1)
+                    var_idx = min(var_idx, len(gene_var_list) - 1)
+                    while var_idx >= 0:
+                        if gene_var_maxright_list[var_idx] < left:
                             break
-                        if var_pos < left or var_id in ht:
+                        _, var_id = gene_var_list[var_idx]
+                        if var_id.startswith("nv") or var_id in ht:
+                            var_idx -= 1
                             continue
-                        if var_id in ht:
-                            continue
-                        if var_id.startswith("nv"):
-                            continue
-                        tmp_alleles |= set(Links[var_id])
-
-                    # DK - check this out
-                    # var_idx = typing_common.lower_bound(gene_del_var_list, left)
-                    var_idx = 0
-                    for var_idx in range(var_idx, len(gene_del_var_list)):
-                        var_left, var_right, var_id = gene_del_var_list[var_idx]
-                        assert var_left <= var_right
-                        if var_left > right:
-                            break
-                        if var_id in ht:
-                            continue
-                        if var_right < left or var_left > right:
-                            continue
-                        tmp_alleles |= set(Links[var_id])
+                        var_type, var_left, var_data = gene_vars[var_id]
+                        var_right = var_left
+                        if var_type == "deletion":
+                            var_right = var_left + int(var_data) - 1
+                        if (var_left >= left and var_left <= right) or \
+                           (var_right >= left and var_right <= right):
+                            tmp_alleles |= set(Links[var_id])
+                        var_idx -= 1                        
                     alleles -= tmp_alleles
+                    
                     for allele in alleles:
                         count_per_read[allele] += add
 
