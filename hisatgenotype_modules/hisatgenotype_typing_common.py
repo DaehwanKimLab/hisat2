@@ -234,9 +234,9 @@ def extract_database_if_not_exists(base,
         return
 
     extract_cmd = ["hisatgenotype_extract_vars.py"]
-    if len(locus_list) > 0:
-        extract_cmd += ["--locus-list", ','.join(locus_list)]
     extract_cmd += ["--base", base]
+    if len(locus_list) > 0:
+        extract_cmd += ["--locus-list", ','.join(locus_list)]    
     if not partial:
         extract_cmd += ["--no-partial"]
     if base == "codis":
@@ -246,6 +246,7 @@ def extract_database_if_not_exists(base,
                         "--intra-gap", str(intra_gap)]
     if base == "hla":
         extract_cmd += ["--min-var-freq", "0.1"]
+
     if base == "codis":
         extract_cmd += ["--leftshift"]
 

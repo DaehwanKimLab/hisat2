@@ -912,7 +912,7 @@ def extract_vars(base_fname,
                     exons_.append([exon_left, exon_right])
 
                 backbone_seq_ = backbone_seq.replace('.', '')
-                if ref_gene in Vars:
+                if ref_gene in Vars_:
                     vars_ = Vars_[ref_gene]
                 else:
                     vars_ = []
