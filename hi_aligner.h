@@ -2621,6 +2621,14 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
     if(ht_llist.size() <= dep) ht_llist.expand();
     if(raw_refbufs.size() <= dep) raw_refbufs.expand();
     if(rfoff < -16) return 0;
+    size_t contig_len = ref.approxLen(tidx);
+    if(rfoff >= contig_len) return 0;
+    if(rfoff >= 0 && rfoff + rflen > contig_len) {
+        rflen = contig_len - rfoff;
+    } else if(rfoff < 0 && rflen > contig_len) {
+        rflen = contig_len;
+    }
+    if(rflen == 0) return 0;
     if(rfseq == NULL) {
         SStringExpandable<char>& raw_refbuf = raw_refbufs[dep];
         raw_refbuf.resize(rflen + 16 + 16);
