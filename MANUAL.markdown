@@ -793,7 +793,8 @@ than using this option.  It has no effect to provide splice sites that are alrea
 </td><td>
 
 In this mode, HISAT2 reports a list of splice sites in the file <path>:  
-   chromosome name `<tab>` genomic position of the flanking base on the left side of an intron `<tab>` genomic position of the flanking base on the right `<tab>` strand
+   chromosome name `<tab>` genomic position of the flanking base on the left side of an intron `<tab>` genomic position of the flanking base on the right `<tab>` strand (+, -, and .)
+   '.' indicates an unknown strand for non-canonical splice sites.
 
 </td></tr>
 
@@ -890,6 +891,28 @@ which helps transcript assemblers improve significantly in computation and memor
 Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta),
 With this option, HISAT2 looks for novel splice sites with three signals (GT/AG, GC/AG, AT/AC), but all user-provided splice sites are used irrespective of their signals.
 HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
+
+</td></tr>
+
+<tr><td id="hisat2-options-avoid-pseudogene">
+[`--avoid-pseudogene`]: #hisat2-options-avoid-pseudogene
+
+    --avoid-pseudogene
+
+</td><td>
+
+Try to avoid aligning reads to pseudogenes.  Note this option is experimental and needs further investigation.
+
+</td></tr>
+
+<tr><td id="hisat2-options-no-templatelen-adjustment">
+[`--no-templatelen-adjustment`]: #hisat2-options-no-templatelen-adjustment
+
+    --no-templatelen-adjustment
+
+</td><td>
+
+Disables template length adjustment for RNA-seq reads.
 
 </td></tr>
 
@@ -1174,6 +1197,31 @@ in the same order as they did in the inputs.
 Print nothing besides alignments and serious errors.
 
 </td></tr>
+
+<tr><td id="hisat2-summary-file">
+
+[`--summary-file`]: #hisat2-options-summary-file
+
+    --summary-file
+
+</td><td>
+
+Print alignment summary to this file.
+
+</td></tr>
+
+<tr><td id="hisat2-new-summary">
+
+[`--new-summary`]: #hisat2-options-new-summary
+
+    --new-summary
+
+</td><td>
+
+Print alignment summary in a new style, which is more machine-friendly.
+
+</td></tr>
+
 <tr><td id="hisat2-options-met-file">
 
 [`--met-file`]: #hisat2-options-met-file
@@ -1562,7 +1610,7 @@ left to right, the fields are:
 4.  1-based offset into the forward reference strand where leftmost
     character of the alignment occurs
 
-5.  Mapping quality
+5.  Mapping quality.  Mapping quality of HISAT2 
 
 6.  CIGAR string representation of alignment
 

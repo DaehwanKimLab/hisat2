@@ -263,6 +263,7 @@ static bool pseudogeneStop;
 static bool tranMapOnly; // transcriptome mapping only
 static bool tranAssm;    // alignments selected for downstream transcript assembly such as StringTie and Cufflinks
 static string tranAssm_program;
+static bool avoid_pseudogene;
 
 #ifdef USE_SRA
 static EList<string> sra_accs;
@@ -280,6 +281,12 @@ static bool rmChrName;  // remove "chr" from reference names (e.g., chr18 to 18)
 static bool addChrName; // add "chr" to reference names (e.g., 18 to chr18)
 
 static size_t max_alts_tried;
+static bool use_haplotype;
+static bool enable_codis;
+
+static bool templateLenAdjustment;
+static string alignSumFile; // write alignment summary stat. to this file
+static bool newAlignSummary;
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -490,6 +497,7 @@ static void resetOptions() {
     tranMapOnly = false;
     tranAssm = false;
     tranAssm_program = "";
+    avoid_pseudogene = false;
     
 #ifdef USE_SRA
     sra_accs.clear();
@@ -499,6 +507,12 @@ static void resetOptions() {
     addChrName = false;
     
     max_alts_tried = 16;
+    use_haplotype = false;
+    enable_codis = false;
+    
+    templateLenAdjustment = true;
+    alignSumFile = "";
+    newAlignSummary = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -708,12 +722,18 @@ static struct option long_options[] = {
     {(char*)"downstream-transcriptome-assembly",   no_argument, 0,        ARG_TRANSCRIPTOME_ASSEMBLY},
     {(char*)"dta",             no_argument,        0,        ARG_TRANSCRIPTOME_ASSEMBLY},
     {(char*)"dta-cufflinks",   no_argument,        0,        ARG_TRANSCRIPTOME_ASSEMBLY_CUFFLINKS},
+    {(char*)"avoid-pseudogene",no_argument,        0,        ARG_AVOID_PSEUDOGENE},
+    {(char*)"no-templatelen-adjustment",    no_argument,        0,        ARG_NO_TEMPLATELEN_ADJUSTMENT},
 #ifdef USE_SRA
     {(char*)"sra-acc",         required_argument,  0,        ARG_SRA_ACC},
 #endif
     {(char*)"remove-chrname",  no_argument,        0,        ARG_REMOVE_CHRNAME},
     {(char*)"add-chrname",     no_argument,        0,        ARG_ADD_CHRNAME},
     {(char*)"max-altstried",   required_argument,  0,        ARG_MAX_ALTSTRIED},
+    {(char*)"haplotype",       no_argument,        0,        ARG_HAPLOTYPE},
+    {(char*)"enable-codis",    no_argument,        0,        ARG_CODIS},
+    {(char*)"summary-file",    required_argument,  0,        ARG_SUMMARY_FILE},
+    {(char*)"new-summary",     no_argument,        0,        ARG_NEW_SUMMARY},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -850,10 +870,12 @@ static void printUsage(ostream& out) {
         << "  --novel-splicesite-infile <path>   provide a list of novel splice sites" << endl
         << "  --no-temp-splicesite               disable the use of splice sites found" << endl
         << "  --no-spliced-alignment             disable spliced alignment" << endl
-        << "  --rna-strandness <string>          Specify strand-specific information (unstranded)" << endl
-        << "  --tmo                              Reports only those alignments within known transcriptome" << endl
-        << "  --dta                              Reports alignments tailored for transcript assemblers" << endl
-        << "  --dta-cufflinks                    Reports alignments tailored specifically for cufflinks" << endl
+        << "  --rna-strandness <string>          specify strand-specific information (unstranded)" << endl
+        << "  --tmo                              reports only those alignments within known transcriptome" << endl
+        << "  --dta                              reports alignments tailored for transcript assemblers" << endl
+        << "  --dta-cufflinks                    reports alignments tailored specifically for cufflinks" << endl
+        << "  --avoid-pseudogene                 tries to avoid aligning reads to pseudogenes (experimental option)" << endl
+        << "  --no-templatelen-adjustment        disables template length adjustment for RNA-seq reads" << endl
         << endl
 		<< " Scoring:" << endl
 		//<< "  --ma <int>         match bonus (0 for --end-to-end, 2 for --local) " << endl
@@ -893,7 +915,9 @@ static void printUsage(ostream& out) {
 	    << "  (Note: for --un, --al, --un-conc, or --al-conc, add '-gz' to the option name, e.g." << endl
 		<< "  --un-gz <path>, to gzip compress output, or add '-bz2' to bzip2 compress output.)" << endl;
 	}
-	out << "  --quiet            print nothing to stderr except serious errors" << endl
+    out << "  --summary-file     print alignment summary to this file." << endl
+        << "  --new-summary      print alignment summary in a new style, which is more machine-friendly." << endl
+        << "  --quiet            print nothing to stderr except serious errors" << endl
 	//  << "  --refidx           refer to ref. seqs by 0-based index rather than name" << endl
 		<< "  --met-file <path>  send metrics to file at <path> (off)" << endl
 		<< "  --met-stderr       send metrics to stderr (off)" << endl
@@ -1649,6 +1673,10 @@ static void parseOption(int next_option, const char *arg) {
             tranAssm_program = "cufflinks";
             break;
         }
+        case ARG_AVOID_PSEUDOGENE: {
+            avoid_pseudogene = true;
+            break;
+        }
 #ifdef USE_SRA
         case ARG_SRA_ACC: {
             tokenize(arg, ",", sra_accs); format = SRA_FASTA;
@@ -1665,6 +1693,26 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_MAX_ALTSTRIED: {
             max_alts_tried = parseInt(8, "--max-altstried arg must be at least 8", arg);
+            break;
+        }
+        case ARG_HAPLOTYPE: {
+            use_haplotype = true;
+            break;
+        }
+        case ARG_CODIS: {
+            enable_codis = true;
+            break;
+        }
+        case ARG_NO_TEMPLATELEN_ADJUSTMENT: {
+            templateLenAdjustment = false;
+            break;
+        }
+        case ARG_SUMMARY_FILE: {
+            alignSumFile = arg;
+            break;
+        }
+        case ARG_NEW_SUMMARY: {
+            newAlignSummary = true;
             break;
         }
 		default:
@@ -3454,7 +3502,8 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                      prm,                  // per-read metrics
                                      sc,                   // scoring scheme
                                      !seedSumm,            // suppress seed summaries?
-                                     seedSumm);            // suppress alignments?
+                                     seedSumm,             // suppress alignments?
+                                     templateLenAdjustment);
 				assert(!retry || msinkwrap.empty());
 			} // while(retry)
 		} // if(rdid >= skipReads && rdid < qUpto)
@@ -3615,7 +3664,8 @@ static void driver(
                                      gVerbose, // whether to be talkative
                                      startVerbose, // talkative during initialization
                                      false /*passMemExc*/,
-                                     sanityCheck);
+                                     sanityCheck,
+                                     use_haplotype); //use haplotypes?
 	if(sanityCheck && !os.empty()) {
 		// Sanity check number of patterns and pattern lengths in GFM
 		// against original strings
@@ -3798,9 +3848,13 @@ static void driver(
                                  no_spliced_alignment,
                                  tranMapOnly,
                                  tranAssm,
-                                 xsOnly);
+                                 xsOnly,
+                                 avoid_pseudogene);
         
-        GraphPolicy gpol(max_alts_tried);
+        GraphPolicy gpol(max_alts_tried,
+                         use_haplotype,
+                         altdb->haplotypes().size() > 0 && use_haplotype,
+                         enable_codis);
         
         init_junction_prob();
         bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;
@@ -3878,11 +3932,24 @@ static void driver(
 			if(repThresh == 0) {
 				repThresh = std::numeric_limits<size_t>::max();
 			}
-			mssink->finish(
-				repThresh,
-				gReportDiscordant,
-				gReportMixed,
-				hadoopOut);
+			mssink->finish(cerr,
+                           repThresh,
+                           gReportDiscordant,
+                           gReportMixed,
+                           newAlignSummary,
+                           hadoopOut);
+            if(alignSumFile != "") {
+                ofstream sumfile(alignSumFile.c_str(), ios::out);
+                if(sumfile.is_open()) {
+                    mssink->finish(sumfile,
+                                   repThresh,
+                                   gReportDiscordant,
+                                   gReportMixed,
+                                   newAlignSummary,
+                                   false); // hadoopOut
+                    sumfile.close();
+                }
+            }
 		}
         if(ssdb != NULL) {
             if(novelSpliceSiteOutfile != "") {

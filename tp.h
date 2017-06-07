@@ -45,7 +45,8 @@ public:
                         bool no_spliced_alignment = false,
                         bool transcriptome_mapping_only = false,
                         bool transcriptome_assembly = false,
-                        bool xs_only = false)
+                        bool xs_only = false,
+                        bool avoid_pseudogene = false)
     {
         init(minIntronLen,
              maxIntronLen,
@@ -54,7 +55,8 @@ public:
              no_spliced_alignment,
              transcriptome_mapping_only,
              transcriptome_assembly,
-             xs_only);
+             xs_only,
+             avoid_pseudogene);
     }
     
     /**
@@ -73,7 +75,8 @@ public:
               bool no_spliced_alignment = false,
               bool transcriptome_mapping_only = false,
               bool transcriptome_assembly = false,
-              bool xs_only = false)
+              bool xs_only = false,
+              bool avoid_pseudogene = false)
     {
         minIntronLen_ = minIntronLen;
         maxIntronLen_ = maxIntronLen;
@@ -83,6 +86,7 @@ public:
         transcriptome_mapping_only_ = transcriptome_mapping_only;
         transcriptome_assembly_ = transcriptome_assembly;
         xs_only_ = xs_only;
+        avoid_pseudogene_ = avoid_pseudogene;
     }
     
     size_t minIntronLen() const { return minIntronLen_; }
@@ -93,6 +97,7 @@ public:
     bool transcriptome_mapping_only() const { return transcriptome_mapping_only_; }
     bool transcriptome_assembly() const { return transcriptome_assembly_; }
     bool xs_only() const { return xs_only_; }
+    bool avoid_pseudogene() const { return avoid_pseudogene_; }
     
 private:
     size_t   minIntronLen_;
@@ -107,6 +112,7 @@ private:
     bool transcriptome_mapping_only_;
     bool transcriptome_assembly_;
     bool xs_only_;
+    bool avoid_pseudogene_;
 };
 
 #endif /*ndef TP_H_*/

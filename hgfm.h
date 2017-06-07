@@ -65,7 +65,8 @@ public:
              bool verbose, // = false,
              bool startVerbose, // = false,
              bool passMemExc, // = false,
-             bool sanityCheck) : // = false) :
+             bool sanityCheck, // = false)
+             bool useHaplotype) : // = false
 	GFM<index_t>(in,
                  altdb,
                  needEntireReverse,
@@ -84,6 +85,7 @@ public:
                  startVerbose,
                  passMemExc,
                  sanityCheck,
+                 useHaplotype,
                  true)
 	{
 		this->_in1Str = in + ".5." + gfm_ext;
@@ -1551,7 +1553,7 @@ template <typename index_t = uint32_t, typename local_index_t = uint16_t>
 class HGFM : public GFM<index_t> {
 	typedef GFM<index_t> PARENT_CLASS;
 public:
-	/// Construct an Ebwt from the given input file
+	/// Construct a GFM from the given input file
 	HGFM(const string& in,
          ALTDB<index_t>* altdb,
          int needEntireReverse,
@@ -1570,6 +1572,7 @@ public:
          bool startVerbose, // = false,
          bool passMemExc, // = false,
          bool sanityCheck, // = false
+         bool useHaplotype, // = false
          bool skipLoading = false) :
     GFM<index_t>(in,
                  altdb,
@@ -1589,6 +1592,7 @@ public:
                  startVerbose,
                  passMemExc,
                  sanityCheck,
+                 useHaplotype,
                  skipLoading),
     _in5(NULL),
     _in6(NULL)
@@ -1597,7 +1601,7 @@ public:
         _in6Str = in + ".6." + gfm_ext;
     }
 	
-	/// Construct an Ebwt from the given header parameters and string
+	/// Construct a HGFM from the given header parameters and string
 	/// vector, optionally using a blockwise suffix sorter with the
 	/// given 'bmax' and 'dcv' parameters.  The string vector is
 	/// ultimately joined and the joined string is passed to buildToDisk().
@@ -1897,7 +1901,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
     }
 }
     
-/// Construct an Ebwt from the given header parameters and string
+/// Construct a GFM from the given header parameters and string
 /// vector, optionally using a blockwise suffix sorter with the
 /// given 'bmax' and 'dcv' parameters.  The string vector is
 /// ultimately joined and the joined string is passed to buildToDisk().
@@ -2595,7 +2599,8 @@ void HGFM<index_t, local_index_t>::readIntoMemory(
                                                                                           false,  // _verbose
                                                                                           false,
                                                                                           this->_passMemExc,
-                                                                                          this->_sanity);
+                                                                                          this->_sanity,
+                                                                                          false); // use haplotypes?
         
 		if(tidx >= _localGFMs.size()) {
 			assert_eq(tidx, _localGFMs.size());

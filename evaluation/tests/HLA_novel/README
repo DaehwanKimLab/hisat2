@@ -1,4 +1,20 @@
-To run HISAT-genotype
-   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A
+   hisatgenotype_locus.py --aligner-list hisat2.graph --base hla --locus-list A --num-editdist 2 --assembly -1 ILMN/NA12892.extracted.1.fq.gz -2 ILMN/NA12892.extracted.2.fq.gz
 
-   ./hisat2_test_HLA_genotyping.py --aligner-list hisat2.graph --hla-list A --simulate-interval 1 --verbose-level 2 --debug paired > temp
+   for i in `ls -l CP_80/LP*1.fq.gz | awk '{print $NF}' | cut -d'/' -f2 | cut -d'.' -f1`; do echo $i; ./hisatgenotype_locus.py --locus-list A --num-editdist 2 --assembly --reads CP_80/$i.extracted.1.fq.gz,CP_80/$i.extracted.2.fq.gz --assembly-base assembly_graph_$i 2> $i.tmp; done
+
+   hisatgenotype_locus_samples.py -p 3 -v --max-sample 400 --region-list hla.A --read-dir CP_400 --out-dir test_A > cp_400_A.txt
+   hisatgenotype_scripts/compare_HLA_Omixon.py cp_400_A.txt ../CAAPA/omixon_caapa_hla.txt
+
+   hisatgenotype_locus.py --aligner-list hisat2.graph --locus-list A --num-editdist 2 --assembly -1 CP_80/LP6005106-DNA_H02.extracted.fq.1.gz -2 CP_80/LP6005106-DNA_H02.extracted.fq.2.gz --display-alleles A*23:17,A*02:02:01:01
+
+   hisatgenotype_extract_reads.py --base-fname genotype_genome --reference-type genome --read-dir ILMN_12062016 --out-dir ILMN
+
+   hisat2 --no-hd -x genotype_genome -c CAGCTGGGATGTGGAGTGGTGTGAGGAGTGGCCACAGGGGAGCAGAGGAGGTGGCAGAAGCCGGAGGTAAAGGTGTCTTAAA
+
+
+On MARCC - https://www.marcc.jhu.edu/getting-started/basic
+
+sbatch script-name
+squeue -u dkim136@jhu.edu
+scancel job-id
+sinfo

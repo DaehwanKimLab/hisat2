@@ -648,7 +648,7 @@ public:
 	    mmFile2_(NULL), \
         _nthreads(1)
 
-	/// Construct an Ebwt from the given input file
+	/// Construct a GFM from the given input file
 	GFM(const string& in,
         ALTDB<index_t>* altdb,
         int needEntireReverse,
@@ -667,6 +667,7 @@ public:
         bool startVerbose, // = false,
         bool passMemExc, // = false,
         bool sanityCheck, // = false)
+        bool useHaplotype, // = false
         bool skipLoading = false) :
         GFM_INITS
 	{
@@ -706,6 +707,7 @@ public:
 
         // Read ALTs
         EList<ALT<index_t> >& alts = altdb->alts();
+        EList<Haplotype<index_t> >& haplotypes = altdb->haplotypes();
         EList<string>& altnames = altdb->altnames();
         alts.clear(); altnames.clear();
         string in7Str = in + ".7." + gfm_ext;
@@ -717,23 +719,51 @@ public:
             cerr << "Could not open index file " << in7Str.c_str() << endl;
         }
         
+        EList<index_t> to_alti;
+        index_t to_alti_far = 0;
         readI32(in7, this->toBe());
         index_t numAlts = readIndex<index_t>(in7, this->toBe());
         if(numAlts > 0) {
+            alts.resizeExact(numAlts); alts.clear();
+            to_alti.resizeExact(numAlts); to_alti.clear();
             while(!in7.eof()) {
                 alts.expand();
                 alts.back().read(in7, this->toBe());
+                to_alti.push_back(to_alti_far);
+                to_alti_far++;
                 if(!loadSpliceSites) {
                     if(alts.back().splicesite()) {
                         alts.pop_back();
                         assert_gt(numAlts, 0);
                         numAlts--;
+                        to_alti.back() = std::numeric_limits<index_t>::max();
+                        to_alti_far--;
                     }
                 }
                 if(alts.size() == numAlts) break;
             }
         }
         assert_eq(alts.size(), numAlts);
+        assert_eq(to_alti_far, numAlts);
+        if(useHaplotype) {
+            // Check if it hits the end of file, and this routine is needed for backward compatibility
+            if(in7.peek() != std::ifstream::traits_type::eof()) {
+                index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
+                if(numHaplotypes > 0) {
+                    haplotypes.resizeExact(numHaplotypes);
+                    haplotypes.clear();
+                    while(!in7.eof()) {
+                        haplotypes.expand();
+                        haplotypes.back().read(in7, this->toBe());
+                        Haplotype<index_t>& ht = haplotypes.back();
+                        for(index_t h = 0; h < ht.alts.size(); h++) {
+                            ht.alts[h] = to_alti[ht.alts[h]];
+                        }
+                        if(haplotypes.size() == numHaplotypes) break;
+                    }
+                }
+            }
+        }
         
         if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
         ifstream in8(in8Str.c_str(), ios::binary);
@@ -787,6 +817,25 @@ public:
             for(size_t i = 0; i < alts.size(); i++) {
                 alts[i] = buf[i].first;
                 altnames[i] = buf2[buf[i].second];
+                if(buf[i].second < numAlts) {
+                    to_alti[buf[i].second] = i;
+                }
+            }
+        }
+        
+        if(useHaplotype) {
+            EList<index_t>& haplotype_maxrights = altdb->haplotype_maxrights();
+            haplotype_maxrights.resizeExact(haplotypes.size());
+            for(index_t h = 0; h < haplotypes.size(); h++) {
+                Haplotype<index_t>& ht = haplotypes[h];
+                for(index_t h2 = 0; h2 < ht.alts.size(); h2++) {
+                    ht.alts[h2] = to_alti[ht.alts[h2]];
+                }
+                if(h == 0) {
+                    haplotype_maxrights[h] = ht.right;
+                } else {
+                    haplotype_maxrights[h] = std::max<index_t>(haplotype_maxrights[h - 1], ht.right);
+                }
             }
         }
         
@@ -1333,7 +1382,7 @@ public:
                             assert_lt(bp, 4);
                             if((int)bp == s[pos]) {
                                 cerr << "Warning: single type should have a different base than " << "ACGTN"[(int)s[pos]]
-                                << " (" << snp_id << ") at " << genome_pos << " on " << chr << endl;
+                                     << " (" << snp_id << ") at " << genome_pos << " on " << chr << endl;
                                 _alts.pop_back();
                                 continue;
                                 // throw 1;
@@ -1703,7 +1752,7 @@ public:
                         buf3[before] = (index_t)i;
                     }
                     for(size_t h = 0; h < _haplotypes.size(); h++) {
-                        EList<index_t, 4>& alts = _haplotypes[h].alts;
+                        EList<index_t, 1>& alts = _haplotypes[h].alts;
                         for(size_t a = 0; a < alts.size(); a++) {
                             index_t before = alts[a];
                             assert_lt(before, buf3.size());
@@ -1734,6 +1783,11 @@ public:
                 for(index_t i = 0; i < _alts.size(); i++) {
                     _alts[i].write(fout7, this->toBe());
                     fout8 << _altnames[i] << endl;
+                }
+                
+                writeIndex<index_t>(fout7, (index_t)_haplotypes.size(), this->toBe());
+                for(index_t i = 0; i < _haplotypes.size(); i++) {
+                    _haplotypes[i].write(fout7, this->toBe());
                 }
                 
                 fout7.close();

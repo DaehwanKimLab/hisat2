@@ -632,7 +632,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         // Create nodes and edges for haplotypes
         for(index_t i = 0; i < haplotypes.size(); i++) {
             const Haplotype<index_t>& haplotype = haplotypes[i];
-            const EList<index_t, 4>& snpIDs = haplotype.alts;
+            const EList<index_t, 1>& snpIDs = haplotype.alts;
             assert_gt(snpIDs.size(), 0);
             assert_lt(haplotype.right, s.length());
             bool pass = true;
@@ -793,21 +793,21 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
         }
     }
     
-    // daehwan - for debugging purposes
-#if 0
-    cout << "num nodes: " << nodes.size() << endl;
-    for(index_t i = 0; i < nodes.size(); i++) {
-        const Node& n = nodes[i];
-        cout << i << "\t" << n.label << "\t" << n.value << endl;
+#ifndef NDEBUG
+    if(debug) {
+        cout << "num nodes: " << nodes.size() << endl;
+        for(index_t i = 0; i < nodes.size(); i++) {
+            const Node& n = nodes[i];
+            cout << i << "\t" << n.label << "\t" << n.value << endl;
+        }
+        
+        sort(edges.begin(), edges.end());
+        cout << "num edges: " << edges.size() << endl;
+        for(index_t i = 0; i < edges.size(); i++) {
+            const Edge& e = edges[i];
+            cout << i << "\t" << e.from << " --> " << e.to << endl;
+        }
     }
-    
-    sort(edges.begin(), edges.end());
-    cout << "num edges: " << edges.size() << endl;
-    for(index_t i = 0; i < edges.size(); i++) {
-        const Edge& e = edges[i];
-        cout << i << "\t" << e.from << " --> " << e.to << endl;
-    }
-    exit(1);
 #endif
 }
 
@@ -949,7 +949,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             const Haplotype<index_t>& haplotype = haplotypes[haplotype_idx];
             if(haplotype.left < curr_pos) continue;
             if(haplotype.right >= curr_pos + curr_len) break;
-            const EList<index_t, 4>& snpIDs = haplotype.alts;
+            const EList<index_t, 1>& snpIDs = haplotype.alts;
             assert_gt(snpIDs.size(), 0);
             bool pass = true;
             for(index_t s = 0; s < snpIDs.size(); s++) {
@@ -2290,7 +2290,7 @@ void PathGraph<index_t>::printInfo()
     if(verbose) {
         cerr << "Generation " << generation
         << " (" << temp_nodes << " -> " << nodes.size() << " nodes, "
-        << ranks << " ranks" << endl;
+        << ranks << " ranks)" << endl;
     }
 }
 

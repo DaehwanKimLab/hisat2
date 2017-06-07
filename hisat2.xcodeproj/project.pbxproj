@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 46;
+	objectVersion = 48;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -636,7 +636,7 @@
 		E8C30C521C20A5DD00C03464 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0720;
+				LastUpgradeCheck = 0810;
 				ORGANIZATIONNAME = "Daehwan Kim";
 				TargetAttributes = {
 					E8C30C591C20A5DD00C03464 = {
@@ -651,7 +651,7 @@
 				};
 			};
 			buildConfigurationList = E8C30C551C20A5DD00C03464 /* Build configuration list for PBXProject "hisat2" */;
-			compatibilityVersion = "Xcode 3.2";
+			compatibilityVersion = "Xcode 8.0";
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -852,8 +852,10 @@
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "-";
@@ -872,7 +874,7 @@
 					"MACOS=1",
 					POPCNT_CAPABILITY,
 					BOWTIE2,
-					"HISAT2_VERSION=\"\\\"2.0.6\\\"\"",
+					"HISAT2_VERSION=\"\\\"2.1.0\\\"\"",
 					"HISAT2_VERSION2=\"\\\"`cat VERSION`\\\"\"",
 					"BUILD_HOST=\"\\\"`hostname`\\\"\"",
 					"BUILD_TIME=\"\\\"`date\\\"\"",
@@ -885,7 +887,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
@@ -905,8 +907,10 @@
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "-";
@@ -923,7 +927,7 @@
 					"MACOS=1",
 					POPCNT_CAPABILITY,
 					BOWTIE2,
-					"HISAT2_VERSION=\"\\\"2.0.6\\\"\"",
+					"HISAT2_VERSION=\"\\\"2.1.0\\\"\"",
 					"BUILD_HOST=\"\\\"`hostname`\\\"\"",
 					"BUILD_TIME=\"\\\"`date`\\\"\"",
 					"COMPILER_VERSION=\"\\\"`$(CXX) -v 2>&1 | tail -1`\\\"\"",
@@ -935,7 +939,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
 			};

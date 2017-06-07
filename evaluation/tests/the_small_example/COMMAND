@@ -1,0 +1,2 @@
+../../../hisat2-build --offrate 0 --ftabchars 1 --snp small.snp small.fa small
+../../../hisat2 -x small -c GCTAG

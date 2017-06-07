@@ -35,15 +35,15 @@
 <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads"><h2><u>Releases</u></h2></a>
 <div class="box">
  <ul>
-   <table width="100%"><tbody><tr><td>version 2.0.5</td> <td align="right">11/4/2016</td></tr>
+   <table width="100%"><tbody><tr><td>version 2.1.0</td> <td align="right">6/8/2017</td></tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.5-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
+	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
        </tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.5-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
+	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
        </tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.5-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
+	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
        </tr>
        <tr>
 	 <td><a href="http://www.di.fc.ul.pt/~afalcao/hisat2_windows.html" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Windowns binary</a></td>
@@ -58,7 +58,7 @@
     <table width="100%">
       <tr>
       <td colspan="2">
-         <i>H. sapiens</i>, Ensembl GRCh38
+         <i>H. sapiens</i>, GRCh38
         </td>
       </tr>
       <tr>
@@ -110,7 +110,7 @@
 
       <tr>
 	<td colspan="2">
-          <i>H. sapiens</i>, UCSC hg38 and gene annotations referred to in <a href="">the Nature Protocol paper</a>
+          <i>H. sapiens</i>, UCSC hg38 and Refseq gene annotations referred to in <a href="">the Nature Protocol paper</a>
         </td>
       </tr>
       <tr>
@@ -124,7 +124,7 @@
 
       <tr>
         <td colspan="2">
-         <i>H. sapiens</i>, Ensembl GRCh37
+         <i>H. sapiens</i>, GRCh37
         </td>
       </tr>
       <tr>
@@ -175,7 +175,7 @@
 
       <tr>
       <td colspan="2">
-         <i>M. musculus</i>, Ensembl GRCm38
+         <i>M. musculus</i>, GRCm38
         </td>
       </tr>
       <tr>
@@ -238,7 +238,7 @@
       </tr>
       <tr>
       <td colspan="2">
-         <i>D. melanogaster</i>, Ensembl BDGP6
+         <i>D. melanogaster</i>, BDGP6
         </td>
       </tr>
       <tr>
@@ -273,7 +273,7 @@
       
       <tr>
       <td colspan="2">
-         <i>C. elegans</i>, Ensembl WBcel235
+         <i>C. elegans</i>, WBcel235
         </td>
       </tr>
       <tr>
@@ -308,7 +308,7 @@
       
       <tr>
       <td colspan="2">
-         <i>S. cerevisiae</i>, Ensembl R64-1-1
+         <i>S. cerevisiae</i>, R64-1-1
         </td>
       </tr>
       <tr>
@@ -371,7 +371,8 @@
 
 <h2>Related Tools</h2>
 <div class="box">
- <ul>
+  <ul>
+    <li><a href="http://www.ccb.jhu.edu/hisat-genotype">HISAT-genotype</a>: Next-generation analysis of human genomes</li>
    <li><a href="http://www.ccb.jhu.edu/software/hisat">HISAT</a>: Fast and sensitive spliced alignment</li>
    <li><a href="http://bowtie-bio.sourceforge.net/bowtie2">Bowtie2</a>: Ultrafast read alignment</li>
    <li><a href="http://www.ccb.jhu.edu/software/tophat">TopHat2</a>: Spliced read mapper for RNA-Seq</li>

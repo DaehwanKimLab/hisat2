@@ -74,9 +74,9 @@ my @signame     = ();
 
 # Get description of arguments from HISAT so that we can distinguish HISAT
 # args from wrapper args
-sub getBt2Desc($) {
+sub getHt2Desc($) {
 	my $d = shift;
-	my $cmd = "$align_prog --wrapper basic-0 --arg-desc";
+	my $cmd = "'$align_prog' --wrapper basic-0 --arg-desc";
 	open(my $fh, "$cmd |") || Fail("Failed to run command '$cmd'\n");
 	while(readline $fh) {
 		chomp;
@@ -90,7 +90,7 @@ sub getBt2Desc($) {
 
 my %desc = ();
 my %wrapped = ("1" => 1, "2" => 1);
-getBt2Desc(\%desc);
+getHt2Desc(\%desc);
 
 # Given an option like -1, determine whether it's wrapped (i.e. should be
 # handled by this script rather than being passed along to HISAT)
@@ -98,20 +98,20 @@ sub isWrapped($) { return defined($wrapped{$_[0]}); }
 
 my @orig_argv = @ARGV;
 
-my @bt2w_args = (); # options for wrapper
-my @bt2_args  = (); # options for HISAT
+my @ht2w_args = (); # options for wrapper
+my @ht2_args  = (); # options for HISAT
 my $saw_dd = 0;
 for(0..$#ARGV) {
 	if($ARGV[$_] eq "--") {
 		$saw_dd = 1;
 		next;
 	}
-	push @bt2w_args, $ARGV[$_] if !$saw_dd;
-	push @bt2_args,  $ARGV[$_] if  $saw_dd;
+	push @ht2w_args, $ARGV[$_] if !$saw_dd;
+	push @ht2_args,  $ARGV[$_] if  $saw_dd;
 }
 if(!$saw_dd) {
-	@bt2_args = @bt2w_args;
-	@bt2w_args= ();
+	@ht2_args = @ht2w_args;
+	@ht2w_args= ();
 }
 
 my $debug = 0;
@@ -121,75 +121,75 @@ my $cap_out = undef;       # Filename for passthrough
 my $no_unal = 0;
 my $large_idx = 0;
 # Remove whitespace
-for my $i (0..$#bt2_args) {
-	$bt2_args[$i]=~ s/^\s+//; $bt2_args[$i] =~ s/\s+$//;
+for my $i (0..$#ht2_args) {
+	$ht2_args[$i]=~ s/^\s+//; $ht2_args[$i] =~ s/\s+$//;
 }
 
 # We've handled arguments that the user has explicitly directed either to the
 # wrapper or to hisat, now we capture some of the hisat arguments that
 # ought to be handled in the wrapper
-for(my $i = 0; $i < scalar(@bt2_args); $i++) {
-	next unless defined($bt2_args[$i]);
-	my $arg = $bt2_args[$i];
+for(my $i = 0; $i < scalar(@ht2_args); $i++) {
+	next unless defined($ht2_args[$i]);
+	my $arg = $ht2_args[$i];
 	my @args = split(/=/, $arg);
 	if(scalar(@args) > 2) {
 		$args[1] = join("=", @args[1..$#args]);
 	}
 	$arg = $args[0];
 	if($arg eq "-U" || $arg eq "--unpaired") {
-		$bt2_args[$i] = undef;
+		$ht2_args[$i] = undef;
 		$arg =~ s/^-U//; $arg =~ s/^--unpaired//;
 		if($arg ne "") {
 			# Argument was part of this token
 			my @args = split(/,/, $arg);
-			for my $a (@args) { push @bt2w_args, ("-U", $a); }
+			for my $a (@args) { push @ht2w_args, ("-U", $a); }
 		} else {
 			# Argument is in the next token
-			$i < scalar(@bt2_args)-1 || Fail("Argument expected in next token!\n");
+			$i < scalar(@ht2_args)-1 || Fail("Argument expected in next token!\n");
 			$i++;
-			my @args = split(/,/, $bt2_args[$i]);
-			for my $a (@args) { push @bt2w_args, ("-U", $a); }
-			$bt2_args[$i] = undef;
+			my @args = split(/,/, $ht2_args[$i]);
+			for my $a (@args) { push @ht2w_args, ("-U", $a); }
+			$ht2_args[$i] = undef;
 		}
 	}
 	if($arg =~ /^--?([12])/ && $arg !~ /^--?12/) {
 		my $mate = $1;
-		$bt2_args[$i] = undef;
+		$ht2_args[$i] = undef;
 		$arg =~ s/^--?[12]//;
 		if($arg ne "") {
 			# Argument was part of this token
 			my @args = split(/,/, $arg);
-			for my $a (@args) { push @bt2w_args, ("-$mate", $a); }
+			for my $a (@args) { push @ht2w_args, ("-$mate", $a); }
 		} else {
 			# Argument is in the next token
-			$i < scalar(@bt2_args)-1 || Fail("Argument expected in next token!\n");
+			$i < scalar(@ht2_args)-1 || Fail("Argument expected in next token!\n");
 			$i++;
-			my @args = split(/,/, $bt2_args[$i]);
-			for my $a (@args) { push @bt2w_args, ("-$mate", $a); }
-			$bt2_args[$i] = undef;
+			my @args = split(/,/, $ht2_args[$i]);
+			for my $a (@args) { push @ht2w_args, ("-$mate", $a); }
+			$ht2_args[$i] = undef;
 		}
 	}
 	if($arg eq "--debug") {
 		$debug = 1;
-		$bt2_args[$i] = undef;
+		$ht2_args[$i] = undef;
 	}
 	if($arg eq "--no-unal") {
 		$no_unal = 1;
-		$bt2_args[$i] = undef;
+		$ht2_args[$i] = undef;
 	}
 	if($arg eq "--large-index") {
 		$large_idx = 1;
-		$bt2_args[$i] = undef;
+		$ht2_args[$i] = undef;
 	}
 	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
 		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
-			$bt2_args[$i] = undef;
+			$ht2_args[$i] = undef;
 			if(scalar(@args) > 1 && $args[1] ne "") {
 				$read_fns{$rarg} = $args[1];
 			} else {
-				$i < scalar(@bt2_args)-1 || Fail("--${rarg}* option takes an argument.\n");
-				$read_fns{$rarg} = $bt2_args[$i+1];
-				$bt2_args[$i+1] = undef;
+				$i < scalar(@ht2_args)-1 || Fail("--${rarg}* option takes an argument.\n");
+				$read_fns{$rarg} = $ht2_args[$i+1];
+				$ht2_args[$i+1] = undef;
 			}
 			$read_compress{$rarg} = "";
 			$read_compress{$rarg} = "gzip"  if $arg eq "--${rarg}-gz";
@@ -204,22 +204,22 @@ for(my $i = 0; $i < scalar(@bt2_args); $i++) {
 my $passthru = 0;
 if(scalar(keys %read_fns) > 0 || $no_unal) {
 	$passthru = 1;
-	push @bt2_args, "--passthrough";
+	push @ht2_args, "--passthrough";
 	$cap_out = "-";
-	for(my $i = 0; $i < scalar(@bt2_args); $i++) {
-		next unless defined($bt2_args[$i]);
-		my $arg = $bt2_args[$i];
+	for(my $i = 0; $i < scalar(@ht2_args); $i++) {
+		next unless defined($ht2_args[$i]);
+		my $arg = $ht2_args[$i];
 		if($arg eq "-S" || $arg eq "--output") {
-			$i < scalar(@bt2_args)-1 || Fail("-S/--output takes an argument.\n");
-			$cap_out = $bt2_args[$i+1];
-			$bt2_args[$i] = undef;
-			$bt2_args[$i+1] = undef;
+			$i < scalar(@ht2_args)-1 || Fail("-S/--output takes an argument.\n");
+			$cap_out = $ht2_args[$i+1];
+			$ht2_args[$i] = undef;
+			$ht2_args[$i+1] = undef;
 		}
 	}
 }
 my @tmp = ();
-for (@bt2_args) { push(@tmp, $_) if defined($_); }
-@bt2_args = @tmp;
+for (@ht2_args) { push(@tmp, $_) if defined($_); }
+@ht2_args = @tmp;
 
 my @unps = ();
 my @mate1s = ();
@@ -235,11 +235,11 @@ my $readpipe = undef;
 my $log_fName = undef;
 my $help = 0;
 
-my @bt2w_args_cp = (@bt2w_args>0) ? @bt2w_args : @bt2_args;
+my @ht2w_args_cp = (@ht2w_args>0) ? @ht2w_args : @ht2_args;
 Getopt::Long::Configure("pass_through","no_ignore_case");
 
 my @old_ARGV = @ARGV;
-@ARGV = @bt2w_args_cp;
+@ARGV = @ht2w_args_cp;
 
 GetOptions(
 	"1=s"                           => \@mate1s,
@@ -265,8 +265,8 @@ if ($log_fName) {
 }
 
 Info("Before arg handling:\n");
-Info("  Wrapper args:\n[ @bt2w_args ]\n");
-Info("  Binary args:\n[ @bt2_args ]\n");
+Info("  Wrapper args:\n[ @ht2w_args ]\n");
+Info("  Binary args:\n[ @ht2_args ]\n");
 
 sub cat_file($$) {
 	my ($ifn, $ofh) = @_;
@@ -332,7 +332,7 @@ if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 		# Make a named pipe for delivering mate #1s
 		my $m1fn = "$temp_dir/$$.inpipe1";
 		push @to_delete, $m1fn;
-		push @bt2_args, "-1 $m1fn";
+		push @ht2_args, "-1 $m1fn";
 		# Create named pipe 1 for writing
 		if(!$no_pipes) {
 			mkfifo($m1fn, 0700) || Fail("mkfifo($m1fn) failed.\n");
@@ -349,7 +349,7 @@ if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 		# Make a named pipe for delivering mate #2s
 		my $m2fn = "$temp_dir/$$.inpipe2";
 		push @to_delete, $m2fn;
-		push @bt2_args, "-2 $m2fn";
+		push @ht2_args, "-2 $m2fn";
 		# Create named pipe 2 for writing
 		if(!$no_pipes) {
 			mkfifo($m2fn, 0700) || Fail("mkfifo($m2fn) failed.\n");
@@ -371,7 +371,7 @@ if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 		# Make a named pipe for delivering unpaired reads
 		my $ufn = "$temp_dir/$$.unp";
 		push @to_delete, $ufn;
-		push @bt2_args, "-U $ufn";
+		push @ht2_args, "-U $ufn";
 		# Create named pipe 2 for writing
 		if(!$no_pipes) {
 			mkfifo($ufn, 0700) || Fail("mkfifo($ufn) failed.\n");
@@ -389,11 +389,11 @@ if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 } else {
 	if(scalar(@mate2s) > 0) {
 		# Just pass all the mate arguments along to the binary
-		push @bt2_args, ("-1", join(",", @mate1s));
-		push @bt2_args, ("-2", join(",", @mate2s));
+		push @ht2_args, ("-1", join(",", @mate1s));
+		push @ht2_args, ("-2", join(",", @mate2s));
 	}
 	if(scalar(@unps) > 0) {
-		push @bt2_args, ("-U", join(",", @unps));
+		push @ht2_args, ("-U", join(",", @unps));
 	}
 }
 
@@ -406,7 +406,7 @@ if(defined($ref_str)) {
 	push @to_delete, $ofn;
 	system("$build_bin $ofn $ofn") == 0 ||
 		Fail("hisat2-build returned non-0 exit level.\n");
-	push @bt2_args, ("--index", "$ofn");
+	push @ht2_args, ("--index", "$ofn");
 	push @to_delete, ("$ofn.1.".$idx_ext, "$ofn.2.".$idx_ext, 
 	                  "$ofn.3.".$idx_ext, "$ofn.4.".$idx_ext,
 			  "$ofn.5.".$idx_ext, "$ofn.6.".$idx_ext,
@@ -415,9 +415,9 @@ if(defined($ref_str)) {
 }
 
 Info("After arg handling:\n");
-Info("  Binary args:\n[ @bt2_args ]\n");
+Info("  Binary args:\n[ @ht2_args ]\n");
 
-my $index_name = Extract_IndexName_From(@bt2_args);
+my $index_name = Extract_IndexName_From(@ht2_args);
 
 if ($large_idx) {
     Info("Using a large index enforced by user.\n");
@@ -444,7 +444,7 @@ else {
 my $debug_str = ($debug ? "-debug" : "");
 
 # Construct command invoking hisat2-align
-my $cmd = "$align_prog$debug_str --wrapper basic-0 ".join(" ", @bt2_args);
+my $cmd = "'$align_prog$debug_str' --wrapper basic-0 ".join(" ", @ht2_args);
 
 # Possibly add read input on an anonymous pipe
 $cmd = "$readpipe $cmd" if defined($readpipe);
@@ -453,7 +453,7 @@ Info("$cmd\n");
 my $ret;
 if(defined($cap_out)) {
 	# Open HISAT2 pipe
-	open(BT, "$cmd |") || Fail("Could not open HISAT2 pipe: '$cmd |'\n");
+	open(HT, "$cmd |") || Fail("Could not open HISAT2 pipe: '$cmd |'\n");
 	# Open output pipe
 	my $ofh = *STDOUT;
 	my @fhs_to_close = ();
@@ -511,7 +511,7 @@ if(defined($cap_out)) {
 			}
 		}
 	}
-	while(<BT>) {
+	while(<HT>) {
 		chomp;
 		my $filt = 0;
 		unless(substr($_, 0, 1) eq "@") {
@@ -525,14 +525,14 @@ if(defined($cap_out)) {
 			if($passthru) {
 				if(scalar(keys %read_fhs) == 0) {
 					# Next line is read with some whitespace escaped
-					my $l = <BT>;
+					my $l = <HT>;
 				} else {
 					my $mate1 = (($fl &  64) != 0);
 					my $mate2 = (($fl & 128) != 0);
 					my $unp = !$mate1 && !$mate2;
 					my $pair = !$unp;
 					# Next line is read with some whitespace escaped
-					my $l = <BT>;
+					my $l = <HT>;
 					chomp($l);
 					$l =~ s/%(..)/chr(hex($1))/eg;
 					if((defined($read_fhs{un}) || defined($read_fhs{al})) && $unp) {
@@ -569,7 +569,7 @@ if(defined($cap_out)) {
 	}
 	for my $k (@fhs_to_close) { close($k); }
 	close($ofh);
-	close(BT);
+	close(HT);
 	$ret = $?;
 } else {
 	$ret = system($cmd);
