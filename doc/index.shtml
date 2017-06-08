@@ -26,6 +26,7 @@
             <li>HISAT2 can be directly compiled and executed on Windows system using Visual Studio, thanks to <a href="http://www2.warwick.ac.uk/fac/sci/systemsbiology/staff/dyer/"> Nigel Dyer.</a> </li>
             <li>Implemented --new-summary option to output a new style of alignment summary, which is easier to parse for programming purposes.</li>
             <li>Implemented --summary-file option to output alignment summary to a file in addition to the terminal (e.g. stderr).</li>
+            <li>Fixed discrepancy in HISAT2’s alignment summary.</li>
             <li>Implemented --no-templatelen-adjustment option to disable automatic template length adjustment for RNA-seq reads.</li>
 	  </ul>
 	  <br/>	  
@@ -43,8 +44,7 @@
 	  
 	  <h2><a href="http://www.nature.com/nprot/journal/v11/n9/full/nprot.2016.095.html">HISAT, StringTie and Ballgown protocol</a> published at Nature Protocols 8/11/2016</h2>
 	  
-	  <h2>HISAT2 2.0.4 Windows binary available <a href="http://www.di.fc.ul.pt/~afalcao/hisat2_windows.html">here</a>, thanks to <a href="http://www.di.fc.ul.pt/~afalcao/">André
-Osório Falcão</a> 5/24/2016</h2>
+	  <h2>HISAT2 2.0.4 Windows binary available <a href="http://www.di.fc.ul.pt/~afalcao/hisat2_windows.html">here</a>, thanks to <a href="http://www.di.fc.ul.pt/~afalcao/">Andre Osorio Falcao</a> 5/24/2016</h2>
 	  
 	  <h2>HISAT2 2.0.4 release 5/18/2016</h2>
 	  Version 2.0.4 is a minor release with the following changes.

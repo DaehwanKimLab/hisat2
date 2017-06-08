@@ -53,7 +53,7 @@
 <font size="-1">Please cite: <p>Kim D, Langmead B and Salzberg SL. <a href="http://www.nature.com/nmeth/journal/vaop/ncurrent/full/nmeth.3317.html"><b>HISAT: a fast spliced aligner with low memory requirements</b></a>. <i><a href="http://www.nature.com/nmeth">Nature Methods</a></i></font> 2015</p>
 </div>
 
-<a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data"><h2><u>Indexes</u></h2></a>
+<h2><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data"><u>Indexes</u></a> (see <a href="indexes.txt"><u>note</u><a>)</h2>
   <div class="box">
     <table width="100%">
       <tr>

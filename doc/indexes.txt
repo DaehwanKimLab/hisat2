@@ -1,0 +1,5 @@
+Each of the HISAT2 indexes available here on the website comes with a shell script (e.g. make_grch38.sh) that provides instructions (or shell commands) for downloading a reference sequence, gene annotations, and SNPs, and building a HISAT2 index.  You can use the script to build the same HISAT2 index we provide.
+
+HISAT2 indexes named genome_tran or genome_snp_tran use Ensembl gene annotations, which include many more transcripts than RefSeq annotations, due to the inclusion of annotations as predicted by software.
+
+The HISAT2 indexes for the human genome include only primary assembly.  If you choose to include alternative sequences introduced in GRCh38 and build your own HISAT2 indexes, then please be aware that those alternative sequences are nearly identical to the primary assembly in GRCh38 and as a result some reads may map to many more locations compared to when using the primary assembly only.  HISAT2 often skips those multi-mapped reads if the number of potential locations is more than the value specified by the -k option.  You may want to use a higher value for the -k option to resolve the issue.
