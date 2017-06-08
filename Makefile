@@ -449,4 +449,4 @@ clean:
 
 .PHONY: push-doc
 push-doc: doc/manual.inc.html
-	scp doc/*.*html igm1:/data1/igm3/www/ccb.jhu.edu/html/software/hisat2/
+	scp doc/*.*html salz-dmz:/ccb/salz7-data/www/ccb.jhu.edu/html/software/hisat2/
