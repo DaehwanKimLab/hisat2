@@ -1796,18 +1796,17 @@ def genotyping_locus(base_fname,
                      display_alleles,
                      verbose,
                      debug_instr):
-    if not os.path.exists("hisatgenotype_db"):
-        typing_common.clone_hisatgenotype_database()
-
     simulation = (read_fname == [] and alignment_fname == "")
+    if genotype_genome == "":
+        if not os.path.exists("hisatgenotype_db"):
+            typing_common.clone_hisatgenotype_database()
 
-    # Download human genome and HISAT2 index
-    HISAT2_fnames = ["grch38",
-                     "genome.fa",
-                     "genome.fa.fai"]
-
-    if not typing_common.check_files(HISAT2_fnames):
-        typing_common.download_genome_and_index()
+        # Download human genome and HISAT2 index
+        HISAT2_fnames = ["grch38",
+                         "genome.fa",
+                         "genome.fa.fai"]    
+        if not typing_common.check_files(HISAT2_fnames):
+            typing_common.download_genome_and_index()
 
     # Check if the pre-existing files (hla*) are compatible with the current parameter setting
     if genotype_genome != "":
