@@ -24,7 +24,7 @@ import os, sys, subprocess, re
 import inspect, operator
 from copy import deepcopy
 from argparse import ArgumentParser, FileType
-import typing_common
+import hisatgenotype_typing_common as typing_common
 
 # sequences for DNA fingerprinting loci are available at http://www.cstl.nist.gov/biotech/strbase/seq_ref.htm
 
