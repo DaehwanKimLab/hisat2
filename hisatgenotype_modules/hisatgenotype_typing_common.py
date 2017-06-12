@@ -208,10 +208,7 @@ def download_genome_and_index():
 """
 def clone_hisatgenotype_database():
     os.system("git clone https://github.com/infphilo/hisatgenotype_db.git")
-    
-    # Check out one particular revision just to have the same data across multiple computers        
-    # revision = "d3b559b34b96ff9e7f0d97476222d8e4cdee63ad" # Revision on November 16, 2016
-    # os.system("cd IMGTHLA; git checkout %s; cd .." % revision)
+    os.system("cd hisatgenotype_db; git checkout hisatgenotype_v1.0.1_beta; cd ..")
 
 
 """
@@ -239,11 +236,8 @@ def extract_database_if_not_exists(base,
         extract_cmd += ["--locus-list", ','.join(locus_list)]    
     if not partial:
         extract_cmd += ["--no-partial"]
-    if base == "codis":
-        extract_cmd += ["--whole-haplotype"]
-    else:
-        extract_cmd += ["--inter-gap", str(inter_gap),
-                        "--intra-gap", str(intra_gap)]
+    extract_cmd += ["--inter-gap", str(inter_gap),
+                    "--intra-gap", str(intra_gap)]
     if base == "hla":
         extract_cmd += ["--min-var-freq", "0.1"]
 

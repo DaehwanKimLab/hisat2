@@ -207,7 +207,13 @@ def get_flanking_seqs(seq,
 """
 def get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j):
     if repeat_i == repeat_j:
-        return 0
+        min_diff = sys.maxint
+        for repeat_num_i in repeat_nums_i:
+            for repeat_num_j in repeat_nums_j:
+                min_diff = min(abs(repeat_num_i - repeat_num_j), min_diff)
+        equal_score = -min_diff / 10.0 + (len(repeat_nums_i) + len(repeat_nums_j)) / 100.0
+        equal_score = max(min(0.0, equal_score), -0.9)
+        return equal_score
     elif repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1]):
         return -1
     else:
@@ -219,28 +225,15 @@ Smith Waterman Algorithm
 """
 def SW_alignment(allele_i, allele_j):
     n, m = len(allele_i), len(allele_j)
-    a = [[0 for j in range(m)] for i in range(n)]
+    a = [[-(i+j) if i == 0 or j == 0 else 0 for j in range(m + 1)] for i in range(n + 1)]
 
     # Fill 2D array
     for i in range(n):
         repeat_i, repeat_nums_i = allele_i[i]
         for j in range(m):
             repeat_j, repeat_nums_j = allele_j[j]
-            if i == 0:
-                if j == 0:
-                    if repeat_i == repeat_j:
-                        a[i][j] = 0
-                    else:
-                        a[i][j] = -1
-                else:
-                    assert j > 0
-                    a[i][j] = a[i][j-1] - 1
-            elif j == 0:
-                assert i > 0
-                a[i][j] = a[i-1][j] - 1
-            else:
-                equal_score = get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j)
-                a[i][j] = max(a[i-1][j] - 1, a[i][j-1] - 1, a[i-1][j-1] + equal_score)
+            equal_score = get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j)
+            a[i+1][j+1] = max(a[i][j+1] - 1, a[i+1][j] - 1, a[i][j] + equal_score)
 
     return a, n, m
 
@@ -254,34 +247,27 @@ def combine_alleles(backbone_allele, add_allele):
     # Back tracking
     new_backbone_allele = []
     i, j = n - 1, m - 1
-    while i >= 0 and j >= 0:
-        repeat_i, repeat_nums_i = allele_i[i]
-        repeat_j, repeat_nums_j = allele_j[j]
-        if i == 0:
-            if j == 0:
-                if repeat_i == repeat_j:
-                    new_backbone_allele.append([repeat_i, repeat_nums_i | repeat_nums_j])
-                else:
-                    assert repeat_nums_i == repeat_nums_j
-                    assert repeat_nums_i == set([1])
-                    new_backbone_allele.append([repeat_i | repeat_j, repeat_nums_i | repeat_nums_j])
-            else:
-                new_backbone_allele.append([repeat_j, repeat_nums_j | set([0])])
+    while i >= 0 or j >= 0:
+        if i < 0:
+            repeat_j, repeat_nums_j = allele_j[j]
+            new_backbone_allele.append([repeat_j, repeat_nums_j | set([0])])
             j -= 1
-        elif j == 0:
-            assert i > 0
+        elif j < 0:
+            repeat_i, repeat_nums_i = allele_i[i]
             new_backbone_allele.append([repeat_i, repeat_nums_i | set([0])])
             i -= 1
         else:
+            repeat_i, repeat_nums_i = allele_i[i]
+            repeat_j, repeat_nums_j = allele_j[j]    
             equal_score = get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j)
-            if a[i-1][j] - 1 == a[i][j]:
+            if a[i][j+1] - 1 == a[i+1][j+1]:
                 new_backbone_allele.append([repeat_i, repeat_nums_i | set([0])])
                 i -= 1
-            elif a[i][j-1] - 1 == a[i][j]:
+            elif a[i+1][j] - 1 == a[i+1][j+1]:
                 new_backbone_allele.append([repeat_j, repeat_nums_j | set([0])])
                 j -= 1
             else:
-                assert a[i-1][j-1] + equal_score == a[i][j]
+                assert a[i][j] + equal_score == a[i+1][j+1]
                 if repeat_i == repeat_j:
                     new_backbone_allele.append([repeat_i, repeat_nums_i | repeat_nums_j])
                 else:
@@ -292,7 +278,6 @@ def combine_alleles(backbone_allele, add_allele):
                 j -= 1
 
     new_backbone_allele = new_backbone_allele[::-1]
-
     return new_backbone_allele
 
 
@@ -305,7 +290,8 @@ def msf_alignment(backbone_allele, allele):
     # Back tracking
     allele_seq, backbone_seq = "", ""
     i, j = n - 1, m - 1
-    while i >= 0 and j >= 0:
+    while i >= 0 or j >= 0:
+        assert i >= 0
         repeats_i, repeat_nums_i = allele_i[i]
         repeat_i = ""
         max_repeat = ""
@@ -313,38 +299,21 @@ def msf_alignment(backbone_allele, allele):
             if len(repeat_str) > len(repeat_i):
                 repeat_i = repeat_str
         repeat_num_i = max(repeat_nums_i)
-        repeats_j, repeat_nums_j = allele_j[j]
-        assert len(repeats_j) == 1 and len(repeat_nums_j) == 1
-        repeat_j, repeat_num_j = list(repeats_j)[0], list(repeat_nums_j)[0]
-        if i == 0:
-            assert j == 0
-            if repeats_i == repeats_j:
-                add_seq = repeat_i * repeat_num_j
-                dot_seq = '.' * (len(repeat_i) * (repeat_num_i - repeat_num_j))
-                allele_seq = add_seq + dot_seq + allele_seq
-                add_seq = repeat_i * repeat_num_i
-                backbone_seq = add_seq + backbone_seq
-            else:
-                assert repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1])
-                dot_seq = '.' * (len(repeat_i) - len(repeat_j))
-                allele_seq = repeat_j + dot_seq + allele_seq
-                backbone_seq = repeat_i + backbone_seq                    
-            j -= 1
-        elif j == 0:
-            assert i > 0
+        if j < 0:
             allele_seq = '.' * (len(repeat_i) * repeat_num_i) + allele_seq
             backbone_seq = repeat_i * repeat_num_i + backbone_seq
             i -= 1
         else:
+            repeats_j, repeat_nums_j = allele_j[j]
+            assert len(repeats_j) == 1 and len(repeat_nums_j) == 1
+            repeat_j, repeat_num_j = list(repeats_j)[0], list(repeat_nums_j)[0]
             equal_score = get_equal_score(repeats_i, repeat_nums_i, repeats_j, repeat_nums_j)
-            if a[i-1][j] - 1 == a[i][j]:
+            if a[i][j+1] - 1 == a[i+1][j+1]:
                 allele_seq = '.' * (len(repeat_i) * repeat_num_i) + allele_seq
                 backbone_seq = repeat_i * repeat_num_i + backbone_seq
                 i -= 1
-            elif a[i][j-1] - 1 == a[i][j]:
-                assert False
             else:
-                assert a[i-1][j-1] + equal_score == a[i][j]
+                assert a[i][j] + equal_score == a[i+1][j+1]
                 if repeat_i == repeat_j:
                     add_seq = repeat_i * repeat_num_j
                     dot_seq = '.' * (len(repeat_i) * (repeat_num_i - repeat_num_j))
