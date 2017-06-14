@@ -25,7 +25,7 @@ import math
 from datetime import datetime, date, time
 from argparse import ArgumentParser, FileType
 from copy import deepcopy
-import hisatgenotype_typing_common as typing_common, hisatgenotype_gene_typing as gene_typing, hisatgenotype_assembly_graph as assembly_graph
+import hisatgenotype_typing_common as typing_common, hisatgenotype_assembly_graph as assembly_graph
 
 
 """
