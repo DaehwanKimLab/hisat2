@@ -166,7 +166,7 @@ static void printUsage(ostream& out) {
 		<< "                            has fewer than 4 billion nucleotides" << endl;
 	}
     out << "    -a/--noauto             disable automatic -p/--bmax/--dcv memory-fitting" << endl
-	    << "    -p                      number of threads" << endl
+	    << "    -p <int>                number of threads" << endl
 	    << "    --bmax <int>            max bucket sz for blockwise suffix-array builder" << endl
 	    << "    --bmaxdivn <int>        max bucket sz as divisor of ref len (default: 4)" << endl
 	    << "    --dcv <int>             diff-cover period for blockwise (default: 1024)" << endl
@@ -182,7 +182,7 @@ static void printUsage(ostream& out) {
         << "    --ss <path>             Splice site file name" << endl
         << "    --exon <path>           Exon file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
-	    << "    -q/--quiet              verbose output (for debugging)" << endl
+	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
 	    << "    --version               print version information and quit" << endl
