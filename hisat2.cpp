@@ -915,21 +915,21 @@ static void printUsage(ostream& out) {
 	    << "  (Note: for --un, --al, --un-conc, or --al-conc, add '-gz' to the option name, e.g." << endl
 		<< "  --un-gz <path>, to gzip compress output, or add '-bz2' to bzip2 compress output.)" << endl;
 	}
-    out << "  --summary-file     print alignment summary to this file." << endl
-        << "  --new-summary      print alignment summary in a new style, which is more machine-friendly." << endl
-        << "  --quiet            print nothing to stderr except serious errors" << endl
-	//  << "  --refidx           refer to ref. seqs by 0-based index rather than name" << endl
-		<< "  --met-file <path>  send metrics to file at <path> (off)" << endl
-		<< "  --met-stderr       send metrics to stderr (off)" << endl
-		<< "  --met <int>        report internal counters & metrics every <int> secs (1)" << endl
+    out << "  --summary-file <path> print alignment summary to this file." << endl
+        << "  --new-summary         print alignment summary in a new style, which is more machine-friendly." << endl
+        << "  --quiet               print nothing to stderr except serious errors" << endl
+	//  << "  --refidx              refer to ref. seqs by 0-based index rather than name" << endl
+		<< "  --met-file <path>     send metrics to file at <path> (off)" << endl
+		<< "  --met-stderr          send metrics to stderr (off)" << endl
+		<< "  --met <int>           report internal counters & metrics every <int> secs (1)" << endl
 	// Following is supported in the wrapper instead
-	//  << "  --no-unal          supppress SAM records for unaligned reads" << endl
-	    << "  --no-head          supppress header lines, i.e. lines starting with @" << endl
-	    << "  --no-sq            supppress @SQ header lines" << endl
-	    << "  --rg-id <text>     set read group id, reflected in @RG line and RG:Z: opt field" << endl
-	    << "  --rg <text>        add <text> (\"lab:value\") to @RG line of SAM header." << endl
-	    << "                     Note: @RG line only printed when --rg-id is set." << endl
-	    << "  --omit-sec-seq     put '*' in SEQ and QUAL fields for secondary alignments." << endl
+	//  << "  --no-unal             suppress SAM records for unaligned reads" << endl
+	    << "  --no-head             suppress header lines, i.e. lines starting with @" << endl
+	    << "  --no-sq               suppress @SQ header lines" << endl
+	    << "  --rg-id <text>        set read group id, reflected in @RG line and RG:Z: opt field" << endl
+	    << "  --rg <text>           add <text> (\"lab:value\") to @RG line of SAM header." << endl
+	    << "                        Note: @RG line only printed when --rg-id is set." << endl
+	    << "  --omit-sec-seq        put '*' in SEQ and QUAL fields for secondary alignments." << endl
 		<< endl
 	    << " Performance:" << endl
 	    << "  -o/--offrate <int> override offrate of index; must be >= index's offrate" << endl

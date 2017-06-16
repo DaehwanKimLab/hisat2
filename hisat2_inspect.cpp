@@ -101,7 +101,7 @@ static void printUsage(ostream& out) {
 	<< "  -e/--ht2-ref       Reconstruct reference from ." << gfm_ext << " (slow, preserves colors)" << endl
 	<< "  -v/--verbose       Verbose output (for debugging)" << endl
 	<< "  -h/--help          print detailed description of tool and its options" << endl
-	<< "  --help             print this usage message" << endl
+	<< "  --usage            print this usage message" << endl
 	;
     if(wrapper.empty()) {
 		cerr << endl
