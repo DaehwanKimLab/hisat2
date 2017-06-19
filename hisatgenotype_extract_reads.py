@@ -86,6 +86,7 @@ def extract_reads(base_fname,
                   paired,
                   simulation,
                   threads,
+                  threads_aprocess,
                   max_sample,
                   job_range,
                   verbose):
@@ -187,11 +188,13 @@ def extract_reads(base_fname,
                  simulation,
                  verbose):
             aligner_cmd = ["hisat2"]
+            if threads_aprocess > 1:
+                aligner_cmd += ["-p", "%d" % threads_aprocess]
             if not fastq:
                 aligner_cmd += ["-f"]
             aligner_cmd += ["-x", base_fname]
-            aligner_cmd += ["--no-spliced-alignment",
-                            "--max-altstried", "64"]
+            aligner_cmd += ["--no-spliced-alignment"]
+            # aligner_cmd += ["--max-altstried", "64"]
             if paired:
                 aligner_cmd += ["-1", fq_fname,
                                 "-2", fq_fname2]
@@ -373,6 +376,11 @@ if __name__ == '__main__':
                         type=int,
                         default=1,
                         help="Number of threads")
+    parser.add_argument("--pp", "--threads-aprocess",
+                        dest="threads_aprocess",
+                        type=int,
+                        default=1,
+                        help="Number of threads a process")
     parser.add_argument("--max-sample",
                         dest="max_sample",
                         type=int,
@@ -424,6 +432,7 @@ if __name__ == '__main__':
                   False if args.read_fname_U != "" else True,
                   args.simulation,
                   args.threads,
+                  args.threads_aprocess,
                   args.max_sample,
                   job_range,
                   args.verbose)
