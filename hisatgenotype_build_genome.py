@@ -23,7 +23,7 @@
 import os, sys, subprocess, re
 import inspect
 from argparse import ArgumentParser, FileType
-import hisatgenotype_typing_common as typing_common, hisatgenotype_gene_typing as gene_typing
+import hisatgenotype_typing_common as typing_common
 
 
 """

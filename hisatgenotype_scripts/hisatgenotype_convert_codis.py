@@ -3,20 +3,20 @@
 #
 # Copyright 2017, Daehwan Kim <infphilo@gmail.com>
 #
-# This file is part of HISAT 2.
+# This file is part of HISAT-genotype.
 #
-# HISAT 2 is free software: you can redistribute it and/or modify
+# HISAT-genotype is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# HISAT 2 is distributed in the hope that it will be useful,
+# HISAT-genotype is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
+# along with HISAT-genotype.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 
@@ -207,12 +207,17 @@ def get_flanking_seqs(seq,
 """
 def get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j):
     if repeat_i == repeat_j:
+        # DK - experimental SW alignment
         min_diff = sys.maxint
         for repeat_num_i in repeat_nums_i:
             for repeat_num_j in repeat_nums_j:
                 min_diff = min(abs(repeat_num_i - repeat_num_j), min_diff)
         equal_score = -min_diff / 10.0 + (len(repeat_nums_i) + len(repeat_nums_j)) / 100.0
-        equal_score = max(min(0.0, equal_score), -0.9)
+        equal_score = max(min(0.0 if min_diff == 0 else -0.1, equal_score), -0.9)
+
+        # DK - just for now
+        equal_score = 0
+        
         return equal_score
     elif repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1]):
         return -1
@@ -319,7 +324,7 @@ def msf_alignment(backbone_allele, allele):
                     dot_seq = '.' * (len(repeat_i) * (repeat_num_i - repeat_num_j))
                     allele_seq = add_seq + dot_seq + allele_seq
                     add_seq = repeat_i * repeat_num_i
-                    backbone_seq = add_seq + backbone_seq
+                    backbone_seq = add_seq + backbone_seq                    
                 else:
                     assert repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1])
                     dot_seq = '.' * (len(repeat_i) - len(repeat_j))
@@ -510,9 +515,9 @@ def extract_msa(base_dname,
 
         # Sanity check
         assert len(allele_dic) == len(allele_repeat_msf)
-        repeat_len = -1
-        for repeat_msf in allele_repeat_msf.values():
-            if repeat_len < 0:
+        repeat_len = None
+        for allele_id, repeat_msf in allele_repeat_msf.items():
+            if not repeat_len:
                 repeat_len = len(repeat_msf)
             else:
                 assert repeat_len == len(repeat_msf)
