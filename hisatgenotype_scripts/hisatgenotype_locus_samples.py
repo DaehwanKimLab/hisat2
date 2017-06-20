@@ -28,6 +28,31 @@ from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
 
 
+# Platinum genomes - CEPH pedigree (17 family members)
+CEPH_pedigree = {
+    "NA12889" : {"gender" : "M", "spouse" : "NA12890", "children" : ["NA12877"]},
+    "NA12890" : {"gender" : "F", "spouse" : "NA12889", "children" : ["NA12877"]},
+    "NA12877" : {"gender" : "M", "father" : "NA12889", "mother" : "NA12890", "spouse" : "NA12878", "children" : ["NA12879", "NA12880", "NA12881", "NA12882", "NA12883", "NA12884", "NA12885", "NA12886", "NA12887", "NA12888", "NA12893"]},
+
+    "NA12891" : {"gender" : "M", "spouse" : "NA12892", "children" : ["NA12878"]},
+    "NA12892" : {"gender" : "F", "spouse" : "NA12891", "children" : ["NA12878"]},
+    "NA12878" : {"gender" : "F", "father" : "NA12892", "mother" : "NA12891", "spouse" : "NA12877", "children" : ["NA12879", "NA12880", "NA12881", "NA12882", "NA12883", "NA12884", "NA12885", "NA12886", "NA12887", "NA12888", "NA12893"]},
+
+    "NA12879" : {"gender" : "F", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12880" : {"gender" : "F", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12881" : {"gender" : "F", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12882" : {"gender" : "M", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12883" : {"gender" : "M", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12884" : {"gender" : "M", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12885" : {"gender" : "F", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12886" : {"gender" : "M", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12887" : {"gender" : "F", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12888" : {"gender" : "M", "father" : "NA12877", "mother" : "NA12878"},
+    "NA12893" : {"gender" : "M", "father" : "NA12877", "mother" : "NA12878"},
+    }
+
+
+
 """
 """
 class myThread(threading.Thread):
@@ -40,6 +65,7 @@ class myThread(threading.Thread):
                  max_sample,
                  assembly,
                  out_dir,
+                 genotype_results,
                  verbose):
         threading.Thread.__init__(self)
         self.lock = lock
@@ -50,6 +76,7 @@ class myThread(threading.Thread):
         self.max_sample = max_sample
         self.assembly = assembly
         self.out_dir = out_dir
+        self.genotype_results = genotype_results
         self.verbose = verbose
 
     def run(self):
@@ -69,6 +96,7 @@ class myThread(threading.Thread):
                    self.num_editdist,
                    self.assembly,
                    self.out_dir,
+                   self.genotype_results,
                    self.verbose)
 
             
@@ -82,6 +110,7 @@ def worker(lock,
            num_editdist,
            assembly,
            out_dir,
+           genotype_results,
            verbose):
     fq_name = path.split('/')[-1]
     read_dir = '/'.join(path.split('/')[:-1])
@@ -105,13 +134,13 @@ def worker(lock,
             test_hla_cmd += ["--locus", ','.join(loci)]
         test_hla_cmd += ["--num-editdist", str(num_editdist)]
         test_hla_cmd += ["-1", read_fname_1, "-2", read_fname_2]
-        test_hla_cmd += ["--assembly-base"]
-        if out_dir != "":
-            test_hla_cmd += ["%s/%s" % (out_dir, genome)]
-        else:
-            test_hla_cmd += [genome]
         if assembly:
             test_hla_cmd += ["--assembly"]
+            test_hla_cmd += ["--assembly-base"]
+            if out_dir != "":
+                test_hla_cmd += ["%s/%s" % (out_dir, genome)]
+            else:
+                test_hla_cmd += [genome]        
 
         if verbose:
             lock.acquire()
@@ -130,9 +159,9 @@ def worker(lock,
             output_list.append([allele, abundance[:-2]])
 
     lock.acquire()
-    for output in output_list:
-        allele, abundance = output
+    for allele, abundance in output_list:
         print >> sys.stdout, "%s\t%s\t%s" % (genome, allele, abundance)
+        genotype_results.append([genome, allele, abundance])
     sys.stdout.flush()
     lock.release()
 
@@ -147,7 +176,8 @@ def genotyping(read_dir,
                max_sample,
                assembly,
                out_dir,
-               verbose):
+               verbose,
+               platinum_check):
     for database_name in region_list:
         # Extract variants, backbone sequence, and other sequeces
         typing_common.extract_database_if_not_exists(database_name,
@@ -169,6 +199,8 @@ def genotyping(read_dir,
     # fastq files
     fq_fnames = glob.glob("%s/*.extracted.1.fq.gz" % read_dir)
 
+    genotype_results = []
+
     lock = threading.Lock()
     threads = []
     for t in range(nthreads):
@@ -180,12 +212,47 @@ def genotyping(read_dir,
                           max_sample,
                           assembly,
                           out_dir,
+                          genotype_results,
                           verbose)
         thread.start()
         threads.append(thread)
 
     for thread in threads:
         thread.join()
+
+
+    if platinum_check:
+        genotype_dic = {}
+        for genome, allele, abundance in genotype_results:
+            region, _ = allele.split('*')
+            if region not in genotype_dic:
+                genotype_dic[region] = {}
+            if genome not in genotype_dic[region]:
+                genotype_dic[region][genome] = []
+            if len(genotype_dic[region][genome]) >= 2:
+                continue
+            genotype_dic[region][genome].append([allele, abundance])
+
+        for region, region_genotype in genotype_dic.items():
+            print >> sys.stderr, region
+            included, total = 0, 0
+            for genome, genome_alleles in region_genotype.items():
+                genome_alleles = set([allele for allele, _ in genome_alleles])
+                if "father" in CEPH_pedigree[genome]:
+                    assert "mother" in CEPH_pedigree[genome]
+                    parents = [CEPH_pedigree[genome]["father"], CEPH_pedigree[genome]["mother"]]
+                else:
+                    parents = []
+                parent_alleles = set()
+                for parent in parents:
+                    for parent_allele, _ in region_genotype[parent]:
+                        parent_alleles.add(parent_allele)
+                print >> sys.stderr, "\t", genome, genome_alleles, parent_alleles
+                if len(parent_alleles) > 0:
+                    total += 1
+                    if genome_alleles.issubset(parent_alleles):
+                        included += 1
+            print >> sys.stderr, "\t%d / %d" % (included, total)
 
 
 """
@@ -236,6 +303,10 @@ if __name__ == '__main__':
                         dest='verbose',
                         action='store_true',
                         help='also print some statistics to stderr')
+    parser.add_argument('--platinum-check',
+                        dest='platinum_check',
+                        action='store_true',
+                        help='Check for concordance of platinum genomes')
 
     args = parser.parse_args()
 
@@ -271,5 +342,6 @@ if __name__ == '__main__':
                args.max_sample,
                args.assembly,
                args.out_dir,
-               args.verbose)
+               args.verbose,
+               args.platinum_check)
 

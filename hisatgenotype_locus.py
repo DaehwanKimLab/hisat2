@@ -261,8 +261,8 @@ def typing(simulation,
                 alignment_fname = "%s_output.bam" % base_fname
             else:
                 alignment_fname = read_fname[0].split('/')[-1]
-                alignment_fname = alignment_fname.split('.')[0] + ".bam"
-                
+                alignment_fname = "%s.bam" % '.'.join(alignment_fname.split('.')[:2])
+                    
             typing_common.align_reads(aligner,
                                       simulation,
                                       genotype_genome if genotype_genome != "" else (base_fname + "." + index_type),
