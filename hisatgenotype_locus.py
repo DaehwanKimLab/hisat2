@@ -1675,6 +1675,9 @@ def read_Gene_alleles_from_vars(Vars, Var_list, Links, Genes):
             if prev_pos < len(backbone_seq):
                 seq += backbone_seq[prev_pos:]
             Genes[gene_name][allele_name] = seq
+
+        if len(Genes[gene_name]) <= 1:
+            Genes[gene_name]["%s*GRCh38" % gene_name] = backbone_seq
             
     
 """
@@ -1905,6 +1908,12 @@ def genotyping_locus(base_fname,
         Vars, Var_list = read_Gene_vars("%s.snp" % base_fname)
         Links = read_Gene_links("%s.link" % base_fname)
 
+    # Some loci may have only one allele
+    for gene_name in refGene_loci.keys():
+        if gene_name in Vars:
+            continue
+        Vars[gene_name], Var_list[gene_name], Links[gene_name] = {}, [], {}        
+
     # Read allele sequences
     if genotype_genome != "":
         read_backbone_alleles(genotype_genome, refGene_loci, Genes)
@@ -1980,7 +1989,7 @@ def genotyping_locus(base_fname,
 
         if "test_list" in debug_instr:
             test_list = [[debug_instr["test_list"].split('-')]]
-            
+
         for test_i in range(len(test_list)):
             if "test_id" in debug_instr:
                 test_ids = debug_instr["test_id"].split('-')
