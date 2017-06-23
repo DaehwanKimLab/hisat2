@@ -243,14 +243,18 @@ def genotyping(read_dir,
                     parents = [CEPH_pedigree[genome]["father"], CEPH_pedigree[genome]["mother"]]
                 else:
                     parents = []
-                parent_alleles = set()
-                for parent in parents:
-                    for parent_allele, _ in region_genotype[parent]:
-                        parent_alleles.add(parent_allele)
-                print >> sys.stderr, "\t", genome, genome_alleles, parent_alleles
-                if len(parent_alleles) > 0:
+                parent_allele_sets = []
+                assert len(parents) in [0, 2]
+                if len(parents) == 2 and \
+                   parents[0] in region_genotype and \
+                   parents[1] in region_genotype:
+                    for parent_allele, _ in region_genotype[parents[0]]:
+                        for parent_allele2, _ in region_genotype[parents[1]]:
+                            parent_allele_sets.append(set([parent_allele, parent_allele2]))
+                print >> sys.stderr, "\t", genome, genome_alleles, parent_allele_sets
+                if len(parent_allele_sets) > 0:
                     total += 1
-                    if genome_alleles.issubset(parent_alleles):
+                    if genome_alleles in parent_allele_sets:
                         included += 1
             print >> sys.stderr, "\t%d / %d" % (included, total)
 

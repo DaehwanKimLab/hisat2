@@ -938,17 +938,18 @@ def typing(simulation,
                                     assert type_ == "insertion"
                                     data_ = read_seq[read_pos:read_pos + length_]
                                 if add:
-                                    var_id, novel_var_count = add_novel_var(gene_vars,
-                                                                            gene_var_list,
-                                                                            novel_var_count,
-                                                                            type_ if type_ != "mismatch" else "single",
-                                                                            pos_,
-                                                                            data_)
-                                    cmp_list[cmp_i][3] = var_id
-                            if var_id not in var_count:
-                                var_count[var_id] = 1
-                            else:
-                                var_count[var_id] += 1
+                                    var_id_, novel_var_count = add_novel_var(gene_vars,
+                                                                             gene_var_list,
+                                                                             novel_var_count,
+                                                                             type_ if type_ != "mismatch" else "single",
+                                                                             pos_,
+                                                                             data_)
+                                    cmp_list[cmp_i][3] = var_id_
+                            if var_id_ != "unknown":
+                                if var_id_ not in var_count:
+                                    var_count[var_id_] = 1
+                                else:
+                                    var_count[var_id_] += 1
                                 
                         if type_ != "deletion":
                             read_pos += length_
