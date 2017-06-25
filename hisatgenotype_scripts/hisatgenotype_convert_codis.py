@@ -133,6 +133,8 @@ orig_CODIS_seq = {
      "TCTATCTATCTATCTATCTGTCTGTCTGTCTGTCTGTCTGTCTATCTATCTATATCTATCTATCTATCATCTATCTATCCATATCTATCTATCTATCTATCTATCTATCTATCTATCTATCTATCTA",
      "TCGTCTATCTATCCAGTCTATCTACCTCCTATTAGTCTGTCTCTGGAGAACATTGACTAATACAAC"],
 
+    # "AMEL" - http://www.cstl.nist.gov/biotech/strbase/jpg_amel.htm
+    #          X chromosome has 6 bp deletion and Y chromosome doesn't
     "AMELX" :
     ["",
      "TGTTGATTCTTTATCCCAGATGTTTCTCAAGTGG", # chromosome X at 11296898
@@ -145,9 +147,6 @@ orig_CODIS_seq = {
      "",
      ""]
 }
-
-# "AMEL" - http://www.cstl.nist.gov/biotech/strbase/jpg_amel.htm
-#          X chromosome has 6 bp deletion and Y chromosome doesn't
 
 CODIS_ref_name = {}
 

@@ -156,11 +156,11 @@ def worker(lock,
                 continue
 
             rank, _, allele, _, abundance = line.split()        
-            output_list.append([allele, abundance[:-2]])
+            output_list.append([allele, float(abundance[:-2])])
 
     lock.acquire()
     for allele, abundance in output_list:
-        print >> sys.stdout, "%s\t%s\t%s" % (genome, allele, abundance)
+        print >> sys.stdout, "%s\t%s\t%.2f" % (genome, allele, abundance)
         genotype_results.append([genome, allele, abundance])
     sys.stdout.flush()
     lock.release()
@@ -231,6 +231,9 @@ def genotyping(read_dir,
                 genotype_dic[region][genome] = []
             if len(genotype_dic[region][genome]) >= 2:
                 continue
+            # DK - debugging purposes
+            # if abundance < 0.15 * 100:
+            #    continue
             genotype_dic[region][genome].append([allele, abundance])
 
         for region, region_genotype in genotype_dic.items():

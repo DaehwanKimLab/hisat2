@@ -604,7 +604,9 @@ def align_reads(aligner,
             aligner_cmd += ["--max-altstried", "64"]
             aligner_cmd += ["--haplotype"]
             if base_fname == "codis":
-                aligner_cmd += ["--enable-codis"]        
+                aligner_cmd += ["--enable-codis"]
+                aligner_cmd += ["--no-softclip"]
+    
     elif aligner == "bowtie2":
         aligner_cmd = [aligner,
                        "--no-unal",
@@ -621,6 +623,7 @@ def align_reads(aligner,
     else:
         aligner_cmd += ["-1", "%s" % read_fname[0],
                         "-2", "%s" % read_fname[1]]
+
     if verbose >= 1:
         print >> sys.stderr, ' '.join(aligner_cmd)
     align_proc = subprocess.Popen(aligner_cmd,

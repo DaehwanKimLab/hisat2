@@ -1025,14 +1025,13 @@ def typing(simulation,
 
                             # DK - debugging purposes
                             """
-                            debug_allele_id = "A*02:406"
-                            assert debug_allele_id in Gene_count_per_read
-                            debug_max_read_count = max(Gene_count_per_read.values())
-                            debug_read_count = Gene_count_per_read[debug_allele_id]
-                            if debug_read_count == debug_max_read_count and \
-                               Gene_count_per_read["A*11:01:01:01"] < debug_max_read_count and \
-                               Gene_count_per_read["A*02:01:01:01"] < debug_max_read_count:
-                                print prev_read_id
+                            debug_allele_id = "D8S1179*12"
+                            assert debug_allele_id in Gene_gen_count_per_read
+                            debug_max_read_count = max(Gene_gen_count_per_read.values())
+                            debug_read_count = Gene_gen_count_per_read[debug_allele_id]
+                            if debug_read_count < debug_max_read_count:
+                                print prev_read_id, debug_read_count, debug_max_read_count, Gene_gen_count_per_read
+                                print "\t", left_positive_hts, right_positive_hts
                                 None
                             if prev_read_id == "HSQ1008:175:C0JVFACXX:5:1109:17665:21583":
                                 for line in prev_lines:
@@ -1048,8 +1047,7 @@ def typing(simulation,
                                         # print "allele max:", allele_id, count
                                 # sys.exit(1)
                                 None
-                            """
-                                
+                            """                                
 
                             cur_cmpt, cur_cmpt_gen = "", ""
                             if base_fname == "hla":
