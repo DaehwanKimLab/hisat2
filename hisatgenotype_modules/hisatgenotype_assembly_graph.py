@@ -1483,6 +1483,15 @@ class Graph:
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
                 print >> js_file, r'ctx.stroke();'
 
+        # Draw backbone sequence
+        y = get_dspace(0, max_right, 4)
+        print >> js_file, r'ctx.fillStyle = "purple";'
+        print >> js_file, r'ctx.font = "20px Times New Roman";'
+        print >> js_file, r'ctx.font = "8px Times New Roman";'
+        for pos in range(len(self.backbone)):
+            base = self.backbone[pos]
+            print >> js_file, r'ctx.fillText("%s", %d, %d);' % (base, get_x(pos), get_y(y))
+
         # Draw true or predicted alleles
         node_colors = ["#FFFF00", "#00FF00", "#FFCBA4", "#C14581"]
         allele_node_colors = ["#DDDD00", "#008800", "#DDA982", "#A12561"]
@@ -1583,7 +1592,7 @@ class Graph:
             # Draw label
             print >> js_file, r'ctx.fillStyle = "blue";'
             print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
-                (pos, get_x(pos+2), get_y(y + 2))
+                (pos + 1, get_x(pos+1), get_y(y + 2))
 
         # Draw nodes
         node_to_y = {}

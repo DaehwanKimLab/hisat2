@@ -1011,16 +1011,13 @@ def typing(simulation,
 
                             for positive_ht in left_positive_hts | right_positive_hts:
                                 exon_hts = get_exon_haplotypes(positive_ht, ref_exons)
-
-                                if prev_read_id == "aHSQ1008:175:C0JVFACXX:5:1109:17665:21583":
-                                    print "positive_ht:", positive_ht, "exon_hts:", exon_hts
-                                    
                                 for exon_ht in exon_hts:
                                     add_count(Gene_count_per_read, exon_ht, 1)
                                 add_count(Gene_gen_count_per_read, positive_ht, 1)
 
                             # DK - debugging purposes
-                            if prev_read_id.startswith("a30"):
+                            if prev_read_id.startswith("HSQ1008:173:C0KAMACXX:3:1207:5452"):
+                                print prev_read_id, left_positive_hts, right_positive_hts
                                 print Gene_gen_count_per_read
 
                             # DK - debugging purposes
