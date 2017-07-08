@@ -25,6 +25,12 @@ import inspect, operator
 from copy import deepcopy
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
+try:
+    import openpyxl
+except ImportError:
+    print >> sys.stderr, "Error: please install openpyxl by running 'pip install openpyxl'."
+    sys.exit(1)
+
 
 # sequences for DNA fingerprinting loci are available at http://www.cstl.nist.gov/biotech/strbase/seq_ref.htm
 
@@ -353,6 +359,7 @@ Extract multiple sequence alignments
 def extract_msa(base_dname,
                 base_fname,
                 locus_list,
+                min_freq,
                 verbose):    
     # Download human genome and HISAT2 index
     HISAT2_fnames = ["grch38",
@@ -360,6 +367,29 @@ def extract_msa(base_dname,
                      "genome.fa.fai"]
     if not typing_common.check_files(HISAT2_fnames):
         typing_common.download_genome_and_index(ex_path)
+
+    # Load allele frequency information
+    allele_freq = {}
+    if min_freq > 0.0:
+        excel = openpyxl.load_workbook("hisatgenotype_db/CODIS/NIST-US1036-AlleleFrequencies.xlsx")
+        sheet = excel.get_sheet_by_name(u'All data, n=1036')
+        for col in range(2, 100):
+            locus_name = sheet.cell(row = 3, column = col).value
+            if not locus_name:
+                break
+            locus_name = locus_name.encode('ascii','ignore')
+            locus_name = locus_name.upper()
+            assert locus_name not in allele_freq
+            allele_freq[locus_name] = {}
+
+            for row in range(4, 101):
+                allele_id = sheet.cell(row = row, column = 1).value
+                allele_id = str(allele_id)
+                freq = sheet.cell(row = row, column = col).value
+                if not freq:
+                    continue
+                allele_freq[locus_name][allele_id] = float(freq)
+        excel.close()
 
     CODIS_seq = orig_CODIS_seq
     if len(locus_list) > 0:
@@ -385,6 +415,12 @@ def extract_msa(base_dname,
             locus_name2, allele_id, repeat_st = line.strip().split('\t')
             if locus_name != locus_name2:
                 continue
+            if min_freq > 0.0:
+                assert locus_name in allele_freq
+                if allele_id not in allele_freq[locus_name] or \
+                   allele_freq[locus_name][allele_id] < min_freq:
+                    continue
+                
             alleles.append([allele_id, repeat_st])
 
         # From   [TTTC]3TTTTTTCT[CTTT]20CTCC[TTCC]2
@@ -586,7 +622,12 @@ if __name__ == '__main__':
                         dest="locus_list",
                         type=str,
                         default="",
-                        help="base filename (default: empty)")    
+                        help="base filename (default: empty)")
+    parser.add_argument("--min-freq",
+                        dest="min_freq",
+                        type=float,
+                        default=0.0,
+                        help="minimum allele frequency (default: 0.0)")    
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -608,5 +649,6 @@ if __name__ == '__main__':
     extract_msa(base_dname,
                 base_fname,
                 locus_list,
+                args.min_freq,
                 args.verbose)
 

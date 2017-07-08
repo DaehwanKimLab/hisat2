@@ -226,6 +226,7 @@ def extract_database_if_not_exists(base,
               base + ".index.snp",
               base + ".haplotype",
               base + ".link",
+              base + ".allele",
               base + ".partial"]
     if check_files(fnames):
         return
@@ -1289,7 +1290,7 @@ def identify_ambigious_diffs(ref_seq,
         type, cur_left, length = cmp_i[:3]
         var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
 
-        # DK - debugging purpose
+        # DK - debugging purposes
         if type in ["mismatch", "deletion", "insertion"]:
             if not var_id.startswith("hv"):
                 continue
@@ -1311,6 +1312,7 @@ def identify_ambigious_diffs(ref_seq,
                 break            
             if ht_pos > cur_right:
                 continue
+
             if len(cur_ht) > 0:
                 if ht.find('-'.join(cur_ht)) == -1:
                     continue
@@ -1323,6 +1325,15 @@ def identify_ambigious_diffs(ref_seq,
                 ht_type, ht_pos, ht_data = Vars[var_id2]
                 if ht_type == "deletion":
                     ht_pos = ht_pos + int(ht_data) - 1
+
+            # DK - debugging purposes
+            if debug:
+                print "DK:", cmp_i, ht_j, Alts_left_list[ht_j], ht_pos, "TT", cur_ht, ht
+
+                for ht_pos, ht in Alts_left_list:
+                    print ht_pos, ht
+
+                sys.exit(1)
                     
             if left < ht_pos:
                 continue

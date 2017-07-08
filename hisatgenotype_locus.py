@@ -232,6 +232,7 @@ def typing(simulation,
            assembly,
            output_base,
            error_correction,
+           keep_alignment,
            allow_discordant,
            display_alleles,
            fastq,
@@ -1016,13 +1017,13 @@ def typing(simulation,
                                 add_count(Gene_gen_count_per_read, positive_ht, 1)
 
                             # DK - debugging purposes
-                            if prev_read_id.startswith("HSQ1008:173:C0KAMACXX:3:1207:5452"):
+                            if prev_read_id.startswith("HSQ1003:106:C0K8TACXX:2:1207:1190:92036#"):
                                 print prev_read_id, left_positive_hts, right_positive_hts
                                 print Gene_gen_count_per_read
 
                             # DK - debugging purposes
                             """
-                            debug_allele_id = "D8S1179*12"
+                            debug_allele_id = "D13S317*9"
                             assert debug_allele_id in Gene_gen_count_per_read
                             debug_max_read_count = max(Gene_gen_count_per_read.values())
                             debug_read_count = Gene_gen_count_per_read[debug_allele_id]
@@ -1072,8 +1073,7 @@ def typing(simulation,
 
                             prev_lines = []
 
-                        left_positive_hts, right_positive_hts = set(), set()
-                        
+                        left_positive_hts, right_positive_hts = set(), set()                        
                         Gene_count_per_read, Gene_gen_count_per_read = {}, {}
                         for Gene_name in Gene_names[gene]:
                             if Gene_name.find("BACKBONE") != -1:
@@ -1101,6 +1101,7 @@ def typing(simulation,
                                 cmp_list2.append(["match", pos, 1])
                         else:
                             cmp_list2.append(cmp)
+                            
                     cmp_list_left, cmp_list_right, cmp_left_alts, cmp_right_alts = \
                     typing_common.identify_ambigious_diffs(ref_seq,
                                                            gene_vars,
@@ -1110,7 +1111,7 @@ def typing(simulation,
                                                            Alts_right_list,
                                                            cmp_list2,
                                                            verbose,
-                                                           orig_read_id.startswith("a30|R"))  # debug?
+                                                           orig_read_id.startswith("HSQ1003:106:C0K8TACXX:2:1110:17145:36176#"))  # debug?
 
                     mid_ht = []
                     for cmp in cmp_list2[cmp_list_left:cmp_list_right+1]:
@@ -1604,7 +1605,7 @@ def typing(simulation,
                 else:
                     test_passed[aligner_type] += 1
 
-        if remove_alignment_file and not simulation:
+        if not keep_alignment and remove_alignment_file:
             os.system("rm %s*" % (alignment_fname))
 
     report_file.close()
@@ -1791,6 +1792,7 @@ def genotyping_locus(base_fname,
                      assembly,
                      output_base,
                      error_correction,
+                     keep_alignment,
                      discordant,
                      display_alleles,
                      verbose,
@@ -1840,6 +1842,7 @@ def genotyping_locus(base_fname,
                          genotype_genome + ".link",
                          genotype_genome + ".clnsig",
                          genotype_genome + ".coord",
+                         genotype_genome + ".allele",
                          genotype_genome + ".partial"]
         for i in range(8):
             genome_fnames.append(genotype_genome + ".%d.ht2" % (i+1))
@@ -1860,6 +1863,17 @@ def genotyping_locus(base_fname,
                                                     index_type,
                                                     threads,
                                                     verbose >= 1)
+
+    # Read alleles
+    alleles = set()
+    if genotype_genome != "":
+        for line in open("%s.allele" % genotype_genome):
+            family, allele_name = line.strip().split('\t')
+            if family == base_fname:
+                alleles.add(allele_name)
+    else:
+        for line in open("%s.allele" % base_fname):
+            alleles.add(line.strip())
 
     # Read partial alleles
     partial_alleles = set()
@@ -1896,7 +1910,7 @@ def genotyping_locus(base_fname,
     if len(locus_list) == 0:
         locus_list = refGene_loci.keys()
 
-    # Read HLA variants, and link information
+    # Read variants, and link information
     if genotype_genome:
         Vars, Var_list = read_Gene_vars_genotype_genome("%s.snp" % genotype_genome, refGene_loci)
         Links = read_Gene_links("%s.link" % genotype_genome)
@@ -1904,7 +1918,7 @@ def genotyping_locus(base_fname,
         Vars, Var_list = read_Gene_vars("%s.snp" % base_fname)
         Links = read_Gene_links("%s.link" % base_fname)
 
-    # Some loci may have only one allele
+    # Some loci may have only one allele such as AMELX and AMELY
     for gene_name in refGene_loci.keys():
         if gene_name in Vars:
             continue
@@ -1917,6 +1931,13 @@ def genotyping_locus(base_fname,
     else:
         read_Gene_alleles(base_fname + "_backbone.fa", Genes)
         read_Gene_alleles_from_vars(Vars, Var_list, Links, Genes)
+
+    # alleles corresponding to backbones
+    for allele in alleles:
+        locus = allele.split('*')[0]
+        assert locus in Genes
+        if allele not in Genes[locus]:
+            Genes[locus][allele] = Genes[locus]["%s*BACKBONE" % locus]
 
     # Sanity Check
     if os.path.exists(base_fname + "_backbone.fa") and \
@@ -1931,19 +1952,19 @@ def genotyping_locus(base_fname,
                 allele_seq2 = Genes2[gene_name][allele_name]
                 assert allele_seq == allele_seq2
 
-    # HLA gene alleles
+    # alleles names
     Gene_names = {}
     for Gene_gene, data in Genes.items():
         Gene_names[Gene_gene] = list(data.keys())
 
-    # HLA gene allele lengths
+    # allele lengths
     Gene_lengths = {}
     for Gene_gene, Gene_alleles in Genes.items():
         Gene_lengths[Gene_gene] = {}
         for allele_name, seq in Gene_alleles.items():
             Gene_lengths[Gene_gene][allele_name] = len(seq)
 
-    # Test HLA typing
+    # Test typing
     test_list = []
     if simulation:
         basic_test, pair_test = True, False
@@ -2043,6 +2064,7 @@ def genotyping_locus(base_fname,
                                      assembly,
                                      output_base,
                                      error_correction,
+                                     keep_alignment,
                                      discordant,
                                      display_alleles,
                                      fastq,
@@ -2088,6 +2110,7 @@ def genotyping_locus(base_fname,
                assembly,
                output_base,
                error_correction,
+               keep_alignment,
                discordant,
                display_alleles,
                fastq,
@@ -2230,6 +2253,10 @@ if __name__ == '__main__':
                         dest="error_correction",
                         action="store_false",
                         help="Correct sequencing errors")
+    parser.add_argument("--keep-alignment",
+                        dest="keep_alignment",
+                        action="store_true",
+                        help="Keep alignment file")
     parser.add_argument("--only-locus-list",
                         dest="only_locus_list",
                         type=str,
@@ -2332,6 +2359,7 @@ if __name__ == '__main__':
                      args.assembly,
                      args.output_base,
                      args.error_correction,
+                     args.keep_alignment,
                      args.discordant,
                      display_alleles,
                      args.verbose_level,
