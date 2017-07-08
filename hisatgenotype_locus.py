@@ -1316,10 +1316,7 @@ def typing(simulation,
             # Calculate the abundance of representative alleles on exonic sequences
             if base_fname == "hla":
                 # Incorporate non representative alleles (full length alleles)
-                Gene_prob = typing_common.single_abundance(Gene_cmpt,
-                                                           Gene_lengths[gene],
-                                                           True) # exonic sequence
-
+                Gene_prob = typing_common.single_abundance(Gene_cmpt)
                 gen_alleles = set()
                 gen_prob_sum = 0.0
                 for prob_i in range(len(Gene_prob)):
@@ -1348,8 +1345,7 @@ def typing(simulation,
                             Gene_gen_cmpt2[cmpt2] += value
                     Gene_gen_cmpt = Gene_gen_cmpt2
                     Gene_gen_prob = typing_common.single_abundance(Gene_gen_cmpt,
-                                                                   Gene_lengths[gene],
-                                                                   False) # whole gene sequence
+                                                                   Gene_lengths[gene])
                     
                     Gene_combined_prob = {}
                     for allele, prob in Gene_prob:
@@ -1360,7 +1356,7 @@ def typing(simulation,
                     Gene_prob = [[allele, prob] for allele, prob in Gene_combined_prob.items()]
                     Gene_prob = sorted(Gene_prob, cmp=typing_common.Gene_prob_cmp)
             else:
-                Gene_prob = typing_common.single_abundance(Gene_cmpt, Gene_lengths[gene])
+                Gene_prob = typing_common.single_abundance(Gene_cmpt)
 
             if index_type == "graph" and assembly:
                 allele_node_order = []

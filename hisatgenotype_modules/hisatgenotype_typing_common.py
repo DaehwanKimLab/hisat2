@@ -903,7 +903,7 @@ def Gene_prob_cmp(a, b):
 
 """
 """
-def single_abundance(Gene_cmpt, Gene_length, exonic = False):
+def single_abundance(Gene_cmpt, Gene_length = {}):
     def normalize(prob):
         total = sum(prob.values())
         for allele, mass in prob.items():
@@ -925,10 +925,10 @@ def single_abundance(Gene_cmpt, Gene_length, exonic = False):
             if allele not in Gene_prob:
                 Gene_prob[allele] = 0.0
             Gene_prob[allele] += (float(count) / len(alleles))
-    if exonic:
-        normalize(Gene_prob)
-    else:
+    if len(Gene_length) > 0:
         normalize_len(Gene_prob, Gene_length)
+    else:
+        normalize(Gene_prob)
 
     def next_prob(Gene_cmpt, Gene_prob, Gene_length):
         Gene_prob_next = {}
@@ -947,10 +947,10 @@ def single_abundance(Gene_cmpt, Gene_length, exonic = False):
                 if allele not in Gene_prob_next:
                     Gene_prob_next[allele] = 0.0
                 Gene_prob_next[allele] += (float(count) * Gene_prob[allele] / alleles_prob)
-        if exonic:
-            normalize(Gene_prob_next)
-        else:
+        if len(Gene_length) > 0:
             normalize_len(Gene_prob_next, Gene_length)
+        else:
+            normalize(Gene_prob_next)
         return Gene_prob_next
 
     def select_alleles(Gene_prob):
@@ -1002,10 +1002,10 @@ def single_abundance(Gene_cmpt, Gene_length, exonic = False):
         iter += 1
         
     Gene_prob = select_alleles(Gene_prob)
-    if exonic:
-        normalize(Gene_prob)
+    if len(Gene_length) > 0:
+            normalize_len(Gene_prob, Gene_length)
     else:
-        normalize_len(Gene_prob, Gene_length)
+        normalize(Gene_prob)
     Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]
     Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
     return Gene_prob
