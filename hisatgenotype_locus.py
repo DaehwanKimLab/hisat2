@@ -1053,8 +1053,9 @@ def typing(simulation,
                                 cur_cmpt_gen = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
                             else:
                                 cur_cmpt = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
-                            for read_id_, read_node in read_nodes:
+                            for read_id_, read_id_i, read_node in read_nodes:
                                 asm_graph.add_node(read_id_,
+                                                   read_id_i,
                                                    read_node,
                                                    simulation)
                             read_nodes, read_var_list = [], []
@@ -1139,68 +1140,120 @@ def typing(simulation,
 
                     # DK - debugging purposes
                     DK_debug = False
-                    if orig_read_id.startswith("a30|R"):
+                    if orig_read_id.startswith("30|R!"):
                         DK_debug = True
                         print line
                         print cmp_list
                         print "positive hts:", left_positive_hts, right_positive_hts
                         print "cmp_list [%d, %d]" % (cmp_list_left, cmp_list_right)
 
-                    # Node
-                    read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
-                    read_vars = []
-                    ref_pos, read_pos = left_pos, 0
-                    cmp_i = 0
-                    while cmp_i < len(cmp_list):
-                        cmp = cmp_list[cmp_i]
-                        type, length = cmp[0], cmp[2]
-                        if type in ["match", "mismatch"]:
-                            if read_node_pos < 0:
-                                read_node_pos = ref_pos
-                        if type == "match":
-                            read_node_seq += list(read_seq[read_pos:read_pos+length])
-                            read_node_qual += list(read_qual[read_pos:read_pos+length])
-                            read_node_var += ([''] * length)
-                            read_pos += length
-                        elif type == "mismatch":
-                            var_id = cmp[3]
-                            read_base, qual = read_seq[read_pos], read_qual[read_pos]
-                            read_node_seq += [read_base]
-                            read_node_qual += [qual]
-                            read_node_var.append(var_id)
-                            read_pos += 1
-                        elif type == "insertion":
-                            var_id = cmp[3]
-                            ins_len = length
-                            ins_seq = read_seq[read_pos:read_pos+ins_len]
-                            read_node_seq += ["I%s" % nt for nt in ins_seq]
-                            read_node_qual += list(read_qual[read_pos:read_pos+ins_len])
-                            read_node_var += ([var_id] * ins_len)                                        
-                            read_pos += length
-                        elif type == "deletion":
-                            var_id = cmp[3]
-                            del_len = length
-                            read_node_seq += (['D'] * del_len)
-                            read_node_qual += ([''] * del_len)
-                            if len(read_node_seq) > len(read_node_var):
-                                assert len(read_node_seq) == len(read_node_var) + del_len
-                                read_node_var += ([var_id] * del_len)
-                        else:
-                            assert type == "intron"
-                        cmp_i += 1
-
-                    # Node
                     if assembly:
-                        read_nodes.append([node_read_id,
-                                           assembly_graph.Node(node_read_id,
-                                                               read_node_pos,
-                                                               read_node_seq,
-                                                               read_node_qual,
-                                                               read_node_var,
-                                                               ref_seq,
-                                                               gene_vars,
-                                                               mpileup,
-                                                               simulation)])
+                        # Construct multiple candidate realignments for CODIS
+                        cmp_llist = []
+                        hts = left_positive_hts if is_left_read else right_positive_hts
+                        assert len(hts) > 0
+                        for ht in hts:
+                            cmp_list = []
+                            read_pos = 0
+                            vars_ = ht.split('-')
+                            left_ = int(vars_[0])
+                            vars_ = vars_[1:]
+                            for var_i in range(len(vars_)):
+                                var_id = vars_[var_i]
+                                # ref_seq, read_seq
+                                if var_i == len(vars_) - 1:
+                                    right_ = int(var_id)
+                                else:
+                                    var_type, var_pos, var_data = gene_vars[var_id]
+                                    right_ = var_pos - 1
+                                    
+                                for pos in range(left_, right_ + 1):
+                                    if read_seq[read_pos] != ref_seq[pos]:
+                                        if left_ < pos:
+                                            cmp_list.append(["match", left_, pos - left_])
+                                        cmp_list.append(["mismatch", pos, 1, "unknown"])
+                                        left_ = pos + 1
+                                    read_pos += 1                                    
+                                if left_ <= right_:
+                                    cmp_list.append(["match", left_, right_ - left_ + 1])
+                                    
+                                if var_i == len(vars_) - 1:
+                                    left_ = right_ + 1
+                                    break
+
+                                if var_type == "single":
+                                    cmp_list.append(["mismatch", var_pos, 1, var_id])
+                                    left_ = var_pos + 1
+                                    read_pos += 1
+                                elif var_type == "deletion":
+                                    del_len = int(var_data)
+                                    cmp_list.append(["deletion", var_pos, del_len, var_id])
+                                    left_ = var_pos + del_len                                    
+                                else:
+                                    assert var_type == "insertion"
+                                    cmp_list.append(["insertion", var_pos, len(var_data), var_id])
+                                    left_ = var_pos
+                                    read_pos += len(var_data)
+                                    
+                            assert len(cmp_list) > 0
+                            cmp_llist.append(cmp_list)
+
+                        for cmp_list_i in range(len(cmp_llist)):
+                            # Node
+                            cmp_list = cmp_llist[cmp_list_i]
+                            read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
+                            read_vars = []
+                            ref_pos, read_pos = left_pos, 0
+                            cmp_i = 0
+                            while cmp_i < len(cmp_list):
+                                cmp = cmp_list[cmp_i]
+                                type, length = cmp[0], cmp[2]
+                                if type in ["match", "mismatch"]:
+                                    if read_node_pos < 0:
+                                        read_node_pos = ref_pos
+                                if type == "match":
+                                    read_node_seq += list(read_seq[read_pos:read_pos+length])
+                                    read_node_qual += list(read_qual[read_pos:read_pos+length])
+                                    read_node_var += ([''] * length)
+                                    read_pos += length
+                                elif type == "mismatch":
+                                    var_id = cmp[3]
+                                    read_base, qual = read_seq[read_pos], read_qual[read_pos]
+                                    read_node_seq += [read_base]
+                                    read_node_qual += [qual]
+                                    read_node_var.append(var_id)
+                                    read_pos += 1
+                                elif type == "deletion":
+                                    var_id = cmp[3]
+                                    del_len = length
+                                    read_node_seq += (['D'] * del_len)
+                                    read_node_qual += ([''] * del_len)
+                                    if len(read_node_seq) > len(read_node_var):
+                                        assert len(read_node_seq) == len(read_node_var) + del_len
+                                        read_node_var += ([var_id] * del_len)
+                                elif type == "insertion":
+                                    var_id = cmp[3]
+                                    ins_len = length
+                                    ins_seq = read_seq[read_pos:read_pos+ins_len]
+                                    read_node_seq += ["I%s" % nt for nt in ins_seq]
+                                    read_node_qual += list(read_qual[read_pos:read_pos+ins_len])
+                                    read_node_var += ([var_id] * ins_len)                                        
+                                    read_pos += length
+                                else:
+                                    assert type == "intron"
+                                cmp_i += 1
+
+                            read_nodes.append([node_read_id,
+                                               cmp_list_i,
+                                               assembly_graph.Node(node_read_id,
+                                                                   read_node_pos,
+                                                                   read_node_seq,
+                                                                   read_node_qual,
+                                                                   read_node_var,
+                                                                   ref_seq,
+                                                                   gene_vars,
+                                                                   mpileup,
+                                                                   simulation)])
 
                     prev_read_id = read_id
                     prev_right_pos = right_pos
@@ -1218,8 +1271,9 @@ def typing(simulation,
                     if base_fname == "hla":
                         add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
                     add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
-                    for read_id_, read_node in read_nodes:
+                    for read_id_, read_id_i, read_node in read_nodes:
                         asm_graph.add_node(read_id_,
+                                           read_id_i,
                                            read_node,
                                            simulation)
                     read_nodes, read_var_list = [], []
