@@ -459,7 +459,7 @@ class Graph:
         self.simulation = simulation
 
         self.read_nodes = self.nodes = {}
-        self.node_others = {}
+        self.other_nodes = {}
         self.edges = {}
         self.to_node, self.from_node = {}, {}
 
@@ -493,9 +493,9 @@ class Graph:
             assert id not in self.nodes
             self.nodes[id] = node
         else:
-            if id not in self.node_others:
-                self.node_others[id] = []
-            self.node_others[id].append(node)
+            if id not in self.other_nodes:
+                self.other_nodes[id] = []
+            self.other_nodes[id].append(node)
 
         
     # Remove nodes that are inside other nodes or with low coverage
@@ -1607,8 +1607,8 @@ class Graph:
         for id, left, right in nodes:
             node = self.nodes[id]
             nodes2 = [[node, left, right]]
-            if id in self.node_others:
-                for node in self.node_others[id]:
+            if id in self.other_nodes:
+                for node in self.other_nodes[id]:
                     nodes2.append([node, node.left, node.right])
 
             # Get y position
