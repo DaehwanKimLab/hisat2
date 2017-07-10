@@ -1320,36 +1320,27 @@ def identify_ambigious_diffs(ref_seq,
             ht = ht.split('-')[:-1]
             if len(cur_ht) + 1 == len(ht):
                 ht_pos = int(ht[0])
+                if left < ht_pos:
+                    continue
             else:
                 var_id2 = ht[len(ht) - len(cur_ht) - 1]
                 ht_type, ht_pos, ht_data = Vars[var_id2]
                 if ht_type == "deletion":
                     ht_pos = ht_pos + int(ht_data) - 1
-
-            # DK - debugging purposes
-            if debug:
-                print "DK:", cmp_i, ht_j, Alts_left_list[ht_j], ht_pos, "TT", cur_ht, ht
-
-                for ht_pos, ht in Alts_left_list:
-                    print ht_pos, ht
-
-                sys.exit(1)
-                    
-            if left < ht_pos:
-                continue
+                if left <= ht_pos:
+                    continue
 
             i_found = True
-
             if debug:
                 print cmp_list[:i+1]
-                print "\t", cur_ht, "vs", Alts_left_list[ht_j], ht_pos
+                print "\t", cur_ht, "vs", Alts_left_list[ht_j]
 
             _, rep_ht = Alts_left_list[ht_j]
 
             if debug:
                 print "DK1:", cmp_i, cmp_list
                 print "DK2:", rep_ht, Alts_left[rep_ht]
-                print "DK3:", left, right, ht_pos
+                print "DK3:", left, right
 
             for alt_ht_str in Alts_left[rep_ht]:
                 alt_ht = alt_ht_str.split('-')
@@ -1449,12 +1440,13 @@ def identify_ambigious_diffs(ref_seq,
             ht = ht.split('-')[1:]
             if len(cur_ht) + 1 == len(ht):
                 ht_pos = int(ht[-1])
+                if right > ht_pos:
+                    continue
             else:
                 var_id2 = ht[len(cur_ht)]
-                _, ht_pos, _ = Vars[var_id2]
-
-            if right > ht_pos:
-                continue
+                var_type, ht_pos, _ = Vars[var_id2]
+                if right >= ht_pos:
+                    continue
 
             i_found = True
             _, rep_ht = Alts_right_list[ht_j]

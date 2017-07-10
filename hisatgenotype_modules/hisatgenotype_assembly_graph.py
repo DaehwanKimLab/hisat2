@@ -614,6 +614,11 @@ class Graph:
             nodes = []
             for id, node in self.nodes.items():
                 seq = node_seq[id]
+
+                # DK - debugging purposes
+                if id in self.other_nodes:
+                    continue
+                
                 if len(seq) < k:
                     continue
                 kmer, seq = seq[:k], seq[k:]
@@ -1610,6 +1615,10 @@ class Graph:
             if id in self.other_nodes:
                 for node in self.other_nodes[id]:
                     nodes2.append([node, node.left, node.right])
+                    if left > node.left:
+                        left = node.left
+                    if right < node.right:
+                        right = node.right
 
             # Get y position
             y = get_dspace(left, right, 14 * len(nodes2))
@@ -1620,7 +1629,9 @@ class Graph:
 
                 node_vars = node.get_vars()
                 node_var_ids = node.get_var_ids()
-                if len(allele_nodes) > 0:
+                if len(nodes2) > 1:
+                    color = "#D8D8D8"
+                elif len(allele_nodes) > 0:
                     color = "white"
                     max_common = -sys.maxint
                     for a in range(len(allele_nodes)):

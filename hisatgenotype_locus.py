@@ -1017,13 +1017,13 @@ def typing(simulation,
                                 add_count(Gene_gen_count_per_read, positive_ht, 1)
 
                             # DK - debugging purposes
-                            if prev_read_id.startswith("HSQ1003:106:C0K8TACXX:2:1207:1190:92036#"):
+                            if prev_read_id.startswith("HS2000-115_741:7:2104:14038:88562#"):
                                 print prev_read_id, left_positive_hts, right_positive_hts
                                 print Gene_gen_count_per_read
 
                             # DK - debugging purposes
                             """
-                            debug_allele_id = "D13S317*9"
+                            debug_allele_id = "TH01*10"
                             assert debug_allele_id in Gene_gen_count_per_read
                             debug_max_read_count = max(Gene_gen_count_per_read.values())
                             debug_read_count = Gene_gen_count_per_read[debug_allele_id]
@@ -1112,7 +1112,7 @@ def typing(simulation,
                                                            Alts_right_list,
                                                            cmp_list2,
                                                            verbose,
-                                                           orig_read_id.startswith("HSQ1003:106:C0K8TACXX:2:1110:17145:36176#"))  # debug?
+                                                           orig_read_id.startswith("36|R#"))  # debug?
 
                     mid_ht = []
                     for cmp in cmp_list2[cmp_list_left:cmp_list_right+1]:
@@ -1203,7 +1203,7 @@ def typing(simulation,
                             cmp_list = cmp_llist[cmp_list_i]
                             read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
                             read_vars = []
-                            ref_pos, read_pos = left_pos, 0
+                            ref_pos, read_pos = cmp_list[0][1], 0
                             cmp_i = 0
                             while cmp_i < len(cmp_list):
                                 cmp = cmp_list[cmp_i]
