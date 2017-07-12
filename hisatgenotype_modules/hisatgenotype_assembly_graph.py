@@ -739,8 +739,13 @@ class Graph:
                         assert len(vertices) >= 2
                         relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
                         if len(vertices) == 2:
+                            # DK - debugging purposes
+                            if vertice_count[v] * 10 < relative_avg and False:
+                                num_ids = vertices[v][3]
+                                delete_ids |= set(num_ids)
+                            
                             # Eliminate reads that have conflicts with other reads due to a deletion
-                            if vertice_count[v] * 2 < relative_avg:
+                            elif vertice_count[v] * 2 < relative_avg:
                                 nt, kmer, _, num_ids = vertices[1-v]
                                 if nt == 'D':
                                     num_id = num_ids[0]
@@ -791,8 +796,6 @@ class Graph:
                 del self.nodes[read_id]
 
         # Print De Bruijn graph
-        # """
-        # for i in range(len(debruijn)):
         for i in range(len(debruijn)):
             curr_vertices = debruijn[i]
             if len(curr_vertices) == 0:
@@ -824,9 +827,6 @@ class Graph:
                     
                 if print_msg: print >> sys.stderr, "\t%d:" % v, kmer_seq, len(num_ids), predecessors, num_ids
                     
-
-        # """
-
         # Generate compressed nodes
         paths = []
         path_queue, done = deque(), set()
@@ -955,8 +955,6 @@ class Graph:
 
         known_alleles = False
         while True:
-            # DK - debugging purposes
-            # """
             for i in range(len(equiv_list)):
                 classes = equiv_list[i]
                 for j in range(len(classes)):
@@ -964,7 +962,6 @@ class Graph:
                     if print_msg: print >> sys.stderr, i, j, ids, len(num_ids), sorted(list(num_ids))[:20], alleles
 
                 if print_msg: print >> sys.stderr
-            # """
 
             if known_alleles:
                 for i in range(len(equiv_list)):
@@ -1021,13 +1018,10 @@ class Graph:
                     if common_stat > best_stat:
                         best_common_mat, best_stat, best_i, best_i2 = common_mat, common_stat, i, i2
 
-            # DK - debugging purposes
-            # """
             if print_msg:
                 print >> sys.stderr, "best:", best_i, best_i2, best_stat, best_common_mat
                 print >> sys.stderr
                 print >> sys.stderr
-            # """
 
             if known_alleles and best_stat < 0:
                 self.remove_nodes(self.nodes2)
@@ -1041,7 +1035,6 @@ class Graph:
                         ids, num_ids, all_ids, alleles = classes[j]
                         num_ids = sorted(list(num_ids))
 
-                        # DK - debugging purposes
                         if print_msg: print >> sys.stderr, i, j, num_ids
 
                         assert (num_ids) > 0
@@ -1062,7 +1055,6 @@ class Graph:
                 self.remove_nodes(self.nodes)
                 continue
 
-            # DK - for the moment
             mat = best_common_mat
             classes, classes2 = equiv_list[best_i], equiv_list[best_i2]
 
@@ -1152,8 +1144,11 @@ class Graph:
                     add_merge(classes, classes2, 0, 1, 0)
                 else:
                     classes.append(deepcopy(classes[0]))
+
                     # Handle a special case at 5' end
-                    if 0 in classes[0][0] and len(classes[0][0]) == 1 and mat[0][0] != mat[0][1]:
+                    if 0 in classes[0][0] and \
+                       len(classes[0][0]) == 1 and \
+                       mat[0][0] != mat[0][1]:
                         if mat[0][0] > mat[0][1]:
                             add_merge(classes, classes2, 0, 0, 0)
                             add_copy(classes, classes2, 1, 1, 1)
