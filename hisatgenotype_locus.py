@@ -1112,7 +1112,7 @@ def typing(simulation,
                                                            Alts_right_list,
                                                            cmp_list2,
                                                            verbose,
-                                                           orig_read_id.startswith("36|R#"))  # debug?
+                                                           orig_read_id.startswith("HSQ1009:126:D0UUYACXX:4:2212:9787:80992#"))  # debug?
 
                     mid_ht = []
                     for cmp in cmp_list2[cmp_list_left:cmp_list_right+1]:
@@ -1120,8 +1120,6 @@ def typing(simulation,
                         if type not in ["mismatch", "deletion", "insertion"]:
                             continue                            
                         var_id = cmp[3]
-                        if var_id == "unknown" or var_id.startswith("nv"):
-                            continue
                         mid_ht.append(var_id)
 
                     for l in range(len(cmp_left_alts)):
