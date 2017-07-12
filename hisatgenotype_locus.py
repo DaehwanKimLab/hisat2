@@ -243,7 +243,8 @@ def typing(simulation,
            fragment_len,
            threads,
            best_alleles,
-           verbose):
+           verbose,
+           assembly_verbose):
     if simulation:
         test_passed = {}
     report_file = open(output_base + ".report", 'w')
@@ -1431,7 +1432,7 @@ def typing(simulation,
                 begin_y += 200
                 
                 # Apply De Bruijn graph
-                asm_graph.guided_DeBruijn()
+                asm_graph.guided_DeBruijn(assembly_verbose)
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(begin_y, "Asssembly")
@@ -1844,6 +1845,7 @@ def genotyping_locus(base_fname,
                      discordant,
                      display_alleles,
                      verbose,
+                     assembly_verbose,
                      debug_instr):
     simulation = (read_fname == [] and alignment_fname == "")
     if genotype_genome == "":
@@ -2123,7 +2125,8 @@ def genotyping_locus(base_fname,
                                      fragment_len,
                                      threads,
                                      best_alleles,
-                                     verbose)
+                                     verbose,
+                                     assembly_verbose)
 
             for aligner_type, passed in tmp_test_passed.items():
                 if aligner_type in test_passed:
@@ -2169,7 +2172,8 @@ def genotyping_locus(base_fname,
                fragment_len,
                threads,
                best_alleles,
-               verbose)
+               verbose,
+               assembly_verbose)
 
 
 """
@@ -2314,6 +2318,10 @@ if __name__ == '__main__':
                         dest="discordant",
                         action="store_true",
                         help="Allow discordantly mapped pairs or singletons")
+    parser.add_argument("--assembly-verbose",
+                        dest="assembly_verbose",
+                        action="store_true",
+                        help="Output intermediate assembly information")
     parser.add_argument("--display-alleles",
                         dest="display_alleles",
                         type=str,
@@ -2411,5 +2419,6 @@ if __name__ == '__main__':
                      args.discordant,
                      display_alleles,
                      args.verbose_level,
+                     args.assembly_verbose,
                      debug)
 

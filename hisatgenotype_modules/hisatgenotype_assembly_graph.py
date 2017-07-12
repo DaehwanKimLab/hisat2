@@ -615,7 +615,7 @@ class Graph:
             for id, node in self.nodes.items():
                 seq = node_seq[id]
 
-                # DK - debugging purposes
+                # Ignore reads that are multi-aligned
                 if id in self.other_nodes:
                     continue
                 
