@@ -739,11 +739,6 @@ class Graph:
                         assert len(vertices) >= 2
                         relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
                         if len(vertices) == 2:
-                            # DK - debugging purposes
-                            if vertice_count[v] * 10 < relative_avg and False:
-                                num_ids = vertices[v][3]
-                                delete_ids |= set(num_ids)
-                            
                             # Eliminate reads that have conflicts with other reads due to a deletion
                             elif vertice_count[v] * 2 < relative_avg:
                                 nt, kmer, _, num_ids = vertices[1-v]
@@ -913,7 +908,6 @@ class Graph:
                 return a[1] - b[1]
         paths = sorted(paths, cmp=path_cmp)
 
-        # DK - debugging purposes
         for p in range(len(paths)):
             if print_msg: print >> sys.stderr, "path:", p, paths[p]
 
@@ -1148,7 +1142,7 @@ class Graph:
                     # Handle a special case at 5' end
                     if 0 in classes[0][0] and \
                        len(classes[0][0]) == 1 and \
-                       mat[0][0] != mat[0][1]:
+                       (mat[0][0] > mat[0][1] * 2 or mat[0][1] > mat[0][0] * 2):
                         if mat[0][0] > mat[0][1]:
                             add_merge(classes, classes2, 0, 0, 0)
                             add_copy(classes, classes2, 1, 1, 1)
