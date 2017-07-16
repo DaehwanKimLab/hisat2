@@ -459,6 +459,7 @@ class Graph:
         self.simulation = simulation
 
         self.read_nodes = self.nodes = {}
+        self.other_nodes = {}
         self.edges = {}
         self.to_node, self.from_node = {}, {}
 
@@ -480,15 +481,21 @@ class Graph:
 
 
     # Add node, which is an alignment w.r.t. the reference
-    def add_node(self, id, node, simulation = False):
+    def add_node(self, id, id_i, node, simulation = False):
         if simulation:
             id = id.split('_')[0]
-        if id in self.nodes:
-            print >> sys.stderr, "Warning) multi-mapped read:", id
-            # assert False
-            return
-        assert id not in self.nodes
-        self.nodes[id] = node
+            
+        if id_i == 0:
+            if id in self.nodes:
+                print >> sys.stderr, "Warning) multi-mapped read:", id
+                # assert False
+                return
+            assert id not in self.nodes
+            self.nodes[id] = node
+        else:
+            if id not in self.other_nodes:
+                self.other_nodes[id] = []
+            self.other_nodes[id].append(node)
 
         
     # Remove nodes that are inside other nodes or with low coverage
@@ -607,6 +614,11 @@ class Graph:
             nodes = []
             for id, node in self.nodes.items():
                 seq = node_seq[id]
+
+                # DK - debugging purposes
+                if id in self.other_nodes:
+                    continue
+                
                 if len(seq) < k:
                     continue
                 kmer, seq = seq[:k], seq[k:]
@@ -1483,6 +1495,15 @@ class Graph:
                 print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
                 print >> js_file, r'ctx.stroke();'
 
+        # Draw backbone sequence
+        y = get_dspace(0, max_right, 4)
+        print >> js_file, r'ctx.fillStyle = "purple";'
+        print >> js_file, r'ctx.font = "20px Times New Roman";'
+        print >> js_file, r'ctx.font = "8px Times New Roman";'
+        for pos in range(len(self.backbone)):
+            base = self.backbone[pos]
+            print >> js_file, r'ctx.fillText("%s", %d, %d);' % (base, get_x(pos), get_y(y))
+
         # Draw true or predicted alleles
         node_colors = ["#FFFF00", "#00FF00", "#FFCBA4", "#C14581"]
         allele_node_colors = ["#DDDD00", "#008800", "#DDA982", "#A12561"]
@@ -1583,89 +1604,102 @@ class Graph:
             # Draw label
             print >> js_file, r'ctx.fillStyle = "blue";'
             print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
-                (pos, get_x(pos+2), get_y(y + 2))
+                (pos + 1, get_x(pos+1), get_y(y + 2))
 
         # Draw nodes
         node_to_y = {}
         draw_title = False
         for id, left, right in nodes:
             node = self.nodes[id]
+            nodes2 = [[node, left, right]]
+            if id in self.other_nodes:
+                for node in self.other_nodes[id]:
+                    nodes2.append([node, node.left, node.right])
+                    if left > node.left:
+                        left = node.left
+                    if right < node.right:
+                        right = node.right
 
             # Get y position
-            y = get_dspace(left, right, 14)
-            if y < 0:
-                continue
-            node_to_y[id] = y
+            y = get_dspace(left, right, 14 * len(nodes2))
+            for node, left, right in nodes2:
+                if y < 0:
+                    continue
+                node_to_y[id] = y
 
-            node_vars = node.get_vars()
-            node_var_ids = node.get_var_ids()
-            if len(allele_nodes) > 0:
-                color = "white"
-                max_common = -sys.maxint
-                for a in range(len(allele_nodes)):
-                    allele_node_id, allele_left, allele_right = allele_nodes[a]
-                    if right - left <= 500 and (left < allele_left or right > allele_right):
-                        continue
-                    if self.simulation:
-                        allele_node = self.true_allele_nodes[allele_node_id]
-                    else:
-                        allele_node = self.predicted_allele_nodes[allele_node_id]
-                    allele_vars = allele_node.get_var_ids(left, right)
-                    common_vars = set(node_var_ids) & set(allele_vars)
-                    tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
-                    if max_common < tmp_common:
-                        max_common = tmp_common
-                        color = node_colors[a % len(node_colors)]
-                    elif max_common == tmp_common:
-                        color = "white"
-            else:
-                color = "yellow"    
-
-            # Draw node
-            right += 1
-            print >> js_file, r'ctx.beginPath();'
-            print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-            print >> js_file, r'ctx.fillStyle = "%s";' % color
-            print >> js_file, r'ctx.fill();'
-            print >> js_file, r'ctx.lineWidth = 2;'
-            print >> js_file, r'ctx.strokeStyle = "black";'
-            print >> js_file, r'ctx.stroke();'
-
-            # Draw variants
-            for var_id, pos in node_vars:
-                if var_id == "gap":
-                    var_type, var_left = "single", pos
-                    color = "black"
-                elif var_id == "unknown" or var_id.startswith("nv"):
-                    var_type, var_left = "single", pos
-                    color = "red"
+                node_vars = node.get_vars()
+                node_var_ids = node.get_var_ids()
+                if len(nodes2) > 1:
+                    color = "#D8D8D8"
+                elif len(allele_nodes) > 0:
+                    color = "white"
+                    max_common = -sys.maxint
+                    for a in range(len(allele_nodes)):
+                        allele_node_id, allele_left, allele_right = allele_nodes[a]
+                        if right - left <= 500 and (left < allele_left or right > allele_right):
+                            continue
+                        if self.simulation:
+                            allele_node = self.true_allele_nodes[allele_node_id]
+                        else:
+                            allele_node = self.predicted_allele_nodes[allele_node_id]
+                        allele_vars = allele_node.get_var_ids(left, right)
+                        common_vars = set(node_var_ids) & set(allele_vars)
+                        tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
+                        if max_common < tmp_common:
+                            max_common = tmp_common
+                            color = node_colors[a % len(node_colors)]
+                        elif max_common == tmp_common:
+                            color = "white"
                 else:
-                    var_type, var_left, var_data = self.gene_vars[var_id]
-                    color = "blue"
-                if var_type == "single":
-                    var_right = var_left + 1
-                else:
-                    assert var_type == "deletion"
-                    var_right = var_left + int(var_data)
+                    color = "yellow"    
+
+                # Draw node
+                right += 1
                 print >> js_file, r'ctx.beginPath();'
                 print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                    (get_x(var_left), get_y(y + 1), get_x(var_right) - get_x(var_left), get_sy(8))
-                print >> js_file, r'ctx.fillStyle = "%s";' % (color)
+                    (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
+                print >> js_file, r'ctx.fillStyle = "%s";' % color
                 print >> js_file, r'ctx.fill();'
+                print >> js_file, r'ctx.lineWidth = 2;'
+                print >> js_file, r'ctx.strokeStyle = "black";'
+                print >> js_file, r'ctx.stroke();'
 
-            # Draw label
-            if get_sx(right - left) >= 300:
-                print >> js_file, r'ctx.fillStyle = "blue";'
-                print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                    (node.id, get_x(left + 2), get_y(y + 7))
+                # Draw variants
+                for var_id, pos in node_vars:
+                    if var_id == "gap":
+                        var_type, var_left = "single", pos
+                        color = "black"
+                    elif var_id == "unknown" or var_id.startswith("nv"):
+                        var_type, var_left = "single", pos
+                        color = "red"
+                    else:
+                        var_type, var_left, var_data = self.gene_vars[var_id]
+                        color = "blue"
+                    if var_type == "single":
+                        var_right = var_left + 1
+                    else:
+                        assert var_type == "deletion"
+                        var_right = var_left + int(var_data)
+                    print >> js_file, r'ctx.beginPath();'
+                    print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
+                        (get_x(var_left), get_y(y + 1), get_x(var_right) - get_x(var_left), get_sy(8))
+                    print >> js_file, r'ctx.fillStyle = "%s";' % (color)
+                    print >> js_file, r'ctx.fill();'
 
-            if not draw_title:
-                draw_title = True
-                print >> js_file, r'ctx.font = "24px Times New Roman";'
-                print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                    (title, 10, get_y(y + 7))
-                print >> js_file, r'ctx.font = "12px Times New Roman";'
+                # Draw label
+                if get_sx(right - left) >= 300:
+                    print >> js_file, r'ctx.fillStyle = "blue";'
+                    print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
+                        (node.id, get_x(left + 2), get_y(y + 7))
+
+                if not draw_title:
+                    draw_title = True
+                    print >> js_file, r'ctx.font = "24px Times New Roman";'
+                    print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
+                        (title, 10, get_y(y + 7))
+                    print >> js_file, r'ctx.font = "12px Times New Roman";'
+
+                y += 14
 
 
         # Draw edges

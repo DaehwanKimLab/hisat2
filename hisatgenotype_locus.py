@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 #
-# Copyright 2015, Daehwan Kim <infphilo@gmail.com>
+# Copyright 2017, Daehwan Kim <infphilo@gmail.com>
 #
-# This file is part of HISAT 2.
+# This file is part of HISAT-genotype.
 #
-# HISAT 2 is free software: you can redistribute it and/or modify
+# HISAT-genotype is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# HISAT 2 is distributed in the hope that it will be useful,
+# HISAT-genotype is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
+# along with HISAT-genotype.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 
@@ -232,6 +232,7 @@ def typing(simulation,
            assembly,
            output_base,
            error_correction,
+           keep_alignment,
            allow_discordant,
            display_alleles,
            fastq,
@@ -938,17 +939,18 @@ def typing(simulation,
                                     assert type_ == "insertion"
                                     data_ = read_seq[read_pos:read_pos + length_]
                                 if add:
-                                    var_id, novel_var_count = add_novel_var(gene_vars,
-                                                                            gene_var_list,
-                                                                            novel_var_count,
-                                                                            type_ if type_ != "mismatch" else "single",
-                                                                            pos_,
-                                                                            data_)
-                                    cmp_list[cmp_i][3] = var_id
-                            if var_id not in var_count:
-                                var_count[var_id] = 1
-                            else:
-                                var_count[var_id] += 1
+                                    var_id_, novel_var_count = add_novel_var(gene_vars,
+                                                                             gene_var_list,
+                                                                             novel_var_count,
+                                                                             type_ if type_ != "mismatch" else "single",
+                                                                             pos_,
+                                                                             data_)
+                                    cmp_list[cmp_i][3] = var_id_
+                            if var_id_ != "unknown":
+                                if var_id_ not in var_count:
+                                    var_count[var_id_] = 1
+                                else:
+                                    var_count[var_id_] += 1
                                 
                         if type_ != "deletion":
                             read_pos += length_
@@ -1010,28 +1012,24 @@ def typing(simulation,
 
                             for positive_ht in left_positive_hts | right_positive_hts:
                                 exon_hts = get_exon_haplotypes(positive_ht, ref_exons)
-
-                                if prev_read_id == "aHSQ1008:175:C0JVFACXX:5:1109:17665:21583":
-                                    print "positive_ht:", positive_ht, "exon_hts:", exon_hts
-                                    
                                 for exon_ht in exon_hts:
                                     add_count(Gene_count_per_read, exon_ht, 1)
                                 add_count(Gene_gen_count_per_read, positive_ht, 1)
 
                             # DK - debugging purposes
-                            if prev_read_id.startswith("a30"):
+                            if prev_read_id.startswith("HS2000-115_741:7:2104:14038:88562#"):
+                                print prev_read_id, left_positive_hts, right_positive_hts
                                 print Gene_gen_count_per_read
 
                             # DK - debugging purposes
                             """
-                            debug_allele_id = "A*02:406"
-                            assert debug_allele_id in Gene_count_per_read
-                            debug_max_read_count = max(Gene_count_per_read.values())
-                            debug_read_count = Gene_count_per_read[debug_allele_id]
-                            if debug_read_count == debug_max_read_count and \
-                               Gene_count_per_read["A*11:01:01:01"] < debug_max_read_count and \
-                               Gene_count_per_read["A*02:01:01:01"] < debug_max_read_count:
-                                print prev_read_id
+                            debug_allele_id = "TH01*10"
+                            assert debug_allele_id in Gene_gen_count_per_read
+                            debug_max_read_count = max(Gene_gen_count_per_read.values())
+                            debug_read_count = Gene_gen_count_per_read[debug_allele_id]
+                            if debug_read_count < debug_max_read_count:
+                                print prev_read_id, debug_read_count, debug_max_read_count, Gene_gen_count_per_read
+                                print "\t", left_positive_hts, right_positive_hts
                                 None
                             if prev_read_id == "HSQ1008:175:C0JVFACXX:5:1109:17665:21583":
                                 for line in prev_lines:
@@ -1047,8 +1045,7 @@ def typing(simulation,
                                         # print "allele max:", allele_id, count
                                 # sys.exit(1)
                                 None
-                            """
-                                
+                            """                                
 
                             cur_cmpt, cur_cmpt_gen = "", ""
                             if base_fname == "hla":
@@ -1056,8 +1053,9 @@ def typing(simulation,
                                 cur_cmpt_gen = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
                             else:
                                 cur_cmpt = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
-                            for read_id_, read_node in read_nodes:
+                            for read_id_, read_id_i, read_node in read_nodes:
                                 asm_graph.add_node(read_id_,
+                                                   read_id_i,
                                                    read_node,
                                                    simulation)
                             read_nodes, read_var_list = [], []
@@ -1076,8 +1074,7 @@ def typing(simulation,
 
                             prev_lines = []
 
-                        left_positive_hts, right_positive_hts = set(), set()
-                        
+                        left_positive_hts, right_positive_hts = set(), set()                        
                         Gene_count_per_read, Gene_gen_count_per_read = {}, {}
                         for Gene_name in Gene_names[gene]:
                             if Gene_name.find("BACKBONE") != -1:
@@ -1105,6 +1102,7 @@ def typing(simulation,
                                 cmp_list2.append(["match", pos, 1])
                         else:
                             cmp_list2.append(cmp)
+                            
                     cmp_list_left, cmp_list_right, cmp_left_alts, cmp_right_alts = \
                     typing_common.identify_ambigious_diffs(ref_seq,
                                                            gene_vars,
@@ -1114,7 +1112,7 @@ def typing(simulation,
                                                            Alts_right_list,
                                                            cmp_list2,
                                                            verbose,
-                                                           orig_read_id.startswith("a30|R"))  # debug?
+                                                           orig_read_id.startswith("36|R#"))  # debug?
 
                     mid_ht = []
                     for cmp in cmp_list2[cmp_list_left:cmp_list_right+1]:
@@ -1142,68 +1140,120 @@ def typing(simulation,
 
                     # DK - debugging purposes
                     DK_debug = False
-                    if orig_read_id.startswith("a30|R"):
+                    if orig_read_id.startswith("30|R!"):
                         DK_debug = True
                         print line
                         print cmp_list
                         print "positive hts:", left_positive_hts, right_positive_hts
                         print "cmp_list [%d, %d]" % (cmp_list_left, cmp_list_right)
 
-                    # Node
-                    read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
-                    read_vars = []
-                    ref_pos, read_pos = left_pos, 0
-                    cmp_i = 0
-                    while cmp_i < len(cmp_list):
-                        cmp = cmp_list[cmp_i]
-                        type, length = cmp[0], cmp[2]
-                        if type in ["match", "mismatch"]:
-                            if read_node_pos < 0:
-                                read_node_pos = ref_pos
-                        if type == "match":
-                            read_node_seq += list(read_seq[read_pos:read_pos+length])
-                            read_node_qual += list(read_qual[read_pos:read_pos+length])
-                            read_node_var += ([''] * length)
-                            read_pos += length
-                        elif type == "mismatch":
-                            var_id = cmp[3]
-                            read_base, qual = read_seq[read_pos], read_qual[read_pos]
-                            read_node_seq += [read_base]
-                            read_node_qual += [qual]
-                            read_node_var.append(var_id)
-                            read_pos += 1
-                        elif type == "insertion":
-                            var_id = cmp[3]
-                            ins_len = length
-                            ins_seq = read_seq[read_pos:read_pos+ins_len]
-                            read_node_seq += ["I%s" % nt for nt in ins_seq]
-                            read_node_qual += list(read_qual[read_pos:read_pos+ins_len])
-                            read_node_var += ([var_id] * ins_len)                                        
-                            read_pos += length
-                        elif type == "deletion":
-                            var_id = cmp[3]
-                            del_len = length
-                            read_node_seq += (['D'] * del_len)
-                            read_node_qual += ([''] * del_len)
-                            if len(read_node_seq) > len(read_node_var):
-                                assert len(read_node_seq) == len(read_node_var) + del_len
-                                read_node_var += ([var_id] * del_len)
-                        else:
-                            assert type == "intron"
-                        cmp_i += 1
-
-                    # Node
                     if assembly:
-                        read_nodes.append([node_read_id,
-                                           assembly_graph.Node(node_read_id,
-                                                               read_node_pos,
-                                                               read_node_seq,
-                                                               read_node_qual,
-                                                               read_node_var,
-                                                               ref_seq,
-                                                               gene_vars,
-                                                               mpileup,
-                                                               simulation)])
+                        # Construct multiple candidate realignments for CODIS
+                        cmp_llist = []
+                        hts = left_positive_hts if is_left_read else right_positive_hts
+                        assert len(hts) > 0
+                        for ht in hts:
+                            cmp_list = []
+                            read_pos = 0
+                            vars_ = ht.split('-')
+                            left_ = int(vars_[0])
+                            vars_ = vars_[1:]
+                            for var_i in range(len(vars_)):
+                                var_id = vars_[var_i]
+                                # ref_seq, read_seq
+                                if var_i == len(vars_) - 1:
+                                    right_ = int(var_id)
+                                else:
+                                    var_type, var_pos, var_data = gene_vars[var_id]
+                                    right_ = var_pos - 1
+                                    
+                                for pos in range(left_, right_ + 1):
+                                    if read_seq[read_pos] != ref_seq[pos]:
+                                        if left_ < pos:
+                                            cmp_list.append(["match", left_, pos - left_])
+                                        cmp_list.append(["mismatch", pos, 1, "unknown"])
+                                        left_ = pos + 1
+                                    read_pos += 1                                    
+                                if left_ <= right_:
+                                    cmp_list.append(["match", left_, right_ - left_ + 1])
+                                    
+                                if var_i == len(vars_) - 1:
+                                    left_ = right_ + 1
+                                    break
+
+                                if var_type == "single":
+                                    cmp_list.append(["mismatch", var_pos, 1, var_id])
+                                    left_ = var_pos + 1
+                                    read_pos += 1
+                                elif var_type == "deletion":
+                                    del_len = int(var_data)
+                                    cmp_list.append(["deletion", var_pos, del_len, var_id])
+                                    left_ = var_pos + del_len                                    
+                                else:
+                                    assert var_type == "insertion"
+                                    cmp_list.append(["insertion", var_pos, len(var_data), var_id])
+                                    left_ = var_pos
+                                    read_pos += len(var_data)
+                                    
+                            assert len(cmp_list) > 0
+                            cmp_llist.append(cmp_list)
+
+                        for cmp_list_i in range(len(cmp_llist)):
+                            # Node
+                            cmp_list = cmp_llist[cmp_list_i]
+                            read_node_pos, read_node_seq, read_node_qual, read_node_var = -1, [], [], []
+                            read_vars = []
+                            ref_pos, read_pos = cmp_list[0][1], 0
+                            cmp_i = 0
+                            while cmp_i < len(cmp_list):
+                                cmp = cmp_list[cmp_i]
+                                type, length = cmp[0], cmp[2]
+                                if type in ["match", "mismatch"]:
+                                    if read_node_pos < 0:
+                                        read_node_pos = ref_pos
+                                if type == "match":
+                                    read_node_seq += list(read_seq[read_pos:read_pos+length])
+                                    read_node_qual += list(read_qual[read_pos:read_pos+length])
+                                    read_node_var += ([''] * length)
+                                    read_pos += length
+                                elif type == "mismatch":
+                                    var_id = cmp[3]
+                                    read_base, qual = read_seq[read_pos], read_qual[read_pos]
+                                    read_node_seq += [read_base]
+                                    read_node_qual += [qual]
+                                    read_node_var.append(var_id)
+                                    read_pos += 1
+                                elif type == "deletion":
+                                    var_id = cmp[3]
+                                    del_len = length
+                                    read_node_seq += (['D'] * del_len)
+                                    read_node_qual += ([''] * del_len)
+                                    if len(read_node_seq) > len(read_node_var):
+                                        assert len(read_node_seq) == len(read_node_var) + del_len
+                                        read_node_var += ([var_id] * del_len)
+                                elif type == "insertion":
+                                    var_id = cmp[3]
+                                    ins_len = length
+                                    ins_seq = read_seq[read_pos:read_pos+ins_len]
+                                    read_node_seq += ["I%s" % nt for nt in ins_seq]
+                                    read_node_qual += list(read_qual[read_pos:read_pos+ins_len])
+                                    read_node_var += ([var_id] * ins_len)                                        
+                                    read_pos += length
+                                else:
+                                    assert type == "intron"
+                                cmp_i += 1
+
+                            read_nodes.append([node_read_id,
+                                               cmp_list_i,
+                                               assembly_graph.Node(node_read_id,
+                                                                   read_node_pos,
+                                                                   read_node_seq,
+                                                                   read_node_qual,
+                                                                   read_node_var,
+                                                                   ref_seq,
+                                                                   gene_vars,
+                                                                   mpileup,
+                                                                   simulation)])
 
                     prev_read_id = read_id
                     prev_right_pos = right_pos
@@ -1221,8 +1271,9 @@ def typing(simulation,
                     if base_fname == "hla":
                         add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
                     add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
-                    for read_id_, read_node in read_nodes:
+                    for read_id_, read_id_i, read_node in read_nodes:
                         asm_graph.add_node(read_id_,
+                                           read_id_i,
                                            read_node,
                                            simulation)
                     read_nodes, read_var_list = [], []
@@ -1319,10 +1370,7 @@ def typing(simulation,
             # Calculate the abundance of representative alleles on exonic sequences
             if base_fname == "hla":
                 # Incorporate non representative alleles (full length alleles)
-                Gene_prob = typing_common.single_abundance(Gene_cmpt,
-                                                           Gene_lengths[gene],
-                                                           True) # exonic sequence
-
+                Gene_prob = typing_common.single_abundance(Gene_cmpt)
                 gen_alleles = set()
                 gen_prob_sum = 0.0
                 for prob_i in range(len(Gene_prob)):
@@ -1351,8 +1399,7 @@ def typing(simulation,
                             Gene_gen_cmpt2[cmpt2] += value
                     Gene_gen_cmpt = Gene_gen_cmpt2
                     Gene_gen_prob = typing_common.single_abundance(Gene_gen_cmpt,
-                                                                   Gene_lengths[gene],
-                                                                   False) # whole gene sequence
+                                                                   Gene_lengths[gene])
                     
                     Gene_combined_prob = {}
                     for allele, prob in Gene_prob:
@@ -1363,7 +1410,7 @@ def typing(simulation,
                     Gene_prob = [[allele, prob] for allele, prob in Gene_combined_prob.items()]
                     Gene_prob = sorted(Gene_prob, cmp=typing_common.Gene_prob_cmp)
             else:
-                Gene_prob = typing_common.single_abundance(Gene_cmpt, Gene_lengths[gene])
+                Gene_prob = typing_common.single_abundance(Gene_cmpt)
 
             if index_type == "graph" and assembly:
                 allele_node_order = []
@@ -1608,7 +1655,7 @@ def typing(simulation,
                 else:
                     test_passed[aligner_type] += 1
 
-        if remove_alignment_file and not simulation:
+        if not keep_alignment and remove_alignment_file:
             os.system("rm %s*" % (alignment_fname))
 
     report_file.close()
@@ -1795,6 +1842,7 @@ def genotyping_locus(base_fname,
                      assembly,
                      output_base,
                      error_correction,
+                     keep_alignment,
                      discordant,
                      display_alleles,
                      verbose,
@@ -1844,6 +1892,7 @@ def genotyping_locus(base_fname,
                          genotype_genome + ".link",
                          genotype_genome + ".clnsig",
                          genotype_genome + ".coord",
+                         genotype_genome + ".allele",
                          genotype_genome + ".partial"]
         for i in range(8):
             genome_fnames.append(genotype_genome + ".%d.ht2" % (i+1))
@@ -1864,6 +1913,17 @@ def genotyping_locus(base_fname,
                                                     index_type,
                                                     threads,
                                                     verbose >= 1)
+
+    # Read alleles
+    alleles = set()
+    if genotype_genome != "":
+        for line in open("%s.allele" % genotype_genome):
+            family, allele_name = line.strip().split('\t')
+            if family == base_fname:
+                alleles.add(allele_name)
+    else:
+        for line in open("%s.allele" % base_fname):
+            alleles.add(line.strip())
 
     # Read partial alleles
     partial_alleles = set()
@@ -1900,7 +1960,7 @@ def genotyping_locus(base_fname,
     if len(locus_list) == 0:
         locus_list = refGene_loci.keys()
 
-    # Read HLA variants, and link information
+    # Read variants, and link information
     if genotype_genome:
         Vars, Var_list = read_Gene_vars_genotype_genome("%s.snp" % genotype_genome, refGene_loci)
         Links = read_Gene_links("%s.link" % genotype_genome)
@@ -1908,7 +1968,7 @@ def genotyping_locus(base_fname,
         Vars, Var_list = read_Gene_vars("%s.snp" % base_fname)
         Links = read_Gene_links("%s.link" % base_fname)
 
-    # Some loci may have only one allele
+    # Some loci may have only one allele such as AMELX and AMELY
     for gene_name in refGene_loci.keys():
         if gene_name in Vars:
             continue
@@ -1921,6 +1981,13 @@ def genotyping_locus(base_fname,
     else:
         read_Gene_alleles(base_fname + "_backbone.fa", Genes)
         read_Gene_alleles_from_vars(Vars, Var_list, Links, Genes)
+
+    # alleles corresponding to backbones
+    for allele in alleles:
+        locus = allele.split('*')[0]
+        assert locus in Genes
+        if allele not in Genes[locus]:
+            Genes[locus][allele] = Genes[locus]["%s*BACKBONE" % locus]
 
     # Sanity Check
     if os.path.exists(base_fname + "_backbone.fa") and \
@@ -1935,19 +2002,19 @@ def genotyping_locus(base_fname,
                 allele_seq2 = Genes2[gene_name][allele_name]
                 assert allele_seq == allele_seq2
 
-    # HLA gene alleles
+    # alleles names
     Gene_names = {}
     for Gene_gene, data in Genes.items():
         Gene_names[Gene_gene] = list(data.keys())
 
-    # HLA gene allele lengths
+    # allele lengths
     Gene_lengths = {}
     for Gene_gene, Gene_alleles in Genes.items():
         Gene_lengths[Gene_gene] = {}
         for allele_name, seq in Gene_alleles.items():
             Gene_lengths[Gene_gene][allele_name] = len(seq)
 
-    # Test HLA typing
+    # Test typing
     test_list = []
     if simulation:
         basic_test, pair_test = True, False
@@ -2047,6 +2114,7 @@ def genotyping_locus(base_fname,
                                      assembly,
                                      output_base,
                                      error_correction,
+                                     keep_alignment,
                                      discordant,
                                      display_alleles,
                                      fastq,
@@ -2092,6 +2160,7 @@ def genotyping_locus(base_fname,
                assembly,
                output_base,
                error_correction,
+               keep_alignment,
                discordant,
                display_alleles,
                fastq,
@@ -2234,6 +2303,10 @@ if __name__ == '__main__':
                         dest="error_correction",
                         action="store_false",
                         help="Correct sequencing errors")
+    parser.add_argument("--keep-alignment",
+                        dest="keep_alignment",
+                        action="store_true",
+                        help="Keep alignment file")
     parser.add_argument("--only-locus-list",
                         dest="only_locus_list",
                         type=str,
@@ -2336,6 +2409,7 @@ if __name__ == '__main__':
                      args.assembly,
                      args.output_base,
                      args.error_correction,
+                     args.keep_alignment,
                      args.discordant,
                      display_alleles,
                      args.verbose_level,

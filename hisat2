@@ -70,7 +70,7 @@ my @signame     = ();
 }
 
 (-x "$align_prog") ||
-	Fail("Expected hisat2 to be in same directory with hisat-align:\n$script_path\n");
+	Fail("Expected hisat2 to be in same directory with hisat2-align-s and hisat2-align-l:\n$script_path\n");
 
 # Get description of arguments from HISAT so that we can distinguish HISAT
 # args from wrapper args

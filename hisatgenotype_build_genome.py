@@ -356,6 +356,13 @@ def build_genotype_genome(base_fname,
     coord_out_file.close()
     clnsig_out_file.close()
 
+    allele_out_file = open("%s.allele" % base_fname, 'w')
+    for database in database_list:
+        for line in open("%s.allele" % database):
+            allele_name = line.strip()
+            print >> allele_out_file, "%s\t%s" % (database.upper(), allele_name)
+    allele_out_file.close()
+
     partial_out_file = open("%s.partial" % base_fname, 'w')
     for database in database_list:
         for line in open("%s.partial" % database):

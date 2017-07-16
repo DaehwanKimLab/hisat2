@@ -395,6 +395,8 @@ def extract_vars(base_fname,
     link_file = open(base_fullpath_name + ".link", 'w')
     # Write all the sequences with dots removed into a file
     input_file = open(base_fullpath_name + "_sequences.fa", 'w')
+    # Write allele names into a file
+    allele_file = open("%s.allele" % base_fullpath_name, 'w')
     num_vars, num_haplotypes = 0, 0
     full_alleles = {}
     for gene, ref_gene in genes.items():
@@ -1165,6 +1167,7 @@ def extract_vars(base_fname,
             seq = seqs[ID].replace('.', '')
             for s in range(0, len(seq), 60):
                 print >> input_file, seq[s:s+60]
+            print >> allele_file, name
 
     backbone_file.close()
     locus_file.close()
@@ -1174,6 +1177,7 @@ def extract_vars(base_fname,
     haplotype_file.close()
     link_file.close()
     input_file.close()
+    allele_file.close()
 
     # Read partial alleles from hla.data, and write them into a file
     partial_allele_list = []
