@@ -134,14 +134,14 @@ def build_genotype_genome(base_fname,
         locus_fname = "%s.locus" % database_name
         assert os.path.exists(locus_fname)
         for line in open(locus_fname):
-            HLA_name, chr, left, right, length, exon_str, strand = line.strip().split()
+            locus_name, chr, left, right, length, exon_str, strand = line.strip().split()
             left, right = int(left), int(right)
             length = int(length)
             if chr not in chr_names:
                 continue
             if chr not in genotype_genes:
                 genotype_genes[chr] = []
-            genotype_genes[chr].append([left, right, length, HLA_name, database_name, exon_str, strand])
+            genotype_genes[chr].append([left, right, length, locus_name, database_name, exon_str, strand])
 
     # Write genotype genome
     var_num, haplotype_num = 0, 0
@@ -242,17 +242,22 @@ def build_genotype_genome(base_fname,
             # Read HLA link information between haplotypes and variants
             links = typing_common.read_links("%s.link" % family)
 
-            if name not in allele_seqs or \
-                    name not in allele_vars or \
-                    name not in allele_haplotypes:
+            if name not in allele_seqs:
                 continue
+            if name not in allele_vars or name not in allele_index_vars:
+                vars, index_vars = [], []
+            else:
+                vars, index_vars = allele_vars[name], allele_index_vars[name]
+                
             allele_seq = allele_seqs[name]
-            vars, index_vars = allele_vars[name], allele_index_vars[name]
             index_var_ids = set()
             for _, _, _, var_id in index_vars:
                 index_var_ids.add(var_id)
 
-            haplotypes = allele_haplotypes[name]
+            if name not in allele_haplotypes:
+                haplotypes = []
+            else:
+                haplotypes = allele_haplotypes[name]
             assert length == len(allele_seq)
             assert left < chr_len and right < chr_len
             # Skipping overlapping genes
