@@ -551,78 +551,94 @@ class Graph:
         k = 60 # k-mer
 
         DRB1_debug = False
-        CP_IMPL = True
 
         node_seq = {}
-        for id, node in self.nodes.items():
-            s, seq = 0, []
-            while s < len(node.seq):
-                nt_dic = node.seq[s] # {'C': [1, '']}
-                nt = get_major_nt(nt_dic)
-                if nt in "ACGTND":
-                    seq.append(nt)
-                else:
-                    assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
-                s += 1
+        for id in self.nodes.keys():
+            nodes = [self.nodes[id]]
+            if id in self.other_nodes:
+                nodes += self.other_nodes[id]
+            for node_i in range(len(nodes)):
+                node = nodes[node_i]
+                s, seq = 0, []
+                while s < len(node.seq):
+                    nt_dic = node.seq[s] # {'C': [1, '']}
+                    nt = get_major_nt(nt_dic)
+                    if nt in "ACGTND":
+                        seq.append(nt)
+                    else:
+                        assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
+                    s += 1
 
-            if len(seq) < k:
-                continue
+                if len(seq) < k:
+                    continue
 
-            def leftshift(seq, ref_seq):
-                seq_len = len(seq)
-                assert seq_len > 0 and seq[0] != 'D'
+                def leftshift(seq, ref_seq):
+                    seq_len = len(seq)
+                    assert seq_len > 0 and seq[0] != 'D'
 
-                bp_i = 0
-                while bp_i < seq_len:
-                    bp = seq[bp_i]
-                    if bp != 'D':
-                        bp_i += 1
-                        continue
-                    bp_j = bp_i + 1
-                    while bp_j < seq_len:
-                        bp2 = seq[bp_j]
-                        if bp2 != 'D':
-                            break
-                        else:
-                            bp_j += 1
-
-                    if bp_j >= seq_len:
-                        bp_i = bp_j
-                        break
-
-                    prev_i, prev_j = bp_i, bp_j
-                    while bp_i > 0 and seq[bp_i-1] in "ACGT" and ref_seq[bp_j-1] in "ACGT":
-                        if seq[bp_i-1] != ref_seq[bp_j-1]:
-                            break
-                        seq[bp_j-1] = seq[bp_i-1]
-                        seq[bp_i-1] = 'D'
-                        bp_i -= 1
-                        bp_j -= 1
-                    bp_i = bp_j
+                    bp_i = 0
                     while bp_i < seq_len:
-                        if seq[bp_i] in "ACGT":
-                            break
-                        bp_i += 1
+                        bp = seq[bp_i]
+                        if bp != 'D':
+                            bp_i += 1
+                            continue
+                        bp_j = bp_i + 1
+                        while bp_j < seq_len:
+                            bp2 = seq[bp_j]
+                            if bp2 != 'D':
+                                break
+                            else:
+                                bp_j += 1
 
-            if DRB1_debug:
-                leftshift(seq, self.backbone[node.left:node.left + len(seq)])
-            node_seq[id] = seq
+                        if bp_j >= seq_len:
+                            bp_i = bp_j
+                            break
+
+                        prev_i, prev_j = bp_i, bp_j
+                        while bp_i > 0 and seq[bp_i-1] in "ACGT" and ref_seq[bp_j-1] in "ACGT":
+                            if seq[bp_i-1] != ref_seq[bp_j-1]:
+                                break
+                            seq[bp_j-1] = seq[bp_i-1]
+                            seq[bp_i-1] = 'D'
+                            bp_i -= 1
+                            bp_j -= 1
+                        bp_i = bp_j
+                        while bp_i < seq_len:
+                            if seq[bp_i] in "ACGT":
+                                break
+                            bp_i += 1
+
+                if DRB1_debug:
+                    leftshift(seq, self.backbone[node.left:node.left + len(seq)])
+                node_seq["%s.%d" % (id, node_i)] = seq
+
+        # AAA.1 => AAA, 1
+        def get_id_and_sub(id):
+            id_split = id.split('.')
+            return '.'.join(id_split[:-1]), int(id_split[-1])
 
         try_hard = False
         while True:
             delete_ids = set()
             nodes = []
             for id, node in self.nodes.items():
-                seq = node_seq[id]
-
-                # Ignore reads that are multi-aligned
+                nodes_ = [node]
                 if id in self.other_nodes:
+                    nodes_ += self.other_nodes[id]
+
+                # DK - debugging purposes
+                if len(nodes_) > 1 and False:
                     continue
-                
-                if len(seq) < k:
-                    continue
-                kmer, seq = seq[:k], seq[k:]
-                nodes.append([id, node.left, node.right, kmer, seq])
+
+                for node_i in range(len(nodes_)):
+                    node = nodes_[node_i]
+                    id_ = "%s.%d" % (id, node_i)
+                    seq = node_seq[id_]
+
+                    if len(seq) < k:
+                        continue
+                    kmer, seq = seq[:k], seq[k:]
+                    nodes.append([id_, node.left, node.right, kmer, seq])
                 
             def node_cmp(a, b):
                 if a[1] != b[1]:
@@ -714,12 +730,21 @@ class Graph:
                     for num_id in num_ids:
                         if num_id in delete_ids:
                             continue
-                        read_id = num_to_id[num_id]
+                        read_id = get_id_and_sub(num_to_id[num_id])[0]
                         mate_read_id = get_mate_node_id(read_id)
                         if mate_read_id in self.nodes:
                             vertice_count[v] += 1
 
-                # DK - debugging purposes
+                # First look at and remove reads that are multi-aligned locally
+                first_pair = None
+                for v in range(len(vertices)):
+                    read_ids = set([get_id_and_sub(num_to_id[num_id])[0] for num_id in vertices[v][3]])
+                    for v2 in range(v + 1, len(vertices)):
+                        read_ids2 = set([get_id_and_sub(num_to_id[num_id])[0] for num_id in vertices[v2][3]])
+                        if read_ids & read_ids2:
+                            first_pair = [v, v2, read_ids & read_ids2]
+                            break
+
                 debug_msg = False
                 if debug_msg:
                     print >> sys.stderr, "at", pos, vertices
@@ -735,50 +760,69 @@ class Graph:
                         if debug_msg:
                             print >> sys.stderr, v, "is removed with", num_ids
                 else:
-                    for v in range(len(vertices)):
-                        assert len(vertices) >= 2
-                        relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
-                        if len(vertices) == 2:
-                            # Eliminate reads that have conflicts with other reads due to a deletion
-                            elif vertice_count[v] * 2 < relative_avg:
-                                nt, kmer, _, num_ids = vertices[1-v]
-                                if nt == 'D':
-                                    num_id = num_ids[0]
-                                    read_id = num_to_id[num_id]
-                                    left, seq = pos - self.nodes[read_id].left, node_seq[read_id]
-                                    seq_right = ''.join(seq[left+k:])
-                                    seq_right = seq_right.replace('D', '')
-                                    success = True
-                                    for num_id2 in vertices[v][3]:
-                                        read_id2 = num_to_id[num_id2]
-                                        left2, seq2 = pos-self.nodes[read_id2].left, node_seq[read_id2]
-                                        seq2_right = ''.join(seq2[left2+k:])
-                                        if seq_right.find(seq2_right) != 0:
-                                            success = False
-                                            break
-                                    if success:
-                                        delete_ids |= set(vertices[v][3])
+                    # DK - debugging purposes
+                    if first_pair:
+                        v, v2, multi_read_ids = first_pair
+                        v_ = v if vertice_count[v] < vertice_count[v2] else v2
+                        for num_id in vertices[v_][3]:
+                            id = get_id_and_sub(num_to_id[num_id])[0]
+                            if id in multi_read_ids:
+                                delete_ids.add(num_id)                               
+                    else:
+                        for v in range(len(vertices)):
+                            assert len(vertices) >= 2
+                            relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
+                            if len(vertices) == 2:
+                                # Eliminate reads that have conflicts with other reads due to a deletion
+                                if vertice_count[v] * 2 < relative_avg:
+                                    nt, kmer, _, num_ids = vertices[1-v]
+                                    if nt == 'D':
+                                        num_id = num_ids[0]
+                                        id_sub = num_to_id[num_id]
+                                        id, sub = get_id_and_sub(id_sub)
+                                        if sub == 0:
+                                            left = pos - self.nodes[id].left
+                                        else:
+                                            left = pos - self.other_nodes[id][sub - 1].left
+                                        seq = node_seq[id_sub]
+                                        seq_right = ''.join(seq[left+k:])
+                                        seq_right = seq_right.replace('D', '')
+                                        success = True
+                                        for num_id2 in vertices[v][3]:
+                                            id_sub2 = num_to_id[num_id2]
+                                            id2, sub2 = get_id_and_sub(id_sub2)
+                                            if sub2 == 0:
+                                                left2 = pos - self.nodes[id2].left
+                                            else:
+                                                left2 = pos - self.other_nodes[id2][sub2 - 1].left
+                                            seq2 = node_seq[id_sub2]
+                                            seq2_right = ''.join(seq2[left2+k:])
+                                            if seq_right.find(seq2_right) != 0:
+                                                success = False
+                                                break
+                                        if success:
+                                            delete_ids |= set(vertices[v][3])
 
-                            # DK - working on ...
-                            if DRB1_debug:
-                                if vertice_count[v] * 8 < relative_avg:
+                                # DK - working on ...
+                                if DRB1_debug:
+                                    if vertice_count[v] * 8 < relative_avg:
+                                        num_ids = vertices[v][3]
+                                        delete_ids |= set(num_ids)
+                                        if debug_msg:
+                                            print >> sys.stderr, v, "is removed with", num_ids
+                                    elif vertice_count[v] * 8 < avg_kmers:
+                                        num_ids = vertices[v][3]
+                                        delete_ids |= set(num_ids)
+                            else:
+                                if vertice_count[v] * 3 < relative_avg:
                                     num_ids = vertices[v][3]
                                     delete_ids |= set(num_ids)
                                     if debug_msg:
                                         print >> sys.stderr, v, "is removed with", num_ids
-                                elif vertice_count[v] * 8 < avg_kmers:
-                                    num_ids = vertices[v][3]
-                                    delete_ids |= set(num_ids)
-                        else:
-                            if vertice_count[v] * 3 < relative_avg:
-                                num_ids = vertices[v][3]
-                                delete_ids |= set(num_ids)
-                                if debug_msg:
-                                    print >> sys.stderr, v, "is removed with", num_ids
 
                 if debug_msg:
                     print >> sys.stderr
-                    print >> sys.stderr             
+                    print >> sys.stderr           
                 
             if len(delete_ids) == 0:
                 if try_hard:
@@ -786,9 +830,32 @@ class Graph:
                 else:
                     try_hard = True
 
+            # delete nodes
             for num_id in delete_ids:
-                read_id = num_to_id[num_id]
-                del self.nodes[read_id]
+                id_sub = num_to_id[num_id]
+                id, sub = get_id_and_sub(id_sub)
+                if sub == 0:
+                    self.nodes[id] = None
+                else:
+                    self.other_nodes[id][sub-1] = None
+            
+            for node_id, node in self.nodes.items():
+                other_nodes = []
+                if node_id in self.other_nodes:
+                    for other_node in self.other_nodes[node_id]:
+                        if other_node != None:
+                            other_nodes.append(other_node)
+                if self.nodes[node_id] == None:
+                    if len(other_nodes) == 0:
+                        del self.nodes[node_id]
+                    else:
+                        self.nodes[node_id] = other_nodes[0]
+                        del other_nodes[0]
+                if node_id in self.other_nodes:
+                    if len(other_nodes) == 0:
+                        del self.other_nodes[node_id]
+                    else:
+                        self.other_nodes[node_id] = other_nodes
 
         # Print De Bruijn graph
         for i in range(len(debruijn)):
@@ -821,6 +888,15 @@ class Graph:
                         kmer_seq += "\033[00m"
                     
                 if print_msg: print >> sys.stderr, "\t%d:" % v, kmer_seq, len(num_ids), predecessors, num_ids
+
+        id_to_num = {}
+        for num in range(len(num_to_id)):
+            id_sub = num_to_id[num]
+            id = get_id_and_sub(id_sub)[0]
+            num_to_id[num] = id
+            if id not in id_to_num:
+                id_to_num[id] = set()
+            id_to_num[id].add(num)          
                     
         # Generate compressed nodes
         paths = []
@@ -895,7 +971,7 @@ class Graph:
                 mate_read_id = get_mate_node_id(read_id)
                 if mate_read_id in id_to_num:
                     mate_num_id = id_to_num[mate_read_id]
-                    mate_num_ids.add(mate_num_id)
+                    mate_num_ids |= mate_num_id
                     
             return mate_num_ids
         

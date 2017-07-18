@@ -41,6 +41,7 @@ def align_reads(base_fname,
                    "-p", str(threads),
                    "--no-spliced-alignment",
                    "--max-altstried", "64"]
+    aligner_cmd += ["-X", "1000"]
     # aligner_cmd += ["--mm"]
     aligner_cmd += ["-x", "%s" % base_fname]
 

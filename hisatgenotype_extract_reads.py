@@ -194,6 +194,7 @@ def extract_reads(base_fname,
                 aligner_cmd += ["-f"]
             aligner_cmd += ["-x", base_fname]
             aligner_cmd += ["--no-spliced-alignment"]
+            aligner_cmd += ["-X", "1000"]
             # aligner_cmd += ["--max-altstried", "64"]
             if paired:
                 aligner_cmd += ["-1", fq_fname,

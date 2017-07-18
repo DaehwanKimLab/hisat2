@@ -659,12 +659,12 @@ struct GenomeHit {
     /*
      * Find offset differences due to deletions
      */
-    static void findOffDiffs(
-                             const GFM<index_t>&         gfm,
-                             const ALTDB<index_t>&       altdb,
-                             index_t                     start,
-                             index_t                     end,
-                             EList<pair<index_t, int> >& offDiffs);
+    static index_t findOffDiffs(
+                                const GFM<index_t>&         gfm,
+                                const ALTDB<index_t>&       altdb,
+                                index_t                     start,
+                                index_t                     end,
+                                EList<pair<index_t, int> >& offDiffs);
     
     /*
      *
@@ -2153,7 +2153,12 @@ bool GenomeHit<index_t>::adjustWithALT(
                                sharedVars);
         GenomeHit<index_t>& genomeHit = genomeHits.back();
         EList<pair<index_t, int> >& offDiffs = sharedVars.offDiffs;
-        findOffDiffs(gfm, altdb, (genomeHit._joinedOff >= width ? genomeHit._joinedOff - width : 0), genomeHit._joinedOff + width, offDiffs);
+        const index_t single_offDiffs_size = findOffDiffs(gfm,
+                                                          altdb,
+                                                          (genomeHit._joinedOff >= width ? genomeHit._joinedOff - width : 0),
+                                                          genomeHit._joinedOff + width,
+                                                          offDiffs);
+        assert_leq(single_offDiffs_size, offDiffs.size());
         
         const BTDnaString& seq = genomeHit._fw ? rd.patFw : rd.patRc;
         const EList<ALT<index_t> >& alts = altdb.alts();
@@ -2164,7 +2169,7 @@ bool GenomeHit<index_t>::adjustWithALT(
         // maxAltsTried is not directly related to the size of offDiffs,
         // but let's make the size of offDiffs is determined by maxAltsTried
         const index_t max_offDiffs_size = max<index_t>(4, gpol.maxAltsTried() / 4);
-        if(offDiffs.size() > max_offDiffs_size) offDiffs.resize(max_offDiffs_size);
+        if(offDiffs.size() - single_offDiffs_size > max_offDiffs_size) offDiffs.resize(single_offDiffs_size + max_offDiffs_size);
         for(index_t o = 0; o < offDiffs.size() && !found2; o++) {
             const pair<index_t, int>& offDiff = offDiffs[o];
 #ifndef NDEBUG
@@ -2187,6 +2192,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                 genomeHit._joinedOff = orig_joinedOff - offDiff.first;
                 genomeHit._toff = orig_toff - offDiff.first;
             }
+            
             genomeHit._edits->clear();
             ELList<Edit, 128, 4>& candidate_edits = sharedVars.candidate_edits;
             candidate_edits.clear();
@@ -2262,7 +2268,12 @@ bool GenomeHit<index_t>::adjustWithALT(
     assert(_sharedVars != NULL);
     EList<pair<index_t, int> >& offDiffs = _sharedVars->offDiffs;
     index_t width = 1 << (gfm.gh()._offRate + 2);
-    findOffDiffs(gfm, altdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff + width, offDiffs);
+    const index_t single_offDiffs_size = findOffDiffs(gfm,
+                                                      altdb,
+                                                      (this->_joinedOff >= width ? this->_joinedOff - width : 0),
+                                                      this->_joinedOff + width,
+                                                      offDiffs);
+    assert_leq(single_offDiffs_size, offDiffs.size());
     
     const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
     const EList<ALT<index_t> >& alts = altdb.alts();
@@ -2273,7 +2284,7 @@ bool GenomeHit<index_t>::adjustWithALT(
     // maxAltsTried is not directly related to the size of offDiffs,
     // but let's make the size of offDiffs is determined by maxAltsTried
     const index_t max_offDiffs_size = max<index_t>(4, gpol.maxAltsTried() / 4);
-    if(offDiffs.size() > max_offDiffs_size) offDiffs.resize(max_offDiffs_size);
+    if(offDiffs.size() - single_offDiffs_size > max_offDiffs_size) offDiffs.resize(single_offDiffs_size + max_offDiffs_size);
     for(index_t o = 0; o < offDiffs.size() && !found; o++) {
         const pair<index_t, int>& offDiff = offDiffs[o];
 #ifndef NDEBUG
@@ -2399,17 +2410,17 @@ void GenomeHit<index_t>::findSSOffs(
  * Find offset differences due to indels
  */
 template <typename index_t>
-void GenomeHit<index_t>::findOffDiffs(
-                                      const GFM<index_t>&         gfm,
-                                      const ALTDB<index_t>&       altdb,
-                                      index_t                     start,
-                                      index_t                     end,
-                                      EList<pair<index_t, int> >& offDiffs)
+index_t GenomeHit<index_t>::findOffDiffs(
+                                         const GFM<index_t>&         gfm,
+                                         const ALTDB<index_t>&       altdb,
+                                         index_t                     start,
+                                         index_t                     end,
+                                         EList<pair<index_t, int> >& offDiffs)
 {
     offDiffs.clear();
     offDiffs.expand();
     offDiffs.back().first = offDiffs.back().second = 0;
-    if(gfm.gh().linearFM()) return;
+    if(gfm.gh().linearFM()) return offDiffs.size();
     const EList<ALT<index_t> >& alts = altdb.alts();
     pair<index_t, index_t> alt_range;
     
@@ -2420,41 +2431,29 @@ void GenomeHit<index_t>::findOffDiffs(
         alt_range.first = alt_range.second = (index_t)alts.bsearchLoBound(alt_search);
         for(alt_range.second = alt_range.first; alt_range.second < alts.size(); alt_range.second++) {
             const ALT<index_t>& alt = alts[alt_range.second];
-            if(alt.splicesite()) {
-                if(alt.left > alt.right) continue;
-            }
-            if(alt.deletion()) {
-                if(alt.reversed) continue;
-            }
+            if(alt.splicesite() && alt.left > alt.right) continue;
+            if(alt.deletion() && alt.reversed) continue;
             if(alt.pos >= end) break;
         }
     }
-    if(alt_range.first >= alt_range.second) return;
+    if(alt_range.first >= alt_range.second) return offDiffs.size();
     
-    for(; alt_range.second > alt_range.first; alt_range.second--) {
-        assert_leq(alt_range.second, alts.size());
-        const ALT<index_t>& alt = alts[alt_range.second - 1];
-        if(!alt.gap()) continue;
-        if(alt.splicesite()) continue;
-        if(alt.deletion() && alt.reversed) continue;
-        index_t numOffs = (index_t)offDiffs.size();
-        for(index_t i = 0; i < numOffs; i++) {
-            if(offDiffs[i].first > 10) continue;
-            int off = offDiffs[i].first * offDiffs[i].second;
-            if(alt.type == ALT_SNP_DEL) {
-                off += alt.len;
-            } else if(alt.type == ALT_SNP_INS) {
-                off -= alt.len;
-            } else {
-                assert(false);
-            }
-            
-            if(off != 0) {
-                offDiffs.expand();
-                offDiffs.back().first = abs(off);
-                offDiffs.back().second = (off > 0 ? 1 : -1);
-            }
+    for(index_t second = alt_range.second; second > alt_range.first; second--) {
+        assert_leq(second, alts.size());
+        const ALT<index_t>& alt = alts[second - 1];
+        if(!alt.gap() || alt.splicesite() || (alt.deletion() && alt.reversed))
+            continue;
+        int off = 0;
+        if(alt.type == ALT_SNP_DEL) {
+            off = alt.len;
+        } else {
+            assert_eq(alt.type, ALT_SNP_INS);
+            off = -alt.len;
         }
+        assert_neq(off, 0);
+        offDiffs.expand();
+        offDiffs.back().first = abs(off);
+        offDiffs.back().second = (off > 0 ? 1 : -1);
     }
 
     if(offDiffs.size() > 1) {
@@ -2462,6 +2461,51 @@ void GenomeHit<index_t>::findOffDiffs(
         index_t new_size = (index_t)(unique(offDiffs.begin(), offDiffs.end()) - offDiffs.begin());
         offDiffs.resize(new_size);
     }
+    
+    const index_t single_offDiffs_size = offDiffs.size();
+    for(index_t second = alt_range.second; second > alt_range.first; second--) {
+        assert_leq(alt_range.second, alts.size());
+        const ALT<index_t>& alt = alts[second - 1];
+        if(!alt.gap() || alt.splicesite() || (alt.deletion() && alt.reversed))
+            continue;
+        int off = 0;
+        if(alt.type == ALT_SNP_DEL) {
+            off = alt.len;
+        } else {
+            assert_eq(alt.type, ALT_SNP_INS);
+            off = -alt.len;
+        }
+        for(index_t second2 = second - 1; second2 > alt_range.first; second2--) {
+            const ALT<index_t>& alt2 = alts[second2 - 1];
+            if(!alt2.gap() || alt2.splicesite() || (alt2.deletion() && alt2.reversed))
+                continue;
+            if(alt2.type == ALT_SNP_DEL) {
+                if(alt2.pos + alt2.len >= alt.pos)
+                    continue;
+                off += alt2.len;
+            } else {
+                assert_eq(alt2.type, ALT_SNP_INS);
+                if(alt2.pos >= alt.pos)
+                    continue;
+                off -= alt2.len;
+            }
+            bool found = false;
+            for(index_t i = 0; i < offDiffs.size(); i++) {
+                int off_cmp = offDiffs[i].first * offDiffs[i].second;
+                if(off == off_cmp) {
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) {
+                offDiffs.expand();
+                offDiffs.back().first = abs(off);
+                offDiffs.back().second = (off > 0 ? 1 : -1);
+            }
+        }
+    }
+    
+    return single_offDiffs_size;
 }
 
 
