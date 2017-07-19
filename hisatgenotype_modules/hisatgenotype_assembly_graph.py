@@ -553,7 +553,7 @@ class Graph:
         DRB1_debug = False
 
         node_seq = {}
-        for id in self.nodes.keys():
+        def add_node_seq(node_seq, id):
             nodes = [self.nodes[id]]
             if id in self.other_nodes:
                 nodes += self.other_nodes[id]
@@ -611,7 +611,10 @@ class Graph:
                 if DRB1_debug:
                     leftshift(seq, self.backbone[node.left:node.left + len(seq)])
                 node_seq["%s.%d" % (id, node_i)] = seq
-
+            
+        for id in self.nodes.keys():
+            add_node_seq(node_seq, id)
+            
         # AAA.1 => AAA, 1
         def get_id_and_sub(id):
             id_split = id.split('.')
@@ -625,17 +628,13 @@ class Graph:
                 nodes_ = [node]
                 if id in self.other_nodes:
                     nodes_ += self.other_nodes[id]
-
-                # DK - debugging purposes
-                if len(nodes_) > 1 and False:
-                    continue
-
                 for node_i in range(len(nodes_)):
                     node = nodes_[node_i]
                     id_ = "%s.%d" % (id, node_i)
                     seq = node_seq[id_]
 
-                    if len(seq) < k:
+                    if len(seq) < k or \
+                       'N' in seq:
                         continue
                     kmer, seq = seq[:k], seq[k:]
                     nodes.append([id_, node.left, node.right, kmer, seq])
@@ -760,7 +759,6 @@ class Graph:
                         if debug_msg:
                             print >> sys.stderr, v, "is removed with", num_ids
                 else:
-                    # DK - debugging purposes
                     if first_pair:
                         v, v2, multi_read_ids = first_pair
                         v_ = v if vertice_count[v] < vertice_count[v2] else v2
@@ -769,10 +767,10 @@ class Graph:
                             if id in multi_read_ids:
                                 delete_ids.add(num_id)                               
                     else:
-                        for v in range(len(vertices)):
-                            assert len(vertices) >= 2
-                            relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
-                            if len(vertices) == 2:
+                        assert len(vertices) >= 2
+                        relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
+                        if len(vertices) == 2:
+                            for v in range(len(vertices)):
                                 # Eliminate reads that have conflicts with other reads due to a deletion
                                 if vertice_count[v] * 2 < relative_avg:
                                     nt, kmer, _, num_ids = vertices[1-v]
@@ -813,8 +811,11 @@ class Graph:
                                     elif vertice_count[v] * 8 < avg_kmers:
                                         num_ids = vertices[v][3]
                                         delete_ids |= set(num_ids)
-                            else:
-                                if vertice_count[v] * 3 < relative_avg:
+                        else:
+                            second2last = sorted(vertice_count)[1]
+                            for v in range(len(vertices)):
+                                # if vertice_count[v] * 3 < relative_avg:
+                                if vertice_count[v] < second2last:
                                     num_ids = vertices[v][3]
                                     delete_ids |= set(num_ids)
                                     if debug_msg:
@@ -824,38 +825,44 @@ class Graph:
                     print >> sys.stderr
                     print >> sys.stderr           
                 
-            if len(delete_ids) == 0:
-                if try_hard:
-                    break
-                else:
-                    try_hard = True
-
             # delete nodes
+            ids_to_be_updated = set()
             for num_id in delete_ids:
                 id_sub = num_to_id[num_id]
                 id, sub = get_id_and_sub(id_sub)
+                ids_to_be_updated.add(id)
                 if sub == 0:
                     self.nodes[id] = None
                 else:
                     self.other_nodes[id][sub-1] = None
             
-            for node_id, node in self.nodes.items():
+            for id in self.nodes.keys():
                 other_nodes = []
-                if node_id in self.other_nodes:
-                    for other_node in self.other_nodes[node_id]:
+                if id in self.other_nodes:
+                    for other_node in self.other_nodes[id]:
                         if other_node != None:
                             other_nodes.append(other_node)
-                if self.nodes[node_id] == None:
+                if self.nodes[id] == None:
                     if len(other_nodes) == 0:
-                        del self.nodes[node_id]
+                        del self.nodes[id]
                     else:
-                        self.nodes[node_id] = other_nodes[0]
+                        self.nodes[id] = other_nodes[0]
                         del other_nodes[0]
-                if node_id in self.other_nodes:
+                if id in self.other_nodes:
                     if len(other_nodes) == 0:
-                        del self.other_nodes[node_id]
+                        del self.other_nodes[id]
                     else:
-                        self.other_nodes[node_id] = other_nodes
+                        self.other_nodes[id] = other_nodes
+
+            for id in ids_to_be_updated:
+                if id in self.nodes:
+                    add_node_seq(node_seq, id)
+
+            if len(delete_ids) == 0:
+                if try_hard:
+                    break
+                else:
+                    try_hard = True
 
         # Print De Bruijn graph
         for i in range(len(debruijn)):
@@ -1298,9 +1305,6 @@ class Graph:
                     new_nodes[node_id] = node
                         
                 self.nodes2 = new_nodes
-            
-        # DK - debugging purposes
-        # sys.exit(1)
             
         
     # Display graph information

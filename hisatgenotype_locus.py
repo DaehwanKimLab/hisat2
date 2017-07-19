@@ -912,6 +912,10 @@ def typing(simulation,
                         for type, length in cigars:
                             cigar_str += str(length)
                             cigar_str += type
+
+                    # DK - debugging purposes
+                    if sum(softclip) > 0:
+                        continue
                    
                     if right_pos > len(ref_seq):
                         continue
