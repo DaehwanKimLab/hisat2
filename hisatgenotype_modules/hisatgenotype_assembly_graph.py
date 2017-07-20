@@ -204,6 +204,7 @@ class Node:
         if self.left > other.left:
             self.print_info()
             other.print_info()
+            return
         
         assert self.left <= other.left
 
