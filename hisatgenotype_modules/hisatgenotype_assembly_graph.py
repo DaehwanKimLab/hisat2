@@ -199,7 +199,6 @@ class Node:
     
     # Combine two nodes with considering deletions
     def combine_with(self, other):
-
         # DK - debugging purposes
         if self.left > other.left:
             self.print_info()
@@ -731,6 +730,8 @@ class Graph:
                         if num_id in delete_ids:
                             continue
                         read_id = get_id_and_sub(num_to_id[num_id])[0]
+                        if read_id in self.other_nodes:
+                            continue
                         mate_read_id = get_mate_node_id(read_id)
                         if mate_read_id in self.nodes:
                             vertice_count[v] += 1
@@ -766,7 +767,7 @@ class Graph:
                         for num_id in vertices[v_][3]:
                             id = get_id_and_sub(num_to_id[num_id])[0]
                             if id in multi_read_ids:
-                                delete_ids.add(num_id)                               
+                                delete_ids.add(num_id)
                     else:
                         assert len(vertices) >= 2
                         relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
