@@ -21,6 +21,7 @@
 
 
 import os, sys, subprocess, re
+import shutil
 import inspect
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
@@ -45,6 +46,8 @@ def build_genotype_genome(base_fname,
                           database_list,
                           use_clinvar,
                           use_commonvar,
+                          aligner,
+                          graph_index,
                           verbose):    
     # Download HISAT2 index
     HISAT2_fnames = ["grch38",
@@ -174,11 +177,12 @@ def build_genotype_genome(base_fname,
             chr_genes = []
 
         chr_genotype_vars, chr_genotype_vari = [], 0
-        if chr in genotype_vars:
-            chr_genotype_vars = genotype_vars[chr]
-        chr_genotype_haplotypes, chr_genotype_hti = [], 0
-        if chr in genotype_haplotypes:
-            chr_genotype_haplotypes = genotype_haplotypes[chr]
+        if graph_index:
+            if chr in genotype_vars:
+                chr_genotype_vars = genotype_vars[chr]
+            chr_genotype_haplotypes, chr_genotype_hti = [], 0
+            if chr in genotype_haplotypes:
+                chr_genotype_haplotypes = genotype_haplotypes[chr]
 
         def add_vars(left, right, chr_genotype_vari, chr_genotype_hti, haplotype_num):
             # Output variants with clinical significance
@@ -226,6 +230,12 @@ def build_genotype_genome(base_fname,
         prev_right = 0
         for gene in chr_genes:
             left, right, length, name, family, exon_str, strand = gene
+
+            if not graph_index:
+                # Output gene (genotype_genome.gene)
+                print >> locus_out_file, "%s\t%s\t%s\t%d\t%d\t%s\t%s" % \
+                    (family.upper(), name, chr, left, right, exon_str, strand)
+                continue            
 
             chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(left, right, chr_genotype_vari, chr_genotype_hti, haplotype_num)
 
@@ -332,6 +342,9 @@ def build_genotype_genome(base_fname,
 
             prev_right = right + 1
 
+        if not graph_index:
+            continue
+
         # Write the rest of the Vars
         chr_genotype_vari, chr_genotype_hti, haplotype_num = add_vars(sys.maxint, sys.maxint, chr_genotype_vari, chr_genotype_hti, haplotype_num)            
             
@@ -357,37 +370,51 @@ def build_genotype_genome(base_fname,
     clnsig_out_file.close()
 
     allele_out_file = open("%s.allele" % base_fname, 'w')
-    for database in database_list:
-        for line in open("%s.allele" % database):
-            allele_name = line.strip()
-            print >> allele_out_file, "%s\t%s" % (database.upper(), allele_name)
+    if graph_index:
+        for database in database_list:
+            for line in open("%s.allele" % database):
+                allele_name = line.strip()
+                print >> allele_out_file, "%s\t%s" % (database.upper(), allele_name)
     allele_out_file.close()
 
     partial_out_file = open("%s.partial" % base_fname, 'w')
-    for database in database_list:
-        for line in open("%s.partial" % database):
-            allele_name = line.strip()
-            print >> partial_out_file, "%s\t%s" % (database.upper(), allele_name)
+    if graph_index:
+        for database in database_list:
+            for line in open("%s.partial" % database):
+                allele_name = line.strip()
+                print >> partial_out_file, "%s\t%s" % (database.upper(), allele_name)
     partial_out_file.close()
+
+    if not graph_index:
+        shutil.copyfile("genome.fa", "%s.fa" % base_fname)
 
     # Index genotype_genome.fa
     index_cmd = ["samtools", "faidx", "%s.fa" % base_fname]
     subprocess.call(index_cmd)
 
-    # Build HISAT-genotype graph indexes based on the above information
-    hisat2_index_fnames = ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
-    build_cmd = ["hisat2-build",
-                 "-p", str(threads),
-                 "--snp", "%s.index.snp" % base_fname,
-                 "--haplotype", "%s.haplotype" % base_fname,
-                 "%s.fa" % base_fname,
-                 "%s" % base_fname]
+    # Build indexes based on the above information
+    if graph_index:
+        assert aligner == "hisat2"
+        build_cmd = ["hisat2-build",
+                     "-p", str(threads),
+                     "--snp", "%s.index.snp" % base_fname,
+                     "--haplotype", "%s.haplotype" % base_fname,
+                     "%s.fa" % base_fname,
+                     "%s" % base_fname]
+    else:        
+        assert aligner in ["hisat2", "bowtie2"]
+        build_cmd = ["%s-build" % aligner,
+                     "-p" if aligner == "hisat2" else "--threads", str(threads),
+                     "%s.fa" % base_fname,
+                     "%s" % base_fname]
     if verbose:
         print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
         
     subprocess.call(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-    if not typing_common.check_files(hisat2_index_fnames):
-        print >> sys.stderr, "Error: indexing failed!  Perhaps, you may have forgotten to build hisat2 executables?"
+    
+    index_fnames = ["%s.%d.%s" % (base_fname, i+1, "ht2" if aligner == "hisat2" else "bt2") for i in range(8)]
+    if not typing_common.check_files(index_fnames):
+        print >> sys.stderr, "Error: indexing failed!  Perhaps, you may have forgotten to build %s executables?" % aligner
         sys.exit(1)
 
         
@@ -428,7 +455,16 @@ if __name__ == '__main__':
                         dest="intra_gap",
                         type=int,
                         default=50,
-                        help="Break a haplotype into several haplotypes")    
+                        help="Break a haplotype into several haplotypes")
+    parser.add_argument("--aligner",
+                        dest="aligner",
+                        type=str,
+                        default="hisat2",
+                        help="Aligner (default: hisat2)")
+    parser.add_argument("--linear-index",
+                        dest="graph_index",
+                        action="store_false",
+                        help="Build linear index")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -447,7 +483,10 @@ if __name__ == '__main__':
     if args.use_clinvar and args.use_commonvar:
         print >> sys.stderr, "Error: both --clinvar and --commonvar cannot be used together."
         sys.exit(1)
-        
+
+    if args.aligner not in ["hisat2", "bowtie2"]:
+        print >> sys.stderr, "Error: --aligner should be either hisat2 or bowtie2."
+        sys.exit(1)        
         
     build_genotype_genome(args.base_fname,
                           args.inter_gap,
@@ -456,5 +495,7 @@ if __name__ == '__main__':
                           database_list,
                           args.use_clinvar,
                           args.use_commonvar,
+                          args.aligner,
+                          args.graph_index,
                           args.verbose)
     
