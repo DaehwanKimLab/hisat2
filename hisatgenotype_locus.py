@@ -277,15 +277,23 @@ def typing(simulation,
                                       verbose)
             
         for test_Gene_names in locus_list:
-            if simulation:
-                gene = test_Gene_names[0].split('*')[0]
+            if base_fname == "genome":
+                if simulation:
+                    region_chr, region_left, region_right = test_Gene_names[0]
+                else:
+                    region_chr, region_left, region_right = test_Gene_names
+                gene = "%s:%d-%d" % (region_chr, region_left, region_right)
             else:
-                gene = test_Gene_names
+                if simulation:
+                    gene = test_Gene_names.split('*')[0]
+                else:
+                    gene = test_Gene_names
+                
             ref_allele = refGenes[gene]
             ref_seq = Genes[gene][ref_allele]
             ref_locus = refGene_loci[gene]
             ref_exons = ref_locus[-1]
-            
+                
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
             cur_maxright = -1
@@ -370,15 +378,16 @@ def typing(simulation,
 
             # List of nodes that represent alleles
             allele_vars = {}
-            for _, var_id in gene_var_list:
-                allele_list = Links[var_id]
-                for allele_id in allele_list:
-                    if allele_id not in Genes[gene]:
-                        continue
-                    if allele_id not in allele_vars:
-                        allele_vars[allele_id] = [var_id]
-                    else:
-                        allele_vars[allele_id].append(var_id)
+            if base_fname != "genome":
+                for _, var_id in gene_var_list:
+                    allele_list = Links[var_id]
+                    for allele_id in allele_list:
+                        if allele_id not in Genes[gene]:
+                            continue
+                        if allele_id not in allele_vars:
+                            allele_vars[allele_id] = [var_id]
+                        else:
+                            allele_vars[allele_id].append(var_id)
 
             # Extract variants that are within exons
             exon_vars = get_exonic_vars(gene_vars, ref_exons)
@@ -1700,6 +1709,8 @@ def read_Gene_alleles_from_vars(Vars, Var_list, Links, Genes):
         gene_vars, gene_var_list = Vars[gene_name], Var_list[gene_name]
         allele_vars = {}
         for _, var_id in gene_var_list:
+            if var_id not in Links:
+                continue
             for allele_name in Links[var_id]:
                 if allele_name not in allele_vars:
                     allele_vars[allele_name] = []
@@ -1943,23 +1954,29 @@ def genotyping_locus(base_fname,
 
     # Read alleles (names and sequences)
     refGenes, refGene_loci = {}, {}
-    for line in open("%s.locus" % (genotype_genome if genotype_genome != "" else base_fname)):
-        fields = line.strip().split()
-        if genotype_genome != "" and base_fname != fields[0].lower():
-            continue
-        if genotype_genome != "":
-            _, Gene_name, chr, left, right, exon_str, strand = fields
-        else:
-            Gene_name, chr, left, right, _, exon_str, strand = fields
-        Gene_gene = Gene_name.split('*')[0]
-        assert not Gene_gene in refGenes
-        refGenes[Gene_gene] = Gene_name
-        left, right = int(left), int(right)
-        exons = []
-        for exon in exon_str.split(','):
-            exon_left, exon_right = exon.split('-')
-            exons.append([int(exon_left), int(exon_right)])
-        refGene_loci[Gene_gene] = [Gene_name, chr, left, right, exons]
+    if base_fname == "genome":
+        for chr, left, right in locus_list:
+            region_name = "%s:%d-%d" % (chr, left, right)
+            refGenes[region_name] = region_name
+            refGene_loci[region_name] = [region_name, chr, left, right, []]
+    else:
+        for line in open("%s.locus" % (genotype_genome if genotype_genome != "" else base_fname)):
+            fields = line.strip().split()
+            if genotype_genome != "" and base_fname != fields[0].lower():
+                continue
+            if genotype_genome != "":
+                _, Gene_name, chr, left, right, exon_str, strand = fields
+            else:
+                Gene_name, chr, left, right, _, exon_str, strand = fields
+            Gene_gene = Gene_name.split('*')[0]
+            assert not Gene_gene in refGenes
+            refGenes[Gene_gene] = Gene_name
+            left, right = int(left), int(right)
+            exons = []
+            for exon in exon_str.split(','):
+                exon_left, exon_right = exon.split('-')
+                exons.append([int(exon_left), int(exon_right)])
+            refGene_loci[Gene_gene] = [Gene_name, chr, left, right, exons]
     Genes = {}
     if len(locus_list) == 0:
         locus_list = refGene_loci.keys()
@@ -2145,7 +2162,10 @@ def genotyping_locus(base_fname,
             print >> sys.stderr, "%s:\t%d/%d passed (%.2f%%)" % (aligner_type, passed, len(test_list), passed * 100.0 / len(test_list))
     
     else: # With real reads or BAMs
-        print >> sys.stderr, "\t", ' '.join(locus_list)
+        if base_fname == "genome":
+            print >> sys.stderr, "\t", locus_list
+        else:
+            print >> sys.stderr, "\t", ' '.join(locus_list)
         typing(simulation,
                base_fname,
                locus_list,
@@ -2337,10 +2357,18 @@ if __name__ == '__main__':
         locus_list = []
     else:
         locus_list = args.locus_list.split(',')
+        if args.base_fname == "genome":
+            assert ':' in args.locus_list
+            for i in range(len(locus_list)):
+                assert ':' in locus_list[i] and '-' in locus_list[i]
+                chr, coord = locus_list[i].split(':')
+                left, right = coord.split('-')
+                locus_list[i] = [chr, int(left), int(right)]
+
     if args.only_locus_list == "":
         only_locus_list = []
     else:
-        locus_list = only_locus_list = args.only_locus_list.split(',')    
+        locus_list = only_locus_list = args.only_locus_list.split(',')
     if args.aligners == "":
         print >> sys.stderr, "Error: --aligners must be non-empty."
         sys.exit(1)    
