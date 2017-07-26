@@ -411,8 +411,12 @@ def build_genotype_genome(base_fname,
         print >> sys.stderr, "\tRunning:", ' '.join(build_cmd)
         
     subprocess.call(build_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-    
-    index_fnames = ["%s.%d.%s" % (base_fname, i+1, "ht2" if aligner == "hisat2" else "bt2") for i in range(8)]
+
+    if aligner == "hisat2":
+        index_fnames = ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
+    else:
+        index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
+        index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
     if not typing_common.check_files(index_fnames):
         print >> sys.stderr, "Error: indexing failed!  Perhaps, you may have forgotten to build %s executables?" % aligner
         sys.exit(1)
