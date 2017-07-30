@@ -378,16 +378,17 @@ def typing(simulation,
 
             # List of nodes that represent alleles
             allele_vars = {}
-            if base_fname != "genome":
-                for _, var_id in gene_var_list:
-                    allele_list = Links[var_id]
-                    for allele_id in allele_list:
-                        if allele_id not in Genes[gene]:
-                            continue
-                        if allele_id not in allele_vars:
-                            allele_vars[allele_id] = [var_id]
-                        else:
-                            allele_vars[allele_id].append(var_id)
+            for _, var_id in gene_var_list:
+                if var_id not in Links:
+                    continue
+                allele_list = Links[var_id]
+                for allele_id in allele_list:
+                    if allele_id not in Genes[gene]:
+                        continue
+                    if allele_id not in allele_vars:
+                        allele_vars[allele_id] = [var_id]
+                    else:
+                        allele_vars[allele_id].append(var_id)
 
             # Extract variants that are within exons
             exon_vars = get_exonic_vars(gene_vars, ref_exons)
@@ -904,7 +905,7 @@ def typing(simulation,
                             right_pos += length
 
                         if cigar_op in "MIS":
-                            read_pos += length
+                            read_pos += length                    
 
                     # Remove softclip in cigar and modify read_seq and read_qual accordingly
                     if sum(softclip) > 0:
@@ -924,7 +925,7 @@ def typing(simulation,
 
                     if sum(softclip) > 0:
                         continue
-                   
+
                     if right_pos > len(ref_seq):
                         continue
 
