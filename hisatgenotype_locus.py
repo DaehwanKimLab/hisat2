@@ -922,7 +922,6 @@ def typing(simulation,
                             cigar_str += str(length)
                             cigar_str += type
 
-                    # DK - debugging purposes
                     if sum(softclip) > 0:
                         continue
                    
@@ -1438,7 +1437,7 @@ def typing(simulation,
                 asm_graph.allele_node_order = allele_node_order
 
                 # Start drawing assembly graph
-                asm_graph.begin_draw(output_base)
+                asm_graph.begin_draw("%s.%s.%s" % (output_base, base_fname, gene))
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(0, "Initial graph")
