@@ -1748,6 +1748,8 @@ class Graph:
                         color = "blue"
                     if var_type == "single":
                         var_right = var_left + 1
+                    elif var_type == "insertion":
+                        var_right = var_left + len(var_data)
                     else:
                         assert var_type == "deletion"
                         var_right = var_left + int(var_data)

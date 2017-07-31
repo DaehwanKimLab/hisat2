@@ -285,7 +285,7 @@ def typing(simulation,
                 gene = "%s:%d-%d" % (region_chr, region_left, region_right)
             else:
                 if simulation:
-                    gene = test_Gene_names.split('*')[0]
+                    gene = test_Gene_names[0].split('*')[0]
                 else:
                     gene = test_Gene_names
                 
@@ -495,6 +495,11 @@ def typing(simulation,
 
                 # 
                 def add_count(count_per_read, ht, add):
+                    if base_fname == "genome" and len(count_per_read) == 1:
+                        for allele in count_per_read.keys():
+                            count_per_read[allele] = add
+                        return
+                    
                     orig_ht = ht
                     ht = ht.split('-')
 
@@ -506,7 +511,8 @@ def typing(simulation,
                     alleles = set(Genes[gene].keys()) - set([ref_allele])
                     for i in range(len(ht)):
                         var_id = ht[i]
-                        if var_id.startswith("nv"):
+                        if var_id.startswith("nv") or \
+                           var_id not in Links:
                             continue
                         alleles &= set(Links[var_id])
                     ht = set(ht)
@@ -516,7 +522,9 @@ def typing(simulation,
                     var_idx = min(var_idx, len(gene_var_list) - 1)
                     while var_idx >= 0:
                         _, var_id = gene_var_list[var_idx]
-                        if var_id.startswith("nv") or var_id in ht:
+                        if var_id.startswith("nv") or \
+                           var_id in ht or \
+                           var_id not in Links:
                             var_idx -= 1
                             continue
                         if var_id in gene_var_maxrights and gene_var_maxrights[var_id] < left:
@@ -1090,11 +1098,13 @@ def typing(simulation,
 
                         left_positive_hts, right_positive_hts = set(), set()                        
                         Gene_count_per_read, Gene_gen_count_per_read = {}, {}
-                        for Gene_name in Gene_names[gene]:
-                            if Gene_name.find("BACKBONE") != -1:
+                        for allele_name in Gene_names[gene]:
+                            if allele_name.find("BACKBONE") != -1:
                                 continue
-                            Gene_count_per_read[Gene_name] = 0
-                            Gene_gen_count_per_read[Gene_name] = 0
+                            if base_fname == "genome" and allele_name.find("GRCh38") != -1:
+                                continue
+                            Gene_count_per_read[allele_name] = 0
+                            Gene_gen_count_per_read[allele_name] = 0
 
                     prev_lines.append(line)
 
@@ -1422,7 +1432,12 @@ def typing(simulation,
                     Gene_prob = [[allele, prob] for allele, prob in Gene_combined_prob.items()]
                     Gene_prob = sorted(Gene_prob, cmp=typing_common.Gene_prob_cmp)
             else:
-                Gene_prob = typing_common.single_abundance(Gene_cmpt)
+                if len(Gene_cmpt.keys()) <= 1:
+                    Gene_prob = []
+                    if len(Gene_cmpt.keys()) == 1:
+                        Gene_prob = [[Gene_cmpt.keys()[0], 1.0]]
+                else:
+                    Gene_prob = typing_common.single_abundance(Gene_cmpt)
 
             if index_type == "graph" and assembly:
                 allele_node_order = []
@@ -1615,9 +1630,10 @@ def typing(simulation,
                     for max_allele_name in max_allele_names:
                         print >> f_, "\t\t%s:" % max_allele_name, max_common
             """
-            
-            success = [False for i in range(len(test_Gene_names))]
-            found_list = [False for i in range(len(test_Gene_names))]
+
+            if simulation:
+                success = [False for i in range(len(test_Gene_names))]
+                found_list = [False for i in range(len(test_Gene_names))]
             for prob_i in range(len(Gene_prob)):
                 prob = Gene_prob[prob_i]
                 found = False
