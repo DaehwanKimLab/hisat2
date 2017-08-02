@@ -463,18 +463,12 @@ class Graph:
         self.edges = {}
         self.to_node, self.from_node = {}, {}
 
-        self.left_margin = 300
+        self.left_margin = 350
         self.right_margin = 20
         self.top_margin = 20
         self.bottom_margin = 20
 
-        if len(backbone) <= 4000:
-            self.scalex = 5
-        elif len(backbone) <= 8000:
-            self.scalex = 2
-        else:
-            self.scalex = 1
-        self.scaley = 2
+        self.scalex, self.scaley = 5, 2
         self.width = len(self.backbone) * self.scalex + self.left_margin + self.right_margin
         self.unscaled_height = 6000
         self.height = self.unscaled_height * self.scaley
@@ -1431,38 +1425,54 @@ class Graph:
         def get_sy(y):
             return y * self.scaley
 
-        htmlDraw = self.htmlDraw = HtmlDraw(fname_base)
-        htmlDraw.write_html_css(self.width, self.height)
-        htmlDraw.start_js()
-        # htmlDraw.draw_smile()
-        js_file = htmlDraw.js_file
-
-        # Choose font
-        print >> js_file, r'ctx.font = "12px Times New Roman";'
+        pdfDraw = self.pdfDraw = open(fname_base + '.pdf', 'w')
+        print >> pdfDraw, r'%PDF-1.7'
+        self.objects, self.stream = [], []
+        self.add_pdf_object('<</Type /Catalog /Pages 2 0 R>>')
+        self.add_pdf_object('<</Type /Pages /Kids [3 0 R] /Count 1>>')
+        self.add_pdf_object('<</Type /Page /Parent 2 0 R /Resources 4 0 R /MediaBox [0 0 %d %d] /Contents 6 0 R>>' % \
+                   (self.width, self.height))
+        self.add_pdf_object('<</Font <</F1 5 0 R>>>>')
+        self.add_pdf_object('<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>')
 
         # Draw vertical dotted lines at every 100nt and thick lines at every 500nt
-        print >> js_file, r'ctx.fillStyle = "gray";'
-        for pos in range(0, nodes[-1][2], 100):
+        self.stream.append('q 0.5 0.5 0.5 RG')
+        for pos in range(0, nodes[-1][2], 100):            
             if pos != 0 and pos % 500 == 0:
-                print >> js_file, r'ctx.setLineDash([]);'
-                print >> js_file, r'ctx.lineWidth = 1;'
+                line_style = "1 w [] 0 d"
             else:
-                print >> js_file, r'ctx.setLineDash([5, 15]);'
-                print >> js_file, r'ctx.lineWidth = 0.2;'
-
-            print >> js_file, r'ctx.beginPath();'
-            print >> js_file, r'ctx.moveTo(%d, %d);' % \
-                (get_x(pos), self.top_margin)
-            print >> js_file, r'ctx.lineTo(%d, %d);' % \
-                (get_x(pos), self.height)
-            print >> js_file, r'ctx.stroke();'
-
-        print >> js_file, r'ctx.setLineDash([]);'
-
-
+                line_style = "0.2 w [3] 0 d"
+            self.stream.append("%s %d %d m %d 0 l h S" % \
+                               (line_style, get_x(pos), self.height - self.top_margin, get_x(pos)))
+        self.stream.append('Q')
+        
+        
     # End drawing graph
     def end_draw(self):
-        self.htmlDraw.end_js()
+        pdfDraw = self.pdfDraw
+        self.add_pdf_stream('\n'.join(self.stream))
+        to_xref = pdfDraw.tell()
+        print >> pdfDraw, 'xref'
+        print >> pdfDraw, "0 %d" % (len(self.objects) + 1)
+        print >> pdfDraw, r'0000000000 65535 f'
+        for object in self.objects:
+            print >> pdfDraw, "%s 00000 n" % "{:010}".format(object)
+        print >> pdfDraw, 'trailer <</Size %d /Root 1 0 R>>' % (len(self.objects) + 1)
+        print >> pdfDraw, 'startxref'
+        print >> pdfDraw, str(to_xref)
+        print >> pdfDraw, r'%%EOF'
+        
+        self.pdfDraw.close()
+
+        
+    def add_pdf_object(self, obj):
+        self.objects.append(self.pdfDraw.tell())
+        print >> self.pdfDraw, "%d 0 obj %s" % (len(self.objects), obj)
+        print >> self.pdfDraw, 'endobj'
+
+
+    def add_pdf_stream(self, stream):
+        self.add_pdf_object("<</Length %d>>\nstream\n%s\nendstream" % (len(stream), stream))
 
         
     # Draw graph
@@ -1525,7 +1535,7 @@ class Graph:
             return self.left_margin + x * self.scalex
 
         def get_y(y):
-            return self.top_margin + y * self.scaley
+            return self.height - self.top_margin - y * self.scaley
 
         # Get scalar
         def get_sx(x):
@@ -1534,10 +1544,6 @@ class Graph:
         def get_sy(y):
             return y * self.scaley
 
-        htmlDraw = self.htmlDraw
-        # htmlDraw.draw_smile()
-        js_file = htmlDraw.js_file
-
         # Draw exons
         y = get_dspace(0, max_right, 14)
         for e in range(len(self.exons)):
@@ -1545,39 +1551,30 @@ class Graph:
             right += 1
 
             # Draw node
-            print >> js_file, r'ctx.beginPath();'
-            print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-            print >> js_file, r'ctx.fillStyle = "white";'
-            print >> js_file, r'ctx.fill();'
-            print >> js_file, r'ctx.lineWidth = 2;'
-            print >> js_file, r'ctx.strokeStyle = "black";'
-            print >> js_file, r'ctx.stroke();'
+            re_str = "%d %d %d %d" % (get_x(left), get_y(y + 10), get_x(right) - get_x(left), get_sy(10))
+            self.stream.append("q 1.0 1.0 1.0 rg 2 w %s re f %s re S Q" % (re_str, re_str))
 
             # Draw label
-            print >> js_file, r'ctx.fillStyle = "blue";'
-            print >> js_file, r'ctx.fillText("Exon %d", %d, %d);' % \
-                (e+1, get_x(left + 2), get_y(y + 7))
+            self.stream.append("q 0.0 0.0 1.0 rg BT /F1 12 Tf %d %d Td (Exon %d) Tj ET Q" % \
+                               (get_x(left + 2), get_y(y + 7), e+1))
 
             if e > 0:
                 prev_right = self.exons[e-1][1] + 1
-                print >> js_file, r'ctx.beginPath();'
-                print >> js_file, r'ctx.moveTo(%d, %d);' % (get_x(left), get_y(y + 5))
-                print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
-                print >> js_file, r'ctx.stroke();'
+                self.stream.append("q 2 w %d %d m %d %d l h S Q" % \
+                                   (get_x(prev_right), get_y(y + 5), get_x(left), get_y(y + 5)))
 
         # Draw backbone sequence
         y = get_dspace(0, max_right, 4)
-        print >> js_file, r'ctx.fillStyle = "purple";'
-        print >> js_file, r'ctx.font = "20px Times New Roman";'
-        print >> js_file, r'ctx.font = "8px Times New Roman";'
+        self.stream.append("q 0.5 0 0.5 rg") # purple
         for pos in range(len(self.backbone)):
             base = self.backbone[pos]
-            print >> js_file, r'ctx.fillText("%s", %d, %d);' % (base, get_x(pos), get_y(y))
+            self.stream.append("BT /F1 8 Tf %d %d Td (%s) Tj ET" % \
+                               (get_x(pos), get_y(y + 2), base))
+        self.stream.append("Q")
 
         # Draw true or predicted alleles
-        node_colors = ["#FFFF00", "#00FF00", "#FFCBA4", "#C14581"]
-        allele_node_colors = ["#DDDD00", "#008800", "#DDA982", "#A12561"]
+        node_colors = ["1 1 0", "0 1 0", "1 0.8 0.64", "0.76 0.27 0.5"]
+        allele_node_colors = ["0.87 0.87 0", "0 0.53 0", "0.87 0.66 0.5", "0.63 0.14 0.38"]
         def draw_alleles(allele_node_dic, allele_node_colors, display = False):
             if len(allele_node_dic) <= 0:
                 return
@@ -1610,27 +1607,17 @@ class Graph:
                         allele_type = "true"
                     else:
                         allele_type = "predicted"
-                print >> js_file, r'ctx.fillStyle = "blue";'
-                print >> js_file, r'ctx.font = "20px Times New Roman";'
-                print >> js_file, r'ctx.fillText("%s (%s, %s%s)", %d, %d);' % \
-                    (allele_id,
-                     "partial" if allele_id in self.partial_allele_ids else "full",
-                     allele_type,
-                     # prob,
-                     "",
-                     10,
-                     get_y(y + 5))
-                print >> js_file, r'ctx.font = "12px Times New Roman";'
-        
+                self.stream.append("q 0.0 0.0 1.0 rg BT /F1 20 Tf %d %d Td (%s (%s, %s)) Tj ET Q" % \
+                               (10,
+                                get_y(y + 7),
+                                allele_id,
+                               "partial" if allele_id in self.partial_allele_ids else "full",
+                                allele_type))
+
                 # Draw node
-                print >> js_file, r'ctx.beginPath();'
-                print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                    (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-                print >> js_file, r'ctx.fillStyle = "%s";' % (allele_node_colors[n % len(allele_node_colors)])
-                print >> js_file, r'ctx.fill();'
-                print >> js_file, r'ctx.lineWidth = 2;'
-                print >> js_file, r'ctx.strokeStyle = "black";'
-                print >> js_file, r'ctx.stroke();'
+                re_str = "%d %d %d %d" % (get_x(left), get_y(y + 10), get_x(right) - get_x(left), get_sy(10))
+                self.stream.append("q %s rg 2 w %s re f %s re S Q" % \
+                                   (allele_node_colors[n % len(allele_node_colors)], re_str, re_str))
 
                 color_boxes = []
                 c = 0
@@ -1651,16 +1638,14 @@ class Graph:
                     cleft, cright, color = color_box
                     cleft += left; cright += left
                     if color == 'B':
-                        color = "blue" 
+                        color = "0 0 1" # blue 
                     else:
-                        color = "#1E90FF"
+                        color = "0.12 0.56 1"
                     # DK - debugging purposes
-                    color = "blue"
-                    print >> js_file, r'ctx.beginPath();'
-                    print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                        (get_x(cleft), get_y(y + 1), get_x(cright) - get_x(cleft), get_sy(8))
-                    print >> js_file, r'ctx.fillStyle = "%s";' % (color)
-                    print >> js_file, r'ctx.fill();'
+                    color = "0 0 1"
+                    self.stream.append("q %s rg 2 w %d %d %d %d re f Q" % \
+                                       (color, get_x(cleft), get_y(y + 9), get_x(cright) - get_x(cleft), get_sy(8)))
+
             return allele_nodes, seqs, colors
 
         allele_nodes, seqs, colors = draw_alleles(self.true_allele_nodes if self.simulation else self.predicted_allele_nodes,
@@ -1673,9 +1658,8 @@ class Graph:
         y = get_dspace(0, nodes[-1][2], 14)
         for pos in range(0, nodes[-1][2], 100):
             # Draw label
-            print >> js_file, r'ctx.fillStyle = "blue";'
-            print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
-                (pos + 1, get_x(pos+1), get_y(y + 2))
+            self.stream.append("BT /F1 12 Tf %d %d Td (%d) Tj ET" % \
+                               (get_x(pos+1), get_y(y + 2), pos + 1))
 
         # Draw nodes
         node_to_y = {}
@@ -1701,9 +1685,9 @@ class Graph:
                 node_vars = node.get_vars()
                 node_var_ids = node.get_var_ids()
                 if len(nodes2) > 1:
-                    color = "#D8D8D8"
+                    color = "0.85 0.85 0.85"
                 elif len(allele_nodes) > 0:
-                    color = "white"
+                    color = "1 1 1"
                     max_common = -sys.maxint
                     for a in range(len(allele_nodes)):
                         allele_node_id, allele_left, allele_right = allele_nodes[a]
@@ -1720,32 +1704,28 @@ class Graph:
                             max_common = tmp_common
                             color = node_colors[a % len(node_colors)]
                         elif max_common == tmp_common:
-                            color = "white"
+                            color = "1 1 1"
                 else:
-                    color = "yellow"    
+                    color = "1 1 0" # yellow
 
                 # Draw node
                 right += 1
-                print >> js_file, r'ctx.beginPath();'
-                print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                    (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-                print >> js_file, r'ctx.fillStyle = "%s";' % color
-                print >> js_file, r'ctx.fill();'
-                print >> js_file, r'ctx.lineWidth = 2;'
-                print >> js_file, r'ctx.strokeStyle = "black";'
-                print >> js_file, r'ctx.stroke();'
+                re_str = "%d %d %d %d" % (get_x(left), get_y(y + 10), get_x(right) - get_x(left), get_sy(10))
+                self.stream.append("q %s rg 2 w %s re f %s re S Q" % \
+                                   (color, re_str, re_str))
 
+                
                 # Draw variants
                 for var_id, pos in node_vars:
                     if var_id == "gap":
                         var_type, var_left = "single", pos
-                        color = "black"
+                        color = "0 0 0"
                     elif var_id == "unknown" or var_id.startswith("nv"):
                         var_type, var_left = "single", pos
-                        color = "red"
+                        color = "1 0 0"
                     else:
                         var_type, var_left, var_data = self.gene_vars[var_id]
-                        color = "blue"
+                        color = "0 0 1"
                     if var_type == "single":
                         var_right = var_left + 1
                     elif var_type == "insertion":
@@ -1753,126 +1733,21 @@ class Graph:
                     else:
                         assert var_type == "deletion"
                         var_right = var_left + int(var_data)
-                    print >> js_file, r'ctx.beginPath();'
-                    print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                        (get_x(var_left), get_y(y + 1), get_x(var_right) - get_x(var_left), get_sy(8))
-                    print >> js_file, r'ctx.fillStyle = "%s";' % (color)
-                    print >> js_file, r'ctx.fill();'
+                    self.stream.append("q %s rg 2 w %d %d %d %d re f Q" % \
+                                       (color, get_x(var_left), get_y(y + 9), get_x(var_right) - get_x(var_left), get_sy(8)))
 
                 # Draw label
                 if get_sx(right - left) >= 300:
-                    print >> js_file, r'ctx.fillStyle = "blue";'
-                    print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                        (node.id, get_x(left + 2), get_y(y + 7))
+                    self.stream.append("q 0.0 0.0 1.0 rg BT /F1 12 Tf %d %d Td (%s) Tj ET Q" % \
+                                       (get_x(left + 2), get_y(y + 7), node.id))
 
                 if not draw_title:
                     draw_title = True
-                    print >> js_file, r'ctx.font = "24px Times New Roman";'
-                    print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                        (title, 10, get_y(y + 7))
-                    print >> js_file, r'ctx.font = "12px Times New Roman";'
+                    self.stream.append("q 0.0 0.0 1.0 rg BT /F1 24 Tf %d %d Td (%s) Tj ET Q" % \
+                                       (10, get_y(y + 7), title))
 
                 y += 14
-
-
-        # Draw edges
-        print >> js_file, r'ctx.lineWidth = 1;'
-        line_colors = ["red", "black", "blue"]
-        for node_id, to_node_ids in self.to_node.items():
-            node = self.nodes[node_id]
-            node_x = (get_x(node.left) + get_x(node.right)) / 2
-            node_y = get_y(node_to_y[node_id] + 5)
-            print >> js_file, r'ctx.strokeStyle = "%s";' % \
-                line_colors[random.randrange(len(line_colors))]
-            for to_node_id, _ in to_node_ids:
-                to_node = self.nodes[to_node_id]
-                to_node_x = (get_x(to_node.left) + get_x(to_node.right) + (random.random() * 10 - 5)) / 2
-                to_node_y = get_y(node_to_y[to_node_id] + 5)
-
-                jitter1, jitter2 = (random.random() * 10 - 5), (random.random() * 10 - 5)
-                jitter1, jitter2 = get_sx(jitter1), get_sx(jitter2)
-
-                print >> js_file, r'ctx.beginPath();'
-                print >> js_file, r'ctx.moveTo(%d, %d);' % (node_x + jitter1, node_y)
-                print >> js_file, r'ctx.lineTo(%d, %d);' % (to_node_x + jitter2, to_node_y)
-                print >> js_file, r'ctx.stroke();'
 
         curr_y = get_dspace(0, nodes[-1][2], 1)
         return curr_y if curr_y > 0 else end_y
 
-        
-class HtmlDraw:
-    def __init__(self, base_fname):
-        self.base_fname = base_fname
-
-        
-    def write_html_css(self, width = 2000, height = 1000):
-        base_fname = self.base_fname
-        html_file = open("%s.html" % base_fname, 'w')
-        print >> html_file, r'<!DOCTYPE html>'
-        print >> html_file, r'<html>'
-        print >> html_file, r'<head>'
-        print >> html_file, r'<title>HISAT-genotyping HLA</title>'
-        print >> html_file, r'<link rel="stylesheet" type="text/css" href="%s.css"/>' % (base_fname.split("/")[-1])
-        print >> html_file, r'</head>'
-        print >> html_file, r'<body>'
-        print >> html_file, r'<canvas id="a" width="%d" height="%d">' % (width, height)
-        print >> html_file, r'This text is displayed if your browser does not support HTML5 Canvas.'
-        print >> html_file, r'</canvas>'
-        print >> html_file, r'<script type="text/javascript" src="%s.js"></script>' % (base_fname.split("/")[-1])
-        print >> html_file, r'</body>'
-        print >> html_file, r'</html>'
-        html_file.close()
-
-        css_file = open("%s.css" % base_fname, 'w')
-        print >> css_file, r'canvas {'
-        print >> css_file, r'border: 1px dotted black;'
-        print >> css_file, r'}'
-        css_file.close()
-
-        
-    def start_js(self):
-        self.js_file = open("%s.js" % self.base_fname, 'w')
-        print >> self.js_file, r'var a_canvas = document.getElementById("a");'
-        print >> self.js_file, r'var ctx = a_canvas.getContext("2d");'
-
-        
-    def end_js(self):
-        self.js_file.close()
-
-        
-    def draw_smile(self):
-        js_file = self.js_file
-        
-        # Draw the face
-        print >> js_file, r'ctx.fillStyle = "yellow";'
-        print >> js_file, r'ctx.beginPath();'
-        print >> js_file, r'ctx.arc(95, 85, 40, 0, 2*Math.PI);'
-        print >> js_file, r'ctx.closePath();'
-        print >> js_file, r'ctx.fill();'
-        print >> js_file, r'ctx.lineWidth = 2;'
-        print >> js_file, r'ctx.stroke();'
-        print >> js_file, r'ctx.fillStyle = "black";'
-        
-        # Draw the left eye
-        print >> js_file, r'ctx.beginPath();'
-        print >> js_file, r'ctx.arc(75, 75, 5, 0, 2*Math.PI);'
-        print >> js_file, r'ctx.closePath();'
-        print >> js_file, r'ctx.fill();'
-
-        # Draw the right eye
-        print >> js_file, r'ctx.beginPath();'
-        print >> js_file, r'ctx.arc(114, 75, 5, 0, 2*Math.PI);'
-        print >> js_file, r'ctx.closePath();'
-        print >> js_file, r'ctx.fill();'
-
-        # Draw the mouth
-        print >> js_file, r'ctx.beginPath();'
-        print >> js_file, r'ctx.arc(95, 90, 26, Math.PI, 2*Math.PI, true);'
-        print >> js_file, r'ctx.closePath();'
-        print >> js_file, r'ctx.fill();'
-
-        # Write "Hello, World!"
-        print >> js_file, r'ctx.font = "30px Garamond";'
-        print >> js_file, r'ctx.fillText("Hello, World!", 15, 175);'
-       
