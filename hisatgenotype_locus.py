@@ -1456,20 +1456,20 @@ def typing(simulation,
                 asm_graph.begin_draw("%s.%s.%s" % (output_base, base_fname, gene))
 
                 # Draw assembly graph
-                begin_y = asm_graph.draw(0, "Initial graph")
+                begin_y = asm_graph.draw(0, "a. Read alignment")
                 begin_y += 200
                 
                 # Apply De Bruijn graph
                 asm_graph.guided_DeBruijn(assembly_verbose)
 
                 # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y, "Asssembly")
+                begin_y = asm_graph.draw(begin_y, "b. Asssembly")
                 begin_y += 200
 
                 # Draw assembly graph
                 asm_graph.nodes = asm_graph.nodes2
                 asm_graph.to_node, asm_graph.from_node = {}, {}
-                begin_y = asm_graph.draw(begin_y, "Assembly with known alleles")
+                begin_y = asm_graph.draw(begin_y, "c. Assembly with known alleles")
 
                 # End drawing assembly graph
                 asm_graph.end_draw()

@@ -1406,17 +1406,21 @@ class Graph:
         
     # Begin drawing graph
     def begin_draw(self, fname_base):
-        assert len(self.nodes) > 0
-        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
-        def node_cmp(a, b):
-            return a[1] - b[1]
-        nodes = sorted(nodes, cmp=node_cmp)
-
+        pdfDraw = self.pdfDraw = open(fname_base + '.pdf', 'w')
+        print >> pdfDraw, r'%PDF-1.7'
+        self.objects, self.stream = [], []
+        self.draw_items = []
+        
+    # End drawing graph
+    def end_draw(self):
+        self.unscaled_height += 50
+        self.height = self.unscaled_height * self.scaley
+        
         def get_x(x):
             return self.left_margin + x * self.scalex
 
         def get_y(y):
-            return self.top_margin + y * self.scaley
+            return self.height - self.top_margin - y * self.scaley
 
         # Get scalar
         def get_sx(x):
@@ -1424,10 +1428,8 @@ class Graph:
 
         def get_sy(y):
             return y * self.scaley
-
-        pdfDraw = self.pdfDraw = open(fname_base + '.pdf', 'w')
-        print >> pdfDraw, r'%PDF-1.7'
-        self.objects, self.stream = [], []
+        
+        pdfDraw = self.pdfDraw
         self.add_pdf_object('<</Type /Catalog /Pages 2 0 R>>')
         self.add_pdf_object('<</Type /Pages /Kids [3 0 R] /Count 1>>')
         self.add_pdf_object('<</Type /Page /Parent 2 0 R /Resources 4 0 R /MediaBox [0 0 %d %d] /Contents 6 0 R>>' % \
@@ -1436,21 +1438,66 @@ class Graph:
         self.add_pdf_object('<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>')
 
         # Draw vertical dotted lines at every 100nt and thick lines at every 500nt
-        self.stream.append('q 0.5 0.5 0.5 RG')
-        for pos in range(0, nodes[-1][2], 100):            
-            if pos != 0 and pos % 500 == 0:
-                line_style = "1 w [] 0 d"
+        pre_items = []
+        for pos in range(0, len(self.backbone), 100):
+            main_line = (pos != 0 and pos % 500 == 0)
+            dic = {"coord": [pos, 2, pos, self.unscaled_height - 2],
+                   "stroke" : "0.5 0.5 0.5",
+                   "line_width" : 1 if main_line else 0.2}
+            if not main_line:
+                dic["line_dash"] = "[3] 0"
+            pre_items.append(["line", dic])
+        self.draw_items = pre_items + self.draw_items
+
+        fill, stroke, line_width, line_dash = "0 0 0", "0 0 0", 2.0, ""
+        for type, dic in self.draw_items:
+            commands = []
+            if type != "state":
+                assert "coord" in dic
+
+            if "fill" in dic and dic["fill"] != fill:
+                fill = dic["fill"]
+                commands.append("%s rg" % fill)
+            if "stroke" in dic and dic["stroke"] != stroke:
+                stroke = dic["stroke"]
+                commands.append("%s RG" % stroke)
+            if "line_width" in dic and dic["line_width"] != line_width:
+                line_width = dic["line_width"]
+                commands.append("%.1f w" % line_width)
+            if "line_dash" in dic:
+                if dic["line_dash"] != line_dash:
+                    line_dash = dic["line_dash"]
+                    commands.append("%s d" % line_dash)
+            elif line_dash != "":
+                line_dash = ""
+                commands.append("[] 0 d")
+                    
+            if type == "rect":
+                x, y, sx, sy = dic["coord"]
+                re_str = "%d %d %d %d" % (get_x(x), get_y(y), get_sx(sx), get_sy(sy))
+                if "fill" in dic:
+                    commands.append("%s re f" % re_str)
+                if "stroke" in dic:
+                    commands.append("%s re S" % re_str)
+                    
+            elif type == "line":
+                x, y, x2, y2 = dic["coord"]
+                commands.append("%d %d m %d %d l h S" % \
+                                (get_x(x), get_y(y), get_x(x2), get_y(y2)))
+            elif type == "text":
+                assert "text" in dic and "font_size" in dic
+                x, y = dic["coord"]
+                commands.append("BT /F1 %d Tf %d %d Td (%s) Tj ET" % \
+                                (dic["font_size"], get_x(x), get_y(y), dic["text"]))
             else:
-                line_style = "0.2 w [3] 0 d"
-            self.stream.append("%s %d %d m %d 0 l h S" % \
-                               (line_style, get_x(pos), self.height - self.top_margin, get_x(pos)))
-        self.stream.append('Q')
-        
-        
-    # End drawing graph
-    def end_draw(self):
-        pdfDraw = self.pdfDraw
+                assert type == "state"
+                
+            self.stream.append(' '.join(commands))
+
+        # Write stream
         self.add_pdf_stream('\n'.join(self.stream))
+
+        # Write xref and trailer
         to_xref = pdfDraw.tell()
         print >> pdfDraw, 'xref'
         print >> pdfDraw, "0 %d" % (len(self.objects) + 1)
@@ -1488,7 +1535,7 @@ class Graph:
         max_right = len(self.backbone)
 
         # display space
-        end_y = self.unscaled_height if begin_y > 0 else self.unscaled_height * 0.8
+        end_y = begin_y + 10000
         dspace = [[[begin_y, end_y]]] * (max_right + 1)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
@@ -1550,27 +1597,34 @@ class Graph:
             left, right = self.exons[e]
             right += 1
 
-            # Draw node
-            re_str = "%d %d %d %d" % (get_x(left), get_y(y + 10), get_x(right) - get_x(left), get_sy(10))
-            self.stream.append("q 1.0 1.0 1.0 rg 2 w %s re f %s re S Q" % (re_str, re_str))
+            # Draw exon
+            self.draw_items.append(["rect",
+                                    {"coord" : [left, y + 10, right - left, 10],
+                                     "fill" : "1 1 1",
+                                     "stroke" : "0 0 0",
+                                     "line_width" : 2}])
 
             # Draw label
-            self.stream.append("q 0.0 0.0 1.0 rg BT /F1 12 Tf %d %d Td (Exon %d) Tj ET Q" % \
-                               (get_x(left + 2), get_y(y + 7), e+1))
-
+            self.draw_items.append(["text",
+                                    {"coord" : [left + 2, y + 7],
+                                     "text" : "Exon %d" % (e+1),
+                                     "fill" : "0 0 0",
+                                     "font_size" : 12}])
             if e > 0:
                 prev_right = self.exons[e-1][1] + 1
-                self.stream.append("q 2 w %d %d m %d %d l h S Q" % \
-                                   (get_x(prev_right), get_y(y + 5), get_x(left), get_y(y + 5)))
+                self.draw_items.append(["line",
+                                        {"coord": [prev_right, y + 5, left, y + 5],
+                                         "line_width" : 2}])
 
         # Draw backbone sequence
         y = get_dspace(0, max_right, 4)
-        self.stream.append("q 0.5 0 0.5 rg") # purple
         for pos in range(len(self.backbone)):
             base = self.backbone[pos]
-            self.stream.append("BT /F1 8 Tf %d %d Td (%s) Tj ET" % \
-                               (get_x(pos), get_y(y + 2), base))
-        self.stream.append("Q")
+            self.draw_items.append(["text",
+                                    {"coord" : [pos, y + 2],
+                                     "text" : base,
+                                     "fill" : "0.5 0 0.5",
+                                     "font_size" : 8}])
 
         # Draw true or predicted alleles
         node_colors = ["1 1 0", "0 1 0", "1 0.8 0.64", "0.76 0.27 0.5"]
@@ -1607,17 +1661,18 @@ class Graph:
                         allele_type = "true"
                     else:
                         allele_type = "predicted"
-                self.stream.append("q 0.0 0.0 1.0 rg BT /F1 20 Tf %d %d Td (%s (%s, %s)) Tj ET Q" % \
-                               (10,
-                                get_y(y + 7),
-                                allele_id,
-                               "partial" if allele_id in self.partial_allele_ids else "full",
-                                allele_type))
-
+                self.draw_items.append(["text",
+                                    {"coord" : [-55, y + 7],
+                                     "text" : "%s (%s, %s)" % (allele_id, "partial" if allele_id in self.partial_allele_ids else "full", allele_type),
+                                     "fill" : "0 0 1",
+                                     "font_size" : 18}])
                 # Draw node
-                re_str = "%d %d %d %d" % (get_x(left), get_y(y + 10), get_x(right) - get_x(left), get_sy(10))
-                self.stream.append("q %s rg 2 w %s re f %s re S Q" % \
-                                   (allele_node_colors[n % len(allele_node_colors)], re_str, re_str))
+                self.draw_items.append(["rect",
+                                        {"coord" : [left, y + 10, right - left, 10],
+                                         "fill" : allele_node_colors[n % len(allele_node_colors)],
+                                         "stroke" : "0 0 0",
+                                         "line_width" : 2}])
+
 
                 color_boxes = []
                 c = 0
@@ -1643,24 +1698,28 @@ class Graph:
                         color = "0.12 0.56 1"
                     # DK - debugging purposes
                     color = "0 0 1"
-                    self.stream.append("q %s rg 2 w %d %d %d %d re f Q" % \
-                                       (color, get_x(cleft), get_y(y + 9), get_x(cright) - get_x(cleft), get_sy(8)))
+                    self.draw_items.append(["rect",
+                                            {"coord" : [cleft, y + 9, cright - cleft, 8],
+                                             "fill" : color}])
 
             return allele_nodes, seqs, colors
 
         allele_nodes, seqs, colors = draw_alleles(self.true_allele_nodes if self.simulation else self.predicted_allele_nodes,
                                                   allele_node_colors)
         draw_alleles(self.display_allele_nodes,
-                     ["#FFF5EE"],
+                     ["1 0.96 0.95"],
                      True) # display alleles?
 
         # Draw location at every 100bp
         y = get_dspace(0, nodes[-1][2], 14)
         for pos in range(0, nodes[-1][2], 100):
             # Draw label
-            self.stream.append("BT /F1 12 Tf %d %d Td (%d) Tj ET" % \
-                               (get_x(pos+1), get_y(y + 2), pos + 1))
-
+            self.draw_items.append(["text",
+                                    {"coord" : [pos + 1, y + 2],
+                                     "text" : "%d" % (pos + 1),
+                                     "fill" : "0 0 0",
+                                     "font_size" : 10}])
+                
         # Draw nodes
         node_to_y = {}
         draw_title = False
@@ -1710,10 +1769,11 @@ class Graph:
 
                 # Draw node
                 right += 1
-                re_str = "%d %d %d %d" % (get_x(left), get_y(y + 10), get_x(right) - get_x(left), get_sy(10))
-                self.stream.append("q %s rg 2 w %s re f %s re S Q" % \
-                                   (color, re_str, re_str))
-
+                self.draw_items.append(["rect",
+                                        {"coord" : [left, y + 10, right - left, 10],
+                                         "fill" : color,
+                                         "stroke" : "0 0 0",
+                                         "line_width" : 2}])
                 
                 # Draw variants
                 for var_id, pos in node_vars:
@@ -1733,21 +1793,30 @@ class Graph:
                     else:
                         assert var_type == "deletion"
                         var_right = var_left + int(var_data)
-                    self.stream.append("q %s rg 2 w %d %d %d %d re f Q" % \
-                                       (color, get_x(var_left), get_y(y + 9), get_x(var_right) - get_x(var_left), get_sy(8)))
+                    self.draw_items.append(["rect",
+                                            {"coord" : [var_left, y + 9, var_right - var_left, 8],
+                                             "fill" : color}])
 
                 # Draw label
                 if get_sx(right - left) >= 300:
-                    self.stream.append("q 0.0 0.0 1.0 rg BT /F1 12 Tf %d %d Td (%s) Tj ET Q" % \
-                                       (get_x(left + 2), get_y(y + 7), node.id))
+                    self.draw_items.append(["text",
+                                            {"coord" : [left + 2, y + 7],
+                                             "text" : node.id,
+                                             "fill" : "0 0 1",
+                                             "font_size" : 12}])
+            
 
                 if not draw_title:
                     draw_title = True
-                    self.stream.append("q 0.0 0.0 1.0 rg BT /F1 24 Tf %d %d Td (%s) Tj ET Q" % \
-                                       (10, get_y(y + 7), title))
-
+                    self.draw_items.append(["text",
+                                            {"coord" : [-68, y + 7],
+                                             "text" : title,
+                                             "fill" : "0 0 0",
+                                             "font_size" : 24}])
+                    
                 y += 14
 
         curr_y = get_dspace(0, nodes[-1][2], 1)
-        return curr_y if curr_y > 0 else end_y
+        self.unscaled_height = curr_y if curr_y > 0 else end_y
+        return self.unscaled_height
 
