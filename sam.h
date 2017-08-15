@@ -967,55 +967,57 @@ const
         Edit::invertPoss(const_cast<EList<Edit>&>(res.ned()), len_trimmed, false);
     }
     for(size_t i = 0; i < res.ned().size(); i++) {
-        if(res.ned()[i].snpID < altdb->alts().size()) {
-            index_t snp_idx = res.ned()[i].snpID;
-            assert_lt(snp_idx, altdb->alts().size());
-            const ALT<index_t>& snp = altdb->alts()[snp_idx];
-            const string& snpID = altdb->altnames()[snp_idx];
-            if(snp_idx == prev_snp_idx) continue;
-            if(snp_first) {
-                WRITE_SEP();
-                o.append("Zs:Z:");
-            }
-            if(!snp_first) o.append(",");
-            uint64_t pos = res.ned()[i].pos;
-            size_t j = i;
-            while(j > 0) {
-                if(res.ned()[j-1].snpID < altdb->alts().size()) {
-                    const ALT<index_t>& snp2 = altdb->alts()[res.ned()[j-1].snpID];
-                    if(snp2.type == ALT_SNP_SGL) {
-                        pos -= (res.ned()[j-1].pos + 1);
-                    } else if(snp2.type == ALT_SNP_DEL) {
-                        pos -= res.ned()[j-1].pos;
-                    } else if(snp2.type == ALT_SNP_INS) {
-                        pos -= (res.ned()[j-1].pos + snp.len);
-                    }
-                    break;
-                }
-                j--;
-            }
-            itoa10<uint64_t>(pos, buf);
-            o.append(buf);
-            o.append("|");
-            if(snp.type == ALT_SNP_SGL) {
-                o.append("S");
-            } else if(snp.type == ALT_SNP_DEL) {
-                o.append("D");
-            } else {
-                assert_eq(snp.type, ALT_SNP_INS);
-                o.append("I");
-            }
-            o.append("|");
-            o.append(snpID.c_str());
-            
-            if(snp_first) snp_first = false;
-            prev_snp_idx = snp_idx;
+        if(res.ned()[i].snpID >= altdb->alts().size())
+            continue;
+        index_t snp_idx = res.ned()[i].snpID;
+        assert_lt(snp_idx, altdb->alts().size());
+        const ALT<index_t>& snp = altdb->alts()[snp_idx];
+        const string& snpID = altdb->altnames()[snp_idx];
+        if(snp_idx == prev_snp_idx) continue;
+        if(snp_first) {
+            WRITE_SEP();
+            o.append("Zs:Z:");
         }
+        if(!snp_first) o.append(",");
+        uint64_t pos = res.ned()[i].pos;
+        size_t j = i;
+        while(j > 0) {
+            if(res.ned()[j-1].snpID < altdb->alts().size()) {
+                const ALT<index_t>& snp2 = altdb->alts()[res.ned()[j-1].snpID];
+                if(snp2.type == ALT_SNP_SGL) {
+                    pos -= (res.ned()[j-1].pos + 1);
+                } else if(snp2.type == ALT_SNP_DEL) {
+                    pos -= res.ned()[j-1].pos;
+                } else if(snp2.type == ALT_SNP_INS) {
+                    pos -= (res.ned()[j-1].pos + snp.len);
+                }
+                break;
+            } else if(res.ned()[j-1].type == EDIT_TYPE_REF_GAP) {
+                pos += 1;
+            }
+            j--;
+        }
+        itoa10<uint64_t>(pos, buf);
+        o.append(buf);
+        o.append("|");
+        if(snp.type == ALT_SNP_SGL) {
+            o.append("S");
+        } else if(snp.type == ALT_SNP_DEL) {
+            o.append("D");
+        } else {
+            assert_eq(snp.type, ALT_SNP_INS);
+            o.append("I");
+        }
+        o.append("|");
+        o.append(snpID.c_str());
+        
+        if(snp_first) snp_first = false;
+        prev_snp_idx = snp_idx;
     }
     if(!res.fw()) {
         Edit::invertPoss(const_cast<EList<Edit>&>(res.ned()), len_trimmed, false);
     }
-    
+
     if(print_xr_) {
         // Original read string
         o.append("\n");

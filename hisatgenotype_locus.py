@@ -727,6 +727,7 @@ def typing(simulation,
                             node_read_id += '|R'
 
                     if Zs:
+                        Zs_str = Zs
                         Zs = Zs.split(',')             
 
                     assert MD != ""
