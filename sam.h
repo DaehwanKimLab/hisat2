@@ -992,8 +992,6 @@ const
                     pos -= (res.ned()[j-1].pos + snp.len);
                 }
                 break;
-            } else if(res.ned()[j-1].type == EDIT_TYPE_REF_GAP) {
-                pos += 1;
             }
             j--;
         }

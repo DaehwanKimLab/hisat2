@@ -1772,6 +1772,7 @@ bool GenomeHit<index_t>::combineWith(
             }
         }
     } else {
+        index_t ins_len = 0;
         for(index_t i = 0; i < len; i++) {
             char rdc = seq[this_rdoff + i];
             char rfc = (i <= maxscorei ? refbuf[i] : refbuf2[i]);
@@ -1780,7 +1781,7 @@ bool GenomeHit<index_t>::combineWith(
             if(rdc != rfc) {
                 ALT<index_t> cmp_alt;
                 assert_geq(this_toff, this->_toff);
-                cmp_alt.pos = this->_joinedOff + i + (this_toff - this->_toff);
+                cmp_alt.pos = this->_joinedOff + i + (this_toff - this->_toff) - ins_len;
                 index_t alt_i = (index_t)altdb.alts().bsearchLoBound(cmp_alt);
                 index_t add_alt_i = std::numeric_limits<index_t>::max();
                 for(; alt_i < altdb.alts().size(); alt_i++) {
@@ -1823,6 +1824,7 @@ bool GenomeHit<index_t>::combineWith(
                         _edits->push_back(e);
                     }
                     i += skipLen;
+                    ins_len += skipLen;
                 }
             }
         }
