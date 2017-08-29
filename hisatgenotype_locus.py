@@ -1645,7 +1645,6 @@ def typing(simulation,
                     if len(_fields) == 4:
                         _allele_rep = ':'.join(_fields[:-1])
                 """
-
                 if simulation:
                     for name_i in range(len(test_Gene_names)):
                         test_Gene_name = test_Gene_names[name_i]
@@ -1668,14 +1667,30 @@ def typing(simulation,
                 if not found:
                     for f_ in [sys.stderr, report_file]:
                         print >> f_, "\t\t\t\t%d ranked %s (abundance: %.2f%%)" % (prob_i + 1, _allele_rep, prob[1] * 100.0)
+
                     if best_alleles and prob_i < 2:
                         for f_ in [sys.stderr, report_file]:
                             print >> f_, "SingleModel %s (abundance: %.2f%%)" % (_allele_rep, prob[1] * 100.0)
+
+                # DK - debugging purposes
+                """
+                # ref_allele_node_ = create_allele_node("A*03:01:01:01")
+                ref_allele_node_ = create_allele_node("DQA1*01:02:01:01")
+                cmp_node_ = create_allele_node(_allele_rep)
+                count_ = 0
+                for i_ in range(len(ref_allele_node_.seq)):
+                    if assembly_graph.get_major_nt(ref_allele_node_.seq[i_]) != assembly_graph.get_major_nt(cmp_node_.seq[i_]):
+                        count_ += 1
+                print "\t\t\t\t\tDK:", count_, len(ref_allele_node_.seq)
+                vars1, vars2 = allele_vars["DQA1*01:02:01:01"], allele_vars[_allele_rep]
+                print "\t\t\t\t\tDK:", set(vars1) - set(vars2), set(vars2) - set(vars1)
+                """
+
                 if not simulation and prob_i >= 9:
                     break
                 if prob_i >= 19:
                     break
-            print >> sys.stderr
+            print >> sys.stderr         
 
             if simulation and not False in success:
                 aligner_type = "%s %s" % (aligner, index_type)
