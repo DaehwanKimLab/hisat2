@@ -201,12 +201,49 @@ def build_epigenome(base_fname,
                                chr_dic,
                                abundance_cutoff)
 
-    if region != "":
-        region_chr, region_range = region.split(':')
-        region_left, region_right = region_range.split('-')
-        region_left, region_right = int(region_left), int(region_right)
-        
+    genome_fname = "genome.fa"
+    if len(region) > 0:
+        extract_seq_cmd = ["samtools", "faidx", "genome.fa"]
+        if len(region) == 1:
+            region_chr, region_left, region_right = region[0], 1, len(chr_dic[region_chr])
+            region_str = region_str2 = region_chr
+            extract_seq_cmd.append(region_chr)
+        else:
+            region_chr, region_left, region_right = region
+            region_str = "%s_%d_%d" % (region_chr, region_left, region_right)
+            region_str2 = "%s:%d-%d" % (region_chr, region_left, region_right)
+            extract_seq_cmd.append("%s:%d-%d" % (region_chr, region_left, region_right))
+        extract_seq_proc = subprocess.Popen(extract_seq_cmd,
+                                            stdout=open("genome_%s.fa" % region_str, 'w'),
+                                            stderr=open("/dev/null", 'w'))
 
+        region_left, region_right = region_left - 1, region_right - 1
+        region_snp_file = open("%s_%s.snp" % (base_fname, region_str), 'w')
+        for line in open("%s.snp" % base_fname):
+            id, type, chr, pos, data = line.strip().split()
+            pos = int(pos)
+            if chr != region_chr:
+                continue
+            if pos < region_left or pos > region_right:
+                continue
+            assert chr_dic[region_chr][pos:pos+2] == "CG" or chr_dic[region_chr][pos-1:pos+1] == "CG"
+            print >> region_snp_file, "%s\t%s\t%s\t%d\t%s" % (id, type, region_str2, pos - region_left, data)
+        region_snp_file.close()
+        
+        region_haplotype_file = open("%s_%s.haplotype" % (base_fname, region_str), 'w')
+        for line in open("%s.haplotype" % base_fname):
+            id, chr, left, right, ids = line.strip().split()
+            left, right = int(left), int(right)
+            if chr != region_chr:
+                continue
+            if left < region_left or right > region_right:
+                continue
+            print >> region_haplotype_file, "%s\t%s\t%d\t%d\t%s" % (id, region_str2, left - region_left, right - region_left, ids)
+        region_haplotype_file.close()
+        base_fname = "%s_%s" % (base_fname, region_str)
+        genome_fname = "genome_%s.fa" % region_str
+
+            
     # Build indexes based on the above information
     if graph_index:
         assert aligner == "hisat2"
@@ -214,13 +251,13 @@ def build_epigenome(base_fname,
                      "-p", str(threads),
                      "--snp", "%s.snp" % base_fname,
                      "--haplotype", "%s.haplotype" % base_fname,
-                     "genome.fa",
+                     genome_fname,
                      "%s" % base_fname]
     else:        
         assert aligner in ["hisat2", "bowtie2"]
         build_cmd = ["%s-build" % aligner,
                      "-p" if aligner == "hisat2" else "--threads", str(threads),
-                     "genome.fa",
+                     genome_fname,
                      "%s" % base_fname]
     print >> sys.stderr, "Building HISAT2 index:", ' '.join(build_cmd)        
     subprocess.call(build_cmd,
@@ -256,7 +293,7 @@ if __name__ == '__main__':
                         dest="region",
                         type=str,
                         default="",
-                        help="Genomic region instead of the whole genome (default: (empty), example: chr7 and chr10:1000000-2000000)")
+                        help="Genomic region (1-offset) instead of the whole genome (default: (empty), example: 7 and 10:1000000-2000000)")
     parser.add_argument("-p", "--threads",
                         dest="threads",
                         type=int,
@@ -279,11 +316,23 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.aligner not in ["hisat2", "bowtie2"]:
         print >> sys.stderr, "Error: --aligner should be either hisat2 or bowtie2."
-        sys.exit(1)        
+        sys.exit(1)
+
+    region = []
+    if args.region != "":
+        try:
+            region_chr, region_range = args.region.split(':')
+            if region_range != "":
+                region_left, region_right = region_range.split('-')
+                region_left, region_right = int(region_left), int(region_right)
+                region = [region_chr, region_left, region_right]
+        except ValueError:
+            print >> sys.stderr, "Error: --region %s is ill-formated." % args.region
+            sys.exit(1)
         
     build_epigenome(args.base_fname,
                     args.abundance_cutoff,                    
-                    args.region,
+                    region,
                     args.threads,
                     args.aligner,
                     args.graph_index,
