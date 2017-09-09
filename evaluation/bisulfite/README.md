@@ -11,7 +11,7 @@ hisat-bisulfite-top$ git checkout bisulfite
 
 $ make hisat2-align-s hisat2-build-s hisat2-inspect-s
 
-Add the above directory (hisat-genotype-top) to your PATH environment variable (e.g. ~/.bashrc) to make the binaries we just built above and other python scripts available everywhere:
+Add the above directory (hisat-bisulfite-top) to your PATH environment variable (e.g. ~/.bashrc) to make the binaries we just built above and other python scripts available everywhere:
 
 export PATH=hisat-bisulfite-top:hisat-bisulfite-top/hisatgenotype_scripts:$PATH
 
@@ -24,7 +24,9 @@ $ mkdir bisulfite-analysis
 $ cd bisulfite-analysis
 
 Additional program requirements:
+ 
  SAMtools (version 0.1.19 or later)
+ 
  bigWigToBedGraph at http://hgdownload.soe.ucsc.edu/admin/exe/
 
 Build epigenome by incorporating known CpG sites into the human reference genome (GRCh38)
