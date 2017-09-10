@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 #
 # Copyright 2017, Daehwan Kim <infphilo@gmail.com> and Bongsoo Park <genomicspark@gmail.com>
 #
@@ -33,7 +32,8 @@ Download BigWig (bw) files from Smith Lab at USC, and convert them to a HISAT2's
 """
 def create_snp_from_bigwig(base_fname,
                            chr_dic,
-                           abundance_cutoff):
+                           abundance_cutoff,
+                           sample_cutoff):
     if not os.path.exists("%s.cpg" % base_fname):
         def get_html(url):
             download_cmd = ["wget",
@@ -77,10 +77,6 @@ def create_snp_from_bigwig(base_fname,
             proc = subprocess.Popen(convert_cmd)
             proc.communicate()
             os.system("rm -f %s.meth.bw" % sample)
-
-            # DK - debugging purposes
-            if s > 0:
-                break
 
         def read_line(file):
             line = file.readline()
@@ -138,8 +134,9 @@ def create_snp_from_bigwig(base_fname,
         chr, pos, samples = line.strip().split()
         pos = int(pos)
         abundances = [float(sample.split(':')[1]) for sample in samples.split(',')]
-        if max(abundances) < abundance_cutoff:
-            continue            
+        abundances = sorted(abundances, reverse = True)
+        if abundances[min(len(abundances), sample_cutoff) - 1] < abundance_cutoff:
+            continue
         assert chr in chr_dic
         chr_seq = chr_dic[chr]
         if chr_seq[pos:pos+2] != "CG":
@@ -166,6 +163,7 @@ def create_snp_from_bigwig(base_fname,
 """
 def build_epigenome(base_fname,                          
                     abundance_cutoff,
+                    sample_cutoff,
                     region,
                     threads,
                     aligner,
@@ -199,9 +197,12 @@ def build_epigenome(base_fname,
     if not typing_common.check_files(CpG_fnames):
         create_snp_from_bigwig(base_fname,
                                chr_dic,
-                               abundance_cutoff)
+                               abundance_cutoff,
+                               sample_cutoff)
 
     genome_fname = "genome.fa"
+    # Because building an index for the whole genome takes a lot of memory (~200 GB) and a couple of hours,
+    # we provide a way to build and test a small index using --region option.
     if len(region) > 0:
         extract_seq_cmd = ["samtools", "faidx", "genome.fa"]
         if len(region) == 1:
@@ -243,7 +244,6 @@ def build_epigenome(base_fname,
         base_fname = "%s_%s" % (base_fname, region_str)
         genome_fname = "genome_%s.fa" % region_str
 
-            
     # Build indexes based on the above information
     if graph_index:
         assert aligner == "hisat2"
@@ -289,6 +289,11 @@ if __name__ == '__main__':
                         type=float,
                         default=0.0,
                         help="Abundance cutoff")
+    parser.add_argument("--sample-cutoff",
+                        dest="sample_cutoff",
+                        type=int,
+                        default=1,
+                        help="Sample cutoff")
     parser.add_argument("--region",
                         dest="region",
                         type=str,
@@ -327,11 +332,12 @@ if __name__ == '__main__':
                 region_left, region_right = int(region_left), int(region_right)
                 region = [region_chr, region_left, region_right]
         except ValueError:
-            print >> sys.stderr, "Error: --region %s is ill-formated." % args.region
+            print >> sys.stderr, "Error: --region %s is ill-formatted." % args.region
             sys.exit(1)
         
     build_epigenome(args.base_fname,
-                    args.abundance_cutoff,                    
+                    args.abundance_cutoff,
+                    args.sample_cutoff,
                     region,
                     args.threads,
                     args.aligner,
