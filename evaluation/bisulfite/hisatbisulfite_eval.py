@@ -27,39 +27,6 @@ import copy
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
 
-def shuffle_reads(read_fname, random_list):
-    reads = []
-    read_file = open(read_fname)
-    for line in read_file:
-        if line[0] == ">":
-            reads.append([])
-        reads[-1].append(line[:-1])        
-    read_file.close()
-
-    read_fname_out = read_fname + ".shuffle"
-    read_file_out = open(read_fname_out, "w")
-    assert len(random_list) == len(reads)
-    for i in random_list:
-        read = reads[random_list[i]]
-        print >> read_file_out, "\n".join(read)
-    read_file_out.close()
-
-
-def shuffle_pairs(read1_fname, read2_fname):
-    read1_file = open(read1_fname)
-    num_reads = 0
-    for line in read1_file:
-        if line[0] == ">":
-            num_reads += 1
-    read1_file.close()
-
-    random_list = [i for i in range(num_reads)]
-    random.shuffle(random_list)
-
-    shuffle_reads(read1_fname, random_list)
-    shuffle_reads(read2_fname, random_list)
-
-
 def simulate_reads(genome,
                    index,
                    sim_name,
@@ -70,23 +37,12 @@ def simulate_reads(genome,
         cpg_fname = "%s.snp" % index
     else:
         cpg_fname = "/dev/null"
-
-    cmd_add = "--dna "
     if mismatch:
         cmd_add += "--error-rate 0.5 "
-    cmd = "hisat2_simulate_reads.py --sanity-check %s --num-fragment %d %s.fa /dev/null %s %s" % (cmd_add, numreads, genome, cpg_fname, sim_name)
+    cmd = "hisat2_simulate_reads.py --sanity-check --dna %s --num-fragment %d %s.fa /dev/null %s %s" % \
+        (cmd_add, numreads, genome, cpg_fname, sim_name)
     print >> sys.stderr, cmd
-
-    sys.exit(1)
-    
     os.system(cmd)
-
-    random.seed(0)
-    print >> sys.stderr, "shuffle reads sim_1.fa and sim_2.fa"
-    shuffle_pairs("sim_1.fa", "sim_2.fa")
-    shuffle_reads_cmd = " mv sim_1.fa.shuffle sim_1.fa"
-    shuffle_reads_cmd += "; mv sim_2.fa.shuffle sim_2.fa"
-    os.system(shuffle_reads_cmd)
 
 
 cigar_re = re.compile('\d+\w')
@@ -803,10 +759,8 @@ def eval(aligner_list,
     if len(region) > 0:
         if len(region) == 1:
             genome = "genome_" + region[0]
-            index = "epigenome_" + region[0]
         else:
-            genome = "genome_%s_%d_%d" % (region[0], region[1], region[2])
-            index = "epigenome_%s_%d_%d" % (region[0], region[1], region[2])
+            genome = "genome_%s:%d-%d" % (region[0], region[1], region[2])
     else:
         genome = "genome"
         index = "epigenome"

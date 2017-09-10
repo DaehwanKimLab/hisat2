@@ -207,13 +207,12 @@ def build_epigenome(base_fname,
         extract_seq_cmd = ["samtools", "faidx", "genome.fa"]
         if len(region) == 1:
             region_chr, region_left, region_right = region[0], 1, len(chr_dic[region_chr])
-            region_str = region_str2 = region_chr
+            region_str = region_chr
             extract_seq_cmd.append(region_chr)
         else:
             region_chr, region_left, region_right = region
-            region_str = "%s_%d_%d" % (region_chr, region_left, region_right)
-            region_str2 = "%s:%d-%d" % (region_chr, region_left, region_right)
-            extract_seq_cmd.append("%s:%d-%d" % (region_chr, region_left, region_right))
+            region_str = "%s:%d-%d" % (region_chr, region_left, region_right)
+            extract_seq_cmd.append(return_str)
         extract_seq_proc = subprocess.Popen(extract_seq_cmd,
                                             stdout=open("genome_%s.fa" % region_str, 'w'),
                                             stderr=open("/dev/null", 'w'))
@@ -228,7 +227,7 @@ def build_epigenome(base_fname,
             if pos < region_left or pos > region_right:
                 continue
             assert chr_dic[region_chr][pos:pos+2] == "CG" or chr_dic[region_chr][pos-1:pos+1] == "CG"
-            print >> region_snp_file, "%s\t%s\t%s\t%d\t%s" % (id, type, region_str2, pos - region_left, data)
+            print >> region_snp_file, "%s\t%s\t%s\t%d\t%s" % (id, type, region_str, pos - region_left, data)
         region_snp_file.close()
         
         region_haplotype_file = open("%s_%s.haplotype" % (base_fname, region_str), 'w')
@@ -239,7 +238,7 @@ def build_epigenome(base_fname,
                 continue
             if left < region_left or right > region_right:
                 continue
-            print >> region_haplotype_file, "%s\t%s\t%d\t%d\t%s" % (id, region_str2, left - region_left, right - region_left, ids)
+            print >> region_haplotype_file, "%s\t%s\t%d\t%d\t%s" % (id, region_str, left - region_left, right - region_left, ids)
         region_haplotype_file.close()
         base_fname = "%s_%s" % (base_fname, region_str)
         genome_fname = "genome_%s.fa" % region_str
@@ -282,8 +281,8 @@ if __name__ == '__main__':
     parser.add_argument("--base", "--base-fname",
                         dest="base_fname",
                         type=str,
-                        default="epigenome",
-                        help="base filename for genotype genome (default: epigenome)")
+                        default="genome",
+                        help="base filename for genotype genome (default: genome)")
     parser.add_argument("--abundance-cutoff",
                         dest="abundance_cutoff",
                         type=float,
