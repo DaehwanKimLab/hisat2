@@ -892,7 +892,7 @@ if __name__ == '__main__':
                         help='also print some statistics to stderr')
     parser.add_argument('--version', 
                         action='version',
-                        version='%(prog)s 2.0.0-alpha')
+                        version='%(prog)s 2.1.1')
     args = parser.parse_args()
     if not args.genome_file or not args.gtf_file or not args.snp_file:
         parser.print_help()

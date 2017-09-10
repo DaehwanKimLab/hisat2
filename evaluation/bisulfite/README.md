@@ -31,7 +31,7 @@ Additional program requirements:
 
 Build epigenome by incorporating known CpG sites into the human reference genome (GRCh38)
 
-$ hisatgenotype_build_epigenome.py
+$ hisatbisulfite_build_epigenome.py
 
 
 HISAT-bisulfite project is led by Bongsoo Park (genomicspark@gmail.com) and Daehwan Kim (infphilo@gmail.com)
