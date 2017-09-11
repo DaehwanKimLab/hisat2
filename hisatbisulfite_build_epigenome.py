@@ -168,6 +168,7 @@ def build_epigenome(base_fname,
                     threads,
                     aligner,
                     graph_index,
+                    index_suffix,
                     verbose):
     # Make sure the following programs installed
     programs = [aligner, "%s-build" % aligner, "samtools", "bigWigToBedGraph"]
@@ -212,7 +213,7 @@ def build_epigenome(base_fname,
         else:
             region_chr, region_left, region_right = region
             region_str = "%s:%d-%d" % (region_chr, region_left, region_right)
-            extract_seq_cmd.append(return_str)
+            extract_seq_cmd.append(region_str)
         extract_seq_proc = subprocess.Popen(extract_seq_cmd,
                                             stdout=open("genome_%s.fa" % region_str, 'w'),
                                             stderr=open("/dev/null", 'w'))
@@ -244,6 +245,9 @@ def build_epigenome(base_fname,
         genome_fname = "genome_%s.fa" % region_str
 
     # Build indexes based on the above information
+    index_fname = base_fname
+    if index_suffix != "":
+        index_fname += (".%s" % index_suffix)
     if graph_index:
         assert aligner == "hisat2"
         build_cmd = ["hisat2-build",
@@ -251,22 +255,22 @@ def build_epigenome(base_fname,
                      "--snp", "%s.snp" % base_fname,
                      "--haplotype", "%s.haplotype" % base_fname,
                      genome_fname,
-                     "%s" % base_fname]
+                     index_fname]
     else:        
         assert aligner in ["hisat2", "bowtie2"]
         build_cmd = ["%s-build" % aligner,
                      "-p" if aligner == "hisat2" else "--threads", str(threads),
                      genome_fname,
-                     "%s" % base_fname]
+                     index_fname]
     print >> sys.stderr, "Building HISAT2 index:", ' '.join(build_cmd)        
     subprocess.call(build_cmd,
                     stdout=open("/dev/null", 'w'),
                     stderr=open("/dev/null", 'w'))
 
     if aligner == "hisat2":
-        index_fnames = ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
+        index_fnames = ["%s.%d.ht2" % (index_fname, i+1) for i in range(8)]
     else:
-        index_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
+        index_fnames = ["%s.%d.bt2" % (index_fname, i+1) for i in range(4)]
         index_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
     if not typing_common.check_files(index_fnames):
         print >> sys.stderr, "Error: indexing failed."
@@ -312,6 +316,11 @@ if __name__ == '__main__':
                         dest="graph_index",
                         action="store_false",
                         help="Build linear index")
+    parser.add_argument("--index-suffix",
+                        dest="index_suffix",
+                        type=str,
+                        default="",
+                        help="Index suffix (default: empty)")
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -341,5 +350,6 @@ if __name__ == '__main__':
                     args.threads,
                     args.aligner,
                     args.graph_index,
+                    args.index_suffix,
                     args.verbose)
     

@@ -33,5 +33,7 @@ Build epigenome by incorporating known CpG sites into the human reference genome
 
 $ hisatbisulfite_build_epigenome.py
 
+Test the followign command:
+$ hisat-bisulfite-top/evaluation/bisulfite//hisatbisulfite_eval.py --region 10:1000000-2000000
 
 HISAT-bisulfite project is led by Bongsoo Park (genomicspark@gmail.com) and Daehwan Kim (infphilo@gmail.com)
