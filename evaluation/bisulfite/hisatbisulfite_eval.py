@@ -37,7 +37,7 @@ def simulate_reads(genome,
             not os.path.exists("%s_1.fa" % sim_name) or \
             not os.path.exists("%s_2.fa" % sim_name):
         if cpg:
-            cpg_fname = "%s.snp" % genome
+            cpg_fname = "%s.sense.snp" % genome
         else:
             cpg_fname = "/dev/null"
         cmd_add = ""
@@ -310,17 +310,16 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
             elif col.startswith("YT"):
                 YT = col[5:]
         assert NM1 != ""
-        NM1 = int(NM1[5:])
-        assert NH != ""
-        NH = int(NH[5:])
+        NM1 = int(NM1[5:])        
+
         if aligner == "hisat2":
+            assert NH != ""
+            NH = int(NH[5:])
             if prev_read_id == read_id:
                 if left_read:
                     assert prev_NH1 == 0 or prev_NH1 == NH
                 else:
                     assert prev_NH2 == 0 or prev_NH2 == NH
-            if NH == 1 or mapQ == 60:
-                assert NH == 1 and mapQ == 60
 
         unpaired = (flag & 0x8 != 0) or (YT in ["UU", "UP"])
         if unpaired:
@@ -868,6 +867,9 @@ def eval(aligners,
                     cmd += ["--new-summary",
                             "--summary-file", out_fname + ".summary"]
 
+                if index_type == "linear":
+                    cmd += ["--score-min", "C,-50"]
+
                 # index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
                 # if index_type:
                 #     index_cmd += ("_" + index_type)
@@ -928,8 +930,9 @@ def eval(aligners,
                 cmd = [aligner]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
-                cmd += ["-f", "-k", "10"]
-                cmd += ["--score-min", "C,-18"]
+                cmd += ["-f"]
+                # cmd += ["-k", "10"]
+                # cmd += ["--score-min", "C,-18"]
                 # cmd += ["-x", "%s/HISAT%s/" % (index_base, index_add) + genome]
                 cmd += ["-x", "../%s" % genome]
                 if paired:
@@ -979,6 +982,8 @@ def eval(aligners,
                 aligner_dir = aligner_name + "_single"
             if not os.path.exists(aligner_dir):
                 os.mkdir(aligner_dir)
+            else:
+                continue
             os.chdir(aligner_dir)
 
             out_fname = sim_name + ".sam"
@@ -1083,7 +1088,6 @@ def eval(aligners,
                 align_stat[-1].extend([numreads, duration, mapped, unique_mapped, unmapped, mapping_point])
 
             os.system("touch %s.done" % type_sam_fname)
-
             os.chdir("..")
 
     print >> sys.stdout, "\t".join(["type", "aligner", "all", "all_time", "mapped", "unique_mapped", "unmapped", "mapping point"])

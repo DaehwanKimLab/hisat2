@@ -126,6 +126,7 @@ def create_snp_from_bigwig(base_fname,
     # Convert CpG sites to snps and haplotypes in file formats used for HISAT2
     print >> sys.stderr, "Converting to HISAT2's snp and haplotype files ..."
     snp_file = open("%s.snp" % base_fname, 'w')
+    sense_snp_file = open("%s.sense.snp" % base_fname, 'w')
     haplotype_file = open("%s.haplotype" % base_fname, 'w')
     CpG_file = open("%s.cpg" % base_fname)
     cpg_num = 0
@@ -145,7 +146,9 @@ def create_snp_from_bigwig(base_fname,
             else:
                 miscpg_dic[chr] += 1
             continue
+
         print >> snp_file, "cpg%d\tsingle\t%s\t%d\tT" % (cpg_num, chr, pos)
+        print >> sense_snp_file, "cpg%d\tsingle\t%s\t%d\tT" % (cpg_num, chr, pos)
         print >> haplotype_file, "ht%d\t%s\t%d\t%d\tcpg%d" % (cpg_num, chr, pos, pos + 1, cpg_num)
         cpg_num += 1
         print >> snp_file, "cpg%d\tsingle\t%s\t%d\tA" % (cpg_num, chr, pos + 1)
@@ -156,6 +159,7 @@ def create_snp_from_bigwig(base_fname,
         print >> sys.stderr, "Warning: %d non-CpG sites on chromosome %s" % (num, chr)
         
     snp_file.close()
+    sense_snp_file.close()
     haplotype_file.close()
         
 
@@ -219,17 +223,20 @@ def build_epigenome(base_fname,
                                             stderr=open("/dev/null", 'w'))
 
         region_left, region_right = region_left - 1, region_right - 1
-        region_snp_file = open("%s_%s.snp" % (base_fname, region_str), 'w')
-        for line in open("%s.snp" % base_fname):
-            id, type, chr, pos, data = line.strip().split()
-            pos = int(pos)
-            if chr != region_chr:
-                continue
-            if pos < region_left or pos > region_right:
-                continue
-            assert chr_dic[region_chr][pos:pos+2] == "CG" or chr_dic[region_chr][pos-1:pos+1] == "CG"
-            print >> region_snp_file, "%s\t%s\t%s\t%d\t%s" % (id, type, region_str, pos - region_left, data)
-        region_snp_file.close()
+        def extract_snps(snp_file, snp_out_file):
+            for line in snp_file:
+                id, type, chr, pos, data = line.strip().split()
+                pos = int(pos)
+                if chr != region_chr:
+                    continue
+                if pos < region_left or pos > region_right:
+                    continue
+                assert chr_dic[region_chr][pos:pos+2] == "CG" or chr_dic[region_chr][pos-1:pos+1] == "CG"
+                print >> snp_out_file, "%s\t%s\t%s\t%d\t%s" % (id, type, region_str, pos - region_left, data)
+            snp_out_file.close()
+
+        extract_snps(open("%s.snp" % base_fname), open("%s_%s.snp" % (base_fname, region_str), 'w'))
+        extract_snps(open("%s.sense.snp" % base_fname), open("%s_%s.sense.snp" % (base_fname, region_str), 'w'))
         
         region_haplotype_file = open("%s_%s.haplotype" % (base_fname, region_str), 'w')
         for line in open("%s.haplotype" % base_fname):
