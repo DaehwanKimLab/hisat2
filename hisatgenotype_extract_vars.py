@@ -56,6 +56,11 @@ def create_consensus_seq(seqs,
             continue                    
         for j in range(seq_len):
             nt = seq[j]
+
+            # DK - debugging purposes
+            if nt not in "ACGT.E":
+                print nt, seq
+            
             assert nt in "ACGT.E"
             if nt == 'A':
                 consensus_freq[j][0] += 1
@@ -229,7 +234,7 @@ def extract_vars(base_fname,
     if base_fname == "hla":
         fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
     else:
-        assert base_fname in ["codis", "cyp"]
+        assert base_fname in ["codis", "cyp", "rep"]
         fasta_fnames = glob.glob("%s/*.fasta" % fasta_dname)
     for gen_fname in fasta_fnames:
         gene_name = gen_fname.split('/')[-1].split('_')[0]
@@ -244,7 +249,7 @@ def extract_vars(base_fname,
     remove_locus_list = []
     for gene in locus_list:
         aligner_cmd = ["hisat2"]
-        if base_fname in ["hla", "coids"]:
+        if base_fname in ["hla", "codis"]:
             aligner_cmd += ["--score-min", "C,0"]
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",

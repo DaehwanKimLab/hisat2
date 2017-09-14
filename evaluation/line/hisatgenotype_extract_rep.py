@@ -28,8 +28,7 @@ import hisatgenotype_typing_common as typing_common
 """
 Extract human specific LINEs from RepBase database such as RepBase22.08.fasta.tar.gz
 """
-def extract_L1HS(base_fname,
-                 rep_fname,
+def extract_L1HS(rep_fname,
                  l1hs_fname):
     l1hs_file = open(l1hs_fname, 'w')
     for line in open(rep_fname):
@@ -59,10 +58,9 @@ def extract_rep(base_fname,
     
     l1hs_fname = "%s.l1hs.fasta" % rep_fname
     if not os.path.exists(l1hs_fname):
-        extract_L1HS(base_fname,
-                     "%s.fasta/humrep.ref" % base_fname,
+        extract_L1HS("%s.fasta/humrep.ref" % rep_fname,
                      l1hs_fname)
-        assert os.path.exits(l1hs_fname)
+        assert os.path.exists(l1hs_fname)
 
     clustalw_fname = "%s.l1hs.aln" % rep_fname
     # Run ClustalW2 to perform multiple sequencing alignment
@@ -94,8 +92,10 @@ def extract_rep(base_fname,
         else:
             allele_dic[l1_name] += aln
 
-    # Make sure every alignment is of the same length
+    # Make sure every alignment is of the same length and
+    #    replace 'N' to 'A' for now
     msf_len = None
+    allele_dic2 = {}
     for l1_name, aln in allele_dic.items():
         # Make sure the length of allele ID is short, less than 20 characters
         assert len(l1_name) < 20
@@ -103,9 +103,26 @@ def extract_rep(base_fname,
             msf_len = len(aln)
         else:
             assert msf_len == len(aln)
-
-        print l1_name, aln[:100]
-
+        aln2, non_nt = "", {}
+        for nt in aln:
+            if nt in "ACGT.":
+                aln2 += nt
+                continue
+            else:
+                if nt not in non_nt:
+                    non_nt[nt] = 1
+                else:
+                    non_nt[nt] += 1
+                aln2 += 'A'
+        if non_nt:
+            print >> sys.stderr, "Warning: %s has" % (l1_name),
+            for nt, num in non_nt.items():
+                print >> sys.stderr, "%d %s" % (num, nt),
+            print >> sys.stderr
+        
+        allele_dic2[l1_name] = aln2
+    allele_dic = allele_dic2
+                
     # Write MSF (multiple sequence alignment file)
     msf_fname = "L1HS_gen.msf"
     msf_file = open(msf_fname, 'w')

@@ -2022,9 +2022,9 @@ void PathGraph<index_t>::createNewNodesCounter(void* vp) {
     *(params->sub_temp_nodes) = (index_t)count;
 
     //check for overflow
-    if(count > (index_t)-1) {
+    if(count > min<size_t>((index_t)-1, graph.max_num_nodes)) {
         cerr << "exceeded integer bounds, remove adjacent SNPs, use haplotypes, or switch to a large index (--large-index)" << endl;
-        throw 1;
+        throw ExplosionException();
     }
 }
 template <typename index_t>
@@ -2104,9 +2104,9 @@ void PathGraph<index_t>::createNewNodes() {
     for(int i = 0; i < nthreads; i++) {
         // done to check if we exceed index_t range
         size_t val = (size_t)temp_nodes + (size_t)sub_temp_nodes[i];
-        if(val > (index_t)-1) {
+        if(val > min<size_t>((index_t)-1, max_num_nodes)) {
             cerr << "exceeded integer bounds, remove adjacent SNPs, use haplotypes, or switch to a large index (--large-index)" << endl;
-            throw 1;
+            throw ExplosionException();
         }
         temp_nodes = (index_t)val;
     }

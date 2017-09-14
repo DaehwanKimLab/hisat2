@@ -457,11 +457,14 @@ def typing(simulation,
             allele_rep_set = set(allele_reps.values())
 
             # For checking alternative alignments near the ends of alignments
-            Alts_left, Alts_right = typing_common.get_alternatives(ref_seq,
-                                                                   allele_vars,
-                                                                   gene_vars,
-                                                                   gene_var_list,
-                                                                   verbose >= 2)
+            if base_fname == "rep":
+                Alts_left, Alts_right = {}, {}
+            else:
+                Alts_left, Alts_right = typing_common.get_alternatives(ref_seq,
+                                                                       allele_vars,
+                                                                       gene_vars,
+                                                                       gene_var_list,
+                                                                       verbose >= 2)
 
             def haplotype_alts_list(haplotype_alts, left = True):
                 haplotype_list = []
