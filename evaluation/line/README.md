@@ -28,6 +28,7 @@ Additional program requirements:
  ClustalW2 at http://www.clustal.org/clustal2/#Download
 
 Test the followign command:
-$ hisat-rep-top/evaluation/line/hisatgenotype_locus.py --base rep
+$ ./hisatgenotype_extract_rep.py
+$ hisatgenotype_locus.py --base rep
 
 HISAT-rep project is led by Hyunmin Kim (human.gim@gmail.com) and Daehwan Kim (infphilo@gmail.com)

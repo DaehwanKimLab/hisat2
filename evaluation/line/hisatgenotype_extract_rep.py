@@ -47,6 +47,9 @@ def extract_L1HS(rep_fname,
 """
 def extract_rep(base_fname,
                 verbose):
+    if not os.path.exists("hisatgenotype_db"):
+            typing_common.clone_hisatgenotype_database()
+
     rep_fname = "RepBase22.08"
     if not os.path.exists(rep_fname + ".fasta") and not os.path.exists(rep_fname + ".fasta.tar.gz"):
         print >> sys.stderr, "Error: please have %s.fasta.tar.gz copied in the current directory." % rep_fname
@@ -139,6 +142,10 @@ def extract_rep(base_fname,
         print >> msf_file
     msf_file.close()
 
+    for dir in ["hisatgenotype_db/REP", "hisatgenotype_db/REP/fasta", "hisatgenotype_db/REP/msf"]:
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+    
     # Write FASTA file
     fasta_fname = "L1HS_gen.fasta"
     fasta_file = open(fasta_fname, 'w')
@@ -148,6 +155,18 @@ def extract_rep(base_fname,
         for s in range(0, len(gen_seq), 60):
             print >> fasta_file, gen_seq[s:s+60]
     fasta_file.close()
+    os.system("cp %s hisatgenotype_db/REP/fasta/" % fasta_fname)
+    
+    # Write FASTA file no break
+    fasta_fname = "L1HS_gen_nb.fasta"
+    fasta_file = open(fasta_fname, 'w')
+    for allele_id, msf in allele_dic.items():
+        gen_seq = msf.replace('.', '')
+        print >> fasta_file, ">L1HS*%s %d bp" % (allele_id, len(gen_seq))
+        print >> fasta_file, gen_seq
+    fasta_file.close()
+    os.system("cp %s hisatgenotype_db/REP/msf/" % msf_fname)
+    
 
     
 """
