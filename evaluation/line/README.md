@@ -23,7 +23,7 @@ $ cd hisat-rep-top/evaluation/line
 
 Additional program requirements:
  
- SAMtools (version 0.1.19 or later)
+ SAMtools (version 1.3 or later)
  
  ClustalW2 at http://www.clustal.org/clustal2/#Download
 
