@@ -25,7 +25,7 @@ $ cd bisulfite-analysis
 
 Additional program requirements:
  
- SAMtools (version 0.1.19 or later)
+ SAMtools (version 1.3 or later)
  
  bigWigToBedGraph at http://hgdownload.soe.ucsc.edu/admin/exe/
 
