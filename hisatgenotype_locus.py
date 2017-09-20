@@ -293,7 +293,7 @@ def typing(simulation,
             ref_seq = Genes[gene][ref_allele]
             ref_locus = refGene_loci[gene]
             ref_exons = ref_locus[-1]
-                
+
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
             cur_maxright = -1
@@ -1485,7 +1485,7 @@ def typing(simulation,
                     skip = True
                     var_i, var_j = 0, 0
                     exon_i = 0
-                    mismatches = 0
+                    allele_seq, mismatches = list(ref_seq), 0
                     while var_i < len(vars1) and var_j < len(vars2):
                         cmp_var_id, node_var_id = vars1[var_i], vars2[var_j]
                         cmp_var, node_var = gene_vars[cmp_var_id], gene_vars[node_var_id]
@@ -1513,6 +1513,14 @@ def typing(simulation,
                                     print >> sys.stderr, "\033[94mexon%d\033[00m" % (exon_i + 1),
                                 print >> sys.stderr, cmp_var_id, cmp_var, "\t\t\t", mpileup[cmp_var[1]]
                             var_i += 1; var_j += 1
+
+                            var_type, var_pos, var_data = cmp_var
+                            if var_type == "single":
+                                allele_seq[var_pos] = var_data
+                            elif var_type == "deletion":
+                                allele_seq[var_pos:var_pos+int(var_data)] = '.' * int(var_data)
+                            else:
+                                assert var_type == "insertion"
                             continue
                         if cmp_var[1] <= node_var[1]:
                             if not skip:
@@ -1534,8 +1542,23 @@ def typing(simulation,
                                     print >> f_, "*** ==", node_var_id, node_var, "\t\t\t", mpileup[node_var[1]]
                             mismatches += 1
                             var_j += 1
-                            
-                    return mismatches
+
+                    allele_exons = ref_exons[:]
+                    allele_seq = ''.join(allele_seq)
+                    del_counts = []
+                    for del_i in range(len(allele_seq)):
+                        del_count = 0 if del_i == 0 else del_counts[-1]
+                        if allele_seq[del_i] == '.':
+                            del_count += 1
+                        del_counts.append(del_count)
+                    for exon_i in range(len(allele_exons)):
+                        exon_left, exon_right = allele_exons[exon_i]
+                        exon_left -= del_counts[exon_left]
+                        exon_right -= del_counts[exon_right]
+                        allele_exons[exon_i] = [exon_left, exon_right]
+                        
+                    allele_seq = allele_seq.replace('.', '')
+                    return allele_seq, allele_exons, mismatches
                     
                 tmp_nodes = asm_graph.nodes
                 print >> sys.stderr, "Number of tmp nodes:", len(tmp_nodes)
@@ -1569,7 +1592,9 @@ def typing(simulation,
                     for allele_name, cmp_vars in alleles:
                         for f_ in [sys.stderr, report_file]:
                             print >> f_, "vs.", allele_name
-                        compare_alleles(cmp_vars, node_vars)
+                            allele_seq, allele_exons, allele_mm = compare_alleles(cmp_vars, node_vars)
+                            print >> f_, "\t\tallele sequence (%d bps):" % len(allele_seq), allele_seq
+                            print >> f_, "\t\texons (zero-based offset):", allele_exons
 
                     print >> sys.stderr
                     print >> sys.stderr
@@ -1597,7 +1622,7 @@ def typing(simulation,
                         cmp_vars = allele_vars[max_allele_name]
                         cmp_vars = sorted(cmp_vars, cmp=lambda a, b: int(a[2:]) - int(b[2:]))
                         print_output = False
-                        tmp_mismatches = compare_alleles(cmp_vars, node_vars, print_output)
+                        _, _, tmp_mismatches = compare_alleles(cmp_vars, node_vars, print_output)
                         print >> f_, "\t\t%s:" % max_allele_name, max_common, tmp_mismatches
                         if tmp_mismatches < min_mismatches:
                             min_mismatches = tmp_mismatches
