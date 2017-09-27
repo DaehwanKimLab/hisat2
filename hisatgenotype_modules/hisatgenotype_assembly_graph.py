@@ -325,7 +325,7 @@ class Node:
 
     
     # Get variant ids
-    #   left, right are absolute coordinates
+    #   left and right are gene-level coordinates
     def get_vars(self, left = 0, right = sys.maxint):
         vars = []
         left = max(left, self.left)
@@ -362,7 +362,7 @@ class Node:
                 assert var in self.ref_vars
                 type, var_pos, data = self.ref_vars[var]                    
                 if data == nt or (type == "deletion" and nt == 'D'):
-                    assert pos >= var_pos
+                    assert pos + ins_len >= var_pos
                     if type == "deletion" and pos > var_pos:
                         continue                    
                     if type == "deletion":
@@ -625,6 +625,8 @@ class Graph:
                 for node_i in range(len(nodes_)):
                     node = nodes_[node_i]
                     id_ = "%s.%d" % (id, node_i)
+                    if id_ not in node_seq:
+                        continue
                     seq = node_seq[id_]
 
                     if len(seq) < k or \
