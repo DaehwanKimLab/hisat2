@@ -64,12 +64,14 @@ def get_exonic_vars(Vars, exons):
 """
 Get representative alleles among those that share the same exonic sequences
 """
-def get_rep_alleles(Links, exon_vars):
+def get_rep_alleles(Links, exon_vars, in_alleles = None):
     allele_vars = {}
     for var, alleles in Links.items():
         if var not in exon_vars:
             continue
         for allele in alleles:
+            if in_alleles != None and allele not in in_alleles:
+                continue
             if allele not in allele_vars:
                 allele_vars[allele] = set()
             allele_vars[allele].add(var)
@@ -234,6 +236,8 @@ def typing(simulation,
            error_correction,
            keep_alignment,
            allow_discordant,
+           type_primary_exons,
+           remove_low_abundance_alleles,
            display_alleles,
            fastq,
            read_fname,
@@ -292,7 +296,7 @@ def typing(simulation,
             ref_allele = refGenes[gene]
             ref_seq = Genes[gene][ref_allele]
             ref_locus = refGene_loci[gene]
-            ref_exons = ref_locus[-1]
+            ref_exons, ref_primary_exons = ref_locus[-2], ref_locus[-1]
                 
             novel_var_count = 0        
             gene_vars, gene_var_list = deepcopy(Vars[gene]), deepcopy(Var_list[gene])
@@ -392,6 +396,7 @@ def typing(simulation,
 
             # Extract variants that are within exons
             exon_vars = get_exonic_vars(gene_vars, ref_exons)
+            primary_exon_vars = get_exonic_vars(gene_vars, ref_primary_exons)
 
             # Store nodes that represent alleles
             allele_nodes = {}
@@ -446,6 +451,7 @@ def typing(simulation,
             asm_graph = assembly_graph.Graph(ref_seq,
                                              gene_vars,
                                              ref_exons,
+                                             ref_primary_exons,
                                              partial_alleles,
                                              true_allele_nodes,
                                              {}, # predicted_allele_nodes, which is empty for now
@@ -456,6 +462,18 @@ def typing(simulation,
             allele_reps, allele_rep_groups = get_rep_alleles(Links, exon_vars)
             allele_rep_set = set(allele_reps.values())
 
+            # Choose allele representives from those that share the primary exonic sequences
+            primary_exon_allele_reps, primary_exon_allele_rep_groups = get_rep_alleles(Links, primary_exon_vars, allele_rep_set)
+            primary_exon_allele_rep_set = set(primary_exon_allele_reps.values())
+
+            # Sanity check
+            for exon_allele in primary_exon_allele_reps.keys():
+                # DK - debugging purposes
+                if exon_allele not in allele_rep_set:
+                    print exon_allele, allele_reps[exon_allele], exon_allele in primary_exon_allele_reps.keys()
+                    
+                assert exon_allele in allele_rep_set
+                                    
             # For checking alternative alignments near the ends of alignments
             Alts_left, Alts_right = typing_common.get_alternatives(ref_seq,
                                                                    allele_vars,
@@ -476,8 +494,9 @@ def typing(simulation,
             Alts_left_list, Alts_right_list = haplotype_alts_list(Alts_left, True), haplotype_alts_list(Alts_right, False)
 
             # Count alleles
+            Gene_primary_exons_counts, Gene_primary_exons_cmpt = {}, {}
+            Gene_exons_counts, Gene_exons_cmpt = {}, {}
             Gene_counts, Gene_cmpt = {}, {}
-            Gene_gen_counts, Gene_gen_cmpt = {}, {}
             num_reads, num_pairs = 0, 0
 
             # For debugging purposes
@@ -538,6 +557,7 @@ def typing(simulation,
                             tmp_alleles |= set(Links[var_id])
                         var_idx -= 1                        
                     alleles -= tmp_alleles
+                    alleles &= set(count_per_read.keys())
                     
                     for allele in alleles:
                         count_per_read[allele] += add
@@ -982,6 +1002,8 @@ def typing(simulation,
                     num_reads += 1
 
                     def add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, include_alleles = set()):
+                        if len(Gene_count_per_read) <= 0:
+                            return ""
                         max_count = max(Gene_count_per_read.values())
                         cur_cmpt = set()
                         for allele, count in Gene_count_per_read.items():
@@ -1034,15 +1056,24 @@ def typing(simulation,
                                 left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)
 
                             for positive_ht in left_positive_hts | right_positive_hts:
+                                primary_exon_hts = get_exon_haplotypes(positive_ht, ref_primary_exons)
+                                for exon_ht in primary_exon_hts:
+                                    add_count(Gene_primary_exons_count_per_read, exon_ht, 1)
                                 exon_hts = get_exon_haplotypes(positive_ht, ref_exons)
                                 for exon_ht in exon_hts:
-                                    add_count(Gene_count_per_read, exon_ht, 1)
-                                add_count(Gene_gen_count_per_read, positive_ht, 1)
+                                    add_count(Gene_exons_count_per_read, exon_ht, 1)
+                                add_count(Gene_count_per_read, positive_ht, 1)
 
                             # DK - debugging purposes
-                            if prev_read_id.startswith("HS2000-115_741:7:2104:14038:88562#"):
+                            if prev_read_id.startswith("NS500497:33:HY32TBGXX:3:13511:0:56517876") and False:
                                 print prev_read_id, left_positive_hts, right_positive_hts
-                                print Gene_gen_count_per_read
+                                max_count = max(Gene_primary_exons_count_per_read.values())
+                                for allele, count in Gene_primary_exons_count_per_read.items():
+                                    if allele not in primary_exon_allele_rep_set:
+                                        continue
+                                    if count < max_count:
+                                        continue
+                                    print allele, count
 
                             # DK - debugging purposes
                             """
@@ -1072,10 +1103,20 @@ def typing(simulation,
 
                             cur_cmpt, cur_cmpt_gen = "", ""
                             if base_fname == "hla":
-                                cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
-                                cur_cmpt_gen = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
+                                cur_primary_exons_cmpt = add_stat(Gene_primary_exons_cmpt, Gene_primary_exons_counts, Gene_primary_exons_count_per_read, primary_exon_allele_rep_set)
+
+                                # DK - debugging purposes
+                                # for cmpt, count in Gene_primary_exons_count_per_read.items():
+                                if cur_primary_exons_cmpt.find("A*24:145") != -1 and cur_primary_exons_cmpt.find("A*24:02:01") == -1:
+                                    print prev_read_id
+                                    print cur_primary_exons_cmpt
+        
+
+            
+                                cur_exons_cmpt = add_stat(Gene_exons_cmpt, Gene_exons_counts, Gene_exons_count_per_read, allele_rep_set)
+                                cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read)
                             else:
-                                cur_cmpt = add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
+                                cur_cmpt = add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read)
                             for read_id_, read_id_i, read_node in read_nodes:
                                 asm_graph.add_node(read_id_,
                                                    read_id_i,
@@ -1098,14 +1139,17 @@ def typing(simulation,
                             prev_lines = []
 
                         left_positive_hts, right_positive_hts = set(), set()                        
-                        Gene_count_per_read, Gene_gen_count_per_read = {}, {}
-                        for allele_name in Gene_names[gene]:
-                            if allele_name.find("BACKBONE") != -1:
+                        Gene_primary_exons_count_per_read, Gene_exons_count_per_read, Gene_count_per_read = {}, {}, {}
+                        for allele in Gene_names[gene]:
+                            if allele.find("BACKBONE") != -1:
                                 continue
-                            if base_fname == "genome" and allele_name.find("GRCh38") != -1:
+                            if base_fname == "genome" and allele.find("GRCh38") != -1:
                                 continue
-                            Gene_count_per_read[allele_name] = 0
-                            Gene_gen_count_per_read[allele_name] = 0
+                            if allele in primary_exon_allele_rep_set:
+                                Gene_primary_exons_count_per_read[allele] = 0
+                            if allele in allele_rep_set:
+                                Gene_exons_count_per_read[allele] = 0
+                            Gene_count_per_read[allele] = 0
 
                     prev_lines.append(line)
 
@@ -1286,14 +1330,18 @@ def typing(simulation,
                     if base_fname == "codis" and gene == "D18S51":
                         left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)                            
                     for positive_ht in left_positive_hts | right_positive_hts:
+                        primary_exon_hts = get_exon_haplotypes(positive_ht, ref_primary_exons)
+                        for exon_ht in primary_exon_hts:
+                            add_count(Gene_primary_exons_count_per_read, exon_ht, 1)
                         exon_hts = get_exon_haplotypes(positive_ht, ref_exons)
                         for exon_ht in exon_hts:
-                            add_count(Gene_count_per_read, exon_ht, 1)
-                        add_count(Gene_gen_count_per_read, positive_ht, 1)
+                            add_count(Gene_exons_count_per_read, exon_ht, 1)
+                        add_count(Gene_count_per_read, positive_ht, 1)
 
                     if base_fname == "hla":
-                        add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read, allele_rep_set)
-                    add_stat(Gene_gen_cmpt, Gene_gen_counts, Gene_gen_count_per_read)
+                        add_stat(Gene_primary_exons_cmpt, Gene_primary_exons_counts, Gene_primary_exons_count_per_read, primary_exon_allele_rep_set)
+                        add_stat(Gene_exons_cmpt, Gene_exons_counts, Gene_exons_count_per_read, allele_rep_set)
+                    add_stat(Gene_cmpt, Gene_counts, Gene_count_per_read)
                     for read_id_, read_id_i, read_node in read_nodes:
                         asm_graph.add_node(read_id_,
                                            read_id_i,
@@ -1392,44 +1440,87 @@ def typing(simulation,
 
             # Calculate the abundance of representative alleles on exonic sequences
             if base_fname == "hla":
-                # Incorporate non representative alleles (full length alleles)
-                Gene_prob = typing_common.single_abundance(Gene_cmpt)
-                gen_alleles = set()
-                gen_prob_sum = 0.0
-                for prob_i in range(len(Gene_prob)):
-                    allele, prob = Gene_prob[prob_i][:2]
+                perform_typing_primary_exon = False
+                # Incorporate representive alleles for primary exons (experimental feature)
+                if perform_typing_primary_exon:
+                    Gene_prob = primary_exon_prob = typing_common.single_abundance(Gene_primary_exons_cmpt)
+                    primary_exon_alleles = set()
+                    primary_exon_prob_sum = 0.0
+                    for prob_i in range(len(primary_exon_prob)):
+                        allele, prob = primary_exon_prob[prob_i][:2]
+                        if len(primary_exon_allele_rep_groups[allele]) <= 1:
+                            continue
+                        primary_exon_prob_sum += prob
+                        primary_exon_alleles |= set(primary_exon_allele_rep_groups[allele])
+
+                    # Incorporate representative alleles for exons
+                    if len(primary_exon_alleles) > 0:
+                        Gene_exons_cmpt2 = {}
+                        for cmpt, value in Gene_exons_cmpt.items():
+                            cmpt2 = []
+                            for allele in cmpt.split('-'):
+                                if allele in primary_exon_alleles:
+                                    cmpt2.append(allele)
+                            if len(cmpt2) == 0:
+                                continue
+                            cmpt2 = '-'.join(cmpt2)
+                            if cmpt2 not in Gene_exons_cmpt2:
+                                Gene_exons_cmpt2[cmpt2] = value
+                            else:
+                                Gene_exons_cmpt2[cmpt2] += value
+                        exon_prob = typing_common.single_abundance(Gene_exons_cmpt2,
+                                                                   remove_low_abundance_alleles)
+                        exon_prob2 = {}
+                        for allele, prob in primary_exon_prob:
+                            if allele not in primary_exon_alleles:
+                                exon_prob2[allele] = prob
+                        for allele, prob in exon_prob:
+                            exon_prob2[allele] = prob * primary_exon_prob_sum
+                        exon_prob = [[allele, prob] for allele, prob in exon_prob2.items()]
+                        Gene_prob = exon_prob = sorted(exon_prob, cmp=typing_common.Gene_prob_cmp)
+                else:
+                    # Incorporate representative alleles for exons
+                    Gene_prob =  exon_prob = typing_common.single_abundance(Gene_exons_cmpt,
+                                                                            remove_low_abundance_alleles)
+
+                exon_alleles = set()
+                exon_prob_sum = 0.0
+                for prob_i in range(len(exon_prob)):
+                    allele, prob = exon_prob[prob_i][:2]
                     if prob_i >= 10 and prob < 0.03:
                         break
                     if allele in partial_alleles:
                         continue
 
-                    gen_prob_sum += prob
-                    gen_alleles |= set(allele_rep_groups[allele])
+                    exon_prob_sum += prob
+                    exon_alleles |= set(allele_rep_groups[allele])
 
-                if len(gen_alleles) > 0:
-                    Gene_gen_cmpt2 = {}
-                    for cmpt, value in Gene_gen_cmpt.items():
+                # Incorporate full-length alleles, non-representative alleles
+                if len(exon_alleles) > 0 and gene != "DRB1":
+                    Gene_cmpt2 = {}
+                    for cmpt, value in Gene_cmpt.items():
                         cmpt2 = []
                         for allele in cmpt.split('-'):
-                            if allele in gen_alleles:
+                            if allele in exon_alleles:
                                 cmpt2.append(allele)
                         if len(cmpt2) == 0:
                             continue
                         cmpt2 = '-'.join(cmpt2)
-                        if cmpt2 not in Gene_gen_cmpt2:
-                            Gene_gen_cmpt2[cmpt2] = value
+                        if cmpt2 not in Gene_cmpt2:
+                            Gene_cmpt2[cmpt2] = value
                         else:
-                            Gene_gen_cmpt2[cmpt2] += value
-                    Gene_gen_cmpt = Gene_gen_cmpt2
-                    Gene_gen_prob = typing_common.single_abundance(Gene_gen_cmpt,
-                                                                   Gene_lengths[gene])
-                    
+                            Gene_cmpt2[cmpt2] += value
+                    Gene_cmpt = Gene_cmpt2
+                    Gene_prob = typing_common.single_abundance(Gene_cmpt,
+                                                               True,
+                                                               Gene_lengths[gene])
+
                     Gene_combined_prob = {}
-                    for allele, prob in Gene_prob:
-                        if allele not in gen_alleles:
+                    for allele, prob in exon_prob:
+                        if allele not in exon_alleles:
                             Gene_combined_prob[allele] = prob
-                    for allele, prob in Gene_gen_prob:
-                        Gene_combined_prob[allele] = prob * gen_prob_sum
+                    for allele, prob in Gene_prob:
+                        Gene_combined_prob[allele] = prob * exon_prob_sum
                     Gene_prob = [[allele, prob] for allele, prob in Gene_combined_prob.items()]
                     Gene_prob = sorted(Gene_prob, cmp=typing_common.Gene_prob_cmp)
             else:
@@ -1637,6 +1728,8 @@ def typing(simulation,
                 found_list = [False for i in range(len(test_Gene_names))]
             for prob_i in range(len(Gene_prob)):
                 prob = Gene_prob[prob_i]
+                if prob[1] < 0.01:
+                    break
                 found = False
                 _allele_rep = prob[0]
                 """
@@ -1875,6 +1968,8 @@ def genotyping_locus(base_fname,
                      error_correction,
                      keep_alignment,
                      discordant,
+                     type_primary_exons,
+                     remove_low_abundance_alleles,
                      display_alleles,
                      verbose,
                      assembly_verbose,
@@ -1989,11 +2084,17 @@ def genotyping_locus(base_fname,
             assert not Gene_gene in refGenes
             refGenes[Gene_gene] = Gene_name
             left, right = int(left), int(right)
-            exons = []
+            exons, primary_exons = [], []
             for exon in exon_str.split(','):
+                primary = exon.endswith('p')
+                if primary:
+                    exon = exon[:-1]
                 exon_left, exon_right = exon.split('-')
-                exons.append([int(exon_left), int(exon_right)])
-            refGene_loci[Gene_gene] = [Gene_name, chr, left, right, exons]
+                exon_left, exon_right = int(exon_left), int(exon_right)
+                exons.append([exon_left, exon_right])
+                if primary:
+                    primary_exons.append([exon_left, exon_right])
+            refGene_loci[Gene_gene] = [Gene_name, chr, left, right, exons, primary_exons]
     Genes = {}
     if len(locus_list) == 0:
         locus_list = refGene_loci.keys()
@@ -2154,6 +2255,8 @@ def genotyping_locus(base_fname,
                                      error_correction,
                                      keep_alignment,
                                      discordant,
+                                     type_primary_exons,
+                                     remove_low_abundance_alleles,
                                      display_alleles,
                                      fastq,
                                      read_fname,
@@ -2204,6 +2307,8 @@ def genotyping_locus(base_fname,
                error_correction,
                keep_alignment,
                discordant,
+               type_primary_exons,
+               remove_low_abundance_alleles,
                display_alleles,
                fastq,
                read_fname,
@@ -2359,6 +2464,14 @@ if __name__ == '__main__':
                         dest="discordant",
                         action="store_true",
                         help="Allow discordantly mapped pairs or singletons")
+    parser.add_argument("--type-primary-exons",
+                        dest="type_primary_exons",
+                        action="store_true",
+                        help="Look at primary exons first")
+    parser.add_argument("--remove-low-abundance-alleles",
+                        dest="remove_low_abundance_alleles",
+                        action="store_true",
+                        help="Remove alleles with low abundance while performing typing")
     parser.add_argument("--assembly-verbose",
                         dest="assembly_verbose",
                         action="store_true",
@@ -2466,6 +2579,8 @@ if __name__ == '__main__':
                      args.error_correction,
                      args.keep_alignment,
                      args.discordant,
+                     args.type_primary_exons,
+                     args.remove_low_abundance_alleles,
                      display_alleles,
                      args.verbose_level,
                      args.assembly_verbose,

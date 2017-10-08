@@ -337,25 +337,27 @@ def extract_vars(base_fname,
             
 
     # Extract exon information from hla.data
-    gene_exons = {}
+    gene_exons, gene_exon_counts = {}, {}
     if base_fname == "hla":        
-        skip = False
+        skip, look_exon_num = False, False
         for line in open("hisatgenotype_db/%s/hla.dat" % base_fname.upper()):
             if line.startswith("DE"):
                 allele_name = line.split()[1][:-1]
                 if allele_name.startswith("HLA-"):
                     allele_name = allele_name[4:]
                 gene = allele_name.split('*')[0]
-                if line.find("partial") != -1 or \
-                        not gene in genes or \
-                        allele_name != genes[gene]:
+                if not gene in genes:
                     skip = True
-                    continue
-                skip = False
-            elif not skip:
-                if not line.startswith("FT"):
-                    continue
-                if line.find("exon") != -1:
+                else:
+                    skip = False
+            if skip:
+                continue
+            if not line.startswith("FT"):
+                continue
+            
+            if line.find("exon") != -1:
+                look_exon_num = True
+                if allele_name == genes[gene]:
                     exon_range = line.split()[2].split("..")
                     exon_left, exon_right = int(exon_range[0]) - 1, int(exon_range[1]) - 1
                     assert exon_left >= 0
@@ -367,6 +369,20 @@ def extract_vars(base_fname,
                     else:
                         left_ext_seq_len = 0
                     gene_exons[gene].append([exon_left + left_ext_seq_len, exon_right + left_ext_seq_len])
+            elif look_exon_num:
+                assert line.find("number")
+                look_exon_num = False
+                num = line.strip().split("number=")[1]
+                num = int(num[1:-1]) - 1
+                if gene not in gene_exon_counts:
+                    gene_exon_counts[gene] = {}
+                if num not in gene_exon_counts[gene]:
+                    gene_exon_counts[gene][num] = 1
+                else:
+                    gene_exon_counts[gene][num] += 1
+                
+        for gene, exon_counts in gene_exon_counts.items():
+            print >> sys.stderr, "%s exon counts:" % gene, exon_counts
 
     tmp_locus_list = []
     for gene in locus_list:
@@ -609,6 +625,10 @@ def extract_vars(base_fname,
                     left, right = ref_seq_len - right - 1, ref_seq_len - left - 1
                     exons.append([left, right])
                 gene_exons[gene] = exons
+                exon_counts = {}
+                for exon_i, count in gene_exon_counts[gene].items():
+                    exon_counts[len(gene_exons[gene]) - exon_i - 1] = count
+                gene_exon_counts[gene] = exon_counts
 
             for i in range(len(seqs)):
                 seqs[i] = typing_common.reverse_complement(seqs[i])
@@ -895,13 +915,15 @@ def extract_vars(base_fname,
         
         if base_fname == "hla":
             exon_str = ""
-            for exon_left, exon_right in gene_exons[gene]:
+            for exon_i in range(len(gene_exons[gene])):
+                exon_left, exon_right = gene_exons[gene][exon_i]
                 exon_left, exon_right = ref_seq_map[exon_left], ref_seq_map[exon_right]
                 exon_left -= del_count[exon_left]
                 exon_right -= del_count[exon_right]
                 if exon_str != "":
                     exon_str += ','
-                exon_str += ("%d-%d" % (exon_left, exon_right))
+                primary = gene_exon_counts[gene][exon_i] == max(gene_exon_counts[gene].values())
+                exon_str += ("%d-%d%s" % (exon_left, exon_right, 'p' if primary else ''))
 
             # Sanity check for exonic sequence
             sanity_check = True
@@ -909,6 +931,8 @@ def extract_vars(base_fname,
                os.path.exists("hisatgenotype_db/HLA/fasta/%s_nuc.fasta" % gene):
                 exons_ = []
                 for exon in exon_str.split(','):
+                    if exon.endswith('p'):
+                        exon = exon[:-1]
                     exon_left, exon_right = exon.split('-')
                     exon_left, exon_right = int(exon_left), int(exon_right)
                     exons_.append([exon_left, exon_right])

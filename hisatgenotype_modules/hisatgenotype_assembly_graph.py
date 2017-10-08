@@ -443,6 +443,7 @@ class Graph:
                  backbone,
                  gene_vars,
                  exons,
+                 primary_exons,
                  partial_allele_ids,
                  true_allele_nodes = {},
                  predicted_allele_nodes = {},
@@ -451,6 +452,7 @@ class Graph:
         self.backbone = backbone # backbone sequence
         self.gene_vars = gene_vars
         self.exons = exons
+        self.primary_exons = primary_exons
         self.partial_allele_ids = partial_allele_ids
         self.true_allele_nodes = true_allele_nodes
         self.predicted_allele_nodes = predicted_allele_nodes
@@ -1606,10 +1608,16 @@ class Graph:
                                      "stroke" : "0 0 0",
                                      "line_width" : 2}])
 
+            primary = False
+            for left_, _ in self.primary_exons:
+                if left == left_:
+                    primary = True
+                    break                
+
             # Draw label
             self.draw_items.append(["text",
                                     {"coord" : [left + 2, y + 7],
-                                     "text" : "Exon %d" % (e+1),
+                                     "text" : "Exon %d%s" % (e+1, " (primary)" if primary else ""),
                                      "fill" : "0 0 0",
                                      "font_size" : 12}])
             if e > 0:
@@ -1657,7 +1665,7 @@ class Graph:
 
                 # Draw allele name
                 if display:
-                    allele_type = "Omixon"
+                    allele_type = "display"
                 else:
                     if self.simulation:
                         allele_type = "true"
