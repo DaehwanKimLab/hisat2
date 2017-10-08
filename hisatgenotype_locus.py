@@ -1489,14 +1489,14 @@ def typing(simulation,
                     allele, prob = exon_prob[prob_i][:2]
                     if prob_i >= 10 and prob < 0.03:
                         break
-                    if allele in partial_alleles:
+                    if len(allele_rep_groups[allele]) <= 1:
                         continue
 
                     exon_prob_sum += prob
                     exon_alleles |= set(allele_rep_groups[allele])
 
                 # Incorporate full-length alleles, non-representative alleles
-                if len(exon_alleles) > 0 and gene != "DRB1":
+                if len(exon_alleles) > 0:
                     Gene_cmpt2 = {}
                     for cmpt, value in Gene_cmpt.items():
                         cmpt2 = []
@@ -1519,8 +1519,10 @@ def typing(simulation,
                     for allele, prob in exon_prob:
                         if allele not in exon_alleles:
                             Gene_combined_prob[allele] = prob
+
                     for allele, prob in Gene_prob:
                         Gene_combined_prob[allele] = prob * exon_prob_sum
+                                            
                     Gene_prob = [[allele, prob] for allele, prob in Gene_combined_prob.items()]
                     Gene_prob = sorted(Gene_prob, cmp=typing_common.Gene_prob_cmp)
             else:
