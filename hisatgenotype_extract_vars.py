@@ -413,6 +413,9 @@ def extract_vars(base_fname,
     input_file = open(base_fullpath_name + "_sequences.fa", 'w')
     # Write allele names into a file
     allele_file = open("%s.allele" % base_fullpath_name, 'w')
+    # Read partial alleles from hla.data, and write them into a file
+    partial_file = open("%s.partial" % base_fullpath_name, 'w')
+    
     num_vars, num_haplotypes = 0, 0
     full_alleles = {}
     for gene, ref_gene in genes.items():
@@ -493,6 +496,7 @@ def extract_vars(base_fname,
             continue
 
         names, seqs = read_MSF_file(MSA_fname, left_ext_seq, right_ext_seq)
+        full_allele_names = set(names.keys())
 
         # Identify a consensus sequence
         assert len(seqs) > 0
@@ -1193,6 +1197,12 @@ def extract_vars(base_fname,
                 print >> input_file, seq[s:s+60]
             print >> allele_file, name
 
+                    
+        # Write partial allele names
+        for name in names:
+            if name not in full_allele_names:
+                print >> partial_file, name
+
     backbone_file.close()
     locus_file.close()
     var_file.close()
@@ -1202,23 +1212,6 @@ def extract_vars(base_fname,
     link_file.close()
     input_file.close()
     allele_file.close()
-
-    # Read partial alleles from hla.data, and write them into a file
-    partial_allele_list = []
-    if base_fname == "hla":
-        for line in open("hisatgenotype_db/HLA/hla.dat"):
-            if not line.startswith("DE"):
-                continue
-            allele_name = line.split()[1][:-1]
-            if allele_name.startswith("HLA-"):
-                allele_name = allele_name[4:]
-            gene = allele_name.split('*')[0]
-            if line.find("partial") != -1:
-                partial_allele_list.append(allele_name)
-
-    partial_file = open("%s.partial" % base_fullpath_name, 'w')
-    for partial_allele in partial_allele_list:
-        print >> partial_file, partial_allele
     partial_file.close()
    
     

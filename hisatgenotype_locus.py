@@ -2470,10 +2470,10 @@ if __name__ == '__main__':
                         dest="type_primary_exons",
                         action="store_true",
                         help="Look at primary exons first")
-    parser.add_argument("--remove-low-abundance-alleles",
+    parser.add_argument("--keep-low-abundance-alleles",
                         dest="remove_low_abundance_alleles",
-                        action="store_true",
-                        help="Remove alleles with low abundance while performing typing")
+                        action="store_false",
+                        help="Do not remove alleles with low abundance while performing typing")
     parser.add_argument("--assembly-verbose",
                         dest="assembly_verbose",
                         action="store_true",
