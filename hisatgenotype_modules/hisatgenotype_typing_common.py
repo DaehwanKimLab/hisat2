@@ -903,7 +903,9 @@ def Gene_prob_cmp(a, b):
 
 """
 """
-def single_abundance(Gene_cmpt, Gene_length = {}):
+def single_abundance(Gene_cmpt,
+                     remove_low_abundance_allele = False,
+                     Gene_length = {}):
     def normalize(prob):
         total = sum(prob.values())
         for allele, mass in prob.items():
@@ -989,19 +991,20 @@ def single_abundance(Gene_cmpt, Gene_length = {}):
         Gene_prob = Gene_prob_next
 
         # Accelerate convergence
-        if iter >= 10:
+        if iter >= 10 and remove_low_abundance_allele:
             Gene_prob = select_alleles(Gene_prob)
 
         # DK - debugging purposes
         if iter % 10 == 0 and False:
             print >> sys.stderr, "iter", iter
             for allele, prob in Gene_prob.items():
-                if prob >= 0.01:
+                if prob >= 0.001:
                     print >> sys.stderr, "\t", iter, allele, prob
         
         iter += 1
-        
-    Gene_prob = select_alleles(Gene_prob)
+
+    if remove_low_abundance_allele:
+        Gene_prob = select_alleles(Gene_prob)
     if len(Gene_length) > 0:
             normalize_len(Gene_prob, Gene_length)
     else:
