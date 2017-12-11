@@ -1,0 +1,17 @@
+### common
+# module load module load samtools/1.6
+
+### tensor-flow
+# module load cuda80/8.0.44
+# module load tensorflow/gpu/python2.7/1.1.0 
+
+### leela-zero
+# module load gcc/5.4.0 
+# module load boost/gcc/1.61.0 
+# module load openblas/gcc/0.2.14 
+# module load zlib/gcc/1.2.11 
+# module load cuda80/8.0.44
+# export PATH=$(PWD):$PATH
+
+
+
