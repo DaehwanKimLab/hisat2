@@ -65,24 +65,37 @@ def generate_sequences(base_fname,
                 if seq_dic[seq][-1] != l:
                     seq_dic[seq].append(l)
 
+    seq_file = open("seq.train", 'w')
+    label_file = open("label.train", 'w')
     for seq, locals in seq_dic.items():
         assert len(locals) > 0
         def seq_to_binary(seq):
             bseq = []
             for nt in seq:
                 if nt == 'A':
-                    bseq += [0, 0]
+                    bseq += ['0', '0']
                 elif nt == 'C':
-                    bseq += [0, 1]
+                    bseq += ['0', '1']
                 elif nt == 'G':
-                    bseq += [1, 0]
+                    bseq += ['1', '0']
                 else:
                     assert nt == 'T'
-                    bseq += [1, 1]
+                    bseq += ['1', '1']
             return bseq
         bseq = seq_to_binary(seq)
-        if len(locals) > 1:
-            print seq, bseq, locals
+        print >> seq_file, ' '.join(bseq)
+        if len(locals) == 1:
+            if locals[0] == 0:
+                label = "1 0"
+            else:
+                label = "0 1"
+        else:
+            assert len(locals) == 2
+            label = "0.5 0.5"
+        print >> label_file, label
+    seq_file.close()
+    label_file.close()
+    
     
     
         
