@@ -45,14 +45,15 @@ def generate_sequences(base_fname,
 
     chr_dic, _, _ = typing_common.read_genome(open("genome.fa"))
 
-    local_size = 1 << 16
+    local_counts, local_size = 10, 1 << 16
     chr, chr_pos = '1', 1000000
-    local_seqs = [chr_dic[chr][chr_pos:chr_pos+local_size], \
-                      chr_dic[chr][chr_pos+local_size:chr_pos+local_size*2]]
+    local_seqs = []
+    for l in range(local_counts):
+        local_seqs.append(chr_dic[chr][chr_pos + l * local_size:chr_pos + (l + 1) * local_size])
 
     seq_len = 20
     seq_dic = {}
-    for l in range(len(local_seqs)):
+    for l in range(local_counts):
         local_seq = local_seqs[l]
         assert len(local_seq) == local_size
         for p in range(0, local_size - seq_len):
@@ -60,10 +61,8 @@ def generate_sequences(base_fname,
             if 'N' in seq:
                 continue
             if seq not in seq_dic:
-                seq_dic[seq] = [l]
-            else:
-                if seq_dic[seq][-1] != l:
-                    seq_dic[seq].append(l)
+                seq_dic[seq] = [0 for _ in range(local_counts)]
+            seq_dic[seq][l] = 1
 
     seq_file = open("seq.train", 'w')
     label_file = open("label.train", 'w')
@@ -84,14 +83,8 @@ def generate_sequences(base_fname,
             return bseq
         bseq = seq_to_binary(seq)
         print >> seq_file, ' '.join(bseq)
-        if len(locals) == 1:
-            if locals[0] == 0:
-                label = "1 0"
-            else:
-                label = "0 1"
-        else:
-            assert len(locals) == 2
-            label = "0.5 0.5"
+        local_sum = float(sum(locals))
+        label = ' '.join(["%f" % (local / local_sum) for local in locals])
         print >> label_file, label
     seq_file.close()
     label_file.close()

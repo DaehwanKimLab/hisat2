@@ -107,9 +107,9 @@ def bias_variable(shape):
 def conv1d(x, W):
   return tf.nn.conv1d(x, W, stride=1, padding='SAME')
 
-def max_pool_2x2(x):
-  return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
-                        strides=[1, 2, 2, 1], padding='SAME')
+def max_pool_2(x):
+  return tf.nn.max_pool(x, ksize=[1, 2, 1],
+                        strides=[1, 2, 1], padding='SAME')
 
 
 """
@@ -118,7 +118,7 @@ def train_sequences_CNN(base_fname,
                         locus_list,
                         verbose):
     # filenames = ["label.train", "seq.train"]
-    # dataset = tf.data.TextLineDataset(filenames)
+    # dataset = tf.contrib.data.TextLineDataset(filenames)
     # print dataset
 
     features, labels = read_seqs("seq.train")[:1000], read_labels("label.train")[:1000]
@@ -129,26 +129,27 @@ def train_sequences_CNN(base_fname,
     x_reshape = tf.reshape(x, [-1, feature_len, 1])
     y = tf.placeholder(tf.float32, [None, label_len])
 
-    W_conv1 = weight_variable([6, 1, 32])
-    b_conv1 = bias_variable([32])
+    W_conv1 = weight_variable([6, 1, 4])
+    b_conv1 = bias_variable([4])
     h_conv1 = tf.nn.relu(conv1d(x_reshape, W_conv1) + b_conv1)
+    # h_pool1 = max_pool_2(h_conv1)
 
-    W_conv2 = weight_variable([6, 32, 64])
-    b_conv2 = bias_variable([64])
+    W_conv2 = weight_variable([6, 4, 8])
+    b_conv2 = bias_variable([8])
     h_conv2 = tf.nn.relu(conv1d(h_conv1, W_conv2) + b_conv2)
 
-    W_fc1 = weight_variable([40 * 64, 256])
-    b_fc1 = bias_variable([256])
+    W_fc1 = weight_variable([40 * 8, 32])
+    b_fc1 = bias_variable([32])
 
-    h_conv2_flat = tf.reshape(h_conv2, [-1, 40 * 64])
+    h_conv2_flat = tf.reshape(h_conv2, [-1, 40 * 8])
     h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, W_fc1) + b_fc1)
 
     keep_prob = tf.placeholder(tf.float32)
     keep_prob = 1.0
     h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
-    W_fc2 = weight_variable([256, 2])
-    b_fc2 = bias_variable([2])
+    W_fc2 = weight_variable([32, 10])
+    b_fc2 = bias_variable([10])
 
     y_ = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
     ysoftmax = tf.nn.softmax(y_)
@@ -159,7 +160,7 @@ def train_sequences_CNN(base_fname,
     sess = tf.Session()
     init = tf.global_variables_initializer()
     sess.run(init)
-    for i in range(2000):
+    for i in range(10000):
         sess.run(train, {x: features, y: labels})
         if i % 100 == 0:
             print "DK:", i
@@ -174,14 +175,18 @@ def train_sequences_CNN(base_fname,
     correct_count, total_count = 0, len(labels)
     for l in range(len(labels)):
         label, predicted_label = labels[l], predicted_labels[l]
-        if label[0] == 1.0:
-            if predicted_label[0] > predicted_label[1]:
-                correct_count += 1
-        elif label[1] == 1.0:
-            if predicted_label[1] > predicted_label[0]:
+        if max(label) == 1.0:
+            label_max = np.argmax(label)
+            predicted_label_max = np.argmax(predicted_label)
+            if label_max == predicted_label_max:
                 correct_count += 1
         else:
-            if abs(predicted_label[0] - predicted_label[1]) < 0.1:
+            same = True
+            for i in range(len(label)):
+                if label[i] > 0.0:
+                    if abs(label[i] - predicted_label[i]) / label[i] > 0.1:
+                        same = False
+            if same:
                 correct_count += 1
 
     print >> sys.stderr, "%d / %d (%.2f)" % (correct_count, total_count, float(correct_count) / total_count * 100)
