@@ -121,37 +121,54 @@ def train_sequences_CNN(base_fname,
     # dataset = tf.contrib.data.TextLineDataset(filenames)
     # print dataset
 
-    features, labels = read_seqs("seq.train")[:1000], read_labels("label.train")[:1000]
-    feature_len, label_len = len(features[0]), len(labels[0])
-    assert len(features) > 0 and len(features) == len(labels)
+    batch_size = 1000
+    features_array, labels_array = read_seqs("seq.train"), read_labels("label.train")
+    feature_len, label_len = len(features_array[0]), len(labels_array[0])
+    assert len(features_array) > 0 and len(features_array) == len(labels_array)
 
     x = tf.placeholder(tf.float32, [None, feature_len])
     x_reshape = tf.reshape(x, [-1, feature_len, 1])
     y = tf.placeholder(tf.float32, [None, label_len])
 
-    W_conv1 = weight_variable([6, 1, 4])
-    b_conv1 = bias_variable([4])
+    W_conv1 = weight_variable([12, 1, 8])
+    b_conv1 = bias_variable([8])
     h_conv1 = tf.nn.relu(conv1d(x_reshape, W_conv1) + b_conv1)
     # h_pool1 = max_pool_2(h_conv1)
 
-    W_conv2 = weight_variable([6, 4, 8])
-    b_conv2 = bias_variable([8])
+    W_conv2 = weight_variable([12, 8, 16])
+    b_conv2 = bias_variable([16])
     h_conv2 = tf.nn.relu(conv1d(h_conv1, W_conv2) + b_conv2)
 
-    W_fc1 = weight_variable([40 * 8, 32])
-    b_fc1 = bias_variable([32])
+    W_conv3 = weight_variable([12, 16, 32])
+    b_conv3 = bias_variable([32])
+    h_conv3 = tf.nn.relu(conv1d(h_conv2, W_conv3) + b_conv3)
 
-    h_conv2_flat = tf.reshape(h_conv2, [-1, 40 * 8])
+    W_conv4 = weight_variable([12, 32, 64])
+    b_conv4 = bias_variable([64])
+    h_conv4 = tf.nn.relu(conv1d(h_conv3, W_conv4) + b_conv4)
+
+    W_conv5 = weight_variable([12, 64, 64])
+    b_conv5 = bias_variable([64])
+    h_conv5 = tf.nn.relu(conv1d(h_conv4, W_conv5) + b_conv5)
+
+    W_fc1 = weight_variable([40 * 64, 64])
+    b_fc1 = bias_variable([64])
+
+    h_conv2_flat = tf.reshape(h_conv5, [-1, 40 * 64])
     h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, W_fc1) + b_fc1)
+
+    W_fc2 = weight_variable([64, 64])
+    b_fc2 = bias_variable([64])
+    h_fc2 = tf.nn.relu(tf.matmul(h_fc1, W_fc2) + b_fc2)
 
     keep_prob = tf.placeholder(tf.float32)
     keep_prob = 1.0
     h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
-    W_fc2 = weight_variable([32, 10])
-    b_fc2 = bias_variable([10])
+    W_fc3 = weight_variable([64, 10])
+    b_fc3 = bias_variable([10])
 
-    y_ = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
+    y_ = tf.matmul(h_fc2, W_fc3) + b_fc3
     ysoftmax = tf.nn.softmax(y_)
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_))
     optimizer = tf.train.AdamOptimizer(1e-4)
@@ -160,37 +177,50 @@ def train_sequences_CNN(base_fname,
     sess = tf.Session()
     init = tf.global_variables_initializer()
     sess.run(init)
-    for i in range(10000):
-        sess.run(train, {x: features, y: labels})
-        if i % 100 == 0:
+    for i in range(100000):
+        for b in range(len(features_array) / batch_size + 1):
+            features, labels = features_array[b*batch_size:(b+1)*batch_size], labels_array[b*batch_size:(b+1)*batch_size]
+            if len(features) <= 0:
+                break
+            sess.run(train, {x: features, y: labels})
+        if i % 500 == 0:
             print "DK:", i
-            print "\t", sess.run([cross_entropy], {x: features, y: labels})
+            # print "\t", sess.run([cross_entropy], {x: features_array, y: labels_array})
 
-    # evaluate training accuracy
-    correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    print sess.run(accuracy, {x: features, y: labels})
+            # evaluate training accuracy
+            # correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
+            # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+            # print "\t", sess.run(accuracy, {x: features_array, y: labels_array})
+    
+            ucorrect_count, utotal_count = 0, 0
+            mcorrect_count, mtotal_count = 0, 0
+            for b in range(len(features_array) / batch_size + 1):
+                features, labels = features_array[b*batch_size:(b+1)*batch_size], labels_array[b*batch_size:(b+1)*batch_size]
+                if len(features) <= 0:
+                    break
+                predicted_labels = sess.run(ysoftmax, {x: features, y: labels})
+                for l in range(len(labels)):
+                    label, predicted_label = labels[l], predicted_labels[l]
+                    if max(label) == 1.0:
+                        label_max = np.argmax(label)
+                        predicted_label_max = np.argmax(predicted_label)
+                        if label_max == predicted_label_max:
+                            ucorrect_count += 1
+                        utotal_count += 1
+                    else:
+                        same = True
+                        for i_ in range(len(label)):
+                            if label[i_] > 0.0:
+                                # if abs(label[i_] - predicted_label[i_]) / label[i_] > 0.7:
+                                if predicted_label[i_] < 0.02:
+                                    same = False
+                        if same:
+                            mcorrect_count += 1
+                        mtotal_count += 1
 
-    predicted_labels = sess.run(ysoftmax, {x: features, y: labels})
-    correct_count, total_count = 0, len(labels)
-    for l in range(len(labels)):
-        label, predicted_label = labels[l], predicted_labels[l]
-        if max(label) == 1.0:
-            label_max = np.argmax(label)
-            predicted_label_max = np.argmax(predicted_label)
-            if label_max == predicted_label_max:
-                correct_count += 1
-        else:
-            same = True
-            for i in range(len(label)):
-                if label[i] > 0.0:
-                    if abs(label[i] - predicted_label[i]) / label[i] > 0.1:
-                        same = False
-            if same:
-                correct_count += 1
+            print >> sys.stderr, "\tunique: %d / %d (%.2f), multi: %d / %d (%.2f)" % \
+                (ucorrect_count, utotal_count, float(ucorrect_count) / utotal_count * 100, mcorrect_count, mtotal_count, float(mcorrect_count) / mtotal_count * 100)
 
-    print >> sys.stderr, "%d / %d (%.2f)" % (correct_count, total_count, float(correct_count) / total_count * 100)
-            
 
     
 """
