@@ -1404,9 +1404,6 @@ def typing(simulation,
                 if alleles:
                     add_alleles(alleles)
 
-            if base_fname != "hla":
-                Gene_cmpt, Gene_counts = Gene_gen_cmpt, Gene_gen_counts
-                
             Gene_counts = [[allele, count] for allele, count in Gene_counts.items()]
             def Gene_count_cmp(a, b):
                 if a[1] != b[1]:

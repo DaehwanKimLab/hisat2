@@ -1406,6 +1406,59 @@ class Graph:
             print >> sys.stderr, p
             for seq, id in cur_seqs:
                 print >> sys.stderr, "\t", seq, id
+
+                
+    # Calculate coverage
+    def calculate_coverage(self):
+        allele_nodes = self.true_allele_nodes if self.simulation else self.predicted_allele_nodes
+        allele_nodes = [[id, node.left, node.right] for id, node in allele_nodes.items()]
+        coverage = {}
+        for allele_id, _, _ in allele_nodes:
+            coverage[allele_id] = [0.0 for _ in range(len(self.backbone))]
+
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        for id, left, right in nodes:
+            node = self.nodes[id]
+            nodes2 = [[node, left, right]]
+            if id in self.other_nodes:
+                for node in self.other_nodes[id]:
+                    nodes2.append([node, node.left, node.right])
+
+            for node, left, right in nodes2:
+                node_vars = node.get_vars()
+                node_var_ids = node.get_var_ids()
+                max_common = -sys.maxint
+                max_allele_node_ids = []
+                for allele_node_id, allele_left, allele_right in allele_nodes:
+                    if right - left <= 500 and (left < allele_left or right > allele_right):
+                        continue
+                    if self.simulation:
+                        allele_node = self.true_allele_nodes[allele_node_id]
+                    else:
+                        allele_node = self.predicted_allele_nodes[allele_node_id]
+                    allele_vars = allele_node.get_var_ids(left, right)
+                    common_vars = set(node_var_ids) & set(allele_vars)
+                    tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
+                    if max_common < tmp_common:
+                        max_common = tmp_common
+                        max_allele_node_ids = [allele_node_id]
+                    elif max_common == tmp_common:
+                        max_allele_node_ids.append(allele_node_id)
+                if len(max_allele_node_ids) <= 0:
+                    continue
+                add_cov = 1.0 / len(nodes2) / len(max_allele_node_ids)
+                assert add_cov > 0.0
+                for allele_node_id in max_allele_node_ids:
+                    for p in range(left, right + 1):
+                        coverage[allele_node_id][p] += add_cov
+
+        max_cov = 0.0
+        for allele_id, cov in coverage.items():
+            max_cov = max(max_cov, max(cov))
+        for allele_id, cov in coverage.items():
+            cov2 = [c / max_cov for c in cov]
+            coverage[allele_id] = cov2
+        self.coverage = coverage
                                 
         
     # Begin drawing graph
@@ -1643,6 +1696,18 @@ class Graph:
             if len(allele_node_dic) <= 0:
                 return
             allele_nodes, seqs, colors = self.get_node_comparison_info(allele_node_dic)
+
+            def draw_coverage(allele_node, allele_id, left, right, allele_node_color):
+                if allele_id not in self.coverage:
+                    return
+                y = get_dspace(0, max_right, 14)
+                for p in range(left, right):
+                    cov = math.ceil(self.coverage[allele_id][p] * 12)
+                    self.draw_items.append(["rect",
+                                            {"coord" : [p, y + 13, 1, cov],
+                                             "fill" : allele_node_color}])
+
+
             for n_ in range(len(allele_nodes)):
                 n = -1
                 prob = ""
@@ -1661,6 +1726,10 @@ class Graph:
                 allele_id, left, right = allele_nodes[n]
                 right += 1
                 allele_node = allele_node_dic[allele_id]
+                allele_node_color = allele_node_colors[n % len(allele_node_colors)]
+
+                draw_coverage(allele_node, allele_id, left, right, allele_node_color)
+                
                 y = get_dspace(0, max_right, 14)
 
                 # Draw allele name
@@ -1679,7 +1748,7 @@ class Graph:
                 # Draw node
                 self.draw_items.append(["rect",
                                         {"coord" : [left, y + 10, right - left, 10],
-                                         "fill" : allele_node_colors[n % len(allele_node_colors)],
+                                         "fill" : allele_node_color,
                                          "stroke" : "0 0 0",
                                          "line_width" : 2}])
 
