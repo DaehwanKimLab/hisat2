@@ -1051,8 +1051,12 @@ def typing(simulation,
                     if read_id != prev_read_id:
                         if prev_read_id != None:
                             num_pairs += 1
+                            # DK - needs more test
+                            #      Several alleles go over 100 bps
+                            """
                             if base_fname == "codis" and gene == "D18S51":
                                 left_positive_hts, right_positive_hts = choose_pairs(left_positive_hts, right_positive_hts)
+                            """
 
                             for positive_ht in left_positive_hts | right_positive_hts:
                                 primary_exon_hts = get_exon_haplotypes(positive_ht, ref_primary_exons)
