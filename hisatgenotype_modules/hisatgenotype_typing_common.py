@@ -208,7 +208,7 @@ def download_genome_and_index():
 """
 def clone_hisatgenotype_database():
     os.system("git clone https://github.com/infphilo/hisatgenotype_db.git")
-    os.system("cd hisatgenotype_db; git checkout hisatgenotype_v1.0.1_beta; cd ..")
+    os.system("cd hisatgenotype_db; git checkout hisatgenotype_v1.0.2_beta; cd ..")
 
 
 """
