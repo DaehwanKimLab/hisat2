@@ -474,6 +474,7 @@ class Graph:
         self.width = len(self.backbone) * self.scalex + self.left_margin + self.right_margin
         self.unscaled_height = 6000
         self.height = self.unscaled_height * self.scaley
+        self.coverage = {}
 
 
     # Add node, which is an alignment w.r.t. the reference

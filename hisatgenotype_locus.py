@@ -1545,6 +1545,7 @@ def typing(simulation,
                         break
                 asm_graph.predicted_allele_nodes = predicted_allele_nodes
                 asm_graph.allele_node_order = allele_node_order
+                # asm_graph.calculate_coverage()
 
                 # Start drawing assembly graph
                 asm_graph.begin_draw("%s.%s.%s" % (output_base, base_fname, gene))
