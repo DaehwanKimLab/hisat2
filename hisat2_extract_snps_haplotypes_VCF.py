@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 #
 # Copyright 2016, Daehwan Kim <infphilo@gmail.com>
 #
@@ -95,40 +94,62 @@ def extract_vars(chr_dic, chr, pos, ref_allele, alt_alleles, varID):
     assert ',' not in ref_allele
     alt_alleles = alt_alleles.split(',')    
     for a in range(len(alt_alleles)):
-        alt_allele = alt_alleles[a]
+        alt_allele = alt_allele2 = alt_alleles[a]
         if 'N' in alt_allele:
             continue
         ref_allele2, pos2 = ref_allele, pos
-        min_len = min(len(ref_allele2), len(alt_allele))
-        assert min_len >= 1
-        if min_len > 1:
-            ref_allele2 = ref_allele2[min_len - 1:]
-            alt_allele = alt_allele[min_len - 1:]
-            pos2 += (min_len - 1)
+
+        if chr_seq[pos:pos+len(ref_allele)] != ref_allele:
+            print >> sys.stderr, "Error: the reference genome you provided seems to be incompatible with the VCF file at %d of chromosome %s where %s is in the reference genome while %s is in the VCF file" % (pos, chr, chr_seq[pos:pos+len(ref_allele)], ref_allele)
+
+        def warning_msg():
+            print >> sys.stderr, "Warning) ref allele (%s) and alt allele (%s in %s) at chr%s:%d are excluded." % \
+                (ref_allele, alt_allele, ','.join(alt_alleles), chr, pos + 1)
+            
+        min_len = min(len(ref_allele2), len(alt_allele2))
+        if min_len >= 2:
+            if len(ref_allele2) != len(alt_allele2):
+                if ref_allele2[:min_len-1] != alt_allele2[:min_len-1]:
+                    warning_msg()
+                    continue
+                ref_allele2, alt_allele2 = ref_allele2[min_len-1:], alt_allele2[min_len-1:]
+                pos2 += (min_len - 1)
+            else:
+                if ref_allele2[1:] != alt_allele2[1:]:
+                    warning_msg()
+                    continue
+                ref_allele2, alt_allele2 = ref_allele2[0], alt_allele2[0]
 
         type, data = '', ''
-        if len(ref_allele2) == 1 and len(alt_allele) == 1:
-            type = 'S'
-            data = alt_allele
-            assert ref_allele2 != alt_allele
-            if chr_seq[pos2] != ref_allele2:
+        if len(ref_allele2) == 1 and len(alt_allele2) == 1:
+            if ref_allele2 == alt_allele2:
+                warning_msg()
                 continue
+            type = 'S'
+            data = alt_allele2
         elif len(ref_allele2) == 1:
-            assert len(alt_allele) > 1
+            assert len(alt_allele2) > 1
+            if ref_allele2[0] != alt_allele2[0]:
+                warning_msg()
+                continue
+            alt_allele2 = alt_allele2[1:]
+            pos2 += 1
             type = 'I'
-            data = alt_allele[1:]
+            data = alt_allele2
             if len(data) > 32:
                 continue
-            if chr_seq[pos] != ref_allele2:
-                continue
-        elif len(alt_allele) == 1:
+        elif len(alt_allele2) == 1:
             assert len(ref_allele2) > 1
-            type = 'D'
-            data = len(ref_allele2) - 1
-            if chr_seq[pos2:pos2+data+1] != ref_allele2:
+            if ref_allele2[0] != alt_allele2[0]:
+                warning_msg()
                 continue
+            ref_allele2 = ref_allele2[1:]
+            pos2 += 1
+            type = 'D'
+            data = len(ref_allele2)
         else:
-            assert False
+            warning_msg()
+            continue
         varID2 = varID
         if len(alt_alleles) > 1:
             varID2 = "%s.%d" % (varID, a)
@@ -562,9 +583,11 @@ def main(genome_file,
         else:
             assert reference_type == "genome"
             os.system("cp genome.fa %s_backbone.fa" % base_fname)
-        
+            
+    num_genomes = 0
     num_haplotypes = 0
     num_unassigned = 0
+    unnamed_var_count = 0
     for VCF_fname in VCF_fnames:
         empty_VCF_file = False
         if VCF_fname == "/dev/null" or \
@@ -612,6 +635,10 @@ def main(genome_file,
                     continue
 
                 assert len(genotypes) == len(genomeIDs)
+
+                if varID == ".":
+                    unnamed_var_count += 1
+                    varID = "un%d" % unnamed_var_count
 
                 if only_rs and not varID.startswith("rs"):
                     continue
