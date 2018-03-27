@@ -20,11 +20,10 @@
 
 
 import os, sys, subprocess, re
-import heapq
 import inspect
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
-from datetime import datetime
+
 
 """
 Download BigWig (bw) files from Smith Lab at USC, and convert them to a HISAT2's snp file
@@ -124,7 +123,6 @@ def create_snp_from_bigwig(base_fname,
                 print >> CpG_file, "%s\t%s\t%s" % (chr, pos, abundances[:-1])
         CpG_file.close()
         
-        print datetime.now()
         
         for sample in sample_files.keys():
             os.system("rm -f %s.meth.bedgraph" % sample)
