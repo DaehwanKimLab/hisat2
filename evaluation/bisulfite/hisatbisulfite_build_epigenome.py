@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017, Daehwan Kim <infphilo@gmail.com> and Bongsoo Park <genomicspark@gmail.com>
+# Copyright 2018, Jong Jun Lee <leejj82@gmail.com>, Bongsoo Park <genomicspark@gmail.com>, and Daehwan Kim <infphilo@gmail.com>.
 #
 # This file is part of HISAT-bisulfite.
 #
@@ -20,11 +20,10 @@
 
 
 import os, sys, subprocess, re
-import heapq
 import inspect
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
-from datetime import datetime
+
 
 """
 Download BigWig (bw) files from Smith Lab at USC, and convert them to a HISAT2's snp file
@@ -90,97 +89,43 @@ def create_snp_from_bigwig(base_fname,
                 chr = "MT"
             return chr, pos, abundance
 
-        print datetime.now()
-        
-        # Use heap (a.k.a. priority queue) to handle merge in a memory lean way
-      
-        samples.sort()      
-
-        sample_files, heap = {}, []
+        sample_files, lines = {}, []
         for sample in samples:
             sample_fname = "%s.meth.bedgraph" % sample
             if not os.path.exists(sample_fname):
                 continue
             sample_file = open(sample_fname)
             sample_files[sample] = sample_file
-            chr, pos, abundance = read_line(sample_file)
-            if chr != None:
-                heapq.heappush(heap, [chr, pos, sample, abundance])
 
-        print >> sys.stderr, "Merging %s samples ..." % len(heap)
+        print >> sys.stderr, "Merging %s samples ..." % len(samples)
         CpG_file = open("%s.cpg" % base_fname, 'w')
 
-        title="#CHR#POS"
-        for sample in samples:
-            title+="#%s" % sample
+        title = "#CHR\tPOS\t"
+        title += '\t'.join(samples)
         print >> CpG_file, title
-
-        def simplify(num):#round up to two decimal places
-            dec_2=round(num, 2)
-            if dec_2==0 or dec_2==1:
-                return str(int(dec_2))
-            return str(dec_2)
-
-            
-        prev_chr, prev_pos, prev_sample, cur_samples = None, None, None, []
-        while len(heap) > 0:
-            chr, pos, sample ,abundance = heapq.heappop(heap)
-            if prev_chr != None and (chr != prev_chr or pos != prev_pos):
-                print >> CpG_file, "%s\t%s\t%s" % (prev_chr, prev_pos, ','.join(cur_samples))
-                cur_samples = [simplify(abundance) ]
-            else:
-                cur_samples.append(simplify(abundance))
-            prev_chr, prev_pos, prev_sample = chr, pos, sample
-            chr, pos, abundance = read_line(sample_files[sample])
-            if chr != None:
-                heapq.heappush(heap, [chr, pos, sample, abundance])
-
-        if len(cur_samples) > 0:
-            print >> CpG_file, "%s\t%s\t%s" % (prev_chr, prev_pos, ','.join(cur_samples))
+        
+        done = False
+        while not done:
+            abundances=""
+            for sample, sample_file in sample_files.items():
+                chr, pos, abundance = read_line(sample_file)
+                if chr == None:
+                    done = True
+                    break
+                def simplify(num):#round abundance up to two decimal places
+                    num = round(num, 2)
+                    if num == 0 or num == 1:
+                        return "01"[int(num)]
+                    else: 
+                        return str(num)
+                abundances += "%s," % simplify(abundance)
+            if not done:
+                print >> CpG_file, "%s\t%s\t%s" % (chr, pos, abundances[:-1])
         CpG_file.close()
         
-        print datetime.now()
         
         for sample in sample_files.keys():
             os.system("rm -f %s.meth.bedgraph" % sample)
-
-
-#        # Use heap (a.k.a. priority queue) to handle merge in a memory lean way
-#        sample_files, heap = {}, []
-#        for sample in samples:
-#            sample_fname = "%s.meth.bedgraph" % sample
-#            if not os.path.exists(sample_fname):
-#                continue
-#            sample_file = open(sample_fname)
-#            sample_files[sample] = sample_file
-#            chr, pos, abundance = read_line(sample_file)
-#            if chr != None:
-#                heapq.heappush(heap, [chr, pos, abundance, sample])
-#
-#        print >> sys.stderr, "Merging %s samples ..." % len(heap)
-#        CpG_file = open("%s.cpg" % base_fname, 'w')
-#        prev_chr, prev_pos, prev_sample, cur_samples = None, None, None, []
-#        while len(heap) > 0:
-#            chr, pos, abundance, sample = heapq.heappop(heap)
-#            if prev_chr != None and (chr != prev_chr or pos != prev_pos):
-#                print >> CpG_file, "%s\t%s\t%s" % (prev_chr, prev_pos, ','.join(cur_samples))
-#                cur_samples = ["%s:%.2f" % (sample, abundance)]
-#            else:
-#                cur_samples.append("%s:%.2f" % (sample, abundance))
-#            prev_chr, prev_pos, prev_sample = chr, pos, sample
-#            chr, pos, abundance = read_line(sample_files[sample])
-#            if chr != None:
-#                heapq.heappush(heap, [chr, pos, abundance, sample])
-#
-#        if len(cur_samples) > 0:
-#            print >> CpG_file, "%s\t%s\t%s" % (prev_chr, prev_pos, ','.join(cur_samples))
-#        CpG_file.close()
-#        
-#       # for sample in sample_files.keys():
-#           # os.system("rm -f %s.meth.bedgraph" % sample)
-#
-
-
 
 
     # Convert CpG sites to snps and haplotypes in file formats used for HISAT2
@@ -191,11 +136,12 @@ def create_snp_from_bigwig(base_fname,
     CpG_file = open("%s.cpg" % base_fname)
     cpg_num = 0
     miscpg_dic = {}
-    index=0
+
+
+    # Skip first line
+    CpG_file.readline()
+
     for line in CpG_file:
-        if index==0:
-            index=1
-            continue
         chr, pos, samples = line.strip().split()
         pos = int(pos)
         abundances = [float(sample) for sample in samples.split(',')]
