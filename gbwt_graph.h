@@ -1650,6 +1650,8 @@ private:
     void earlyGeneration();
     void firstPruneGeneration();
     void lateGeneration();
+    void linear_generation();
+    void linear_lateGeneration();
 
     void mergeUpdateRank();
     pair<index_t, index_t> nextMaximalSet(pair<index_t, index_t> range);
@@ -1750,13 +1752,14 @@ public: EList<pair<index_t, index_t> > ftab;
 
 //creates prefix-sorted PathGraph Nodes given a reverse determinized RefGraph
 //outputs nodes sorted by their from attribute
+#if 0
 template <typename index_t>
 PathGraph<index_t>::PathGraph(
                               RefGraph<index_t>& base,
                               const string& base_fname,
                               size_t max_num_nodes_,
                               int nthreads_,
-                              bool verbose_) :
+							  bool verbose_) :
 nthreads(nthreads_), verbose(verbose_),
 ranks(0), temp_nodes(0), generation(0), sorted(false),
 report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
@@ -1778,7 +1781,7 @@ max_num_nodes(max_num_nodes_)
         base.write(rf_fname, bigEndian);
         base.nullify();
     }
-    
+
     // In the first generation the nodes enter, not quite sorted by from.
     // We use a counting sort to sort the nodes, otherwise same as early generation.
     generationOne();
@@ -1812,6 +1815,61 @@ max_num_nodes(max_num_nodes_)
         std::remove(rf_fname.c_str());
     }
 }
+#else
+template <typename index_t>
+PathGraph<index_t>::PathGraph(
+                              RefGraph<index_t>& base,
+                              const string& base_fname,
+                              size_t max_num_nodes_,
+                              int nthreads_,
+							  bool verbose_) :
+nthreads(nthreads_), verbose(verbose_),
+ranks(0), temp_nodes(0), generation(0), sorted(false),
+report_node_idx(0), report_edge_range(pair<index_t, index_t>(0, 0)), report_M(pair<index_t, index_t>(0, 0)),
+report_F_node_idx(0), report_F_location(0),
+max_num_nodes(max_num_nodes_)
+{
+#ifndef NDEBUG
+    debug = base.nodes.size() <= 20;
+#endif
+    // Fill nodes with a PathNode for each edge in base.edges.
+    // Set max_from.
+    makeFromRef(base);
+    
+    // Write RefGraph into a file
+    const bool file_rf = base.nodes.size() > (1 << 22);
+    const bool bigEndian = false;
+    const string rf_fname = base_fname + ".rf";
+    if(file_rf) {
+        base.write(rf_fname, bigEndian);
+        base.nullify();
+    }
+
+    // In the first generation the nodes enter, not quite sorted by from.
+    // We use a counting sort to sort the nodes, otherwise same as early generation.
+    linear_generation();
+
+    // In later generations, most nodes are already sorted, so we
+    //   perform a more expensive random access join with nodes in rank order
+    //   in return for avoiding having to sort by rank in order to prune nodes.
+    while(!isSorted()) {
+        linear_lateGeneration();
+    }
+    // In the generateEdges method it is convenient to begin with nodes sorted by from.
+    // We perform this action here, while we still have past_nodes allocated to avoid
+    //   an in-place sort.
+    nodes.resizeNoCopyExact(past_nodes.size());
+    radix_sort_copy<PathNode, PathNodeFromCmp, index_t>(past_nodes.begin(), past_nodes.end(), nodes.ptr(),
+            &PathNodeFrom, max_from, nthreads);
+    past_nodes.nullify();
+    from_table.nullify();
+    
+    if(file_rf) {
+        base.read(rf_fname, bigEndian);
+        std::remove(rf_fname.c_str());
+    }
+}
+#endif
 
 //make original unsorted PathNodes given a RefGraph
 template <typename index_t>
@@ -2280,6 +2338,102 @@ pair<index_t, index_t> PathGraph<index_t>::nextMaximalSet(pair<index_t, index_t>
     }
     range.second = (index_t)nodes.size();
     return range;
+}
+
+//-----------------------------------------------------------------------------------------
+
+template <typename index_t>
+void PathGraph<index_t>::linear_generation() {
+    //nodes enter almost sorted by from
+    //this is only generation method that whose
+    // incoming nodes are in the nodes EList
+    generation++;
+    //Sort nodes by from using counting sort
+    //Copy into past_nodes in the process
+    //first count number with each from value
+    for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+        nodes[node->from].key.second++;
+    }
+    //convert into an index
+    index_t tot = nodes[0].key.second;
+    nodes[0].key.second = 0;
+    for(index_t i = 1; i < max_from + 2; i++) {
+        tot += nodes[i].key.second;
+        nodes[i].key.second = tot - nodes[i].key.second;
+    }
+    // use past_nodes as from_table
+    past_nodes.resizeExact(nodes.size());
+    for(PathNode* node = nodes.begin(); node != nodes.end(); node++) {
+        past_nodes[nodes[node->from].key.second++] = *node;
+    }
+    //reset index
+    for(index_t i = max_from + 1; i > 0; i--) {
+        past_nodes[i].key.second = nodes[i - 1].key.second;
+    }
+    past_nodes[0].key.second = 0;
+	// copy past_nodes to from_table
+	from_table.resizeExact(past_nodes.size());
+	from_table = past_nodes;
+
+    //Now query direct-access table
+    //createNewNodes();
+	nodes.resizeNoCopyExact(past_nodes.size());
+	nodes = past_nodes;
+    printInfo();
+    past_nodes.swap(nodes);
+
+	// to trick createNewNode
+	generation = 5;
+
+	// past_nodes * from_tables -> nodes
+    createNewNodes();
+    past_nodes.resizeNoCopyExact(nodes.size());
+
+	// Z
+    index_t max_rank = 5;
+    radix_sort_copy<PathNode, less<PathNode>, index_t>(nodes.begin(), nodes.end(), past_nodes.ptr(),
+            &PathNodeKey, max_rank, nthreads);
+
+    nodes.swap(past_nodes);
+	// to trick mergeUpdateRank
+	generation = 4;
+    mergeUpdateRank();
+	generation = 5;
+
+    printInfo();
+    past_nodes.swap(nodes);
+}
+
+template <typename index_t>
+void PathGraph<index_t>::linear_lateGeneration() {
+    //past_nodes enter sorted by rank
+    //build direct-access table sorted by from,
+    //but query with original nodes sorted by rank
+    //since nodes we query with are sorted by rank,
+    // the nodes produced are automatically sorted by key.first
+    // therefore we only need to sort clusters with same key.first
+    generation++;
+    time_t overall = time(0);
+    time_t indiv = time(0);
+    assert_gt(nthreads, 0);
+    assert_neq(past_nodes.size(), ranks);
+
+	// past_node x from_table -> nodes
+    createNewNodes();
+
+    indiv = time(0);
+
+    mergeUpdateRank();
+
+    if(verbose) cerr << "MERGEUPDATERANK: " << time(0) - indiv << endl;
+    if(verbose) cerr << "TOTAL TIME: " << time(0) - overall << endl;
+    
+    if(ranks >= (index_t)max_num_nodes) {
+        throw ExplosionException();
+    }
+
+    printInfo();
+    past_nodes.swap(nodes);
 }
 
 //-----------------------------------------------------------------------------------------
