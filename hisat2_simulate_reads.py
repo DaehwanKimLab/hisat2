@@ -303,7 +303,7 @@ def getSNPs(chr_snps, left, right):
 
 """
 """
-def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err_rand_src, max_mismatch):
+def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err_rand_src, methyl_prob, methyl_corr, max_mismatch):
     # Find the genomic position for frag_pos and exon number
     tmp_frag_pos, tmp_read_len = frag_pos, read_len
     pos, cigars, cigar_descs = exons[0][0], [], []
@@ -346,9 +346,22 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
         # Retreive SNPs
         if rna:
             snps = getSNPs(chr_snps, e_left, e[1])
-        else:
+        elif methyl_prob >= 1.0: # DNA
             snps = getSNPs(chr_snps, frag_pos, frag_pos + read_len)
-            
+        else:
+            snps = []
+            strand = '+' if random.random() <= 0.5 else '-'
+            read_seq = chr_seq[frag_pos:frag_pos+read_len]
+            for p in xrange(len(read_seq) - 1):
+                two = read_seq[p:p+2]
+                if two != "CG":
+                    continue
+                if random.random() > methyl_prob: # unmethylated
+                    if strand == '+':
+                        snps.append(['', 'single', frag_pos + p, 'T'])
+                    else:
+                        snps.append(['', 'single', frag_pos + p + 1, 'A'])
+
         # Simulate mismatches due to sequencing errors
         mms = []
         for i in range(e_left, min(e[1], e_left + tmp_read_len - 1)):
@@ -455,7 +468,7 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
         prev_e = e
 
     # Define MD, XM, NM, Zs, read_seq
-    MD, XM, NM, Zs, read_seq = "", 0, 0, "", ""
+    MD, XM, NM, Zs, read_seq, methyl_seq = "", 0, 0, "", "", ""
     assert len(cigars) == len(cigar_descs)
     MD_match_len, Zs_match_len = 0, 0
     cur_trans_pos = frag_pos
@@ -471,6 +484,7 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
                 Zs_match_len += add_match_len
                 assert cur_trans_pos + add_match_len <= len(trans_seq)
                 read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
+                methyl_seq += ('.' * add_match_len)
                 cur_trans_pos += add_match_len
                 if alt_base != "":
                     if MD_match_len > 0:
@@ -488,6 +502,7 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
                         XM += 1
                         NM += 1
                     read_seq += alt_base
+                    methyl_seq += 'z'
                     cur_trans_pos += 1
         elif cigar_op == 'D':
             assert len(cigar_desc) == 1
@@ -527,7 +542,7 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
         print >> sys.stderr, pos, "".join(cigars), cigar_descs, MD, XM, NM, Zs
         assert False
 
-    return pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq
+    return pos, cigars, cigar_descs, MD, XM, NM, Zs, methyl_seq, read_seq
 
 
 """
@@ -662,9 +677,10 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch
 """
 """
 def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
-                       rna, paired_end, read_len, frag_len, \
-                       num_frag, expr_profile_type, error_rate, max_mismatch, \
-                       random_seed, sanity_check, verbose):
+                   rna, paired_end, read_len, frag_len, \
+                   num_frag, expr_profile_type, error_rate, \
+                   methyl_prob, methyl_corr, max_mismatch, \
+                   random_seed, sanity_check, verbose):
     random.seed(random_seed)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
     
@@ -756,8 +772,8 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             # SAM specification (v1.4)
             # http://samtools.sourceforge.net/
             flag, flag2 = 99, 163  # 83, 147
-            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, err_rand_src, max_mismatch)
-            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, err_rand_src, max_mismatch)
+            pos, cigars, cigar_descs, MD, XM, NM, Zs, ME, read_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, err_rand_src, methyl_prob, methyl_corr, max_mismatch)
+            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, ME2, read2_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, err_rand_src, methyl_prob, methyl_corr, max_mismatch)
             swapped = False
             if paired_end:
                 if random.randint(0, 1) == 1:
@@ -772,6 +788,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                     NM, NM2 = NM2, NM
                     MD, MD2 = MD2, MD
                     Zs, Zs2 = Zs2, Zs
+                    ME, ME2 = ME2, ME
 
             cigar_str, cigar2_str = "".join(cigars), "".join(cigars2)
             if sanity_check:
@@ -786,22 +803,27 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             if rna:
                 XS = "\tXS:A:{}".format(strand)
                 TI = "\tTI:Z:{}".format(transcript_id)
+            else: # DNA
+                XS, TI = "", ""
+            if methyl_prob < 1.0:
+                ME = "\tME:Z:{}".format(ME)
+                ME2 = "\tME:Z:{}".format(ME2)
             else:
-                XS, TI = "", ""                
+                ME, ME2 = "", ""
 
             print >> read_file, ">{}".format(cur_read_id)
             if swapped:
                 print >> read_file, reverse_complement(read_seq)
             else:
                 print >> read_file, read_seq
-            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, chr, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI)
+            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, chr, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI, ME)
             if paired_end:
                 print >> read2_file, ">{}".format(cur_read_id)
                 if swapped:
                     print >> read2_file, read2_seq
                 else:
                     print >> read2_file, reverse_complement(read2_seq)
-                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, chr, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI)
+                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, chr, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI, ME)
 
             cur_read_id += 1
             
@@ -870,6 +892,16 @@ if __name__ == '__main__':
                         type=float,
                         default=0.0,
                         help='per-base sequencing error rate (%%) (default: 0.0)')
+    parser.add_argument('--methylation-prob',
+                        dest='methylation_prob',
+                        type=float,
+                        default=1.0,
+                        help='JL (leejj82@gmail.com) will write description (default: 0.0)')
+    parser.add_argument('--methylation-correlation',
+                        dest='methylation_correlation',
+                        type=float,
+                        default=1.0,
+                        help='JL (leejj82@gmail.com) will write description (default: 0.0)')
     parser.add_argument('--max-mismatch',
                         dest='max_mismatch',
                         action='store',
@@ -899,7 +931,10 @@ if __name__ == '__main__':
         exit(1)
     if not args.rna:
         args.expr_profile = "constant"
+    if args.methylation_prob < 1.0:
+        args.rna = False
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
-                       args.rna, args.paired_end, args.read_len, args.frag_len, \
-                       args.num_frag, args.expr_profile, args.error_rate, args.max_mismatch, \
-                       args.random_seed, args.sanity_check, args.verbose)
+                   args.rna, args.paired_end, args.read_len, args.frag_len, \
+                   args.num_frag, args.expr_profile, args.error_rate, \
+                   args.methylation_prob, args.methylation_correlation, \
+                   args.max_mismatch, args.random_seed, args.sanity_check, args.verbose)

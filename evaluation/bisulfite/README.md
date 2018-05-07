@@ -37,3 +37,7 @@ Test the followign command:
 $ hisat-bisulfite-top/evaluation/bisulfite//hisatbisulfite_eval.py --region 10:1000000-2000000
 
 HISAT-bisulfite project is led by Bongsoo Park (genomicspark@gmail.com) and Daehwan Kim (infphilo@gmail.com)
+
+
+To simulate reads
+hisat2_simulate_reads.py --methylation-prob 0.5 --num-fragment 1000000 22.fa /dev/null /dev/null sim
