@@ -43,7 +43,7 @@ def simulate_reads(genome,
         cmd_add = ""
         if mismatch:
             cmd_add += "--error-rate 0.5 "
-        cmd = "hisat2_simulate_reads.py --sanity-check --dna %s --num-fragment %d %s.fa /dev/null %s %s" % \
+        cmd = "hisat2_simulate_reads.py --sanity-check --methyl-prob 0.7 %s --num-fragment %d %s.fa /dev/null %s %s" % \
             (cmd_add, numreads, genome, cpg_fname, sim_name)
         print >> sys.stderr, "\tSimulating reads:", cmd
         os.system(cmd)
@@ -952,6 +952,8 @@ def eval(aligners,
                 cmd += [read1_fname]
                 if paired:
                     cmd += [read2_fname]
+            elif aligner == "bismark":
+                None
             else:
                 assert False
 
