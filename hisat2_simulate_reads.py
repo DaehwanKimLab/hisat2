@@ -302,7 +302,7 @@ def getSNPs(chr_snps, left, right):
 
 """
 """
-def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, err_rand_src, max_mismatch):
+def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, snp_prob, err_rand_src, max_mismatch):
     # Find the genomic position for frag_pos and exon number
     tmp_frag_pos, tmp_read_len = frag_pos, read_len
     pos, cigars, cigar_descs = exons[0][0], [], []
@@ -347,6 +347,13 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
             snps = getSNPs(chr_snps, e_left, e[1])
         else:
             snps = getSNPs(chr_snps, frag_pos, frag_pos + read_len)
+
+        if snp_prob < 1.0 and len(snps) > 0:
+            snps_ = []
+            for snp in snps:
+                if random.random() <= snp_prob:
+                    snps_.append(snp)
+            snps = snps_
             
         # Simulate mismatches due to sequencing errors
         mms = []
@@ -395,18 +402,20 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
             if diff_type == "deletion":
                 diff_pos2 += diff_data
             if e_left + tmp_read_len - 1 < diff_pos2 or e[1] < diff_pos2:
-                break            
+                break
+            
             if diff_type == "single":
-                if diff_id == "" and mismatch >= max_mismatch:
-                    continue                
+                if mismatch + 1 > max_mismatch:
+                    continue
                 cigar_descs[-1].append([diff_pos - tmp_e_left, diff_data, diff_id])
                 tmp_e_left = diff_pos + 1
-                if diff_id == "":
-                    mismatch += 1
+                mismatch += 1
             elif diff_type == "deletion":
-                if len(cigars) <= 0:
-                    continue
                 del_len = diff_data
+                if mismatch + del_len > max_mismatch:
+                    continue
+                if len(cigars) <= 0 and diff_pos - e_left <= 0:
+                    continue                
                 if remain_trans_len < del_len:
                     continue
                 remain_trans_len -= del_len
@@ -419,21 +428,26 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
                 cigar_descs.append([])
                 tmp_read_len -= (diff_pos - e_left)
                 e_left = tmp_e_left = diff_pos + del_len
+
             elif diff_type == "insertion":
-                if len(cigars) > 0:
-                    ins_len = len(diff_data)
-                    if e_left + tmp_read_len - 1 < diff_pos + ins_len:
-                        break
-                    if diff_pos - e_left > 0:
-                        cigars.append("{}M".format(diff_pos - e_left))
-                        cigar_descs[-1].append([diff_pos - tmp_e_left, "", ""])
-                        cigar_descs.append([])
-                    cigars.append("{}I".format(ins_len))
-                    cigar_descs[-1].append([0, diff_data, diff_id])
+                ins_len = len(diff_data)
+                if mismatch + ins_len > max_mismatch:
+                    continue
+                if len(cigars) <= 0 and diff_pos - e_left <= 0:
+                    continue
+                if e_left + tmp_read_len - 1 < diff_pos + ins_len:
+                    break
+                if diff_pos - e_left > 0:
+                    cigars.append("{}M".format(diff_pos - e_left))
+                    cigar_descs[-1].append([diff_pos - tmp_e_left, "", ""])
                     cigar_descs.append([])
-                    tmp_read_len -= (diff_pos - e_left)
-                    tmp_read_len -= ins_len
-                    e_left = tmp_e_left = diff_pos
+                cigars.append("{}I".format(ins_len))
+                cigar_descs[-1].append([0, diff_data, diff_id])
+                cigar_descs.append([])
+                tmp_read_len -= (diff_pos - e_left)
+                tmp_read_len -= ins_len
+                e_left = tmp_e_left = diff_pos
+
             else:
                 assert False
             prev_diff = diff
@@ -661,9 +675,9 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch
 """
 """
 def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
-                       rna, paired_end, read_len, frag_len, \
-                       num_frag, expr_profile_type, error_rate, max_mismatch, \
-                       random_seed, sanity_check, verbose):
+                   rna, paired_end, read_len, frag_len, \
+                   num_frag, expr_profile_type, error_rate, max_mismatch, \
+                   random_seed, snp_prob, sanity_check, verbose):
     random.seed(random_seed)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
     
@@ -717,9 +731,6 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         if rna:
             transcript_id = transcript_ids[t]
             chr, strand, transcript_len, exons = transcripts[transcript_id]
-            # daehwan - for debugging purposes
-            # if transcript_id != "ENST00000398359":
-            #    continue
             print >> sys.stderr, transcript_id, t_num_frags
         else:
             chr = chr_ids[t]
@@ -738,6 +749,11 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             t_seq = chr_seq
             exons = [[0, chr_len - 1]]
 
+        if chr in snps:
+            chr_snps = snps[chr]
+        else:
+            chr_snps = []
+
         for f in range(t_num_frags):
             if rna:
                 frag_pos = random.randint(0, transcript_len - frag_len)
@@ -747,16 +763,11 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                     if 'N' not in chr_seq[frag_pos:frag_pos + frag_len]:
                         break
 
-            if chr in snps:
-                chr_snps = snps[chr]
-            else:
-                chr_snps = []
-
             # SAM specification (v1.4)
             # http://samtools.sourceforge.net/
             flag, flag2 = 99, 163  # 83, 147
-            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, err_rand_src, max_mismatch)
-            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, err_rand_src, max_mismatch)
+            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, snp_prob, err_rand_src, max_mismatch)
+            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, snp_prob, err_rand_src, max_mismatch)
             swapped = False
             if paired_end:
                 if random.randint(0, 1) == 1:
@@ -881,6 +892,12 @@ if __name__ == '__main__':
                         type=int,
                         default=0,
                         help='random seeding value (default: 0)')
+    parser.add_argument('--snp-prob',
+                        dest='snp_prob',
+                        action='store',
+                        type=float,
+                        default=1.0,
+                        help='probability of a read including a snp when the read spans the snp ranging from 0.0 to 1.0 (default: 1.0)')
     parser.add_argument('--sanity-check',
                         dest='sanity_check',
                         action='store_true',
@@ -901,4 +918,4 @@ if __name__ == '__main__':
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
                        args.rna, args.paired_end, args.read_len, args.frag_len, \
                        args.num_frag, args.expr_profile, args.error_rate, args.max_mismatch, \
-                       args.random_seed, args.sanity_check, args.verbose)
+                       args.random_seed, args.snp_prob, args.sanity_check, args.verbose)
