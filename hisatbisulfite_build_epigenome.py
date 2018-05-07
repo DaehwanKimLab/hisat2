@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017, Daehwan Kim <infphilo@gmail.com> and Bongsoo Park <genomicspark@gmail.com>
+# Copyright 2018, Jong Jun Lee <leejj82@gmail.com>, Bongsoo Park <genomicspark@gmail.com>, and Daehwan Kim <infphilo@gmail.com>.
 #
 # This file is part of HISAT-bisulfite.
 #
@@ -20,7 +20,6 @@
 
 
 import os, sys, subprocess, re
-import heapq
 import inspect
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
@@ -63,20 +62,21 @@ def create_snp_from_bigwig(base_fname,
         print >> sys.stderr, "Number of samples:", len(samples)
         for s in range(len(samples)):
             sample = samples[s]
-            print >> sys.stderr, "\tDownloading %s ... (%d/%d)" % (sample, s+1, len(samples))
-            sample_cmd = ["wget",
-                          "http://smithlab.usc.edu/methbase/data/ENCODE-Project-Human-2011/%s/tracks_hg38/%s.meth.bw" % (sample, sample)]
-            proc = subprocess.Popen(sample_cmd,
-                                    stderr=open("/dev/null", 'w'))
-            proc.communicate()
+            if not os.path.exists("%s.meth.bedgraph" % sample):#added
+                print >> sys.stderr, "\tDownloading %s ... (%d/%d)" % (sample, s+1, len(samples))
+                sample_cmd = ["wget",
+                              "http://smithlab.usc.edu/methbase/data/ENCODE-Project-Human-2011/%s/tracks_hg38/%s.meth.bw" % (sample, sample)]
+                proc = subprocess.Popen(sample_cmd,
+                                        stderr=open("/dev/null", 'w'))
+                proc.communicate()
 
-            print >> sys.stderr, "\tConverting %s.meth.bw to %s.meth.bedgraph ..." % (sample, sample)
-            convert_cmd = ["bigWigToBedGraph",
-                           "%s.meth.bw" % sample,
-                           "%s.meth.bedgraph" % sample]
-            proc = subprocess.Popen(convert_cmd)
-            proc.communicate()
-            os.system("rm -f %s.meth.bw" % sample)
+                print >> sys.stderr, "\tConverting %s.meth.bw to %s.meth.bedgraph ..." % (sample, sample)
+                convert_cmd = ["bigWigToBedGraph",
+                               "%s.meth.bw" % sample,
+                               "%s.meth.bedgraph" % sample]
+                proc = subprocess.Popen(convert_cmd)
+                proc.communicate()
+                os.system("rm -f %s.meth.bw" % sample)
 
         def read_line(file):
             line = file.readline()
@@ -89,39 +89,44 @@ def create_snp_from_bigwig(base_fname,
                 chr = "MT"
             return chr, pos, abundance
 
-        # Use heap (a.k.a. priority queue) to handle merge in a memory lean way
-        sample_files, heap = {}, []
+        sample_files, lines = {}, []
         for sample in samples:
             sample_fname = "%s.meth.bedgraph" % sample
             if not os.path.exists(sample_fname):
                 continue
             sample_file = open(sample_fname)
             sample_files[sample] = sample_file
-            chr, pos, abundance = read_line(sample_file)
-            if chr != None:
-                heapq.heappush(heap, [chr, pos, abundance, sample])
 
-        print >> sys.stderr, "Merging %s samples ..." % len(heap)
+        print >> sys.stderr, "Merging %s samples ..." % len(samples)
         CpG_file = open("%s.cpg" % base_fname, 'w')
-        prev_chr, prev_pos, prev_sample, cur_samples = None, None, None, []
-        while len(heap) > 0:
-            chr, pos, abundance, sample = heapq.heappop(heap)
-            if prev_chr != None and (chr != prev_chr or pos != prev_pos):
-                print >> CpG_file, "%s\t%s\t%s" % (prev_chr, prev_pos, ','.join(cur_samples))
-                cur_samples = ["%s:%.2f" % (sample, abundance)]
-            else:
-                cur_samples.append("%s:%.2f" % (sample, abundance))
-            prev_chr, prev_pos, prev_sample = chr, pos, sample
-            chr, pos, abundance = read_line(sample_files[sample])
-            if chr != None:
-                heapq.heappush(heap, [chr, pos, abundance, sample])
 
-        if len(cur_samples) > 0:
-            print >> CpG_file, "%s\t%s\t%s" % (prev_chr, prev_pos, ','.join(cur_samples))
+        title = "#CHR\tPOS\t"
+        title += '\t'.join(samples)
+        print >> CpG_file, title
+        
+        done = False
+        while not done:
+            abundances=""
+            for sample, sample_file in sample_files.items():
+                chr, pos, abundance = read_line(sample_file)
+                if chr == None:
+                    done = True
+                    break
+                def simplify(num):#round abundance up to two decimal places
+                    num = round(num, 2)
+                    if num == 0 or num == 1:
+                        return "01"[int(num)]
+                    else: 
+                        return str(num)
+                abundances += "%s," % simplify(abundance)
+            if not done:
+                print >> CpG_file, "%s\t%s\t%s" % (chr, pos, abundances[:-1])
         CpG_file.close()
+        
         
         for sample in sample_files.keys():
             os.system("rm -f %s.meth.bedgraph" % sample)
+
 
     # Convert CpG sites to snps and haplotypes in file formats used for HISAT2
     print >> sys.stderr, "Converting to HISAT2's snp and haplotype files ..."
@@ -131,11 +136,16 @@ def create_snp_from_bigwig(base_fname,
     CpG_file = open("%s.cpg" % base_fname)
     cpg_num = 0
     miscpg_dic = {}
+
+
+    # Skip first line
+    CpG_file.readline()
+
     for line in CpG_file:
         chr, pos, samples = line.strip().split()
         pos = int(pos)
-        abundances = [float(sample.split(':')[1]) for sample in samples.split(',')]
-        abundances = sorted(abundances, reverse = True)
+        abundances = [float(sample) for sample in samples.split(',')]
+        abundances = sorted(abundances, reverse = True)# sort in decreasing order
         if abundances[min(len(abundances), sample_cutoff) - 1] < abundance_cutoff:
             continue
         assert chr in chr_dic
@@ -174,7 +184,7 @@ def build_epigenome(base_fname,
                     graph_index,
                     index_suffix,
                     verbose):
-    # Make sure the following programs installed
+    # Make sure the following programs are installed
     programs = [aligner, "%s-build" % aligner, "samtools", "bigWigToBedGraph"]
     for program in programs:
         def which(file):
@@ -193,7 +203,7 @@ def build_epigenome(base_fname,
     if not typing_common.check_files(HISAT2_fnames):
         typing_common.download_genome_and_index()
 
-    # Load genomic sequences
+    # Load genomic sequences(chr_dic raw sequence, char_names chromosome names, char_full_names detailed chromosome names
     chr_dic, chr_names, chr_full_names = typing_common.read_genome(open("genome.fa"))
 
     # Extract variants from dbSNP database
@@ -206,6 +216,7 @@ def build_epigenome(base_fname,
                                sample_cutoff)
 
     genome_fname = "genome.fa"
+
     # Because building an index for the whole genome takes a lot of memory (~200 GB) and a couple of hours,
     # we provide a way to build and test a small index using --region option.
     if len(region) > 0:
