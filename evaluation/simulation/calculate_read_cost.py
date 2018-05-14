@@ -573,7 +573,7 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
         def get_cigar_str(chr, pos, cigar_str):
             NM_real = 0
             read_pos, right_pos = 0, pos - 1
-            cigars = cigar_re.findall(cigar1_str)
+            cigars = cigar_re.findall(cigar_str)
             cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
             for i in range(len(cigars)):
                 cigar_op, length = cigars[i]            
@@ -625,7 +625,7 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
                 alignments.append([alt_chr, alt_pos, alt_cigar_str])
             
         for i, alignment in enumerate(alignments):
-            chr1, pos1, cigar_str1 = alignment
+            chr1, pos1, cigar1_str = alignment
             pos1, cigar_str, NM_real = get_cigar_str(chr1, pos1, cigar1_str)
             chr2 = chr1
 
@@ -653,10 +653,10 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
 
                         if int(pos2) > int(pos1):
                             p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s\tNM:i:%d\tNM:i:%d" % \
-                                    (read_id, chr1, pos1, cigar1_str, chr2, pos2, cigar2_str, NM1, NM2)
+                                    (read_id, chr1, pos1, cigar_str, chr2, pos2, cigar2_str, NM1, NM2)
                         else:
                             p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s\tNM:i:%d\tNM:i:%d" % \
-                                    (read_id, chr2, pos2, cigar2_str, chr1, pos1, cigar1_str, NM2, NM1)
+                                    (read_id, chr2, pos2, cigar2_str, chr1, pos1, cigar_str, NM2, NM1)
 
                         if p_str not in pair_reported:
                             pair_reported.add(p_str)
@@ -665,7 +665,7 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
             if not me in read_dic:
                 read_dic[me] = []
 
-            read_dic[me].append([partner, cigar1_str, NM1, pos1])
+            read_dic[me].append([partner, cigar_str, NM1, pos1])
 
         if aligner == "hisat2":
             if prev_read_id != read_id:
@@ -1431,9 +1431,9 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "tran", "210", ""],
         # ["hisat2", "", "snp_tran", "210", ""],
         ["hisat2", "", "", "", ""],
-        ["hisat2", "", "", "", "-k 50 --score-min C,-50"],
+        ["hisat2", "", "", "", "-k 50"],
         ["hisat2", "", "snp", "", ""],
-        ["hisat2", "", "snp", "", "-k 50"],
+        # ["hisat2", "", "snp", "", "-k 50"],
         # ["hisat2", "", "snp_noht", "", ""],
         # ["hisat2", "x2", "", "", ""],
         # ["hisat2", "x1", "tran", "", ""],
