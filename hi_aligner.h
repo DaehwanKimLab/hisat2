@@ -4760,6 +4760,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                    index_t                          tidx,
                                                    index_t                          toff)
 {
+    const ReportingParams& rp = sink.reportingParams();
+    
     assert_lt(rdi, 2);
     index_t ordi = 1 - rdi;
     bool ofw = (fw == gMate2fw ? gMate1fw : gMate2fw);
@@ -4775,20 +4777,25 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     EList<Coord>& coords = _coords.front();
     
     // local search to find anchors
+    const index_t minHitLen = _minK_local << 1;
     const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
     const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(tidx, toff);
-    bool success = false, first = true;
+    bool first = true;
     index_t count = 0;
-    index_t max_hitlen = 0;
-    while(!success && count++ < 2) {
+    while(count++ < 2) {
         if(first) {
             first = false;
         } else {
-            lGFM = hGFM->prevLocalGFM(lGFM);
+            if(_genomeHits.size() > 0) break;
+            if(fw) {
+                lGFM = hGFM->nextLocalGFM(lGFM);
+            } else {
+                lGFM = hGFM->prevLocalGFM(lGFM);
+            }
             if(lGFM == NULL || lGFM->empty()) break;
         }
         index_t hitoff = rdlen - 1;
-        while(hitoff >= _minK_local - 1) {
+        while(hitoff >= minHitLen - 1) {
             index_t hitlen = 0;
             local_index_t top = (local_index_t)INDEX_MAX, bot = (local_index_t)INDEX_MAX;
             local_index_t node_top = (local_index_t)INDEX_MAX, node_bot = (local_index_t)INDEX_MAX;
@@ -4809,11 +4816,11 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                           _local_node_iedge_count,
                                           rnd,
                                           uniqueStop,
-                                          _minK_local);
+                                          minHitLen);
             assert_leq(top, bot);
             assert_eq(nelt, (index_t)(node_bot - node_top));
             assert_leq(hitlen, hitoff + 1);
-            if(nelt > 0 && nelt <= 5 && hitlen > max_hitlen) {
+            if(nelt > 0 && nelt <= rp.kseeds && hitlen >= minHitLen) {
                 coords.clear();
                 bool straddled = false;
                 getGenomeCoords_local(
@@ -4836,7 +4843,6 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                       true, // reject straddled?
                                       straddled);
                 assert_leq(coords.size(), nelt);
-                _genomeHits.clear();
                 for(index_t ri = 0; ri < coords.size(); ri++) {
                     const Coord& coord = coords[ri];
                     GenomeHit<index_t>::adjustWithALT(
@@ -4851,19 +4857,17 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                       ref,
                                                       gpol);
                 }
-                max_hitlen = hitlen;
             }
-            
             assert_leq(hitlen, hitoff + 1);
-            if(hitlen > 0) hitoff -= (hitlen - 1);
+            if(hitlen == hitoff + 1) break;
+            if(hitoff + 1 < minHitLen) break;
+            hitoff -= minHitLen;
             if(hitoff > 0) hitoff -= 1;
         } // while(hitoff >= _minK_local - 1)
-    } // while(!success && count++ < 2)
-    
-    if(max_hitlen < _minK_local) return false;
+    } // while(count++ < 2)
     
     // randomly select
-    const index_t maxsize = 5;
+    const index_t maxsize = rp.kseeds;
     if(_genomeHits.size() > maxsize) {
         _genomeHits.shufflePortion(0, _genomeHits.size(), rnd);
         _genomeHits.resize(maxsize);
