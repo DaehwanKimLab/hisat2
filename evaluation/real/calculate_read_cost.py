@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os, subprocess
+import sys, os, subprocess, signal
 import multiprocessing
 import platform
 import string
@@ -8,6 +8,17 @@ import re
 from datetime import datetime, date, time
 
 MAX_EDIT = 21
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+"""
+"""
+def parse_mem_usage(resource):
+    resource = resource.split(' ')
+    for line in resource:
+        idx = line.find('maxresident')
+        if idx != -1:
+            return line[:idx]
+    return '0'
 
 """
 """
@@ -49,7 +60,7 @@ def read_genome(genome_filename):
             if chr_name and sequence:
                 chr_dic[chr_name] = sequence
 
-            chr_name = line[1:-1]
+            chr_name = line[1:-1].split()[0]
             sequence = ""
         else:
             sequence += line[:-1]
@@ -777,47 +788,62 @@ def calculate_read_cost():
     just_runtime = False
     sql_write = True
     aligners = [
-        ["hisat2", "", "", ""],
-        ["hisat2", "", "snp", ""],
-        ["hisat2", "", "snp_tran", ""],
-        ["hisat", "x1", "", ""],
-        ["hisat", "", "", ""],
-        ["hisat", "x2", "", ""],
-        ["tophat2", "", "", ""],
-        ["star", "", "", ""],
-        ["star", "x2", "", ""],
-        ["gsnap", "", "", ""],
-        ["bowtie", "", "", ""],
-        ["bowtie2", "", "", ""],
-        ["bwa", "", "", ""]
+        ["hisat2", "", "", "", ""],
+        ["hisat2", "", "snp", "", ""],
+        ["hisat2", "", "snp_tran", "", ""],
+        ["hisat", "x1", "", "", ""],
+        ["hisat", "", "", "", ""],
+        ["hisat", "x2", "", "", ""],
+        ["tophat2", "", "", "", ""],
+        ["star", "", "", "", ""],
+        ["star", "x2", "", "", ""],
+        ["gsnap", "", "", "", ""],
+        ["bowtie", "", "", "", ""],
+        ["bowtie2", "", "", "", ""],
+        ["bwa", "", "", "", ""]
         ]
     is_large_file = False
-    assert os.path.exists("1.fq")
-    if os.path.getsize("1.fq") > (2 * 1024 * 1024 * 1024):
-        is_large_file = True
+    gz_file = False
+    if os.path.exists("1.fq.gz"):
+        gz_file = True
+        if os.path.getsize("1.fq.gz") > (1024 * 1024 * 1024):
+            is_large_file = True
+
+    elif os.path.exists("1.fq"):
+        gz_file = False
+        if os.path.getsize("1.fq") > (2 * 1024 * 1024 * 1024):
+            is_large_file = True
+
+    else:
+        assert(False)
+
 
     aligners = [
-        # ["hisat", "", "", ""],
-        ["hisat2", "", "", "205"],
-        ["hisat2", "", "", ""],
-        ["hisat2", "", "snp", "205"],
-        ["hisat2", "", "snp_tran", "205"],
-        ["hisat2", "", "snp", ""],
-        # ["hisat2", "", "tran", ""],
-        # ["hisat2", "x1", "snp", ""],
-        # ["hisat2", "x1", "", ""],
-        # ["hisat2", "x2", "", ""],
-        # ["hisat2", "", "tran", ""],
-        # ["hisat2", "", "snp_tran", "204"],
-        ["hisat2", "", "snp_tran", ""],
-        # ["hisat", "", "", ""],
-        # ["tophat2", "", "", ""],
-        # ["bowtie", "", "", ""],
-        # ["bowtie2", "", "", ""],
-        # ["bwa", "mem", "", ""],
-        # ["bwa", "sw", "", ""],
-        # ["star", "", "", ""],
-        # ["star", "x2", "", ""],        
+        ["hisat2", "", "", "", ""],
+        ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
+        ["hisat2", "", "snp", "", ""],
+        ["hisat2", "", "snp", "", "-k 50 --score-min C,-50,0"],
+        # ["hisat2", "", "", "205", ""],
+        # ["hisat2", "", "snp", "205", ""],
+        # ["hisat2", "", "snp_tran", "205", ""],
+        # ["hisat2", "", "tran", "", ""],
+        # ["hisat2", "x1", "snp", "", ""],
+        # ["hisat2", "x1", "", "", ""],
+        # ["hisat2", "x2", "", "", ""],
+        # ["hisat2", "", "tran", "", ""],
+        # ["hisat2", "", "snp_tran", "204", ""],
+        # ["hisat2", "", "snp_tran", "", ""],
+        # ["hisat", "", "", "", ""],
+        # ["tophat2", "", "", "", ""],
+        # ["bowtie", "", "", "", ""],
+        ["bowtie2", "", "", "", ""],
+        ["bowtie2", "", "", "", "-k 10 --score-min C,-18"],
+        ["bwa", "mem", "", "", ""],
+        # ["bwa", "sw", "", "", ""],
+        # ["star", "", "", "", ""],
+        # ["star", "x2", "", "", ""],        
+        ["vg", "", "", "", "-M 10"],
+        ["vg", "", "snp", "", "-M 10"],
         ]
 
     # sql_write = False
@@ -829,7 +855,7 @@ def calculate_read_cost():
     RNA = (cwd.find("RNA") != -1)
 
     chr_dic = read_genome("../../../data/" + genome + ".fa")
-    gtf_junction_strs = extract_splice_sites("../../../data/genome.gtf")
+    gtf_junction_strs = extract_splice_sites("../../../data/" + genome + ".gtf")
     gene = "no"
     gtf_junctions = []
     for junction_str in gtf_junction_strs:
@@ -842,8 +868,14 @@ def calculate_read_cost():
     for paired in [False, True]:
     # for paired in [False]:
         type_read1_fname = "1.fq"
+        if gz_file:
+            type_read1_fname += ".gz"
+
         if paired:
             type_read2_fname = "2.fq"
+            if gz_file:
+                type_read2_fname += ".gz"
+
         else:
             type_read2_fname = ""
 
@@ -876,6 +908,11 @@ def calculate_read_cost():
                 cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                 version = cmd_process.communicate()[1][:-1].split("\n")[2]
                 version = version.split()[1]
+            elif aligner == "vg":
+                cmd = ["vg"]
+                cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
+                version = cmd_process.communicate()[1][:-1].split("\n")[0]
+                version = version.split()[5]
                 
             return version
 
@@ -883,13 +920,13 @@ def calculate_read_cost():
         index_add = ""
         if genome != "genome":
             index_add = "_" + genome
-        def get_aligner_cmd(RNA, aligner, type, index_type, version, read1_fname, read2_fname, out_fname, cmd_idx = 0):
-            cmd = []
+        def get_aligner_cmd(RNA, aligner, type, index_type, version, options, read1_fname, read2_fname, out_fname, cmd_idx = 0):
+            cmd = ["/usr/bin/time"]
             if aligner == "hisat2":
                 if version:
-                    cmd = ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
+                    cmd += ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
                 else:
-                    cmd = ["%s/hisat2" % (aligner_bin_base)]
+                    cmd += ["%s/hisat2" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
                     
@@ -921,6 +958,9 @@ def calculate_read_cost():
                     cmd += ["-k", "100"]
                 """
 
+                if options != "":
+                    cmd += options.split(' ')
+
                 if type == "x2":
                     if cmd_idx == 0:
                         cmd += ["--novel-splicesite-outfile"]
@@ -940,9 +980,9 @@ def calculate_read_cost():
                     cmd += ["-1", read1_fname,
                             "-2", read2_fname]
                 else:
-                    cmd += [read1_fname]                        
+                    cmd += ["-U", read1_fname]                        
             elif aligner == "hisat":
-                cmd = ["%s/hisat" % (aligner_bin_base)]
+                cmd += ["%s/hisat" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
                 # cmd += ["-k", "5"]
@@ -981,7 +1021,7 @@ def calculate_read_cost():
                 else:
                     cmd += [read1_fname]                        
             elif aligner == "tophat2":
-                cmd = ["%s/tophat" % (aligner_bin_base)]
+                cmd += ["%s/tophat" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
                 cmd += ["--read-edit-dist", "3"]
@@ -993,7 +1033,7 @@ def calculate_read_cost():
                 if paired:
                     cmd += [read2_fname]
             elif aligner == "star":
-                cmd = ["%s/STAR" % (aligner_bin_base)]
+                cmd += ["%s/STAR" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["--runThreadN", str(num_threads)]
                 if type == "x2" and cmd_idx == 1:
@@ -1016,7 +1056,7 @@ def calculate_read_cost():
                 else:
                     cmd += ["--outFilterMismatchNmax", "3"]
             elif aligner == "bowtie":
-                cmd = ["%s/bowtie" % (aligner_bin_base)]
+                cmd += ["%s/bowtie" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
                 cmd += ["--sam",
@@ -1031,19 +1071,23 @@ def calculate_read_cost():
                 else:
                     cmd += [read1_fname]
             elif aligner == "bowtie2":
-                cmd = ["%s/bowtie2" % (aligner_bin_base)]
+                cmd += ["%s/bowtie2" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
-                cmd += ["-k", "10"]
-                cmd += ["--score-min", "C,-18"]
-                cmd += ["-x %s/HISAT%s/" % (index_base, index_add) + genome]
+                #cmd += ["-k", "10"]
+                #cmd += ["--score-min", "C,-18"]
+
+                if options:
+                    cmd += options.split(' ')
+
+                cmd += ["-x %s/Bowtie2%s/" % (index_base, index_add) + genome]
                 if paired:
                     cmd += ["-1", read1_fname,
                             "-2", read2_fname]
                 else:
                     cmd += [read1_fname]
             elif aligner == "gsnap":
-                cmd = ["%s/gsnap" % (aligner_bin_base),
+                cmd += ["%s/gsnap" % (aligner_bin_base),
                        "-A",
                        "sam"]
                 if num_threads > 1:
@@ -1056,54 +1100,85 @@ def calculate_read_cost():
                 if paired:
                     cmd += [read2_fname]
             elif aligner == "bwa":
-                cmd = ["%s/bwa" % (aligner_bin_base)]
+                cmd += ["%s/bwa" % (aligner_bin_base)]
                 if type in ["mem", "aln"]:
                     cmd += [type]
                 elif type == "sw":
                     cmd += ["bwa" + type]
                 if num_threads > 1:
                     cmd += ["-t", str(num_threads)]
+                if options:
+                    cmd += options.split(' ')
                 cmd += ["%s/BWA%s/%s.fa" % (index_base, index_add, genome)]
                 cmd += [read1_fname]
                 if paired:
                     cmd += [read2_fname]
+            elif aligner == "vg":
+                # vg map -d 22 -t 6 -M 10 -f ../sim-1.fa -f ../sim-2.fa --surject-to sam > result.sam
+                cmd += ["vg"]
+                cmd += ["map"]
+                cmd += ["-t", str(num_threads)]
+                cmd += ["--surject-to", "sam"]
+                index_cmd = "%s/VG%s/" % (index_base, index_add) + genome
+                if index_type:
+                    index_cmd += ("_" + index_type)
+
+                if options:
+                    cmd += options.split(' ')
+
+                cmd += ["-d", index_cmd]
+
+                cmd += ["-f", read1_fname]
+                if paired:
+                    cmd += ["-f", read2_fname]
+
             else:
                 assert False
 
             return cmd
 
-        init_time = {"hisat2" : 0.0, "hisat" : 0.0, "bowtie" : 0.0, "bowtie2" : 0.0, "star" : 0.0, "olego" : 0.0, "gsnap" : 0.0, "tophat2" : 0.0, "bwa" : 0.0}
+        init_time = {"hisat2" : 0.0, "hisat" : 0.0, "bowtie" : 0.0, "bowtie2" : 0.0, "star" : 0.0, "olego" : 0.0, "gsnap" : 0.0, "tophat2" : 0.0, "bwa" : 0.0, "vg" : 0.5}
         if not is_large_file:
             if desktop:
-                init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 1, "bwa" : 1.3}
+                init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 1, "bwa" : 1.3, "vg": 0.5}
             else:
-                init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1, "bwa" : 3.3}
+                init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1, "bwa" : 3.3, "vg": 0.5}
         init_time["tophat2"] = 0.0
                     
-        for aligner, type, index_type, version in aligners:
+        for aligner, type, index_type, version, options in aligners:
             aligner_name = aligner + type + version
-            if aligner == "hisat2" and index_type != "":
+            if (aligner == "hisat2" or aligner == "vg") and index_type != "":
                 aligner_name += ("_" + index_type)
+
+            if options != "":
+                option_name = options.replace(' ', '').replace('-', '').replace(',', '')
+                aligner_name = aligner_name + '_' + option_name
             if paired:
                 aligner_dir = aligner_name + "_paired"
             else:
                 aligner_dir = aligner_name + "_single"
+
             if not os.path.exists(aligner_dir):
                 os.mkdir(aligner_dir)
             os.chdir(aligner_dir)
 
             out_fname = "accepted.sam"
-            aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
+            aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
             duration = 0.1
+            mem_usage = ''
             if not os.path.exists(out_fname):
                 if not os.path.exists("../one.fq") or not os.path.exists("../two.fq"):
-                    os.system("head -400 ../1.fq > ../one.fq")
-                    os.system("head -400 ../2.fq > ../two.fq")
+                    if gz_file:
+                        os.system("zcat ../1.fq.gz | head -400 > ../one.fq")
+                        os.system("zcat ../2.fq.gz | head -400 > ../two.fq")
+                    else:
+                        os.system("head -400 ../1.fq > ../one.fq")
+                        os.system("head -400 ../2.fq > ../two.fq")
 
                 # dummy commands for caching index
                 if aligner not in ["tophat2"]:
                     for i in range(2):
-                        dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../one.fq", "../two.fq", "/dev/null")
+                        dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../one.fq", "../two.fq", "/dev/null")
                         start_time = datetime.now()
                         if verbose:
                             print >> sys.stderr, start_time, "\t", " ".join(dummy_cmd)
@@ -1131,15 +1206,16 @@ def calculate_read_cost():
                     skip_alignment = True
 
                 if not skip_alignment:
-                    aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
+                    aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, start_time, "\t", " ".join(aligner_cmd)
-                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
+                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "vg"]:
                         proc = subprocess.Popen(aligner_cmd, stdout=open(out_fname, "w"), stderr=subprocess.PIPE)
                     else:
                         proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    proc.communicate()
+                    _, mem_usage = proc.communicate()
+                    mem_usage = parse_mem_usage(mem_usage)
                     finish_time = datetime.now()
                     duration = finish_time - start_time
                     assert aligner in init_time
@@ -1149,6 +1225,9 @@ def calculate_read_cost():
                     if verbose:
                         print >> sys.stderr, finish_time, "duration:", duration
 
+                    if verbose:
+                        print >> sys.stderr, finish_time, "Memory Usage: %dMB" % (int(mem_usage) / 1024)
+
                     if debug and aligner == "hisat" and type == "x1":
                         os.system("cat metrics.out")
                         print >> sys.stderr, "\ttime: %.4f" % (duration)
@@ -1157,7 +1236,7 @@ def calculate_read_cost():
                 if aligner == "star" and type in ["", "gtf"]:
                     os.system("mv Aligned.out.sam %s" % out_fname)
                 elif aligner in ["hisat2", "hisat"] and type == "x2":
-                    aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
+                    aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
                     if verbose:
                         print >> sys.stderr, start_time, "\t", " ".join(aligner_cmd)
                     start_time = datetime.now()
@@ -1187,7 +1266,7 @@ def calculate_read_cost():
                     proc.communicate()
                     if verbose:
                         print >> sys.stderr, "\t", datetime.now(), "finished"
-                    aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
+                    aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../" + type_read1_fname, "../" + type_read2_fname, out_fname, 1)
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
@@ -1204,6 +1283,10 @@ def calculate_read_cost():
                     os.system("mv Aligned.out.sam %s" % out_fname)
                 elif aligner == "tophat2":
                     os.system("samtools sort -n tophat_out/accepted_hits.bam accepted_hits; samtools view -h accepted_hits.bam > %s" % out_fname)
+                elif aligner == "vg":
+                    index_name = '%s/VG%s/' % (index_base, index_add) + genome
+                    if index_type:
+                        index_name += ('_' + index_type)
 
                 os.system("echo %s %s %f >> runtime" % (str(datetime.now()), aligner, duration))
 
@@ -1220,6 +1303,15 @@ def calculate_read_cost():
             if not os.path.exists(read_sam) or not os.path.exists(pair_sam):
                 extract_reads_and_pairs(chr_dic, out_fname, read_sam, pair_sam, unmapped_read_1_fq, unmapped_read_2_fq)
 
+
+            out = '' 
+            if gz_file:
+                out = subprocess.check_output("zcat ../%s | wc -l" % type_read1_fname, shell=True)
+            else:
+                out = subprocess.check_output("wc -l ../%s" % type_read1_fname, shell=True)
+
+            numreads = int(out.split()[0]) / 4
+
             done_filename = suffix + ".done"
             if not os.path.exists(done_filename):
                 done_file = open(done_filename, "w")
@@ -1233,7 +1325,7 @@ def calculate_read_cost():
 
                         dis_sum += dis_stat[i]
                         mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions = sum
-                        output += "%s\t%s\tpaired\t%d\t%d\t%d\t%d\t%d\t%d\t%f\n" % (aligner_name, gene, i, mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration)
+                        output += "%s\t%s\tpaired\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration)
 
                         if sql_write and os.path.exists("../" + sql_db_name):
                             sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \
@@ -1252,7 +1344,7 @@ def calculate_read_cost():
                             sum[j] += stat[i][j]
 
                         mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions = sum
-                        output += "%s\t%s\tsingle\t%d\t%d\t%d\t%d\t%d\t%d\t%f\n" % (aligner_name, gene, i, mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration)
+                        output += "%s\t%s\tsingle\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration)
 
                         if sql_write and os.path.exists("../" + sql_db_name):
                             sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \

@@ -1,9 +1,28 @@
 #!/usr/bin/env python
 
-import sys, os
+import sys, os, signal
 import string, re
+
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 use_message = '''
 '''
+
+def make_cat_cmd(gzmode, read_dir_base, read_dir, fq_name, num_read):
+    cmd = []
+    if gzmode:
+        cmd += ["zcat"]
+    else:
+        cmd += ["cat"]
+
+    cmd += ["../../%s%s/%s" % (read_dir_base, read_dir, fq_name)]
+    cmd += ["|", "head", "-n", "%d" % (num_read * 4)]
+
+    if gzmode:
+        cmd += ["|", "gzip"]
+
+    cmd += [">", fq_name]
+    return ' '.join(cmd)
+
 
 def init():
     read_dir_base = "../reads/real/"
@@ -11,9 +30,19 @@ def init():
     for read_dir in read_dirs:
         if os.path.exists(read_dir):
             continue
-        if not os.path.exists(read_dir_base + read_dir + "/1.fq") or \
-                not os.path.exists(read_dir_base + read_dir + "/1.fq"):
-            continue
+
+        gz_file = False
+        fq_1_name = '1.fq'
+        fq_2_name = '2.fq'
+        if os.path.exists(read_dir_base + read_dir + "/1.fq.gz") and \
+            os.path.exists(read_dir_base + read_dir + "/2.fq.gz"):
+            gz_file = True
+            fq_1_name = '1.fq.gz'
+            fq_2_name = '2.fq.gz'
+        else:
+            if not os.path.exists(read_dir_base + read_dir + "/1.fq") or \
+                 not os.path.exists(read_dir_base + read_dir + "/1.fq"):
+                continue
 
         print >> sys.stderr, "Processing", read_dir, "..."
 
@@ -25,7 +54,7 @@ def init():
             ["1M", 1000000],
             ["5M", 5000000],
             ["20M", 20000000],
-            ["whole", 0]
+            ["whole", 0],
             ]
 
         for dir_name, num_reads in tests:
@@ -36,16 +65,20 @@ def init():
             os.chdir(dir_name)
 
             if dir_name == "whole":
-                ln_cmd = "ln -s ../../%s%s/[12].fq ." % (read_dir_base, read_dir)
+                ln_cmd = "ln -s ../../%s%s/%s ." % (read_dir_base, read_dir, fq_1_name)
+                print >> sys.stderr, ln_cmd
+                os.system(ln_cmd)
+                ln_cmd = "ln -s ../../%s%s/%s ." % (read_dir_base, read_dir, fq_2_name)
                 print >> sys.stderr, ln_cmd
                 os.system(ln_cmd)
             else:
-                head_cmd = "head -%d ../../%s%s/1.fq > 1.fq" % (num_reads * 4, read_dir_base, read_dir)
-                print >> sys.stderr, head_cmd
-                os.system(head_cmd)
-                head_cmd = "head -%d ../../%s%s/2.fq > 2.fq" % (num_reads * 4, read_dir_base, read_dir)
-                print >> sys.stderr, head_cmd
-                os.system(head_cmd)
+                cmd = make_cat_cmd(gz_file, read_dir_base, read_dir, fq_1_name, num_reads)
+                print >> sys.stderr, cmd
+                os.system(cmd)
+
+                cmd = make_cat_cmd(gz_file, read_dir_base, read_dir, fq_2_name, num_reads)
+                print >> sys.stderr, cmd
+                os.system(cmd)
 
             os.system("ln -s ../../calculate_read_cost.py .")
             os.chdir("..")
