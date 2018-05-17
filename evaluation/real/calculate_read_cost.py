@@ -6,6 +6,7 @@ import platform
 import string
 import re
 from datetime import datetime, date, time
+from collections import defaultdict
 
 MAX_EDIT = 21
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -73,6 +74,31 @@ def read_genome(genome_filename):
     print >> sys.stderr, "genome is loaded"
     
     return chr_dic
+
+
+"""
+"""
+def read_snp(snp_filename):
+    snps = defaultdict(list)
+    snp_file = open(snp_filename, 'r')
+
+    for line in snp_file:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        try:
+            snpID, type, chr, pos, data = line.split('\t')
+        except ValueError:
+            continue
+
+        assert type in ["single", "deletion", "insertion"]
+        if type == "deletion":
+            data = int(data)
+        snps[chr].append([snpID, type, int(pos), data])
+
+    print >> sys.stderr, "snp is loaded"
+
+    return snps
 
 
 """
@@ -362,8 +388,65 @@ def is_junction_pair(chr_dic, gtf_junctions, chr, pos, cigar_str, mate_chr, mate
         
     return junctions, junction_pair, gtf_junction_pair
 
+"""
+"""
+def getSNPs(chr_snps, left, right):
+    low, high = 0, len(chr_snps)
+    while low < high:
+        mid = (low + high) / 2
+        snpID, type, pos, data = chr_snps[mid]
+        if pos < left:
+            low = mid + 1
+        else:
+            high = mid - 1
 
-def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename, unmapped_read_1_fq_name, unmapped_read_2_fq_name):
+    snps = []
+    for snp in chr_snps[low:]:
+        snpID, type, pos, data = snp
+        pos2 = pos
+        if type == "deletion":
+            pos2 += data
+        if pos2 >= right:
+            break
+        if pos >= left:
+            if len(snps) > 0:
+                _, prev_type, prev_pos, prev_data = snps[-1]
+                assert prev_pos <= pos
+                prev_pos2 = prev_pos
+                if prev_type == "deletion":
+                    prev_pos2 += prev_data
+                if pos <= prev_pos2:
+                    continue
+            snps.append(snp)
+
+    return snps
+
+"""
+"""
+def check_snps(snps, read_seq, ref_pos):
+    found = False
+
+    for snp in snps:
+        snp_type = snp[1]
+        snp_pos = snp[2]
+        snp_data = snp[3]
+
+        if snp_type == 'single':
+            if ref_pos == snp_pos:
+                if snp_data[0] == read_seq:
+                    found = True
+                    break
+        """
+        elif snp_type == 'insertion':
+            print 'not support'
+        elif snp_type == 'deletion':
+            print 'not support'
+        """
+
+    return found
+
+
+def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename, unmapped_read_1_fq_name, unmapped_read_2_fq_name, snps_dict = None):
     temp_read_filename, temp_pair_filename = read_filename + ".temp", pair_filename + ".temp"
     temp_read_file, temp_pair_file = open(temp_read_filename, "w"), open(temp_pair_filename, "w")
 
@@ -415,7 +498,12 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                     HISAT2_NM = int(field[5:])
 
         prev_read_id = read_id
-        
+
+        if snps_dict != None and chr in snps_dict:
+            chr_snps = snps_dict[chr]
+        else:
+            chr_snps = []
+       
         XM, gap = 0, 0
         read_pos, right_pos = 0, pos - 1,
         junction_read = False
@@ -430,16 +518,26 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                     print >> sys.stderr, "S is located at %dth out of %d %s" % (i+1, len(cigars), cigar_str)
 
             if cigar_op in "MS":
+                ref_pos = right_pos
                 if cigar_op == "S" and i == 0:
                     ref_seq = chr_dic[chr][right_pos-length:right_pos]
+                    ref_pos = right_pos - length
                 else:
                     ref_seq = chr_dic[chr][right_pos:right_pos+length]
+
+                snps = getSNPs(chr_snps, ref_pos, ref_pos + length)
 
                 ref_seq = ref_seq.upper()
                 if length == len(ref_seq):
                     for j in range(length):
                         if ref_seq[j] != "N" and read_seq[read_pos+j] != ref_seq[j]:
-                            XM += 1
+                            if snps_dict == None:
+                                XM += 1
+                            else:
+                                found_snp = check_snps(snps, read_seq[read_pos + j], ref_pos + j)
+                                if not found_snp:
+                                    XM += 1
+
                             if hisat2 and cigar_op == "S":
                                 HISAT2_XM += 1
                                 HISAT2_NM += 1
@@ -497,7 +595,7 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
     unmapped_read_2_fq.close()
 
 
-    sort = False
+    sort = True 
     if sort:
         command = "sort %s | uniq > %s; rm %s" % (temp_read_filename, read_filename, temp_read_filename)
         os.system(command)
@@ -842,8 +940,8 @@ def calculate_read_cost():
         # ["bwa", "sw", "", "", ""],
         # ["star", "", "", "", ""],
         # ["star", "x2", "", "", ""],        
-        ["vg", "", "", "", "-M 10"],
-        ["vg", "", "snp", "", "-M 10"],
+        ["vg", "", "", "", ""],
+        ["vg", "", "snp", "", ""],
         ]
 
     # sql_write = False
@@ -855,6 +953,7 @@ def calculate_read_cost():
     RNA = (cwd.find("RNA") != -1)
 
     chr_dic = read_genome("../../../data/" + genome + ".fa")
+    snp_dic = read_snp("../../../data/" + genome + ".snp")
     gtf_junction_strs = extract_splice_sites("../../../data/" + genome + ".gtf")
     gene = "no"
     gtf_junctions = []
@@ -1301,7 +1400,11 @@ def calculate_read_cost():
             read_sam, pair_sam = suffix + ".read.sam", suffix + ".pair.sam"
             unmapped_read_1_fq, unmapped_read_2_fq = suffix + ".unmapped.1.fq", suffix + ".unmapped.2.fq"
             if not os.path.exists(read_sam) or not os.path.exists(pair_sam):
-                extract_reads_and_pairs(chr_dic, out_fname, read_sam, pair_sam, unmapped_read_1_fq, unmapped_read_2_fq)
+                if index_type == 'snp':
+                    extract_reads_and_pairs(chr_dic, out_fname, read_sam, pair_sam, unmapped_read_1_fq, unmapped_read_2_fq, snp_dic)
+                else:
+                    extract_reads_and_pairs(chr_dic, out_fname, read_sam, pair_sam, unmapped_read_1_fq, unmapped_read_2_fq)
+
 
 
             out = '' 
@@ -1325,7 +1428,7 @@ def calculate_read_cost():
 
                         dis_sum += dis_stat[i]
                         mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions = sum
-                        output += "%s\t%s\tpaired\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration)
+                        output += "%s\t%s\tpaired\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\t%d\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, (numreads / max(1.0, duration)))
 
                         if sql_write and os.path.exists("../" + sql_db_name):
                             sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \
@@ -1344,7 +1447,7 @@ def calculate_read_cost():
                             sum[j] += stat[i][j]
 
                         mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions = sum
-                        output += "%s\t%s\tsingle\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration)
+                        output += "%s\t%s\tsingle\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\t%d\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, (numreads / max(1.0, duration)))
 
                         if sql_write and os.path.exists("../" + sql_db_name):
                             sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \
