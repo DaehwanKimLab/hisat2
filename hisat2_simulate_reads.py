@@ -89,6 +89,15 @@ def read_genome(genome_file):
 
     if chr_name and sequence:
         chr_dic[chr_name] = sequence
+
+
+    chr_filter = [str(x) for x in range(1, 23) + ['X', 'Y']]
+    #chr_filter = None
+
+    if chr_filter:
+        for chr_id, chr_seq in chr_dic.items():
+            if not chr_id in chr_filter: 
+                chr_dic.pop(chr_id, None)
     
     return chr_dic
 
