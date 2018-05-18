@@ -570,7 +570,7 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
         if chr2 == '*':
             continue
 
-        def get_cigar_str(chr, pos, cigar_str):
+        def adjust_alignment(chr, pos, cigar_str):
             NM_real = 0
             read_pos, right_pos = 0, pos - 1
             cigars = cigar_re.findall(cigar_str)
@@ -626,7 +626,7 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
             
         for i, alignment in enumerate(alignments):
             chr1, pos1, cigar1_str = alignment
-            pos1, cigar_str, NM_real = get_cigar_str(chr1, pos1, cigar1_str)
+            pos1, cigar_str, NM_real = adjust_alignment(chr1, pos1, cigar1_str)
             chr2 = chr1
 
             if aligner == "bwa":
@@ -1431,10 +1431,10 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "tran", "210", ""],
         # ["hisat2", "", "snp_tran", "210", ""],
         ["hisat2", "", "", "", ""],
-        ["hisat2", "", "", "", "--bowtie2-dp"],
+        ["hisat2", "", "", "", "--bowtie2-dp -k 50"],
         # ["hisat2", "", "", "", "-k 50"],
         ["hisat2", "", "snp", "", ""],
-        ["hisat2", "", "snp", "", "--bowtie2-dp"],
+        # ["hisat2", "", "snp", "", "--bowtie2-dp"],
         # ["hisat2", "", "snp", "", "-k 50"],
         # ["hisat2", "", "snp_noht", "", ""],
         # ["hisat2", "x2", "", "", ""],
@@ -1460,6 +1460,7 @@ def calculate_read_cost(verbose):
         ["bowtie2", "", "", "", "-k 10"],
         # ["gsnap", "", "", "", ""],
         ["bwa", "mem", "", "", ""],
+        ["bwa", "mem", "", "", "-a"],
         # ["hisat2", "", "snp", "", ""],
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],

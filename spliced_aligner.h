@@ -203,6 +203,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                                    him,
                                    rnd,
                                    sink);
+        
         if(this->_bowtie2_dp && maxsc < this->_minsc[rdi]) {
             const Read& rd = *this->_rds[rdi];
             // Initialize the aligner with a new read
