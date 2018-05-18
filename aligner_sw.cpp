@@ -796,6 +796,7 @@ bool SwAligner::nextAlignment(
 				// alignment was done at all.
 				if(!checkpointed) {
 					SwResult res2;
+                    res2.alres = res.alres; res2.alres.reset();
 					size_t maxiter2 = MAX_SIZE_T;
 					size_t niter2 = 0;
 					bool ret2 = backtrace(
@@ -818,6 +819,7 @@ bool SwAligner::nextAlignment(
 				}
 				if(sse16succ_ && !checkpointed) {
 					SwResult res2;
+                    res2.alres = res.alres; res2.alres.reset();
 					size_t off2, nbts2 = 0;
 					rnd.init(reseed);
 					bool ret2 = backtraceNucleotidesEnd2EndSseI16(

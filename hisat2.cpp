@@ -288,6 +288,8 @@ static bool templateLenAdjustment;
 static string alignSumFile; // write alignment summary stat. to this file
 static bool newAlignSummary;
 
+static bool bowtie2_dp; // enable Bowtie2's dynamic programming alignment
+
 #define DMAX std::numeric_limits<double>::max()
 
 static void resetOptions() {
@@ -513,6 +515,8 @@ static void resetOptions() {
     templateLenAdjustment = true;
     alignSumFile = "";
     newAlignSummary = false;
+    
+    bowtie2_dp = false; // enable Bowtie2's dynamic programming alignment
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -734,6 +738,8 @@ static struct option long_options[] = {
     {(char*)"enable-codis",    no_argument,        0,        ARG_CODIS},
     {(char*)"summary-file",    required_argument,  0,        ARG_SUMMARY_FILE},
     {(char*)"new-summary",     no_argument,        0,        ARG_NEW_SUMMARY},
+    {(char*)"enable-dp",       no_argument,        0,        ARG_DP},
+    {(char*)"bowtie2-dp",      no_argument,        0,        ARG_DP},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -850,6 +856,7 @@ static void printUsage(ostream& out) {
 		//<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		//<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
 		//<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
+        << "  --enable-dp/--bowtie2-dp use Bowtie2's dynamic programming alignment algorithm"
 		<< "  --n-ceil <func>    func for max # non-A/C/G/Ts permitted in aln (L,0,0.15)" << endl
 		//<< "  --dpad <int>       include <int> extra ref chars on sides of DP table (15)" << endl
 		//<< "  --gbar <int>       disallow gaps within <int> nucs of read extremes (4)" << endl
@@ -1713,6 +1720,10 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_NEW_SUMMARY: {
             newAlignSummary = true;
+            break;
+        }
+        case ARG_DP: {
+            bowtie2_dp = true;
             break;
         }
 		default:
@@ -3099,6 +3110,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                                           anchorStop,
                                                           secondary,
                                                           localAlign,
+                                                          bowtie2_dp,
                                                           thread_rids_mindist);
 	SwAligner sw;
 	OuterLoopMetrics olm;
@@ -3432,7 +3444,22 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     splicedAligner.initRead(rds[1], nofw[1], norc[1], minsc[1], maxpen[1], true);
                 }
                 if(filt[0] || filt[1]) {
-                    int ret = splicedAligner.go(sc, pepol, *multiseed_tpol, *gpol, gfm, *altdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
+                    int ret = splicedAligner.go(
+                                                sc,
+                                                pepol,
+                                                *multiseed_tpol,
+                                                *gpol,
+                                                gfm,
+                                                *altdb,
+                                                ref,
+                                                sw,
+                                                *ssdb,
+                                                wlm,
+                                                prm,
+                                                swmSeed,
+                                                him,
+                                                rnd,
+                                                msinkwrap);
                     MERGE_SW(sw);
                     // daehwan
                     size_t mate = 0;

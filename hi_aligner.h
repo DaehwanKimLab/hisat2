@@ -1196,6 +1196,109 @@ struct GenomeHit {
 	bool repOk(const Read& rd, const BitPairReference& ref);
 #endif
     
+    void replace_edits_with_alts(const Read&      rd,
+                                 const EList<ALT<index_t> >& alts,
+                                 SpliceSiteDB&    ssdb,
+                                 const Scoring&   sc,
+                                 index_t          minK_local,
+                                 index_t          minIntronLen,
+                                 index_t          maxIntronLen,
+                                 index_t          minAnchorLen,
+                                 index_t          minAnchorLen_noncan,
+                                 const            BitPairReference& ref) {
+        assert(inited());
+        if(alts.size() <= 0)
+            return;
+        if(_edits->size() <= 0)
+            return;
+        
+        index_t joinedOff = _joinedOff;
+        int offset = 0;
+        size_t i = 0, next_i;
+        while(i < _edits->size()) {
+            next_i = i + 1;
+            Edit& ed = (*_edits)[i];
+            if(ed.type == EDIT_TYPE_SPL) {
+                assert(false);
+            } else if(ed.type == EDIT_TYPE_READ_GAP || ed.type == EDIT_TYPE_REF_GAP) {
+                for(; next_i < _edits->size(); next_i++) {
+                    Edit& next_ed = (*_edits)[next_i];
+                    if(ed.type != next_ed.type) break;
+                }
+            }
+
+            if(ed.snpID == (index_t)INDEX_MAX) {
+                ALT<index_t> cmp_alt;
+                cmp_alt.pos = joinedOff + ed.pos + offset;
+                index_t alt_i = (index_t)alts.bsearchLoBound(cmp_alt);
+                for(; alt_i < alts.size(); alt_i++) {
+                    const ALT<index_t>& alt = alts[alt_i];
+                    if(alt.left > cmp_alt.pos) break;
+                    if(ed.type == EDIT_TYPE_MM) {
+                        if(alt.type != ALT_SNP_SGL) continue;
+                        if("ACGT"[alt.seq] == ed.qchr) {
+                            ed.snpID = alt_i;
+                            break;
+                        }
+                    } else {
+                        size_t gap = next_i - i;
+                        if(ed.type == EDIT_TYPE_READ_GAP) {
+                            if(alt.type != ALT_SNP_DEL) continue;
+                            if(alt.len == gap) {
+                                for(size_t ii = i; ii < next_i; ii++) {
+                                    Edit& ii_ed = (*_edits)[ii];
+                                    ii_ed.snpID = alt_i;
+                                }
+                                break;
+                            }
+                        } else {
+                            assert_eq(ed.type, EDIT_TYPE_REF_GAP);
+                            if(alt.type != ALT_SNP_INS) continue;
+                            if(alt.len == gap) {
+                                uint64_t seq = 0;
+                                for(size_t ii = i; ii < next_i; ii++) {
+                                    Edit& ii_ed = (*_edits)[ii];
+                                    seq = (seq << 2) | asc2dna[ii_ed.qchr];
+                                }
+                                if(alt.seq == seq) {
+                                    for(size_t ii = i; ii < next_i; ii++) {
+                                        Edit& ii_ed = (*_edits)[ii];
+                                        ii_ed.snpID = alt_i;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if(ed.type == EDIT_TYPE_SPL) {
+                offset += ed.splLen;
+            } else if(ed.type == EDIT_TYPE_READ_GAP || ed.type == EDIT_TYPE_REF_GAP) {
+                size_t gap = next_i - i;
+                if(ed.type == EDIT_TYPE_READ_GAP) {
+                    assert_gt(joinedOff, gap);
+                    offset += gap;
+                } else {
+                    offset -= gap;
+                }
+            }
+            
+            i = next_i;
+        }
+        
+        calculateScore(rd,
+                       ssdb,
+                       sc,
+                       minK_local,
+                       minIntronLen,
+                       maxIntronLen,
+                       minAnchorLen,
+                       minAnchorLen_noncan,
+                       ref);
+    }
+    
 private:
     /**
 	 * Calculate alignment score
@@ -2179,7 +2282,6 @@ bool GenomeHit<index_t>::adjustWithALT(
                 assert_eq(offDiff.first, 0);
                 assert_eq(offDiff.second, 0);
             } else {
-                assert_leq(offDiffs[o-1].first, offDiff.first);
                 if(offDiffs[o-1].first == offDiff.first) {
                     assert_lt(offDiffs[o-1].second, offDiff.second);
                 }
@@ -2293,11 +2395,6 @@ bool GenomeHit<index_t>::adjustWithALT(
         if(o == 0) {
             assert_eq(offDiff.first, 0);
             assert_eq(offDiff.second, 0);
-        } else {
-            assert_leq(offDiffs[o-1].first, offDiff.first);
-            if(offDiffs[o-1].first == offDiff.first) {
-                assert_lt(offDiffs[o-1].second, offDiff.second);
-            }
         }
 #endif
         if(offDiff.second >= 0) {
@@ -3842,10 +3939,12 @@ public:
                bool anchorStop = true,
                bool secondary = false,
                bool local = false,
+               bool bowtie2_dp = false,
                uint64_t threads_rids_mindist = 0) :
     _anchorStop(anchorStop),
     _secondary(secondary),
     _local(local),
+    _bowtie2_dp(bowtie2_dp),
     _gwstate(GW_CAT),
     _gwstate_local(GW_CAT),
     _thread_rids_mindist(threads_rids_mindist)
@@ -4562,6 +4661,8 @@ protected:
     bool     _secondary;  // allow secondary alignments
     bool     _local;      // perform local alignments
     
+    bool     _bowtie2_dp; // enable Bowtie2's dynamic programming alignment
+    
     ReadBWTHit<index_t> _hits[2][2];
     
     EList<index_t, 16>                                 _offs;
@@ -4760,6 +4861,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                    index_t                          tidx,
                                                    index_t                          toff)
 {
+    const ReportingParams& rp = sink.reportingParams();
+    
     assert_lt(rdi, 2);
     index_t ordi = 1 - rdi;
     bool ofw = (fw == gMate2fw ? gMate1fw : gMate2fw);
@@ -4775,20 +4878,25 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     EList<Coord>& coords = _coords.front();
     
     // local search to find anchors
+    const index_t minHitLen = _minK_local << 1;
     const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
     const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(tidx, toff);
-    bool success = false, first = true;
+    bool first = true;
     index_t count = 0;
-    index_t max_hitlen = 0;
-    while(!success && count++ < 2) {
+    while(count++ < 2) {
         if(first) {
             first = false;
         } else {
-            lGFM = hGFM->prevLocalGFM(lGFM);
+            if(_genomeHits.size() > 0) break;
+            if(fw) {
+                lGFM = hGFM->nextLocalGFM(lGFM);
+            } else {
+                lGFM = hGFM->prevLocalGFM(lGFM);
+            }
             if(lGFM == NULL || lGFM->empty()) break;
         }
         index_t hitoff = rdlen - 1;
-        while(hitoff >= _minK_local - 1) {
+        while(hitoff >= minHitLen - 1) {
             index_t hitlen = 0;
             local_index_t top = (local_index_t)INDEX_MAX, bot = (local_index_t)INDEX_MAX;
             local_index_t node_top = (local_index_t)INDEX_MAX, node_bot = (local_index_t)INDEX_MAX;
@@ -4809,11 +4917,11 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                           _local_node_iedge_count,
                                           rnd,
                                           uniqueStop,
-                                          _minK_local);
+                                          minHitLen);
             assert_leq(top, bot);
             assert_eq(nelt, (index_t)(node_bot - node_top));
             assert_leq(hitlen, hitoff + 1);
-            if(nelt > 0 && nelt <= 5 && hitlen > max_hitlen) {
+            if(nelt > 0 && nelt <= rp.kseeds && hitlen >= minHitLen) {
                 coords.clear();
                 bool straddled = false;
                 getGenomeCoords_local(
@@ -4836,7 +4944,6 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                       true, // reject straddled?
                                       straddled);
                 assert_leq(coords.size(), nelt);
-                _genomeHits.clear();
                 for(index_t ri = 0; ri < coords.size(); ri++) {
                     const Coord& coord = coords[ri];
                     GenomeHit<index_t>::adjustWithALT(
@@ -4851,19 +4958,17 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                       ref,
                                                       gpol);
                 }
-                max_hitlen = hitlen;
             }
-            
             assert_leq(hitlen, hitoff + 1);
-            if(hitlen > 0) hitoff -= (hitlen - 1);
+            if(hitlen == hitoff + 1) break;
+            if(hitoff + 1 < minHitLen) break;
+            hitoff -= minHitLen;
             if(hitoff > 0) hitoff -= 1;
         } // while(hitoff >= _minK_local - 1)
-    } // while(!success && count++ < 2)
-    
-    if(max_hitlen < _minK_local) return false;
+    } // while(count++ < 2)
     
     // randomly select
-    const index_t maxsize = 5;
+    const index_t maxsize = rp.kseeds;
     if(_genomeHits.size() > maxsize) {
         _genomeHits.shufflePortion(0, _genomeHits.size(), rnd);
         _genomeHits.resize(maxsize);

@@ -423,25 +423,27 @@ def getSNPs(chr_snps, left, right):
 
 """
 """
-def check_snps(snps, read_seq, ref_pos):
+def check_snps(snps, check_type, ref_pos, read_seq):
     found = False
 
     for snp in snps:
-        snp_type = snp[1]
-        snp_pos = snp[2]
-        snp_data = snp[3]
+        snp_type, snp_pos, snp_data = snp[1:4]
 
-        if snp_type == 'single':
-            if ref_pos == snp_pos:
-                if snp_data[0] == read_seq:
+        if snp_type == check_type:
+            if snp_type == 'single':
+                if snp_pos == ref_pos and snp_data[0] == read_seq[0]:
                     found = True
                     break
-        """
-        elif snp_type == 'insertion':
-            print 'not support'
-        elif snp_type == 'deletion':
-            print 'not support'
-        """
+            elif snp_type == 'insertion':
+                if snp_pos == ref_pos and snp_data == read_seq:
+                    found = True
+                    break
+
+            elif snp_type == 'deletion':
+                # snp_data and read_seq are length of sequence deleted
+                if snp_pos == ref_pos and int(snp_data) == int(read_seq):
+                    found = True
+                    break
 
     return found
 
@@ -507,6 +509,9 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
         XM, gap = 0, 0
         read_pos, right_pos = 0, pos - 1,
         junction_read = False
+
+        snps = getSNPs(chr_snps, right_pos, right_pos + len(read_seq))
+
         cigars = cigar_re.findall(cigar_str)
         for i in range(len(cigars)):
             cigar = cigars[i]
@@ -525,8 +530,6 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                 else:
                     ref_seq = chr_dic[chr][right_pos:right_pos+length]
 
-                snps = getSNPs(chr_snps, ref_pos, ref_pos + length)
-
                 ref_seq = ref_seq.upper()
                 if length == len(ref_seq):
                     for j in range(length):
@@ -534,7 +537,7 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                             if snps_dict == None:
                                 XM += 1
                             else:
-                                found_snp = check_snps(snps, read_seq[read_pos + j], ref_pos + j)
+                                found_snp = check_snps(snps, 'single', ref_pos + j, read_seq[read_pos + j])
                                 if not found_snp:
                                     XM += 1
 
@@ -544,15 +547,22 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                 else:
                     XM += length
 
+            if cigar_op in "I":
+                found_snp = check_snps(snps, 'insertion', right_pos, read_seq[read_pos:read_pos + length])
+                if not found_snp:
+                    gap += length
+                
+            if cigar_op in "D":
+                found_snp = check_snps(snps, 'deletion', right_pos, length)
+                if not found_snp:
+                    gap += length
+
             if cigar_op in "MND":
                 right_pos += length
 
             if cigar_op in "MIS":
                 read_pos += length
                 
-            if cigar_op in "ID":
-                gap += length
-
             if cigar_op == "N":
                 junction_read = True
                 
