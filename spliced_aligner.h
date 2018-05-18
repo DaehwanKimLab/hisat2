@@ -38,11 +38,13 @@ public:
                    bool anchorStop,
                    bool secondary = false,
                    bool local = false,
+                   bool bowtie2_dp = false,
                    uint64_t threads_rids_mindist = 0) :
     HI_Aligner<index_t, local_index_t>(gfm,
                                        anchorStop,
                                        secondary,
                                        local,
+                                       bowtie2_dp,
                                        threads_rids_mindist)
     {
     }
@@ -180,26 +182,134 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
         // given a candidate partial alignment, extend it bidirectionally
         him.anchoratts++;
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hj];
-        hybridSearch_recur(
-                           sc,
-                           pepol,
-                           tpol,
-                           gpol,
-                           gfm,
-                           altdb,
-                           ref,
-                           swa,
-                           ssdb,
-                           rdi,
-                           genomeHit,
-                           genomeHit.rdoff(),
-                           genomeHit.len(),
-                           wlm,
-                           prm,
-                           swm,
-                           him,
-                           rnd,
-                           sink);
+     
+        int64_t maxsc = std::numeric_limits<int64_t>::min();
+        maxsc = hybridSearch_recur(sc,
+                                   pepol,
+                                   tpol,
+                                   gpol,
+                                   gfm,
+                                   altdb,
+                                   ref,
+                                   swa,
+                                   ssdb,
+                                   rdi,
+                                   genomeHit,
+                                   genomeHit.rdoff(),
+                                   genomeHit.len(),
+                                   wlm,
+                                   prm,
+                                   swm,
+                                   him,
+                                   rnd,
+                                   sink);
+        if(this->_bowtie2_dp && maxsc < this->_minsc[rdi]) {
+            const Read& rd = *this->_rds[rdi];
+            // Initialize the aligner with a new read
+            swa.initRead(rd.patFw,    // fw version of query
+                         rd.patRc,    // rc version of query
+                         rd.qual,     // fw version of qualities
+                         rd.qualRev,  // rc version of qualities
+                         0,           // off of first char in 'rd' to consider
+                         rd.length(), // off of last char (excl) in 'rd' to consider
+                         sc);         // scoring scheme
+            
+            bool found = genomeHit.len() >= rd.length();
+            if(!found) {
+                DynProgFramer dpframe(false);  // trimToRef
+                size_t tlen = ref.approxLen(genomeHit.ref());
+                size_t readGaps = 10, refGaps = 10, nceil = 0, maxhalf = 10;
+                index_t refoff = genomeHit.refoff() > genomeHit.rdoff() ? genomeHit.refoff() - genomeHit.rdoff() :  0;
+                DPRect rect;
+                dpframe.frameSeedExtensionRect(refoff,         // ref offset implied by seed hit assuming no gaps
+                                               rd.length(),    // length of read sequence used in DP table
+                                               tlen,           // length of reference
+                                               readGaps,       // max # of read gaps permitted in opp mate alignment
+                                               refGaps,        // max # of ref gaps permitted in opp mate alignment
+                                               (size_t)nceil,  // # Ns permitted
+                                               maxhalf,        // max width in either direction
+                                               rect);          // DP rectangle
+                assert(rect.repOk());
+                
+                size_t cminlen = 2000, cpow2 = 4, nwindow = 10, nsInLeftShift = 0;
+                swa.initRef(fw,                // whether to align forward or revcomp read
+                            genomeHit.ref(),   // reference aligned against
+                            rect,              // DP rectangle
+                            ref,               // Reference strings
+                            tlen,              // length of reference sequence
+                            sc,                // scoring scheme
+                            this->_minsc[rdi], // minimum score permitted
+                            true,              // use 8-bit SSE if possible?
+                            cminlen,           // minimum length for using checkpointing scheme
+                            cpow2,             // interval b/t checkpointed diags; 1 << this
+                            false,             // triangular mini-fills?
+                            true,              // this is a seed extension - not finding a mate
+                            nwindow,
+                            nsInLeftShift);
+                
+                // Now fill the dynamic programming matrix and return true iff
+                // there is at least one valid alignment
+                TAlScore bestCell = std::numeric_limits<TAlScore>::min();
+                found = swa.align(rnd, bestCell);
+                if(found) {
+                    SwResult res;
+                    res.reset();
+                    res.alres.init_raw_edits(&(this->_rawEdits));
+                    swa.nextAlignment(res, this->_minsc[rdi], rnd);
+                    if(!fw) res.alres.invertEdits();
+                    
+                    const Coord& coord = res.alres.refcoord();
+                    assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
+                    index_t joinedOff = genomeHit._joinedOff + coord.off() - genomeHit.refoff();
+                    genomeHit.init(fw,
+                                   0, // rdoff
+                                   rd.length(),
+                                   0, // trim5
+                                   0, // trim3
+                                   coord.ref(),
+                                   coord.off(),
+                                   joinedOff,
+                                   this->_sharedVars,
+                                   &res.alres.ned(),
+                                   NULL,
+                                   res.alres.score().score());
+
+                    genomeHit.replace_edits_with_alts(rd,
+                                                      altdb.alts(),
+                                                      ssdb,
+                                                      sc,
+                                                      this->_minK_local,
+                                                      (index_t)tpol.minIntronLen(),
+                                                      (index_t)tpol.maxIntronLen(),
+                                                      (index_t)tpol.minAnchorLen(),
+                                                      (index_t)tpol.minAnchorLen_noncan(),
+                                                      ref);
+                    
+                }
+            }
+            
+            if(found) {
+                hybridSearch_recur(sc,
+                                   pepol,
+                                   tpol,
+                                   gpol,
+                                   gfm,
+                                   altdb,
+                                   ref,
+                                   swa,
+                                   ssdb,
+                                   rdi,
+                                   genomeHit,
+                                   genomeHit.rdoff(),
+                                   genomeHit.len(),
+                                   wlm,
+                                   prm,
+                                   swm,
+                                   him,
+                                   rnd,
+                                   sink);
+            }
+        }
         this->_genomeHits_done[hj] = true;
     }
 }

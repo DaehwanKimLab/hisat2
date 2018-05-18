@@ -3336,8 +3336,8 @@ size_t Descent<index_t>::recalcOutgoing(
 		// Update top and bot
 		if(off5p >= al5pi_ - extrai && off5p <= al5pf_ + extraf) {
 			assert_range(0, 3, c);
-			top = t[c], topp = tp[c];
-			bot = b[c], botp = bp[c];
+            top = t[c]; topp = tp[c];
+            bot = b[c]; botp = bp[c];
 			assert_eq(bot-top, botp-topp);
 		}
 	}

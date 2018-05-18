@@ -1430,9 +1430,11 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "snp", "210", ""],
         # ["hisat2", "", "tran", "210", ""],
         # ["hisat2", "", "snp_tran", "210", ""],
-        ["hisat2", "", "", "", ""],
-        ["hisat2", "", "", "", "-k 50"],
+        # ["hisat2", "", "", "", ""],
+        # ["hisat2", "", "", "", "--bowtie2-dp"],
+        # ["hisat2", "", "", "", "-k 50"],
         ["hisat2", "", "snp", "", ""],
+        ["hisat2", "", "snp", "", "--bowtie2-dp"],
         # ["hisat2", "", "snp", "", "-k 50"],
         # ["hisat2", "", "snp_noht", "", ""],
         # ["hisat2", "x2", "", "", ""],
@@ -1454,10 +1456,10 @@ def calculate_read_cost(verbose):
         # ["star", "x2", "", "", ""],
         # ["star", "gtf", "", "", ""],
         # ["bowtie", "", "", "", ""],
-        ["bowtie2", "", "", "", ""],
-        ["bowtie2", "", "", "", "-k 10"],
+        # ["bowtie2", "", "", "", ""],
+        # ["bowtie2", "", "", "", "-k 10"],
         # ["gsnap", "", "", "", ""],
-        ["bwa", "mem", "", "", ""],
+        # ["bwa", "mem", "", "", ""],
         # ["hisat2", "", "snp", "", ""],
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],
@@ -1483,8 +1485,8 @@ def calculate_read_cost(verbose):
     chr_dic = read_genome("../../data/%s.fa" % genome)
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     align_stat = []
-    for paired in [False, True]:
-    # for paired in [False]:
+    # for paired in [False, True]:
+    for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"

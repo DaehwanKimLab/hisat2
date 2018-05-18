@@ -850,7 +850,7 @@ public:
 	 */
 	virtual void reset() {
 		PatternSource::reset();
-		filecur_ = 0,
+        filecur_ = 0;
 		open();
 		filecur_++;
 	}

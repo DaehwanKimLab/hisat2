@@ -1019,12 +1019,27 @@ public:
         }
 #endif
         if(ned_ != NULL) {
+            ned_->clear(); aed_->clear();
             raw_edits_->delete_node(ned_node_);
-            raw_edits_->delete_node(aed_node_);
+            raw_edits_->delete_node(aed_node_);            
             ned_ = aed_ = NULL;
             ned_node_ = aed_node_ = NULL;
             raw_edits_ = NULL;
         }
+    }
+    
+    /* DK - temporary implementation */
+    void init_raw_edits(LinkedEList<EList<Edit> >* raw_edits) {
+        if(raw_edits == NULL)
+            return;
+        raw_edits_ = raw_edits;
+        assert(ned_ == NULL && aed_ == NULL);
+        assert(ned_node_ == NULL && aed_node_ == NULL);
+        ned_node_ = raw_edits_->new_node();
+        aed_node_ = raw_edits_->new_node();
+        assert(ned_node_ != NULL && aed_node_ != NULL);
+        ned_ = &(ned_node_->payload);
+        aed_ = &(aed_node_->payload);
     }
 
 	/**
@@ -1059,8 +1074,8 @@ public:
 	 */
 	bool empty() const {
 		if(!VALID_AL_SCORE(score_)) {
-			assert(ned_->empty());
-			assert(aed_->empty());
+			assert(ned_ == NULL || ned_->empty());
+			assert(aed_ == NULL || aed_->empty());
 			assert(!refcoord_.inited());
 			assert(!refival_.inited());
 			return true;
@@ -1364,8 +1379,8 @@ public:
 			assert_lt(refoff(), reflen_);
 		}
 		assert(refival_.repOk());
-		assert(VALID_AL_SCORE(score_) || ned_->empty());
-		assert(VALID_AL_SCORE(score_) || aed_->empty());
+		assert(VALID_AL_SCORE(score_) || ned_ == NULL || ned_->empty());
+		assert(VALID_AL_SCORE(score_) || aed_ == NULL || aed_->empty());
 		assert(empty() || refcoord_.inited());
 		assert(empty() || refival_.inited());
 		assert_geq(rdexrows_, rdextent_);
