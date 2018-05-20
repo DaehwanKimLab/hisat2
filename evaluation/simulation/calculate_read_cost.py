@@ -1431,23 +1431,16 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "tran", "210", ""],
         # ["hisat2", "", "snp_tran", "210", ""],
         ["hisat2", "", "", "", ""],
-        ["hisat2", "", "", "", "--bowtie2-dp -k 50"],
+        ["hisat2", "", "", "", "--sensitive"],
+        ["hisat2", "", "", "", "--very-sensitive"],
         # ["hisat2", "", "", "", "-k 50"],
         ["hisat2", "", "snp", "", ""],
-        # ["hisat2", "", "snp", "", "--bowtie2-dp"],
-        # ["hisat2", "", "snp", "", "-k 50"],
+        ["hisat2", "", "snp", "", "--sensitive"],
         # ["hisat2", "", "snp_noht", "", ""],
         # ["hisat2", "x2", "", "", ""],
         # ["hisat2", "x1", "tran", "", ""],
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],
-        # ["hisat2", "", "", "201b", ""],
-        # ["hisat2", "", "", "", ""],
-        # ["hisat2", "x1", "tran", "201b", ""],
-        # ["hisat2", "x1", "tran", "", ""],
-        # ["hisat2", "", "snp", "201b", ""],
-        # ["hisat2", "", "snp", "", ""],
-        # ["hisat2", "x1", "snp_tran", "203b", ""],
         # ["hisat2", "x1", "snp_tran", "", ""],
         # ["hisat2", "x1", "snp_tran_ercc", "", ""],
         # ["tophat2", "gtfonly", "", "", ""],
@@ -1728,8 +1721,6 @@ def calculate_read_cost(verbose):
                     cmd += ["-f"]
                     if options != "":
                         cmd += options.split(' ')
-                    cmd += ["--score-min", "C,-18"]
-                    
                     cmd += ["-x %s/HISAT%s/" % (index_base, index_add) + genome]
                     if paired:
                         cmd += ["-1", read1_fname,

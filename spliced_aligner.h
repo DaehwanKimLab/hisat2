@@ -38,7 +38,7 @@ public:
                    bool anchorStop,
                    bool secondary = false,
                    bool local = false,
-                   bool bowtie2_dp = false,
+                   int bowtie2_dp = 0,
                    uint64_t threads_rids_mindist = 0) :
     HI_Aligner<index_t, local_index_t>(gfm,
                                        anchorStop,
@@ -204,7 +204,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                                    rnd,
                                    sink);
         
-        if(this->_bowtie2_dp && maxsc < this->_minsc[rdi]) {
+        if(this->_bowtie2_dp == 2 || (this->_bowtie2_dp == 1 && maxsc < this->_minsc[rdi])) {
             const Read& rd = *this->_rds[rdi];
             // Initialize the aligner with a new read
             swa.initRead(rd.patFw,    // fw version of query

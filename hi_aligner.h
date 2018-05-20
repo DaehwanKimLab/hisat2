@@ -3939,7 +3939,7 @@ public:
                bool anchorStop = true,
                bool secondary = false,
                bool local = false,
-               bool bowtie2_dp = false,
+               int bowtie2_dp = 0,
                uint64_t threads_rids_mindist = 0) :
     _anchorStop(anchorStop),
     _secondary(secondary),
@@ -4661,7 +4661,10 @@ protected:
     bool     _secondary;  // allow secondary alignments
     bool     _local;      // perform local alignments
     
-    bool     _bowtie2_dp; // enable Bowtie2's dynamic programming alignment
+    int     _bowtie2_dp; // Bowtie2's dynamic programming alignment
+                         //   0: no dynamic programming
+                         //   1: conditional dynamic programming
+                         //   2: uncoditional dynamic programming
     
     ReadBWTHit<index_t> _hits[2][2];
     

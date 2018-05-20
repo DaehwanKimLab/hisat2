@@ -288,7 +288,10 @@ static bool templateLenAdjustment;
 static string alignSumFile; // write alignment summary stat. to this file
 static bool newAlignSummary;
 
-static bool bowtie2_dp; // enable Bowtie2's dynamic programming alignment
+static int bowtie2_dp; // Bowtie2's dynamic programming alignment (0: no dynamic programming, 1: conditional dynamic programming, and 2: uncoditional dynamic programming)
+static bool sensitive;      // --sensitive
+static bool very_sensitive; // --very-sensitive
+
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -516,7 +519,9 @@ static void resetOptions() {
     alignSumFile = "";
     newAlignSummary = false;
     
-    bowtie2_dp = false; // enable Bowtie2's dynamic programming alignment
+    bowtie2_dp = 0; // disable Bowtie2's dynamic programming alignment
+    sensitive = false;
+    very_sensitive = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -739,7 +744,7 @@ static struct option long_options[] = {
     {(char*)"summary-file",    required_argument,  0,        ARG_SUMMARY_FILE},
     {(char*)"new-summary",     no_argument,        0,        ARG_NEW_SUMMARY},
     {(char*)"enable-dp",       no_argument,        0,        ARG_DP},
-    {(char*)"bowtie2-dp",      no_argument,        0,        ARG_DP},
+    {(char*)"bowtie2-dp",      required_argument,  0,        ARG_DP},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -837,14 +842,17 @@ static void printUsage(ostream& out) {
         << "  --sra-acc          SRA accession ID" << endl
 #endif
 		<< endl
-#if 0
+
 	    << " Presets:                 Same as:" << endl
-		<< "  For --end-to-end:" << endl
-		<< "   --very-fast            -D 5 -R 1 -N 0 -L 22 -i S,0,2.50" << endl
-		<< "   --fast                 -D 10 -R 2 -N 0 -L 22 -i S,0,2.50" << endl
-		<< "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
-		<< "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
+		// << "  For --end-to-end:" << endl
+		// << "   --very-fast            -D 5 -R 1 -N 0 -L 22 -i S,0,2.50" << endl
+		// << "   --fast                 -D 10 -R 2 -N 0 -L 22 -i S,0,2.50" << endl
+		// << "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
+		// << "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
+        << "   --sensitive            --bowtie2-dp 1 -k 50 --score-min L,0,-0.5" << endl
+        << "   --very-sensitive       --bowtie2-dp 2 -k 100 --score-min L,0,-1" << endl
 		<< endl
+#if 0
 		<< "  For --local:" << endl
 		<< "   --very-fast-local      -D 5 -R 1 -N 0 -L 25 -i S,1,2.00" << endl
 		<< "   --fast-local           -D 10 -R 2 -N 0 -L 22 -i S,1,1.75" << endl
@@ -856,7 +864,7 @@ static void printUsage(ostream& out) {
 		//<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		//<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
 		//<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
-        << "  --enable-dp/--bowtie2-dp use Bowtie2's dynamic programming alignment algorithm"
+        << "  --bowtie2-dp <int> use Bowtie2's dynamic programming alignment algorithm (0) - 0: no dynamic programming, 1: conditional dynamic programming, and 2: unconditional dynamic programming (slowest)"
 		<< "  --n-ceil <func>    func for max # non-A/C/G/Ts permitted in aln (L,0,0.15)" << endl
 		//<< "  --dpad <int>       include <int> extra ref chars on sides of DP table (15)" << endl
 		//<< "  --gbar <int>       disallow gaps within <int> nucs of read extremes (4)" << endl
@@ -1410,10 +1418,12 @@ static void parseOption(int next_option, const char *arg) {
 		}
 		case ARG_PRESET_SENSITIVE_LOCAL: localAlign = true;
 		case ARG_PRESET_SENSITIVE: {
+            sensitive = true;
 			presetList.push_back("sensitive%LOCAL%"); break;
 		}
 		case ARG_PRESET_VERY_SENSITIVE_LOCAL: localAlign = true;
 		case ARG_PRESET_VERY_SENSITIVE: {
+            very_sensitive = true;
 			presetList.push_back("very-sensitive%LOCAL%"); break;
 		}
 		case 'P': { presetList.push_back(arg); break; }
@@ -1723,7 +1733,7 @@ static void parseOption(int next_option, const char *arg) {
             break;
         }
         case ARG_DP: {
-            bowtie2_dp = true;
+            bowtie2_dp = parseInt(0, "--bowtie2-dp arg must be 0, 1, or 2", arg);
             break;
         }
 		default:
@@ -1782,7 +1792,8 @@ static void parseOptions(int argc, const char **argv) {
 	if(gVerbose) {
 		cerr << "Final policy string: '" << polstr.c_str() << "'" << endl;
 	}
-	size_t failStreakTmp = 0;
+    
+    size_t failStreakTmp = 0;
 	SeedAlignmentPolicy::parseString(
                                      polstr,
                                      localAlign,
@@ -1823,6 +1834,26 @@ static void parseOptions(int argc, const char **argv) {
 		assert_gt(mhits, 0);
 		msample = true;
 	}
+    
+    if(very_sensitive) {
+        bowtie2_dp = 2;
+        if(khits < 100) {
+            khits = 100;
+            saw_k = true;
+        }
+        scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -1.0f);
+        
+    } else if(sensitive) {
+        if(bowtie2_dp == 0) {
+            bowtie2_dp = 1;
+        }
+        if(khits < 50) {
+            khits = 50;
+            saw_k = true;
+        }
+        scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -0.5f);
+    }
+    
 	if(mates1.size() != mates2.size()) {
 		cerr << "Error: " << mates1.size() << " mate files/sequences were specified with -1, but " << mates2.size() << endl
 		     << "mate files/sequences were specified with -2.  The same number of mate files/" << endl
