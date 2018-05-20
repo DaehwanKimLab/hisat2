@@ -24,14 +24,14 @@ def get_aligners():
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
         elif program == "Bowtie2":
-            dir = "bowtie2-2.2.5"
+            dir = "bowtie2-2.3.2"
             if os.path.exists(dir):
                 continue
             fname = dir + "-source.zip"
-            url = "http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.2.5"
+            url = "http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.3.2"
             bins = "bowtie2-align-s bowtie2-build-s bowtie2-inspect-s"
             installs = bins + " bowtie2 bowtie2-build bowtie2-inspect"
-            cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
+            cmd = "wget %s/%s; unzip %s; cd %s; make NO_TBB=1 %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
         elif program == "Bowtie":
             dir = "bowtie-1.1.2"
@@ -85,7 +85,7 @@ def get_aligners():
                 continue
             url = "http://sourceforge.net/projects/bio-bwa/files/%s.tar.bz2" % (dir)
             installs = "bwa"
-            cmd = "wget %s; tar xvzf %s.tar.bz2; cd %s; make; cp %s ../bin/; cd .." % (url, dir, dir, installs)
+            cmd = "wget %s; tar xvjf %s.tar.bz2; cd %s; make; cp %s ../bin/; cd .." % (url, dir, dir, installs)
         elif program == "StringTie":
             dir = "stringtie-1.0.4"
             url = "http://ccb.jhu.edu/software/stringtie/dl"
@@ -99,7 +99,7 @@ def get_aligners():
         print >> sys.stderr, cmd
         os.system(cmd)
 
-    files = ["hisat2", "hisat2-align-s", "hisat2-build", "hisat2-build-s", "hisat2-inspect", "hisat2-inspect-s", "extract_splice_sites.py", "extract_snps.py", "simulate_reads.py"]
+    files = ["hisat2", "hisat2-align-s", "hisat2-build", "hisat2-build-s", "hisat2-inspect", "hisat2-inspect-s", "extract_splice_sites.py", "hisat2_extract_snps_haplotypes_UCSC.py", "hisat2_simulate_reads.py"]
     os.chdir("bin")
     for file in files:
         if os.path.exists(file):

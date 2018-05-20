@@ -11,7 +11,8 @@ def build_indexes():
         os.mkdir("indexes")
     os.chdir("indexes")
     aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP", "BWA"]
-    for genome in ["22_20-21M", "22", "genome"]:
+    genomes = ["22_20-21M", "22", "genome"]:
+    for genome in genomes:
         for aligner in aligners:
             if genome == "genome":
                 dir = aligner
@@ -31,6 +32,8 @@ def build_indexes():
                 cmd = cmd + "; ../../aligners/bin/tophat -G ../../data/%s.gtf --transcriptome-index=gtf %s; rm -rf tophat_out" % (genome, genome)
             elif aligner == "Bowtie":
                 cmd = "../../aligners/bin/bowtie-build ../../data/%s.fa %s" % (genome, genome)
+            elif aligner == "Bowtie2":
+                cmd = "../../aligners/bin/bowtie2-build --threads 6 ../../data/%s.fa %s" % (genome, genome)
             elif aligner == "STAR":
                 cmd = "../../aligners/bin/STAR --runMode genomeGenerate --genomeDir . --genomeFastaFiles ../../data/%s.fa" % (genome)
                 cmd = cmd + "; mkdir gtf; ../../aligners/bin/STAR --runMode genomeGenerate --genomeDir gtf --genomeFastaFiles ../../data/%s.fa --sjdbGTFfile ../../data/%s.gtf --sjdbOverhang 99 --runThreadN 4" % (genome, genome)
@@ -38,6 +41,8 @@ def build_indexes():
                 cmd = "../../aligners/bin/gmap_build -B ../../aligners/bin -D . -d %s ../../data/%s.fa" % (genome, genome)
             elif aligner == "BWA":
                 cmd = "../../aligners/bin/bwa index -p %s.fa ../../data/%s.fa" % (genome, genome)
+            elif aligner == "VG":
+                assert False
             else:
                 assert False
             print >> sys.stderr, cmd

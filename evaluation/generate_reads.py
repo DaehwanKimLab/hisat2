@@ -2,6 +2,7 @@
 
 import sys, os, random
 from argparse import ArgumentParser, FileType
+from multiprocessing import Process
 
 def shuffle_reads(read_fname, random_list):
     reads = []
@@ -70,12 +71,31 @@ def simulate_reads():
         ]
 
     data_dir_base = "../../../data"
+
+    def generate_reads(cmd):
+        print >> sys.stderr, cmd
+        os.system(cmd)
+
+        random.seed(0)
+        print >> sys.stderr, "shuffle reads sim_1.fa and sim_2.fa"
+        shuffle_pairs("sim_1.fa", "sim_2.fa")
+        shuffle_reads_cmd = " mv sim_1.fa.shuffle sim_1.fa"
+        shuffle_reads_cmd += "; mv sim_2.fa.shuffle sim_2.fa"
+        os.system(shuffle_reads_cmd)
+
+
+    pid_list = []
+
     for genome, numreads, rna, snp, mismatch, constant in datasets:
         if rna:
             molecule = "RNA"
         else:
             molecule = "DNA"
-        dirname = "%dM_%s" % (numreads / 1000000, molecule)
+        if numreads >= 1000000:
+            dirname = "%dM_%s" % (numreads / 1000000, molecule)
+        else:
+            dirname = "%dk_%s" % (numreads / 1000, molecule)
+
         if mismatch:
             dirname += "_mismatch"
         if snp:
@@ -104,11 +124,13 @@ def simulate_reads():
         if not rna:
             cmd_add += "--dna "
         if mismatch:
-            cmd_add += "--error-rate 0.5 "
+            cmd_add += "--error-rate 0.2 "
         if rna and constant:
             cmd_add += "--expr-profile constant "
         cmd = "../../../aligners/bin/hisat2_simulate_reads.py --sanity-check %s --num-fragment %d %s %s %s sim" % \
             (cmd_add, numreads, genome_fname, gtf_fname, snp_fname)
+
+        """
         print >> sys.stderr, cmd
         os.system(cmd)
 
@@ -118,10 +140,19 @@ def simulate_reads():
         shuffle_reads_cmd = " mv sim_1.fa.shuffle sim_1.fa"
         shuffle_reads_cmd += "; mv sim_2.fa.shuffle sim_2.fa"
         os.system(shuffle_reads_cmd)
+        """
+        #generate_reads(cmd)
+        p = Process(target=generate_reads, args=(cmd,))
+        p.start()
+        pid_list.append(p)
 
         os.chdir("..")
 
     os.chdir("..")
+
+    # wait
+    for p in pid_list:
+        p.join()
             
     
 if __name__ == "__main__":
