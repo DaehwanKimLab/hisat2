@@ -4964,10 +4964,10 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             }
             assert_leq(hitlen, hitoff + 1);
             if(hitlen == hitoff + 1) break;
-            if(hitoff + 1 < minHitLen) break;
+            if(hitoff < minHitLen) break;
             hitoff -= minHitLen;
             if(hitoff > 0) hitoff -= 1;
-        } // while(hitoff >= _minK_local - 1)
+        } // while(hitoff >= minHitLen - 1)
     } // while(count++ < 2)
     
     // randomly select
