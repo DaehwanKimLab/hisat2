@@ -256,36 +256,38 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                     SwResult res;
                     res.reset();
                     res.alres.init_raw_edits(&(this->_rawEdits));
-                    swa.nextAlignment(res, this->_minsc[rdi], rnd);
-                    if(!fw) res.alres.invertEdits();
-                    
-                    const Coord& coord = res.alres.refcoord();
-                    assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
-                    index_t joinedOff = genomeHit._joinedOff + coord.off() - genomeHit.refoff();
-                    genomeHit.init(fw,
-                                   0, // rdoff
-                                   rd.length(),
-                                   0, // trim5
-                                   0, // trim3
-                                   coord.ref(),
-                                   coord.off(),
-                                   joinedOff,
-                                   this->_sharedVars,
-                                   &res.alres.ned(),
-                                   NULL,
-                                   res.alres.score().score());
-
-                    genomeHit.replace_edits_with_alts(rd,
-                                                      altdb.alts(),
-                                                      ssdb,
-                                                      sc,
-                                                      this->_minK_local,
-                                                      (index_t)tpol.minIntronLen(),
-                                                      (index_t)tpol.maxIntronLen(),
-                                                      (index_t)tpol.minAnchorLen(),
-                                                      (index_t)tpol.minAnchorLen_noncan(),
-                                                      ref);
-                    
+                    found = swa.nextAlignment(res, this->_minsc[rdi], rnd);
+                    if(found) {
+                        if(!fw) res.alres.invertEdits();
+                        
+                        const Coord& coord = res.alres.refcoord();
+                        assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
+                        index_t joinedOff = genomeHit._joinedOff + coord.off() - genomeHit.refoff();
+                        genomeHit.init(fw,
+                                       0, // rdoff
+                                       rd.length(),
+                                       0, // trim5
+                                       0, // trim3
+                                       coord.ref(),
+                                       coord.off(),
+                                       joinedOff,
+                                       this->_sharedVars,
+                                       &res.alres.ned(),
+                                       NULL,
+                                       res.alres.score().score());
+                        
+                        genomeHit.replace_edits_with_alts(rd,
+                                                          altdb.alts(),
+                                                          ssdb,
+                                                          sc,
+                                                          this->_minK_local,
+                                                          (index_t)tpol.minIntronLen(),
+                                                          (index_t)tpol.maxIntronLen(),
+                                                          (index_t)tpol.minAnchorLen(),
+                                                          (index_t)tpol.minAnchorLen_noncan(),
+                                                          ref);
+                        
+                    }
                 }
             }
             
