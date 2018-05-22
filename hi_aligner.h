@@ -2281,10 +2281,6 @@ bool GenomeHit<index_t>::adjustWithALT(
             if(o == 0) {
                 assert_eq(offDiff.first, 0);
                 assert_eq(offDiff.second, 0);
-            } else {
-                if(offDiffs[o-1].first == offDiff.first) {
-                    assert_lt(offDiffs[o-1].second, offDiff.second);
-                }
             }
 #endif
             if(offDiff.second >= 0) {

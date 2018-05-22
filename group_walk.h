@@ -479,6 +479,8 @@ public:
 		WalkMetrics& met)
 	{
 		assert_gt(bt, tp);
+        assert_gt(n_bt, n_tp);
+        assert_geq(bt - tp, n_bt - n_tp);
 		assert_lt(range, sts.size());
 		top = tp;
 		bot = bt;
@@ -674,6 +676,7 @@ public:
 #endif
 			}
 		}
+
 		// Trim from beginning
 		assert_geq(trimBegin, 0);
 		mapi_ += trimBegin;
@@ -691,6 +694,7 @@ public:
                 node_iedge_count[e].first -= trimBegin;
             }
         }
+        
         node_top += trimBegin;
 		if(trimEnd > 0) {
 			// Trim from end
@@ -775,40 +779,14 @@ public:
             }
             assert_eq(bot - top, tmp_gbwt_to_node.size());
             for(index_t i = 0; i < tmp_zOffs.size(); i++) {
-                assert_lt(top, tmp_zOffs[i]);
-                index_t diff = tmp_zOffs[i] - top;
-                assert_lt(diff, tmp_gbwt_to_node.size());
-                for(index_t j = diff + 1; j < tmp_gbwt_to_node.size(); j++) {
-                    if(tmp_gbwt_to_node[i] == tmp_gbwt_to_node[j]) {
-                        tmp_gbwt_to_node[j] = (index_t)INDEX_MAX;
-                    } else {
-                        break;
-                    }
-                }
-                tmp_gbwt_to_node[diff] = (index_t)INDEX_MAX;
-            }
-            for(index_t i = 0; i < tmp_zOffs.size(); i++) {
                 // Note: might be able to do additional trimming off the end.
                 // Create a new range for the portion after the dollar.
                 index_t new_top = tmp_zOffs[i] + 1;
-                while(new_top - top < tmp_gbwt_to_node.size()) {
-                    if(tmp_gbwt_to_node[new_top - top] != (index_t)INDEX_MAX) {
-                        break;
-                    }
-                    new_top++;
+                if(i + 1 < tmp_zOffs.size() && new_top == tmp_zOffs[i+1]) {
+                    continue;
                 }
                 assert_leq(new_top - top, tmp_gbwt_to_node.size());
                 if(new_top - top == tmp_gbwt_to_node.size()) {
-#if 0
-                    if(node_iedge_count.size() > 0 &&
-                       node_iedge_count.back().first + 1 == node_bot - node_top) {
-                        assert_gt(node_iedge_count.back().second, 0);
-                        node_iedge_count.back().second -= 1;
-                        if(node_iedge_count.back().second == 0) {
-                            node_iedge_count.resize(node_iedge_count.size()- 1);
-                        }
-                    }
-#endif
                     break;
                 }
                 index_t new_node_top = tmp_gbwt_to_node[new_top - top] + node_top;
@@ -819,16 +797,9 @@ public:
                 } else {
                     new_bot = bot;
                 }
-                index_t new_bot2 = new_bot;
-                while(new_bot2 - top < tmp_gbwt_to_node.size()) {
-                    if(tmp_gbwt_to_node[new_bot2 - top] != (index_t)INDEX_MAX) {
-                        break;
-                    }
-                    new_bot2++;
-                }
                 index_t new_node_bot = node_bot;
-                if(new_bot2 - top < tmp_gbwt_to_node.size()) {
-                    new_node_bot = node_top + tmp_gbwt_to_node[new_bot2 - top];
+                if(new_bot - top < tmp_gbwt_to_node.size()) {
+                    new_node_bot = node_top + tmp_gbwt_to_node[new_bot - top];
                 }
                 tmp_node_iedge_count.clear();
                 if(new_top >= new_bot) continue;
