@@ -458,7 +458,7 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
     vg = read_filename.find("vg") != -1 or pair_filename.find("vg") != -1    
 
     read_dic = {}
-    prev_read_id = ""
+    prev_read_id, prev_read_seq = "", ""
     sam_file = open(sam_filename, "r")
     for line in sam_file:
         if line[0] == "@":
@@ -466,9 +466,15 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
 
         fields = line[:-1].split()
         read_id, flag, chr, pos, mapQ, cigar_str, mate_chr, mate_pos, template_len, read_seq, read_qual = fields[:11]
+        if 'H' in cigar_str:
+            continue
 
         flag, pos, mate_pos = int(flag), int(pos), int(mate_pos)
+        if read_seq == "*" and prev_read_id == read_id:
+            read_seq = prev_read_seq
         read_seq = read_seq.upper()
+        if read_seq == "" or read_seq == "*":
+            continue
 
         if flag & 0x04 != 0 or \
                chr == "*" or \
@@ -502,6 +508,7 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                     HISAT2_NM = int(field[5:])
 
         prev_read_id = read_id
+        prev_read_seq = read_seq
 
         if snps_dict != None and chr in snps_dict:
             chr_snps = snps_dict[chr]
@@ -940,9 +947,12 @@ def calculate_read_cost():
 
     aligners = [
         ["hisat2", "", "", "", ""],
-        ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
+        ["hisat2", "", "", "", "--sensitive"],
+        ["hisat2", "", "", "", "--very-sensitive"],
+        # ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
         ["hisat2", "", "snp", "", ""],
-        ["hisat2", "", "snp", "", "-k 50 --score-min C,-50,0"],
+        ["hisat2", "", "snp", "", "--sensitive"],
+        # ["hisat2", "", "snp", "", "-k 50"],
         # ["hisat2", "", "", "205", ""],
         # ["hisat2", "", "snp", "205", ""],
         # ["hisat2", "", "snp_tran", "205", ""],
@@ -957,13 +967,15 @@ def calculate_read_cost():
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
         ["bowtie2", "", "", "", ""],
-        ["bowtie2", "", "", "", "-k 10 --score-min C,-18"],
+        ["bowtie2", "", "", "", "-k 10"],
         ["bwa", "mem", "", "", ""],
+        ["bwa", "mem", "", "", "-a"],
         # ["bwa", "sw", "", "", ""],
         # ["star", "", "", "", ""],
         # ["star", "x2", "", "", ""],        
-        ["vg", "", "", "", ""],
+        # ["vg", "", "", "", ""],
         ["vg", "", "snp", "", ""],
+        ["vg", "", "snp", "", "-M 10"],
         ]
 
     # sql_write = False
@@ -1030,7 +1042,7 @@ def calculate_read_cost():
                 version = cmd_process.communicate()[1][:-1].split("\n")[2]
                 version = version.split()[1]
             elif aligner == "vg":
-                cmd = ["vg"]
+                cmd = ["%s/vg" % (aligner_bin_base)]
                 cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                 version = cmd_process.communicate()[1][:-1].split("\n")[0]
                 version = version.split()[5]
@@ -1236,7 +1248,7 @@ def calculate_read_cost():
                     cmd += [read2_fname]
             elif aligner == "vg":
                 # vg map -d 22 -t 6 -M 10 -f ../sim-1.fa -f ../sim-2.fa --surject-to sam > result.sam
-                cmd += ["vg"]
+                cmd += ["%s/vg" % (aligner_bin_base)]
                 cmd += ["map"]
                 cmd += ["-t", str(num_threads)]
                 cmd += ["--surject-to", "sam"]

@@ -1502,8 +1502,8 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],
         # ["vg", "", "", "", ""],
-        # ["vg", "", "snp", "", ""],
-        # ["vg", "", "snp", "", "-M 10"]
+        ["vg", "", "snp", "", ""],
+        ["vg", "", "snp", "", "-M 10"]
         ]
     readtypes = ["all"]
     verbose = True
@@ -1595,7 +1595,7 @@ def calculate_read_cost(verbose):
                     version = cmd_process.communicate()[1][:-1].split("\n")[2]
                     version = version.split()[1]
                 elif aligner == "vg":
-                    cmd = ["vg"]
+                    cmd = ["%s/vg" % (aligner_bin_base)]
                     cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                     version = cmd_process.communicate()[1][:-1].split("\n")[0]
                     version = version.split()[5]
@@ -1810,7 +1810,7 @@ def calculate_read_cost(verbose):
                         cmd += [read2_fname]
                 elif aligner == "vg":
                     # vg map -d 22 -t 6 -M 10 -f ../sim-1.fa -f ../sim-2.fa > result.sam.gam
-                    cmd += ["vg"]
+                    cmd += ["%s/vg" % (aligner_bin_base)]
                     cmd += ["map"]
                     cmd += ["-t", str(num_threads)]
                     cmd += ["--surject-to", "sam"]
