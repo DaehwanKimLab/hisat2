@@ -1246,14 +1246,6 @@ def calculate_read_cost():
 
             return cmd
 
-        init_time = {"hisat2" : 0.0, "hisat" : 0.0, "bowtie" : 0.0, "bowtie2" : 0.0, "star" : 0.0, "olego" : 0.0, "gsnap" : 0.0, "tophat2" : 0.0, "bwa" : 0.0, "vg" : 0.5}
-        if not is_large_file:
-            if desktop:
-                init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 1, "bwa" : 1.3, "vg": 0.5}
-            else:
-                init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1, "bwa" : 3.3, "vg": 0.5}
-        init_time["tophat2"] = 0.0
-                    
         for aligner, type, index_type, version, options in aligners:
             aligner_name = aligner + type + version
             if (aligner == "hisat2" or aligner == "vg") and index_type != "":
@@ -1285,8 +1277,9 @@ def calculate_read_cost():
                         os.system("head -400 ../2.fq > ../two.fq")
 
                 # dummy commands for caching index
+                loading_time = 0 
                 if aligner not in ["tophat2"]:
-                    for i in range(2):
+                    for i in range(3):
                         dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../one.fq", "../two.fq", "/dev/null")
                         start_time = datetime.now()
                         if verbose:
@@ -1301,6 +1294,7 @@ def calculate_read_cost():
                         duration = duration.total_seconds()
                         if verbose:
                             print >> sys.stderr, finish_time, "duration:", duration
+                        loading_time = duration
 
                 # align all reads
                 if paired:
@@ -1327,8 +1321,7 @@ def calculate_read_cost():
                     mem_usage = parse_mem_usage(mem_usage)
                     finish_time = datetime.now()
                     duration = finish_time - start_time
-                    assert aligner in init_time
-                    duration = duration.total_seconds() - init_time[aligner]
+                    duration = duration.total_seconds() - loading_time
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:
@@ -1353,8 +1346,7 @@ def calculate_read_cost():
                     proc.communicate()
                     finish_time = datetime.now()
                     duration += (finish_time - start_time).total_seconds()
-                    assert aligner in init_time
-                    duration -= init_time[aligner]
+                    duration -= loading_time
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:
@@ -1383,8 +1375,7 @@ def calculate_read_cost():
                     proc.communicate()
                     finish_time = datetime.now()
                     duration += (finish_time - start_time).total_seconds()
-                    assert aligner in init_time
-                    duration -= init_time[aligner]
+                    duration -= loading_time
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:

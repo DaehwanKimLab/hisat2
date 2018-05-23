@@ -1831,19 +1831,6 @@ def calculate_read_cost(verbose):
 
                 return cmd
 
-            if test_small:
-                init_time = {"hisat2" : 0.2, "hisat" : 0.1, "bowtie" : 0.1, "bowtie2" : 0.2, "gsnap" : 0.0, "bwa" : 0.0, "vg" : 0.5}
-                if desktop:
-                    init_time["star"] = 1.7
-                else:
-                    init_time["star"] = 0.0
-            else:
-                if desktop:
-                    init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 12, "bwa" : 1.3, "vg" : 0.5}
-                else:
-                    init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1, "bwa" : 3.3, "vg" : 0.5}
-                    
-            init_time["tophat2"] = 0.0
             for aligner, type, index_type, version, options in aligners:
                 aligner_name = aligner + type
                 if version != "":
@@ -1892,17 +1879,24 @@ def calculate_read_cost(verbose):
                         align_stat.append([readtype, aligner_name])
 
                     # dummy commands for caching index and simulated reads
+                    loading_time = 0
                     if aligner != "tophat2":
-                        dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../one.fa", "../two.fa", "/dev/null")
-                        if verbose:
-                            print >> sys.stderr, "\t", datetime.now(), " ".join(dummy_cmd)
-                        if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
-                            proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
-                        else:
-                            proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        proc.communicate()
-                        if verbose:
-                            print >> sys.stderr, "\t", datetime.now(), "finished"
+                        for i in range(3):
+                            dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../one.fa", "../two.fa", "/dev/null")
+                            start_time = datetime.now()
+                            if verbose:
+                                print >> sys.stderr, start_time, "\t", " ".join(dummy_cmd)
+                            if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
+                                proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
+                            else:
+                                proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            proc.communicate()
+                            finish_time = datetime.now()
+                            duration = finish_time - start_time
+                            duration = duration.total_seconds()
+                            if verbose:
+                                print >> sys.stderr, finish_time, "duration:", duration
+                            loading_time = duration
 
                     # Align all reads
                     aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
@@ -1917,8 +1911,7 @@ def calculate_read_cost(verbose):
                     mem_usage = parse_mem_usage(mem_usage)
                     finish_time = datetime.now()
                     duration = finish_time - start_time
-                    assert aligner in init_time
-                    duration = duration.total_seconds() - init_time[aligner]
+                    duration = duration.total_seconds() - loading_time
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:
@@ -1939,8 +1932,7 @@ def calculate_read_cost(verbose):
                         proc.communicate()
                         finish_time = datetime.now()
                         duration += (finish_time - start_time).total_seconds()
-                        assert aligner in init_time
-                        duration -= init_time[aligner]
+                        duration -= loading_time
                         if duration < 0.1:
                             duration = 0.1
                         if verbose:
@@ -1970,8 +1962,7 @@ def calculate_read_cost(verbose):
                         proc.communicate()
                         finish_time = datetime.now()
                         duration += (finish_time - start_time).total_seconds()
-                        assert aligner in init_time
-                        duration -= init_time[aligner]
+                        duration -= loading_time
                         if duration < 0.1:
                             duration = 0.1
                         if verbose:
