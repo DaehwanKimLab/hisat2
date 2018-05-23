@@ -401,7 +401,8 @@ def getSNPs(chr_snps, left, right):
             high = mid - 1
 
     snps = []
-    for snp in chr_snps[low:]:
+    for i in xrange(low, len(chr_snps)):
+        snp = chr_snps[i]
         snpID, type, pos, data = snp
         pos2 = pos
         if type == "deletion":
@@ -454,6 +455,7 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
 
     unmapped_read_1_fq, unmapped_read_2_fq = open(unmapped_read_1_fq_name, "w"), open(unmapped_read_2_fq_name, "w")
     hisat2 = read_filename.find("hisat2") != -1 or pair_filename.find("hisat2") != -1    
+    vg = read_filename.find("vg") != -1 or pair_filename.find("vg") != -1    
 
     read_dic = {}
     prev_read_id = ""
@@ -505,12 +507,12 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
             chr_snps = snps_dict[chr]
         else:
             chr_snps = []
+
+        snps = None
        
         XM, gap = 0, 0
         read_pos, right_pos = 0, pos - 1,
         junction_read = False
-
-        snps = getSNPs(chr_snps, right_pos, right_pos + len(read_seq))
 
         cigars = cigar_re.findall(cigar_str)
         for i in range(len(cigars)):
@@ -537,6 +539,9 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                             if snps_dict == None:
                                 XM += 1
                             else:
+                                if snps == None:
+                                    snps = getSNPs(chr_snps, pos - 1, pos + len(read_seq))
+
                                 found_snp = check_snps(snps, 'single', ref_pos + j, read_seq[read_pos + j])
                                 if not found_snp:
                                     XM += 1
@@ -548,11 +553,15 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                     XM += length
 
             if cigar_op in "I":
+                if snps == None:
+                    snps = getSNPs(chr_snps, pos - 1, pos + len(read_seq))
                 found_snp = check_snps(snps, 'insertion', right_pos, read_seq[read_pos:read_pos + length])
                 if not found_snp:
                     gap += length
                 
             if cigar_op in "D":
+                if snps == None:
+                    snps = getSNPs(chr_snps, pos - 1, pos + len(read_seq))
                 found_snp = check_snps(snps, 'deletion', right_pos, length)
                 if not found_snp:
                     gap += length
@@ -605,7 +614,10 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
     unmapped_read_2_fq.close()
 
 
-    sort = True 
+    sort = False
+    if vg:
+        sort = True
+
     if sort:
         command = "sort %s | uniq > %s; rm %s" % (temp_read_filename, read_filename, temp_read_filename)
         os.system(command)
