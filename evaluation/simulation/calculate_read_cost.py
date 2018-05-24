@@ -8,14 +8,25 @@ from datetime import datetime, date, time
 import copy
 from argparse import ArgumentParser, FileType
 
+osx_mode = False
+if sys.platform == 'darwin':
+    osx_mode = True
+
 """
 """
 def parse_mem_usage(resource):
-    resource = resource.split(' ')
-    for line in resource:
-        idx = line.find('maxresident')
-        if idx != -1:
-            return line[:idx]
+    if osx_mode:
+        resource = resource.strip().split('\n')
+        for line in resource:
+            if line.find('maximum resident set size') != -1:
+                return int(line.split()[0]) / 1024
+    else:
+        resource = resource.split(' ')
+        for line in resource:
+            idx = line.find('maxresident')
+            if idx != -1:
+                return line[:idx]
+
     return '0'
 
 
@@ -1610,6 +1621,8 @@ def calculate_read_cost(verbose):
                 index_add = "_" + genome
             def get_aligner_cmd(RNA, aligner, type, index_type, version, options, read1_fname, read2_fname, out_fname, cmd_idx = 0):
                 cmd = ["/usr/bin/time"]
+                if osx_mode:
+                    cmd += ['-l']
                 if aligner == "hisat2":
                     if version:
                         cmd += ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
