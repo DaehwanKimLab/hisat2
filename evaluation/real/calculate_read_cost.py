@@ -401,7 +401,8 @@ def getSNPs(chr_snps, left, right):
             high = mid - 1
 
     snps = []
-    for snp in chr_snps[low:]:
+    for i in xrange(low, len(chr_snps)):
+        snp = chr_snps[i]
         snpID, type, pos, data = snp
         pos2 = pos
         if type == "deletion":
@@ -454,9 +455,10 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
 
     unmapped_read_1_fq, unmapped_read_2_fq = open(unmapped_read_1_fq_name, "w"), open(unmapped_read_2_fq_name, "w")
     hisat2 = read_filename.find("hisat2") != -1 or pair_filename.find("hisat2") != -1    
+    vg = read_filename.find("vg") != -1 or pair_filename.find("vg") != -1    
 
     read_dic = {}
-    prev_read_id = ""
+    prev_read_id, prev_read_seq = "", ""
     sam_file = open(sam_filename, "r")
     for line in sam_file:
         if line[0] == "@":
@@ -464,9 +466,15 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
 
         fields = line[:-1].split()
         read_id, flag, chr, pos, mapQ, cigar_str, mate_chr, mate_pos, template_len, read_seq, read_qual = fields[:11]
+        if 'H' in cigar_str:
+            continue
 
         flag, pos, mate_pos = int(flag), int(pos), int(mate_pos)
+        if read_seq == "*" and prev_read_id == read_id:
+            read_seq = prev_read_seq
         read_seq = read_seq.upper()
+        if read_seq == "" or read_seq == "*":
+            continue
 
         if flag & 0x04 != 0 or \
                chr == "*" or \
@@ -500,17 +508,18 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                     HISAT2_NM = int(field[5:])
 
         prev_read_id = read_id
+        prev_read_seq = read_seq
 
         if snps_dict != None and chr in snps_dict:
             chr_snps = snps_dict[chr]
         else:
             chr_snps = []
+
+        snps = None
        
         XM, gap = 0, 0
         read_pos, right_pos = 0, pos - 1,
         junction_read = False
-
-        snps = getSNPs(chr_snps, right_pos, right_pos + len(read_seq))
 
         cigars = cigar_re.findall(cigar_str)
         for i in range(len(cigars)):
@@ -537,6 +546,9 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                             if snps_dict == None:
                                 XM += 1
                             else:
+                                if snps == None:
+                                    snps = getSNPs(chr_snps, pos - 1, pos + len(read_seq))
+
                                 found_snp = check_snps(snps, 'single', ref_pos + j, read_seq[read_pos + j])
                                 if not found_snp:
                                     XM += 1
@@ -548,11 +560,15 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
                     XM += length
 
             if cigar_op in "I":
+                if snps == None:
+                    snps = getSNPs(chr_snps, pos - 1, pos + len(read_seq))
                 found_snp = check_snps(snps, 'insertion', right_pos, read_seq[read_pos:read_pos + length])
                 if not found_snp:
                     gap += length
                 
             if cigar_op in "D":
+                if snps == None:
+                    snps = getSNPs(chr_snps, pos - 1, pos + len(read_seq))
                 found_snp = check_snps(snps, 'deletion', right_pos, length)
                 if not found_snp:
                     gap += length
@@ -605,7 +621,10 @@ def extract_reads_and_pairs(chr_dic, sam_filename, read_filename, pair_filename,
     unmapped_read_2_fq.close()
 
 
-    sort = True 
+    sort = False
+    if vg:
+        sort = True
+
     if sort:
         command = "sort %s | uniq > %s; rm %s" % (temp_read_filename, read_filename, temp_read_filename)
         os.system(command)
@@ -928,9 +947,12 @@ def calculate_read_cost():
 
     aligners = [
         ["hisat2", "", "", "", ""],
-        ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
+        ["hisat2", "", "", "", "--sensitive"],
+        ["hisat2", "", "", "", "--very-sensitive"],
+        # ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
         ["hisat2", "", "snp", "", ""],
-        ["hisat2", "", "snp", "", "-k 50 --score-min C,-50,0"],
+        ["hisat2", "", "snp", "", "--sensitive"],
+        # ["hisat2", "", "snp", "", "-k 50"],
         # ["hisat2", "", "", "205", ""],
         # ["hisat2", "", "snp", "205", ""],
         # ["hisat2", "", "snp_tran", "205", ""],
@@ -945,13 +967,15 @@ def calculate_read_cost():
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
         ["bowtie2", "", "", "", ""],
-        ["bowtie2", "", "", "", "-k 10 --score-min C,-18"],
+        ["bowtie2", "", "", "", "-k 10"],
         ["bwa", "mem", "", "", ""],
+        ["bwa", "mem", "", "", "-a"],
         # ["bwa", "sw", "", "", ""],
         # ["star", "", "", "", ""],
         # ["star", "x2", "", "", ""],        
-        ["vg", "", "", "", ""],
+        # ["vg", "", "", "", ""],
         ["vg", "", "snp", "", ""],
+        ["vg", "", "snp", "", "-M 10"],
         ]
 
     # sql_write = False
@@ -1018,7 +1042,7 @@ def calculate_read_cost():
                 version = cmd_process.communicate()[1][:-1].split("\n")[2]
                 version = version.split()[1]
             elif aligner == "vg":
-                cmd = ["vg"]
+                cmd = ["%s/vg" % (aligner_bin_base)]
                 cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                 version = cmd_process.communicate()[1][:-1].split("\n")[0]
                 version = version.split()[5]
@@ -1224,7 +1248,7 @@ def calculate_read_cost():
                     cmd += [read2_fname]
             elif aligner == "vg":
                 # vg map -d 22 -t 6 -M 10 -f ../sim-1.fa -f ../sim-2.fa --surject-to sam > result.sam
-                cmd += ["vg"]
+                cmd += ["%s/vg" % (aligner_bin_base)]
                 cmd += ["map"]
                 cmd += ["-t", str(num_threads)]
                 cmd += ["--surject-to", "sam"]
@@ -1246,14 +1270,6 @@ def calculate_read_cost():
 
             return cmd
 
-        init_time = {"hisat2" : 0.0, "hisat" : 0.0, "bowtie" : 0.0, "bowtie2" : 0.0, "star" : 0.0, "olego" : 0.0, "gsnap" : 0.0, "tophat2" : 0.0, "bwa" : 0.0, "vg" : 0.5}
-        if not is_large_file:
-            if desktop:
-                init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 1, "bwa" : 1.3, "vg": 0.5}
-            else:
-                init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1, "bwa" : 3.3, "vg": 0.5}
-        init_time["tophat2"] = 0.0
-                    
         for aligner, type, index_type, version, options in aligners:
             aligner_name = aligner + type + version
             if (aligner == "hisat2" or aligner == "vg") and index_type != "":
@@ -1285,8 +1301,9 @@ def calculate_read_cost():
                         os.system("head -400 ../2.fq > ../two.fq")
 
                 # dummy commands for caching index
+                loading_time = 0 
                 if aligner not in ["tophat2"]:
-                    for i in range(2):
+                    for i in range(3):
                         dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../one.fq", "../two.fq", "/dev/null")
                         start_time = datetime.now()
                         if verbose:
@@ -1301,6 +1318,7 @@ def calculate_read_cost():
                         duration = duration.total_seconds()
                         if verbose:
                             print >> sys.stderr, finish_time, "duration:", duration
+                        loading_time = duration
 
                 # align all reads
                 if paired:
@@ -1327,8 +1345,7 @@ def calculate_read_cost():
                     mem_usage = parse_mem_usage(mem_usage)
                     finish_time = datetime.now()
                     duration = finish_time - start_time
-                    assert aligner in init_time
-                    duration = duration.total_seconds() - init_time[aligner]
+                    duration = duration.total_seconds() - loading_time
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:
@@ -1353,8 +1370,7 @@ def calculate_read_cost():
                     proc.communicate()
                     finish_time = datetime.now()
                     duration += (finish_time - start_time).total_seconds()
-                    assert aligner in init_time
-                    duration -= init_time[aligner]
+                    duration -= loading_time
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:
@@ -1383,8 +1399,7 @@ def calculate_read_cost():
                     proc.communicate()
                     finish_time = datetime.now()
                     duration += (finish_time - start_time).total_seconds()
-                    assert aligner in init_time
-                    duration -= init_time[aligner]
+                    duration -= loading_time
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:

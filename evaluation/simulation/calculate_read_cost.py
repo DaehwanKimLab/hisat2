@@ -8,14 +8,25 @@ from datetime import datetime, date, time
 import copy
 from argparse import ArgumentParser, FileType
 
+osx_mode = False
+if sys.platform == 'darwin':
+    osx_mode = True
+
 """
 """
 def parse_mem_usage(resource):
-    resource = resource.split(' ')
-    for line in resource:
-        idx = line.find('maxresident')
-        if idx != -1:
-            return line[:idx]
+    if osx_mode:
+        resource = resource.strip().split('\n')
+        for line in resource:
+            if line.find('maximum resident set size') != -1:
+                return int(line.split()[0]) / 1024
+    else:
+        resource = resource.split(' ')
+        for line in resource:
+            idx = line.find('maxresident')
+            if idx != -1:
+                return line[:idx]
+
     return '0'
 
 
@@ -1502,8 +1513,8 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],
         # ["vg", "", "", "", ""],
-        # ["vg", "", "snp", "", ""],
-        # ["vg", "", "snp", "", "-M 10"]
+        ["vg", "", "snp", "", ""],
+        ["vg", "", "snp", "", "-M 10"]
         ]
     readtypes = ["all"]
     verbose = True
@@ -1595,7 +1606,7 @@ def calculate_read_cost(verbose):
                     version = cmd_process.communicate()[1][:-1].split("\n")[2]
                     version = version.split()[1]
                 elif aligner == "vg":
-                    cmd = ["vg"]
+                    cmd = ["%s/vg" % (aligner_bin_base)]
                     cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                     version = cmd_process.communicate()[1][:-1].split("\n")[0]
                     version = version.split()[5]
@@ -1610,6 +1621,8 @@ def calculate_read_cost(verbose):
                 index_add = "_" + genome
             def get_aligner_cmd(RNA, aligner, type, index_type, version, options, read1_fname, read2_fname, out_fname, cmd_idx = 0):
                 cmd = ["/usr/bin/time"]
+                if osx_mode:
+                    cmd += ['-l']
                 if aligner == "hisat2":
                     if version:
                         cmd += ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
@@ -1810,7 +1823,7 @@ def calculate_read_cost(verbose):
                         cmd += [read2_fname]
                 elif aligner == "vg":
                     # vg map -d 22 -t 6 -M 10 -f ../sim-1.fa -f ../sim-2.fa > result.sam.gam
-                    cmd += ["vg"]
+                    cmd += ["%s/vg" % (aligner_bin_base)]
                     cmd += ["map"]
                     cmd += ["-t", str(num_threads)]
                     cmd += ["--surject-to", "sam"]
@@ -1831,19 +1844,6 @@ def calculate_read_cost(verbose):
 
                 return cmd
 
-            if test_small:
-                init_time = {"hisat2" : 0.2, "hisat" : 0.1, "bowtie" : 0.1, "bowtie2" : 0.2, "gsnap" : 0.0, "bwa" : 0.0, "vg" : 0.5}
-                if desktop:
-                    init_time["star"] = 1.7
-                else:
-                    init_time["star"] = 0.0
-            else:
-                if desktop:
-                    init_time = {"hisat2" : 3.0, "hisat" : 3.0, "bowtie" : 1.3, "bowtie2" : 1.9, "star" : 27.0, "gsnap" : 12, "bwa" : 1.3, "vg" : 0.5}
-                else:
-                    init_time = {"hisat2" : 9.5, "hisat" : 9.5, "bowtie" : 3.3, "bowtie2" : 4.1, "star" : 1.7, "gsnap" : 0.1, "bwa" : 3.3, "vg" : 0.5}
-                    
-            init_time["tophat2"] = 0.0
             for aligner, type, index_type, version, options in aligners:
                 aligner_name = aligner + type
                 if version != "":
@@ -1892,17 +1892,24 @@ def calculate_read_cost(verbose):
                         align_stat.append([readtype, aligner_name])
 
                     # dummy commands for caching index and simulated reads
+                    loading_time = 0
                     if aligner != "tophat2":
-                        dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../one.fa", "../two.fa", "/dev/null")
-                        if verbose:
-                            print >> sys.stderr, "\t", datetime.now(), " ".join(dummy_cmd)
-                        if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
-                            proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
-                        else:
-                            proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        proc.communicate()
-                        if verbose:
-                            print >> sys.stderr, "\t", datetime.now(), "finished"
+                        for i in range(3):
+                            dummy_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../one.fa", "../two.fa", "/dev/null")
+                            start_time = datetime.now()
+                            if verbose:
+                                print >> sys.stderr, start_time, "\t", " ".join(dummy_cmd)
+                            if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
+                                proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
+                            else:
+                                proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            proc.communicate()
+                            finish_time = datetime.now()
+                            duration = finish_time - start_time
+                            duration = duration.total_seconds()
+                            if verbose:
+                                print >> sys.stderr, finish_time, "duration:", duration
+                            loading_time = duration
 
                     # Align all reads
                     aligner_cmd = get_aligner_cmd(RNA, aligner, type, index_type, version, options, "../" + type_read1_fname, "../" + type_read2_fname, out_fname)
@@ -1917,8 +1924,7 @@ def calculate_read_cost(verbose):
                     mem_usage = parse_mem_usage(mem_usage)
                     finish_time = datetime.now()
                     duration = finish_time - start_time
-                    assert aligner in init_time
-                    duration = duration.total_seconds() - init_time[aligner]
+                    duration = duration.total_seconds() - loading_time
                     if duration < 0.1:
                         duration = 0.1
                     if verbose:
@@ -1939,8 +1945,7 @@ def calculate_read_cost(verbose):
                         proc.communicate()
                         finish_time = datetime.now()
                         duration += (finish_time - start_time).total_seconds()
-                        assert aligner in init_time
-                        duration -= init_time[aligner]
+                        duration -= loading_time
                         if duration < 0.1:
                             duration = 0.1
                         if verbose:
@@ -1970,8 +1975,7 @@ def calculate_read_cost(verbose):
                         proc.communicate()
                         finish_time = datetime.now()
                         duration += (finish_time - start_time).total_seconds()
-                        assert aligner in init_time
-                        duration -= init_time[aligner]
+                        duration -= loading_time
                         if duration < 0.1:
                             duration = 0.1
                         if verbose:

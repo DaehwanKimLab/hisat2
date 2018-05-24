@@ -7,10 +7,17 @@ signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 use_message = '''
 '''
 
+osx_mode = False
+if sys.platform == 'darwin':
+    osx_mode = True
+
 def make_cat_cmd(gzmode, read_dir_base, read_dir, fq_name, num_read):
     cmd = []
     if gzmode:
-        cmd += ["zcat"]
+        if osx_mode:
+            cmd += ["gzcat"]
+        else:
+            cmd += ["zcat"]
     else:
         cmd += ["cat"]
 
