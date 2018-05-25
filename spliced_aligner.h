@@ -217,6 +217,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
             
             bool found = genomeHit.len() >= rd.length();
             if(!found) {
+                // CP todo 2
                 DynProgFramer dpframe(false);  // trimToRef
                 size_t tlen = ref.approxLen(genomeHit.ref());
                 size_t readGaps = 10, refGaps = 10, nceil = 0, maxhalf = 10;

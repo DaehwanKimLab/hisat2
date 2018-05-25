@@ -4775,7 +4775,15 @@ bool HI_Aligner<index_t, local_index_t>::align(
     ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
     assert(hit.done());
     index_t minOff = 0;
+    
+    // CP todo 1
+#if 1
     if(hit.minWidth(minOff) > (index_t)(rp.kseeds * 2)) return false;
+#else
+    if(hit.minWidth(minOff) > rp.kseeds) {
+        // randomly select rp.kseeds
+    }
+#endif
     
     // Don't try to align if the potential alignment for this read might be
     // worse than the best alignment of its reverse complement
