@@ -799,7 +799,11 @@ public:
                 }
                 index_t new_node_bot = node_bot;
                 if(new_bot - top < tmp_gbwt_to_node.size()) {
-                    new_node_bot = node_top + tmp_gbwt_to_node[new_bot - top] + 1;
+                    new_node_bot = node_top + tmp_gbwt_to_node[new_bot - top];
+                    if(new_bot - top > 0 &&
+                       tmp_gbwt_to_node[new_bot - top] == tmp_gbwt_to_node[new_bot - top - 1]) {
+                        new_node_bot++;
+                    }
                 }
                 tmp_node_iedge_count.clear();
                 if(new_top >= new_bot) continue;
