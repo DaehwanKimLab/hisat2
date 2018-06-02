@@ -1513,8 +1513,8 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],
         # ["vg", "", "", "", ""],
-        ["vg", "", "snp", "", ""],
-        ["vg", "", "snp", "", "-M 10"]
+        # ["vg", "", "snp", "", ""],
+        # ["vg", "", "snp", "", "-M 10"]
         ]
     readtypes = ["all"]
     verbose = True
@@ -1537,8 +1537,8 @@ def calculate_read_cost(verbose):
     chr_dic = read_genome("../../data/%s.fa" % genome)
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     align_stat = []
-    for paired in [False, True]:
-    # for paired in [False]:
+    # for paired in [False, True]:
+    for paired in [True]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"

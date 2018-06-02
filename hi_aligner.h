@@ -4479,14 +4479,12 @@ public:
         assert(hit.done());
         index_t offsetSize = hit.offsetSize();
         assert_gt(offsetSize, 0);
-        const index_t max_size = (hit._cur >= hit._len ? maxGenomeHitSize : 1);
         genomeHits.clear();
         for(size_t hi = 0; hi < offsetSize; hi++) {
             index_t hj = 0;
             for(; hj < offsetSize; hj++) {
                 BWTHit<index_t>& partialHit_j = hit.getPartialHit(hj);
                 if(partialHit_j.empty() ||
-                   (partialHit_j._hit_type == CANDIDATE_HIT && partialHit_j.size() > max_size) ||
                    partialHit_j.hasGenomeCoords() ||
                    partialHit_j.len() <= _minK + 2) continue;
                 else break;
@@ -4496,7 +4494,6 @@ public:
                 BWTHit<index_t>& partialHit_j = hit.getPartialHit(hj);
                 BWTHit<index_t>& partialHit_k = hit.getPartialHit(hk);
                 if(partialHit_k.empty() ||
-                   (partialHit_k._hit_type == CANDIDATE_HIT && partialHit_k.size() > max_size) ||
                    partialHit_k.hasGenomeCoords() ||
                    partialHit_k.len() <= _minK + 2) continue;
                 
@@ -4513,27 +4510,82 @@ public:
             }
             BWTHit<index_t>& partialHit = hit.getPartialHit(hj);
             assert(!partialHit.hasGenomeCoords());
+            
+            // Retrieve genomic coordinates
+            //  If there are too many genomic coordinates to get,
+            //  then we randomly choose and retrieve a small set of them
+            assert_lt(genomeHits.size(), maxGenomeHitSize);
+            index_t remainedGenomeHitSize = maxGenomeHitSize - genomeHits.size();
+            index_t expectedNumCoords = partialHit._node_bot - partialHit._node_top;
             bool straddled = false;
-            getGenomeCoords(
-                            gfm,
-                            altdb,
-                            ref,
-                            rnd,
-                            partialHit._top,
-                            partialHit._bot,
-                            partialHit._node_top,
-                            partialHit._node_bot,
-                            partialHit._node_iedge_count,
-                            fw,
-                            partialHit._bot - partialHit._top,
-                            hit._len - partialHit._bwoff - partialHit._len,
-                            partialHit._len,
-                            partialHit._coords,
-                            wlm,
-                            prm,
-                            him,
-                            false, // reject straddled
-                            straddled);
+            if(expectedNumCoords <= remainedGenomeHitSize) {
+                getGenomeCoords(
+                                gfm,
+                                altdb,
+                                ref,
+                                rnd,
+                                partialHit._top,
+                                partialHit._bot,
+                                partialHit._node_top,
+                                partialHit._node_bot,
+                                partialHit._node_iedge_count,
+                                fw,
+                                partialHit._bot - partialHit._top,
+                                hit._len - partialHit._bwoff - partialHit._len,
+                                partialHit._len,
+                                partialHit._coords,
+                                wlm,
+                                prm,
+                                him,
+                                false, // reject straddled
+                                straddled);
+            } else {
+                index_t edgeIdx = 0;
+                index_t top = partialHit._top;
+                index_t added = 0;
+                for(index_t node = partialHit._node_top; node < partialHit._node_bot; node++) {
+                    index_t bot = top + 1;
+                    _tmp_node_iedge_count.clear();
+                    if(edgeIdx < partialHit._node_iedge_count.size()) {
+                        assert_leq(node - partialHit._node_top, partialHit._node_iedge_count[edgeIdx].first);
+                        if(node - partialHit._node_top == partialHit._node_iedge_count[edgeIdx].first) {
+                            bot += partialHit._node_iedge_count[edgeIdx].second;
+                            _tmp_node_iedge_count.expand();
+                            _tmp_node_iedge_count.back() = partialHit._node_iedge_count[edgeIdx];
+                            edgeIdx++;
+                        }
+                    }
+                    assert_leq(remainedGenomeHitSize, expectedNumCoords);
+                    assert_leq(added, remainedGenomeHitSize);
+                    uint32_t rndi = rnd.nextU32() % (expectedNumCoords - added);
+                    if(rndi < remainedGenomeHitSize - added) {
+                        getGenomeCoords(
+                                        gfm,
+                                        altdb,
+                                        ref,
+                                        rnd,
+                                        top,
+                                        bot,
+                                        node,
+                                        node + 1,
+                                        _tmp_node_iedge_count,
+                                        fw,
+                                        partialHit._bot - partialHit._top,
+                                        hit._len - partialHit._bwoff - partialHit._len,
+                                        partialHit._len,
+                                        partialHit._coords,
+                                        wlm,
+                                        prm,
+                                        him,
+                                        false, // reject straddled
+                                        straddled);
+                        added++;
+                        if(added >= remainedGenomeHitSize) break;
+                    }
+                    top = bot;
+                }
+            }
+            
             if(!partialHit.hasGenomeCoords()) continue;
             EList<Coord>& coords = partialHit._coords;
             assert_gt(coords.size(), 0);
@@ -4775,15 +4827,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
     assert(hit.done());
     index_t minOff = 0;
-    
-    // CP todo 1
-#if 1
-    if(hit.minWidth(minOff) > (index_t)(rp.kseeds * 2)) return false;
-#else
-    if(hit.minWidth(minOff) > rp.kseeds) {
-        // randomly select rp.kseeds
-    }
-#endif
+    if(hit.minWidth(minOff) == std::numeric_limits<index_t>::max()) return false;
     
     // Don't try to align if the potential alignment for this read might be
     // worse than the best alignment of its reverse complement
