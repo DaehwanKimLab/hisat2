@@ -645,9 +645,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     // if(this->_anchors_added[i] < this->_anchors_added.back()) continue;
                     
                     //}
-		    if(i > 0 && !this->isSearched(canHit, rdi)) {
-		      this->addSearched(canHit, rdi);
-		    }
+                    if(i > 0 && !this->isSearched(canHit, rdi)) {
+                        this->addSearched(canHit, rdi);
+                    }
                     if(!this->redundant(sink, rdi, canHit)) {
                         this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, ref, ssdb, sink, rdi, canHit);
                         maxsc = max<int64_t>(maxsc, canHit.score());

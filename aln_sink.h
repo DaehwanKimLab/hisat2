@@ -2416,6 +2416,32 @@ bool AlnSinkWrap<index_t>::report(
 	bool one = (rs1 != NULL);
 	const AlnRes* rsa = one ? rs1 : rs2;
 	const AlnRes* rsb = one ? rs2 : rs1;
+    
+    // Tally overall alignment score
+    TAlScore score = rsa->score().score();
+    if(rsb != NULL) score += rsb->score().score();
+    index_t num_spliced = (index_t)rsa->num_spliced();
+    if(rsb != NULL) num_spliced += (index_t)rsb->num_spliced();
+    
+    // Limit the size of alignments to be stored in order to save memory
+    if(rp_.khits > 10) {
+        if(paired) {
+            if(rs1_.size() >= rp_.khits * 2 && score < best2Pair_) {
+                return false;
+            }
+        } else {
+            if(one) {
+                if(rs1u_.size() >= rp_.khits * 2 && score < best2Unp1_) {
+                    return false;
+                }
+            } else {
+                if(rs2u_.size() >= rp_.khits * 2 && score < best2Unp2_) {
+                    return false;
+                }
+            }
+        }
+    }
+    
 	if(paired) {
 		assert(readIsPair());
 		st_.foundConcordant();
@@ -2429,11 +2455,7 @@ bool AlnSinkWrap<index_t>::report(
 			rs2u_.push_back(*rs2);
 		}
 	}
-	// Tally overall alignment score
-	TAlScore score = rsa->score().score();
-	if(rsb != NULL) score += rsb->score().score();
-    index_t num_spliced = (index_t)rsa->num_spliced();
-    if(rsb != NULL) num_spliced += (index_t)rsb->num_spliced();
+	
 	// Update best score so far
 	if(paired) {
 		if(score > bestPair_) {

@@ -849,8 +849,8 @@ static void printUsage(ostream& out) {
 		// << "   --fast                 -D 10 -R 2 -N 0 -L 22 -i S,0,2.50" << endl
 		// << "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
 		// << "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
-        << "   --sensitive            --bowtie2-dp 1 -k 50 --score-min L,0,-0.5" << endl
-        << "   --very-sensitive       --bowtie2-dp 2 -k 100 --score-min L,0,-1" << endl
+        << "   --sensitive            --bowtie2-dp 1 -k 30 --score-min L,0,-0.5" << endl
+        << "   --very-sensitive       --bowtie2-dp 2 -k 50 --score-min L,0,-1" << endl
 		<< endl
 #if 0
 		<< "  For --local:" << endl
@@ -1837,8 +1837,8 @@ static void parseOptions(int argc, const char **argv) {
     
     if(very_sensitive) {
         bowtie2_dp = 2;
-        if(khits < 100) {
-            khits = 100;
+        if(khits < 50) {
+            khits = 50;
             saw_k = true;
         }
         scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -1.0f);
@@ -1847,8 +1847,8 @@ static void parseOptions(int argc, const char **argv) {
         if(bowtie2_dp == 0) {
             bowtie2_dp = 1;
         }
-        if(khits < 50) {
-            khits = 50;
+        if(khits < 30) {
+            khits = 30;
             saw_k = true;
         }
         scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -0.5f);
