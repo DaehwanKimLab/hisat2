@@ -5328,7 +5328,8 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
             }
         
             if(!tpol.no_spliced_alignment() || dna_frag_pass) {
-                TAlScore threshold = std::max<TAlScore>(sink.bestPair(), sink.bestUnp1() + sink.bestUnp2() - (r1.readLength() + r2.readLength()) * 0.06);
+                TAlScore threshold = std::max<TAlScore>(sink.bestPair(),
+                                                        sink.bestUnp1() + sink.bestUnp2() - (r1.readLength() + r2.readLength()) * 0.02 * sc.mm(255));
                 if(r1.score().score() + r2.score().score() >= threshold || _secondary) {
                     sink.report(0, &r1, &r2);
                     _concordantPairs.expand();
