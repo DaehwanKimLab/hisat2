@@ -8,18 +8,30 @@ import re
 from datetime import datetime, date, time
 from collections import defaultdict
 
+osx_mode = False
+if sys.platform == 'darwin':
+    osx_mode = True
+
 MAX_EDIT = 21
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 """
 """
 def parse_mem_usage(resource):
-    resource = resource.split(' ')
-    for line in resource:
-        idx = line.find('maxresident')
-        if idx != -1:
-            return line[:idx]
+    if osx_mode:
+        resource = resource.strip().split('\n')
+        for line in resource:
+            if line.find('maximum resident set size') != -1:
+                return int(line.split()[0]) / 1024
+    else:
+        resource = resource.split(' ')
+        for line in resource:
+            idx = line.find('maxresident')
+            if idx != -1:
+                return line[:idx]
+
     return '0'
+
 
 """
 """
@@ -914,21 +926,6 @@ def calculate_read_cost():
     verbose = False
     just_runtime = False
     sql_write = True
-    aligners = [
-        ["hisat2", "", "", "", ""],
-        ["hisat2", "", "snp", "", ""],
-        ["hisat2", "", "snp_tran", "", ""],
-        ["hisat", "x1", "", "", ""],
-        ["hisat", "", "", "", ""],
-        ["hisat", "x2", "", "", ""],
-        ["tophat2", "", "", "", ""],
-        ["star", "", "", "", ""],
-        ["star", "x2", "", "", ""],
-        ["gsnap", "", "", "", ""],
-        ["bowtie", "", "", "", ""],
-        ["bowtie2", "", "", "", ""],
-        ["bwa", "", "", "", ""]
-        ]
     is_large_file = False
     gz_file = False
     if os.path.exists("1.fq.gz"):
@@ -973,7 +970,7 @@ def calculate_read_cost():
         # ["bwa", "sw", "", "", ""],
         # ["star", "", "", "", ""],
         # ["star", "x2", "", "", ""],        
-        # ["vg", "", "", "", ""],
+        ["vg", "", "", "", ""],
         ["vg", "", "snp", "", ""],
         ["vg", "", "snp", "", "-M 10"],
         ]
@@ -1055,6 +1052,8 @@ def calculate_read_cost():
             index_add = "_" + genome
         def get_aligner_cmd(RNA, aligner, type, index_type, version, options, read1_fname, read2_fname, out_fname, cmd_idx = 0):
             cmd = ["/usr/bin/time"]
+            if osx_mode:
+                cmd += ['-l']
             if aligner == "hisat2":
                 if version:
                     cmd += ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
@@ -1080,7 +1079,7 @@ def calculate_read_cost():
                 if not RNA:
                     cmd += ["--no-spliced-alignment"]
 
-                if type in ["x1", "x2"] or not RNA:
+                if type in ["x1", "x2"]:
                     cmd += ["--no-temp-splicesite"]
 
                 # daehwan - for debugging purposes
@@ -1294,8 +1293,8 @@ def calculate_read_cost():
             if not os.path.exists(out_fname):
                 if not os.path.exists("../one.fq") or not os.path.exists("../two.fq"):
                     if gz_file:
-                        os.system("zcat ../1.fq.gz | head -400 > ../one.fq")
-                        os.system("zcat ../2.fq.gz | head -400 > ../two.fq")
+                        os.system("gzip -cd ../1.fq.gz | head -400 > ../one.fq")
+                        os.system("gzip -cd ../2.fq.gz | head -400 > ../two.fq")
                     else:
                         os.system("head -400 ../1.fq > ../one.fq")
                         os.system("head -400 ../2.fq > ../two.fq")
@@ -1434,7 +1433,7 @@ def calculate_read_cost():
 
             out = '' 
             if gz_file:
-                out = subprocess.check_output("zcat ../%s | wc -l" % type_read1_fname, shell=True)
+                out = subprocess.check_output("gzip -cd ../%s | wc -l" % type_read1_fname, shell=True)
             else:
                 out = subprocess.check_output("wc -l ../%s" % type_read1_fname, shell=True)
 

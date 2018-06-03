@@ -5328,7 +5328,8 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
             }
         
             if(!tpol.no_spliced_alignment() || dna_frag_pass) {
-                if(r1.score().score() + r2.score().score() >= sink.bestPair() || _secondary) {
+                if(r1.score().score() + r2.score().score() >= std::max(sink.bestPair(), sink.bestUnp1() + sink.bestUnp2()) ||
+                   _secondary) {
                     sink.report(0, &r1, &r2);
                     _concordantPairs.expand();
                     _concordantPairs.back().first = i;
