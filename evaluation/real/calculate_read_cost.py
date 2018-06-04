@@ -815,9 +815,10 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
 
     alignment, dis_alignments = [], []
     prev_read_id = ""
-    discon_file = open(pair_filename + ".discon", "w")
-    pair_filename = open(pair_filename, "r")
-    for line in pair_filename:
+    con_file = open(pair_filename + ".con", "w")
+    discon_file = open(pair_filename + ".discon", "w")    
+    pair_file = open(pair_filename, "r")
+    for line in pair_file:
         read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_chr, mate_pos, mate_cigar_str, mate_XM, mate_NM = line[:-1].split()
         flag, pos, XM, NM, mate_flag, mate_pos, mate_XM, mate_NM = \
              int(flag), int(pos), int(XM[5:]), int(NM[5:]), int(mate_flag), int(mate_pos), int(mate_XM[5:]), int(mate_NM[5:])
@@ -830,8 +831,7 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
 
         # check concordantly
         concord_align, segment_len  = is_concordantly(read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_chr, mate_pos, mate_cigar_str, mate_XM, mate_NM)
-        if not concord_align:
-            print >> discon_file, line, ('none', 'first')[(flag & 0x40 == 0x40)], ('none', 'last')[(mate_flag & 0x80 == 0x80)], segment_len
+        print >> (con_file if concord_align else discon_file), line, ('none', 'first')[(flag & 0x40 == 0x40)], ('none', 'last')[(mate_flag & 0x80 == 0x80)], segment_len
 
         if junction_pair:
             for junction_str, is_gtf_junction in pair_junctions:
@@ -875,7 +875,9 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
             elif dis_alignments[0] > pair_NM:
                 dis_alignments = [pair_NM]
 
-    pair_filename.close()
+    pair_file.close()
+    con_file.close()
+    discon_file.close()
 
     # process last line
     if alignment:
@@ -1039,7 +1041,7 @@ def calculate_read_cost():
         # ["hisat", "", "", "", ""],
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
-        # ["bowtie2", "", "", "", ""],
+        ["bowtie2", "", "", "", ""],
         # ["bowtie2", "", "", "", "-k 10"],
         # ["bwa", "mem", "", "", ""],
         # ["bwa", "mem", "", "", "-a"],
