@@ -831,7 +831,7 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
         # check concordantly
         concord_align, segment_len  = is_concordantly(read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_chr, mate_pos, mate_cigar_str, mate_XM, mate_NM)
         if not concord_align:
-            print >> discon_file, line, ('none', 'first')[(flag & 0x40 == 0x40)], ('none', 'last')[(mate_flag & 0x80 == 0x80)], segment_len
+            print >> discon_file, line.strip(), ('none', 'first')[(flag & 0x40 == 0x40)], ('none', 'last')[(mate_flag & 0x80 == 0x80)], segment_len
 
         if junction_pair:
             for junction_str, is_gtf_junction in pair_junctions:
