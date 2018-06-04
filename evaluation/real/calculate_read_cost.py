@@ -945,10 +945,10 @@ def calculate_read_cost():
     aligners = [
         ["hisat2", "", "", "", ""],
         ["hisat2", "", "", "", "--sensitive"],
-        ["hisat2", "", "", "", "--very-sensitive"],
+        # ["hisat2", "", "", "", "--very-sensitive"],
         # ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
-        ["hisat2", "", "snp", "", ""],
-        ["hisat2", "", "snp", "", "--sensitive"],
+        # ["hisat2", "", "snp", "", ""],
+        # ["hisat2", "", "snp", "", "--sensitive"],
         # ["hisat2", "", "snp", "", "-k 50"],
         # ["hisat2", "", "", "205", ""],
         # ["hisat2", "", "snp", "205", ""],
@@ -963,16 +963,16 @@ def calculate_read_cost():
         # ["hisat", "", "", "", ""],
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
-        ["bowtie2", "", "", "", ""],
-        ["bowtie2", "", "", "", "-k 10"],
-        ["bwa", "mem", "", "", ""],
-        ["bwa", "mem", "", "", "-a"],
+        # ["bowtie2", "", "", "", ""],
+        # ["bowtie2", "", "", "", "-k 10"],
+        # ["bwa", "mem", "", "", ""],
+        # ["bwa", "mem", "", "", "-a"],
         # ["bwa", "sw", "", "", ""],
         # ["star", "", "", "", ""],
         # ["star", "x2", "", "", ""],        
-        ["vg", "", "", "", ""],
-        ["vg", "", "snp", "", ""],
-        ["vg", "", "snp", "", "-M 10"],
+        # ["vg", "", "", "", ""],
+        # ["vg", "", "snp", "", ""],
+        # ["vg", "", "snp", "", "-M 10"],
         ]
 
     # sql_write = False
@@ -995,8 +995,8 @@ def calculate_read_cost():
 
     print >> sys.stderr, "aligner\tuse_annotation\tend_type\tedit_distance\tmapped_reads\tjunction_reads\tgtf_junction_reads\tjunctions\tgtf_junctions\truntime"
     
-    for paired in [False, True]:
-    # for paired in [False]:
+    # for paired in [False, True]:
+    for paired in [True]:
         type_read1_fname = "1.fq"
         if gz_file:
             type_read1_fname += ".gz"

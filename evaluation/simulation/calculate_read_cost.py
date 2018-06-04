@@ -1488,7 +1488,6 @@ def calculate_read_cost(verbose):
         ["hisat2", "", "", "", ""],
         ["hisat2", "", "", "", "--sensitive"],
         ["hisat2", "", "", "", "--very-sensitive"],
-        # ["hisat2", "", "", "", "-k 50"],
         ["hisat2", "", "snp", "", ""],
         ["hisat2", "", "snp", "", "--sensitive"],
         # ["hisat2", "", "snp_noht", "", ""],
