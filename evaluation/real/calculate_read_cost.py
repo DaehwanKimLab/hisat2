@@ -15,6 +15,8 @@ if sys.platform == 'darwin':
 MAX_EDIT = 21
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
+cigar_re = re.compile('\d+\w')
+
 """
 """
 def parse_mem_usage(resource):
@@ -174,9 +176,6 @@ def extract_splice_sites(gtf_fname):
     return junctions
 
 
-cigar_re = re.compile('\d+\w')
-
-
 def to_junction_str(junction):
     return "%s-%d-%d" % (junction[0], junction[1], junction[2])
 
@@ -255,8 +254,6 @@ def get_junctions(chr, pos, cigar_str, min_anchor_len = 0, read_len = 100):
 
     return junctions
 
-
-cigar_re = re.compile('\d+\w')
 
 def get_right(pos, cigars):
     right_pos = pos
@@ -743,14 +740,82 @@ def read_stat(read_filename, gtf_junctions, chr_dic = None, debug = False):
     return read_stat
 
 
+def cal_read_len(cigar_str):
+    length = 0
+    leftmost_softclip = 0
+    rightmost_softclip = 0
+    cigars = cigar_re.findall(cigar_str)
+
+    for i in range(len(cigars)):
+        cigar = cigars[i]
+        cigar_length = int(cigar[:-1])
+        cigar_op = cigar[-1]
+
+        if cigar_op in "MIS":
+            length += cigar_length
+
+        if (i == 0) and (cigar_op == "S"):
+            leftmost_softclip = cigar_length
+        if (i == (len(cigars) - 1)) and (cigar_op == "S"):
+            rightmost_softclip = cigar_length
+
+    return length, leftmost_softclip, rightmost_softclip
+
+def is_concordantly(read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_chr, mate_pos, mate_cigar_str, mate_XM, mate_NM):
+    concord_length = 1000
+    segment_length = 0
+
+    pairs = {}
+    pairs[0] = [flag, chr, pos, cigar_str, XM, NM]
+    pairs[1] = [mate_flag, mate_chr, mate_pos, mate_cigar_str, mate_XM, mate_NM]
+
+    if chr != mate_chr:
+        return False, segment_length
+
+    reverse = False
+    left = pairs[0]
+    right = pairs[1]
+
+    """
+    if pos >= mate_pos:
+        left = pairs[1]
+        right = pairs[0]
+        reverse = True
+    """
+    if (flag & 0x40 == 0x40) and (mate_flag & 0x80 == 0x80):
+        left = pairs[0]
+        right = pairs[1]
+        reverse = False
+    elif (flag & 0x80 == 0x80) and (mate_flag & 0x40 == 0x40):
+        left = pairs[1]
+        right = pairs[0]
+        reverse = True
+    else:
+        return False, segment_length
+
+    left_start = left[2]
+    left_len, _, _ = cal_read_len(left[3]) # cigar
+
+    right_start = right[2]
+    right_len, _, right_soft = cal_read_len(right[3]) 
+
+    segment_length = (right_start + right_len) - left_start - right_soft
+
+    if segment_length > concord_length:
+        return False, segment_length
+
+    return True, segment_length
+
 def pair_stat(pair_filename, gtf_junctions, chr_dic):
-    pair_stat = [[0, 0, 0] for i in range(MAX_EDIT)]
+    # pair_stat = NM, junction_pair, gtf_junction, concordant_alignment]
+    pair_stat = [[0, 0, 0, 0] for i in range(MAX_EDIT)]
     dis_pair_stat = [0 for i in range(MAX_EDIT)]
     temp_junctions = [set() for i in range(MAX_EDIT)]
     temp_gtf_junctions = [set() for i in range(MAX_EDIT)]
 
     alignment, dis_alignments = [], []
     prev_read_id = ""
+    discon_file = open(pair_filename + ".discon", "w")
     pair_filename = open(pair_filename, "r")
     for line in pair_filename:
         read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_chr, mate_pos, mate_cigar_str, mate_XM, mate_NM = line[:-1].split()
@@ -763,6 +828,11 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
         pair_junctions, junction_pair, gtf_junction_pair = \
             is_junction_pair(chr_dic, gtf_junctions, chr, pos, cigar_str, mate_chr, mate_pos, mate_cigar_str)
 
+        # check concordantly
+        concord_align, segment_len  = is_concordantly(read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_chr, mate_pos, mate_cigar_str, mate_XM, mate_NM)
+        if not concord_align:
+            print >> discon_file, line, ('none', 'first')[(flag & 0x40 == 0x40)], ('none', 'last')[(mate_flag & 0x80 == 0x80)], segment_len
+
         if junction_pair:
             for junction_str, is_gtf_junction in pair_junctions:
                 if pair_NM < len(temp_junctions):
@@ -773,7 +843,7 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
 
         if read_id != prev_read_id:
             if prev_read_id != "":
-                NM2, junction_read2, gtf_junction_read2 = alignment
+                NM2, junction_read2, gtf_junction_read2, concord_align2 = alignment
                 if NM2 < len(pair_stat):
                     pair_stat[NM2][0] += 1
 
@@ -781,6 +851,8 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
                         pair_stat[NM2][1] += 1
                         if gtf_junction_read2:
                             pair_stat[NM2][2] += 1
+                    if concord_align2:
+                        pair_stat[NM2][3] += 1
 
             for NM2 in dis_alignments:
                 if NM2 < len(dis_pair_stat):
@@ -792,10 +864,10 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
         prev_read_id = read_id
 
         if not alignment:
-            alignment = [pair_NM, junction_pair, gtf_junction_pair]
+            alignment = [pair_NM, junction_pair, gtf_junction_pair, concord_align]
         elif alignment[0] > pair_NM or \
                 (alignment[0] == pair_NM and not alignment[2] and junction_pair):
-            alignment = [pair_NM, junction_pair, gtf_junction_pair]
+            alignment = [pair_NM, junction_pair, gtf_junction_pair, concord_align]
 
         if mate_chr != chr or ((flag & 0x10) != 0 or (mate_flag & 0x10) == 0):
             if len(dis_alignments) == 0:
@@ -805,8 +877,9 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
 
     pair_filename.close()
 
+    # process last line
     if alignment:
-        NM2, junction_read2, gtf_junction_read2 = alignment
+        NM2, junction_read2, gtf_junction_read2, concord_align2 = alignment
         if NM2 < len(pair_stat):
             pair_stat[NM2][0] += 1
 
@@ -814,6 +887,9 @@ def pair_stat(pair_filename, gtf_junctions, chr_dic):
                 pair_stat[NM2][1] += 1
                 if gtf_junction_read2:
                     pair_stat[NM2][2] += 1
+
+            if concord_align2:
+                pair_stat[NM2][3] += 1
 
     assert len(dis_alignments) <= 1
     for NM2 in dis_alignments:
@@ -1443,7 +1519,8 @@ def calculate_read_cost():
             if not os.path.exists(done_filename):
                 done_file = open(done_filename, "w")
                 if paired:
-                    sum, dis_sum = [0, 0, 0, 0, 0], 0
+                    sum = [0, 0, 0, 0, 0, 0] # mappep_read, junction_read, gtf_junction_reads, concord_mapped_read, num_junctions, num_gtf_junctions
+                    dis_sum = 0
                     stat, dis_stat = pair_stat(pair_sam, gtf_junctions, chr_dic)
                     output = ""
                     for i in range(len(stat)):
@@ -1451,8 +1528,8 @@ def calculate_read_cost():
                             sum[j] += stat[i][j]
 
                         dis_sum += dis_stat[i]
-                        mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions = sum
-                        output += "%s\t%s\tpaired\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\t%d\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, (numreads / max(1.0, duration)))
+                        mapped_reads, junction_reads, gtf_junction_reads, concord_mapped_read, num_junctions, num_gtf_junctions = sum
+                        output += "%s\t%s\tpaired\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\t%d\t%d\t%.2f%%\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, (numreads / max(1.0, duration)), concord_mapped_read, float(concord_mapped_read) * 100.0 / numreads)
 
                         if sql_write and os.path.exists("../" + sql_db_name):
                             sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \
