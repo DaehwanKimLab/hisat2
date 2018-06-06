@@ -103,6 +103,7 @@ public:
                                HIMetrics&                       him,
                                RandomSource&                    rnd,
                                AlnSinkWrap<index_t>&            sink,
+                               bool                             alignMate = false,
                                index_t                          dep = 0);
 };
 
@@ -345,6 +346,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    HIMetrics&                       him,
                                                                    RandomSource&                    rnd,
                                                                    AlnSinkWrap<index_t>&            sink,
+                                                                   bool                             alignMate,
                                                                    index_t                          dep)
 {
     int64_t maxsc = numeric_limits<int64_t>::min();
@@ -355,6 +357,14 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
     index_t rdlen = (index_t)rd.length();
     if(hit.score() < this->_minsc[rdi]) return maxsc;
     if(dep >= 128) return maxsc;
+    
+    // DK - debugging purposes
+#if 1
+    const TAlScore cushion = alignMate ? rdlen * 0.03 * sc.mm(255) : 0;
+#else
+    TAlScore cushion = 0;
+    alignMate = false;
+#endif
     
     // if it's already examined, just return
     if(hitoff == hit.rdoff() - hit.trim5() && hitlen == hit.len() + hit.trim5() + hit.trim3()) {
@@ -649,13 +659,13 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                         this->addSearched(canHit, rdi);
                     }
                     if(!this->redundant(sink, rdi, canHit)) {
-                        this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, ref, ssdb, sink, rdi, canHit);
+                        this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, ref, ssdb, sink, rdi, canHit, alignMate);
                         maxsc = max<int64_t>(maxsc, canHit.score());
                     }
                 }
             }
             else {
-                this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, ref, ssdb, sink, rdi, hit);
+                this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, ref, ssdb, sink, rdi, hit, alignMate);
                 maxsc = max<int64_t>(maxsc, hit.score());
             }
             return maxsc;
@@ -747,8 +757,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                         &ss,
                                                         tpol.no_spliced_alignment());
                     if(!this->_secondary) {
-                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                        else         minsc = max(minsc, sink.bestUnp2());
+                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                        else         minsc = max(minsc, sink.bestUnp2() - cushion);
                     }
                     if(combined &&
                        tempHit.score() >= minsc &&
@@ -776,6 +786,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                him,
                                                                rnd,
                                                                sink,
+                                                               alignMate,
                                                                dep + 1);
                         maxsc = max<int64_t>(maxsc, tmp_maxsc);
                     }
@@ -963,8 +974,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                         NULL, // splice sites
                                                         tpol.no_spliced_alignment());
                     if(!this->_secondary) {
-                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                        else         minsc = max(minsc, sink.bestUnp2());
+                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                        else         minsc = max(minsc, sink.bestUnp2() - cushion);
                     }
                     if(combined && tempHit.score() >= minsc) {
                         assert_eq(tempHit.trim5(), 0);
@@ -991,6 +1002,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    him,
                                                                    rnd,
                                                                    sink,
+                                                                   alignMate,
                                                                    dep + 1);
                             maxsc = max<int64_t>(maxsc, tmp_maxsc);
                         } else {
@@ -1006,8 +1018,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     GenomeHit<index_t>& tempHit = this->_local_genomeHits[dep][ti];
                     int64_t minsc = this->_minsc[rdi];
                     if(!this->_secondary) {
-                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                        else         minsc = max(minsc, sink.bestUnp2());
+                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                        else         minsc = max(minsc, sink.bestUnp2() - cushion);
                     }
                     if(tempHit.score() >= minsc) {
                         int64_t tmp_maxsc = hybridSearch_recur(
@@ -1030,6 +1042,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                him,
                                                                rnd,
                                                                sink,
+                                                               alignMate,
                                                                dep + 1);
                         maxsc = max<int64_t>(maxsc, tmp_maxsc);
                     }
@@ -1144,8 +1157,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             NULL, // splice sites
                                                             tpol.no_spliced_alignment());
                         if(!this->_secondary) {
-                            if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                            else         minsc = max(minsc, sink.bestUnp2());
+                            if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                            else         minsc = max(minsc, sink.bestUnp2() - cushion);
                         }
                         if(combined && tempHit.score() >= minsc) {
                             assert_eq(tempHit.trim5(), 0);
@@ -1170,6 +1183,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    him,
                                                                    rnd,
                                                                    sink,
+                                                                   alignMate,
                                                                    dep + 1);
                             maxsc = max<int64_t>(maxsc, tmp_maxsc);
                         }
@@ -1214,6 +1228,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                            him,
                                                            rnd,
                                                            sink,
+                                                           alignMate,
                                                            dep + 1);
                     maxsc = max<int64_t>(maxsc, tmp_maxsc);
                     // return maxsc;
@@ -1249,8 +1264,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            rightext,
                            num_mismatch_allowed);
             if(!this->_secondary) {
-                if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                else         minsc = max(minsc, sink.bestUnp2());
+                if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                else         minsc = max(minsc, sink.bestUnp2() - cushion);
             }
             if(tempHit.score() >= minsc && leftext >= min<index_t>((index_t)this->_minK_local, hit.rdoff())) {
                 assert_eq(tempHit.trim5(), 0);
@@ -1275,6 +1290,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                        him,
                                                        rnd,
                                                        sink,
+                                                       alignMate,
                                                        dep + 1);
                 maxsc = max<int64_t>(maxsc, tmp_maxsc);
             } else if(hitoff > this->_minK_local) {
@@ -1306,6 +1322,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                            him,
                                                            rnd,
                                                            sink,
+                                                           alignMate,
                                                            dep + 1);
                     maxsc = max<int64_t>(maxsc, tmp_maxsc);
                 }
@@ -1404,8 +1421,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             &ss,
                                                             tpol.no_spliced_alignment());
                     if(!this->_secondary) {
-                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                        else         minsc = max(minsc, sink.bestUnp2());
+                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                        else         minsc = max(minsc, sink.bestUnp2() - cushion);
                     }
                     if(combined && combinedHit.score() >= minsc &&
                        // soft-clipping might be better
@@ -1431,6 +1448,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                him,
                                                                rnd,
                                                                sink,
+                                                               alignMate,
                                                                dep + 1);
                         maxsc = max<int64_t>(maxsc, tmp_maxsc);
                     }
@@ -1623,8 +1641,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             NULL, // splice sites
                                                             tpol.no_spliced_alignment());
                     if(!this->_secondary) {
-                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                        else         minsc = max(minsc, sink.bestUnp2());
+                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                        else         minsc = max(minsc, sink.bestUnp2() - cushion);
                     }
                     if(combined && combinedHit.score() >= minsc) {
                         assert_leq(combinedHit.trim5(), combinedHit.rdoff());
@@ -1650,6 +1668,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    him,
                                                                    rnd,
                                                                    sink,
+                                                                   alignMate,
                                                                    dep + 1);
                             maxsc = max<int64_t>(maxsc, tmp_maxsc);
                         } else {
@@ -1666,8 +1685,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     GenomeHit<index_t>& tempHit = this->_local_genomeHits[dep][ti];
                     int64_t minsc = this->_minsc[rdi];
                     if(!this->_secondary) {
-                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                        else         minsc = max(minsc, sink.bestUnp2());
+                        if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                        else         minsc = max(minsc, sink.bestUnp2() - cushion);
                     }
                     if(tempHit.score() >= minsc) {
                         int64_t tmp_maxsc = hybridSearch_recur(
@@ -1690,6 +1709,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                him,
                                                                rnd,
                                                                sink,
+                                                               alignMate,
                                                                dep + 1);
                         maxsc = max<int64_t>(maxsc, tmp_maxsc);
                     }
@@ -1802,8 +1822,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                 NULL, // splice sites
                                                                 tpol.no_spliced_alignment());
                         if(!this->_secondary) {
-                            if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                            else         minsc = max(minsc, sink.bestUnp2());
+                            if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                            else         minsc = max(minsc, sink.bestUnp2() - cushion);
                         }
                         if(combined && combinedHit.score() >= minsc) {
                             assert_leq(combinedHit.trim5(), combinedHit.rdoff());
@@ -1827,6 +1847,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    him,
                                                                    rnd,
                                                                    sink,
+                                                                   alignMate,
                                                                    dep + 1);
                             maxsc = max<int64_t>(maxsc, tmp_maxsc);
                         }
@@ -1874,6 +1895,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                            him,
                                                            rnd,
                                                            sink,
+                                                           alignMate,
                                                            dep + 1);
                     maxsc = max<int64_t>(maxsc, tmp_maxsc);
                     // return maxsc;
@@ -1909,9 +1931,10 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            rightext,
                            num_mismatch_allowed);
             if(!this->_secondary) {
-                if(rdi == 0) minsc = max(minsc, sink.bestUnp1());
-                else         minsc = max(minsc, sink.bestUnp2());
+                if(rdi == 0) minsc = max(minsc, sink.bestUnp1() - cushion);
+                else         minsc = max(minsc, sink.bestUnp2() - cushion);
             }
+
             if(tempHit.score() >= minsc && rightext >= min<index_t>((index_t)this->_minK_local, rdlen - hit.len() - hit.rdoff())) {
                 assert_eq(tempHit.trim3(), 0);
                 assert_leq(tempHit.trim5(), tempHit.rdoff());
@@ -1935,6 +1958,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                        him,
                                                        rnd,
                                                        sink,
+                                                       alignMate,
                                                        dep + 1);
                 maxsc = max<int64_t>(maxsc, tmp_maxsc);
             } else if(hitoff + hitlen + this->_minK_local < rdlen) {
@@ -1965,6 +1989,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                            him,
                                                            rnd,
                                                            sink,
+                                                           alignMate,
                                                            dep + 1);
                     maxsc = max<int64_t>(maxsc, tmp_maxsc);
                 }

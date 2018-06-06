@@ -763,7 +763,7 @@ def cal_read_len(cigar_str):
 
 def is_concordantly(read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_chr, mate_pos, mate_cigar_str, mate_XM, mate_NM):
     concord_length = 1000
-    segment_length = 0
+    segment_length = sys.maxint
 
     pairs = {}
     pairs[0] = [flag, chr, pos, cigar_str, XM, NM]
@@ -771,27 +771,13 @@ def is_concordantly(read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_
 
     if chr != mate_chr:
         return False, segment_length
+    if (flag & 0x10 == 0x10) or (mate_flag & 0x10 == 0):
+        return False, segment_length
 
-    reverse = False
+    assert pos <= mate_pos
+
     left = pairs[0]
     right = pairs[1]
-
-    """
-    if pos >= mate_pos:
-        left = pairs[1]
-        right = pairs[0]
-        reverse = True
-    """
-    if (flag & 0x40 == 0x40) and (mate_flag & 0x80 == 0x80):
-        left = pairs[0]
-        right = pairs[1]
-        reverse = False
-    elif (flag & 0x80 == 0x80) and (mate_flag & 0x40 == 0x40):
-        left = pairs[1]
-        right = pairs[0]
-        reverse = True
-    else:
-        return False, segment_length
 
     left_start = left[2]
     left_len, _, _ = cal_read_len(left[3]) # cigar
@@ -800,6 +786,7 @@ def is_concordantly(read_id, flag, chr, pos, cigar_str, XM, NM, mate_flag, mate_
     right_len, _, right_soft = cal_read_len(right[3]) 
 
     segment_length = (right_start + right_len) - left_start - right_soft
+    assert segment_length >= 0
 
     if segment_length > concord_length:
         return False, segment_length

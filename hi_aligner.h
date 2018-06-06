@@ -4311,6 +4311,7 @@ public:
                                HIMetrics&                       him,
                                RandomSource&                    rnd,
                                AlnSinkWrap<index_t>&            sink,
+                               bool                             alignMate = false,
                                index_t                          dep = 0)
     { return numeric_limits<int64_t>::min(); }
     
@@ -4517,6 +4518,7 @@ public:
             assert_lt(genomeHits.size(), maxGenomeHitSize);
             index_t remainedGenomeHitSize = maxGenomeHitSize - genomeHits.size();
             index_t expectedNumCoords = partialHit._node_bot - partialHit._node_top;
+            
             bool straddled = false;
             if(expectedNumCoords <= remainedGenomeHitSize) {
                 getGenomeCoords(
@@ -4660,6 +4662,7 @@ public:
                    AlnSinkWrap<index_t>&            sink,
                    index_t                          rdi,
                    const GenomeHit<index_t>&        hit,
+                   bool                             alignMate = false,
                    const GenomeHit<index_t>*        ohit = NULL);
     
     /**
@@ -5066,7 +5069,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                            swm,
                            him,
                            rnd,
-                           sink);
+                           sink,
+                           true); // alignMate?
     }
     
     return true;
@@ -5359,6 +5363,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                                                    AlnSinkWrap<index_t>&            sink,
                                                    index_t                          rdi,
                                                    const GenomeHit<index_t>&        hit,
+                                                   bool                             alignMate,
                                                    const GenomeHit<index_t>*        ohit)
 {
     assert_lt(rdi, 2);
@@ -5469,9 +5474,9 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     if(ohit == NULL) {
         bool done;
         if(rdi == 0 && !_rightendonly) {
-            done = sink.report(0, &rs, NULL);
+            done = sink.report(0, &rs, NULL, alignMate);
         } else {
-            done = sink.report(0, NULL, &rs);
+            done = sink.report(0, NULL, &rs, alignMate);
         }
         return done;
     }

@@ -1085,7 +1085,8 @@ public:
 	bool report(
 		int stage,
 		const AlnRes* rs1,
-		const AlnRes* rs2);
+		const AlnRes* rs2,
+        bool alignMate = false);
 
 #ifndef NDEBUG
 	/**
@@ -2404,7 +2405,8 @@ template <typename index_t>
 bool AlnSinkWrap<index_t>::report(
 								  int stage,
 								  const AlnRes* rs1,
-								  const AlnRes* rs2)
+								  const AlnRes* rs2,
+                                  bool alignMate)
 {
 	assert(init_);
 	assert(rs1 != NULL || rs2 != NULL);
@@ -2430,13 +2432,15 @@ bool AlnSinkWrap<index_t>::report(
                 return false;
             }
         } else {
-            if(one) {
-                if(rs1u_.size() >= rp_.khits * 2 && score < best2Unp1_) {
-                    return false;
-                }
-            } else {
-                if(rs2u_.size() >= rp_.khits * 2 && score < best2Unp2_) {
-                    return false;
+            if(!alignMate) {
+                if(one) {
+                    if(rs1u_.size() >= rp_.khits * 2 && score < best2Unp1_) {
+                        return false;
+                    }
+                } else {
+                    if(rs2u_.size() >= rp_.khits * 2 && score < best2Unp2_) {
+                        return false;
+                    }
                 }
             }
         }
