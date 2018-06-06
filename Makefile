@@ -129,6 +129,7 @@ BUILD_CPPS = diff_sample.cpp
 
 HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
 HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
+HISAT2_CONSTRUCT_CPPS_MAIN = $(BUILD_CPPS) hisat2_construct_nonrepetitive_genome_main.cpp
 
 SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
 VERSION = $(shell cat VERSION)
@@ -175,13 +176,18 @@ HISAT2_BIN_LIST = hisat2-build-s \
 	hisat2-align-s \
 	hisat2-align-l \
 	hisat2-inspect-s \
-	hisat2-inspect-l
+	hisat2-inspect-l \
+	hisat2-construct-nonrepetitive-genome-s \
+	hisat2-construct-nonrepetitive-genome-l
 HISAT2_BIN_LIST_AUX = hisat2-build-s-debug \
 	hisat2-build-l-debug \
 	hisat2-align-s-debug \
 	hisat2-align-l-debug \
 	hisat2-inspect-s-debug \
-	hisat2-inspect-l-debug
+	hisat2-inspect-l-debug \
+	hisat2-construct-nonrepetitive-genome-s-debug \
+	hisat2-construct-nonrepetitive-genome-l-debug
+
 
 GENERAL_LIST = $(wildcard scripts/*.sh) \
 	$(wildcard scripts/*.pl) \
@@ -265,6 +271,42 @@ hisat-bp-bin-debug: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEAR
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT_CPPS_MAIN) \
 	$(LIBS) $(SEARCH_LIBS)
+
+#
+# hisat2-construct-nonrepetitive-genome targets
+#
+
+hisat2-construct-nonrepetitive-genome-s: hisat2_construct_nonrepetitive_genome.cpp $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_CONSTRUCT_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
+hisat2-construct-nonrepetitive-genome-l: hisat2_construct_nonrepetitive_genome.cpp $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX $(NOASSERT_FLAGS) -Wall \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_CONSTRUCT_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
+hisat2-construct-nonrepetitive-genome-s-debug: hisat2_construct_nonrepetitive_genome.cpp $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 -Wall -DMASSIVE_DATA_RLCSA \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_CONSTRUCT_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
+hisat2-construct-nonrepetitive-genome-l-debug: hisat2_construct_nonrepetitive_genome.cpp $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -Wall \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_CONSTRUCT_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
 
 
 #

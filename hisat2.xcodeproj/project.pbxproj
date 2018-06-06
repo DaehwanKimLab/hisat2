@@ -327,6 +327,8 @@
 		E8C30D011C20B2B600C03464 /* sstring.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = sstring.cpp; sourceTree = "<group>"; };
 		E8C30D021C20B2B600C03464 /* tinythread.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = tinythread.cpp; sourceTree = "<group>"; };
 		E8C30D031C20B2B600C03464 /* unique.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = unique.cpp; sourceTree = "<group>"; };
+		E8D9215820C8449700378C5B /* hisat2_construct_nonrepetitive_genome.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_construct_nonrepetitive_genome.cpp; sourceTree = "<group>"; };
+		E8D9215920C8449700378C5B /* hisat2_construct_nonrepetitive_genome_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_construct_nonrepetitive_genome_main.cpp; sourceTree = "<group>"; };
 		E8EAEDE71C24675500E62E69 /* hisat2-buildlx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-buildlx"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8FD97E41C81CCED00861B09 /* hisat2lx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = hisat2lx; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -503,6 +505,8 @@
 				E8C30CE51C20B2B600C03464 /* hisat_bp.cpp */,
 				E8C30CE61C20B2B600C03464 /* hisat2_build_main.cpp */,
 				E8C30CE71C20B2B600C03464 /* hisat2_build.cpp */,
+				E8D9215920C8449700378C5B /* hisat2_construct_nonrepetitive_genome_main.cpp */,
+				E8D9215820C8449700378C5B /* hisat2_construct_nonrepetitive_genome.cpp */,
 				E8C30CE81C20B2B600C03464 /* hisat2_inspect.cpp */,
 				E8C30CE91C20B2B600C03464 /* hisat2_main.cpp */,
 				E8C30CEA1C20B2B600C03464 /* hisat2.cpp */,
