@@ -276,7 +276,7 @@ hisat-bp-bin-debug: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEAR
 # hisat2-construct-nonrepetitive-genome targets
 #
 
-hisat2-construct-nonrepetitive-genome-s: hisat2_construct_nonrepetitive_genome.cpp $(SHARED_CPPS) $(HEADERS)
+hisat2-construct-nonrepetitive-genome-s: hisat2_construct_nonrepetitive_genome.cpp $(SEARCH_CPPS) dp_framer.cpp $(SHARED_CPPS) $(HEADERS)
 	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
 	$(INC) \

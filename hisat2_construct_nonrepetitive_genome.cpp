@@ -33,7 +33,11 @@
 #include "reference.h"
 #include "ds.h"
 #include "gfm.h"
-#include "hgfm.h"
+#include "aligner_sw.h"
+#include "aligner_result.h"
+#include "search_globals.h"
+#include "scoring.h"
+#include "mask.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -67,19 +71,9 @@ static int32_t ftabChars;
 static int32_t localOffRate;
 static int32_t localFtabChars;
 static int  bigEndian;
-static bool nsToAs;
 static bool autoMem;
-static bool packed;
-static bool writeRef;
-static bool justRef;
-static bool reverseEach;
 static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
-static string snp_fname;
-static string ht_fname;
-static string ss_fname;
-static string exon_fname;
-static string sv_fname;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -102,19 +96,9 @@ static void resetOptions() {
     localOffRate   = 3;
     localFtabChars = 6;
 	bigEndian      = 0;  // little endian
-	nsToAs         = false; // convert reference Ns to As prior to indexing
 	autoMem        = true;  // automatically adjust memory usage parameters
-	packed         = false; //
-	writeRef       = true;  // write compact reference to .3.ht2/.4.ht2
-	justRef        = false; // *just* write compact reference, don't index
-	reverseEach    = false;
-    nthreads       = 1;
+	nthreads       = 1;
     wrapper.clear();
-    snp_fname = "";
-    ht_fname = "";
-    ss_fname = "";
-    exon_fname = "";
-    sv_fname = "";
 }
 
 // Argument constants for getopts
@@ -130,34 +114,26 @@ enum {
 	ARG_USAGE,
 	ARG_REVERSE_EACH,
     ARG_SA,
-	ARG_WRAPPER,
-    ARG_LOCAL_OFFRATE,
-    ARG_LOCAL_FTABCHARS,
-    ARG_SNP,
-    ARG_HAPLOTYPE,
-    ARG_SPLICESITE,
-    ARG_EXON,
-    ARG_SV,
+	ARG_WRAPPER
 };
 
 /**
  * Print a detailed usage message to the provided output stream.
  */
 static void printUsage(ostream& out) {
-	out << "HISAT2 version " << string(HISAT2_VERSION).c_str() << " by Daehwan Kim (infphilo@gmail.com, http://www.ccb.jhu.edu/people/infphilo)" << endl;
+	out << "HISAT2 version " << string(HISAT2_VERSION).c_str() << " by Chanhee Park <parkchanhee@gmail.com> and Daehwan Kim <infphilo@gmail.com>" << endl;
     
 #ifdef BOWTIE_64BIT_INDEX
-	string tool_name = "hisat2-build-l";
+	string tool_name = "hisat2-construct-nonrepetitive-genome-l";
 #else
-	string tool_name = "hisat2-build-s";
+	string tool_name = "hisat2-construct-nonrepetitive-genome-s";
 #endif
 	if(wrapper == "basic-0") {
 		tool_name = "hisat2-build";
 	}
     
-	out << "Usage: hisat2-build [options]* <reference_in> <ht2_index_base>" << endl
+	out << "Usage: " << tool_name << " [options]* <reference_in>" << endl
 	    << "    reference_in            comma-separated list of files with ref sequences" << endl
-	    << "    hisat2_index_base       write " << gfm_ext << " data to files with this dir/basename" << endl
         << "Options:" << endl
         << "    -c                      reference sequences given on cmd line (as" << endl
         << "                            <reference_in>)" << endl;
@@ -171,30 +147,12 @@ static void printUsage(ostream& out) {
 	    << "    --bmaxdivn <int>        max bucket sz as divisor of ref len (default: 4)" << endl
 	    << "    --dcv <int>             diff-cover period for blockwise (default: 1024)" << endl
 	    << "    --nodc                  disable diff-cover (algorithm becomes quadratic)" << endl
-	    << "    -r/--noref              don't build .3/.4.ht2 (packed reference) portion" << endl
-	    << "    -3/--justref            just build .3/.4.ht2 (packed reference) portion" << endl
-	    << "    -o/--offrate <int>      SA is sampled every 2^offRate BWT chars (default: 5)" << endl
-	    << "    -t/--ftabchars <int>    # of chars consumed in initial lookup (default: 10)" << endl
-        << "    --localoffrate <int>    SA (local) is sampled every 2^offRate BWT chars (default: 3)" << endl
-        << "    --localftabchars <int>  # of chars consumed in initial lookup in a local index (default: 6)" << endl
-        << "    --snp <path>            SNP file name" << endl
-        << "    --haplotype <path>      haplotype file name" << endl
-        << "    --ss <path>             Splice site file name" << endl
-        << "    --exon <path>           Exon file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
 	    << "    --version               print version information and quit" << endl
 	    ;
-    
-    if(wrapper.empty()) {
-		cerr << endl
-        << "*** Warning ***" << endl
-        << "'" << tool_name << "' was run directly.  It is recommended "
-        << "that you run the wrapper script 'hisat2-build' instead."
-        << endl << endl;
-	}
 }
 
 static const char *short_options = "qrap:h?nscfl:i:o:t:h:3C";
@@ -217,21 +175,6 @@ static struct option long_options[] = {
 	{(char*)"noblocks",       required_argument, 0,            'n'},
 	{(char*)"linerate",       required_argument, 0,            'l'},
 	{(char*)"linesperside",   required_argument, 0,            'i'},
-	{(char*)"offrate",        required_argument, 0,            'o'},
-	{(char*)"ftabchars",      required_argument, 0,            't'},
-    {(char*)"localoffrate",   required_argument, 0,            ARG_LOCAL_OFFRATE},
-	{(char*)"localftabchars", required_argument, 0,            ARG_LOCAL_FTABCHARS},
-    {(char*)"snp",            required_argument, 0,            ARG_SNP},
-    {(char*)"haplotype",      required_argument, 0,            ARG_HAPLOTYPE},
-    {(char*)"ss",             required_argument, 0,            ARG_SPLICESITE},
-    {(char*)"exon",           required_argument, 0,            ARG_EXON},
-    {(char*)"sv",             required_argument, 0,            ARG_SV},
-	{(char*)"help",           no_argument,       0,            'h'},
-	{(char*)"ntoa",           no_argument,       0,            ARG_NTOA},
-	{(char*)"justref",        no_argument,       0,            '3'},
-	{(char*)"noref",          no_argument,       0,            'r'},
-	{(char*)"sa",             no_argument,       0,            ARG_SA},
-	{(char*)"reverse-each",   no_argument,       0,            ARG_REVERSE_EACH},
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
 	{(char*)0, 0, 0, 0} // terminator
@@ -291,19 +234,7 @@ static void parseOptions(int argc, const char **argv) {
 			case 'o':
 				offRate = parseNumber<int>(0, "-o/--offRate arg must be at least 0");
 				break;
-            case ARG_LOCAL_OFFRATE:
-                localOffRate = parseNumber<int>(0, "-o/--localoffrate arg must be at least 0");
-                break;
-			case '3':
-				justRef = true;
-				break;
-			case 't':
-				ftabChars = parseNumber<int>(1, "-t/--ftabChars arg must be at least 1");
-				break;
-            case ARG_LOCAL_FTABCHARS:
-				localFtabChars = parseNumber<int>(1, "-t/--localftabchars arg must be at least 1");
-				break;
-			case 'n':
+           case 'n':
 				// all f-s is used to mean "not set", so put 'e' on end
 				bmax = 0xfffffffe;
 				break;
@@ -312,22 +243,7 @@ static void parseOptions(int argc, const char **argv) {
 				printUsage(cout);
 				throw 0;
 				break;
-            case ARG_SNP:
-                snp_fname = optarg;
-                break;
-            case ARG_HAPLOTYPE:
-                ht_fname = optarg;
-                break;
-            case ARG_SPLICESITE:
-                ss_fname = optarg;
-                break;
-            case ARG_EXON:
-                exon_fname = optarg;
-                break;
-            case ARG_SV:
-                sv_fname = optarg;
-                break;
-			case ARG_BMAX:
+           case ARG_BMAX:
 				bmax = parseNumber<TIndexOffU>(1, "--bmax arg must be at least 1");
 				bmaxMultSqrt = OFF_MASK; // don't use multSqrt
 				bmaxDivN = 0xffffffff;     // don't use multSqrt
@@ -348,14 +264,9 @@ static void parseOptions(int argc, const char **argv) {
 			case ARG_SEED:
 				seed = parseNumber<int>(0, "--seed arg must be at least 0");
 				break;
-			case ARG_REVERSE_EACH:
-				reverseEach = true;
-				break;
-			case ARG_NTOA: nsToAs = true; break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
 			case 's': sanityCheck = true; break;
-			case 'r': writeRef = false; break;
             case 'p':
                 nthreads = parseNumber<int>(1, "-p arg must be at least 1");
                 break;
@@ -377,23 +288,193 @@ static void parseOptions(int argc, const char **argv) {
 	}
 }
 
-EList<string> filesWritten;
+static EList<bool> stbuf, enbuf;
+static BTDnaString btread;
+static BTString btqual;
+static BTString btref;
+static BTString btref2;
+
+static BTDnaString readrc;
+static BTString qualrc;
 
 /**
- * Delete all the index files that we tried to create.  For when we had to
- * abort the index-building process due to an error.
+ * Helper function for running a case consisting of a read (sequence
+ * and quality), a reference string, and an offset that anchors the 0th
+ * character of the read to a reference position.
  */
-static void deleteIdxFiles(
-	const string& outfile,
-	bool doRef,
-	bool justRef)
+static void doTestCase(
+                       SwAligner&         al,
+                       const BTDnaString& read,
+                       const BTString&    qual,
+                       const BTString&    refin,
+                       TRefOff            off,
+                       EList<bool>        *en,
+                       const Scoring&     sc,
+                       TAlScore           minsc,
+                       TAlScore           floorsc,
+                       SwResult&          res,
+                       bool               nsInclusive,
+                       bool               filterns,
+                       uint32_t           seed)
 {
-	
-	for(size_t i = 0; i < filesWritten.size(); i++) {
-		cerr << "Deleting \"" << filesWritten[i].c_str()
-		     << "\" file written during aborted indexing attempt." << endl;
-		remove(filesWritten[i].c_str());
-	}
+    RandomSource rnd(seed);
+    btref2 = refin;
+    assert_eq(read.length(), qual.length());
+    size_t nrow = read.length();
+    TRefOff rfi, rff;
+    // Calculate the largest possible number of read and reference gaps given
+    // 'minsc' and 'pens'
+    size_t maxgaps;
+    size_t padi, padf;
+    {
+        int readGaps = sc.maxReadGaps(minsc, read.length());
+        int refGaps = sc.maxRefGaps(minsc, read.length());
+        assert_geq(readGaps, 0);
+        assert_geq(refGaps, 0);
+        int maxGaps = max(readGaps, refGaps);
+        padi = 2 * maxGaps;
+        padf = maxGaps;
+        maxgaps = (size_t)maxGaps;
+    }
+    size_t nceil = 1; // (size_t)sc.nCeil.f((double)read.length());
+    size_t width = 1 + padi + padf;
+    rfi = off;
+    off = 0;
+    // Pad the beginning of the reference with Ns if necessary
+    if(rfi < padi) {
+        size_t beginpad = (size_t)(padi - rfi);
+        for(size_t i = 0; i < beginpad; i++) {
+            btref2.insert('N', 0);
+            off--;
+        }
+        rfi = 0;
+    } else {
+        rfi -= padi;
+    }
+    assert_geq(rfi, 0);
+    // Pad the end of the reference with Ns if necessary
+    while(rfi + nrow + padi + padf > btref2.length()) {
+        btref2.append('N');
+    }
+    rff = rfi + nrow + padi + padf;
+    // Convert reference string to masks
+    for(size_t i = 0; i < btref2.length(); i++) {
+        if(toupper(btref2[i]) == 'N' && !nsInclusive) {
+            btref2.set(16, i);
+        } else {
+            int num = 0;
+            int alts[] = {4, 4, 4, 4};
+            decodeNuc(toupper(btref2[i]), num, alts);
+            assert_leq(num, 4);
+            assert_gt(num, 0);
+            btref2.set(0, i);
+            for(int j = 0; j < num; j++) {
+                btref2.set(btref2[i] | (1 << alts[j]), i);
+            }
+        }
+    }
+    bool fw = true;
+    uint32_t refidx = 0;
+    size_t solwidth = width;
+    if(maxgaps >= solwidth) {
+        solwidth = 0;
+    } else {
+        solwidth -= maxgaps;
+    }
+    if(en == NULL) {
+        enbuf.resize(solwidth);
+        enbuf.fill(true);
+        en = &enbuf;
+    }
+    assert_geq(rfi, 0);
+    assert_gt(rff, rfi);
+    readrc = read;
+    qualrc = qual;
+    al.initRead(
+                read,          // read sequence
+                readrc,
+                qual,          // read qualities
+                qualrc,
+                0,             // offset of first character within 'read' to consider
+                read.length(), // offset of last char (exclusive) in 'read' to consider
+                sc);        // local-alignment score floor
+    
+    DynProgFramer dpframe(false);  // trimToRef
+    size_t readGaps = 10, refGaps = 10, maxhalf = 10;
+    DPRect rect;
+    dpframe.frameSeedExtensionRect(0,                // ref offset implied by seed hit assuming no gaps
+                                   read.length(),    // length of read sequence used in DP table
+                                   read.length(),    // length of reference
+                                   readGaps,       // max # of read gaps permitted in opp mate alignment
+                                   refGaps,        // max # of ref gaps permitted in opp mate alignment
+                                   (size_t)nceil,  // # Ns permitted
+                                   maxhalf,        // max width in either direction
+                                   rect);          // DP rectangle
+    assert(rect.repOk());
+    
+    size_t cminlen = 2000, cpow2 = 4;
+    al.initRef(fw,                // whether to align forward or revcomp read
+               refidx,            // reference aligned against
+               rect,              // DP rectangle
+               btref2.wbuf(),     // Reference strings
+               rfi,
+               rff,
+               read.length(),
+               sc,                // scoring scheme
+               minsc,             // minimum score permitted
+               true,              // use 8-bit SSE if possible?
+               cminlen,           // minimum length for using checkpointing scheme
+               cpow2,             // interval b/t checkpointed diags; 1 << this
+               false,             // triangular mini-fills?
+               true);              // this is a seed extension - not finding a mate
+    
+    TAlScore best = 0;
+    al.align(rnd, best);
+}
+
+/**
+ * Another interface for running a case.
+ */
+static void doTestCase2(
+                        SwAligner&         al,
+                        const char        *read,
+                        const char        *qual,
+                        const char        *refin,
+                        TRefOff            off,
+                        const Scoring&     sc,
+                        float              costMinConst,
+                        float              costMinLinear,
+                        SwResult&          res,
+                        bool               nsInclusive = false,
+                        bool               filterns = false,
+                        uint32_t           seed = 0)
+{
+    btread.install(read, true);
+    TAlScore minsc = (TAlScore)(Scoring::linearFunc(
+                                                    btread.length(),
+                                                    costMinConst,
+                                                    costMinLinear));
+    TAlScore floorsc = (TAlScore)(Scoring::linearFunc(
+                                                      btread.length(),
+                                                      costMinConst,
+                                                      costMinLinear));
+    btqual.install(qual);
+    btref.install(refin);
+    doTestCase(
+               al,
+               btread,
+               btqual,
+               btref,
+               off,
+               NULL,
+               sc,
+               minsc,
+               floorsc,
+               res,
+               nsInclusive,
+               filterns,
+               seed
+               );
 }
 
 extern void initializeCntLut();
@@ -407,11 +488,6 @@ template<typename TStr>
 static void driver(
                    const string& infile,
                    EList<string>& infiles,
-                   const string& snpfile,
-                   const string& htfile,
-                   const string& ssfile,
-                   const string& exonfile,
-                   const string& svfile,
                    const string& outfile,
                    bool packed,
                    int reverse)
@@ -420,6 +496,7 @@ static void driver(
     initializeCntBit();
 	EList<FileBuf*> is(MISC_CAT);
 	bool bisulfite = false;
+    bool nsToAs = false;
 	RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
 	assert_gt(infiles.size(), 0);
 	if(format == CMDLINE) {
@@ -460,9 +537,7 @@ static void driver(
 		cerr << "Warning: All fasta inputs were empty" << endl;
 		throw 1;
 	}
-    filesWritten.push_back(outfile + ".1." + gfm_ext);
-    filesWritten.push_back(outfile + ".2." + gfm_ext);
-	// Vector for the ordered list of "records" comprising the input
+    // Vector for the ordered list of "records" comprising the input
 	// sequences.  A record represents a stretch of unambiguous
 	// characters in one of the input sequences.
 	EList<RefRecord> szs(MISC_CAT);
@@ -470,97 +545,185 @@ static void driver(
 	{
 		if(verbose) cerr << "Reading reference sizes" << endl;
 		Timer _t(cerr, "  Time reading reference sizes: ", verbose);
-		if(!reverse && (writeRef || justRef)) {
-			filesWritten.push_back(outfile + ".3." + gfm_ext);
-			filesWritten.push_back(outfile + ".4." + gfm_ext);
-			sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck);
-		} else {
-			sztot = BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
-		}
+        sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck);
 	}
-	if(justRef) return;
 	assert_gt(sztot.first, 0);
 	assert_gt(sztot.second, 0);
 	assert_gt(szs.size(), 0);
     
-	// Construct index from input strings and parameters	
-    filesWritten.push_back(outfile + ".5." + gfm_ext);
-    filesWritten.push_back(outfile + ".6." + gfm_ext);
-    filesWritten.push_back(outfile + ".7." + gfm_ext);
-    filesWritten.push_back(outfile + ".8." + gfm_ext);
-	TStr s;
-	HGFM<TIndexOffU> hGFM(
-                          s,
-                          packed,
-                          1,  // TODO: maybe not?
-                          lineRate,
-                          offRate,      // suffix-array sampling rate
-                          ftabChars,    // number of chars in initial arrow-pair calc
-                          localOffRate,
-                          localFtabChars,
-                          nthreads,
-                          snpfile,
-                          htfile,
-                          ssfile,
-                          exonfile,
-                          svfile,
-                          outfile,      // basename for .?.ht2 files
-                          reverse == 0, // fw
-                          !entireSA,    // useBlockwise
-                          bmax,         // block size for blockwise SA builder
-                          bmaxMultSqrt, // block size as multiplier of sqrt(len)
-                          bmaxDivN,     // block size as divisor of len
-                          noDc? 0 : dcv,// difference-cover period
-                          is,           // list of input streams
-                          szs,          // list of reference sizes
-                          (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
-                          refparams,    // reference read-in parameters
-                          seed,         // pseudo-random number generator seed
-                          -1,           // override offRate
-                          verbose,      // be talkative
-                          autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                          sanityCheck); // verify results and internal consistency
-    // Note that the Ebwt is *not* resident in memory at this time.  To
-    // load it into memory, call ebwt.loadIntoMemory()
-	if(verbose) {
-		// Print Ebwt's vital stats
-		hGFM.gh().print(cerr);
-	}
-	if(sanityCheck) {
-		// Try restoring the original string (if there were
-		// multiple texts, what we'll get back is the joined,
-		// padded string, not a list)
-		hGFM.loadIntoMemory(
-                            reverse ? (refparams.reverse == REF_READ_REVERSE) : 0,
-                            true,  // load SA sample?
-                            true,  // load ftab?
-                            true,  // load rstarts?
-                            false,
-                            false);
-		SString<char> s2;
-		hGFM.restore(s2);
-		hGFM.evictFromMemory();
-		{
-			SString<char> joinedss = GFM<>::join<SString<char> >(
-				is,          // list of input streams
-				szs,         // list of reference sizes
-				(TIndexOffU)sztot.first, // total size of all unambiguous ref chars
-				refparams,   // reference read-in parameters
-				seed);       // pseudo-random number generator seed
-			if(refparams.reverse == REF_READ_REVERSE) {
-				joinedss.reverse();
-			}
-			assert_eq(joinedss.length(), s2.length());
-			assert(sstr_eq(joinedss, s2));
-		}
-		if(verbose) {
-			if(s2.length() < 1000) {
-				cout << "Passed restore check: " << s2.toZBuf() << endl;
-			} else {
-				cout << "Passed restore check: (" << s2.length() << " chars)" << endl;
-			}
-		}
-	}
+    // Compose text strings into single string
+    cerr << "Calculating joined length" << endl;
+    TIndexOffU jlen = 0;
+    for(unsigned int i = 0; i < szs.size(); i++) {
+        jlen += (TIndexOffU)szs[i].len;
+    }
+    // assert_geq(jlen, sztot);
+    
+    TStr s;
+    {
+        cerr << "Reserving space for joined string" << endl;
+        s.resize(jlen);
+        cerr << "Joining reference sequences" << endl;
+        Timer timer(cerr, "  Time to join reference sequences: ", verbose);
+        
+        s = GFM<TIndexOffU>::join<TStr>(
+                                                  is,
+                                                  szs,
+                                                  (TIndexOffU)sztot.first,
+                                                  refparams,
+                                                  seed);
+    }
+        
+    // Succesfully obtained joined reference string
+    assert_geq(s.length(), jlen);
+    if(bmax != (TIndexOffU)OFF_MASK) {
+        // VMSG_NL("bmax according to bmax setting: " << bmax);
+    }
+    else if(bmaxDivN != (TIndexOffU)OFF_MASK) {
+        bmax = max<uint32_t>(jlen / bmaxDivN, 1);
+        // VMSG_NL("bmax according to bmaxDivN setting: " << bmax);
+    }
+    else {
+        bmax = (uint32_t)sqrt(s.length());
+        // VMSG_NL("bmax defaulted to: " << bmax);
+    }
+    int iter = 0;
+    bool first = true;
+    bool passMemExc = false, sanity = false;
+    // Look for bmax/dcv parameters that work.
+    while(true) {
+        if(!first && bmax < 40 && passMemExc) {
+            cerr << "Could not find approrpiate bmax/dcv settings for building this index." << endl;
+            cerr << "Please try indexing this reference on a computer with more memory." << endl;
+            if(sizeof(void*) == 4) {
+                cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
+                << "this executable is 32-bit." << endl;
+            }
+            throw 1;
+        }
+        if(dcv > 4096) dcv = 4096;
+        if((iter % 6) == 5 && dcv < 4096 && dcv != 0) {
+            dcv <<= 1; // double difference-cover period
+        } else {
+            bmax -= (bmax >> 2); // reduce by 25%
+        }
+        iter++;
+        try {
+            cerr << "Using parameters --bmax " << bmax << endl;
+            if(dcv == 0) {
+                cerr << " and *no difference cover*" << endl;
+            } else {
+                cerr << " --dcv " << dcv << endl;
+            }
+            {
+                cerr << "  Doing ahead-of-time memory usage test" << endl;
+                // Make a quick-and-dirty attempt to force a bad_alloc iff
+                // we would have thrown one eventually as part of
+                // constructing the DifferenceCoverSample
+                dcv <<= 1;
+                TIndexOffU sz = (TIndexOffU)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
+                if(nthreads > 1) sz *= (nthreads + 1);
+                AutoArray<uint8_t> tmp(sz, EBWT_CAT);
+                dcv >>= 1;
+                // Likewise with the KarkkainenBlockwiseSA
+                sz = (TIndexOffU)KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
+                AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
+                // Grab another 20 MB out of caution
+                AutoArray<uint32_t> extra(20*1024*1024, EBWT_CAT);
+                // If we made it here without throwing bad_alloc, then we
+                // passed the memory-usage stress test
+                cerr << "  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv << endl;
+                cerr << "" << endl;
+            }
+            cerr << "Constructing suffix-array element generator" << endl;
+            KarkkainenBlockwiseSA<TStr> bsa(s, bmax, nthreads, dcv, seed, sanity, passMemExc, verbose, outfile);
+            assert(bsa.suffixItrIsReset());
+            assert_eq(bsa.size(), s.length() + 1);
+            cerr << "Converting suffix-array elements to index image" << endl;
+            EList<string> suffixes;
+            {
+                // CP - this is a suffix array
+                TIndexOffU count = 0;
+                while(count < s.length() + 1) {
+                    TIndexOffU saElt = bsa.nextSuffix();
+                    count++;
+                    // DK - debugging purposes
+                    if(count < 100) {
+                        suffixes.expand();
+                        cerr << setw(12) << saElt << "\t";
+                        for(int k = 0; k < 100; k++) {
+                            char nt = "ACGT"[s[saElt+k]];
+                            cerr << nt;
+                            suffixes.back().push_back(nt);
+                        }
+                        cerr << endl;
+                        
+                        if(count > 1) {
+                            SwAligner al;
+                            SwResult res;
+                            
+                            SimpleFunc scoreMin;
+                            scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -0.2f);
+                            
+                            SimpleFunc nCeil;
+                            nCeil.init(SIMPLE_FUNC_LINEAR, 0.0f, 0, 2.0f, 0.1f);
+                            
+                            const string& str1 = suffixes[suffixes.size() - 2];
+                            const string& str2 = suffixes[suffixes.size() - 1];
+                            
+                            string qual = "";
+                            for(int i = 0; i < str1.length(); i++) {
+                                qual.push_back('I');
+                            }
+                            
+                            // Set up penalities
+                            Scoring sc(
+                                       DEFAULT_MATCH_BONUS,     // constant reward for match
+                                       DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
+                                       30,        // constant if mm pelanty is a constant
+                                       30,        // penalty for decoded SNP
+                                       0,
+                                       0,
+                                       scoreMin,       // min score as function of read len
+                                       nCeil,          // max # Ns as function of read len
+                                       DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
+                                       DEFAULT_N_PENALTY,          // constant if N pelanty is a constant
+                                       DEFAULT_N_CAT_PAIR,      // true -> concatenate mates before N filtering
+                                       25,  // constant coeff for cost of gap in read
+                                       25,  // constant coeff for cost of gap in ref
+                                       15, // linear coeff for cost of gap in read
+                                       15, // linear coeff for cost of gap in ref
+                                       1,    // # rows at top/bot only entered diagonally
+                                       0,   // canonical splicing penalty
+                                       0,   // non-canonical splicing penalty
+                                       0);  // conflicting splice site penalt
+                            
+                            doTestCase2(
+                                        al,
+                                        str1.c_str(),
+                                        qual.c_str(),
+                                        str2.c_str(),
+                                        0,
+                                        sc,
+                                        DEFAULT_MIN_CONST,
+                                        DEFAULT_MIN_LINEAR,
+                                        res);
+                        }
+                    }
+                }
+            }
+        } catch(bad_alloc& e) {
+            if(passMemExc) {
+                cerr << "  Ran out of memory; automatically trying more memory-economical parameters." << endl;
+            } else {
+                cerr << "Out of memory while constructing suffix array.  Please try using a smaller" << endl
+                << "number of blocks by specifying a smaller --bmax or a larger --bmaxdivn" << endl;
+                throw 1;
+            }
+        }
+        first = false;
+    }
+    // assert(repOk());
 }
 
 static const char *argv0 = NULL;
@@ -611,12 +774,14 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
 		infile = argv[optind++];
         
 		// Get output filename
+#if 0
 		if(optind >= argc) {
 			cerr << "No output file specified!" << endl;
 			printUsage(cerr);
 			return 1;
 		}
 		outfile = argv[optind++];
+#endif
 
 		tokenize(infile, ",", infiles);
 		if(infiles.size() < 1) {
@@ -625,45 +790,10 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
 			return 1;
 		}
         
-        if(!lineRate_provided) {
-            if(snp_fname == "" && ss_fname == "" && exon_fname == "") {
-                lineRate = GFM<TIndexOffU>::default_lineRate_fm;
-            } else {
-                lineRate = GFM<TIndexOffU>::default_lineRate_gfm;
-            }
-        }
-
-		// Optionally summarize
+   		// Optionally summarize
 		if(verbose) {
 			cerr << "Settings:" << endl
-				 << "  Output files: \"" << outfile.c_str() << ".*." << gfm_ext << "\"" << endl
-				 << "  Line rate: " << lineRate << " (line is " << (1<<lineRate) << " bytes)" << endl
-				 << "  Lines per side: " << linesPerSide << " (side is " << ((1<<lineRate)*linesPerSide) << " bytes)" << endl
-				 << "  Offset rate: " << offRate << " (one in " << (1<<offRate) << ")" << endl
-				 << "  FTable chars: " << ftabChars << endl
-				 << "  Strings: " << (packed? "packed" : "unpacked") << endl
-                 << "  Local offset rate: " << localOffRate << " (one in " << (1<<localOffRate) << ")" << endl
-                 << "  Local fTable chars: " << localFtabChars << endl
-                 << "  Local sequence length: " << local_index_size << endl
-                 << "  Local sequence overlap between two consecutive indexes: " << local_index_overlap << endl;
-#if 0
-			if(bmax == OFF_MASK) {
-				cerr << "  Max bucket size: default" << endl;
-			} else {
-				cerr << "  Max bucket size: " << bmax << endl;
-			}
-			if(bmaxMultSqrt == OFF_MASK) {
-				cerr << "  Max bucket size, sqrt multiplier: default" << endl;
-			} else {
-				cerr << "  Max bucket size, sqrt multiplier: " << bmaxMultSqrt << endl;
-			}
-			if(bmaxDivN == 0xffffffff) {
-				cerr << "  Max bucket size, len divisor: default" << endl;
-			} else {
-				cerr << "  Max bucket size, len divisor: " << bmaxDivN << endl;
-			}
-			cerr << "  Difference-cover sample period: " << dcv << endl;
-#endif
+            << "  Output files: \"" << outfile.c_str() << ".*." << gfm_ext << "\"" << endl;
 			cerr << "  Endianness: " << (bigEndian? "big":"little") << endl
 				 << "  Actual local endianness: " << (currentlyBigEndian()? "big":"little") << endl
 				 << "  Sanity checking: " << (sanityCheck? "enabled":"disabled") << endl;
@@ -684,11 +814,10 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, snp_fname, ht_fname, ss_fname, exon_fname, sv_fname, outfile, false, REF_READ_FORWARD);
+                driver<SString<char> >(infile, infiles, outfile, false, REF_READ_FORWARD);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;
-                    packed = true;
                 } else {
                     throw e;
                 }
@@ -700,7 +829,6 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
 		cerr << "Command: ";
 		for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
 		cerr << endl;
-		deleteIdxFiles(outfile, writeRef || justRef, justRef);
 		return 1;
 	} catch(int e) {
 		if(e != 0) {
@@ -709,7 +837,6 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
 			for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
 			cerr << endl;
 		}
-		deleteIdxFiles(outfile, writeRef || justRef, justRef);
 		return e;
 	}
 }
