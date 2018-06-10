@@ -3,115 +3,120 @@
 import sys
 import struct
 
-chr22_seq = ""
-for line in open("22.fa"):
+chr_name = "20"
+
+chr_seq = ""
+for line in open("%s.fa" % chr_name):
     if line.startswith('>'):
         continue
     line = line.strip()
     line = line.replace('N', '')
-    chr22_seq += line
-chr22_seq += '$'
+    chr_seq += line
+chr_seq += '$'
 
-chr22_sa = []
-f = open("22.sa", "rb")
+chr_sa = []
+f = open("%s.sa" % chr_name, "rb")
 while True:
     fourbytes = f.read(4)
     if fourbytes == "":
         break
 
     num = struct.unpack('I', fourbytes)[0]
-    chr22_sa.append(num)
+    chr_sa.append(num)
 
-    if len(chr22_sa) % 5000000 == 0:
-        print len(chr22_sa)
+    if len(chr_sa) % 5000000 == 0:
+        print len(chr_sa)
 f.close()
 
-assert chr22_sa[0] + 1 == len(chr22_sa)
-chr22_sa = chr22_sa[1:]
-assert len(chr22_seq) == len(chr22_sa)
+assert chr_sa[0] + 1 == len(chr_sa)
+chr_sa = chr_sa[1:]
+assert len(chr_seq) == len(chr_sa)
 
-# for i, num in enumerate(chr22_sa):
-#    print "%10d\t%s\t%d" % (i, chr22_seq[num:num+100], num)
+# for i, num in enumerate(chr_sa):
+#    print "%10d\t%s\t%d" % (i, chr_seq[num:num+100], num)
 
 seq_len = 100
 i = 0
-pos_set, pos_seq = None, ""
-pos_set2, pos_seq2 = None, ""
-while i < len(chr22_sa):
-    pos = chr22_sa[i]
-    base_seq = chr22_seq[pos:pos+seq_len]
-    for j in xrange(i+1, len(chr22_sa)):
-        pos2 = chr22_sa[j]
-        cmp_seq = chr22_seq[pos2:pos2+seq_len]
+repeats = []
+while i < len(chr_sa) - 1:
+    pos = chr_sa[i]
+    base_seq = chr_seq[pos:pos+seq_len]
+    for j in xrange(i+1, len(chr_sa)):
+        pos2 = chr_sa[j]
+        cmp_seq = chr_seq[pos2:pos2+seq_len]
         if base_seq != cmp_seq:
             break
 
     if j - i >= 200:
-        if pos_set == None:
-            pos_set = sorted(chr22_sa[i:j])
-            pos_seq = base_seq
-        else:
-            pos_set2 = sorted(chr22_sa[i:j])
-            pos_seq2 = base_seq
-            different = True
-            for _pos1 in pos_set:
-                for _pos2 in pos_set2:
-                    if abs(_pos1 - _pos2) < 1000:
-                        different = False
-                        break
-
-            if different:
-                """
-                print pos_set
-                print pos_set2
-                print pos_seq
-                print pos_seq2
-
-                file1 = open("1.fa", "w")
-                file2 = open("2.fa", "w")
-
-                pos_seq2 = list(pos_seq2)
-                pos_seq2 = pos_seq2[::-1]
-                for k in xrange(seq_len):
-                    nt = pos_seq2[k]
-                    if nt == 'A':
-                        nt = 'T'
-                    elif nt == 'C':
-                        nt = 'G'
-                    elif nt == 'G':
-                        nt = 'C'
-                    else:
-                        assert nt == 'T'
-                        nt = 'A'
-                    pos_seq2[k] = nt
-                pos_seq2 = ''.join(pos_seq2)
-
-                for k in xrange(1000000):
-                    print >> file1, ">%d" % k
-                    print >> file2, ">%d" % k
-                    print >> file1, pos_seq
-                    print >> file2, pos_seq2
-                   
-                file1.close()
-                file2.close()
-                """
-
-                break
+        repeats.append([base_seq, sorted(chr_sa[i:j])])
 
     i = j
 
+    if i % 5000000 == 0:
+        print i
 
-chr22_seq = ""
-for line in open("22.fa"):
+found = False
+print len(repeats), "repeats"
+for i in xrange(len(repeats) - 1):
+    for j in xrange(i + 1, len(repeats)):
+        num_close = 0
+        pos_seq, pos_set = repeats[i]
+        pos_seq2, pos_set2 = repeats[j]
+        for _pos1 in pos_set:
+            for _pos2 in pos_set2:
+                if abs(_pos1 - _pos2) < 300:
+                    num_close += 1
+                
+        if num_close == 1:
+            found = True
+            print pos_set
+            print pos_set2
+            print pos_seq
+            print pos_seq2
+
+            file1 = open("1.fa", "w")
+            file2 = open("2.fa", "w")
+
+            pos_seq2_rc = list(pos_seq2)
+            pos_seq2_rc = pos_seq2_rc[::-1]
+            for k in xrange(seq_len):
+                nt = pos_seq2_rc[k]
+                if nt == 'A':
+                    nt = 'T'
+                elif nt == 'C':
+                    nt = 'G'
+                elif nt == 'G':
+                    nt = 'C'
+                else:
+                    assert nt == 'T'
+                    nt = 'A'
+                pos_seq2_rc[k] = nt
+            pos_seq2_rc = ''.join(pos_seq2_rc)
+
+            for k in xrange(1000000):
+                print >> file1, ">%d" % k
+                print >> file2, ">%d" % k
+                print >> file1, pos_seq
+                print >> file2, pos_seq2_rc
+
+            file1.close()
+            file2.close()
+
+            break
+    if found:
+        break
+
+chr_seq = ""
+for line in open("%s.fa" % chr_name):
     if line.startswith('>'):
         continue
     line = line.strip()
-    chr22_seq += line
+    chr_seq += line
 
 N_ranges = []
 prev_nt = None
-for i in xrange(len(chr22_seq)):
-    nt = chr22_seq[i]
+for i in xrange(len(chr_seq)):
+    nt = chr_seq[i]
     if nt == 'N':
         if prev_nt != 'N':
             N_ranges.append([i, i]) # inclusive
@@ -147,9 +152,9 @@ for i in xrange(len(to_genome_list)):
 
 assert N_ranges == N_ranges_tmp
 
-file = open("22_rep.info", "w")
+file = open("%s_rep.info" % chr_name, "w")
 def print_rep_info(rep_name, rep_len, pos_set, pos_seq):
-    print >> file, ">%s\t%d\t%d" % (rep_name, rep_len, len(pos_set))
+    print >> file, ">%s*0\t%d\t%d\t0" % (rep_name, rep_len, len(pos_set))
     for i in xrange(0, len(pos_set), 10):
         output = ""
         for j in range(i, i + 10):
@@ -166,19 +171,19 @@ def print_rep_info(rep_name, rep_len, pos_set, pos_seq):
                 assert False
                 
             pos = convert(pos_set[j])
-            assert chr22_seq[pos:pos+seq_len] == pos_seq
-            output += ("22:%d" % pos)
+            assert chr_seq[pos:pos+seq_len] == pos_seq
+            output += ("%s:%d" % (chr_name, pos))
         print >> file, output
 print_rep_info("rep1", seq_len, pos_set, pos_seq)
 print_rep_info("rep2", seq_len, pos_set2, pos_seq2)
 file.close()
 
-chr22_seq = chr22_seq.replace(pos_seq, 'N' * seq_len)
-chr22_seq = chr22_seq.replace(pos_seq2, 'N' * seq_len)
-file = open("22_rep.fa", "w")
-print >> file, ">22_rep"
-for i in xrange(0, len(chr22_seq), 60):
-    print >> file, chr22_seq[i:i+60]
+chr_seq = chr_seq.replace(pos_seq, 'N' * seq_len)
+chr_seq = chr_seq.replace(pos_seq2, 'N' * seq_len)
+file = open("%s_rep.fa" % chr_name, "w")
+print >> file, ">%s_rep" % chr_name
+for i in xrange(0, len(chr_seq), 60):
+    print >> file, chr_seq[i:i+60]
 print >> file, ">rep1"
 print >> file, pos_seq
 print >> file, ">rep2"

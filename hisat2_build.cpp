@@ -80,6 +80,7 @@ static string ht_fname;
 static string ss_fname;
 static string exon_fname;
 static string sv_fname;
+static string repeat_fname;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -115,6 +116,7 @@ static void resetOptions() {
     ss_fname = "";
     exon_fname = "";
     sv_fname = "";
+    repeat_fname = "";
 }
 
 // Argument constants for getopts
@@ -138,6 +140,7 @@ enum {
     ARG_SPLICESITE,
     ARG_EXON,
     ARG_SV,
+    ARG_REPEAT,
 };
 
 /**
@@ -181,6 +184,7 @@ static void printUsage(ostream& out) {
         << "    --haplotype <path>      haplotype file name" << endl
         << "    --ss <path>             Splice site file name" << endl
         << "    --exon <path>           Exon file name" << endl
+        << "    --repeat <path>         Repeat file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
@@ -226,6 +230,7 @@ static struct option long_options[] = {
     {(char*)"ss",             required_argument, 0,            ARG_SPLICESITE},
     {(char*)"exon",           required_argument, 0,            ARG_EXON},
     {(char*)"sv",             required_argument, 0,            ARG_SV},
+    {(char*)"repeat",         required_argument, 0,            ARG_REPEAT},
 	{(char*)"help",           no_argument,       0,            'h'},
 	{(char*)"ntoa",           no_argument,       0,            ARG_NTOA},
 	{(char*)"justref",        no_argument,       0,            '3'},
@@ -327,6 +332,9 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_SV:
                 sv_fname = optarg;
                 break;
+            case ARG_REPEAT:
+                repeat_fname = optarg;
+                break;
 			case ARG_BMAX:
 				bmax = parseNumber<TIndexOffU>(1, "--bmax arg must be at least 1");
 				bmaxMultSqrt = OFF_MASK; // don't use multSqrt
@@ -412,6 +420,7 @@ static void driver(
                    const string& ssfile,
                    const string& exonfile,
                    const string& svfile,
+                   const string& repeatfile,
                    const string& outfile,
                    bool packed,
                    int reverse)
@@ -504,6 +513,7 @@ static void driver(
                           ssfile,
                           exonfile,
                           svfile,
+                          repeatfile,
                           outfile,      // basename for .?.ht2 files
                           reverse == 0, // fw
                           !entireSA,    // useBlockwise
@@ -684,7 +694,17 @@ int hisat2_build(int argc, const char **argv) {
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, snp_fname, ht_fname, ss_fname, exon_fname, sv_fname, outfile, false, REF_READ_FORWARD);
+                driver<SString<char> >(infile,
+                                       infiles,
+                                       snp_fname,
+                                       ht_fname,
+                                       ss_fname,
+                                       exon_fname,
+                                       sv_fname,
+                                       repeat_fname,
+                                       outfile,
+                                       false,
+                                       REF_READ_FORWARD);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;

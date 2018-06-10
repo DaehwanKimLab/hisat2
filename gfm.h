@@ -899,6 +899,7 @@ public:
         const string& ssfile,
         const string& exonfile,
         const string& svfile,
+        const string& repeatfile,
 		const string& outfile,   // base filename for GFM files
 		bool fw,
 		bool useBlockwise,
@@ -959,6 +960,7 @@ public:
                              ssfile,
                              exonfile,
                              svfile,
+                             repeatfile,
 							 is,
 							 szs,
 							 sztot,
@@ -1190,6 +1192,7 @@ public:
                         const string& ssfile,
                         const string& exonfile,
                         const string& svfile,
+                        const string& repeatfile,
 						EList<FileBuf*>& is,
 	                    EList<RefRecord>& szs,
 	                    index_t sztot,
@@ -1727,6 +1730,68 @@ public:
                 // Todo - implement structural variations
                 if(svfile != "") {
                     cerr << "Warning: SV option is not implemented " << svfile.c_str() << endl;
+                }
+                
+                if(repeatfile != "") {
+                    ifstream repeat_file(repeatfile.c_str(), ios::in);
+                    if(!repeat_file.is_open()) {
+                        cerr << "Error: could not open " << ssfile.c_str() << endl;
+                        throw 1;
+                    }
+                    while(!repeat_file.eof()) {
+                        // >rep1*0    100    438    0
+                        // 20:26608812 20:26616967 20:26619687 20:26627842 20:26632262 20:26635390 20:26638109 20:26640829 20:26648949 20:26651669
+                        string repAlleleName;
+                        repeat_file >> repAlleleName;
+                        if(repAlleleName.empty() || repAlleleName[0] != '>') {
+                            cerr << "Error: the file format is not correct" << endl;
+                            throw 1;
+                        }
+                        repAlleleName.erase(0); // Remove '>'
+                        index_t repLen, numCoords, numAlts;
+                        repeat_file >> repLen >> numCoords >> numAlts;
+#if 0
+                        
+                        // Convert exonic position to intronic position
+                        left += 1; right -= 1;
+                        if(left >= right) continue;
+                        index_t chr_idx = 0;
+                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
+                            if(chr == refnames_nospace[chr_idx])
+                                break;
+                        }
+                        if(chr_idx >= refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        assert_lt(chr_idx, chr_szs.size());
+                        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+                        const index_t sofar_len = tmp_pair.first;
+                        const index_t szs_idx = tmp_pair.second;
+                        bool inside_Ns = false;
+                        index_t add_pos = 0;
+                        assert(szs[szs_idx].first);
+                        for(index_t i = szs_idx; i < szs.size(); i++) {
+                            if(i != szs_idx && szs[i].first) break;
+                            if(left < szs[i].off) {
+                                inside_Ns = true;
+                                break;
+                            } else {
+                                left -= szs[i].off;
+                                right -= szs[i].off;
+                                if(left < szs[i].len) {
+                                    if(right >= szs[i].len) {
+                                        inside_Ns = true;
+                                    }
+                                    break;
+                                } else {
+                                    left -= szs[i].len;
+                                    right -= szs[i].len;
+                                    add_pos += szs[i].len;
+                                }
+                            }
+                        }
+#endif
+                    }
+                    repeat_file.close();
                 }
                 
                 // Sort SNPs and Splice Sites based on positions

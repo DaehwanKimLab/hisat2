@@ -1,0 +1,2 @@
+date; time bowtie2 --extends 1000 --score-min C,0 -p 3 -x 20 -f -1 1.fa -2 2.fa > bowtie2.sam
+

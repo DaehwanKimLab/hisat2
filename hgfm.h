@@ -1621,6 +1621,7 @@ public:
          const string& ssfile,
          const string& exonfile,
          const string& svfile,
+         const string& repeatfile,
          const string& outfile,   // base filename for GFM files
          bool fw,
          bool useBlockwise,
@@ -1922,6 +1923,7 @@ HGFM<index_t, local_index_t>::HGFM(
                                    const string& ssfile,
                                    const string& exonfile,
                                    const string& svfile,
+                                   const string& repeatfile,
                                    const string& outfile,   // base filename for EBWT files
                                    bool fw,
                                    bool useBlockwise,
@@ -1950,6 +1952,7 @@ HGFM<index_t, local_index_t>::HGFM(
                  ssfile,
                  exonfile,
                  svfile,
+                 repeatfile,
                  outfile,
                  fw,
                  useBlockwise,
