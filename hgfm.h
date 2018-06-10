@@ -69,6 +69,7 @@ public:
              bool useHaplotype) : // = false
 	GFM<index_t>(in,
                  altdb,
+                 NULL,
                  needEntireReverse,
                  fw,
                  overrideOffRate,
@@ -1556,6 +1557,7 @@ public:
 	/// Construct a GFM from the given input file
 	HGFM(const string& in,
          ALTDB<index_t>* altdb,
+         RepeatDB<index_t>* repeatdb,
          int needEntireReverse,
          bool fw,
          int32_t overrideOffRate, // = -1,
@@ -1576,6 +1578,7 @@ public:
          bool skipLoading = false) :
     GFM<index_t>(in,
                  altdb,
+                 repeatdb,
                  needEntireReverse,
                  fw,
                  overrideOffRate,

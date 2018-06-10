@@ -1959,6 +1959,7 @@ static AlnSink<index_t>*                 multiseed_msink;
 static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
 static ALTDB<index_t>*                   altdb;
+static RepeatDB<index_t>*                repeatdb;
 static TranscriptomePolicy*              multiseed_tpol;
 static GraphPolicy*                      gpol;
 
@@ -3703,10 +3704,12 @@ static void driver(
 		cerr << "About to initialize fw GFM: "; logTime(cerr, true);
 	}
     altdb = new ALTDB<index_t>();
+    repeatdb = new RepeatDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
 	HGFM<index_t, local_index_t> gfm(
                                      adjIdxBase,
                                      altdb,
+                                     repeatdb,
                                      -1,       // fw index
                                      true,     // index is for the forward direction
                                      /* overriding: */ offRate,
@@ -4024,6 +4027,7 @@ static void driver(
 		delete patsrc;
 		delete mssink;
         delete altdb;
+        delete repeatdb;
         delete ssdb;
 		delete metricsOfb;
 		if(fout != NULL) {

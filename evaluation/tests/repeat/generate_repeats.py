@@ -172,7 +172,7 @@ def print_rep_info(rep_name, rep_len, pos_set, pos_seq):
                 
             pos = convert(pos_set[j])
             assert chr_seq[pos:pos+seq_len] == pos_seq
-            output += ("%s:%d" % (chr_name, pos))
+            output += ("%s_rep:%d" % (chr_name, pos))
         print >> file, output
 print_rep_info("rep1", seq_len, pos_set, pos_seq)
 print_rep_info("rep2", seq_len, pos_set2, pos_seq2)

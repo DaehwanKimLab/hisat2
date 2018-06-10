@@ -56,6 +56,7 @@
 #include "mem_ids.h"
 #include "btypes.h"
 #include "tokenize.h"
+#include "repeat.h"
 
 #ifdef POPCNT_CAPABILITY
 #include "processor_support.h"
@@ -651,6 +652,7 @@ public:
 	/// Construct a GFM from the given input file
 	GFM(const string& in,
         ALTDB<index_t>* altdb,
+        RepeatDB<index_t>* repeatdb,
         int needEntireReverse,
         bool fw,
         int32_t overrideOffRate, // = -1,
@@ -1732,68 +1734,6 @@ public:
                     cerr << "Warning: SV option is not implemented " << svfile.c_str() << endl;
                 }
                 
-                if(repeatfile != "") {
-                    ifstream repeat_file(repeatfile.c_str(), ios::in);
-                    if(!repeat_file.is_open()) {
-                        cerr << "Error: could not open " << ssfile.c_str() << endl;
-                        throw 1;
-                    }
-                    while(!repeat_file.eof()) {
-                        // >rep1*0    100    438    0
-                        // 20:26608812 20:26616967 20:26619687 20:26627842 20:26632262 20:26635390 20:26638109 20:26640829 20:26648949 20:26651669
-                        string repAlleleName;
-                        repeat_file >> repAlleleName;
-                        if(repAlleleName.empty() || repAlleleName[0] != '>') {
-                            cerr << "Error: the file format is not correct" << endl;
-                            throw 1;
-                        }
-                        repAlleleName.erase(0); // Remove '>'
-                        index_t repLen, numCoords, numAlts;
-                        repeat_file >> repLen >> numCoords >> numAlts;
-#if 0
-                        
-                        // Convert exonic position to intronic position
-                        left += 1; right -= 1;
-                        if(left >= right) continue;
-                        index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
-                                break;
-                        }
-                        if(chr_idx >= refnames_nospace.size()) continue;
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
-                        assert_lt(chr_idx, chr_szs.size());
-                        pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
-                        const index_t sofar_len = tmp_pair.first;
-                        const index_t szs_idx = tmp_pair.second;
-                        bool inside_Ns = false;
-                        index_t add_pos = 0;
-                        assert(szs[szs_idx].first);
-                        for(index_t i = szs_idx; i < szs.size(); i++) {
-                            if(i != szs_idx && szs[i].first) break;
-                            if(left < szs[i].off) {
-                                inside_Ns = true;
-                                break;
-                            } else {
-                                left -= szs[i].off;
-                                right -= szs[i].off;
-                                if(left < szs[i].len) {
-                                    if(right >= szs[i].len) {
-                                        inside_Ns = true;
-                                    }
-                                    break;
-                                } else {
-                                    left -= szs[i].len;
-                                    right -= szs[i].len;
-                                    add_pos += szs[i].len;
-                                }
-                            }
-                        }
-#endif
-                    }
-                    repeat_file.close();
-                }
-                
                 // Sort SNPs and Splice Sites based on positions
                 if(_alts.size() > 1) {
                     assert_eq(_alts.size(), _altnames.size());
@@ -1853,6 +1793,137 @@ public:
                 writeIndex<index_t>(fout7, (index_t)_haplotypes.size(), this->toBe());
                 for(index_t i = 0; i < _haplotypes.size(); i++) {
                     _haplotypes[i].write(fout7, this->toBe());
+                }
+                
+                if(repeatfile != "") {
+                    ifstream repeat_file(repeatfile.c_str(), ios::in);
+                    if(!repeat_file.is_open()) {
+                        cerr << "Error: could not open " << ssfile.c_str() << endl;
+                        throw 1;
+                    }
+                    EList<RepeatAllele<index_t> > repeatAlleles;
+                    while(!repeat_file.eof()) {
+                        // >rep1*0    100    438    0
+                        // 20:26608812 20:26616967 20:26619687 20:26627842 20:26632262 20:26635390 20:26638109 20:26640829 20:26648949 20:26651669
+                        string repName, repAlleleName;
+                        repeat_file >> repAlleleName;
+                        if(repAlleleName.empty()) // Reached the end of file
+                            break;
+                        if(repAlleleName[0] != '>') {
+                            cerr << "Error: the file format is not correct" << endl;
+                            throw 1;
+                        }
+                        repAlleleName = repAlleleName.substr(1); // Remove '>'
+                        index_t alleleID = 0;
+                        size_t star_pos = repAlleleName.find('*');
+                        if(star_pos >= repAlleleName.length()) {
+                            repName = repAlleleName;
+                        } else {
+                            repName = repAlleleName.substr(0, star_pos);
+                            string strID = repAlleleName.substr(star_pos);
+                            istringstream(strID) >> alleleID;
+                        }
+                        
+                        index_t rep_idx = 0;
+                        for(; rep_idx < refnames_nospace.size(); rep_idx++) {
+                            if(repName == refnames_nospace[rep_idx])
+                                break;
+                        }
+                        if(rep_idx >= refnames_nospace.size()) {
+                            cerr << "Error: " << repName << " is not found in " << endl;
+                            throw 1;
+                        }
+                        
+                        index_t repLen, numCoords, numAlts;
+                        repeat_file >> repLen >> numCoords >> numAlts;
+                        EList<index_t> snpIDs;
+                        while(snpIDs.size() < numAlts) {
+                            string snpID;
+                            repeat_file >> snpID;
+                            if(snpID2num.find(snpID) == snpID2num.end()) {
+                                cerr << "Error: " << snpID << " is not found" << endl;
+                                throw 1;
+                            }
+                            index_t numID = snpID2num[snpID];
+                            snpIDs.push_back(numID);
+                        }
+
+                        EList<index_t> positions;
+                        while(positions.size() < numCoords) {
+                            string chr_pos;
+                            repeat_file >> chr_pos;
+                            size_t colon_pos = chr_pos.find(':');
+                            if(colon_pos + 1 >= chr_pos.length()) {
+                                cerr << "Error: : is not found in " << chr_pos << endl;
+                                throw 1;
+                            }
+                            string chr = chr_pos.substr(0, colon_pos);
+                            string strPos = chr_pos.substr(colon_pos + 1);
+                            index_t pos = 0;
+                            istringstream(strPos) >> pos;
+                            
+                            index_t chr_idx = 0;
+                            for(; chr_idx < refnames_nospace.size(); chr_idx++) {
+                                if(chr == refnames_nospace[chr_idx])
+                                    break;
+                            }
+                            if(chr_idx >= refnames_nospace.size()) {
+                                cerr << "Error: " << chr << " is not found in " << endl;
+                                throw 1;
+                            }
+                            assert_eq(chr_szs.size(), refnames_nospace.size());
+                            assert_lt(chr_idx, chr_szs.size());
+                            pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+                            const index_t sofar_len = tmp_pair.first;
+                            const index_t szs_idx = tmp_pair.second;
+                            bool involve_Ns = false;
+                            index_t add_pos = 0;
+                            assert(szs[szs_idx].first);
+                            for(index_t i = szs_idx; i < szs.size(); i++) {
+                                if(i != szs_idx && szs[i].first) {
+                                    break;
+                                }
+                                if(pos < szs[i].off) {
+                                    involve_Ns = true;
+                                    break;
+                                } else {
+                                    pos -= szs[i].off;
+                                    if(pos < szs[i].len) {
+                                        break;
+                                    } else {
+                                        pos -= szs[i].len;
+                                        add_pos += szs[i].len;
+                                    }
+                                }
+                            }
+                            pos = sofar_len + add_pos + pos;
+                            if(chr_idx + 1 < chr_szs.size()) {
+                                if(pos >= chr_szs[chr_idx + 1].first) {
+                                    throw 1;
+                                }
+                            } else {
+                                if(pos >= jlen){
+                                    throw 1;
+                                }
+                            }
+                            
+                            positions.push_back(pos);
+                        }
+                        repeatAlleles.expand();
+                        repeatAlleles.back().init(rep_idx,
+                                                  alleleID,
+                                                  snpIDs,
+                                                  positions);
+                        
+                    }
+                    repeat_file.close();
+                    
+                    if(repeatAlleles.size() > 0) {
+                        writeIndex<index_t>(fout7, (index_t)repeatAlleles.size(), this->toBe());
+                        for(index_t i = 0; i < repeatAlleles.size(); i++) {
+                            repeatAlleles[i].write(fout7, this->toBe());
+                        }
+                    }
                 }
                 
                 fout7.close();
@@ -4245,7 +4316,6 @@ void GFM<index_t>::joinToDisk(
 			}
 			// Increment seqsRead if this is the first fragment
 			if(rec.first && rec.len > 0) seqsRead++;
-			if(bases == 0) continue;
             assert_lt(szsi, szs.size());
             assert_eq(rec.off, szs[szsi].off);
             assert_eq(rec.len, szs[szsi].len);
@@ -4258,7 +4328,11 @@ void GFM<index_t>::joinToDisk(
 			patoff += rec.off; // add fragment's offset from end of last frag.
 			// Adjust rpcps
 			//index_t seq = seqsRead-1;
-			ASSERT_ONLY(entsWritten++);
+#ifndef NDEBUG
+            if(bases > 0) {
+                ASSERT_ONLY(entsWritten++);
+            }
+#endif
 			// This is where rstarts elements are written to the output stream
 			//writeU32(out1, oldRetLen, this->toBe()); // offset from beginning of joined string
 			//writeU32(out1, seq,       this->toBe()); // sequence id
