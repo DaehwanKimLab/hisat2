@@ -513,28 +513,13 @@ string get_string(TStr& ref, TIndexOffU start, int len)
 // Dump
 //
 // to_string
-string to_string(int val)
+static string to_string(int val)
 {
 	stringstream ss;
 	ss << val;
 	return ss.str();
 }
 
-template<typename TStr>
-int get_lcp(TStr& s, TIndexOffU a, TIndexOffU b)
-{
-    int k = 0;
-    TIndexOffU s_len = s.length();
-    
-    while ((a + k) < s_len && (b + k) < s_len) {
-        if (s[a + k] != s[b + k]) {
-            break;
-        }
-        k++;
-    }
-    
-    return k;
-}
 
 template<typename TStr>
 int get_lcp_back(TStr& s, TIndexOffU a, TIndexOffU b)
@@ -556,48 +541,8 @@ int get_lcp_back(TStr& s, TIndexOffU a, TIndexOffU b)
 	return k;
 }
 
-#if 0
-template<typename TStr>
-int get_lcp(TStr& s, TIndexOffU a, TIndexOffU b)
-{
-    int k = 0;
-    TIndexOffU s_len = s.length();
-    
-    if (a >= s_len || b >= s_len) {
-        return 0;
-    }
-    
-#if 1
-    int a_frag_id = map_joined_pos_to_seq(joined_fragments, a);
-    int b_frag_id = map_joined_pos_to_seq(joined_fragments, b);
-    
-    if (a_frag_id < 0 || b_frag_id < 0) {
-        cerr << "CP " << a_frag_id << ", " << b_frag_id << endl;
-        return 0;
-    }
-    
-    size_t a_remains = joined_fragments[a_frag_id].length + joined_fragments[a_frag_id].start;
-    size_t b_remains = joined_fragments[b_frag_id].length + joined_fragments[b_frag_id].start;
-    
-    assert_leq(a_remains, s_len);
-    assert_leq(b_remains, s_len);
-#else
-    size_t a_remains = s_len;
-    size_t b_remains = s_len;
-#endif
-    
-    
-    while ((a + k) < a_remains && (b + k) < b_remains) {
-        if (s[a + k] != s[b + k]) {
-            break;
-        }
-        k++;
-    }
-    
-    return k;
-}
-#endif
 
+#if 0
 int get_lcp(string a, string b)
 {
     int k = 0;
@@ -613,6 +558,7 @@ int get_lcp(string a, string b)
     
     return k;
 }
+#endif
 
 template<typename TStr>
 void dump_tstr(TStr& s)
@@ -712,342 +658,438 @@ public:
 	int victim_ = 0;	/* round-robin */
 
 public:
-	void build_names()
-	{
-		ref_names_.resize(ref_namelines_.size());
-		for (int i = 0; i < ref_namelines_.size(); i++) {
-			string& nameline = ref_namelines_[i];
 
-			for (int j = 0; j < nameline.length(); j++) {
-				char n = nameline[j];
-				if (n == ' ') {
-					break;
-				}
-				ref_names_[i].push_back(n);
-			}
-		}
-	}
+	void build_names(void);
+	int map_joined_pos_to_seq(TIndexOffU joined_pos);
+	int get_genome_coord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
 
-	int map_joined_pos_to_seq(TIndexOffU joined_pos)
-	{
-
-		/* search from cached_list */
-		if (num_cached_ > 0) {
-			for (int i = 0; i < num_cached_; i++) {
-				Fragments *frag = &cached_[i];
-				if (frag->contain(joined_pos)) {
-					return frag->frag_id;
-				}
-			}
-			/* fall through */
-		}
-
-		/* search list */
-		int top = 0;
-		int bot = fraglist_.size() - 1; 
-		int pos = 0;
-
-		Fragments *frag = &fraglist_[pos];
-		while ((bot - top) > 1) {
-			pos = top + ((bot - top) >> 1);
-			frag = &fraglist_[pos];
-
-			if (joined_pos < frag->start) {
-				bot = pos;
-			} else {
-				top = pos;
-			}
-		}
-
-		frag = &fraglist_[top];
-		if (frag->contain(joined_pos)) {
-			// update cache
-			if (num_cached_ < CACHE_SIZE_JOINEDFRG) {
-				cached_[num_cached_] = *frag;
-				num_cached_++;
-			} else {
-				cached_[victim_] = *frag;
-				victim_++;
-				victim_ %= CACHE_SIZE_JOINEDFRG;
-			}
-
-			return top;
-		}
-
-		return -1;
-	}
-
-	int get_genome_coord(TIndexOffU joined_pos, 
-			string& chr_name, TIndexOffU& pos_in_chr)
-	{
-		int seq_id = map_joined_pos_to_seq(joined_pos);
-		if (seq_id < 0) {
-			return -1;
-		}
-
-		Fragments *frag = &fraglist_[seq_id];
-		TIndexOffU offset = joined_pos - frag->start;
-
-		pos_in_chr = frag->start_in_seq + offset;
-		chr_name = ref_names_[frag->seq_id];
-
-		return 0;
-	}
-
-	void build_joined_fragment()
-	{
-		int n_seq = 0;
-		int n_frag = 0;
-
-		for (int i = 0; i < szs_.size(); i++) {
-			if (szs_[i].len > 0) n_frag++;
-			if (szs_[i].first && szs_[i].len > 0) n_seq++;
-		}
-
-		int npos = 0;
-		int seq_id = -1;
-		TIndexOffU acc_frag_length = 0;
-		TIndexOffU acc_ref_length = 0;
-		fraglist_.resize(n_frag + 1);
-
-		for (int i = 0; i < szs_.size(); i++) {
-			if (szs_[i].len == 0) {
-				continue;
-			}
-
-			fraglist_[npos].start = acc_frag_length;
-			fraglist_[npos].length = szs_[i].len;
-			fraglist_[npos].start_in_seq = acc_ref_length + szs_[i].off;
-			fraglist_[npos].frag_id = i;
-			fraglist_[npos].frag_id = npos;
-			if (szs_[i].first) {
-				seq_id++;
-				fraglist_[npos].first = true;
-			}
-			fraglist_[npos].seq_id = seq_id;
-
-			acc_frag_length += szs_[i].len;
-			acc_ref_length += szs_[i].off + szs_[i].len;
-
-			npos++;
-		}
-
-		// Add Last Fragment(empty)
-		fraglist_[npos].start = acc_frag_length;
-		fraglist_[npos].length = 0;
-		fraglist_[npos].start_in_seq = acc_ref_length + szs_.back().off;
-	}
+	void build_joined_fragment(void);
 
 	static bool repeat_group_cmp(const RepeatGroup& a, const RepeatGroup& b)
 	{
 		return a.positions[0] < b.positions[0];
 	}
 
-	void sort_rpt_grp()
-	{
-		if (rpt_grp_.size() > 0) {
-			sort(rpt_grp_.begin(), rpt_grp_.begin() + rpt_grp_.size(), repeat_group_cmp);
-		}
-	}
-
-	void save_repeat_groups()
-	{
-		string rptinfo_filename = filename_ + ".rptinfo";
-		int len = rpt_grp_.size();
-		ofstream fp(rptinfo_filename.c_str());
-
-		for (int i = 0; i < len; i++) {
-			RepeatGroup& rg = rpt_grp_[i];
-			EList<TIndexOffU>& positions = rg.positions;
-
-			// @rpt_name length count
-			// pos0 pos1 ... pos15
-			// pos16 pos17 ... pos31
-			//
-			// where pos# = chr_name:pos
-
-			// Header line
-			fp << "@" << "rpt_" << i;
-			fp << "\t" << rg.repeat_sequence.length();
-			fp << "\t" << positions.size();
-			fp << "\t" << rg.repeat_sequence;
-			fp << endl;
-
-			// Positions
-			for (int j = 0; j < positions.size(); j++) {
-				if (j && (j % 16 == 0)) {
-					fp << endl;
-				}
-
-				if (j % 16) {
-					fp << "\t";
-				}
-
-				string chr_name;
-				TIndexOffU pos_in_chr;
-
-				get_genome_coord(positions[j], chr_name, pos_in_chr);
-
-				fp << chr_name << ":" << pos_in_chr;
-			}
-			fp << endl;
-		}		
-		fp.close();
-	}
-
-	void fill_with_N(ofstream& fp, TIndexOffU start, TIndexOffU end_in_seq)
-	{
-		// [pos_in_seq, end_in_seq) fill with N
-		for (; start < end_in_seq; start++) {
-			if (start && (start % output_width == 0)) {
-				fp << endl;
-			}
-			fp << "N";
-		}
-	}
-
+	void sort_rpt_grp(void);
+	void save_repeat_groups(void);
+	void fill_with_N(ofstream& fp, TIndexOffU start, TIndexOffU end_in_seq);
 
 	// Save single repeatgroup to fp
-	void savefile_rpt(ofstream& fp, RepeatGroup& rpt, int rpt_idx)
-	{
-		// >rpt_###
-		// ACCAGGCATATA
+	void savefile_rpt(ofstream& fp, RepeatGroup& rpt, int rpt_idx);
+	void savefile(void);
 
-		// Name
-		stringstream rpt_name;
-		rpt_name << "rpt_" << rpt_idx;
-		fp << ">" << rpt_name.str() << endl;
+	void add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndexOffU>& rpt_range);
+	void adjust_repeat_group(void);
+	void repeat_masking(void);
 
-		// Sequeunce
-		size_t rpt_len = rpt.repeat_sequence.length();
-		for (size_t i = 0; i < rpt_len; i += output_width) {
-			size_t out_len = std::min((size_t)output_width, (size_t)(rpt_len - i));
+	int get_lcp(TIndexOffU a, TIndexOffU b);
+};
 
-			fp << rpt.repeat_sequence.substr(i, out_len) << endl;
+template<typename TStr>
+void NRG<TStr>::build_names(void)
+{
+	ref_names_.resize(ref_namelines_.size());
+	for (int i = 0; i < ref_namelines_.size(); i++) {
+		string& nameline = ref_namelines_[i];
+
+		for (int j = 0; j < nameline.length(); j++) {
+			char n = nameline[j];
+			if (n == ' ') {
+				break;
+			}
+			ref_names_[i].push_back(n);
 		}
+	}
+}
 
+template<typename TStr>
+int NRG<TStr>::map_joined_pos_to_seq(TIndexOffU joined_pos)
+{
+
+	/* search from cached_list */
+	if (num_cached_ > 0) {
+		for (int i = 0; i < num_cached_; i++) {
+			Fragments *frag = &cached_[i];
+			if (frag->contain(joined_pos)) {
+				return frag->frag_id;
+			}
+		}
+		/* fall through */
 	}
 
-	void savefile()
-	{
-		string nonrpt_name = filename_ + ".nonrpt";
-		ofstream fp(nonrpt_name.c_str());
+	/* search list */
+	int top = 0;
+	int bot = fraglist_.size() - 1; 
+	int pos = 0;
 
-		TIndexOffU ref_name_idx = 0;
-		size_t acc_sum_seq = 0;
-		size_t acc_sum_joined = 0;
+	Fragments *frag = &fraglist_[pos];
+	while ((bot - top) > 1) {
+		pos = top + ((bot - top) >> 1);
+		frag = &fraglist_[pos];
 
-		for (int i = 0; i < szs_.size(); i++) {
-			RefRecord *rec = &szs_[i];
+		if (joined_pos < frag->start) {
+			bot = pos;
+		} else {
+			top = pos;
+		}
+	}
 
-			if (rec->first) {
-				if (i) {
-					fp << endl;
-				}
-				fp << ">" << ref_namelines_[ref_name_idx] << endl;
-				ref_name_idx++;
-				acc_sum_seq = 0;
-			}
-
-			if (rec->off) {
-				fill_with_N(fp, acc_sum_seq, acc_sum_seq + rec->off);
-				acc_sum_seq += rec->off;
-			}
-
-			if (rec->len) {
-				for (TIndexOffU start = acc_sum_joined; start < (acc_sum_joined + rec->len); start++, acc_sum_seq++) {
-					if (acc_sum_seq && (acc_sum_seq % output_width == 0)) {
-						fp << endl;
-					}
-					fp << "ACGTN"[s_[start]];
-				}
-				acc_sum_joined += rec->len;
-			}
+	frag = &fraglist_[top];
+	if (frag->contain(joined_pos)) {
+		// update cache
+		if (num_cached_ < CACHE_SIZE_JOINEDFRG) {
+			cached_[num_cached_] = *frag;
+			num_cached_++;
+		} else {
+			cached_[victim_] = *frag;
+			victim_++; // round-robin
+			victim_ %= CACHE_SIZE_JOINEDFRG;
 		}
 
+		return top;
+	}
+
+	return -1;
+}
+
+template<typename TStr>
+int NRG<TStr>::get_genome_coord(TIndexOffU joined_pos, 
+		string& chr_name, TIndexOffU& pos_in_chr)
+{
+	int seq_id = map_joined_pos_to_seq(joined_pos);
+	if (seq_id < 0) {
+		return -1;
+	}
+
+	Fragments *frag = &fraglist_[seq_id];
+	TIndexOffU offset = joined_pos - frag->start;
+
+	pos_in_chr = frag->start_in_seq + offset;
+	chr_name = ref_names_[frag->seq_id];
+
+	return 0;
+}
+
+
+template<typename TStr>
+void NRG<TStr>::build_joined_fragment(void)
+{
+	int n_seq = 0;
+	int n_frag = 0;
+
+	for (int i = 0; i < szs_.size(); i++) {
+		if (szs_[i].len > 0) n_frag++;
+		if (szs_[i].first && szs_[i].len > 0) n_seq++;
+	}
+
+	int npos = 0;
+	int seq_id = -1;
+	TIndexOffU acc_frag_length = 0;
+	TIndexOffU acc_ref_length = 0;
+	fraglist_.resize(n_frag + 1);
+
+	for (int i = 0; i < szs_.size(); i++) {
+		if (szs_[i].len == 0) {
+			continue;
+		}
+
+		fraglist_[npos].start = acc_frag_length;
+		fraglist_[npos].length = szs_[i].len;
+		fraglist_[npos].start_in_seq = acc_ref_length + szs_[i].off;
+		fraglist_[npos].frag_id = i;
+		fraglist_[npos].frag_id = npos;
+		if (szs_[i].first) {
+			seq_id++;
+			fraglist_[npos].first = true;
+		}
+		fraglist_[npos].seq_id = seq_id;
+
+		acc_frag_length += szs_[i].len;
+		acc_ref_length += szs_[i].off + szs_[i].len;
+
+		npos++;
+	}
+
+	// Add Last Fragment(empty)
+	fraglist_[npos].start = acc_frag_length;
+	fraglist_[npos].length = 0;
+	fraglist_[npos].start_in_seq = acc_ref_length + szs_.back().off;
+}
+
+template<typename TStr>
+void NRG<TStr>::sort_rpt_grp(void)
+{
+	if (rpt_grp_.size() > 0) {
+		sort(rpt_grp_.begin(), rpt_grp_.begin() + rpt_grp_.size(), repeat_group_cmp);
+	}
+}
+
+template<typename TStr>
+void NRG<TStr>::save_repeat_groups(void)
+{
+	string rptinfo_filename = filename_ + ".rptinfo";
+	int len = rpt_grp_.size();
+	ofstream fp(rptinfo_filename.c_str());
+
+	for (int i = 0; i < len; i++) {
+		RepeatGroup& rg = rpt_grp_[i];
+		EList<TIndexOffU>& positions = rg.positions;
+
+		// @rpt_name length count
+		// pos0 pos1 ... pos15
+		// pos16 pos17 ... pos31
+		//
+		// where pos# = chr_name:pos
+
+		// Header line
+		fp << "@" << "rpt_" << i;
+		fp << "\t" << rg.repeat_sequence.length();
+		fp << "\t" << positions.size();
+		fp << "\t" << rg.repeat_sequence;
 		fp << endl;
 
-		// save repeat sequnce 
-		for (int i = 0; i < rpt_grp_.size(); i++) {
-			savefile_rpt(fp, rpt_grp_[i], i);
-		}
-
-		fp.close();
-
-		// save rpt infos
-		save_repeat_groups();
-	}
-
-
-	void add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndexOffU>& rpt_range)
-	{
-		// rpt_seq is always > 0
-		//
-		const int rpt_len = rpt_seq.length();
-
-		for (int i = 0; i < rpt_grp_.size(); i++) {
-			RepeatGroup& rg = rpt_grp_[i];
-			string& rseq = rg.repeat_sequence;
-			const int rlen = rseq.length();
-			if (rlen == 0) {
-				// skip
-				continue;
+		// Positions
+		for (int j = 0; j < positions.size(); j++) {
+			if (j && (j % 16 == 0)) {
+				fp << endl;
 			}
 
-			if (rlen > rpt_len) {
-				// check if rpt_seq is substring of rpt_groups sequeuce
-				if (rseq.find(rpt_seq) != string::npos) {
-					// substring. exit
-					return;
+			if (j % 16) {
+				fp << "\t";
+			}
+
+			string chr_name;
+			TIndexOffU pos_in_chr;
+
+			get_genome_coord(positions[j], chr_name, pos_in_chr);
+
+			fp << chr_name << ":" << pos_in_chr;
+		}
+		fp << endl;
+	}		
+	fp.close();
+}
+
+template<typename TStr>
+void NRG<TStr>::fill_with_N(ofstream& fp, TIndexOffU start, TIndexOffU end_in_seq)
+{
+	// [pos_in_seq, end_in_seq) fill with N
+	for (; start < end_in_seq; start++) {
+		if (start && (start % output_width == 0)) {
+			fp << endl;
+		}
+		fp << "N";
+	}
+}
+
+template<typename TStr>
+void NRG<TStr>::savefile_rpt(ofstream& fp, RepeatGroup& rpt, int rpt_idx)
+{
+	// >rpt_###
+	// ACCAGGCATATA
+
+	// Name
+	fp << ">" << "rpt_" << rpt_idx << endl;
+
+	// Sequeunce
+	size_t rpt_len = rpt.repeat_sequence.length();
+	for (size_t i = 0; i < rpt_len; i += output_width) {
+		size_t out_len = std::min((size_t)output_width, (size_t)(rpt_len - i));
+
+		fp << rpt.repeat_sequence.substr(i, out_len) << endl;
+	}
+
+}
+
+template<typename TStr>
+void NRG<TStr>::savefile(void)
+{
+	string nonrpt_name = filename_ + ".nonrpt";
+	ofstream fp(nonrpt_name.c_str());
+
+	TIndexOffU ref_name_idx = 0;
+	size_t acc_sum_seq = 0;
+	size_t acc_sum_joined = 0;
+
+	for (int i = 0; i < szs_.size(); i++) {
+		RefRecord *rec = &szs_[i];
+
+		if (rec->first) {
+			if (i) {
+				fp << endl;
+			}
+			fp << ">" << ref_namelines_[ref_name_idx] << endl;
+			ref_name_idx++;
+			acc_sum_seq = 0;
+		}
+
+		if (rec->off) {
+			fill_with_N(fp, acc_sum_seq, acc_sum_seq + rec->off);
+			acc_sum_seq += rec->off;
+		}
+
+		if (rec->len) {
+			for (TIndexOffU start = acc_sum_joined; start < (acc_sum_joined + rec->len); start++, acc_sum_seq++) {
+				if (acc_sum_seq && (acc_sum_seq % output_width == 0)) {
+					fp << endl;
 				}
-			} else if (rlen <= rpt_len) {
-				// check if rpt_groups sequeuce is substring of rpt_seq
-				if (rpt_seq.find(rseq) != string::npos) {
-					// remove rseq
-					rg.repeat_sequence = "";
-				}
+				fp << "ACGTN"[s_[start]];
 			}
-		}
-
-		// add to last
-		rpt_grp_.expand();
-		rpt_grp_.back().repeat_sequence = rpt_seq;
-		rpt_grp_.back().repeat_sequence2 = rpt_seq2;
-		rpt_grp_.back().positions = rpt_range;
-	}
-
-	void adjust_repeat_group(void)
-	{
-		// remove empty repeat group
-		EList<RepeatGroup> mgroup;
-
-
-		mgroup.reserveExact(rpt_grp_.size());
-		mgroup.swap(rpt_grp_);
-
-		for (int i = 0; i < mgroup.size(); i++) {
-			if (mgroup[i].repeat_sequence.length() > 0) {
-				rpt_grp_.push_back(mgroup[i]);
-			}
+			acc_sum_joined += rec->len;
 		}
 	}
 
-	void repeat_masking(void)
-	{
-		for (int i = 0; i < rpt_grp_.size(); i++) {
-			RepeatGroup *rg = &rpt_grp_[i];
+	fp << endl;
 
-			size_t rpt_sqn_len = rg->repeat_sequence.length();
+	// save repeat sequnce 
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		savefile_rpt(fp, rpt_grp_[i], i);
+	}
 
-			for (int j = 0; j < rg->positions.size(); j++) {
-				TIndexOffU pos = rg->positions[j];
+	fp.close();
 
-				// masking [pos, pos + rpt_sqn_len) to 'N'
-				masking_with_N(s_, pos, rpt_sqn_len);
+	// save rpt infos
+	save_repeat_groups();
+}
+
+/**
+ * TODO
+ * @brief 
+ *
+ * @param rpt_seq
+ * @param rpt_seq2
+ * @param rpt_range
+ */
+template<typename TStr>
+void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndexOffU>& rpt_range)
+{
+	// rpt_seq is always > 0
+	//
+	const int rpt_len = rpt_seq.length();
+
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		RepeatGroup& rg = rpt_grp_[i];
+		string& rseq = rg.repeat_sequence;
+		const int rlen = rseq.length();
+		if (rlen == 0) {
+			// skip
+			continue;
+		}
+
+		if (rlen > rpt_len) {
+			// check if rpt_seq is substring of rpt_groups sequeuce
+			if (rseq.find(rpt_seq) != string::npos) {
+				// substring. exit
+				return;
+			}
+		} else if (rlen <= rpt_len) {
+			// check if rpt_groups sequeuce is substring of rpt_seq
+			if (rpt_seq.find(rseq) != string::npos) {
+				// remove rseq
+				rg.repeat_sequence = "";
 			}
 		}
 	}
-};
+
+	// add to last
+	rpt_grp_.expand();
+	rpt_grp_.back().repeat_sequence = rpt_seq;
+	rpt_grp_.back().repeat_sequence2 = rpt_seq2;
+	rpt_grp_.back().positions = rpt_range;
+}
+
+/**
+ * @brief Remove empty repeat group
+ */
+template<typename TStr>
+void NRG<TStr>::adjust_repeat_group(void)
+{
+	EList<RepeatGroup> mgroup;
+
+	mgroup.reserveExact(rpt_grp_.size());
+	mgroup.swap(rpt_grp_);
+
+	for (int i = 0; i < mgroup.size(); i++) {
+		if (mgroup[i].repeat_sequence.length() > 0) {
+			rpt_grp_.push_back(mgroup[i]);
+		}
+	}
+}
+
+template<typename TStr>
+void NRG<TStr>::repeat_masking(void)
+{
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		RepeatGroup *rg = &rpt_grp_[i];
+
+		size_t rpt_sqn_len = rg->repeat_sequence.length();
+
+		for (int j = 0; j < rg->positions.size(); j++) {
+			TIndexOffU pos = rg->positions[j];
+
+			// masking [pos, pos + rpt_sqn_len) to 'N'
+			masking_with_N(s_, pos, rpt_sqn_len);
+		}
+	}
+}
+
+#if 0
+template<typename TStr>
+int NRG<TStr>::get_lcp(TIndexOffU a, TIndexOffU b)
+{
+    int k = 0;
+    TIndexOffU s_len = s_.length();
+    
+    while ((a + k) < s_len && (b + k) < s_len) {
+        if (s_[a + k] != s_[b + k]) {
+            break;
+        }
+        k++;
+    }
+    
+    return k;
+}
+#else
+template<typename TStr>
+int NRG<TStr>::get_lcp(TIndexOffU a, TIndexOffU b)
+{
+    int k = 0;
+    TIndexOffU s_len = s_.length();
+    
+    if (a >= s_len || b >= s_len) {
+        return 0;
+    }
+    
+#if 1
+    int a_frag_id = map_joined_pos_to_seq(a);
+    int b_frag_id = map_joined_pos_to_seq(b);
+    
+    if (a_frag_id < 0 || b_frag_id < 0) {
+        cerr << "CP " << a_frag_id << ", " << b_frag_id << endl;
+        return 0;
+    }
+    
+    size_t a_end = fraglist_[a_frag_id].start + fraglist_[a_frag_id].length;
+    size_t b_end = fraglist_[b_frag_id].start + fraglist_[b_frag_id].length;
+    
+    assert_leq(a_end, s_len);
+    assert_leq(b_end, s_len);
+#else
+    size_t a_end = s_len;
+    size_t b_end = s_len;
+#endif
+    
+    
+    while ((a + k) < a_end && (b + k) < b_end) {
+        if (s_[a + k] != s_[b + k]) {
+            break;
+        }
+        k++;
+    }
+    
+    return k;
+}
+#endif
 
 /**
  * Drive the index construction process and optionally sanity-check the
@@ -1220,7 +1262,7 @@ static void driver(
                 // CP - this is a suffix array
                 TIndexOffU count = 0;
                 
-				EList<TIndexOffU> repeat_range;
+				EList<TIndexOffU> rpt_positions;
 				TIndexOffU min_lcp_len = s.length();
 
                 while(count < s.length() + 1) {
@@ -1231,44 +1273,40 @@ static void driver(
 						cerr << "SA count " << count << endl;
 					}
 
-					if (repeat_range.size() == 0) {
-						repeat_range.expand();
-						repeat_range.back() = saElt;
+					if (rpt_positions.size() == 0) {
+						rpt_positions.expand();
+						rpt_positions.back() = saElt;
 					} else {
-						TIndexOffU prev_saElt = repeat_range.back();
+						TIndexOffU prev_saElt = rpt_positions.back();
 
 						// calculate common prefix length between two text.
 						//   text1 is started from prev_saElt and text2 is started from saElt
-						int lcp_len = get_lcp<TStr>(s, prev_saElt, saElt);
+						int lcp_len = nrg.get_lcp(prev_saElt, saElt);
                         
                         // check prev_saElt
 
 						if (lcp_len >= repeat_length) {
-							repeat_range.expand();
-							repeat_range.back() = saElt;
+							rpt_positions.expand();
+							rpt_positions.back() = saElt;
+
 							if (min_lcp_len > lcp_len) {
 								min_lcp_len = lcp_len;
 							}
 
 						} else {
-							if (repeat_range.size() >= repeat_count) {
+							if (rpt_positions.size() >= repeat_count) {
 								// save ranges
-								//cerr << "CP " << "we have " << repeat_range.size() << " continuous range" << ", " << min_lcp_len << endl;
+								//cerr << "CP " << "we have " << rpt_positions.size() << " positions" << ", " << min_lcp_len << endl;
 								//
 
-#if 0
-								repeat_groups.expand();
-								RepeatGroup& rg = repeat_groups.back();
-#endif
-
-								repeat_range.sort();
+								rpt_positions.sort();
 
 								string ss = get_string(s, prev_saElt, min_lcp_len);
 
 								string ss2 = get_string(s, prev_saElt + min_lcp_len, min_lcp_len );
 								ss2 += " " + to_string(min_lcp_len);
 
-								nrg.add_repeat_group(ss, ss2, repeat_range);
+								nrg.add_repeat_group(ss, ss2, rpt_positions);
 
 #if 0
 								rg.positions = repeat_range;
@@ -1277,9 +1315,9 @@ static void driver(
 #endif
 							}
 
-							// flush previous range
-							repeat_range.resize(1);
-							repeat_range.back() = saElt;
+							// flush previous positions 
+							rpt_positions.resize(1);
+							rpt_positions.back() = saElt;
 							min_lcp_len = s.length();
 						}
 					}
