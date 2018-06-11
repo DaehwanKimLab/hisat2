@@ -963,6 +963,7 @@ void NRG<TStr>::savefile(void)
 template<typename TStr>
 void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndexOffU>& rpt_range)
 {
+#if 0
 	// rpt_seq is always > 0
 	//
 	const int rpt_len = rpt_seq.length();
@@ -990,6 +991,7 @@ void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndex
 			}
 		}
 	}
+#endif
 
 	// add to last
 	rpt_grp_.expand();
@@ -998,6 +1000,7 @@ void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndex
 	rpt_grp_.back().positions = rpt_range;
 }
 
+#if 0
 /**
  * @brief Remove empty repeat group
  */
@@ -1015,6 +1018,188 @@ void NRG<TStr>::adjust_repeat_group(void)
 		}
 	}
 }
+#else
+
+typedef pair<TIndexOffU, TIndexOffU> Range;
+static const Range EMPTY_RANGE = Range(1, 0);
+
+struct RepeatRange {
+	RepeatRange() {};
+	RepeatRange(Range r, int id) : 
+		range(r), rg_id(id) {};
+
+	Range range;
+	int rg_id;
+};
+
+static bool repeat_range_cmp(const RepeatRange& a, const RepeatRange& b)
+{
+	if ((a.range.second > b.range.second) ||
+			(a.range.second == b.range.second && a.range.first < b.range.first)) {
+		return true;
+	}
+
+	return false;
+}
+
+static bool cmp_by_rg_id(const RepeatRange& a, const RepeatRange& b)
+{
+	return a.rg_id < b.rg_id;
+}
+
+/**
+ * @brief return true iff a U b = a 
+ *
+ * @param a
+ * @param b
+ *
+ * @return 
+ */
+static bool range_mergeable(const Range& a, const Range& b)
+{
+	if (a.first <= b.first && a.second >= b.second) {
+		return true;
+	}
+
+	return false;
+}
+
+
+/**
+ * @brief Remove empty repeat group
+ */
+template<typename TStr>
+void NRG<TStr>::adjust_repeat_group(void)
+{
+	cerr << "CP " << "repeat_group size " << rpt_grp_.size() << endl;
+
+	int range_count = 0;
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		range_count += rpt_grp_[i].positions.size();
+	}
+
+	cerr << "CP " << "range_count " << range_count << endl;
+
+	cerr << "Build RepeatRange" << endl;
+
+	EList<RepeatRange> rpt_ranges;
+	rpt_ranges.reserveExact(range_count);
+
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		RepeatGroup& rg = rpt_grp_[i];
+		size_t s_len = rg.repeat_sequence.length();
+
+		for (int j = 0; j < rg.positions.size(); j++) {
+			rpt_ranges.push_back(RepeatRange(make_pair(rg.positions[j], rg.positions[j] + s_len), i));
+		}
+	}
+
+
+	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
+			repeat_range_cmp);
+
+	// Dump
+#if 0
+	for (int i = 0; i < rpt_ranges.size(); i++) {
+		cerr << "CP " << i ;
+		cerr << "\t" << rpt_ranges[i].range.first;
+		cerr << "\t" << rpt_ranges[i].range.second;
+		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].repeat_sequence;
+		cerr << "\t" << rpt_ranges[i].rg_id;
+		cerr << endl;
+	}
+#endif
+
+	// Merge
+	int merged_count = 0;
+	for (int i = 0; i < rpt_ranges.size() - 1;) {
+		int j = i + 1;
+		for (; j < rpt_ranges.size(); j++) {
+			// check i, j can be merged 
+			//
+
+			if (!range_mergeable(rpt_ranges[i].range, rpt_ranges[j].range)) {
+				break;
+			}
+
+			rpt_ranges[j].range = EMPTY_RANGE;
+			rpt_ranges[j].rg_id = std::numeric_limits<int>::max();
+			merged_count++;
+		}
+		i = j;
+	}
+
+	cerr << "CP ";
+	cerr << "merged_count: " << merged_count;
+	cerr << endl;
+
+	// Dump
+#if 0
+	for (int i = 0; i < rpt_ranges.size(); i++) {
+		if (rpt_ranges[i].range == EMPTY_RANGE) {
+			continue;
+		}
+		cerr << "CP " << i ;
+		cerr << "\t" << rpt_ranges[i].range.first;
+		cerr << "\t" << rpt_ranges[i].range.second;
+		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].repeat_sequence;
+		cerr << "\t" << rpt_ranges[i].rg_id;
+		cerr << endl;
+	}
+#endif
+
+	// sort by rg_id
+	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
+			cmp_by_rg_id);
+
+
+	/***********/
+
+	/* rebuild rpt_grp_ */
+	EList<RepeatGroup> mgroup;
+
+	mgroup.reserveExact(rpt_grp_.size());
+	mgroup.swap(rpt_grp_);
+
+	for (int i = 0; i < rpt_ranges.size() - 1;) {
+		if (rpt_ranges[i].rg_id == std::numeric_limits<int>::max()) {
+			break;
+		}
+
+		int j = i + 1;
+		for (; j < rpt_ranges.size(); j++) {
+			if (rpt_ranges[i].rg_id != rpt_ranges[j].rg_id) {
+				break;
+			}
+		}
+
+		/* [i, j) has a same rg_id */
+
+
+		int rg_id = rpt_ranges[i].rg_id;
+		rpt_grp_.expand();
+		rpt_grp_.back().repeat_sequence = mgroup[rg_id].repeat_sequence;
+		for (int k = i; k < j; k++) {
+			rpt_grp_.back().positions.push_back(rpt_ranges[k].range.first);
+		}
+
+		i = j;
+	}
+
+#if 0
+	EList<RepeatGroup> mgroup;
+
+	mgroup.reserveExact(rpt_grp_.size());
+	mgroup.swap(rpt_grp_);
+
+	for (int i = 0; i < mgroup.size(); i++) {
+		if (mgroup[i].repeat_sequence.length() > 0) {
+			rpt_grp_.push_back(mgroup[i]);
+		}
+	}
+#endif
+}
+#endif
 
 template<typename TStr>
 void NRG<TStr>::repeat_masking(void)
