@@ -747,23 +747,24 @@ public:
         }
         assert_eq(alts.size(), numAlts);
         assert_eq(to_alti_far, numAlts);
-        if(useHaplotype) {
-            // Check if it hits the end of file, and this routine is needed for backward compatibility
-            if(in7.peek() != std::ifstream::traits_type::eof()) {
-                index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
-                if(numHaplotypes > 0) {
-                    haplotypes.resizeExact(numHaplotypes);
-                    haplotypes.clear();
-                    while(!in7.eof()) {
-                        haplotypes.expand();
-                        haplotypes.back().read(in7, this->toBe());
-                        Haplotype<index_t>& ht = haplotypes.back();
-                        for(index_t h = 0; h < ht.alts.size(); h++) {
-                            ht.alts[h] = to_alti[ht.alts[h]];
-                        }
-                        if(haplotypes.size() == numHaplotypes) break;
+        // Check if it hits the end of file, and this routine is needed for backward compatibility
+        if(in7.peek() != std::ifstream::traits_type::eof()) {
+            index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
+            if(numHaplotypes > 0) {
+                haplotypes.resizeExact(numHaplotypes);
+                haplotypes.clear();
+                while(!in7.eof()) {
+                    haplotypes.expand();
+                    haplotypes.back().read(in7, this->toBe());
+                    Haplotype<index_t>& ht = haplotypes.back();
+                    for(index_t h = 0; h < ht.alts.size(); h++) {
+                        ht.alts[h] = to_alti[ht.alts[h]];
                     }
+                    if(haplotypes.size() == numHaplotypes) break;
                 }
+            }
+            if(!useHaplotype) {
+                haplotypes.nullify();
             }
         }
         
@@ -782,6 +783,21 @@ public:
                 if(altnames.size() == numAlts) break;
             }
             assert_eq(altnames.size(), numAlts);
+        }
+        
+        // Read repeats
+        EList<RepeatAllele<index_t> >& repeatAlleles = repeatdb->repeatAlleles();
+        // Check if it hits the end of file, and this routine is needed for backward compatibility
+        if(in7.peek() != std::ifstream::traits_type::eof()) {
+            index_t numRepeatAlleles = readIndex<index_t>(in7, this->toBe());
+            if(numRepeatAlleles > 0) {
+                while(repeatAlleles.size() < numRepeatAlleles) {
+                    repeatAlleles.expand();
+                    repeatAlleles.back().read(in7, this->toBe());
+                }
+                assert_eq(repeatAlleles.size(), numRepeatAlleles);
+                repeatdb->constructMap();
+            }
         }
         
         in7.close();
@@ -913,6 +929,8 @@ public:
 		EList<RefRecord>& szs,
 		index_t sztot,
 		const RefReadInParams& refparams,
+        EList<RefRecord>* parent_szs,
+        EList<string>* parent_refnames,
 		uint32_t seed,
 		int32_t overrideOffRate = -1,
 		bool verbose = false,
@@ -975,6 +993,8 @@ public:
 							 bmaxSqrtMult,
 							 bmaxDivN,
 							 dcv,
+                             parent_szs,
+                             parent_refnames,
 							 seed,
 							 verbose);
 		// Close output files
@@ -1207,6 +1227,8 @@ public:
 	                    index_t bmaxSqrtMult,
 	                    index_t bmaxDivN,
 	                    int dcv,
+                        EList<RefRecord>* parent_szs,
+                        EList<string>* parent_refnames,
 	                    uint32_t seed,
 						bool verbose)
 	{
@@ -1278,13 +1300,12 @@ public:
                 writeIndex<int32_t>(fout7, 1, this->toBe()); // endianness sentinel
                 writeIndex<int32_t>(fout8, 1, this->toBe()); // endianness sentinel
                 
-                EList<string> refnames_nospace;
                 for(index_t i = 0; i < _refnames.size(); i++) {
-                    refnames_nospace.push_back("");
+                    _refnames_nospace.push_back("");
                     for(index_t j = 0; j < _refnames[i].size(); j++) {
                         char c = _refnames[i][j];
                         if(c == ' ') break;
-                        refnames_nospace.back().push_back(c);
+                        _refnames_nospace.back().push_back(c);
                     }
                 }
                 
@@ -1319,14 +1340,14 @@ public:
                             snp_file >> ins_seq;
                         }
                         index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
+                        for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
+                            if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) {
+                        if(chr_idx >= _refnames_nospace.size()) {
                             continue;
                         }
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1456,14 +1477,14 @@ public:
                         ht_file >> chr >> left >> right >> alt_list;
                         assert_leq(left, right);
                         index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
+                        for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
+                            if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) {
+                        if(chr_idx >= _refnames_nospace.size()) {
                             continue;
                         }
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1563,12 +1584,12 @@ public:
                         left += 1; right -= 1;
                         if(left >= right) continue;
                         index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
+                        for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
+                            if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) continue;
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        if(chr_idx >= _refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1676,12 +1697,12 @@ public:
                         left += 1; right -= 1;
                         if(left >= right) continue;
                         index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
+                        for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
+                            if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) continue;
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        if(chr_idx >= _refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1795,16 +1816,36 @@ public:
                     _haplotypes[i].write(fout7, this->toBe());
                 }
                 
+                EList<RepeatAllele<index_t> >& repeatAlleles = _repeatdb.repeatAlleles();
                 if(repeatfile != "") {
                     ifstream repeat_file(repeatfile.c_str(), ios::in);
                     if(!repeat_file.is_open()) {
                         cerr << "Error: could not open " << ssfile.c_str() << endl;
                         throw 1;
                     }
-                    EList<RepeatAllele<index_t> > repeatAlleles;
+                    if(parent_szs == NULL) {
+                        throw 1;
+                    }
+                    if(parent_refnames == NULL) {
+                        throw 1;
+                    }
+                    
+                    EList<pair<index_t, index_t> > parent_chr_szs;
+                    index_t tmp_len = 0;
+                    for(index_t i = 0; i < parent_szs->size(); i++) {
+                        if((*parent_szs)[i].first) {
+                            parent_chr_szs.expand();
+                            parent_chr_szs.back().first = tmp_len;
+                            parent_chr_szs.back().second = i;
+                        }
+                        tmp_len += (index_t)(*parent_szs)[i].len;
+                    }
+                    index_t parent_jlen = joinedLen(*parent_szs);
+                    
                     while(!repeat_file.eof()) {
-                        // >rep1*0    100    438    0
-                        // 20:26608812 20:26616967 20:26619687 20:26627842 20:26632262 20:26635390 20:26638109 20:26640829 20:26648949 20:26651669
+                        // >rep1*0    rep    0    100    470    0
+                        // 20_rep:26622650:+ 20_rep:26628088:+ 20_rep:26632508:+ 20_rep:26635636:+
+                        // 20_rep:26669936:+ 20_rep:26672654:+ 20_rep:26675373:+ 20_rep:26678095:+
                         string repName, repAlleleName;
                         repeat_file >> repAlleleName;
                         if(repAlleleName.empty()) // Reached the end of file
@@ -1824,18 +1865,21 @@ public:
                             istringstream(strID) >> alleleID;
                         }
                         
+                        string refRepName;
+                        index_t repPos, repLen;
+                        repeat_file >> refRepName >> repPos >> repLen;
                         index_t rep_idx = 0;
-                        for(; rep_idx < refnames_nospace.size(); rep_idx++) {
-                            if(repName == refnames_nospace[rep_idx])
+                        for(; rep_idx < _refnames_nospace.size(); rep_idx++) {
+                            if(refRepName == _refnames_nospace[rep_idx])
                                 break;
                         }
-                        if(rep_idx >= refnames_nospace.size()) {
-                            cerr << "Error: " << repName << " is not found in " << endl;
+                        if(rep_idx >= _refnames_nospace.size()) {
+                            cerr << "Error: " << refRepName << " is not found in " << endl;
                             throw 1;
                         }
                         
-                        index_t repLen, numCoords, numAlts;
-                        repeat_file >> repLen >> numCoords >> numAlts;
+                        index_t numCoords, numAlts;
+                        repeat_file >> numCoords >> numAlts;
                         EList<index_t> snpIDs;
                         while(snpIDs.size() < numAlts) {
                             string snpID;
@@ -1847,8 +1891,8 @@ public:
                             index_t numID = snpID2num[snpID];
                             snpIDs.push_back(numID);
                         }
-
-                        EList<index_t> positions;
+                        
+                        EList<RepeatCoord<index_t> > positions;
                         while(positions.size() < numCoords) {
                             string chr_pos;
                             repeat_file >> chr_pos;
@@ -1858,71 +1902,85 @@ public:
                                 throw 1;
                             }
                             string chr = chr_pos.substr(0, colon_pos);
-                            string strPos = chr_pos.substr(colon_pos + 1);
+                            string strPos = chr_pos.substr(colon_pos + 1, chr_pos.length() - colon_pos - 3);
+                            bool repfw = (chr_pos[chr_pos.length() - 1] == '+');
                             index_t pos = 0;
                             istringstream(strPos) >> pos;
-                            
                             index_t chr_idx = 0;
-                            for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                                if(chr == refnames_nospace[chr_idx])
+                            for(; chr_idx < parent_refnames->size(); chr_idx++) {
+                                if(chr == (*parent_refnames)[chr_idx])
                                     break;
                             }
-                            if(chr_idx >= refnames_nospace.size()) {
+                            if(chr_idx >= parent_refnames->size()) {
                                 cerr << "Error: " << chr << " is not found in " << endl;
                                 throw 1;
                             }
-                            assert_eq(chr_szs.size(), refnames_nospace.size());
-                            assert_lt(chr_idx, chr_szs.size());
-                            pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
+                            assert_eq(parent_chr_szs.size(), parent_refnames->size());
+                            assert_lt(chr_idx, parent_chr_szs.size());
+                            
+                            positions.expand();
+                            positions.back().tid = chr_idx;
+                            positions.back().toff = pos;
+                            positions.back().fw = repfw;
+                            
+                            pair<index_t, index_t> tmp_pair = parent_chr_szs[chr_idx];
                             const index_t sofar_len = tmp_pair.first;
                             const index_t szs_idx = tmp_pair.second;
                             bool involve_Ns = false;
                             index_t add_pos = 0;
-                            assert(szs[szs_idx].first);
-                            for(index_t i = szs_idx; i < szs.size(); i++) {
-                                if(i != szs_idx && szs[i].first) {
+                            assert((*parent_szs)[szs_idx].first);
+                            for(index_t i = szs_idx; i < parent_szs->size(); i++) {
+                                if(i != szs_idx && (*parent_szs)[i].first) {
                                     break;
                                 }
-                                if(pos < szs[i].off) {
+                                if(pos < (*parent_szs)[i].off) {
                                     involve_Ns = true;
                                     break;
                                 } else {
-                                    pos -= szs[i].off;
-                                    if(pos < szs[i].len) {
+                                    pos -= (*parent_szs)[i].off;
+                                    if(pos < (*parent_szs)[i].len) {
                                         break;
                                     } else {
-                                        pos -= szs[i].len;
-                                        add_pos += szs[i].len;
+                                        pos -= (*parent_szs)[i].len;
+                                        add_pos += (*parent_szs)[i].len;
                                     }
                                 }
                             }
+                            if(involve_Ns) {
+                                assert(false);
+                                throw 1;
+                            }
                             pos = sofar_len + add_pos + pos;
-                            if(chr_idx + 1 < chr_szs.size()) {
-                                if(pos >= chr_szs[chr_idx + 1].first) {
+                            if(chr_idx + 1 < parent_chr_szs.size()) {
+                                if(pos >= parent_chr_szs[chr_idx + 1].first) {
+                                    assert(false);
                                     throw 1;
                                 }
                             } else {
-                                if(pos >= jlen){
+                                if(pos >= parent_jlen){
+                                    assert(false);
                                     throw 1;
                                 }
                             }
                             
-                            positions.push_back(pos);
+                            positions.back().joinedOff = pos;
                         }
                         repeatAlleles.expand();
-                        repeatAlleles.back().init(rep_idx,
+                        repeatAlleles.back().init(repName,
                                                   alleleID,
+                                                  rep_idx,
+                                                  repPos,
+                                                  repLen,
                                                   snpIDs,
                                                   positions);
                         
                     }
                     repeat_file.close();
-                    
-                    if(repeatAlleles.size() > 0) {
-                        writeIndex<index_t>(fout7, (index_t)repeatAlleles.size(), this->toBe());
-                        for(index_t i = 0; i < repeatAlleles.size(); i++) {
-                            repeatAlleles[i].write(fout7, this->toBe());
-                        }
+                }
+                writeIndex<index_t>(fout7, (index_t)repeatAlleles.size(), this->toBe());
+                if(repeatAlleles.size() > 0) {
+                    for(index_t i = 0; i < repeatAlleles.size(); i++) {
+                        repeatAlleles[i].write(fout7, this->toBe());
                     }
                 }
                 
@@ -1959,6 +2017,7 @@ public:
 			}
 			throw 1;
 		}
+        
 		// Succesfully obtained joined reference string
 		assert_geq(s.length(), jlen);
 		if(bmax != (index_t)OFF_MASK) {
@@ -3990,6 +4049,7 @@ public:
 	bool       _useMm;        /// use memory-mapped files to hold the index
 	bool       useShmem_;     /// use shared memory to hold large parts of the index
 	EList<string> _refnames; /// names of the reference sequences
+    EList<string> _refnames_nospace; // names of the reference sequences (names stop at space)
     char *mmFile1_;
 	char *mmFile2_;
     int _nthreads;
@@ -4015,9 +4075,11 @@ public:
 	static const int      default_ftabChars = 10;
 	static const bool     default_bigEndian = false;
     
+    // data used to build an index
     EList<ALT<index_t> >       _alts;
     EList<string>              _altnames;
     EList<Haplotype<index_t> > _haplotypes;
+    RepeatDB<index_t>          _repeatdb;
 
 protected:
 

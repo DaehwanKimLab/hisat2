@@ -3483,6 +3483,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                                 *gpol,
                                                 gfm,
                                                 *altdb,
+                                                *repeatdb,
                                                 ref,
                                                 sw,
                                                 *ssdb,

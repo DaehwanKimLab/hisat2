@@ -1636,6 +1636,9 @@ public:
          EList<RefRecord>& szs,
          index_t sztot,
          const RefReadInParams& refparams,
+         bool localIndex, // create local indexes?
+         EList<RefRecord>* parent_szs,
+         EList<string>* parent_refnames,
          uint32_t seed,
          int32_t overrideOffRate = -1,
          bool verbose = false,
@@ -1938,6 +1941,9 @@ HGFM<index_t, local_index_t>::HGFM(
                                    EList<RefRecord>& szs,
                                    index_t sztot,
                                    const RefReadInParams& refparams,
+                                   bool localIndex,
+                                   EList<RefRecord>* parent_szs,
+                                   EList<string>* parent_refnames,
                                    uint32_t seed,
                                    int32_t overrideOffRate,
                                    bool verbose,
@@ -1967,6 +1973,8 @@ HGFM<index_t, local_index_t>::HGFM(
                  szs,
                  sztot,
                  refparams,
+                 parent_szs,
+                 parent_refnames,
                  seed,
                  overrideOffRate,
                  verbose,
@@ -2008,147 +2016,150 @@ HGFM<index_t, local_index_t>::HGFM(
     index_t cumlen = 0;
     typedef EList<RefRecord, 1> EList_RefRecord;
     ELList<EList_RefRecord> all_local_recs;
-    // For each unambiguous stretch...
-    for(index_t i = 0; i < szs.size(); i++) {
-        const RefRecord& rec = szs[i];
-        if(rec.first) {
-            if(_nrefs > 0) {
-                // refLens_ links each reference sequence with the total number
-                // of ambiguous and unambiguous characters in it.
-                _refLens.push_back(cumlen);
+    
+    if(localIndex) {
+        // For each unambiguous stretch...
+        for(index_t i = 0; i < szs.size(); i++) {
+            const RefRecord& rec = szs[i];
+            if(rec.first) {
+                if(_nrefs > 0) {
+                    // refLens_ links each reference sequence with the total number
+                    // of ambiguous and unambiguous characters in it.
+                    _refLens.push_back(cumlen);
+                }
+                cumlen = 0;
+                _nrefs++;
+                all_local_recs.expand();
+                assert_eq(_nrefs, all_local_recs.size());
+            } else if(i == 0) {
+                cerr << "First record in reference index file was not marked as "
+                << "'first'" << endl;
+                throw 1;
             }
-            cumlen = 0;
-            _nrefs++;
-            all_local_recs.expand();
+            
+            assert_gt(_nrefs, 0);
             assert_eq(_nrefs, all_local_recs.size());
-        } else if(i == 0) {
-            cerr << "First record in reference index file was not marked as "
-            << "'first'" << endl;
-            throw 1;
+            EList<EList_RefRecord>& ref_local_recs = all_local_recs[_nrefs-1];
+            index_t next_cumlen = cumlen + rec.off + rec.len;
+            index_t local_off = (cumlen / local_index_interval) * local_index_interval;
+            if(local_off >= local_index_interval) {
+                local_off -= local_index_interval;
+            }
+            for(;local_off < next_cumlen; local_off += local_index_interval) {
+                if(local_off + local_index_size < cumlen) {
+                    continue;
+                }
+                index_t local_idx = local_off / local_index_interval;
+                
+                if(local_idx >= ref_local_recs.size()) {
+                    assert_eq(local_idx, ref_local_recs.size());
+                    ref_local_recs.expand();
+                    _nlocalGFMs++;
+                }
+                assert_lt(local_idx, ref_local_recs.size());
+                EList_RefRecord& local_recs = ref_local_recs[local_idx];
+                assert_gt(local_off + local_index_size, cumlen);
+                local_recs.expand();
+                if(local_off + local_index_size <= cumlen + rec.off) {
+                    local_recs.back().off = local_off + local_index_size - std::max(local_off, cumlen);
+                    local_recs.back().len = 0;
+                } else {
+                    if(local_off < cumlen + rec.off) {
+                        local_recs.back().off = rec.off - (local_off > cumlen ? local_off - cumlen : 0);
+                    } else {
+                        local_recs.back().off = 0;
+                    }
+                    local_recs.back().len = std::min(next_cumlen, local_off + local_index_size) - std::max(local_off, cumlen + rec.off);
+                }
+                local_recs.back().first = (local_recs.size() == 1);
+            }
+            cumlen = next_cumlen;
         }
         
-        assert_gt(_nrefs, 0);
-        assert_eq(_nrefs, all_local_recs.size());
-        EList<EList_RefRecord>& ref_local_recs = all_local_recs[_nrefs-1];
-        index_t next_cumlen = cumlen + rec.off + rec.len;
-        index_t local_off = (cumlen / local_index_interval) * local_index_interval;
-        if(local_off >= local_index_interval) {
-            local_off -= local_index_interval;
-        }
-        for(;local_off < next_cumlen; local_off += local_index_interval) {
-            if(local_off + local_index_size < cumlen) {
-                continue;
-            }
-            index_t local_idx = local_off / local_index_interval;
-            
-            if(local_idx >= ref_local_recs.size()) {
-                assert_eq(local_idx, ref_local_recs.size());
-                ref_local_recs.expand();
-                _nlocalGFMs++;
-            }
-            assert_lt(local_idx, ref_local_recs.size());
-            EList_RefRecord& local_recs = ref_local_recs[local_idx];
-            assert_gt(local_off + local_index_size, cumlen);
-            local_recs.expand();
-            if(local_off + local_index_size <= cumlen + rec.off) {
-                local_recs.back().off = local_off + local_index_size - std::max(local_off, cumlen);
-                local_recs.back().len = 0;
-            } else {
-                if(local_off < cumlen + rec.off) {
-                    local_recs.back().off = rec.off - (local_off > cumlen ? local_off - cumlen : 0);
-                } else {
-                    local_recs.back().off = 0;
-                }
-                local_recs.back().len = std::min(next_cumlen, local_off + local_index_size) - std::max(local_off, cumlen + rec.off);
-            }
-            local_recs.back().first = (local_recs.size() == 1);
-        }
-        cumlen = next_cumlen;
-    }
-    
-    // Store a cap entry for the end of the last reference seq
-    _refLens.push_back(cumlen);
-    
+        // Store a cap entry for the end of the last reference seq
+        _refLens.push_back(cumlen);
+        
 #ifndef NDEBUG
-    EList<RefRecord> temp_szs;
-    index_t temp_sztot = 0;
-    index_t temp_nlocalGFMs = 0;
-    for(size_t tidx = 0; tidx < all_local_recs.size(); tidx++) {
-        assert_lt(tidx, _refLens.size());
-        EList<EList_RefRecord>& ref_local_recs = all_local_recs[tidx];
-        assert_eq((_refLens[tidx] + local_index_interval - 1) / local_index_interval, ref_local_recs.size());
-        temp_szs.expand();
-        temp_szs.back().off = 0;
-        temp_szs.back().len = 0;
-        temp_szs.back().first = true;
-        index_t temp_ref_len = 0;
-        index_t temp_ref_sztot = 0;
-        temp_nlocalGFMs += ref_local_recs.size();
-        for(size_t i = 0; i < ref_local_recs.size(); i++) {
-            EList_RefRecord& local_recs = ref_local_recs[i];
-            index_t local_len = 0;
-            for(size_t j = 0; j < local_recs.size(); j++) {
-                assert(local_recs[j].off != 0 || local_recs[j].len != 0);
-                assert(j != 0 || local_recs[j].first);
-                RefRecord local_rec = local_recs[j];
-                if(local_len < local_index_interval && local_recs[j].off > 0){
-                    if(local_len + local_recs[j].off > local_index_interval) {
-                        temp_ref_len += (local_index_interval - local_len);
-                        local_rec.off = local_index_interval - local_len;
+        EList<RefRecord> temp_szs;
+        index_t temp_sztot = 0;
+        index_t temp_nlocalGFMs = 0;
+        for(size_t tidx = 0; tidx < all_local_recs.size(); tidx++) {
+            assert_lt(tidx, _refLens.size());
+            EList<EList_RefRecord>& ref_local_recs = all_local_recs[tidx];
+            assert_eq((_refLens[tidx] + local_index_interval - 1) / local_index_interval, ref_local_recs.size());
+            temp_szs.expand();
+            temp_szs.back().off = 0;
+            temp_szs.back().len = 0;
+            temp_szs.back().first = true;
+            index_t temp_ref_len = 0;
+            index_t temp_ref_sztot = 0;
+            temp_nlocalGFMs += ref_local_recs.size();
+            for(size_t i = 0; i < ref_local_recs.size(); i++) {
+                EList_RefRecord& local_recs = ref_local_recs[i];
+                index_t local_len = 0;
+                for(size_t j = 0; j < local_recs.size(); j++) {
+                    assert(local_recs[j].off != 0 || local_recs[j].len != 0);
+                    assert(j != 0 || local_recs[j].first);
+                    RefRecord local_rec = local_recs[j];
+                    if(local_len < local_index_interval && local_recs[j].off > 0){
+                        if(local_len + local_recs[j].off > local_index_interval) {
+                            temp_ref_len += (local_index_interval - local_len);
+                            local_rec.off = local_index_interval - local_len;
+                        } else {
+                            temp_ref_len += local_recs[j].off;
+                        }
                     } else {
-                        temp_ref_len += local_recs[j].off;
+                        local_rec.off = 0;
                     }
-                } else {
-                    local_rec.off = 0;
+                    local_len += local_recs[j].off;
+                    if(local_len < local_index_interval && local_recs[j].len > 0) {
+                        if(local_len + local_recs[j].len > local_index_interval) {
+                            temp_ref_len += (local_index_interval - local_len);
+                            temp_ref_sztot += (local_index_interval - local_len);
+                            local_rec.len = local_index_interval - local_len;
+                        } else {
+                            temp_ref_len += local_recs[j].len;
+                            temp_ref_sztot += local_recs[j].len;
+                        }
+                    } else {
+                        local_rec.len = 0;
+                    }
+                    local_len += local_recs[j].len;
+                    if(local_rec.off > 0) {
+                        if(temp_szs.back().len > 0) {
+                            temp_szs.expand();
+                            temp_szs.back().off = local_rec.off;
+                            temp_szs.back().len = local_rec.len;
+                            temp_szs.back().first = false;
+                        } else {
+                            temp_szs.back().off += local_rec.off;
+                            temp_szs.back().len = local_rec.len;
+                        }
+                    } else if(local_rec.len > 0) {
+                        temp_szs.back().len += local_rec.len;
+                    }
                 }
-                local_len += local_recs[j].off;
-                if(local_len < local_index_interval && local_recs[j].len > 0) {
-                    if(local_len + local_recs[j].len > local_index_interval) {
-                        temp_ref_len += (local_index_interval - local_len);
-                        temp_ref_sztot += (local_index_interval - local_len);
-                        local_rec.len = local_index_interval - local_len;
-                    } else {
-                        temp_ref_len += local_recs[j].len;
-                        temp_ref_sztot += local_recs[j].len;
-                    }
+                if(i + 1 < ref_local_recs.size()) {
+                    assert_eq(local_len, local_index_size);
+                    assert_eq(temp_ref_len % local_index_interval, 0);
                 } else {
-                    local_rec.len = 0;
-                }
-                local_len += local_recs[j].len;
-                if(local_rec.off > 0) {
-                    if(temp_szs.back().len > 0) {
-                        temp_szs.expand();
-                        temp_szs.back().off = local_rec.off;
-                        temp_szs.back().len = local_rec.len;
-                        temp_szs.back().first = false;
-                    } else {
-                        temp_szs.back().off += local_rec.off;
-                        temp_szs.back().len = local_rec.len;
-                    }
-                } else if(local_rec.len > 0) {
-                    temp_szs.back().len += local_rec.len;
+                    assert_eq(local_len, _refLens[tidx] % local_index_interval);
                 }
             }
-            if(i + 1 < ref_local_recs.size()) {
-                assert_eq(local_len, local_index_size);
-                assert_eq(temp_ref_len % local_index_interval, 0);
-            } else {
-                assert_eq(local_len, _refLens[tidx] % local_index_interval);
-            }
+            assert_eq(temp_ref_len, _refLens[tidx]);
+            temp_sztot += temp_ref_sztot;
         }
-        assert_eq(temp_ref_len, _refLens[tidx]);
-        temp_sztot += temp_ref_sztot;
-    }
-    assert_eq(temp_sztot, sztot);
-    for(size_t i = 0; i < temp_szs.size(); i++) {
-        assert_lt(i, szs.size());
-        assert_eq(temp_szs[i].off, szs[i].off);
-        assert_eq(temp_szs[i].len, szs[i].len);
-        assert_eq(temp_szs[i].first, szs[i].first);
-    }
-    assert_eq(temp_szs.size(), szs.size());
-    assert_eq(_nlocalGFMs, temp_nlocalGFMs);
+        assert_eq(temp_sztot, sztot);
+        for(size_t i = 0; i < temp_szs.size(); i++) {
+            assert_lt(i, szs.size());
+            assert_eq(temp_szs[i].off, szs[i].off);
+            assert_eq(temp_szs[i].len, szs[i].len);
+            assert_eq(temp_szs[i].first, szs[i].first);
+        }
+        assert_eq(temp_szs.size(), szs.size());
+        assert_eq(_nlocalGFMs, temp_nlocalGFMs);
 #endif
+    }
     
     uint32_t be = this->toBe();
     assert(fout5.good());
@@ -2168,200 +2179,202 @@ HGFM<index_t, local_index_t>::HGFM(
     if(this->_gh._entireReverse) flags |= GFM_ENTIRE_REV;
     writeI32(fout5, -flags, be); // BTL: chunkRate is now deprecated
     
-    assert_gt(this->_nthreads, 0);
-    AutoArray<tthread::thread*> threads(this->_nthreads - 1);    
-    EList<ThreadParam> tParams;
-    for(index_t t = 0; t < (index_t)this->_nthreads; t++) {
-        tParams.expand();
-        tParams.back().s.clear();
-        tParams.back().rg = NULL;
-        tParams.back().pg = NULL;
-        tParams.back().file = outfile;
-        tParams.back().done = true;
-        tParams.back().last = false;
-        tParams.back().dcv = 1024;
-        tParams.back().seed = seed;
-        if(t + 1 < (index_t)this->_nthreads) {
-            tParams.back().mainThread = false;
-            threads[t] = new tthread::thread(gbwt_worker, (void*)&tParams.back());
-        } else {
-            tParams.back().mainThread = true;
+    if(localIndex) {
+        assert_gt(this->_nthreads, 0);
+        AutoArray<tthread::thread*> threads(this->_nthreads - 1);
+        EList<ThreadParam> tParams;
+        for(index_t t = 0; t < (index_t)this->_nthreads; t++) {
+            tParams.expand();
+            tParams.back().s.clear();
+            tParams.back().rg = NULL;
+            tParams.back().pg = NULL;
+            tParams.back().file = outfile;
+            tParams.back().done = true;
+            tParams.back().last = false;
+            tParams.back().dcv = 1024;
+            tParams.back().seed = seed;
+            if(t + 1 < (index_t)this->_nthreads) {
+                tParams.back().mainThread = false;
+                threads[t] = new tthread::thread(gbwt_worker, (void*)&tParams.back());
+            } else {
+                tParams.back().mainThread = true;
+            }
         }
-    }
-    
-    // build local FM indexes
-    index_t curr_sztot = 0;
-    EList<ALT<index_t> > alts;
-    for(size_t tidx = 0; tidx < _refLens.size(); tidx++) {
-        index_t refLen = _refLens[tidx];
-        index_t local_offset = 0;
-        _localGFMs.expand();
-        assert_lt(tidx, _localGFMs.size());
-        while(local_offset < refLen) {
-            index_t t = 0;
-            while(local_offset < refLen && t < (index_t)this->_nthreads) {
-                assert_lt(t, tParams.size());
-                ThreadParam& tParam = tParams[t];
-                
-                tParam.index_size = std::min<index_t>(refLen - local_offset, local_index_size);
-                assert_lt(tidx, all_local_recs.size());
-                assert_lt(local_offset / local_index_interval, all_local_recs[tidx].size());
-                EList_RefRecord& local_szs = all_local_recs[tidx][local_offset / local_index_interval];
-                
-                tParam.conv_local_szs.clear();
-                index_t local_len = 0, local_sztot = 0, local_sztot_interval = 0;
-                for(size_t i = 0; i < local_szs.size(); i++) {
-                    assert(local_szs[i].off != 0 || local_szs[i].len != 0);
-                    assert(i != 0 || local_szs[i].first);
-                    tParam.conv_local_szs.push_back(local_szs[i]);
-                    local_len += local_szs[i].off;
-                    if(local_len < local_index_interval && local_szs[i].len > 0) {
-                        if(local_len + local_szs[i].len > local_index_interval) {
-                            local_sztot_interval += (local_index_interval - local_len);
-                        } else {
-                            local_sztot_interval += local_szs[i].len;
-                        }
-                    }
-                    local_sztot += local_szs[i].len;
-                    local_len += local_szs[i].len;
-                }
-                
-                // Extract sequence corresponding to this local index
-                tParam.s.resize(local_sztot);
-                if(refparams.reverse == REF_READ_REVERSE) {
-                    tParam.s.install(s.buf() + s.length() - curr_sztot - local_sztot, local_sztot);
-                } else {
-                    tParam.s.install(s.buf() + curr_sztot, local_sztot);
-                }
-                
-                // Extract ALTs corresponding to this local index
-                map<index_t, index_t> alt_map;
-                tParam.alts.clear();
-                ALT<index_t> alt;
-                alt.pos = curr_sztot;
-                index_t alt_i = (index_t)this->_alts.bsearchLoBound(alt);
-                for(; alt_i < this->_alts.size(); alt_i++) {
-                    const ALT<index_t>& alt = this->_alts[alt_i];
-                    if(alt.snp()) {
-                        if(alt.mismatch()) {
-                            if(curr_sztot + local_sztot <= alt.pos) break;
-                        } else if(alt.insertion()) {
-                            if(curr_sztot + local_sztot < alt.pos) break;
-                        } else {
-                            assert(alt.deletion());
-                            if(curr_sztot + local_sztot < alt.pos + alt.len) break;
-                        }
-                        if(curr_sztot <= alt.pos) {
-                            alt_map[alt_i] = (index_t)tParam.alts.size();
-                            tParam.alts.push_back(alt);
-                            tParam.alts.back().pos -= curr_sztot;
-                        }
-                    } else if(alt.splicesite()) {
-                        if(alt.excluded) continue;
-                        if(curr_sztot + local_sztot <= alt.right + 1) continue;
-                        if(curr_sztot <= alt.left) {
-                            tParam.alts.push_back(alt);
-                            tParam.alts.back().left -= curr_sztot;
-                            tParam.alts.back().right -= curr_sztot;
-                        }
-                    } else {
-                        assert(alt.exon());
-                    }
-                }
-                
-                // Extract haplotypes
-                tParam.haplotypes.clear();
-                Haplotype<index_t> haplotype;
-                haplotype.left = curr_sztot;
-                index_t haplotpye_i = (index_t)this->_haplotypes.bsearchLoBound(haplotype);
-                for(; haplotpye_i < this->_haplotypes.size(); haplotpye_i++) {
-                    const Haplotype<index_t>& haplotype = this->_haplotypes[haplotpye_i];
-                    if(curr_sztot + local_sztot <= haplotype.right) continue;
-                    if(curr_sztot <= haplotype.left) {
-                        tParam.haplotypes.push_back(haplotype);
-                        tParam.haplotypes.back().left -= curr_sztot;
-                        tParam.haplotypes.back().right -= curr_sztot;
-                        for(index_t a = 0; a < tParam.haplotypes.back().alts.size(); a++) {
-                            index_t alt_i = tParam.haplotypes.back().alts[a];
-                            if(alt_map.find(alt_i) == alt_map.end()) {
-                                assert(false);
-                                tParam.haplotypes.pop_back();
-                                break;
+        
+        // build local FM indexes
+        index_t curr_sztot = 0;
+        EList<ALT<index_t> > alts;
+        for(size_t tidx = 0; tidx < _refLens.size(); tidx++) {
+            index_t refLen = _refLens[tidx];
+            index_t local_offset = 0;
+            _localGFMs.expand();
+            assert_lt(tidx, _localGFMs.size());
+            while(local_offset < refLen) {
+                index_t t = 0;
+                while(local_offset < refLen && t < (index_t)this->_nthreads) {
+                    assert_lt(t, tParams.size());
+                    ThreadParam& tParam = tParams[t];
+                    
+                    tParam.index_size = std::min<index_t>(refLen - local_offset, local_index_size);
+                    assert_lt(tidx, all_local_recs.size());
+                    assert_lt(local_offset / local_index_interval, all_local_recs[tidx].size());
+                    EList_RefRecord& local_szs = all_local_recs[tidx][local_offset / local_index_interval];
+                    
+                    tParam.conv_local_szs.clear();
+                    index_t local_len = 0, local_sztot = 0, local_sztot_interval = 0;
+                    for(size_t i = 0; i < local_szs.size(); i++) {
+                        assert(local_szs[i].off != 0 || local_szs[i].len != 0);
+                        assert(i != 0 || local_szs[i].first);
+                        tParam.conv_local_szs.push_back(local_szs[i]);
+                        local_len += local_szs[i].off;
+                        if(local_len < local_index_interval && local_szs[i].len > 0) {
+                            if(local_len + local_szs[i].len > local_index_interval) {
+                                local_sztot_interval += (local_index_interval - local_len);
+                            } else {
+                                local_sztot_interval += local_szs[i].len;
                             }
-                            tParam.haplotypes.back().alts[a] = alt_map[alt_i];
+                        }
+                        local_sztot += local_szs[i].len;
+                        local_len += local_szs[i].len;
+                    }
+                    
+                    // Extract sequence corresponding to this local index
+                    tParam.s.resize(local_sztot);
+                    if(refparams.reverse == REF_READ_REVERSE) {
+                        tParam.s.install(s.buf() + s.length() - curr_sztot - local_sztot, local_sztot);
+                    } else {
+                        tParam.s.install(s.buf() + curr_sztot, local_sztot);
+                    }
+                    
+                    // Extract ALTs corresponding to this local index
+                    map<index_t, index_t> alt_map;
+                    tParam.alts.clear();
+                    ALT<index_t> alt;
+                    alt.pos = curr_sztot;
+                    index_t alt_i = (index_t)this->_alts.bsearchLoBound(alt);
+                    for(; alt_i < this->_alts.size(); alt_i++) {
+                        const ALT<index_t>& alt = this->_alts[alt_i];
+                        if(alt.snp()) {
+                            if(alt.mismatch()) {
+                                if(curr_sztot + local_sztot <= alt.pos) break;
+                            } else if(alt.insertion()) {
+                                if(curr_sztot + local_sztot < alt.pos) break;
+                            } else {
+                                assert(alt.deletion());
+                                if(curr_sztot + local_sztot < alt.pos + alt.len) break;
+                            }
+                            if(curr_sztot <= alt.pos) {
+                                alt_map[alt_i] = (index_t)tParam.alts.size();
+                                tParam.alts.push_back(alt);
+                                tParam.alts.back().pos -= curr_sztot;
+                            }
+                        } else if(alt.splicesite()) {
+                            if(alt.excluded) continue;
+                            if(curr_sztot + local_sztot <= alt.right + 1) continue;
+                            if(curr_sztot <= alt.left) {
+                                tParam.alts.push_back(alt);
+                                tParam.alts.back().left -= curr_sztot;
+                                tParam.alts.back().right -= curr_sztot;
+                            }
+                        } else {
+                            assert(alt.exon());
                         }
                     }
+                    
+                    // Extract haplotypes
+                    tParam.haplotypes.clear();
+                    Haplotype<index_t> haplotype;
+                    haplotype.left = curr_sztot;
+                    index_t haplotpye_i = (index_t)this->_haplotypes.bsearchLoBound(haplotype);
+                    for(; haplotpye_i < this->_haplotypes.size(); haplotpye_i++) {
+                        const Haplotype<index_t>& haplotype = this->_haplotypes[haplotpye_i];
+                        if(curr_sztot + local_sztot <= haplotype.right) continue;
+                        if(curr_sztot <= haplotype.left) {
+                            tParam.haplotypes.push_back(haplotype);
+                            tParam.haplotypes.back().left -= curr_sztot;
+                            tParam.haplotypes.back().right -= curr_sztot;
+                            for(index_t a = 0; a < tParam.haplotypes.back().alts.size(); a++) {
+                                index_t alt_i = tParam.haplotypes.back().alts[a];
+                                if(alt_map.find(alt_i) == alt_map.end()) {
+                                    assert(false);
+                                    tParam.haplotypes.pop_back();
+                                    break;
+                                }
+                                tParam.haplotypes.back().alts[a] = alt_map[alt_i];
+                            }
+                        }
+                    }
+                    
+                    tParam.local_offset = local_offset;
+                    tParam.curr_sztot = curr_sztot;
+                    tParam.local_sztot = local_sztot;
+                    
+                    assert(tParam.rg == NULL);
+                    assert(tParam.pg == NULL);
+                    tParam.done = false;
+                    curr_sztot += local_sztot_interval;
+                    local_offset += local_index_interval;
+                    
+                    t++;
                 }
                 
-                tParam.local_offset = local_offset;
-                tParam.curr_sztot = curr_sztot;
-                tParam.local_sztot = local_sztot;
-
-                assert(tParam.rg == NULL);
-                assert(tParam.pg == NULL);
-                tParam.done = false;
-                curr_sztot += local_sztot_interval;
-                local_offset += local_index_interval;
-               
-                t++;
-            }
-            
-            if(!tParams.back().done) {
-                gbwt_worker((void*)&tParams.back());
-            }
-            
-            for(index_t t2 = 0; t2 < t; t2++) {
-                ThreadParam& tParam = tParams[t2];
-                while(!tParam.done) {
-#if defined(_TTHREAD_WIN32_)
-                    Sleep(1);
-#elif defined(_TTHREAD_POSIX_)
-                    const static timespec ts = {0, 1000000};  // 1 millisecond
-                    nanosleep(&ts, NULL);
-#endif
+                if(!tParams.back().done) {
+                    gbwt_worker((void*)&tParams.back());
                 }
- 
-                LocalGFM<local_index_t, index_t>(
-                                                 tParam.s,
-                                                 tParam.sa,
-                                                 tParam.pg,
-                                                 (index_t)tidx,
-                                                 tParam.local_offset,
-                                                 tParam.curr_sztot,
-                                                 tParam.alts,
-                                                 tParam.index_size,
-                                                 packed,
-                                                 needEntireReverse,
-                                                 local_lineRate,
-                                                 localOffRate,      // suffix-array sampling rate
-                                                 localFtabChars,    // number of chars in initial arrow-pair calc
-                                                 outfile,           // basename for .?.ebwt files
-                                                 fw,                 // fw
-                                                 dcv,                // difference-cover period
-                                                 tParam.conv_local_szs,     // list of reference sizes
-                                                 tParam.local_sztot,        // total size of all unambiguous ref chars
-                                                 refparams,          // reference read-in parameters
-                                                 seed,               // pseudo-random number generator seed
-                                                 fout5,
-                                                 fout6,
-                                                 -1,                 // override offRate
-                                                 false,              // be silent
-                                                 passMemExc,         // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                                                 sanityCheck);       // verify results and internal consistency
-                tParam.s.clear();
-                if(tParam.rg != NULL) {
-                    assert(tParam.pg != NULL);
-                    delete tParam.rg; tParam.rg = NULL;
-                    delete tParam.pg; tParam.pg = NULL;
+                
+                for(index_t t2 = 0; t2 < t; t2++) {
+                    ThreadParam& tParam = tParams[t2];
+                    while(!tParam.done) {
+#if defined(_TTHREAD_WIN32_)
+                        Sleep(1);
+#elif defined(_TTHREAD_POSIX_)
+                        const static timespec ts = {0, 1000000};  // 1 millisecond
+                        nanosleep(&ts, NULL);
+#endif
+                    }
+                    
+                    LocalGFM<local_index_t, index_t>(
+                                                     tParam.s,
+                                                     tParam.sa,
+                                                     tParam.pg,
+                                                     (index_t)tidx,
+                                                     tParam.local_offset,
+                                                     tParam.curr_sztot,
+                                                     tParam.alts,
+                                                     tParam.index_size,
+                                                     packed,
+                                                     needEntireReverse,
+                                                     local_lineRate,
+                                                     localOffRate,      // suffix-array sampling rate
+                                                     localFtabChars,    // number of chars in initial arrow-pair calc
+                                                     outfile,           // basename for .?.ebwt files
+                                                     fw,                 // fw
+                                                     dcv,                // difference-cover period
+                                                     tParam.conv_local_szs,     // list of reference sizes
+                                                     tParam.local_sztot,        // total size of all unambiguous ref chars
+                                                     refparams,          // reference read-in parameters
+                                                     seed,               // pseudo-random number generator seed
+                                                     fout5,
+                                                     fout6,
+                                                     -1,                 // override offRate
+                                                     false,              // be silent
+                                                     passMemExc,         // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                                                     sanityCheck);       // verify results and internal consistency
+                    tParam.s.clear();
+                    if(tParam.rg != NULL) {
+                        assert(tParam.pg != NULL);
+                        delete tParam.rg; tParam.rg = NULL;
+                        delete tParam.pg; tParam.pg = NULL;
+                    }
                 }
             }
         }
-    }
-    assert_eq(curr_sztot, sztot);
-    if(this->_nthreads > 1) {
-        for(index_t i = 0; i + 1 < (index_t)this->_nthreads; i++) {
-            tParams[i].last = true;
-            threads[i]->join();
+        assert_eq(curr_sztot, sztot);
+        if(this->_nthreads > 1) {
+            for(index_t i = 0; i + 1 < (index_t)this->_nthreads; i++) {
+                tParams[i].last = true;
+                threads[i]->join();
+            }
         }
     }
     
@@ -2400,7 +2413,7 @@ HGFM<index_t, local_index_t>::HGFM(
     // Reopen as input streams
     VMSG_NL("Re-opening _in5 and _in5 as input streams");
     if(this->_sanity) {
-        VMSG_NL("Sanity-checking Bt2");
+        VMSG_NL("Sanity-checking ht2");
         assert(!this->isInMemory());
         readIntoMemory(
                        fw ? -1 : needEntireReverse, // 1 -> need the reverse to be reverse-of-concat
@@ -2416,7 +2429,7 @@ HGFM<index_t, local_index_t>::HGFM(
         evictFromMemory();
         assert(!this->isInMemory());
     }
-    VMSG_NL("Returning from HierEbwt constructor");
+    VMSG_NL("Returning from HGFM constructor");
 }
 
     

@@ -582,6 +582,7 @@ struct GenomeHit {
                      const GFM<index_t>&        gfm,
                      const BitPairReference&    ref,
                      const ALTDB<index_t>&      altdb,
+                     const RepeatDB<index_t>&   repeatdb,
                      SpliceSiteDB&              ssdb,
                      SwAligner&                 swa,
                      SwMetrics&                 swm,
@@ -605,6 +606,7 @@ struct GenomeHit {
                 const GFM<index_t>&        gfm,
                 const BitPairReference&    ref,
                 const ALTDB<index_t>&      altdb,
+                const RepeatDB<index_t>&   repeatdb,
                 SpliceSiteDB&              ssdb,
                 SwAligner&                 swa,
                 SwMetrics&                 swm,
@@ -1392,6 +1394,7 @@ bool GenomeHit<index_t>::combineWith(
                                      const GFM<index_t>&        gfm,
                                      const BitPairReference&    ref,
                                      const ALTDB<index_t>&      altdb,
+                                     const RepeatDB<index_t>&   repeatdb,
                                      SpliceSiteDB&              ssdb,
                                      SwAligner&                 swa,
                                      SwMetrics&                 swm,
@@ -1999,6 +2002,7 @@ bool GenomeHit<index_t>::extend(
                                 const GFM<index_t>&        gfm,
                                 const BitPairReference&    ref,
                                 const ALTDB<index_t>&      altdb,
+                                const RepeatDB<index_t>&   repeatdb,
                                 SpliceSiteDB&              ssdb,
                                 SwAligner&                 swa,
                                 SwMetrics&                 swm,
@@ -3978,6 +3982,7 @@ public:
             _hits[0][fwi].init(fw, (index_t)_rds[0]->length());
         }
         _genomeHits.clear();
+        _genomeHits_rep[0].clear();
         _concordantPairs.clear();
         _hits_searched[0].clear();
         assert(!_paired);
@@ -4002,6 +4007,8 @@ public:
             _hits_searched[rdi].clear();
         }
         _genomeHits.clear();
+        _genomeHits_rep[0].clear();
+        _genomeHits_rep[1].clear();
         _concordantPairs.clear();
         assert(_paired);
         assert(!_rightendonly);
@@ -4019,6 +4026,7 @@ public:
            const GraphPolicy&         gpol,
            const GFM<index_t>&        gfm,
            const ALTDB<index_t>&      altdb,
+           const RepeatDB<index_t>&   repeatdb,
            const BitPairReference&    ref,
            SwAligner&                 swa,
            SpliceSiteDB&              ssdb,
@@ -4037,7 +4045,7 @@ public:
         // pick up one with best partial alignment
         while(nextBWT(sc, pepol, tpol, gpol, gfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
             // given the partial alignment, try to extend it to full alignments
-        	found[rdi] = align(sc, pepol, tpol, gpol, gfm, altdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
+        	found[rdi] = align(sc, pepol, tpol, gpol, gfm, altdb, repeatdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
             if(!found[0] && !found[1]) {
                 break;
             }
@@ -4045,7 +4053,7 @@ public:
             // try to combine this alignment with some of mate alignments
             // to produce pair alignment
             if(this->_paired) {
-                pairReads(sc, pepol, tpol, gpol, gfm, altdb, ref, wlm, prm, him, rnd, sink);
+                pairReads(sc, pepol, tpol, gpol, gfm, altdb, repeatdb, ref, wlm, prm, him, rnd, sink);
                 // if(sink.bestPair() >= _minsc[0] + _minsc[1]) break;
             }
         }
@@ -4071,6 +4079,7 @@ public:
                                                 gpol,
                                                 gfm,
                                                 altdb,
+                                                repeatdb,
                                                 ref,
                                                 swa,
                                                 ssdb,
@@ -4088,7 +4097,77 @@ public:
                 }
                 
                 if(mate_found) {
-                    pairReads(sc, pepol, tpol, gpol, gfm, altdb, ref, wlm, prm, him, rnd, sink);
+                    pairReads(
+                              sc,
+                              pepol,
+                              tpol,
+                              gpol,
+                              gfm,
+                              altdb,
+                              repeatdb,
+                              ref,
+                              wlm,
+                              prm,
+                              him,
+                              rnd,
+                              sink);
+                }
+            }
+            
+            // Check if both reads map to repetitive regions
+            if(_concordantPairs.size() == 0 &&
+               (sink.bestUnp1() >= _minsc[0] && sink.bestUnp2() >= _minsc[1])) {
+                EList<index_t>& positions = _positions;
+                positions.clear();
+                for(size_t i = 0; i < _genomeHits_rep[0].size(); i++) {
+                    assert(repeatdb.isRepeat(_genomeHits_rep[0][i].ref()));
+                    for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
+                        assert(repeatdb.isRepeat(_genomeHits_rep[1][j].ref()));
+                        repeatdb.findCommonCoords(_genomeHits_rep[0][i].ref(), _genomeHits_rep[1][j].ref(), positions);
+                    }
+                }
+                
+                for(size_t i = 0; i < positions.size(); i++) {
+                    index_t pos = positions[i];
+                    index_t tidx = 0, toff = 0, tlen = 0;
+                    bool straddled = false;
+                    gfm.joinedToTextOff(
+                                        1,
+                                        pos,
+                                        tidx,
+                                        toff,
+                                        tlen,
+                                        true,        // reject straddlers?
+                                        straddled);  // straddled?
+                    
+                    for(size_t rdi = 0; rdi < 2; rdi++) {
+                        for(size_t fwi = 0; fwi < 2; fwi++) {
+                            bool mate_found = alignMate(
+                                                        sc,
+                                                        pepol,
+                                                        tpol,
+                                                        gpol,
+                                                        gfm,
+                                                        altdb,
+                                                        repeatdb,
+                                                        ref,
+                                                        swa,
+                                                        ssdb,
+                                                        rdi,
+                                                        fwi == 0,
+                                                        wlm,
+                                                        prm,
+                                                        swm,
+                                                        him,
+                                                        rnd,
+                                                        sink,
+                                                        tidx,
+                                                        toff);
+                            if(mate_found) {
+                                
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -4221,6 +4300,7 @@ public:
                const GraphPolicy&               gpol,
                const GFM<index_t>&              gfm,
                const ALTDB<index_t>&            altdb,
+               const RepeatDB<index_t>&         repeatdb,
                const BitPairReference&          ref,
                SwAligner&                       swa,
                SpliceSiteDB&                    ssdb,
@@ -4245,6 +4325,7 @@ public:
                    const GraphPolicy&               gpol,
                    const GFM<index_t>&              gfm,
                    const ALTDB<index_t>&            altdb,
+                   const RepeatDB<index_t>&         repeatdb,
                    const BitPairReference&          ref,
                    SwAligner&                       swa,
                    SpliceSiteDB&                    ssdb,
@@ -4272,6 +4353,7 @@ public:
                       const GraphPolicy&                 gpol,
                       const GFM<index_t>&                gfm,
                       const ALTDB<index_t>&              altdb,
+                      const RepeatDB<index_t>&           repeatdb,
                       const BitPairReference&            ref,
                       SwAligner&                         swa,
                       SpliceSiteDB&                      ssdb,
@@ -4298,6 +4380,7 @@ public:
                                const GraphPolicy&               gpol,
                                const GFM<index_t>&              gfm,
                                const ALTDB<index_t>&            altdb,
+                               const RepeatDB<index_t>&         repeatdb,
                                const BitPairReference&          ref,
                                SwAligner&                       swa,
                                SpliceSiteDB&                    ssdb,
@@ -4462,6 +4545,7 @@ public:
                           const TranscriptomePolicy&        tpol,
                           const GraphPolicy&                gpol,
                           const ALTDB<index_t>&             altdb,
+                          const RepeatDB<index_t>&          repeatdb,
                           const BitPairReference&           ref,
                           RandomSource&                     rnd,
                           index_t                           rdi,
@@ -4640,6 +4724,7 @@ public:
                    const GraphPolicy&         gpol,
                    const GFM<index_t>&        gfm,
                    const ALTDB<index_t>&      altdb,
+                   const RepeatDB<index_t>&   repeatdb,
                    const BitPairReference&    ref,
                    WalkMetrics&               wlm,
                    PerReadMetrics&            prm,
@@ -4657,6 +4742,7 @@ public:
                    const GraphPolicy&               gpol,
                    const GFM<index_t>&              gfm,
                    const ALTDB<index_t>&            altdb,
+                   const RepeatDB<index_t>&         repeatdb,
                    const BitPairReference&          ref,
                    const SpliceSiteDB&              ssdb,
                    AlnSinkWrap<index_t>&            sink,
@@ -4738,8 +4824,10 @@ protected:
     
     // temporary
     EList<GenomeHit<index_t> >     _genomeHits;
+    EList<GenomeHit<index_t> >     _genomeHits_rep[2];
     EList<bool>                    _genomeHits_done;
     ELList<Coord>                  _coords;
+    EList<index_t>                 _positions;
     ELList<SpliceSite>             _spliceSites;
     
     EList<pair<index_t, index_t> >  _concordantPairs;
@@ -4811,6 +4899,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
                                                const GraphPolicy&               gpol,
                                                const GFM<index_t>&              gfm,
                                                const ALTDB<index_t>&            altdb,
+                                               const RepeatDB<index_t>&         repeatdb,
                                                const BitPairReference&          ref,
                                                SwAligner&                       swa,
                                                SpliceSiteDB&                    ssdb,
@@ -4848,6 +4937,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
                                     tpol,
                                     gpol,
                                     altdb,
+                                    repeatdb,
                                     ref,
                                     rnd,
                                     rdi,
@@ -4873,6 +4963,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
                  gpol,
                  gfm,
                  altdb,
+                 repeatdb,
                  ref,
                  swa,
                  ssdb,
@@ -4901,6 +4992,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                    const GraphPolicy&               gpol,
                                                    const GFM<index_t>&              gfm,
                                                    const ALTDB<index_t>&            altdb,
+                                                   const RepeatDB<index_t>&         repeatdb,
                                                    const BitPairReference&          ref,
                                                    SwAligner&                       swa,
                                                    SpliceSiteDB&                    ssdb,
@@ -5038,6 +5130,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                          gfm,
                          ref,
                          altdb,
+                         repeatdb,
                          ssdb,
                          swa,
                          swm,
@@ -5057,6 +5150,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                            gpol,
                            gfm,
                            altdb,
+                           repeatdb,
                            ref,
                            swa,
                            ssdb,
@@ -5260,6 +5354,7 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
                                                    const GraphPolicy&         gpol,
                                                    const GFM<index_t>&        gfm,
                                                    const ALTDB<index_t>&      altdb,
+                                                   const RepeatDB<index_t>&   repeatdb,
                                                    const BitPairReference&    ref,
                                                    WalkMetrics&               wlm,
                                                    PerReadMetrics&            prm,
@@ -5358,6 +5453,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                                                    const GraphPolicy&               gpol,
                                                    const GFM<index_t>&              gfm,
                                                    const ALTDB<index_t>&            altdb,
+                                                   const RepeatDB<index_t>&         repeatdb,
                                                    const BitPairReference&          ref,
                                                    const SpliceSiteDB&              ssdb,
                                                    AlnSinkWrap<index_t>&            sink,

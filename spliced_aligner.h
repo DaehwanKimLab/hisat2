@@ -65,6 +65,7 @@ public:
                       const GraphPolicy&                 gpol,
                       const GFM<index_t>&                gfm,
                       const ALTDB<index_t>&              altdb,
+                      const RepeatDB<index_t>&           repeatdb,
                       const BitPairReference&            ref,
                       SwAligner&                         swa,
                       SpliceSiteDB&                      ssdb,
@@ -90,6 +91,7 @@ public:
                                const GraphPolicy&               gpol,
                                const GFM<index_t>&              gfm,
                                const ALTDB<index_t>&            altdb,
+                               const RepeatDB<index_t>&         repeatdb,
                                const BitPairReference&          ref,
                                SwAligner&                       swa,
                                SpliceSiteDB&                    ssdb,
@@ -120,6 +122,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                                                           const GraphPolicy&             gpol,
                                                           const GFM<index_t>&            gfm,
                                                           const ALTDB<index_t>&          altdb,
+                                                          const RepeatDB<index_t>&       repeatdb,
                                                           const BitPairReference&        ref,
                                                           SwAligner&                     swa,
                                                           SpliceSiteDB&                  ssdb,
@@ -147,6 +150,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                          gfm,
                          ref,
                          altdb,
+                         repeatdb,
                          ssdb,
                          swa,
                          swm,
@@ -159,6 +163,11 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                          gpol,
                          leftext,
                          rightext);
+        
+        if(repeatdb.isRepeat(genomeHit.ref())) {
+            this->_genomeHits_rep[rdi].expand();
+            this->_genomeHits_rep[rdi].back() = genomeHit;
+        }
     }
     
     // for the candidate alignments, examine the longest (best) one first
@@ -191,6 +200,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                                    gpol,
                                    gfm,
                                    altdb,
+                                   repeatdb,
                                    ref,
                                    swa,
                                    ssdb,
@@ -218,7 +228,6 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
             
             bool found = genomeHit.len() >= rd.length();
             if(!found) {
-                // CP todo 2
                 DynProgFramer dpframe(false);  // trimToRef
                 size_t tlen = ref.approxLen(genomeHit.ref());
                 size_t readGaps = 10, refGaps = 10, nceil = 0, maxhalf = 10;
@@ -300,6 +309,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                                    gpol,
                                    gfm,
                                    altdb,
+                                   repeatdb,
                                    ref,
                                    swa,
                                    ssdb,
@@ -333,6 +343,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    const GraphPolicy&               gpol,
                                                                    const GFM<index_t>&              gfm,
                                                                    const ALTDB<index_t>&            altdb,
+                                                                   const RepeatDB<index_t>&         repeatdb,
                                                                    const BitPairReference&          ref,
                                                                    SwAligner&                       swa,
                                                                    SpliceSiteDB&                    ssdb,
@@ -465,6 +476,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                        gfm,
                                        ref,
                                        altdb,
+                                       repeatdb,
                                        ssdb,
                                        swa,
                                        swm,
@@ -492,6 +504,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             gfm,
                                                             ref,
                                                             altdb,
+                                                            repeatdb,
                                                             ssdb,
                                                             swa,
                                                             swm,
@@ -582,6 +595,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                            gfm,
                                            ref,
                                            altdb,
+                                           repeatdb,
                                            ssdb,
                                            swa,
                                            swm,
@@ -605,6 +619,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                     gfm,
                                                                     ref,
                                                                     altdb,
+                                                                    repeatdb,
                                                                     ssdb,
                                                                     swa,
                                                                     swm,
@@ -659,13 +674,13 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                         this->addSearched(canHit, rdi);
                     }
                     if(!this->redundant(sink, rdi, canHit)) {
-                        this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, ref, ssdb, sink, rdi, canHit, alignMate);
+                        this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, repeatdb, ref, ssdb, sink, rdi, canHit, alignMate);
                         maxsc = max<int64_t>(maxsc, canHit.score());
                     }
                 }
             }
             else {
-                this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, ref, ssdb, sink, rdi, hit, alignMate);
+                this->reportHit(sc, pepol, tpol, gpol, gfm, altdb, repeatdb, ref, ssdb, sink, rdi, hit, alignMate);
                 maxsc = max<int64_t>(maxsc, hit.score());
             }
             return maxsc;
@@ -720,6 +735,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                    gfm,
                                    ref,
                                    altdb,
+                                   repeatdb,
                                    ssdb,
                                    swa,
                                    swm,
@@ -742,6 +758,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                         gfm,
                                                         ref,
                                                         altdb,
+                                                        repeatdb,
                                                         ssdb,
                                                         swa,
                                                         swm,
@@ -773,6 +790,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                gpol,
                                                                gfm,
                                                                altdb,
+                                                               repeatdb,
                                                                ref,
                                                                swa,
                                                                ssdb,
@@ -803,6 +821,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            gfm,
                            ref,
                            altdb,
+                           repeatdb,
                            ssdb,
                            swa,
                            swm,
@@ -938,6 +957,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                        gfm,
                                        ref,
                                        altdb,
+                                       repeatdb,
                                        ssdb,
                                        swa,
                                        swm,
@@ -959,6 +979,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                         gfm,
                                                         ref,
                                                         altdb,
+                                                        repeatdb,
                                                         ssdb,
                                                         swa,
                                                         swm,
@@ -989,6 +1010,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    gpol,
                                                                    gfm,
                                                                    altdb,
+                                                                   repeatdb,
                                                                    ref,
                                                                    swa,
                                                                    ssdb,
@@ -1029,6 +1051,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                gpol,
                                                                gfm,
                                                                altdb,
+                                                               repeatdb,
                                                                ref,
                                                                swa,
                                                                ssdb,
@@ -1122,6 +1145,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                            gfm,
                                            ref,
                                            altdb,
+                                           repeatdb,
                                            ssdb,
                                            swa,
                                            swm,
@@ -1142,6 +1166,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             gfm,
                                                             ref,
                                                             altdb,
+                                                            repeatdb,
                                                             ssdb,
                                                             swa,
                                                             swm,
@@ -1170,6 +1195,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    gpol,
                                                                    gfm,
                                                                    altdb,
+                                                                   repeatdb,
                                                                    ref,
                                                                    swa,
                                                                    ssdb,
@@ -1215,6 +1241,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                            gpol,
                                                            gfm,
                                                            altdb,
+                                                           repeatdb,
                                                            ref,
                                                            swa,
                                                            ssdb,
@@ -1250,6 +1277,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            gfm,
                            ref,
                            altdb,
+                           repeatdb,
                            ssdb,
                            swa,
                            swm,
@@ -1277,6 +1305,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                        gpol,
                                                        gfm,
                                                        altdb,
+                                                       repeatdb,
                                                        ref,
                                                        swa,
                                                        ssdb,
@@ -1309,6 +1338,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                            gpol,
                                                            gfm,
                                                            altdb,
+                                                           repeatdb,
                                                            ref,
                                                            swa,
                                                            ssdb,
@@ -1383,6 +1413,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                    gfm,
                                    ref,
                                    altdb,
+                                   repeatdb,
                                    ssdb,
                                    swa,
                                    swm,
@@ -1406,6 +1437,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             gfm,
                                                             ref,
                                                             altdb,
+                                                            repeatdb,
                                                             ssdb,
                                                             swa,
                                                             swm,
@@ -1435,6 +1467,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                gpol,
                                                                gfm,
                                                                altdb,
+                                                               repeatdb,
                                                                ref,
                                                                swa,
                                                                ssdb,
@@ -1465,6 +1498,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            gfm,
                            ref,
                            altdb,
+                           repeatdb,
                            ssdb,
                            swa,
                            swm,
@@ -1605,6 +1639,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                    gfm,
                                    ref,
                                    altdb,
+                                   repeatdb,
                                    ssdb,
                                    swa,
                                    swm,
@@ -1626,6 +1661,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                             gfm,
                                                             ref,
                                                             altdb,
+                                                            repeatdb,
                                                             ssdb,
                                                             swa,
                                                             swm,
@@ -1655,6 +1691,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    gpol,
                                                                    gfm,
                                                                    altdb,
+                                                                   repeatdb,
                                                                    ref,
                                                                    swa,
                                                                    ssdb,
@@ -1696,6 +1733,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                gpol,
                                                                gfm,
                                                                altdb,
+                                                               repeatdb,
                                                                ref,
                                                                swa,
                                                                ssdb,
@@ -1787,6 +1825,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                        gfm,
                                        ref,
                                        altdb,
+                                       repeatdb,
                                        ssdb,
                                        swa,
                                        swm,
@@ -1807,6 +1846,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                 gfm,
                                                                 ref,
                                                                 altdb,
+                                                                repeatdb,
                                                                 ssdb,
                                                                 swa,
                                                                 swm,
@@ -1834,6 +1874,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                                    gpol,
                                                                    gfm,
                                                                    altdb,
+                                                                   repeatdb,
                                                                    ref,
                                                                    swa,
                                                                    ssdb,
@@ -1882,6 +1923,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                            gpol,
                                                            gfm,
                                                            altdb,
+                                                           repeatdb,
                                                            ref,
                                                            swa,
                                                            ssdb,
@@ -1917,6 +1959,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                            gfm,
                            ref,
                            altdb,
+                           repeatdb,
                            ssdb,
                            swa,
                            swm,
@@ -1945,6 +1988,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                        gpol,
                                                        gfm,
                                                        altdb,
+                                                       repeatdb,
                                                        ref,
                                                        swa,
                                                        ssdb,
@@ -1976,6 +2020,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                                                            gpol,
                                                            gfm,
                                                            altdb,
+                                                           repeatdb,
                                                            ref,
                                                            swa,
                                                            ssdb,

@@ -57,17 +57,32 @@ while i < len(chr_sa) - 1:
 
 found = False
 print len(repeats), "repeats"
+deleted = set()
 for i in xrange(len(repeats) - 1):
     for j in xrange(i + 1, len(repeats)):
-        num_close = 0
+        if j in deleted:
+            continue
+        
+        num_close, num_close2 = 0, 0
         pos_seq, pos_set = repeats[i]
         pos_seq2, pos_set2 = repeats[j]
-        for _pos1 in pos_set:
-            for _pos2 in pos_set2:
-                if abs(_pos1 - _pos2) < 300:
-                    num_close += 1
-                
-        if num_close == 1:
+
+        k1, k2 = 0, 0
+        while k1 < len(pos_set) and k2 < len(pos_set2):
+            _pos, _pos2 = pos_set[k1], pos_set2[k2]
+            if abs(_pos - _pos2) < 300:
+                num_close += 1
+            if abs(_pos - _pos2) < 1100:
+                num_close2 += 1
+            if _pos <= _pos2:
+                k1 += 1
+            else:
+                k2 += 1
+
+        if num_close > min(len(pos_set), len(pos_set2)) * 0.95:
+            deleted.add(j)
+
+        if num_close == 1 and num_close2 < 5:
             found = True
             print pos_set
             print pos_set2
@@ -105,6 +120,8 @@ for i in xrange(len(repeats) - 1):
             break
     if found:
         break
+
+    print i
 
 chr_seq = ""
 for line in open("%s.fa" % chr_name):
@@ -153,8 +170,8 @@ for i in xrange(len(to_genome_list)):
 assert N_ranges == N_ranges_tmp
 
 file = open("%s_rep.info" % chr_name, "w")
-def print_rep_info(rep_name, rep_len, pos_set, pos_seq):
-    print >> file, ">%s*0\t%d\t%d\t0" % (rep_name, rep_len, len(pos_set))
+def print_rep_info(rep_name, rep_pos, rep_len, pos_set, pos_seq):
+    print >> file, ">%s*0\trep\t%d\t%d\t%d\t0" % (rep_name, rep_pos, rep_len, len(pos_set))
     for i in xrange(0, len(pos_set), 10):
         output = ""
         for j in range(i, i + 10):
@@ -172,22 +189,24 @@ def print_rep_info(rep_name, rep_len, pos_set, pos_seq):
                 
             pos = convert(pos_set[j])
             assert chr_seq[pos:pos+seq_len] == pos_seq
-            output += ("%s_rep:%d" % (chr_name, pos))
+            output += ("%s:%d:+" % (chr_name, pos))
         print >> file, output
-print_rep_info("rep1", seq_len, pos_set, pos_seq)
-print_rep_info("rep2", seq_len, pos_set2, pos_seq2)
+print_rep_info("rep1", 0, seq_len, pos_set, pos_seq)
+print_rep_info("rep2", seq_len, seq_len, pos_set2, pos_seq2)
 file.close()
 
 chr_seq = chr_seq.replace(pos_seq, 'N' * seq_len)
 chr_seq = chr_seq.replace(pos_seq2, 'N' * seq_len)
-file = open("%s_rep.fa" % chr_name, "w")
-print >> file, ">%s_rep" % chr_name
+file = open("%s_mask.fa" % chr_name, "w")
+print >> file, ">%s_mask" % chr_name
 for i in xrange(0, len(chr_seq), 60):
     print >> file, chr_seq[i:i+60]
-print >> file, ">rep1"
-print >> file, pos_seq
-print >> file, ">rep2"
-print >> file, pos_seq2
 file.close()
 
-
+file = open("%s_rep.fa" % chr_name, "w")
+rep_seq = pos_seq + pos_seq2
+print >> file, ">rep"
+for i in xrange(0, len(rep_seq), 60):
+    print >> file, rep_seq[i:i+60]
+file.close()
+    

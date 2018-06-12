@@ -80,7 +80,10 @@ static string ht_fname;
 static string ss_fname;
 static string exon_fname;
 static string sv_fname;
-static string repeat_fname;
+static string repeat_ref_fname;
+static string repeat_info_fname;
+static string repeat_snp_fname;
+static string repeat_haplotype_fname;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -116,7 +119,10 @@ static void resetOptions() {
     ss_fname = "";
     exon_fname = "";
     sv_fname = "";
-    repeat_fname = "";
+    repeat_ref_fname = "";
+    repeat_info_fname = "";
+    repeat_snp_fname = "";
+    repeat_haplotype_fname = "";
 }
 
 // Argument constants for getopts
@@ -140,7 +146,10 @@ enum {
     ARG_SPLICESITE,
     ARG_EXON,
     ARG_SV,
-    ARG_REPEAT,
+    ARG_REPEAT_REF,
+    ARG_REPEAT_INFO,
+    ARG_REPEAT_SNP,
+    ARG_REPEAT_HAPLOTYPE,
 };
 
 /**
@@ -184,7 +193,10 @@ static void printUsage(ostream& out) {
         << "    --haplotype <path>      haplotype file name" << endl
         << "    --ss <path>             Splice site file name" << endl
         << "    --exon <path>           Exon file name" << endl
-        << "    --repeat <path>         Repeat file name" << endl
+        << "    --repeat-ref <path>     Repeat reference file name" << endl
+        << "    --repeat-info <path>    Repeat information file name" << endl
+        << "    --repeat-snp <path>     Repeat snp file name" << endl
+        << "    --repeat-haplotype <path>   Repeat haplotype file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
@@ -230,7 +242,10 @@ static struct option long_options[] = {
     {(char*)"ss",             required_argument, 0,            ARG_SPLICESITE},
     {(char*)"exon",           required_argument, 0,            ARG_EXON},
     {(char*)"sv",             required_argument, 0,            ARG_SV},
-    {(char*)"repeat",         required_argument, 0,            ARG_REPEAT},
+    {(char*)"repeat-ref",     required_argument, 0,            ARG_REPEAT_REF},
+    {(char*)"repeat-info",    required_argument, 0,            ARG_REPEAT_INFO},
+    {(char*)"repeat-snp",     required_argument, 0,            ARG_REPEAT_SNP},
+    {(char*)"repeat-haplotype", required_argument, 0,          ARG_REPEAT_HAPLOTYPE},
 	{(char*)"help",           no_argument,       0,            'h'},
 	{(char*)"ntoa",           no_argument,       0,            ARG_NTOA},
 	{(char*)"justref",        no_argument,       0,            '3'},
@@ -332,8 +347,17 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_SV:
                 sv_fname = optarg;
                 break;
-            case ARG_REPEAT:
-                repeat_fname = optarg;
+            case ARG_REPEAT_REF:
+                repeat_ref_fname = optarg;
+                break;
+            case ARG_REPEAT_INFO:
+                repeat_info_fname = optarg;
+                break;
+            case ARG_REPEAT_SNP:
+                repeat_snp_fname = optarg;
+                break;
+            case ARG_REPEAT_HAPLOTYPE:
+                repeat_haplotype_fname = optarg;
                 break;
 			case ARG_BMAX:
 				bmax = parseNumber<TIndexOffU>(1, "--bmax arg must be at least 1");
@@ -423,7 +447,12 @@ static void driver(
                    const string& repeatfile,
                    const string& outfile,
                    bool packed,
-                   int reverse)
+                   int reverse,
+                   bool localindex = true,
+                   EList<RefRecord>* parent_szs = NULL,
+                   EList<string>* parent_refnames = NULL,
+                   EList<RefRecord>* output_szs = NULL,
+                   EList<string>* output_refnames = NULL)
 {
     initializeCntLut();
     initializeCntBit();
@@ -525,11 +554,22 @@ static void driver(
                           szs,          // list of reference sizes
                           (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
                           refparams,    // reference read-in parameters
+                          localindex,   // create local indexes?
+                          parent_szs,   // parent szs
+                          parent_refnames, // parent refence names
                           seed,         // pseudo-random number generator seed
                           -1,           // override offRate
                           verbose,      // be talkative
                           autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
                           sanityCheck); // verify results and internal consistency
+    
+    if(output_szs != NULL) {
+        *output_szs = szs;
+    }
+    if(output_refnames != NULL) {
+        *output_refnames = hGFM._refnames_nospace;
+    }
+    
     // Note that the Ebwt is *not* resident in memory at this time.  To
     // load it into memory, call ebwt.loadIntoMemory()
 	if(verbose) {
@@ -694,6 +734,9 @@ int hisat2_build(int argc, const char **argv) {
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
+                EList<RefRecord> parent_szs(MISC_CAT);
+                EList<string> parent_refnames;
+                string dummy_fname = "";
                 driver<SString<char> >(infile,
                                        infiles,
                                        snp_fname,
@@ -701,10 +744,34 @@ int hisat2_build(int argc, const char **argv) {
                                        ss_fname,
                                        exon_fname,
                                        sv_fname,
-                                       repeat_fname,
+                                       dummy_fname,
                                        outfile,
                                        false,
-                                       REF_READ_FORWARD);
+                                       REF_READ_FORWARD,
+                                       true, // create local indexes
+                                       NULL, // no parent szs
+                                       NULL, // no parent refnames
+                                       &parent_szs, // get parent szs
+                                       &parent_refnames); // get parent refnames
+                
+                if(repeat_ref_fname.length() > 0) {
+                    EList<string> repeat_infiles(MISC_CAT);
+                    tokenize(repeat_ref_fname, ",", repeat_infiles);
+                    driver<SString<char> >(repeat_ref_fname,
+                                           repeat_infiles,
+                                           repeat_snp_fname,
+                                           repeat_haplotype_fname,
+                                           dummy_fname,
+                                           dummy_fname,
+                                           dummy_fname,
+                                           repeat_info_fname,
+                                           outfile + ".rep",
+                                           false,
+                                           REF_READ_FORWARD,
+                                           false, // do not create local index
+                                           &parent_szs,
+                                           &parent_refnames);
+                }
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;

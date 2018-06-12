@@ -987,7 +987,7 @@
 					"MACOS=1",
 					POPCNT_CAPABILITY,
 					BOWTIE2,
-					"HISAT2_VERSION=\"\\\"2.1.0\\\"\"",
+					"HISAT2_VERSION=\"\\\"2.2.0\\\"\"",
 					"HISAT2_VERSION2=\"\\\"`cat VERSION`\\\"\"",
 					"BUILD_HOST=\"\\\"`hostname`\\\"\"",
 					"BUILD_TIME=\"\\\"`date\\\"\"",
@@ -1048,7 +1048,7 @@
 					"MACOS=1",
 					POPCNT_CAPABILITY,
 					BOWTIE2,
-					"HISAT2_VERSION=\"\\\"2.1.0\\\"\"",
+					"HISAT2_VERSION=\"\\\"2.2.0\\\"\"",
 					"BUILD_HOST=\"\\\"`hostname`\\\"\"",
 					"BUILD_TIME=\"\\\"`date`\\\"\"",
 					"COMPILER_VERSION=\"\\\"`$(CXX) -v 2>&1 | tail -1`\\\"\"",
@@ -1112,6 +1112,20 @@
 		E8D9219420C85FE900378C5B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+					BOWTIE_MM,
+					"MACOS=1",
+					POPCNT_CAPABILITY,
+					BOWTIE2,
+					"HISAT2_VERSION=\"\\\"2.2.0\\\"\"",
+					"HISAT2_VERSION2=\"\\\"`cat VERSION`\\\"\"",
+					"BUILD_HOST=\"\\\"`hostname`\\\"\"",
+					"BUILD_TIME=\"\\\"`date\\\"\"",
+					"COMPILER_VERSION=\"\\\"`$(CXX) -v 2>&1 | tail -1`\\\"\"",
+					"COMPILER_OPTIONS=\"\\\"test\\\"\"",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
