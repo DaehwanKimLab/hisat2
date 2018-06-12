@@ -590,7 +590,8 @@ BitPairReference::szsFromFasta(
 	bool bigEndian,
 	const RefReadInParams& refparams,
 	EList<RefRecord>& szs,
-	bool sanity)
+	bool sanity,
+	EList<string> *names)
 {
 	RefReadInParams parms = refparams;
 	std::pair<size_t, size_t> sztot;
@@ -649,7 +650,8 @@ BitPairReference::szsFromFasta(
 		// Read in the sizes of all the unambiguous stretches of the
 		// genome into a vector of RefRecords
 		TIndexOff numSeqs = 0;
-		sztot = fastaRefReadSizes(is, szs, parms, NULL, numSeqs);
+		//sztot = fastaRefReadSizes(is, szs, parms, NULL, numSeqs);
+		sztot = fastaRefReadFragsNames(is, szs, parms, NULL, numSeqs, *names);
 #ifndef NDEBUG
 		if(parms.color) {
 			parms.color = false;

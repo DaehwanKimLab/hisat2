@@ -129,7 +129,8 @@ fastaRefReadSize(
 	FileBuf& in,
 	const RefReadInParams& rparms,
 	bool first,
-	BitpairOutFileBuf* bpout = NULL);
+	BitpairOutFileBuf* bpout,
+	string *name = NULL);
 
 extern std::pair<size_t, size_t>
 fastaRefReadSizes(
@@ -138,6 +139,15 @@ fastaRefReadSizes(
 	const RefReadInParams& rparms,
 	BitpairOutFileBuf* bpout,
 	TIndexOff& numSeqs);
+
+extern std::pair<size_t, size_t>
+fastaRefReadFragsNames(
+	EList<FileBuf*>& in,
+	EList<RefRecord>& recs,
+	const RefReadInParams& rparms,
+	BitpairOutFileBuf* bpout,
+	TIndexOff& numSeqs,
+	EList<string>& names);
 
 extern void
 reverseRefRecords(

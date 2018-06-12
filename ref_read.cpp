@@ -29,7 +29,9 @@ RefRecord fastaRefReadSize(
 	FileBuf& in,
 	const RefReadInParams& rparms,
 	bool first,
-	BitpairOutFileBuf* bpout)
+	BitpairOutFileBuf* bpout,
+	string* name // put parsed FASTA name here
+	)
 {
 	int c;
 	static int lastc = '>'; // last character seen
@@ -58,6 +60,7 @@ RefRecord fastaRefReadSize(
 	// Skip to the end of the id line; if the next line is either
 	// another id line or a comment line, keep skipping
 	if(lastc == '>') {
+#if 0
 		// Skip to the end of the name line
 		do {
 			if((c = in.getPastNewline()) == -1) {
@@ -71,6 +74,43 @@ RefRecord fastaRefReadSize(
 			}
 			// continue until a non-name, non-comment line
 		} while (c == '>');
+#else
+		c = lastc;
+		// Skip to the end of the name line
+		do {
+			// get name
+
+			while (true) {
+				c = in.get();
+				if (c == -1) {
+					// No more input
+					cerr << "Warning: Encountered empty reference sequence" << endl;
+					lastc = -1;
+					return RefRecord(0, 0, true);
+				}
+
+				if(c == '\n' || c == '\r') {
+					while(c == '\r' || c == '\n') c = in.get();
+					if (c == -1) {
+						// No more input
+						cerr << "Warning: Encountered empty reference sequence" << endl;
+						lastc = -1;
+						return RefRecord(0, 0, true);
+					}
+					break;
+				}
+
+				if (name) name->push_back(c);
+			}
+
+			if (c == '>') {
+				cerr << "Warning: Encountered empty reference sequence" << endl;
+				// If there's another name line immediately after this one,
+				// discard the previous name and start fresh with the new one
+				if (name) name->clear();
+			}
+		} while (c == '>');
+#endif
 	} else {
 		first = false; // not the first in a sequence
 		off = 1; // The gap has already been consumed, so count it
@@ -301,6 +341,79 @@ fastaRefReadSizes(
 			}
 			// Add the length of this record.
 			if(rec.first) numSeqs++;
+			unambigTot += rec.len;
+			bothTot += rec.len;
+			bothTot += rec.off;
+			first = false;
+			if(rec.len == 0 && rec.off == 0 && !rec.first) continue;
+			recs.push_back(rec);
+		}
+		// Reset the input stream
+		in[i]->reset();
+		assert(!in[i]->eof());
+#ifndef NDEBUG
+		// Check that it's really reset
+		int c = in[i]->get();
+		assert_eq('>', c);
+		in[i]->reset();
+		assert(!in[i]->eof());
+#endif
+	}
+    
+    // Remove empty reference sequences
+    for(int64_t i = 0; (size_t)i < recs.size(); i++) {
+        const RefRecord& rec = recs[i];
+        if(rec.first && rec.len == 0) {
+            if(i + 1 >= recs.size() || recs[i+1].first) {
+                bothTot -= rec.len;
+                bothTot -= rec.off;
+                recs.erase(i);
+                i -= 1;
+            }
+        }
+    }
+    
+	assert_geq(bothTot, 0);
+	assert_geq(unambigTot, 0);
+	return make_pair(
+		unambigTot, // total number of unambiguous DNA characters read
+		bothTot); // total number of DNA characters read, incl. ambiguous ones
+}
+
+
+std::pair<size_t, size_t>
+fastaRefReadFragsNames(
+	EList<FileBuf*>& in,
+	EList<RefRecord>& recs,
+	const RefReadInParams& rparms,
+	BitpairOutFileBuf* bpout,
+	TIndexOff& numSeqs,
+	EList<string>& names)
+{
+	TIndexOffU unambigTot = 0;
+	size_t bothTot = 0;
+	assert_gt(in.size(), 0);
+	// For each input istream
+	for(size_t i = 0; i < in.size(); i++) {
+		bool first = true;
+		assert(!in[i]->eof());
+		// For each pattern in this istream
+		while(!in[i]->eof()) {
+			RefRecord rec;
+			string name;
+			try {
+				rec = fastaRefReadSize(*in[i], rparms, first, bpout, &name);
+				if((unambigTot + rec.len) < unambigTot) {
+					throw RefTooLongException();
+				}
+			}
+			catch(RefTooLongException& e) {
+				cerr << e.what() << endl;
+				throw 1;
+			}
+			// Add the length of this record.
+			if(rec.first) numSeqs++;
+			if(rec.first) names.push_back(name); 
 			unambigTot += rec.len;
 			bothTot += rec.len;
 			bothTot += rec.off;

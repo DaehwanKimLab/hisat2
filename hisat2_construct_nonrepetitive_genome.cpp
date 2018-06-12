@@ -22,6 +22,7 @@
 #include <string>
 #include <cassert>
 #include <getopt.h>
+#include <algorithm>
 #include "assert_helpers.h"
 #include "endian_swap.h"
 #include "formats.h"
@@ -74,6 +75,8 @@ static int  bigEndian;
 static bool autoMem;
 static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
+static int repeat_count;
+static int repeat_length;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -98,6 +101,8 @@ static void resetOptions() {
 	bigEndian      = 0;  // little endian
 	autoMem        = true;  // automatically adjust memory usage parameters
 	nthreads       = 1;
+	repeat_length  = 50;
+	repeat_count   = 5;
     wrapper.clear();
 }
 
@@ -114,6 +119,8 @@ enum {
 	ARG_USAGE,
 	ARG_REVERSE_EACH,
     ARG_SA,
+	ARG_REPEAT_LENGTH,
+	ARG_REPEAT_CNT,
 	ARG_WRAPPER
 };
 
@@ -176,6 +183,8 @@ static struct option long_options[] = {
 	{(char*)"linerate",       required_argument, 0,            'l'},
 	{(char*)"linesperside",   required_argument, 0,            'i'},
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
+	{(char*)"repeat-length",  required_argument, 0,            ARG_REPEAT_LENGTH},
+	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
 	{(char*)0, 0, 0, 0} // terminator
 };
@@ -263,6 +272,12 @@ static void parseOptions(int argc, const char **argv) {
 				break;
 			case ARG_SEED:
 				seed = parseNumber<int>(0, "--seed arg must be at least 0");
+				break;
+			case ARG_REPEAT_CNT:
+				repeat_count = parseNumber<int>(2, "--seed arg must be at least 2");
+				break;
+			case ARG_REPEAT_LENGTH:
+				repeat_length = parseNumber<int>(5, "--seed arg must be at least 5");
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -480,6 +495,787 @@ static void doTestCase2(
 extern void initializeCntLut();
 extern void initializeCntBit();
 
+template<typename TStr>
+string get_string(TStr& ref, TIndexOffU start, int len)
+{
+	string s;
+	size_t ref_len = ref.length();
+
+	for (int i = 0; (i < len) && (start + i < ref_len); i++) {
+		char nt = "ACGT"[ref[start + i]];
+		s.push_back(nt);
+	}
+
+	return s;
+}
+
+
+// Dump
+//
+// to_string
+static string to_string(int val)
+{
+	stringstream ss;
+	ss << val;
+	return ss.str();
+}
+
+
+template<typename TStr>
+int get_lcp_back(TStr& s, TIndexOffU a, TIndexOffU b)
+{
+	int k = 0;
+	TIndexOffU s_len = s.length();
+
+	if (a == s_len || b == s_len) {
+		return 0;
+	}
+
+	while ((a - k) > 0 && (b - k) > 0) {
+		if (s[a - k - 1] != s[b - k - 1]) {
+			break;
+		}
+		k++;
+	}
+
+	return k;
+}
+
+
+#if 0
+int get_lcp(string a, string b)
+{
+    int k = 0;
+    int a_len = a.length();
+    int b_len = b.length();
+    
+    while (k < a_len && k < b_len) {
+        if (a[k] != b[k]) {
+            break;
+        }
+        k++;
+    }
+    
+    return k;
+}
+#endif
+
+template<typename TStr>
+void dump_tstr(TStr& s)
+{
+	static int print_width = 60;
+
+	size_t s_len = s.length();
+
+	for (size_t i = 0; i < s_len; i += print_width) {
+		string buf;
+		for (size_t j = 0; (j < print_width) && (i + j < s_len); j++) {
+			buf.push_back("ACGTN"[s[i + j]]);
+		}
+		cerr << buf << endl;
+	}
+	cerr << endl;
+}
+
+
+template<typename TStr>
+void masking_with_N(TStr& s, TIndexOffU start, size_t length)
+{
+	size_t s_len = s.length();
+
+	for (size_t pos = 0; (pos < length) && (start + pos < s_len); pos++) {
+		s[start + pos] = 0x04;
+	}
+}
+
+// build Non-repetitive Genome
+template<typename TStr>
+class NRG {
+	struct Fragments {
+		bool contain(TIndexOffU pos) {
+			if (pos >= start && pos < (start + length)) {
+				return true;
+			}
+			return false;
+		}
+
+		TIndexOffU start;   // index within joined text
+		TIndexOffU length;
+
+		int frag_id;
+		int seq_id;
+		TIndexOffU start_in_seq;    // index within global 
+		TIndexOffU start_in_block;  // index within Fasta Block
+		bool first;
+
+		string seq_name;
+		string nameline;
+	};
+
+	struct RepeatGroup {
+		string repeat_sequence;
+		string repeat_sequence2;
+		EList<TIndexOffU> positions;
+	};
+
+public:
+	NRG(
+		EList<RefRecord>& szs,
+		EList<string>& ref_names,
+		TStr& s,
+		string& filename) :
+		szs_(szs), ref_namelines_(ref_names), 
+		s_(s), filename_(filename)
+	{
+		cerr << "NRG: " << filename_ << endl;
+
+		// build ref_names_ from ref_namelines_
+		build_names();
+		build_joined_fragment();
+	
+	}
+
+
+public:
+	const int output_width = 60;
+
+	EList<RefRecord>& szs_;
+	EList<string>& ref_namelines_;
+	EList<string> ref_names_;
+	TStr& s_;
+	string& filename_;
+
+	// mapping info from joined string to genome
+	EList<Fragments> fraglist_;
+
+	//
+	EList<RepeatGroup> rpt_grp_;
+
+	// Fragments Cache
+#define CACHE_SIZE_JOINEDFRG	10
+	Fragments cached_[CACHE_SIZE_JOINEDFRG];
+	int num_cached_ = 0;
+	int victim_ = 0;	/* round-robin */
+
+public:
+
+	void build_names(void);
+	int map_joined_pos_to_seq(TIndexOffU joined_pos);
+	int get_genome_coord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
+
+	void build_joined_fragment(void);
+
+	static bool repeat_group_cmp(const RepeatGroup& a, const RepeatGroup& b)
+	{
+		return a.positions[0] < b.positions[0];
+	}
+
+	void sort_rpt_grp(void);
+	void save_repeat_groups(void);
+	void fill_with_N(ofstream& fp, TIndexOffU start, TIndexOffU end_in_seq);
+
+	// Save single repeatgroup to fp
+	void savefile_rpt(ofstream& fp, RepeatGroup& rpt, int rpt_idx);
+	void savefile(void);
+
+	void add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndexOffU>& rpt_range);
+	void adjust_repeat_group(void);
+	void repeat_masking(void);
+
+	int get_lcp(TIndexOffU a, TIndexOffU b);
+};
+
+template<typename TStr>
+void NRG<TStr>::build_names(void)
+{
+	ref_names_.resize(ref_namelines_.size());
+	for (int i = 0; i < ref_namelines_.size(); i++) {
+		string& nameline = ref_namelines_[i];
+
+		for (int j = 0; j < nameline.length(); j++) {
+			char n = nameline[j];
+			if (n == ' ') {
+				break;
+			}
+			ref_names_[i].push_back(n);
+		}
+	}
+}
+
+template<typename TStr>
+int NRG<TStr>::map_joined_pos_to_seq(TIndexOffU joined_pos)
+{
+
+	/* search from cached_list */
+	if (num_cached_ > 0) {
+		for (int i = 0; i < num_cached_; i++) {
+			Fragments *frag = &cached_[i];
+			if (frag->contain(joined_pos)) {
+				return frag->frag_id;
+			}
+		}
+		/* fall through */
+	}
+
+	/* search list */
+	int top = 0;
+	int bot = fraglist_.size() - 1; 
+	int pos = 0;
+
+	Fragments *frag = &fraglist_[pos];
+	while ((bot - top) > 1) {
+		pos = top + ((bot - top) >> 1);
+		frag = &fraglist_[pos];
+
+		if (joined_pos < frag->start) {
+			bot = pos;
+		} else {
+			top = pos;
+		}
+	}
+
+	frag = &fraglist_[top];
+	if (frag->contain(joined_pos)) {
+		// update cache
+		if (num_cached_ < CACHE_SIZE_JOINEDFRG) {
+			cached_[num_cached_] = *frag;
+			num_cached_++;
+		} else {
+			cached_[victim_] = *frag;
+			victim_++; // round-robin
+			victim_ %= CACHE_SIZE_JOINEDFRG;
+		}
+
+		return top;
+	}
+
+	return -1;
+}
+
+template<typename TStr>
+int NRG<TStr>::get_genome_coord(TIndexOffU joined_pos, 
+		string& chr_name, TIndexOffU& pos_in_chr)
+{
+	int seq_id = map_joined_pos_to_seq(joined_pos);
+	if (seq_id < 0) {
+		return -1;
+	}
+
+	Fragments *frag = &fraglist_[seq_id];
+	TIndexOffU offset = joined_pos - frag->start;
+
+	pos_in_chr = frag->start_in_seq + offset;
+	chr_name = ref_names_[frag->seq_id];
+
+	return 0;
+}
+
+
+template<typename TStr>
+void NRG<TStr>::build_joined_fragment(void)
+{
+	int n_seq = 0;
+	int n_frag = 0;
+
+	for (int i = 0; i < szs_.size(); i++) {
+		if (szs_[i].len > 0) n_frag++;
+		if (szs_[i].first && szs_[i].len > 0) n_seq++;
+	}
+
+	int npos = 0;
+	int seq_id = -1;
+	TIndexOffU acc_frag_length = 0;
+	TIndexOffU acc_ref_length = 0;
+	fraglist_.resize(n_frag + 1);
+
+	for (int i = 0; i < szs_.size(); i++) {
+		if (szs_[i].len == 0) {
+			continue;
+		}
+
+		fraglist_[npos].start = acc_frag_length;
+		fraglist_[npos].length = szs_[i].len;
+		fraglist_[npos].start_in_seq = acc_ref_length + szs_[i].off;
+		fraglist_[npos].frag_id = i;
+		fraglist_[npos].frag_id = npos;
+		if (szs_[i].first) {
+			seq_id++;
+			fraglist_[npos].first = true;
+		}
+		fraglist_[npos].seq_id = seq_id;
+
+		acc_frag_length += szs_[i].len;
+		acc_ref_length += szs_[i].off + szs_[i].len;
+
+		npos++;
+	}
+
+	// Add Last Fragment(empty)
+	fraglist_[npos].start = acc_frag_length;
+	fraglist_[npos].length = 0;
+	fraglist_[npos].start_in_seq = acc_ref_length + szs_.back().off;
+}
+
+template<typename TStr>
+void NRG<TStr>::sort_rpt_grp(void)
+{
+	if (rpt_grp_.size() > 0) {
+		sort(rpt_grp_.begin(), rpt_grp_.begin() + rpt_grp_.size(), repeat_group_cmp);
+	}
+}
+
+template<typename TStr>
+void NRG<TStr>::save_repeat_groups(void)
+{
+	string rptinfo_filename = filename_ + ".rptinfo";
+	int len = rpt_grp_.size();
+	ofstream fp(rptinfo_filename.c_str());
+
+	for (int i = 0; i < len; i++) {
+		RepeatGroup& rg = rpt_grp_[i];
+		EList<TIndexOffU>& positions = rg.positions;
+
+		// @rpt_name length count
+		// pos0 pos1 ... pos15
+		// pos16 pos17 ... pos31
+		//
+		// where pos# = chr_name:pos
+
+		// Header line
+		fp << "@" << "rpt_" << i;
+		fp << "\t" << rg.repeat_sequence.length();
+		fp << "\t" << positions.size();
+		fp << "\t" << rg.repeat_sequence;
+		fp << endl;
+
+		// Positions
+		for (int j = 0; j < positions.size(); j++) {
+			if (j && (j % 16 == 0)) {
+				fp << endl;
+			}
+
+			if (j % 16) {
+				fp << "\t";
+			}
+
+			string chr_name;
+			TIndexOffU pos_in_chr;
+
+			get_genome_coord(positions[j], chr_name, pos_in_chr);
+
+			fp << chr_name << ":" << pos_in_chr;
+		}
+		fp << endl;
+	}		
+	fp.close();
+}
+
+template<typename TStr>
+void NRG<TStr>::fill_with_N(ofstream& fp, TIndexOffU start, TIndexOffU end_in_seq)
+{
+	// [pos_in_seq, end_in_seq) fill with N
+	for (; start < end_in_seq; start++) {
+		if (start && (start % output_width == 0)) {
+			fp << endl;
+		}
+		fp << "N";
+	}
+}
+
+template<typename TStr>
+void NRG<TStr>::savefile_rpt(ofstream& fp, RepeatGroup& rpt, int rpt_idx)
+{
+	// >rpt_###
+	// ACCAGGCATATA
+
+	// Name
+	fp << ">" << "rpt_" << rpt_idx << endl;
+
+	// Sequeunce
+	size_t rpt_len = rpt.repeat_sequence.length();
+	for (size_t i = 0; i < rpt_len; i += output_width) {
+		size_t out_len = std::min((size_t)output_width, (size_t)(rpt_len - i));
+
+		fp << rpt.repeat_sequence.substr(i, out_len) << endl;
+	}
+
+}
+
+template<typename TStr>
+void NRG<TStr>::savefile(void)
+{
+	string nonrpt_name = filename_ + ".nonrpt";
+	ofstream fp(nonrpt_name.c_str());
+
+	TIndexOffU ref_name_idx = 0;
+	size_t acc_sum_seq = 0;
+	size_t acc_sum_joined = 0;
+
+	for (int i = 0; i < szs_.size(); i++) {
+		RefRecord *rec = &szs_[i];
+
+		if (rec->first) {
+			if (i) {
+				fp << endl;
+			}
+			fp << ">" << ref_namelines_[ref_name_idx] << endl;
+			ref_name_idx++;
+			acc_sum_seq = 0;
+		}
+
+		if (rec->off) {
+			fill_with_N(fp, acc_sum_seq, acc_sum_seq + rec->off);
+			acc_sum_seq += rec->off;
+		}
+
+		if (rec->len) {
+			for (TIndexOffU start = acc_sum_joined; start < (acc_sum_joined + rec->len); start++, acc_sum_seq++) {
+				if (acc_sum_seq && (acc_sum_seq % output_width == 0)) {
+					fp << endl;
+				}
+				fp << "ACGTN"[s_[start]];
+			}
+			acc_sum_joined += rec->len;
+		}
+	}
+
+	fp << endl;
+
+	// save repeat sequnce 
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		savefile_rpt(fp, rpt_grp_[i], i);
+	}
+
+	fp.close();
+
+	// save rpt infos
+	save_repeat_groups();
+}
+
+/**
+ * TODO
+ * @brief 
+ *
+ * @param rpt_seq
+ * @param rpt_seq2
+ * @param rpt_range
+ */
+template<typename TStr>
+void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndexOffU>& rpt_range)
+{
+#if 0
+	// rpt_seq is always > 0
+	//
+	const int rpt_len = rpt_seq.length();
+
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		RepeatGroup& rg = rpt_grp_[i];
+		string& rseq = rg.repeat_sequence;
+		const int rlen = rseq.length();
+		if (rlen == 0) {
+			// skip
+			continue;
+		}
+
+		if (rlen > rpt_len) {
+			// check if rpt_seq is substring of rpt_groups sequeuce
+			if (rseq.find(rpt_seq) != string::npos) {
+				// substring. exit
+				return;
+			}
+		} else if (rlen <= rpt_len) {
+			// check if rpt_groups sequeuce is substring of rpt_seq
+			if (rpt_seq.find(rseq) != string::npos) {
+				// remove rseq
+				rg.repeat_sequence = "";
+			}
+		}
+	}
+#endif
+
+	// add to last
+	rpt_grp_.expand();
+	rpt_grp_.back().repeat_sequence = rpt_seq;
+	rpt_grp_.back().repeat_sequence2 = rpt_seq2;
+	rpt_grp_.back().positions = rpt_range;
+}
+
+#if 0
+/**
+ * @brief Remove empty repeat group
+ */
+template<typename TStr>
+void NRG<TStr>::adjust_repeat_group(void)
+{
+	EList<RepeatGroup> mgroup;
+
+	mgroup.reserveExact(rpt_grp_.size());
+	mgroup.swap(rpt_grp_);
+
+	for (int i = 0; i < mgroup.size(); i++) {
+		if (mgroup[i].repeat_sequence.length() > 0) {
+			rpt_grp_.push_back(mgroup[i]);
+		}
+	}
+}
+#else
+
+typedef pair<TIndexOffU, TIndexOffU> Range;
+static const Range EMPTY_RANGE = Range(1, 0);
+
+struct RepeatRange {
+	RepeatRange() {};
+	RepeatRange(Range r, int id) : 
+		range(r), rg_id(id) {};
+
+	Range range;
+	int rg_id;
+};
+
+static bool repeat_range_cmp(const RepeatRange& a, const RepeatRange& b)
+{
+	if ((a.range.second > b.range.second) ||
+			(a.range.second == b.range.second && a.range.first < b.range.first)) {
+		return true;
+	}
+
+	return false;
+}
+
+static bool cmp_by_rg_id(const RepeatRange& a, const RepeatRange& b)
+{
+	return a.rg_id < b.rg_id;
+}
+
+/**
+ * @brief return true iff a U b = a 
+ *
+ * @param a
+ * @param b
+ *
+ * @return 
+ */
+static bool range_mergeable(const Range& a, const Range& b)
+{
+	if (a.first <= b.first && a.second >= b.second) {
+		return true;
+	}
+
+	return false;
+}
+
+
+/**
+ * @brief Remove empty repeat group
+ */
+template<typename TStr>
+void NRG<TStr>::adjust_repeat_group(void)
+{
+	cerr << "CP " << "repeat_group size " << rpt_grp_.size() << endl;
+
+	int range_count = 0;
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		range_count += rpt_grp_[i].positions.size();
+	}
+
+	cerr << "CP " << "range_count " << range_count << endl;
+
+	cerr << "Build RepeatRange" << endl;
+
+	EList<RepeatRange> rpt_ranges;
+	rpt_ranges.reserveExact(range_count);
+
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		RepeatGroup& rg = rpt_grp_[i];
+		size_t s_len = rg.repeat_sequence.length();
+
+		for (int j = 0; j < rg.positions.size(); j++) {
+			rpt_ranges.push_back(RepeatRange(make_pair(rg.positions[j], rg.positions[j] + s_len), i));
+		}
+	}
+
+
+	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
+			repeat_range_cmp);
+
+	// Dump
+#if 0
+	for (int i = 0; i < rpt_ranges.size(); i++) {
+		cerr << "CP " << i ;
+		cerr << "\t" << rpt_ranges[i].range.first;
+		cerr << "\t" << rpt_ranges[i].range.second;
+		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].repeat_sequence;
+		cerr << "\t" << rpt_ranges[i].rg_id;
+		cerr << endl;
+	}
+#endif
+
+	// Merge
+	int merged_count = 0;
+	for (int i = 0; i < rpt_ranges.size() - 1;) {
+		int j = i + 1;
+		for (; j < rpt_ranges.size(); j++) {
+			// check i, j can be merged 
+			//
+
+			if (!range_mergeable(rpt_ranges[i].range, rpt_ranges[j].range)) {
+				break;
+			}
+
+			rpt_ranges[j].range = EMPTY_RANGE;
+			rpt_ranges[j].rg_id = std::numeric_limits<int>::max();
+			merged_count++;
+		}
+		i = j;
+	}
+
+	cerr << "CP ";
+	cerr << "merged_count: " << merged_count;
+	cerr << endl;
+
+	// Dump
+#if 0
+	for (int i = 0; i < rpt_ranges.size(); i++) {
+		if (rpt_ranges[i].range == EMPTY_RANGE) {
+			continue;
+		}
+		cerr << "CP " << i ;
+		cerr << "\t" << rpt_ranges[i].range.first;
+		cerr << "\t" << rpt_ranges[i].range.second;
+		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].repeat_sequence;
+		cerr << "\t" << rpt_ranges[i].rg_id;
+		cerr << endl;
+	}
+#endif
+
+	// sort by rg_id
+	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
+			cmp_by_rg_id);
+
+
+	/***********/
+
+	/* rebuild rpt_grp_ */
+	EList<RepeatGroup> mgroup;
+
+	mgroup.reserveExact(rpt_grp_.size());
+	mgroup.swap(rpt_grp_);
+
+	for (int i = 0; i < rpt_ranges.size() - 1;) {
+		if (rpt_ranges[i].rg_id == std::numeric_limits<int>::max()) {
+			break;
+		}
+
+		int j = i + 1;
+		for (; j < rpt_ranges.size(); j++) {
+			if (rpt_ranges[i].rg_id != rpt_ranges[j].rg_id) {
+				break;
+			}
+		}
+
+		/* [i, j) has a same rg_id */
+
+
+		int rg_id = rpt_ranges[i].rg_id;
+		rpt_grp_.expand();
+		rpt_grp_.back().repeat_sequence = mgroup[rg_id].repeat_sequence;
+		for (int k = i; k < j; k++) {
+			rpt_grp_.back().positions.push_back(rpt_ranges[k].range.first);
+		}
+
+		i = j;
+	}
+
+#if 0
+	EList<RepeatGroup> mgroup;
+
+	mgroup.reserveExact(rpt_grp_.size());
+	mgroup.swap(rpt_grp_);
+
+	for (int i = 0; i < mgroup.size(); i++) {
+		if (mgroup[i].repeat_sequence.length() > 0) {
+			rpt_grp_.push_back(mgroup[i]);
+		}
+	}
+#endif
+}
+#endif
+
+template<typename TStr>
+void NRG<TStr>::repeat_masking(void)
+{
+	for (int i = 0; i < rpt_grp_.size(); i++) {
+		RepeatGroup *rg = &rpt_grp_[i];
+
+		size_t rpt_sqn_len = rg->repeat_sequence.length();
+
+		for (int j = 0; j < rg->positions.size(); j++) {
+			TIndexOffU pos = rg->positions[j];
+
+			// masking [pos, pos + rpt_sqn_len) to 'N'
+			masking_with_N(s_, pos, rpt_sqn_len);
+		}
+	}
+}
+
+#if 0
+template<typename TStr>
+int NRG<TStr>::get_lcp(TIndexOffU a, TIndexOffU b)
+{
+    int k = 0;
+    TIndexOffU s_len = s_.length();
+    
+    while ((a + k) < s_len && (b + k) < s_len) {
+        if (s_[a + k] != s_[b + k]) {
+            break;
+        }
+        k++;
+    }
+    
+    return k;
+}
+#else
+template<typename TStr>
+int NRG<TStr>::get_lcp(TIndexOffU a, TIndexOffU b)
+{
+    int k = 0;
+    TIndexOffU s_len = s_.length();
+    
+    if (a >= s_len || b >= s_len) {
+        return 0;
+    }
+    
+#if 1
+    int a_frag_id = map_joined_pos_to_seq(a);
+    int b_frag_id = map_joined_pos_to_seq(b);
+    
+    if (a_frag_id < 0 || b_frag_id < 0) {
+        cerr << "CP " << a_frag_id << ", " << b_frag_id << endl;
+        return 0;
+    }
+    
+    size_t a_end = fraglist_[a_frag_id].start + fraglist_[a_frag_id].length;
+    size_t b_end = fraglist_[b_frag_id].start + fraglist_[b_frag_id].length;
+    
+    assert_leq(a_end, s_len);
+    assert_leq(b_end, s_len);
+#else
+    size_t a_end = s_len;
+    size_t b_end = s_len;
+#endif
+    
+    
+    while ((a + k) < a_end && (b + k) < b_end) {
+        if (s_[a + k] != s_[b + k]) {
+            break;
+        }
+        k++;
+    }
+    
+    return k;
+}
+#endif
+
 /**
  * Drive the index construction process and optionally sanity-check the
  * result.
@@ -541,16 +1337,17 @@ static void driver(
 	// sequences.  A record represents a stretch of unambiguous
 	// characters in one of the input sequences.
 	EList<RefRecord> szs(MISC_CAT);
+	EList<string> ref_names;
 	std::pair<size_t, size_t> sztot;
 	{
 		if(verbose) cerr << "Reading reference sizes" << endl;
 		Timer _t(cerr, "  Time reading reference sizes: ", verbose);
-        sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck);
+        sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck, &ref_names);
 	}
 	assert_gt(sztot.first, 0);
 	assert_gt(sztot.second, 0);
 	assert_gt(szs.size(), 0);
-    
+
     // Compose text strings into single string
     cerr << "Calculating joined length" << endl;
     TIndexOffU jlen = 0;
@@ -576,6 +1373,10 @@ static void driver(
         
     // Succesfully obtained joined reference string
     assert_geq(s.length(), jlen);
+
+	// NRG
+	NRG<TStr> nrg(szs, ref_names, s, infiles[0]);
+
     if(bmax != (TIndexOffU)OFF_MASK) {
         // VMSG_NL("bmax according to bmax setting: " << bmax);
     }
@@ -641,12 +1442,72 @@ static void driver(
             assert_eq(bsa.size(), s.length() + 1);
             cerr << "Converting suffix-array elements to index image" << endl;
             EList<string> suffixes;
+
             {
                 // CP - this is a suffix array
                 TIndexOffU count = 0;
+                
+				EList<TIndexOffU> rpt_positions;
+				TIndexOffU min_lcp_len = s.length();
+
                 while(count < s.length() + 1) {
                     TIndexOffU saElt = bsa.nextSuffix();
                     count++;
+
+					if (count && (count % 1000000 == 0)) {
+						cerr << "SA count " << count << endl;
+					}
+
+					if (rpt_positions.size() == 0) {
+						rpt_positions.expand();
+						rpt_positions.back() = saElt;
+					} else {
+						TIndexOffU prev_saElt = rpt_positions.back();
+
+						// calculate common prefix length between two text.
+						//   text1 is started from prev_saElt and text2 is started from saElt
+						int lcp_len = nrg.get_lcp(prev_saElt, saElt);
+                        
+                        // check prev_saElt
+
+						if (lcp_len >= repeat_length) {
+							rpt_positions.expand();
+							rpt_positions.back() = saElt;
+
+							if (min_lcp_len > lcp_len) {
+								min_lcp_len = lcp_len;
+							}
+
+						} else {
+							if (rpt_positions.size() >= repeat_count) {
+								// save ranges
+								//cerr << "CP " << "we have " << rpt_positions.size() << " positions" << ", " << min_lcp_len << endl;
+								//
+
+								rpt_positions.sort();
+
+								string ss = get_string(s, prev_saElt, min_lcp_len);
+
+								string ss2 = get_string(s, prev_saElt + min_lcp_len, min_lcp_len );
+								ss2 += " " + to_string(min_lcp_len);
+
+								nrg.add_repeat_group(ss, ss2, rpt_positions);
+
+#if 0
+								rg.positions = repeat_range;
+								rg.positions.sort();
+								rg.repeat_sequence = get_string(s, prev_saElt, min_lcp_len);
+#endif
+							}
+
+							// flush previous positions 
+							rpt_positions.resize(1);
+							rpt_positions.back() = saElt;
+							min_lcp_len = s.length();
+						}
+					}
+
+#if 0//{{{
                     // DK - debugging purposes
                     if(count < 100) {
                         suffixes.expand();
@@ -710,8 +1571,29 @@ static void driver(
                                         res);
                         }
                     }
+#endif//}}}
+
                 }
+
+				nrg.adjust_repeat_group();
+				// we found repeat_group
+				cerr << "CP " << nrg.rpt_grp_.size() << " groups found" << endl;
+
+				//dump_tstr(s);
+				// Masking repeat sequeuce to 'N'
+				nrg.repeat_masking();
+
+				//cerr << "After masking" << endl;
+				//dump_tstr(nrg.s_);
+
+				// write to FA
+				// sequence
+				// repeat sequeuce
+				nrg.savefile();
+
+				break;
             }
+
         } catch(bad_alloc& e) {
             if(passMemExc) {
                 cerr << "  Ran out of memory; automatically trying more memory-economical parameters." << endl;
