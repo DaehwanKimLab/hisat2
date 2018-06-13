@@ -105,6 +105,8 @@ public:
         }
         writeIndex<index_t>(f_out, positions.size(), bigEndian);
         for(index_t i = 0; i < positions.size(); i++) {
+            writeIndex<index_t>(f_out, positions[i].tid, bigEndian);
+            writeIndex<index_t>(f_out, positions[i].toff, bigEndian);
             writeIndex<index_t>(f_out, positions[i].joinedOff, bigEndian);
             writeU8(f_out, positions[i].fw);
         }
@@ -124,6 +126,8 @@ public:
         index_t numPositions = readIndex<index_t>(f_in, bigEndian);
         positions.resizeExact(numPositions);
         for(index_t i = 0; i < numPositions; i++) {
+            positions[i].tid = readIndex<index_t>(f_in, bigEndian);
+            positions[i].toff = readIndex<index_t>(f_in, bigEndian);
             positions[i].joinedOff = readIndex<index_t>(f_in, bigEndian);
             positions[i].fw = readU8(f_in);
         }
@@ -163,7 +167,7 @@ public:
     
     bool findCommonCoords(index_t pos,
                           index_t pos2,
-                          EList<pair<index_t, index_t> >& common_positions,
+                          EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& common_positions,
                           index_t dist = 1000) const {
         pair<index_t, index_t> repeat1(pos, 0);
         index_t repeatIdx = _repeatMap.bsearchLoBound(repeat1);
@@ -189,15 +193,23 @@ public:
             if(i_pos <= j_pos) {
                 if(i_pos + dist >= j_pos) {
                     common_positions.expand();
-                    common_positions.back().first = i_pos + adjustedPos;
-                    common_positions.back().second = j_pos + adjustedPos2;
+                    common_positions.back().first = positions[i];
+                    common_positions.back().first.toff += adjustedPos;
+                    common_positions.back().first.joinedOff += adjustedPos;
+                    common_positions.back().second = positions2[j];
+                    common_positions.back().second.toff += adjustedPos2;
+                    common_positions.back().second.joinedOff += adjustedPos2;
                 }
                 i += 1;
             } else {
                 if(i_pos <= j_pos + dist) {
                     common_positions.expand();
-                    common_positions.back().first = i_pos + adjustedPos;
-                    common_positions.back().second = j_pos + adjustedPos2;
+                    common_positions.back().first = positions[i];
+                    common_positions.back().first.toff += adjustedPos;
+                    common_positions.back().first.joinedOff += adjustedPos;
+                    common_positions.back().second = positions2[j];
+                    common_positions.back().second.toff += adjustedPos2;
+                    common_positions.back().second.joinedOff += adjustedPos2;
                 }
                 j += 1;
             }

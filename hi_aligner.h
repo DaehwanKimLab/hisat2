@@ -4169,7 +4169,7 @@ public:
                     }
                 }
                 
-                EList<pair<index_t, index_t> >& positions = _positions;
+                EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& positions = _positions;
                 for(size_t i = 0; i < _genomeHits_rep[0].size(); i++) {
                     for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
                         positions.clear();
@@ -4178,23 +4178,14 @@ public:
                                                   positions);
                    
                         for(size_t p = 0; p < positions.size(); p++) {
-                            index_t tidx = 0, toff = 0, tlen = 0;
-                            bool straddled = false;
-                            gfm.joinedToTextOff(
-                                                1,
-                                                positions[p].first,
-                                                tidx,
-                                                toff,
-                                                tlen,
-                                                true,        // reject straddlers?
-                                                straddled);  // straddled?
-                            
                             _genomeHits.clear();
                             _genomeHits.expand();
                             _genomeHits.back() = _genomeHits_rep[0][i];
-                            _genomeHits.back()._tidx = tidx;
-                            _genomeHits.back()._toff = toff;
-                            _genomeHits.back()._joinedOff = positions[p].first;
+                            _genomeHits.back()._tidx = positions[p].first.tid;
+                            _genomeHits.back()._toff = positions[p].first.toff;
+                            _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
+                            
+                            bool fw1 = (_genomeHits.back()._fw ? _genomeHits_rep[0][i].fw() : !_genomeHits_rep[0][i].fw());
                             
                             // extend the partial alignments bidirectionally using
                             // local search, extension, and (less often) global search
@@ -4209,7 +4200,7 @@ public:
                                          swa,
                                          ssdb,
                                          0,
-                                         _genomeHits_rep[0][i].fw(),
+                                         fw1,
                                          wlm,
                                          prm,
                                          swm,
@@ -4217,23 +4208,14 @@ public:
                                          rnd,
                                          sink);
                             
-                            index_t tidx2 = 0, toff2 = 0, tlen2 = 0;
-                            bool straddled2 = false;
-                            gfm.joinedToTextOff(
-                                                1,
-                                                positions[p].second,
-                                                tidx2,
-                                                toff2,
-                                                tlen2,
-                                                true,        // reject straddlers?
-                                                straddled2);  // straddled?
-                            
                             _genomeHits.clear();
                             _genomeHits.expand();
                             _genomeHits.back() = _genomeHits_rep[1][j];
-                            _genomeHits.back()._tidx = tidx2;
-                            _genomeHits.back()._toff = toff2;
-                            _genomeHits.back()._joinedOff = positions[p].second;
+                            _genomeHits.back()._tidx = positions[p].second.tid;
+                            _genomeHits.back()._toff = positions[p].second.toff;
+                            _genomeHits.back()._joinedOff = positions[p].second.joinedOff;
+                            
+                            bool fw2 = (_genomeHits.back()._fw ? _genomeHits_rep[1][j].fw() : !_genomeHits_rep[1][j].fw());
                             
                             // extend the partial alignments bidirectionally using
                             // local search, extension, and (less often) global search
@@ -4248,7 +4230,7 @@ public:
                                          swa,
                                          ssdb,
                                          1,
-                                         _genomeHits_rep[1][j].fw(),
+                                         fw2,
                                          wlm,
                                          prm,
                                          swm,
@@ -4933,7 +4915,7 @@ protected:
     EList<GenomeHit<index_t> >     _genomeHits_rep[2];
     EList<bool>                    _genomeHits_done;
     ELList<Coord>                  _coords;
-    EList<pair<index_t, index_t> > _positions;
+    EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >     _positions;
     ELList<SpliceSite>             _spliceSites;
     
     EList<pair<index_t, index_t> >  _concordantPairs;
