@@ -3829,6 +3829,9 @@ static void driver(
                                  true,         // load rstarts (in forward index)
                                  !noRefNames,  // load names?
                                  startVerbose);
+            
+            EList<RefRecord> dummy_szs;
+            repeatdb->construct(dummy_szs);
         }
     }
     

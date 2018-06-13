@@ -156,7 +156,7 @@ public:
     EList<RepeatAllele<index_t> >&       repeatAlleles()       { return _repeatAlleles; }
     const EList<RepeatAllele<index_t> >& repeatAlleles() const { return _repeatAlleles; }
     
-    void constructMap() {
+    void construct(const EList<RefRecord>& szs) {
         _repeatMap.clear();
         for(index_t i = 0; i < _repeatAlleles.size(); i++) {
             _repeatMap.expand();

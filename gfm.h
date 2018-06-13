@@ -796,7 +796,6 @@ public:
                     repeatAlleles.back().read(in7, this->toBe());
                 }
                 assert_eq(repeatAlleles.size(), numRepeatAlleles);
-                repeatdb->constructMap();
             }
         }
         

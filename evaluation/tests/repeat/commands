@@ -1,2 +1,7 @@
 date; time bowtie2 -X 800 --extends 1000 --score-min C,0 -p 3 -x 20 -f -1 1.fa -2 2.fa > bowtie2.sam
 
+date; time hisat2 --no-spliced-alignment --score-min C,0 -X 800 -p 3 -x 20 -f -1 1.fa -2 2.fa > hisat2.sam
+
+bowtie2-build -t 3 20_mask.fa,20_rep.fa 20_mask
+
+hisat2-build -p 3 20_mask.fa,20_rep.fa 20_mask
