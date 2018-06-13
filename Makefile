@@ -141,7 +141,8 @@ CONSTRUCT_CPPS = \
 	aligner_swsse_ee_u8.cpp \
 	aligner_swsse_loc_i16.cpp \
 	aligner_swsse_loc_u8.cpp \
-	aligner_swsse.cpp
+	aligner_swsse.cpp \
+	repeat_builder.cpp
 
 HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
 HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
