@@ -410,8 +410,7 @@ if(defined($ref_str)) {
 	push @to_delete, ("$ofn.1.".$idx_ext, "$ofn.2.".$idx_ext, 
 	                  "$ofn.3.".$idx_ext, "$ofn.4.".$idx_ext,
 			  "$ofn.5.".$idx_ext, "$ofn.6.".$idx_ext,
-	                  "$ofn.rev.1.".$idx_ext, "$ofn.rev.2.".$idx_ext,
-			  "$ofn.rev.5.".$idx_ext, "$ofn.rev.6.".$idx_ext);
+			  "$ofn.7.".$idx_ext, "$ofn.8.".$idx_ext);
 }
 
 Info("After arg handling:\n");

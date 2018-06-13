@@ -163,11 +163,6 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                          gpol,
                          leftext,
                          rightext);
-        
-        if(repeatdb.isRepeat(genomeHit.ref())) {
-            this->_genomeHits_rep[rdi].expand();
-            this->_genomeHits_rep[rdi].back() = genomeHit;
-        }
     }
     
     // for the candidate alignments, examine the longest (best) one first

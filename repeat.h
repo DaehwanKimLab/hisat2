@@ -97,6 +97,8 @@ public:
     bool write(ofstream& f_out, bool bigEndian) const {
         writeIndex<index_t>(f_out, repID, bigEndian);
         writeIndex<index_t>(f_out, alleleID, bigEndian);
+        writeIndex<index_t>(f_out, repPos, bigEndian);
+        writeIndex<index_t>(f_out, repLen, bigEndian);
         writeIndex<index_t>(f_out, snpIDs.size(), bigEndian);
         for(index_t i = 0; i < snpIDs.size(); i++) {
             writeIndex<index_t>(f_out, snpIDs[i], bigEndian);
@@ -112,6 +114,8 @@ public:
     bool read(ifstream& f_in, bool bigEndian) {
         repID = readIndex<index_t>(f_in, bigEndian);
         alleleID = readIndex<index_t>(f_in, bigEndian);
+        repPos = readIndex<index_t>(f_in, bigEndian);
+        repLen = readIndex<index_t>(f_in, bigEndian);
         index_t numSNPs = readIndex<index_t>(f_in, bigEndian);
         snpIDs.resizeExact(numSNPs);
         for(index_t i = 0; i < numSNPs; i++) {
@@ -150,44 +154,55 @@ public:
     
     void constructMap() {
         _repeatMap.clear();
-        for(size_t i = 0; i < _repeatAlleles.size(); i++) {
-            _repeatMap[_repeatAlleles[i].repID] = i;
+        for(index_t i = 0; i < _repeatAlleles.size(); i++) {
+            _repeatMap.expand();
+            _repeatMap.back().first = _repeatAlleles[i].repPos + _repeatAlleles[i].repLen;
+            _repeatMap.back().second = i;
         }
     }
     
-    bool isRepeat(index_t tid) const {
-        return _repeatMap.find(tid) != _repeatMap.end();
-    }
-    
-    bool findCommonCoords(index_t tid, index_t tid2, EList<index_t>& common_positions, index_t dist = 1000) const {
-        //assert_neq(_repeatMap.find(tid), _repeatMap.end());
-        //assert_neq(_repeatMap.find(tid2), _repeatMap.end());
-        
-        index_t repeatIdx = _repeatMap.find(tid)->second;
-        index_t repeatIdx2 = _repeatMap.find(tid2)->second;
-        
+    bool findCommonCoords(index_t pos,
+                          index_t pos2,
+                          EList<pair<index_t, index_t> >& common_positions,
+                          index_t dist = 1000) const {
+        pair<index_t, index_t> repeat1(pos, 0);
+        index_t repeatIdx = _repeatMap.bsearchLoBound(repeat1);
         assert_lt(repeatIdx, _repeatAlleles.size());
         const EList<RepeatCoord<index_t> >& positions = _repeatAlleles[repeatIdx].positions;
+        index_t adjustedPos = pos;
+        if(repeatIdx > 0) {
+            adjustedPos -= _repeatMap[repeatIdx-1].first;
+        }
         
+        pair<index_t, index_t> repeat2(pos2, 0);
+        index_t repeatIdx2 = _repeatMap.bsearchLoBound(repeat2);
         assert_lt(repeatIdx2, _repeatAlleles.size());
         const EList<RepeatCoord<index_t> >& positions2 = _repeatAlleles[repeatIdx2].positions;
+        index_t adjustedPos2 = pos2;
+        if(repeatIdx2 > 0) {
+            adjustedPos2 -= _repeatMap[repeatIdx2-1].first;
+        }
         
         index_t i = 0, j = 0;
         while(i < positions.size() && j < positions2.size()) {
             index_t i_pos = positions[i].joinedOff, j_pos = positions2[j].joinedOff;
             if(i_pos <= j_pos) {
                 if(i_pos + dist >= j_pos) {
-                    common_positions.push_back(i_pos);
+                    common_positions.expand();
+                    common_positions.back().first = i_pos + adjustedPos;
+                    common_positions.back().second = j_pos + adjustedPos2;
                 }
                 i += 1;
             } else {
                 if(i_pos <= j_pos + dist) {
-                    common_positions.push_back(j_pos);
+                    common_positions.expand();
+                    common_positions.back().first = i_pos + adjustedPos;
+                    common_positions.back().second = j_pos + adjustedPos2;
                 }
                 j += 1;
             }
         }
-        
+
         return common_positions.size() > 0;
     }
 
@@ -215,7 +230,7 @@ private:
     
 private:
     EList<RepeatAllele<index_t> >  _repeatAlleles;
-    map<index_t, index_t>          _repeatMap; // tid to repeat id
+    EList<pair<index_t, index_t> > _repeatMap; // pos to repeat id
 };
 
 #endif /*ifndef REPEAT_H_*/

@@ -1953,6 +1953,7 @@ typedef TIndexOffU index_t;
 typedef uint16_t local_index_t;
 static PairedPatternSource*              multiseed_patsrc;
 static HGFM<index_t>*                    multiseed_gfm;
+static HGFM<index_t>*                    multiseed_rgfm;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
 static AlnSink<index_t>*                 multiseed_msink;
@@ -3097,6 +3098,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	assert(multiseedMms == 0);
 	PairedPatternSource&             patsrc   = *multiseed_patsrc;
 	const HGFM<index_t>&             gfm      = *multiseed_gfm;
+    const HGFM<index_t>*             rgfm     = multiseed_rgfm;
 	const Scoring&                   sc       = *multiseed_sc;
     const BitPairReference&          ref      = *multiseed_refs;
 	AlnSink<index_t>&                msink    = *multiseed_msink;
@@ -3482,6 +3484,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                                 *multiseed_tpol,
                                                 *gpol,
                                                 gfm,
+                                                rgfm,
                                                 *altdb,
                                                 *repeatdb,
                                                 ref,
@@ -3597,12 +3600,14 @@ static void multiseedSearch(
                             PairedPatternSource& patsrc,  // pattern source
                             AlnSink<index_t>& msink,      // hit sink
                             HGFM<index_t>& gfm,           // index of original text
+                            HGFM<index_t>* rgfm,          // index of repeat sequences
                             BitPairReference* refs,
                             OutFileBuf *metricsOfb)
 {
     multiseed_patsrc       = &patsrc;
 	multiseed_msink        = &msink;
 	multiseed_gfm          = &gfm;
+    multiseed_rgfm         = rgfm;
 	multiseed_sc           = &sc;
     multiseed_tpol         = &tpol;
     gpol                   = &gp;
@@ -3760,6 +3765,73 @@ static void driver(
                            !noRefNames,  // load names?
                            startVerbose);
     }
+    HGFM<index_t, local_index_t>* rgfm = NULL;
+    string rep_adjIdxBase = adjIdxBase + ".rep";
+    bool rep_index_exists = false;
+    {
+        std::ifstream infile(rep_adjIdxBase + ".1.ht2");
+        rep_index_exists = infile.good();
+    }
+    if(rep_index_exists) {
+        rgfm = new HGFM<index_t, local_index_t>(
+                                                rep_adjIdxBase,
+                                                altdb,
+                                                repeatdb,
+                                                -1,       // fw index
+                                                true,     // index is for the forward direction
+                                                /* overriding: */ offRate,
+                                                0, // amount to add to index offrate or <= 0 to do nothing
+                                                useMm,    // whether to use memory-mapped files
+                                                useShmem, // whether to use shared memory
+                                                mmSweep,  // sweep memory-mapped files
+                                                !noRefNames, // load names?
+                                                true,        // load SA sample?
+                                                true,        // load ftab?
+                                                true,        // load rstarts?
+                                                !no_spliced_alignment, // load splice sites?
+                                                gVerbose, // whether to be talkative
+                                                startVerbose, // talkative during initialization
+                                                false /*passMemExc*/,
+                                                sanityCheck,
+                                                use_haplotype); //use haplotypes?
+
+        // CP to do
+#if 0
+        if(sanityCheck && !os.empty()) {
+            // Sanity check number of patterns and pattern lengths in GFM
+            // against original strings
+            assert_eq(os.size(), gfm.nPat());
+            for(size_t i = 0; i < os.size(); i++) {
+                assert_eq(os[i].length(), rgfm->plen()[i]);
+            }
+        }
+        // Sanity-check the restored version of the GFM
+        if(sanityCheck && !os.empty()) {
+            rgfm->loadIntoMemory(
+                               -1, // fw index
+                               true, // load SA sample
+                               true, // load ftab
+                               true, // load rstarts
+                               !noRefNames,
+                               startVerbose);
+            rgfm->checkOrigs(os, false);
+            rgfm->evictFromMemory();
+        }
+#endif
+        {
+            // Load the other half of the index into memory
+            assert(!rgfm->isInMemory());
+            Timer _t(cerr, "Time loading forward index: ", timing);
+            rgfm->loadIntoMemory(
+                                 -1, // not the reverse index
+                                 true,         // load SA samp? (yes, need forward index's SA samp)
+                                 true,         // load ftab (in forward index)
+                                 true,         // load rstarts (in forward index)
+                                 !noRefNames,  // load names?
+                                 startVerbose);
+        }
+    }
+    
     if(!saw_k) {
         if(gfm.gh().linearFM()) khits = 5;
         else                    khits = 10;
@@ -3983,6 +4055,7 @@ static void driver(
                         *patsrc, // pattern source
                         *mssink, // hit sink
                         gfm,     // BWT
+                        rgfm,
                         refs.get(),
                         metricsOfb);
 		// Evict any loaded indexes from memory
@@ -4031,6 +4104,7 @@ static void driver(
         delete repeatdb;
         delete ssdb;
 		delete metricsOfb;
+        delete rgfm;
 		if(fout != NULL) {
 			delete fout;
 		}
