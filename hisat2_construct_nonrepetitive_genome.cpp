@@ -613,8 +613,7 @@ class NRG {
 	};
 
 	struct RepeatGroup {
-		string repeat_sequence;
-		string repeat_sequence2;
+		string rpt_seq;
 		EList<TIndexOffU> positions;
 	};
 
@@ -671,14 +670,13 @@ public:
 	}
 
 	void sort_rpt_grp(void);
-	void save_repeat_groups(void);
-	void fill_with_N(ofstream& fp, TIndexOffU start, TIndexOffU end_in_seq);
 
-	// Save single repeatgroup to fp
-	void savefile_rpt(ofstream& fp, RepeatGroup& rpt, int rpt_idx);
 	void savefile(void);
+	void saveRepeatSequence(void);
+	void saveRepeatGroup(void);
 
-	void add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndexOffU>& rpt_range);
+
+	void add_repeat_group(string& rpt_seq, EList<TIndexOffU>& rpt_range);
 	void adjust_repeat_group(void);
 	void repeat_masking(void);
 
@@ -825,45 +823,54 @@ void NRG<TStr>::sort_rpt_grp(void)
 }
 
 template<typename TStr>
-void NRG<TStr>::save_repeat_groups(void)
+void NRG<TStr>::saveRepeatGroup(void)
 {
-	string rptinfo_filename = filename_ + ".rptinfo";
-	int len = rpt_grp_.size();
+	string rptinfo_filename = filename_ + ".rep.info";
+
+	int rpt_count = rpt_grp_.size();
+	TIndexOffU acc_pos = 0;
+
 	ofstream fp(rptinfo_filename.c_str());
 
-	for (int i = 0; i < len; i++) {
+	for (int i = 0; i < rpt_count; i++) {
 		RepeatGroup& rg = rpt_grp_[i];
 		EList<TIndexOffU>& positions = rg.positions;
 
-		// @rpt_name length count
-		// pos0 pos1 ... pos15
-		// pos16 pos17 ... pos31
+		// >rpt_name*0\trep\trep_pos\trep_len\tpos_count\t0
+		// chr_name:pos:direction chr_name:pos:direction
 		//
-		// where pos# = chr_name:pos
+		// >rep1*0	rep	0	100	470	0
+		// 22:112123123:+ 22:1232131113:+
+		//
 
 		// Header line
-		fp << "@" << "rpt_" << i;
-		fp << "\t" << rg.repeat_sequence.length();
+		fp << ">" << "rpt_" << i << "*0";
+		fp << "\t" << "rep"; // TODO
+		fp << "\t" << acc_pos;
+		fp << "\t" << rg.rpt_seq.length();
 		fp << "\t" << positions.size();
-		fp << "\t" << rg.repeat_sequence;
+		fp << "\t" << "0"; 
 		fp << endl;
+
+		acc_pos += rg.rpt_seq.length();
 
 		// Positions
 		for (int j = 0; j < positions.size(); j++) {
-			if (j && (j % 16 == 0)) {
+			if (j && (j % 10 == 0)) {
 				fp << endl;
 			}
 
-			if (j % 16) {
-				fp << "\t";
+			if (j % 10) {
+				fp << " ";
 			}
 
 			string chr_name;
 			TIndexOffU pos_in_chr;
 
 			get_genome_coord(positions[j], chr_name, pos_in_chr);
+			char direction = '+';
 
-			fp << chr_name << ":" << pos_in_chr;
+			fp << chr_name << ":" << pos_in_chr << ":" << direction;
 		}
 		fp << endl;
 	}		
@@ -871,85 +878,54 @@ void NRG<TStr>::save_repeat_groups(void)
 }
 
 template<typename TStr>
-void NRG<TStr>::fill_with_N(ofstream& fp, TIndexOffU start, TIndexOffU end_in_seq)
+void NRG<TStr>::saveRepeatSequence(void)
 {
-	// [pos_in_seq, end_in_seq) fill with N
-	for (; start < end_in_seq; start++) {
-		if (start && (start % output_width == 0)) {
-			fp << endl;
+	string fname = filename_ + ".rep.fa";
+
+	ofstream fp(fname.c_str());
+
+	/* TODO */
+	fp << ">" << "rep" << endl;
+
+	int oskip = 0;
+
+	for (TIndexOffU grp_idx = 0; grp_idx < rpt_grp_.size(); grp_idx++) {
+
+		RepeatGroup& rg = rpt_grp_[grp_idx];
+		size_t seq_len = rg.rpt_seq.length();
+
+		TIndexOffU si = 0;
+		while (si < seq_len) {
+			size_t out_len = std::min((size_t)(output_width - oskip), (size_t)(seq_len - si));
+
+			fp << rg.rpt_seq.substr(si, out_len);
+
+			if ((oskip + out_len) == output_width) {
+				fp << endl;
+				oskip = 0;
+			} else {
+				// last line
+				oskip = oskip + out_len;
+			}
+
+			si += out_len;
 		}
-		fp << "N";
 	}
-}
-
-template<typename TStr>
-void NRG<TStr>::savefile_rpt(ofstream& fp, RepeatGroup& rpt, int rpt_idx)
-{
-	// >rpt_###
-	// ACCAGGCATATA
-
-	// Name
-	fp << ">" << "rpt_" << rpt_idx << endl;
-
-	// Sequeunce
-	size_t rpt_len = rpt.repeat_sequence.length();
-	for (size_t i = 0; i < rpt_len; i += output_width) {
-		size_t out_len = std::min((size_t)output_width, (size_t)(rpt_len - i));
-
-		fp << rpt.repeat_sequence.substr(i, out_len) << endl;
+	if (oskip) {
+		fp << endl;
 	}
 
+	fp.close();
 }
 
 template<typename TStr>
 void NRG<TStr>::savefile(void)
 {
-	string nonrpt_name = filename_ + ".nonrpt";
-	ofstream fp(nonrpt_name.c_str());
+	// save repeat sequences
+	saveRepeatSequence();
 
-	TIndexOffU ref_name_idx = 0;
-	size_t acc_sum_seq = 0;
-	size_t acc_sum_joined = 0;
-
-	for (int i = 0; i < szs_.size(); i++) {
-		RefRecord *rec = &szs_[i];
-
-		if (rec->first) {
-			if (i) {
-				fp << endl;
-			}
-			fp << ">" << ref_namelines_[ref_name_idx] << endl;
-			ref_name_idx++;
-			acc_sum_seq = 0;
-		}
-
-		if (rec->off) {
-			fill_with_N(fp, acc_sum_seq, acc_sum_seq + rec->off);
-			acc_sum_seq += rec->off;
-		}
-
-		if (rec->len) {
-			for (TIndexOffU start = acc_sum_joined; start < (acc_sum_joined + rec->len); start++, acc_sum_seq++) {
-				if (acc_sum_seq && (acc_sum_seq % output_width == 0)) {
-					fp << endl;
-				}
-				fp << "ACGTN"[s_[start]];
-			}
-			acc_sum_joined += rec->len;
-		}
-	}
-
-	fp << endl;
-
-	// save repeat sequnce 
-	for (int i = 0; i < rpt_grp_.size(); i++) {
-		savefile_rpt(fp, rpt_grp_[i], i);
-	}
-
-	fp.close();
-
-	// save rpt infos
-	save_repeat_groups();
+	// save repeat infos
+	saveRepeatGroup();
 }
 
 /**
@@ -961,7 +937,7 @@ void NRG<TStr>::savefile(void)
  * @param rpt_range
  */
 template<typename TStr>
-void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndexOffU>& rpt_range)
+void NRG<TStr>::add_repeat_group(string& rpt_seq, EList<TIndexOffU>& rpt_range)
 {
 #if 0
 	// rpt_seq is always > 0
@@ -970,7 +946,7 @@ void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndex
 
 	for (int i = 0; i < rpt_grp_.size(); i++) {
 		RepeatGroup& rg = rpt_grp_[i];
-		string& rseq = rg.repeat_sequence;
+		string& rseq = rg.rpt_seq;
 		const int rlen = rseq.length();
 		if (rlen == 0) {
 			// skip
@@ -987,7 +963,7 @@ void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndex
 			// check if rpt_groups sequeuce is substring of rpt_seq
 			if (rpt_seq.find(rseq) != string::npos) {
 				// remove rseq
-				rg.repeat_sequence = "";
+				rg.rpt_seq = "";
 			}
 		}
 	}
@@ -995,8 +971,7 @@ void NRG<TStr>::add_repeat_group(string& rpt_seq, string& rpt_seq2, EList<TIndex
 
 	// add to last
 	rpt_grp_.expand();
-	rpt_grp_.back().repeat_sequence = rpt_seq;
-	rpt_grp_.back().repeat_sequence2 = rpt_seq2;
+	rpt_grp_.back().rpt_seq = rpt_seq;
 	rpt_grp_.back().positions = rpt_range;
 }
 
@@ -1013,7 +988,7 @@ void NRG<TStr>::adjust_repeat_group(void)
 	mgroup.swap(rpt_grp_);
 
 	for (int i = 0; i < mgroup.size(); i++) {
-		if (mgroup[i].repeat_sequence.length() > 0) {
+		if (mgroup[i].rpt_seq.length() > 0) {
 			rpt_grp_.push_back(mgroup[i]);
 		}
 	}
@@ -1087,7 +1062,7 @@ void NRG<TStr>::adjust_repeat_group(void)
 
 	for (int i = 0; i < rpt_grp_.size(); i++) {
 		RepeatGroup& rg = rpt_grp_[i];
-		size_t s_len = rg.repeat_sequence.length();
+		size_t s_len = rg.rpt_seq.length();
 
 		for (int j = 0; j < rg.positions.size(); j++) {
 			rpt_ranges.push_back(RepeatRange(make_pair(rg.positions[j], rg.positions[j] + s_len), i));
@@ -1104,12 +1079,13 @@ void NRG<TStr>::adjust_repeat_group(void)
 		cerr << "CP " << i ;
 		cerr << "\t" << rpt_ranges[i].range.first;
 		cerr << "\t" << rpt_ranges[i].range.second;
-		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].repeat_sequence;
+		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].rpt_seq;
 		cerr << "\t" << rpt_ranges[i].rg_id;
 		cerr << endl;
 	}
 #endif
 
+#if 1	
 	// Merge
 	int merged_count = 0;
 	for (int i = 0; i < rpt_ranges.size() - 1;) {
@@ -1132,6 +1108,7 @@ void NRG<TStr>::adjust_repeat_group(void)
 	cerr << "CP ";
 	cerr << "merged_count: " << merged_count;
 	cerr << endl;
+#endif
 
 	// Dump
 #if 0
@@ -1142,7 +1119,7 @@ void NRG<TStr>::adjust_repeat_group(void)
 		cerr << "CP " << i ;
 		cerr << "\t" << rpt_ranges[i].range.first;
 		cerr << "\t" << rpt_ranges[i].range.second;
-		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].repeat_sequence;
+		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].rpt_seq;
 		cerr << "\t" << rpt_ranges[i].rg_id;
 		cerr << endl;
 	}
@@ -1178,7 +1155,7 @@ void NRG<TStr>::adjust_repeat_group(void)
 
 		int rg_id = rpt_ranges[i].rg_id;
 		rpt_grp_.expand();
-		rpt_grp_.back().repeat_sequence = mgroup[rg_id].repeat_sequence;
+		rpt_grp_.back().rpt_seq = mgroup[rg_id].rpt_seq;
 		for (int k = i; k < j; k++) {
 			rpt_grp_.back().positions.push_back(rpt_ranges[k].range.first);
 		}
@@ -1193,7 +1170,7 @@ void NRG<TStr>::adjust_repeat_group(void)
 	mgroup.swap(rpt_grp_);
 
 	for (int i = 0; i < mgroup.size(); i++) {
-		if (mgroup[i].repeat_sequence.length() > 0) {
+		if (mgroup[i].rpt_seq.length() > 0) {
 			rpt_grp_.push_back(mgroup[i]);
 		}
 	}
@@ -1207,7 +1184,7 @@ void NRG<TStr>::repeat_masking(void)
 	for (int i = 0; i < rpt_grp_.size(); i++) {
 		RepeatGroup *rg = &rpt_grp_[i];
 
-		size_t rpt_sqn_len = rg->repeat_sequence.length();
+		size_t rpt_sqn_len = rg->rpt_seq.length();
 
 		for (int j = 0; j < rg->positions.size(); j++) {
 			TIndexOffU pos = rg->positions[j];
@@ -1488,15 +1465,12 @@ static void driver(
 
 								string ss = get_string(s, prev_saElt, min_lcp_len);
 
-								string ss2 = get_string(s, prev_saElt + min_lcp_len, min_lcp_len );
-								ss2 += " " + to_string(min_lcp_len);
-
-								nrg.add_repeat_group(ss, ss2, rpt_positions);
+								nrg.add_repeat_group(ss, rpt_positions);
 
 #if 0
 								rg.positions = repeat_range;
 								rg.positions.sort();
-								rg.repeat_sequence = get_string(s, prev_saElt, min_lcp_len);
+								rg.rpt_seq = get_string(s, prev_saElt, min_lcp_len);
 #endif
 							}
 
@@ -1580,11 +1554,6 @@ static void driver(
 				cerr << "CP " << nrg.rpt_grp_.size() << " groups found" << endl;
 
 				//dump_tstr(s);
-				// Masking repeat sequeuce to 'N'
-				nrg.repeat_masking();
-
-				//cerr << "After masking" << endl;
-				//dump_tstr(nrg.s_);
 
 				// write to FA
 				// sequence
