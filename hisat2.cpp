@@ -3830,8 +3830,7 @@ static void driver(
                                  !noRefNames,  // load names?
                                  startVerbose);
             
-            EList<RefRecord> dummy_szs;
-            repeatdb->construct(dummy_szs);
+            repeatdb->construct(gfm.rstarts(), gfm.nFrag());
         }
     }
     

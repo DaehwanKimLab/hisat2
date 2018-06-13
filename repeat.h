@@ -105,8 +105,6 @@ public:
         }
         writeIndex<index_t>(f_out, positions.size(), bigEndian);
         for(index_t i = 0; i < positions.size(); i++) {
-            writeIndex<index_t>(f_out, positions[i].tid, bigEndian);
-            writeIndex<index_t>(f_out, positions[i].toff, bigEndian);
             writeIndex<index_t>(f_out, positions[i].joinedOff, bigEndian);
             writeU8(f_out, positions[i].fw);
         }
@@ -126,8 +124,8 @@ public:
         index_t numPositions = readIndex<index_t>(f_in, bigEndian);
         positions.resizeExact(numPositions);
         for(index_t i = 0; i < numPositions; i++) {
-            positions[i].tid = readIndex<index_t>(f_in, bigEndian);
-            positions[i].toff = readIndex<index_t>(f_in, bigEndian);
+            positions[i].tid = 0;
+            positions[i].toff = 0;
             positions[i].joinedOff = readIndex<index_t>(f_in, bigEndian);
             positions[i].fw = readU8(f_in);
         }
@@ -144,6 +142,21 @@ public:
     EList<RepeatCoord<index_t> > positions;
 };
 
+// sorting functions
+template <typename index_t>
+struct sort_pair_loci {
+    bool operator()(const pair<RepeatCoord<index_t>, index_t>& a, const pair<RepeatCoord<index_t>, index_t>& b) {
+        return a.first.joinedOff < b.first.joinedOff;
+    }
+};
+
+template <typename index_t>
+struct sort_pair_loci_by_index {
+    bool operator()(const pair<RepeatCoord<index_t>, index_t>& a, const pair<RepeatCoord<index_t>, index_t>& b) {
+        return a.second < b.second;
+    }
+};
+
 template <typename index_t>
 class RepeatDB {
 public:
@@ -156,17 +169,68 @@ public:
     EList<RepeatAllele<index_t> >&       repeatAlleles()       { return _repeatAlleles; }
     const EList<RepeatAllele<index_t> >& repeatAlleles() const { return _repeatAlleles; }
     
-    void construct(const EList<RefRecord>& szs) {
+    // Build an internal table to allows rapid search of repeats
+    //  and converts joined offsets to chromosome IDs (tid) and loci (toff)
+    void construct(const index_t* rstarts, index_t rlen) {
         _repeatMap.clear();
         for(index_t i = 0; i < _repeatAlleles.size(); i++) {
             _repeatMap.expand();
             _repeatMap.back().first = _repeatAlleles[i].repPos + _repeatAlleles[i].repLen;
             _repeatMap.back().second = i;
         }
+        
+        EList<pair<RepeatCoord<index_t>, index_t> > joinedOffList;
+        for(index_t i = 0; i < _repeatAlleles.size(); i++) {
+            const EList<RepeatCoord<index_t> >& positions = _repeatAlleles[i].positions;
+            for(index_t j = 0; j < positions.size(); j++) {
+                joinedOffList.expand();
+                joinedOffList.back().first.joinedOff = positions[j].joinedOff;
+                joinedOffList.back().first.tid = 0;
+                joinedOffList.back().first.toff = 0;
+                joinedOffList.back().first.fw = positions[j].fw;
+                joinedOffList.back().second = joinedOffList.size() - 1;
+            }
+        }
+        
+        sort(&joinedOffList[0], &joinedOffList[0] + joinedOffList.size(), sort_pair_loci<index_t>());
+        
+        index_t j = 0, r = 0;
+        while(j < joinedOffList.size() && r < rlen) {
+            index_t off = joinedOffList[j].first.joinedOff;
+            index_t lower = rstarts[r*3];
+            index_t upper;
+            if(r == rlen - 1) {
+                upper = numeric_limits<index_t>::max();
+            } else {
+                upper = rstarts[(r+1)*3];
+            }
+            assert_gt(upper, lower);
+            if(off > upper) {
+                r++;
+                continue;
+            }
+            assert_geq(off, lower);
+            joinedOffList[j].first.tid = rstarts[(r*3)+1];
+            joinedOffList[j].first.toff = off - lower + rstarts[(r*3)+2];
+            j++;
+        }
+        
+        sort(&joinedOffList[0], &joinedOffList[0] + joinedOffList.size(), sort_pair_loci_by_index<index_t>());
+        
+        index_t count = 0;
+        for(index_t i = 0; i < _repeatAlleles.size(); i++) {
+            EList<RepeatCoord<index_t> >& positions = _repeatAlleles[i].positions;
+            for(index_t j = 0; j < positions.size(); j++) {
+                assert_lt(count, joinedOffList.size());
+                assert_eq(positions[j].joinedOff, joinedOffList[count].first.joinedOff);
+                positions[j] = joinedOffList[count].first;
+                count++;
+            }
+        }
     }
     
-    bool findCommonCoords(index_t pos,
-                          index_t pos2,
+    bool findCommonCoords(index_t pos,  // offset in the repeat sequence
+                          index_t pos2, // offset in the repeat sequence
                           EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& common_positions,
                           index_t dist = 1000) const {
         pair<index_t, index_t> repeat1(pos, 0);
