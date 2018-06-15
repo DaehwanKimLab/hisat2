@@ -4180,6 +4180,7 @@ public:
                                                   _genomeHits_rep[1][j].refoff(),
                                                   0, // DK right,
                                                   _snpIDs2,
+                                                  raltdb,
                                                   positions);
                    
                         for(size_t p = 0; p < positions.size(); p++) {
