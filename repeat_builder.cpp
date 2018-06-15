@@ -42,11 +42,10 @@ unsigned int levenshtein_distance(const std::string& s1, const std::string& s2)
 	return prevCol[len2];
 }
 
-bool seq_mergeable(const string& s1, const string& s2)
+bool seq_mergeable(const string& s1, const string& s2, TIndexOffU max_edit = 10)
 {
 	unsigned int ed = levenshtein_distance(s1, s2);
-
-	return (ed < 11);
+	return (ed <= max_edit);
 }
 
 typedef pair<TIndexOffU, TIndexOffU> Range;
@@ -156,7 +155,10 @@ NRG<TStr>::NRG(
 }
 
 template<typename TStr>
-void NRG<TStr>::build(int rpt_len, int rpt_cnt, bool flagGrouping)
+void NRG<TStr>::build(TIndexOffU rpt_len,
+                      TIndexOffU rpt_cnt,
+                      bool flagGrouping,
+                      TIndexOffU rpt_edit)
 {
 	TIndexOffU count = 0;
 
@@ -285,7 +287,7 @@ void NRG<TStr>::build(int rpt_len, int rpt_cnt, bool flagGrouping)
 
 	}
 
-	adjust_repeat_group(flagGrouping);
+	adjust_repeat_group(flagGrouping, rpt_edit);
 	// we found repeat_group
 	cerr << "CP " << rpt_grp_.size() << " groups found" << endl;
 
@@ -506,7 +508,7 @@ void NRG<TStr>::saveRepeatSequence(void)
 	for (TIndexOffU grp_idx = 0; grp_idx < rpt_grp_.size(); grp_idx++) {
 
 		RepeatGroup& rg = rpt_grp_[grp_idx];
-		size_t seq_len = rg.seq.length();
+        size_t seq_len = rg.seq.length();
 
 		TIndexOffU si = 0;
 		while (si < seq_len) {
@@ -592,7 +594,7 @@ void NRG<TStr>::add_repeat_group(string& rpt_seq, EList<TIndexOffU>& rpt_range)
  * @brief Remove empty repeat group
  */
 template<typename TStr>
-void NRG<TStr>::adjust_repeat_group(bool flagGrouping)
+void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 {
 	cerr << "CP " << "repeat_group size " << rpt_grp_.size() << endl;
 
@@ -621,6 +623,7 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping)
 			rpt_ranges.push_back(RepeatRange(make_pair(rg.positions[j], rg.positions[j] + s_len), i));
 		}
 	}
+    assert_eq(rpt_ranges.size(), range_count);
 
 
 	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
@@ -749,7 +752,7 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping)
 			for (int j = i + 1; j < rpt_grp_.size(); j++) {
 				string& str2 = rpt_grp_[j].seq;
 
-				if (seq_mergeable(str1, str2)) {
+				if (seq_mergeable(str1, str2, rpt_edit)) {
 					/* i, j merge into i */
 					rpt_grp_[i].merge(rpt_grp_[j]);
 

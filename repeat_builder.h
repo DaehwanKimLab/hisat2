@@ -125,7 +125,11 @@ public:
 
 public:
 
-	void build(int, int, bool flagGrouping = false);
+	void build(TIndexOffU rpt_len,
+               TIndexOffU rpt_cnt,
+               bool flagGrouping,
+               TIndexOffU rpt_edit);
+    
 	void build_names(void);
 	int map_joined_pos_to_seq(TIndexOffU joined_pos);
 	int get_genome_coord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
@@ -145,7 +149,7 @@ public:
 
 
 	void add_repeat_group(string& rpt_seq, EList<TIndexOffU>& rpt_range);
-	void adjust_repeat_group(bool flagGrouping = false);
+	void adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit);
 	void repeat_masking(void);
 
 	int get_lcp(TIndexOffU a, TIndexOffU b);

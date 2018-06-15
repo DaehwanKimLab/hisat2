@@ -5,3 +5,7 @@ date; time hisat2 --no-spliced-alignment --score-min C,0 -X 800 -p 3 -x 20 -f -1
 bowtie2-build -t 3 20_mask.fa,20_rep.fa 20_mask
 
 hisat2-build -p 3 20_mask.fa,20_rep.fa 20_mask
+
+hisat2-build -p 3 20.fa --repeat-ref 20_rep.fa --repeat-info 20_rep.info 20_mask
+
+hisat2-construct-nonrepetitive-genome-s -p 3 22_30_31M.fa
