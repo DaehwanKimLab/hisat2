@@ -28,6 +28,7 @@
 #include "word_io.h"
 #include "mem_ids.h"
 #include "ref_coord.h"
+#include "alt.h"
 
 using namespace std;
 
@@ -109,6 +110,32 @@ public:
             positions[i].joinedOff = readIndex<index_t>(f_in, bigEndian);
             positions[i].fw = readU8(f_in);
         }
+        return true;
+    }
+    
+    bool compatible(const EList<index_t>& cmp_snpIDs, pair<index_t, index_t> alt_range) const {
+        if(snpIDs.size() < cmp_snpIDs.size())
+            return false;
+        
+        index_t i = 0;
+        for(; i < snpIDs.size(); i++) {
+            index_t snpID = snpIDs[i];
+            if(snpID >= alt_range.first)
+                break;
+        }
+        if(snpIDs.size() - i < cmp_snpIDs.size())
+            return false;
+        
+        for(index_t j = 0; j < cmp_snpIDs.size(); j++) {
+            assert_lt(i + j, snpIDs.size());
+            if(snpIDs[i+j] != cmp_snpIDs[j])
+                return false;
+        }
+        
+        i += cmp_snpIDs.size();
+        if(i < snpIDs.size() && snpIDs[i] < alt_range.second)
+            return false;
+        
         return true;
     }
     
@@ -274,61 +301,101 @@ public:
         }
     }
     
-    bool findCommonCoords(index_t left,  // left offset in the repeat sequence
-                          index_t right, // right offset
+    bool findCommonCoords(index_t               left,  // left offset in the repeat sequence
+                          index_t               right, // right offset
                           const EList<index_t>& snpIDs, // SNP IDs
-                          index_t left2, // left offset 2 in the repeat sequence
-                          index_t right2, // right offset 2
+                          index_t               left2, // left offset 2 in the repeat sequence
+                          index_t               right2, // right offset 2
                           const EList<index_t>& snpIDs2, // SNP IDs
+                          const ALTDB<index_t>& altdb,
                           EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& common_positions,
                           index_t dist = 1000) const {
+        common_positions.clear();
+        
+        // Find a repeat corresponding to a given location (left, right)
         pair<index_t, index_t> repeat1(left, 0);
         index_t repeatIdx = _repeatMap.bsearchLoBound(repeat1);
         assert_lt(repeatIdx, _repeats.size());
-        const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx].alleles[0].positions;
-        index_t adjustedPos = left;
+        const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx].alleles;
+        index_t adjLeft = left, adjRight = right;
         if(repeatIdx > 0) {
-            adjustedPos -= _repeatMap[repeatIdx-1].first;
+            adjLeft -= _repeatMap[repeatIdx-1].first;
+            adjRight -= _repeatMap[repeatIdx-1].first;
         }
+        pair<index_t, index_t> alt_range = get_alt_range(altdb, left, right);
         
+        // Find a repeat cooresponding to a given location (left2, right2)
         pair<index_t, index_t> repeat2(left2, 0);
         index_t repeatIdx2 = _repeatMap.bsearchLoBound(repeat2);
         assert_lt(repeatIdx2, _repeats.size());
-        const EList<RepeatCoord<index_t> >& positions2 = _repeats[repeatIdx2].alleles[0].positions;
-        index_t adjustedPos2 = left2;
+        const EList<RepeatAllele<index_t> >& alleles2 = _repeats[repeatIdx2].alleles;
+        index_t adjLeft2 = left2, adjRight2 = right2;
         if(repeatIdx2 > 0) {
-            adjustedPos2 -= _repeatMap[repeatIdx2-1].first;
+            adjLeft2 -= _repeatMap[repeatIdx2-1].first;
+            adjRight2 -= _repeatMap[repeatIdx2-1].first;
         }
+        pair<index_t, index_t> alt_range2 = get_alt_range(altdb, left2, right2);
         
-        index_t i = 0, j = 0;
-        while(i < positions.size() && j < positions2.size()) {
-            index_t i_pos = positions[i].joinedOff, j_pos = positions2[j].joinedOff;
-            if(i_pos <= j_pos) {
-                if(i_pos + dist >= j_pos) {
-                    common_positions.expand();
-                    common_positions.back().first = positions[i];
-                    common_positions.back().first.toff += adjustedPos;
-                    common_positions.back().first.joinedOff += adjustedPos;
-                    common_positions.back().second = positions2[j];
-                    common_positions.back().second.toff += adjustedPos2;
-                    common_positions.back().second.joinedOff += adjustedPos2;
+        for(index_t a = 0; a < alleles.size(); a++) {
+            const RepeatAllele<index_t>& allele = alleles[a];
+            if(!allele.compatible(snpIDs, alt_range))
+                continue;
+            
+            const EList<RepeatCoord<index_t> >& positions = allele.positions;
+            
+            for(index_t a2 = 0; a2 < alleles2.size(); a2++) {
+                const RepeatAllele<index_t>& allele2 = alleles2[a];
+                if(!allele2.compatible(snpIDs2, alt_range2))
+                    continue;
+                
+                const EList<RepeatCoord<index_t> >& positions2 = allele2.positions;
+                
+                index_t i = 0, j = 0;
+                while(i < positions.size() && j < positions2.size()) {
+                    index_t i_pos = positions[i].joinedOff, j_pos = positions2[j].joinedOff;
+                    if(i_pos <= j_pos) {
+                        if(i_pos + dist >= j_pos) {
+                            common_positions.expand();
+                            common_positions.back().first = positions[i];
+                            common_positions.back().first.toff += adjLeft;
+                            common_positions.back().first.joinedOff += adjLeft;
+                            common_positions.back().second = positions2[j];
+                            common_positions.back().second.toff += adjLeft2;
+                            common_positions.back().second.joinedOff += adjLeft2;
+                        }
+                        i += 1;
+                    } else {
+                        if(i_pos <= j_pos + dist) {
+                            common_positions.expand();
+                            common_positions.back().first = positions[i];
+                            common_positions.back().first.toff += adjLeft;
+                            common_positions.back().first.joinedOff += adjLeft;
+                            common_positions.back().second = positions2[j];
+                            common_positions.back().second.toff += adjLeft2;
+                            common_positions.back().second.joinedOff += adjLeft2;
+                        }
+                        j += 1;
+                    }
                 }
-                i += 1;
-            } else {
-                if(i_pos <= j_pos + dist) {
-                    common_positions.expand();
-                    common_positions.back().first = positions[i];
-                    common_positions.back().first.toff += adjustedPos;
-                    common_positions.back().first.joinedOff += adjustedPos;
-                    common_positions.back().second = positions2[j];
-                    common_positions.back().second.toff += adjustedPos2;
-                    common_positions.back().second.joinedOff += adjustedPos2;
-                }
-                j += 1;
             }
         }
 
         return common_positions.size() > 0;
+    }
+    
+private:
+    pair<index_t, index_t> get_alt_range(const ALTDB<index_t>& altdb,
+                                         index_t left,
+                                         index_t right) const {
+        pair<index_t, index_t> alt_range;
+        ALT<index_t> cmp_alt;
+        cmp_alt.pos = left;
+        alt_range.first = alt_range.second = (index_t)altdb.alts().bsearchLoBound(cmp_alt);
+        for(; alt_range.second < altdb.alts().size(); alt_range.second++) {
+            const ALT<index_t>& alt = altdb.alts()[alt_range.second];
+            if(alt.left > right) break;
+        }
+        return alt_range;
     }
     
 private:
