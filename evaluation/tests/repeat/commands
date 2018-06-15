@@ -9,3 +9,6 @@ hisat2-build -p 3 20_mask.fa,20_rep.fa 20_mask
 hisat2-build -p 3 20.fa --repeat-ref 20_rep.fa --repeat-info 20_rep.info 20_mask
 
 hisat2-construct-nonrepetitive-genome-s -p 3 22_30_31M.fa
+
+hisat2_simulate_reads.py --dna --num-fragment 1000000 --repeat-info 22.fa.rep.info 22.fa /dev/null /dev/null sim
+
