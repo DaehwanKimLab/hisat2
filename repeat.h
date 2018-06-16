@@ -35,6 +35,9 @@ using namespace std;
 template <typename index_t>
 class RepeatCoord {
 public:
+    RepeatCoord() {};
+    RepeatCoord(index_t l_tid, index_t l_toff, index_t l_joinedOff, bool l_fw) :
+        tid(l_tid), toff(l_toff), joinedOff(l_joinedOff), fw(l_fw) {};
     index_t tid;
     index_t toff;
     index_t joinedOff;

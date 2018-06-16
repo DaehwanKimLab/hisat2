@@ -781,6 +781,21 @@ public:
 	}
 
 	/**
+	 * Reverse the buffer in place.
+	 */
+	void reverseComplement(int* rcmap) {
+		size_t mid = len_ >> 1;
+		for(size_t i = 0; i < (len_ >> 1); i++) {
+			T tmp = get(i);
+			set(rcmap[get(len_-i-1)], i);
+			set(rcmap[tmp], len_-i-1);
+		}
+		if (len_ % 2) {
+			set(rcmap[get(mid)], mid);
+		}
+	}
+
+	/**
 	 * Reverse a substring of the buffer in place.
 	 */
 	void reverseWindow(size_t off, size_t len) {

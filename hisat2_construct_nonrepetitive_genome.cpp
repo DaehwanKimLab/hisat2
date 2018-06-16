@@ -79,7 +79,7 @@ static string wrapper;
 static TIndexOffU repeat_count;
 static TIndexOffU repeat_length;
 static TIndexOffU max_repeat_edit;
-
+static bool repeat_reverse;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -107,6 +107,7 @@ static void resetOptions() {
 	repeat_length  = 50;
 	repeat_count   = 5;
     max_repeat_edit = 10;
+	repeat_reverse = false;
     wrapper.clear();
 }
 
@@ -126,6 +127,7 @@ enum {
 	ARG_REPEAT_LENGTH,
 	ARG_REPEAT_CNT,
     ARG_REPEAT_EDIT,
+	ARG_REPEAT_REVERSE,
 	ARG_WRAPPER
 };
 
@@ -194,6 +196,7 @@ static struct option long_options[] = {
 	{(char*)"repeat-length",  required_argument, 0,            ARG_REPEAT_LENGTH},
 	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
     {(char*)"repeat-edit",    required_argument, 0,            ARG_REPEAT_EDIT},
+	{(char*)"repeat-reverse", no_argument,       0,            ARG_REPEAT_REVERSE},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
 	{(char*)0, 0, 0, 0} // terminator
 };
@@ -291,6 +294,9 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_REPEAT_EDIT:
                 max_repeat_edit = parseNumber<TIndexOffU>(0, "--repeat-edit arg must be at least 0");
                 break;
+			case ARG_REPEAT_REVERSE:
+				repeat_reverse = true;
+				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
 			case 's': sanityCheck = true; break;
@@ -590,18 +596,30 @@ static void driver(
     TStr s;
     {
         cerr << "Reserving space for joined string" << endl;
-        s.resize(jlen);
         cerr << "Joining reference sequences" << endl;
         Timer timer(cerr, "  Time to join reference sequences: ", verbose);
         
-        s = GFM<TIndexOffU>::join<TStr>(
-                                                  is,
-                                                  szs,
-                                                  (TIndexOffU)sztot.first,
-                                                  refparams,
-                                                  seed);
-    }
+        TStr s_ = GFM<TIndexOffU>::join<TStr>(
+                                              is,
+                                              szs,
+                                              (TIndexOffU)sztot.first,
+                                              refparams,
+                                              seed);
         
+        assert_eq(s_.length(), jlen);
+        s.resize(jlen * 2);
+        
+        // Append reverse complement
+        for(TIndexOffU i = 0; i < jlen; i++) {
+            s[i] = s_[i];
+        }
+        for(TIndexOffU i = 0; i < jlen; i++) {
+            int nt = s[jlen - i - 1];
+            assert_range(0, 3, nt);
+            s[jlen + i] = dnacomp[nt];
+        }
+    }
+
     // Succesfully obtained joined reference string
     assert_geq(s.length(), jlen);
 
@@ -666,10 +684,9 @@ static void driver(
             }
             cerr << "Constructing suffix-array element generator" << endl;
             KarkkainenBlockwiseSA<TStr> bsa(s, bmax, nthreads, dcv, seed, sanity, passMemExc, false /* verbose */, outfile);
+            
             assert(bsa.suffixItrIsReset());
             assert_eq(bsa.size(), s.length() + 1);
-            cerr << "Converting suffix-array elements to index image" << endl;
-            EList<string> suffixes;
 
 			// NRG
 			NRG<TStr> nrg(szs, ref_names, s, outfile, bsa);
@@ -678,6 +695,8 @@ static void driver(
                       repeat_count,
                       true,
                       max_repeat_edit);
+
+            nrg.saveFile();
 
 			break;
 
@@ -790,20 +809,20 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
             }
         }
         return 0;
-    } catch(std::exception& e) {
-		cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
-		cerr << "Command: ";
-		for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
-		cerr << endl;
-		return 1;
-	} catch(int e) {
-		if(e != 0) {
-			cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
-			cerr << "Command: ";
-			for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
-			cerr << endl;
-		}
-		return e;
-	}
+        } catch(std::exception& e) {
+            cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
+            cerr << "Command: ";
+            for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+            cerr << endl;
+            return 1;
+        } catch(int e) {
+            if(e != 0) {
+                cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
+                cerr << "Command: ";
+                for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+                cerr << endl;
+            }
+            return e;
+        }
 }
 }

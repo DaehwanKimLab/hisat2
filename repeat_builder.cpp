@@ -42,7 +42,7 @@ unsigned int levenshtein_distance(const std::string& s1, const std::string& s2)
 	return prevCol[len2];
 }
 
-bool seq_mergeable(const string& s1, const string& s2, TIndexOffU max_edit = 10)
+bool checkSequenceMergeable(const string& s1, const string& s2, TIndexOffU max_edit = 10)
 {
 	unsigned int ed = levenshtein_distance(s1, s2);
 	return (ed <= max_edit);
@@ -52,13 +52,38 @@ typedef pair<TIndexOffU, TIndexOffU> Range;
 static const Range EMPTY_RANGE = Range(1, 0);
 
 struct RepeatRange {
-	RepeatRange() {};
+	RepeatRange() {
+        forward = true;
+    };
 	RepeatRange(Range r, int id) : 
-		range(r), rg_id(id) {};
+		range(r), rg_id(id), forward(true) {};
+    RepeatRange(Range r, int id, bool fw) :
+        range(r), rg_id(id), forward(fw) {};
 
 	Range range;
 	int rg_id;
+    bool forward;
 };
+
+Range reverseRange(const Range& r, TIndexOffU size)
+{
+	size_t len = r.second - r.first;
+	Range rc;
+
+	rc.first = size - r.second;
+	rc.second = rc.first + len;
+
+	return rc;
+}
+
+string reverseComplement(const string& str)
+{
+	string rc;
+	for(TIndexOffU si = str.length(); si > 0; si--) {
+		rc.push_back(asc2dnacomp[str[si - 1]]);
+	}
+	return rc;
+}
 
 /**
  * @brief return true iff a U b = a 
@@ -68,9 +93,9 @@ struct RepeatRange {
  *
  * @return 
  */
-static bool range_mergeable(const Range& a, const Range& b)
+static bool checkRangeMergeable(const Range& a, const Range& b)
 {
-	if (a.first <= b.first && a.second >= b.second) {
+	if(a.first <= b.first && a.second >= b.second) {
 		return true;
 	}
 
@@ -78,9 +103,9 @@ static bool range_mergeable(const Range& a, const Range& b)
 }
 
 
-static bool cmp_by_repeat_range(const RepeatRange& a, const RepeatRange& b)
+static bool compareRepeatRangeByRange(const RepeatRange& a, const RepeatRange& b)
 {
-	if ((a.range.second > b.range.second) ||
+	if((a.range.second > b.range.second) ||
 			(a.range.second == b.range.second && a.range.first < b.range.first)) {
 		return true;
 	}
@@ -88,20 +113,27 @@ static bool cmp_by_repeat_range(const RepeatRange& a, const RepeatRange& b)
 	return false;
 }
 
-static bool cmp_by_rg_id(const RepeatRange& a, const RepeatRange& b)
+static bool compareRepeatRangeByRgID(const RepeatRange& a, const RepeatRange& b)
 {
 	return a.rg_id < b.rg_id;
 }
 
 
+template<typename index_t>
+static bool compareRepeatCoordByJoinedOff(const RepeatCoord<index_t>& a, const RepeatCoord<index_t>& b)
+{
+	return a.joinedOff < b.joinedOff;
+}
+
 
 template<typename TStr>
-string get_string(TStr& ref, TIndexOffU start, int len)
+string getString(const TStr& ref, TIndexOffU start, size_t len)
 {
-	string s;
-	size_t ref_len = ref.length();
+    const size_t ref_len = ref.length();
+    assert_leq(start + len, ref_len);
 
-	for (int i = 0; (i < len) && (start + i < ref_len); i++) {
+    string s;
+	for(size_t i = 0; i < len; i++) {
 		char nt = "ACGT"[ref[start + i]];
 		s.push_back(nt);
 	}
@@ -114,21 +146,21 @@ void masking_with_N(TStr& s, TIndexOffU start, size_t length)
 {
 	size_t s_len = s.length();
 
-	for (size_t pos = 0; (pos < length) && (start + pos < s_len); pos++) {
+	for(size_t pos = 0; (pos < length) && (start + pos < s_len); pos++) {
 		s[start + pos] = 0x04;
 	}
 }
 
 template<typename TStr>
-void dump_tstr(TStr& s)
+void dump_tstr(const TStr& s)
 {
 	static int print_width = 60;
 
 	size_t s_len = s.length();
 
-	for (size_t i = 0; i < s_len; i += print_width) {
+	for(size_t i = 0; i < s_len; i += print_width) {
 		string buf;
-		for (size_t j = 0; (j < print_width) && (i + j < s_len); j++) {
+		for(size_t j = 0; (j < print_width) && (i + j < s_len); j++) {
 			buf.push_back("ACGTN"[s[i + j]]);
 		}
 		cerr << buf << endl;
@@ -144,14 +176,15 @@ NRG<TStr>::NRG(
                TStr& s,
                const string& filename,
                BlockwiseSA<TStr>& sa) :
-	szs_(szs), ref_namelines_(ref_names), 
-	s_(s), filename_(filename), bsa_(sa)
+	szs_(szs), ref_namelines_(ref_names),
+	s_(s), filename_(filename), bsa_(sa),
+    half_length_(s.length() / 2)
 {
 	cerr << "NRG: " << filename_ << endl;
 
 	// build ref_names_ from ref_namelines_
-	build_names();
-	build_joined_fragment();
+    buildNames();
+    buildJoinedFragment();
 }
 
 template<typename TStr>
@@ -162,59 +195,53 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
 {
 	TIndexOffU count = 0;
 
-	EList<TIndexOffU> rpt_positions;
+	EList<RepeatCoord<TIndexOffU> > rpt_positions;
 	TIndexOffU min_lcp_len = s_.length();
 
 	while(count < s_.length() + 1) {
 		TIndexOffU saElt = bsa_.nextSuffix();
 		count++;
-
-		if (count && (count % 1000000 == 0)) {
+		
+		if(count && (count % 1000000 == 0)) {
 			cerr << "SA count " << count << endl;
 		}
+        
+        if(saElt == s_.length()) {
+            assert_eq(count, s_.length() + 1);
+            break;
+        }
 
-		if (rpt_positions.size() == 0) {
+		if(rpt_positions.size() == 0) {
 			rpt_positions.expand();
-			rpt_positions.back() = saElt;
+			rpt_positions.back().joinedOff = saElt;
 		} else {
-			TIndexOffU prev_saElt = rpt_positions.back();
+			TIndexOffU prev_saElt = rpt_positions.back().joinedOff;
 
 			// calculate common prefix length between two text.
 			//   text1 is started from prev_saElt and text2 is started from saElt
-			int lcp_len = get_lcp(prev_saElt, saElt);
+			int lcp_len = getLCP(prev_saElt, saElt);
 
-			// check prev_saElt
-
-			if (lcp_len >= rpt_len) {
+			if(lcp_len >= rpt_len) {
 				rpt_positions.expand();
-				rpt_positions.back() = saElt;
+				rpt_positions.back().joinedOff = saElt;
 
-				if (min_lcp_len > lcp_len) {
+				if(min_lcp_len > lcp_len) {
 					min_lcp_len = lcp_len;
 				}
 
 			} else {
 				if (rpt_positions.size() >= rpt_cnt) {
-					// save ranges
-					//cerr << "CP " << "we have " << rpt_positions.size() << " positions" << ", " << min_lcp_len << endl;
-					//
+                    sort(rpt_positions.begin(), 
+                            rpt_positions.begin() + rpt_positions.size(),
+                            compareRepeatCoordByJoinedOff<TIndexOffU>);
 
-					rpt_positions.sort();
-
-					string ss = get_string(s_, prev_saElt, min_lcp_len);
-
-					add_repeat_group(ss, rpt_positions);
-
-#if 0
-					rg.positions = repeat_range;
-					rg.positions.sort();
-					rg.rpt_seq = get_string(s, prev_saElt, min_lcp_len);
-#endif
+                    string ss = getString(s_, prev_saElt, min_lcp_len);
+					addRepeatGroup(ss, rpt_positions);
 				}
 
 				// flush previous positions 
 				rpt_positions.resize(1);
-				rpt_positions.back() = saElt;
+				rpt_positions.back().joinedOff = saElt;
 				min_lcp_len = s_.length();
 			}
 		}
@@ -287,7 +314,12 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
 
 	}
 
-	adjust_repeat_group(flagGrouping, rpt_edit);
+    mergeRepeatGroup();
+    
+    if(flagGrouping && rpt_edit > 0) {
+        groupRepeatGroup(rpt_edit);
+    }
+	//adjustRepeatGroup(flagGrouping);
 	// we found repeat_group
 	cerr << "CP " << rpt_grp_.size() << " groups found" << endl;
 
@@ -296,19 +328,19 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
 	// write to FA
 	// sequence
 	// repeat sequeuce
-	savefile();
+	//saveFile();
 }
 
 template<typename TStr>
-void NRG<TStr>::build_names(void)
+void NRG<TStr>::buildNames()
 {
 	ref_names_.resize(ref_namelines_.size());
-	for (int i = 0; i < ref_namelines_.size(); i++) {
+	for(size_t i = 0; i < ref_namelines_.size(); i++) {
 		string& nameline = ref_namelines_[i];
 
-		for (int j = 0; j < nameline.length(); j++) {
+		for(size_t j = 0; j < nameline.length(); j++) {
 			char n = nameline[j];
-			if (n == ' ') {
+			if(n == ' ') {
 				break;
 			}
 			ref_names_[i].push_back(n);
@@ -317,7 +349,7 @@ void NRG<TStr>::build_names(void)
 }
 
 template<typename TStr>
-int NRG<TStr>::map_joined_pos_to_seq(TIndexOffU joined_pos)
+int NRG<TStr>::mapJoinedOffToSeq(TIndexOffU joined_pos)
 {
 
 	/* search from cached_list */
@@ -367,10 +399,10 @@ int NRG<TStr>::map_joined_pos_to_seq(TIndexOffU joined_pos)
 }
 
 template<typename TStr>
-int NRG<TStr>::get_genome_coord(TIndexOffU joined_pos, 
+int NRG<TStr>::getGenomeCoord(TIndexOffU joined_pos, 
 		string& chr_name, TIndexOffU& pos_in_chr)
 {
-	int seq_id = map_joined_pos_to_seq(joined_pos);
+	int seq_id = mapJoinedOffToSeq(joined_pos);
 	if (seq_id < 0) {
 		return -1;
 	}
@@ -385,14 +417,14 @@ int NRG<TStr>::get_genome_coord(TIndexOffU joined_pos,
 }
 
 template<typename TStr>
-void NRG<TStr>::build_joined_fragment(void)
+void NRG<TStr>::buildJoinedFragment()
 {
 	int n_seq = 0;
 	int n_frag = 0;
 
-	for (int i = 0; i < szs_.size(); i++) {
-		if (szs_[i].len > 0) n_frag++;
-		if (szs_[i].first && szs_[i].len > 0) n_seq++;
+	for(size_t i = 0; i < szs_.size(); i++) {
+		if(szs_[i].len > 0) n_frag++;
+		if(szs_[i].first && szs_[i].len > 0) n_seq++;
 	}
 
 	int npos = 0;
@@ -401,8 +433,8 @@ void NRG<TStr>::build_joined_fragment(void)
 	TIndexOffU acc_ref_length = 0;
 	fraglist_.resize(n_frag + 1);
 
-	for (int i = 0; i < szs_.size(); i++) {
-		if (szs_[i].len == 0) {
+	for(size_t i = 0; i < szs_.size(); i++) {
+		if(szs_[i].len == 0) {
 			continue;
 		}
 
@@ -411,7 +443,7 @@ void NRG<TStr>::build_joined_fragment(void)
 		fraglist_[npos].start_in_seq = acc_ref_length + szs_[i].off;
 		fraglist_[npos].frag_id = i;
 		fraglist_[npos].frag_id = npos;
-		if (szs_[i].first) {
+		if(szs_[i].first) {
 			seq_id++;
 			fraglist_[npos].first = true;
 		}
@@ -430,15 +462,16 @@ void NRG<TStr>::build_joined_fragment(void)
 }
 
 template<typename TStr>
-void NRG<TStr>::sort_rpt_grp(void)
+void NRG<TStr>::sortRepeatGroup()
 {
-	if (rpt_grp_.size() > 0) {
-		sort(rpt_grp_.begin(), rpt_grp_.begin() + rpt_grp_.size(), repeat_group_cmp);
+	if(rpt_grp_.size() > 0) {
+		sort(rpt_grp_.begin(), rpt_grp_.begin() + rpt_grp_.size(), 
+                compareRepeatGroupByJoinedOff);
 	}
 }
 
 template<typename TStr>
-void NRG<TStr>::saveRepeatGroup(void)
+void NRG<TStr>::saveRepeatGroup()
 {
 	string rptinfo_filename = filename_ + ".rep.info";
 
@@ -447,9 +480,9 @@ void NRG<TStr>::saveRepeatGroup(void)
 
 	ofstream fp(rptinfo_filename.c_str());
 
-	for (int i = 0; i < rpt_count; i++) {
+	for(size_t i = 0; i < rpt_count; i++) {
 		RepeatGroup& rg = rpt_grp_[i];
-		EList<TIndexOffU>& positions = rg.positions;
+		EList<RepeatCoord<TIndexOffU> >& positions = rg.positions;
 
 		// >rpt_name*0\trep\trep_pos\trep_len\tpos_count\t0
 		// chr_name:pos:direction chr_name:pos:direction
@@ -465,25 +498,40 @@ void NRG<TStr>::saveRepeatGroup(void)
 		fp << "\t" << rg.seq.length();
 		fp << "\t" << positions.size();
 		fp << "\t" << "0"; 
-		fp << endl;
+        // debugging
+        // fp << "\t" << rg.seq;
+		fp << endl; 
 
 		acc_pos += rg.seq.length();
 
 		// Positions
-		for (int j = 0; j < positions.size(); j++) {
-			if (j && (j % 10 == 0)) {
+        for(size_t j = 0; j < positions.size(); j++) {
+			if(j > 0 && (j % 10 == 0)) {
 				fp << endl;
 			}
 
-			if (j % 10) {
+			if(j % 10 != 0) {
 				fp << " ";
 			}
 
-			string chr_name;
-			TIndexOffU pos_in_chr;
+            TIndexOffU joinedOff;
+            char direction;
+            if(positions[j].joinedOff < half_length_) {
+                joinedOff = positions[j].joinedOff;
+                direction = '+';
+            } else {
+                joinedOff = s_.length() - positions[j].joinedOff - rg.seq.length();
+                direction = '-';
+            }
+            
+#ifndef NDEBUG
+            string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
+            assert_eq(rg.seq, seq_cmp);
+#endif
 
-			get_genome_coord(positions[j], chr_name, pos_in_chr);
-			char direction = '+';
+            string chr_name;
+            TIndexOffU pos_in_chr;
+			getGenomeCoord(joinedOff, chr_name, pos_in_chr);
 
 			fp << chr_name << ":" << pos_in_chr << ":" << direction;
 		}
@@ -494,7 +542,7 @@ void NRG<TStr>::saveRepeatGroup(void)
 	
 	
 template<typename TStr>
-void NRG<TStr>::saveRepeatSequence(void)
+void NRG<TStr>::saveRepeatSequence()
 {
 	string fname = filename_ + ".rep.fa";
 
@@ -505,18 +553,17 @@ void NRG<TStr>::saveRepeatSequence(void)
 
 	int oskip = 0;
 
-	for (TIndexOffU grp_idx = 0; grp_idx < rpt_grp_.size(); grp_idx++) {
-
+	for(TIndexOffU grp_idx = 0; grp_idx < rpt_grp_.size(); grp_idx++) {
 		RepeatGroup& rg = rpt_grp_[grp_idx];
         size_t seq_len = rg.seq.length();
 
 		TIndexOffU si = 0;
-		while (si < seq_len) {
+		while(si < seq_len) {
 			size_t out_len = std::min((size_t)(output_width - oskip), (size_t)(seq_len - si));
 
 			fp << rg.seq.substr(si, out_len);
 
-			if ((oskip + out_len) == output_width) {
+			if((oskip + out_len) == output_width) {
 				fp << endl;
 				oskip = 0;
 			} else {
@@ -527,7 +574,7 @@ void NRG<TStr>::saveRepeatSequence(void)
 			si += out_len;
 		}
 	}
-	if (oskip) {
+	if(oskip) {
 		fp << endl;
 	}
 
@@ -535,14 +582,20 @@ void NRG<TStr>::saveRepeatSequence(void)
 }
 
 template<typename TStr>
-void NRG<TStr>::savefile(void)
+void NRG<TStr>::saveFile()
 {
-	// save repeat sequences
 	saveRepeatSequence();
-
-	// save repeat infos
 	saveRepeatGroup();
 }
+
+
+template<typename TStr>
+void NRG<TStr>::merge(NRG<TStr>& prev_repeat_groups)
+{
+
+}
+
+
 
 /**
  * TODO
@@ -552,7 +605,7 @@ void NRG<TStr>::savefile(void)
  * @param rpt_range
  */
 template<typename TStr>
-void NRG<TStr>::add_repeat_group(string& rpt_seq, EList<TIndexOffU>& rpt_range)
+void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TIndexOffU> >& positions)
 {
 #if 0
 	// rpt_seq is always > 0
@@ -587,25 +640,240 @@ void NRG<TStr>::add_repeat_group(string& rpt_seq, EList<TIndexOffU>& rpt_range)
 	// add to last
 	rpt_grp_.expand();
 	rpt_grp_.back().seq = rpt_seq;
-	rpt_grp_.back().positions = rpt_range;
+	rpt_grp_.back().positions = positions;
 }
 
-/**
- * @brief Remove empty repeat group
- */
-template<typename TStr>
-void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
-{
-	cerr << "CP " << "repeat_group size " << rpt_grp_.size() << endl;
 
+/**
+ * @brief 
+ *
+ * @tparam TStr
+ */
+template<typename TStr> 
+void NRG<TStr>::mergeRepeatGroup()
+{
 	int range_count = 0;
-	for (int i = 0; i < rpt_grp_.size(); i++) {
+	for(size_t i = 0; i < rpt_grp_.size(); i++) {
 		range_count += rpt_grp_[i].positions.size();
 	}
 
 	cerr << "CP " << "range_count " << range_count << endl;
 
-	if (range_count == 0) {
+	if(range_count == 0) {
+		cerr << "CP " << "no repeat sequeuce" << endl; 
+		return;
+	}
+
+	EList<RepeatRange> rpt_ranges;
+	rpt_ranges.reserveExact(range_count);
+
+	for(size_t i = 0; i < rpt_grp_.size(); i++) {
+		RepeatGroup& rg = rpt_grp_[i];
+		size_t s_len = rg.seq.length();
+
+		for(size_t j = 0; j < rg.positions.size(); j++) {
+			rpt_ranges.push_back(RepeatRange(
+                        make_pair(rg.positions[j].joinedOff, rg.positions[j].joinedOff + s_len),
+                        i, rg.positions[j].fw));
+		}
+	}
+
+    assert_gt(rpt_ranges.size(), 0);
+
+	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
+            compareRepeatRangeByRange);
+
+	// Merge
+	int merged_count = 0;
+	for(size_t i = 0; i < rpt_ranges.size() - 1;) {
+		size_t j = i + 1;
+		for(; j < rpt_ranges.size(); j++) {
+			// check i, j can be merged 
+			//
+
+			if(!checkRangeMergeable(rpt_ranges[i].range, rpt_ranges[j].range)) {
+				break;
+			}
+
+			rpt_ranges[j].range = EMPTY_RANGE;
+			rpt_ranges[j].rg_id = std::numeric_limits<int>::max();
+			merged_count++;
+		}
+		i = j;
+	}
+
+	cerr << "CP ";
+	cerr << "merged_count: " << merged_count;
+	cerr << endl;
+
+#if 1
+	{
+		string fname = filename_ + ".rptinfo";
+		ofstream fp(fname.c_str());
+
+		for(size_t i = 0; i < rpt_ranges.size(); i++) {
+			if(rpt_ranges[i].range == EMPTY_RANGE) {
+				continue;
+			}
+			Range rc = reverseRange(rpt_ranges[i].range, s_.length());
+			fp << "CP " << i ;
+			fp << "\t" << rpt_ranges[i].range.first;
+			fp << "\t" << rpt_ranges[i].range.second;
+			fp << "\t" << rpt_grp_[rpt_ranges[i].rg_id].seq;
+			fp << "\t" << rc.first;
+			fp << "\t" << rc.second;
+			fp << "\t" << reverseComplement(rpt_grp_[rpt_ranges[i].rg_id].seq);
+			fp << "\t" << rpt_ranges[i].rg_id;
+			fp << endl;
+		}
+
+		fp.close();
+	}
+#endif
+
+
+    /* remake RepeatGroup from rpt_ranges */
+
+	// sort by rg_id
+	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
+            compareRepeatRangeByRgID);
+
+	EList<RepeatGroup> mgroup;
+
+	mgroup.reserveExact(rpt_grp_.size());
+	mgroup.swap(rpt_grp_);
+
+	for(size_t i = 0; i < rpt_ranges.size() - 1;) {
+		if(rpt_ranges[i].rg_id == std::numeric_limits<int>::max()) {
+			break;
+		}
+
+		size_t j = i + 1;
+		for(; j < rpt_ranges.size(); j++) {
+			if(rpt_ranges[i].rg_id != rpt_ranges[j].rg_id) {
+				break;
+			}
+		}
+
+		/* [i, j) has a same rg_id */
+
+		int rg_id = rpt_ranges[i].rg_id;
+		rpt_grp_.expand();
+		rpt_grp_.back().seq = mgroup[rg_id].seq;
+		for (int k = i; k < j; k++) {
+			rpt_grp_.back().positions.push_back(
+                    RepeatCoord<TIndexOffU>(0, 0,
+                        rpt_ranges[k].range.first,
+                        rpt_ranges[k].forward));
+		}
+
+		// sort positions
+        assert_gt(rpt_grp_.back().positions.size(), 0);
+        sort(rpt_grp_.back().positions.begin(), 
+                rpt_grp_.back().positions.begin()
+                + rpt_grp_.back().positions.size(),
+                compareRepeatCoordByJoinedOff<TIndexOffU>);
+
+		i = j;
+	}
+
+}
+
+template<typename TStr>
+void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
+{
+    if (rpt_grp_.size() == 0) {
+        cerr << "CP " << "no repeat group" << endl;
+        return;
+    }
+
+    cerr << "CP " << "before grouping " << rpt_grp_.size() << endl;
+
+    int step = rpt_grp_.size() >> 8;
+
+    if(step == 0) {step = 1;}
+    cerr << "CP " << step << endl;
+
+    Timer timer(cerr, "Total time for grouping sequences: ", true);
+
+    for(size_t i = 0; i < rpt_grp_.size() - 1; i++) {
+        if(i % step == 0) {
+            cerr << "CP " << i << "/" << rpt_grp_.size() << endl;
+        }
+
+        if(rpt_grp_[i].empty()) {
+            // empty -> skip
+            continue;
+        }
+
+        string& str1 = rpt_grp_[i].seq;
+
+        for(size_t j = i + 1; j < rpt_grp_.size(); j++) {
+            string& str2 = rpt_grp_[j].seq;
+
+            if(checkSequenceMergeable(str1, str2, rpt_edit)) {
+                /* i, j merge into i */
+                rpt_grp_[i].merge(rpt_grp_[j]);
+
+                rpt_grp_[j].set_empty();
+            }
+        }
+    }
+
+	EList<RepeatGroup> mgroup;
+    mgroup.reserveExact(rpt_grp_.size());
+    mgroup.swap(rpt_grp_);
+
+    for(size_t i = 0; i < mgroup.size(); i++) {
+        if (!mgroup[i].empty()) {
+            rpt_grp_.expand();
+            rpt_grp_.back() = mgroup[i];
+        }
+    }
+
+    cerr << "CP " << "after merge " << rpt_grp_.size() << endl;
+
+#if 1
+    {
+        string fname = filename_ + ".altseq";
+        ofstream fp(fname.c_str());
+
+        for (int i = 0; i < rpt_grp_.size(); i++) {
+            RepeatGroup& rg = rpt_grp_[i];
+            if (rg.empty()) {
+                continue;
+            }
+            fp << "CP " << i ;
+            fp << "\t" << rg.seq;
+            for (int j = 0; j < rg.alt_seq.size(); j++) {
+                fp << "\t" << rg.alt_seq[j];
+            }
+            fp << endl;
+        }
+
+        fp.close();
+    }
+#endif
+}
+
+
+#if 0
+/**
+ * @brief Remove empty repeat group
+ */
+template<typename TStr>
+void NRG<TStr>::adjustRepeatGroup(bool flagGrouping, TIndexOffU rpt_edit)
+{
+	cerr << "CP " << "repeat_group size " << rpt_grp_.size() << endl;
+
+	int range_count = 0;
+	for(size_t i = 0; i < rpt_grp_.size(); i++) {
+		range_count += rpt_grp_[i].positions.size();
+	}
+
+	cerr << "CP " << "range_count " << range_count << endl;
+
+	if(range_count == 0) {
 		cerr << "CP " << "no repeat sequeuce" << endl; 
 		return;
 	}
@@ -615,19 +883,20 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 	EList<RepeatRange> rpt_ranges;
 	rpt_ranges.reserveExact(range_count);
 
-	for (int i = 0; i < rpt_grp_.size(); i++) {
+	for(size_t i = 0; i < rpt_grp_.size(); i++) {
 		RepeatGroup& rg = rpt_grp_[i];
 		size_t s_len = rg.seq.length();
 
-		for (int j = 0; j < rg.positions.size(); j++) {
-			rpt_ranges.push_back(RepeatRange(make_pair(rg.positions[j], rg.positions[j] + s_len), i));
+		for(size_t j = 0; j < rg.positions.size(); j++) {
+			rpt_ranges.push_back(RepeatRange(
+                        make_pair(rg.positions[j].joinedOff, rg.positions[j].joinedOff + s_len),
+                        i, rg.positions[j].fw));
 		}
 	}
     assert_eq(rpt_ranges.size(), range_count);
 
-
 	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
-			cmp_by_repeat_range);
+            compareRepeatRangeByRange);
 
 	// Dump
 #if 0
@@ -643,14 +912,15 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 
 #if 1	
 	// Merge
+    assert_gt(rpt_ranges.size(), 0);
 	int merged_count = 0;
-	for (int i = 0; i < rpt_ranges.size() - 1;) {
-		int j = i + 1;
-		for (; j < rpt_ranges.size(); j++) {
+	for(size_t i = 0; i < rpt_ranges.size() - 1;) {
+		size_t j = i + 1;
+		for(; j < rpt_ranges.size(); j++) {
 			// check i, j can be merged 
 			//
 
-			if (!range_mergeable(rpt_ranges[i].range, rpt_ranges[j].range)) {
+			if(!checkRangeMergeable(rpt_ranges[i].range, rpt_ranges[j].range)) {
 				break;
 			}
 
@@ -666,20 +936,28 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 	cerr << endl;
 #endif
 
+	// sort by rg_id
+	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
+            compareRepeatRangeByRgID);
+
 	// Dump
 #if 1
 	{
 		string fname = filename_ + ".rptinfo";
 		ofstream fp(fname.c_str());
 
-		for (int i = 0; i < rpt_ranges.size(); i++) {
-			if (rpt_ranges[i].range == EMPTY_RANGE) {
+		for(size_t i = 0; i < rpt_ranges.size(); i++) {
+			if(rpt_ranges[i].range == EMPTY_RANGE) {
 				continue;
 			}
+			Range rc = reverseRange(rpt_ranges[i].range, s_.length());
 			fp << "CP " << i ;
 			fp << "\t" << rpt_ranges[i].range.first;
 			fp << "\t" << rpt_ranges[i].range.second;
 			fp << "\t" << rpt_grp_[rpt_ranges[i].rg_id].seq;
+			fp << "\t" << rc.first;
+			fp << "\t" << rc.second;
+			fp << "\t" << reverseComplement(rpt_grp_[rpt_ranges[i].rg_id].seq);
 			fp << "\t" << rpt_ranges[i].rg_id;
 			fp << endl;
 		}
@@ -687,11 +965,6 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 		fp.close();
 	}
 #endif
-
-	// sort by rg_id
-	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
-			cmp_by_rg_id);
-
 
 	/***********/
 
@@ -701,20 +974,19 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 	mgroup.reserveExact(rpt_grp_.size());
 	mgroup.swap(rpt_grp_);
 
-	for (int i = 0; i < rpt_ranges.size() - 1;) {
-		if (rpt_ranges[i].rg_id == std::numeric_limits<int>::max()) {
+	for(size_t i = 0; i < rpt_ranges.size() - 1;) {
+		if(rpt_ranges[i].rg_id == std::numeric_limits<int>::max()) {
 			break;
 		}
 
-		int j = i + 1;
-		for (; j < rpt_ranges.size(); j++) {
-			if (rpt_ranges[i].rg_id != rpt_ranges[j].rg_id) {
+		size_t j = i + 1;
+		for(; j < rpt_ranges.size(); j++) {
+			if(rpt_ranges[i].rg_id != rpt_ranges[j].rg_id) {
 				break;
 			}
 		}
 
 		/* [i, j) has a same rg_id */
-
 
 		int rg_id = rpt_ranges[i].rg_id;
 		rpt_grp_.expand();
@@ -722,6 +994,9 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 		for (int k = i; k < j; k++) {
 			rpt_grp_.back().positions.push_back(rpt_ranges[k].range.first);
 		}
+
+		// sort positions
+		rpt_grp_.back().positions.sort();
 
 		i = j;
 	}
@@ -752,7 +1027,7 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 			for (int j = i + 1; j < rpt_grp_.size(); j++) {
 				string& str2 = rpt_grp_[j].seq;
 
-				if (seq_mergeable(str1, str2, rpt_edit)) {
+				if (checkSequenceMergeable(str1, str2, rpt_edit)) {
 					/* i, j merge into i */
 					rpt_grp_[i].merge(rpt_grp_[j]);
 
@@ -798,17 +1073,20 @@ void NRG<TStr>::adjust_repeat_group(bool flagGrouping, TIndexOffU rpt_edit)
 
 
 }
+#endif
+
+
 
 template<typename TStr>
-void NRG<TStr>::repeat_masking(void)
+void NRG<TStr>::repeat_masking()
 {
-	for (int i = 0; i < rpt_grp_.size(); i++) {
+	for(size_t i = 0; i < rpt_grp_.size(); i++) {
 		RepeatGroup *rg = &rpt_grp_[i];
 
 		size_t rpt_sqn_len = rg->seq.length();
 
-		for (int j = 0; j < rg->positions.size(); j++) {
-			TIndexOffU pos = rg->positions[j];
+		for(size_t j = 0; j < rg->positions.size(); j++) {
+			TIndexOffU pos = rg->positions[j].joinedOff;
 
 			// masking [pos, pos + rpt_sqn_len) to 'N'
 			masking_with_N(s_, pos, rpt_sqn_len);
@@ -865,55 +1143,44 @@ int get_lcp(string a, string b)
 }
 #endif
 
-#if 0
 template<typename TStr>
-int NRG<TStr>::get_lcp(TIndexOffU a, TIndexOffU b)
-{
-    int k = 0;
-    TIndexOffU s_len = s_.length();
+TIndexOffU NRG<TStr>::getEnd(TIndexOffU e) {
+    assert_lt(e, s_.length())
     
-    while ((a + k) < s_len && (b + k) < s_len) {
-        if (s_[a + k] != s_[b + k]) {
-            break;
-        }
-        k++;
+    TIndexOffU end = 0;
+    if(e < half_length_) {
+        int frag_id = mapJoinedOffToSeq(e);
+        assert_geq(frag_id, 0);
+        end = fraglist_[frag_id].start + fraglist_[frag_id].length;
+    } else {
+        // ReverseComplement
+        // a, b are positions w.r.t reverse complement string.
+        // fragment map is based on forward string
+        int frag_id = mapJoinedOffToSeq(s_.length() - e - 1);
+        assert_geq(frag_id, 0);
+        end = s_.length() - fraglist_[frag_id].start;
     }
     
-    return k;
+    assert_leq(end, s_.length());
+    return end;
 }
-#else
+
 template<typename TStr>
-int NRG<TStr>::get_lcp(TIndexOffU a, TIndexOffU b)
+TIndexOffU NRG<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 {
-    int k = 0;
-    TIndexOffU s_len = s_.length();
-    
-    if (a >= s_len || b >= s_len) {
-        return 0;
-    }
-    
 #if 1
-    int a_frag_id = map_joined_pos_to_seq(a);
-    int b_frag_id = map_joined_pos_to_seq(b);
-    
-    if (a_frag_id < 0 || b_frag_id < 0) {
-        cerr << "CP " << a_frag_id << ", " << b_frag_id << endl;
-        return 0;
-    }
-    
-    size_t a_end = fraglist_[a_frag_id].start + fraglist_[a_frag_id].length;
-    size_t b_end = fraglist_[b_frag_id].start + fraglist_[b_frag_id].length;
-    
-    assert_leq(a_end, s_len);
-    assert_leq(b_end, s_len);
+    size_t a_end = getEnd(a);
+    size_t b_end = getEnd(b);
 #else
-    size_t a_end = s_len;
-    size_t b_end = s_len;
+    size_t a_end = s_.length();
+    size_t b_end = s_.length();
 #endif
+    assert_leq(a_end, s_.length());
+    assert_leq(b_end, s_.length());
     
-    
-    while ((a + k) < a_end && (b + k) < b_end) {
-        if (s_[a + k] != s_[b + k]) {
+    TIndexOffU k = 0;
+    while((a + k) < a_end && (b + k) < b_end) {
+        if(s_[a + k] != s_[b + k]) {
             break;
         }
         k++;
@@ -921,10 +1188,9 @@ int NRG<TStr>::get_lcp(TIndexOffU a, TIndexOffU b)
     
     return k;
 }
-#endif
-
-
 
 
 /****************************/
 template class NRG<SString<char> >;
+template void dump_tstr(const SString<char>& );
+template bool compareRepeatCoordByJoinedOff(const RepeatCoord<TIndexOffU>& , const RepeatCoord<TIndexOffU>&);
