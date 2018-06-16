@@ -18,7 +18,7 @@
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys, math, random, re
+import os, sys, math, random, re
 from collections import defaultdict, Counter
 from argparse import ArgumentParser, FileType
 
@@ -685,7 +685,8 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch
 """
 def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                    rna, paired_end, read_len, frag_len, \
-                   num_frag, expr_profile_type, error_rate, max_mismatch, \
+                   num_frag, expr_profile_type, repeat_fname,
+                   error_rate, max_mismatch, \
                    random_seed, snp_prob, sanity_check, verbose):
     random.seed(random_seed)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
@@ -715,6 +716,18 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         for i in range(min(num_frag - sum(expr_profile), len(expr_profile))):
             expr_profile[i] += 1
     assert num_frag == sum(expr_profile)
+
+    repeat_loci = {}
+    if repeat_fname != "" and os.path.exists(repeat_fname):
+        for line in open(repeat_fname):
+            if line.startswith('>'):
+                continue
+            coords = line.strip().split()
+            for coord in coords:
+                chr, pos, strand = coord.split(':')
+                if chr not in repeat_loci:
+                    repeat_loci[chr] = []
+                repeat_loci[chr].append([int(pos), strand])
 
     if rna:
         transcript_ids = transcripts.keys()
@@ -748,6 +761,11 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         assert chr in genome_seq
         chr_seq = genome_seq[chr]
         chr_len = len(chr_seq)
+        if chr in repeat_loci:
+            chr_repeat_loci = repeat_loci[chr]
+        else:
+            chr_repeat_loci = []
+            
         if rna:
             t_seq = ""
             for e in exons:
@@ -768,7 +786,11 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                 frag_pos = random.randint(0, transcript_len - frag_len)
             else:
                 while True:
-                    frag_pos = random.randint(0, chr_len - frag_len)
+                    if len(chr_repeat_loci):
+                        locus_id = random.randint(0, len(chr_repeat_loci) - 1)
+                        frag_pos = chr_repeat_loci[locus_id][0]
+                    else:
+                        frag_pos = random.randint(0, chr_len - frag_len)
                     if 'N' not in chr_seq[frag_pos:frag_pos + frag_len]:
                         break
 
@@ -883,6 +905,12 @@ if __name__ == '__main__':
                         type=str,
                         default='flux',
                         help='expression profile: flux or constant (default: flux)')
+    parser.add_argument('--repeat-info',
+                        dest='repeat_fname',
+                        action='store',
+                        type=str,
+                        default='',
+                        help='repeat information filename')
     parser.add_argument('--error-rate',
                         dest='error_rate',
                         action='store',
@@ -925,6 +953,7 @@ if __name__ == '__main__':
     if not args.rna:
         args.expr_profile = "constant"
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
-                       args.rna, args.paired_end, args.read_len, args.frag_len, \
-                       args.num_frag, args.expr_profile, args.error_rate, args.max_mismatch, \
-                       args.random_seed, args.snp_prob, args.sanity_check, args.verbose)
+                   args.rna, args.paired_end, args.read_len, args.frag_len, \
+                   args.num_frag, args.expr_profile, args.repeat_fname, \
+                   args.error_rate, args.max_mismatch, \
+                   args.random_seed, args.snp_prob, args.sanity_check, args.verbose)

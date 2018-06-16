@@ -76,8 +76,9 @@ static int  bigEndian;
 static bool autoMem;
 static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
-static int repeat_count;
-static int repeat_length;
+static TIndexOffU repeat_count;
+static TIndexOffU repeat_length;
+static TIndexOffU max_repeat_edit;
 static bool repeat_reverse;
 
 static void resetOptions() {
@@ -105,6 +106,7 @@ static void resetOptions() {
 	nthreads       = 1;
 	repeat_length  = 50;
 	repeat_count   = 5;
+    max_repeat_edit = 10;
 	repeat_reverse = false;
     wrapper.clear();
 }
@@ -124,6 +126,7 @@ enum {
     ARG_SA,
 	ARG_REPEAT_LENGTH,
 	ARG_REPEAT_CNT,
+    ARG_REPEAT_EDIT,
 	ARG_REPEAT_REVERSE,
 	ARG_WRAPPER
 };
@@ -159,6 +162,9 @@ static void printUsage(ostream& out) {
 	    << "    --dcv <int>             diff-cover period for blockwise (default: 1024)" << endl
 	    << "    --nodc                  disable diff-cover (algorithm becomes quadratic)" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
+        << "    --repeat-length <int>   minimum repeat length (defaultL 50)" << endl
+        << "    --repeat-count <int>    minimum repeat count (default: 5)" << endl
+        << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -189,6 +195,7 @@ static struct option long_options[] = {
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
 	{(char*)"repeat-length",  required_argument, 0,            ARG_REPEAT_LENGTH},
 	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
+    {(char*)"repeat-edit",    required_argument, 0,            ARG_REPEAT_EDIT},
 	{(char*)"repeat-reverse", no_argument,       0,            ARG_REPEAT_REVERSE},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
 	{(char*)0, 0, 0, 0} // terminator
@@ -278,12 +285,15 @@ static void parseOptions(int argc, const char **argv) {
 			case ARG_SEED:
 				seed = parseNumber<int>(0, "--seed arg must be at least 0");
 				break;
+            case ARG_REPEAT_LENGTH:
+                repeat_length = parseNumber<TIndexOffU>(5, "--repeat-length arg must be at least 5");
+                break;
 			case ARG_REPEAT_CNT:
-				repeat_count = parseNumber<int>(2, "--seed arg must be at least 2");
+				repeat_count = parseNumber<TIndexOffU>(2, "--repeat-count arg must be at least 2");
 				break;
-			case ARG_REPEAT_LENGTH:
-				repeat_length = parseNumber<int>(5, "--seed arg must be at least 5");
-				break;
+            case ARG_REPEAT_EDIT:
+                max_repeat_edit = parseNumber<TIndexOffU>(0, "--repeat-edit arg must be at least 0");
+                break;
 			case ARG_REPEAT_REVERSE:
 				repeat_reverse = true;
 				break;
@@ -671,21 +681,24 @@ static void driver(
                 cerr << "" << endl;
             }
             cerr << "Constructing suffix-array element generator" << endl;
-            KarkkainenBlockwiseSA<TStr> bsa(s, bmax, nthreads, dcv, seed, sanity, passMemExc, verbose, outfile);
+            KarkkainenBlockwiseSA<TStr> bsa(s, bmax, nthreads, dcv, seed, sanity, passMemExc, false /* verbose */, outfile);
             assert(bsa.suffixItrIsReset());
             assert_eq(bsa.size(), s.length() + 1);
 
 			// NRG
 			NRG<TStr> nrg(szs, ref_names, s, infiles[0], bsa, true);
 
-			nrg.build(repeat_length, repeat_count);
+			nrg.build(repeat_length,
+                      repeat_count,
+                      true,
+                      max_repeat_edit);
 
             if (repeat_reverse) {
                 KarkkainenBlockwiseSA<TStr> bsa_rc(s_rc, bmax, nthreads, dcv, seed, sanity, passMemExc, verbose, outfile + ".rc");
 
                 string infile_rev = infiles[0] + ".rev";
                 NRG<TStr> nrg_rc(szs, ref_names, s_rc, infile_rev, bsa_rc, false);
-                nrg_rc.build(repeat_length, repeat_count);
+                nrg_rc.build(repeat_length, repeat_count, true, max_repeat_edit);
                 //nrg_rc.saveFile();
                 nrg.merge(nrg_rc);
             }

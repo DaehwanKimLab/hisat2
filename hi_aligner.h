@@ -4028,6 +4028,7 @@ public:
            const GFM<index_t>*        rgfm,
            const ALTDB<index_t>&      altdb,
            const RepeatDB<index_t>&   repeatdb,
+           const ALTDB<index_t>&      raltdb,
            const BitPairReference&    ref,
            SwAligner&                 swa,
            SpliceSiteDB&              ssdb,
@@ -4174,7 +4175,12 @@ public:
                     for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
                         positions.clear();
                         repeatdb.findCommonCoords(_genomeHits_rep[0][i].refoff(),
+                                                  0, // DK right
+                                                  _snpIDs,
                                                   _genomeHits_rep[1][j].refoff(),
+                                                  0, // DK right,
+                                                  _snpIDs2,
+                                                  raltdb,
                                                   positions);
                    
                         for(size_t p = 0; p < positions.size(); p++) {
@@ -4913,6 +4919,8 @@ protected:
     // temporary
     EList<GenomeHit<index_t> >     _genomeHits;
     EList<GenomeHit<index_t> >     _genomeHits_rep[2];
+    EList<index_t>                 _snpIDs;
+    EList<index_t>                 _snpIDs2;
     EList<bool>                    _genomeHits_done;
     ELList<Coord>                  _coords;
     EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >     _positions;

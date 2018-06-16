@@ -42,11 +42,10 @@ unsigned int levenshtein_distance(const std::string& s1, const std::string& s2)
 	return prevCol[len2];
 }
 
-bool checkSequenceMergeable(const string& s1, const string& s2)
+bool checkSequenceMergeable(const string& s1, const string& s2, TIndexOffU max_edit = 10)
 {
 	unsigned int ed = levenshtein_distance(s1, s2);
-
-	return (ed < 11);
+	return (ed <= max_edit);
 }
 
 typedef pair<TIndexOffU, TIndexOffU> Range;
@@ -188,7 +187,10 @@ NRG<TStr>::NRG(
 }
 
 template<typename TStr>
-void NRG<TStr>::build(int rpt_len, int rpt_cnt, bool flagGrouping)
+void NRG<TStr>::build(TIndexOffU rpt_len,
+                      TIndexOffU rpt_cnt,
+                      bool flagGrouping,
+                      TIndexOffU rpt_edit)
 {
 	TIndexOffU count = 0;
 
@@ -310,10 +312,9 @@ void NRG<TStr>::build(int rpt_len, int rpt_cnt, bool flagGrouping)
 
 	}
 
-
     mergeRepeatGroup();
     if (flagGrouping) {
-        groupRepeatGroup();
+        groupRepeatGroup(rpt_edit);
     }
 	//adjustRepeatGroup(flagGrouping);
 	// we found repeat_group
@@ -538,7 +539,7 @@ void NRG<TStr>::saveRepeatSequence()
 
 	for(TIndexOffU grp_idx = 0; grp_idx < rpt_grp_.size(); grp_idx++) {
 		RepeatGroup& rg = rpt_grp_[grp_idx];
-		size_t seq_len = rg.seq.length();
+        size_t seq_len = rg.seq.length();
 
 		TIndexOffU si = 0;
 		while(si < seq_len) {
@@ -763,7 +764,7 @@ void NRG<TStr>::mergeRepeatGroup()
 }
 
 template<typename TStr>
-void NRG<TStr>::groupRepeatGroup()
+void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
 {
     if (rpt_grp_.size() == 0) {
         cerr << "CP " << "no repeat group" << endl;
@@ -794,7 +795,7 @@ void NRG<TStr>::groupRepeatGroup()
         for(size_t j = i + 1; j < rpt_grp_.size(); j++) {
             string& str2 = rpt_grp_[j].seq;
 
-            if(checkSequenceMergeable(str1, str2)) {
+            if(checkSequenceMergeable(str1, str2, rpt_edit)) {
                 /* i, j merge into i */
                 rpt_grp_[i].merge(rpt_grp_[j]);
 
@@ -845,7 +846,7 @@ void NRG<TStr>::groupRepeatGroup()
  * @brief Remove empty repeat group
  */
 template<typename TStr>
-void NRG<TStr>::adjustRepeatGroup(bool flagGrouping)
+void NRG<TStr>::adjustRepeatGroup(bool flagGrouping, TIndexOffU rpt_edit)
 {
 	cerr << "CP " << "repeat_group size " << rpt_grp_.size() << endl;
 
@@ -876,6 +877,7 @@ void NRG<TStr>::adjustRepeatGroup(bool flagGrouping)
                         i, rg.positions[j].fw));
 		}
 	}
+    assert_eq(rpt_ranges.size(), range_count);
 
 	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
             compareRepeatRangeByRange);
@@ -1009,7 +1011,7 @@ void NRG<TStr>::adjustRepeatGroup(bool flagGrouping)
 			for (int j = i + 1; j < rpt_grp_.size(); j++) {
 				string& str2 = rpt_grp_[j].seq;
 
-				if (checkSequenceMergeable(str1, str2)) {
+				if (checkSequenceMergeable(str1, str2, rpt_edit)) {
 					/* i, j merge into i */
 					rpt_grp_[i].merge(rpt_grp_[j]);
 

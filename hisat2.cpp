@@ -1961,6 +1961,7 @@ static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
 static ALTDB<index_t>*                   altdb;
 static RepeatDB<index_t>*                repeatdb;
+static ALTDB<index_t>*                   raltdb;
 static TranscriptomePolicy*              multiseed_tpol;
 static GraphPolicy*                      gpol;
 
@@ -3487,6 +3488,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                                 rgfm,
                                                 *altdb,
                                                 *repeatdb,
+                                                *raltdb,
                                                 ref,
                                                 sw,
                                                 *ssdb,
@@ -3711,6 +3713,7 @@ static void driver(
 	}
     altdb = new ALTDB<index_t>();
     repeatdb = new RepeatDB<index_t>();
+    raltdb = new ALTDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
 	HGFM<index_t, local_index_t> gfm(
                                      adjIdxBase,
@@ -3775,7 +3778,7 @@ static void driver(
     if(rep_index_exists) {
         rgfm = new HGFM<index_t, local_index_t>(
                                                 rep_adjIdxBase,
-                                                altdb,
+                                                raltdb,
                                                 repeatdb,
                                                 -1,       // fw index
                                                 true,     // index is for the forward direction
@@ -4104,6 +4107,7 @@ static void driver(
 		delete mssink;
         delete altdb;
         delete repeatdb;
+        delete raltdb;
         delete ssdb;
 		delete metricsOfb;
         delete rgfm;

@@ -130,7 +130,10 @@ public:
 
 public:
 
-	void build(int, int, bool flagGrouping = false);
+	void build(TIndexOffU rpt_len,
+               TIndexOffU rpt_cnt,
+               bool flagGrouping,
+               TIndexOffU rpt_edit);
 	void buildNames();
 	int mapJoinedOffToSeq(TIndexOffU joined_pos);
 	int getGenomeCoord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
@@ -149,8 +152,8 @@ public:
 
 	void addRepeatGroup(const string&, const EList<RepeatCoord<TIndexOffU> >&);
     void mergeRepeatGroup();
-    void groupRepeatGroup();
-	//void adjustRepeatGroup(bool flagGrouping = false);
+    void groupRepeatGroup(TIndexOffU rpt_edit);
+	void adjustRepeatGroup(bool flagGrouping = false);
     RepeatGroup* findRepeatGroup(const string&);
 
 	int getLCP(TIndexOffU a, TIndexOffU b);

@@ -786,17 +786,9 @@ public:
         }
         
         // Read repeats
-        EList<RepeatAllele<index_t> >& repeatAlleles = repeatdb->repeatAlleles();
         // Check if it hits the end of file, and this routine is needed for backward compatibility
         if(in7.peek() != std::ifstream::traits_type::eof()) {
-            index_t numRepeatAlleles = readIndex<index_t>(in7, this->toBe());
-            if(numRepeatAlleles > 0) {
-                while(repeatAlleles.size() < numRepeatAlleles) {
-                    repeatAlleles.expand();
-                    repeatAlleles.back().read(in7, this->toBe());
-                }
-                assert_eq(repeatAlleles.size(), numRepeatAlleles);
-            }
+            repeatdb->read(in7, this->toBe());
         }
         
         in7.close();
@@ -1815,7 +1807,7 @@ public:
                     _haplotypes[i].write(fout7, this->toBe());
                 }
                 
-                EList<RepeatAllele<index_t> >& repeatAlleles = _repeatdb.repeatAlleles();
+                EList<Repeat<index_t> >& repeats = _repeatdb.repeats();
                 if(repeatfile != "") {
                     ifstream repeat_file(repeatfile.c_str(), ios::in);
                     if(!repeat_file.is_open()) {
@@ -1875,6 +1867,11 @@ public:
                         if(rep_idx >= _refnames_nospace.size()) {
                             cerr << "Error: " << refRepName << " is not found in " << endl;
                             throw 1;
+                        }
+                        
+                        if(repeats.size() == 0 || repeats.back().repName != repName) {
+                            repeats.expand();
+                            repeats.back().init(repName, rep_idx, repPos, repLen);
                         }
                         
                         index_t numCoords, numAlts;
@@ -1964,24 +1961,16 @@ public:
                             
                             positions.back().joinedOff = pos;
                         }
-                        repeatAlleles.expand();
-                        repeatAlleles.back().init(repName,
-                                                  alleleID,
-                                                  rep_idx,
-                                                  repPos,
-                                                  repLen,
-                                                  snpIDs,
-                                                  positions);
+                        repeats.back().alleles.expand();
+                        repeats.back().alleles.back().init(alleleID,
+                                                           snpIDs,
+                                                           positions);
                         
                     }
                     repeat_file.close();
                 }
-                writeIndex<index_t>(fout7, (index_t)repeatAlleles.size(), this->toBe());
-                if(repeatAlleles.size() > 0) {
-                    for(index_t i = 0; i < repeatAlleles.size(); i++) {
-                        repeatAlleles[i].write(fout7, this->toBe());
-                    }
-                }
+                
+                _repeatdb.write(fout7, this->toBe());
                 
                 fout7.close();
                 fout8.close();

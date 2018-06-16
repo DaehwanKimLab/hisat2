@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E84A236320D2AF1600C12106 /* repeat_builder.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E84A236220D2AF1500C12106 /* repeat_builder.cpp */; };
 		E8D9218220C85FE900378C5B /* diff_sample.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CDF1C20B2B600C03464 /* diff_sample.cpp */; };
 		E8D9218520C85FE900378C5B /* limit.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CEC1C20B2B600C03464 /* limit.cpp */; };
 		E8D9218620C85FE900378C5B /* multikey_qsort.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CEF1C20B2B600C03464 /* multikey_qsort.cpp */; };
@@ -226,6 +227,8 @@
 
 /* Begin PBXFileReference section */
 		E80538341DA83933008894D0 /* gp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gp.h; sourceTree = "<group>"; };
+		E84A236120D2AF0600C12106 /* repeat_builder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = repeat_builder.h; sourceTree = "<group>"; };
+		E84A236220D2AF1500C12106 /* repeat_builder.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = repeat_builder.cpp; sourceTree = "<group>"; };
 		E8C30C5A1C20A5DD00C03464 /* hisat2x */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = hisat2x; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8C30C6A1C20A64A00C03464 /* hisat2-buildx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-buildx"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8C30C751C20A65400C03464 /* hisat2-inspectx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-inspectx"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -504,6 +507,7 @@
 				E8C30CB61C20B2B600C03464 /* ref_read.h */,
 				E8C30CB71C20B2B600C03464 /* reference.h */,
 				E8D921A720CC37B300378C5B /* repeat.h */,
+				E84A236120D2AF0600C12106 /* repeat_builder.h */,
 				E8C30CB81C20B2B600C03464 /* sam.h */,
 				E8C30CB91C20B2B600C03464 /* scoring.h */,
 				E8C30CBA1C20B2B600C03464 /* search_globals.h */,
@@ -573,6 +577,7 @@
 				E8C30CF81C20B2B600C03464 /* ref_coord.cpp */,
 				E8C30CF91C20B2B600C03464 /* ref_read.cpp */,
 				E8C30CFA1C20B2B600C03464 /* reference.cpp */,
+				E84A236220D2AF1500C12106 /* repeat_builder.cpp */,
 				E8C30CFB1C20B2B600C03464 /* scoring.cpp */,
 				E8C30CFC1C20B2B600C03464 /* shmem.cpp */,
 				E8C30CFD1C20B2B600C03464 /* simple_func.cpp */,
@@ -861,6 +866,7 @@
 				E8D9218920C85FE900378C5B /* alphabet.cpp in Sources */,
 				E8D9218A20C85FE900378C5B /* ccnt_lut.cpp in Sources */,
 				E8D9218B20C85FE900378C5B /* ds.cpp in Sources */,
+				E84A236320D2AF1600C12106 /* repeat_builder.cpp in Sources */,
 				E8D9218C20C85FE900378C5B /* edit.cpp in Sources */,
 				E8D9218D20C85FE900378C5B /* gfm.cpp in Sources */,
 				E8D9218E20C85FE900378C5B /* ref_read.cpp in Sources */,
