@@ -301,6 +301,43 @@ public:
         }
     }
     
+    bool findCoords(index_t               left,  // left offset in the repeat sequence
+                    index_t               right, // right offset
+                    const EList<index_t>& snpIDs, // SNP IDs
+                    const ALTDB<index_t>& altdb,
+                    EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& near_positions,
+                    index_t dist = 1000) const {
+        near_positions.clear();
+        
+        // Find a repeat corresponding to a given location (left, right)
+        pair<index_t, index_t> repeat(left, 0);
+        index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
+        assert_lt(repeatIdx, _repeats.size());
+        const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx].alleles;
+        index_t adjLeft = left, adjRight = right;
+        if(repeatIdx > 0) {
+            adjLeft -= _repeatMap[repeatIdx-1].first;
+            adjRight -= _repeatMap[repeatIdx-1].first;
+        }
+        pair<index_t, index_t> alt_range = get_alt_range(altdb, left, right);
+        
+        for(index_t a = 0; a < alleles.size(); a++) {
+            const RepeatAllele<index_t>& allele = alleles[a];
+            if(!allele.compatible(snpIDs, alt_range))
+                continue;
+            
+            const EList<RepeatCoord<index_t> >& positions = allele.positions;
+            for(index_t p = 0; p < positions.size(); p++) {
+                near_positions.expand();
+                near_positions.back().first = positions[p];
+                near_positions.back().first.toff += adjLeft;
+                near_positions.back().first.joinedOff += adjLeft;
+            }
+        }
+        
+        return near_positions.size() > 0;
+    }
+    
     bool findCommonCoords(index_t               left,  // left offset in the repeat sequence
                           index_t               right, // right offset
                           const EList<index_t>& snpIDs, // SNP IDs
@@ -313,8 +350,8 @@ public:
         common_positions.clear();
         
         // Find a repeat corresponding to a given location (left, right)
-        pair<index_t, index_t> repeat1(left, 0);
-        index_t repeatIdx = _repeatMap.bsearchLoBound(repeat1);
+        pair<index_t, index_t> repeat(left, 0);
+        index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
         assert_lt(repeatIdx, _repeats.size());
         const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx].alleles;
         index_t adjLeft = left, adjRight = right;

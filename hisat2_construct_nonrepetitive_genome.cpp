@@ -573,7 +573,7 @@ static void driver(
 	{
 		if(verbose) cerr << "Reading reference sizes" << endl;
 		Timer _t(cerr, "  Time reading reference sizes: ", verbose);
-        sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck, &ref_names);
+        sztot = BitPairReference::szsFromFasta(is, "", bigEndian, refparams, szs, sanityCheck, &ref_names);
 	}
 	assert_gt(sztot.first, 0);
 	assert_gt(sztot.second, 0);
@@ -672,7 +672,7 @@ static void driver(
             EList<string> suffixes;
 
 			// NRG
-			NRG<TStr> nrg(szs, ref_names, s, infiles[0], bsa);
+			NRG<TStr> nrg(szs, ref_names, s, outfile, bsa);
 
 			nrg.build(repeat_length,
                       repeat_count,
@@ -742,15 +742,12 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
 		}
 		infile = argv[optind++];
         
-		// Get output filename
-#if 0
 		if(optind >= argc) {
 			cerr << "No output file specified!" << endl;
 			printUsage(cerr);
 			return 1;
 		}
 		outfile = argv[optind++];
-#endif
 
 		tokenize(infile, ",", infiles);
 		if(infiles.size() < 1) {

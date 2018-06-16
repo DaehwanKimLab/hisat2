@@ -535,7 +535,7 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
             num_pairs += 1
             pair_list = set()
             prev_NM = sys.maxint
-        
+
         flag = int(flag)
         canonical_pos1, canonical_pos2 = int(pos1), int(pos2)
         left_read = (flag & 0x40 != 0)
@@ -1485,9 +1485,11 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "snp", "210", ""],
         # ["hisat2", "", "tran", "210", ""],
         # ["hisat2", "", "snp_tran", "210", ""],
-        ["hisat2", "", "", "", ""],
         # ["hisat2", "", "", "210", ""],
-        ["hisat2", "", "", "", "--sensitive"],
+        ["hisat2", "", "", "", ""],
+        ["hisat2", "", "rep", "", ""],
+        # ["hisat2", "", "", "", "--sensitive"],
+        # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
         # ["hisat2", "", "snp", "", ""],
         # ["hisat2", "", "snp", "", "--sensitive"],
@@ -1505,11 +1507,11 @@ def calculate_read_cost(verbose):
         # ["star", "gtf", "", "", ""],
         # ["bowtie", "", "", "", ""],
         # ["bowtie2", "", "", "", ""],
-        ["bowtie2", "", "", "", "-k 10"],
-        ["bowtie2", "", "", "", "-k 1000 --extends 2000"],
+        # ["bowtie2", "", "", "", "-k 10"],
+        # ["bowtie2", "", "", "", "-k 1000 --extends 2000"],
         # ["gsnap", "", "", "", ""],
         # ["bwa", "mem", "", "", ""],
-        ["bwa", "mem", "", "", "-a"],
+        # ["bwa", "mem", "", "", "-a"],
         # ["hisat2", "", "snp", "", ""],
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],

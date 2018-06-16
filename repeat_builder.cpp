@@ -139,11 +139,11 @@ void dump_tstr(TStr& s)
 
 template<typename TStr>
 NRG<TStr>::NRG(
-		EList<RefRecord>& szs,
-		EList<string>& ref_names,
-		TStr& s,
-		string& filename,
-		BlockwiseSA<TStr>& sa) :
+               const EList<RefRecord>& szs,
+               EList<string>& ref_names,
+               TStr& s,
+               const string& filename,
+               BlockwiseSA<TStr>& sa) :
 	szs_(szs), ref_namelines_(ref_names), 
 	s_(s), filename_(filename), bsa_(sa)
 {

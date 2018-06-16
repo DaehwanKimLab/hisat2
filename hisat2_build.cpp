@@ -768,7 +768,7 @@ int hisat2_build(int argc, const char **argv) {
                                            outfile + ".rep",
                                            false,
                                            REF_READ_FORWARD,
-                                           false, // do not create local index
+                                           true, // create local index?
                                            &parent_szs,
                                            &parent_refnames);
                 }

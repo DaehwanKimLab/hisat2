@@ -92,20 +92,20 @@ class NRG {
 public:
 	NRG();
 	NRG(
-		EList<RefRecord>& szs,
+		const EList<RefRecord>& szs,
 		EList<string>& ref_names,
 		TStr& s,
-		string& filename,
+		const string& filename,
 		BlockwiseSA<TStr>& sa);
 
 public:
 	const int output_width = 60;
 
-	EList<RefRecord>& szs_;
+	const EList<RefRecord>& szs_;
 	EList<string>& ref_namelines_;
 	EList<string> ref_names_;
 	TStr& s_;
-	string& filename_;
+	string filename_;
 
 
 	BlockwiseSA<TStr>& bsa_;

@@ -4121,7 +4121,7 @@ public:
                _concordantPairs.size() == 0 &&
                (sink.bestUnp1() >= _minsc[0] && sink.bestUnp2() >= _minsc[1])) {
                 
-                for(size_t rdi = 0; rdi < 2; rdi++) {
+                for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                     for(size_t fwi = 0; fwi < 2; fwi++) {
                         bool fw = (fwi == 0);
                         _hits[rdi][fwi].init(fw, (index_t)_rds[rdi]->length());
@@ -4130,7 +4130,7 @@ public:
                 
                 while(nextBWT(sc, pepol, tpol, gpol, *rgfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink));
                 
-                for(size_t rdi = 0; rdi < 2; rdi++) {
+                for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                     for(size_t fwi = 0; fwi < 2; fwi++) {
                         const ReportingParams& rp = sink.reportingParams();
                         bool fw = (fwi == 0);
@@ -4171,95 +4171,140 @@ public:
                 }
                 
                 EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& positions = _positions;
-                for(size_t i = 0; i < _genomeHits_rep[0].size(); i++) {
-                    for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
-                        positions.clear();
-                        repeatdb.findCommonCoords(_genomeHits_rep[0][i].refoff(),
-                                                  0, // DK right
-                                                  _snpIDs,
-                                                  _genomeHits_rep[1][j].refoff(),
-                                                  0, // DK right,
-                                                  _snpIDs2,
-                                                  raltdb,
-                                                  positions);
-                   
-                        for(size_t p = 0; p < positions.size(); p++) {
-                            _genomeHits.clear();
-                            _genomeHits.expand();
-                            _genomeHits.back() = _genomeHits_rep[0][i];
-                            _genomeHits.back()._tidx = positions[p].first.tid;
-                            _genomeHits.back()._toff = positions[p].first.toff;
-                            _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
+                if(_genomeHits_rep[0].size() > 0 && (!_paired || _genomeHits_rep[1].size() > 0)) {
+                    for(size_t i = 0; i < _genomeHits_rep[0].size(); i++) {
+                        for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
+                            positions.clear();
+                            repeatdb.findCommonCoords(_genomeHits_rep[0][i].refoff(),
+                                                      0, // DK right
+                                                      _snpIDs,
+                                                      _genomeHits_rep[1][j].refoff(),
+                                                      0, // DK right,
+                                                      _snpIDs2,
+                                                      raltdb,
+                                                      positions);
                             
-                            bool fw1 = (_genomeHits.back()._fw ? _genomeHits_rep[0][i].fw() : !_genomeHits_rep[0][i].fw());
+                            for(size_t p = 0; p < positions.size(); p++) {
+                                _genomeHits.clear();
+                                _genomeHits.expand();
+                                _genomeHits.back() = _genomeHits_rep[0][i];
+                                _genomeHits.back()._tidx = positions[p].first.tid;
+                                _genomeHits.back()._toff = positions[p].first.toff;
+                                _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
+                                
+                                bool fw1 = (_genomeHits.back()._fw ? _genomeHits_rep[0][i].fw() : !_genomeHits_rep[0][i].fw());
+                                
+                                // extend the partial alignments bidirectionally using
+                                // local search, extension, and (less often) global search
+                                hybridSearch(sc,
+                                             pepol,
+                                             tpol,
+                                             gpol,
+                                             gfm,
+                                             altdb,
+                                             repeatdb,
+                                             ref,
+                                             swa,
+                                             ssdb,
+                                             0,
+                                             fw1,
+                                             wlm,
+                                             prm,
+                                             swm,
+                                             him,
+                                             rnd,
+                                             sink);
+                                
+                                _genomeHits.clear();
+                                _genomeHits.expand();
+                                _genomeHits.back() = _genomeHits_rep[1][j];
+                                _genomeHits.back()._tidx = positions[p].second.tid;
+                                _genomeHits.back()._toff = positions[p].second.toff;
+                                _genomeHits.back()._joinedOff = positions[p].second.joinedOff;
+                                
+                                bool fw2 = (_genomeHits.back()._fw ? _genomeHits_rep[1][j].fw() : !_genomeHits_rep[1][j].fw());
+                                
+                                // extend the partial alignments bidirectionally using
+                                // local search, extension, and (less often) global search
+                                hybridSearch(sc,
+                                             pepol,
+                                             tpol,
+                                             gpol,
+                                             gfm,
+                                             altdb,
+                                             repeatdb,
+                                             ref,
+                                             swa,
+                                             ssdb,
+                                             1,
+                                             fw2,
+                                             wlm,
+                                             prm,
+                                             swm,
+                                             him,
+                                             rnd,
+                                             sink);
+                            }
                             
-                            // extend the partial alignments bidirectionally using
-                            // local search, extension, and (less often) global search
-                            hybridSearch(sc,
-                                         pepol,
-                                         tpol,
-                                         gpol,
-                                         gfm,
-                                         altdb,
-                                         repeatdb,
-                                         ref,
-                                         swa,
-                                         ssdb,
-                                         0,
-                                         fw1,
-                                         wlm,
-                                         prm,
-                                         swm,
-                                         him,
-                                         rnd,
-                                         sink);
-                            
-                            _genomeHits.clear();
-                            _genomeHits.expand();
-                            _genomeHits.back() = _genomeHits_rep[1][j];
-                            _genomeHits.back()._tidx = positions[p].second.tid;
-                            _genomeHits.back()._toff = positions[p].second.toff;
-                            _genomeHits.back()._joinedOff = positions[p].second.joinedOff;
-                            
-                            bool fw2 = (_genomeHits.back()._fw ? _genomeHits_rep[1][j].fw() : !_genomeHits_rep[1][j].fw());
-                            
-                            // extend the partial alignments bidirectionally using
-                            // local search, extension, and (less often) global search
-                            hybridSearch(sc,
-                                         pepol,
-                                         tpol,
-                                         gpol,
-                                         gfm,
-                                         altdb,
-                                         repeatdb,
-                                         ref,
-                                         swa,
-                                         ssdb,
-                                         1,
-                                         fw2,
-                                         wlm,
-                                         prm,
-                                         swm,
-                                         him,
-                                         rnd,
-                                         sink);
+                            if(positions.size() > 0) {
+                                pairReads(
+                                          sc,
+                                          pepol,
+                                          tpol,
+                                          gpol,
+                                          gfm,
+                                          altdb,
+                                          repeatdb,
+                                          ref,
+                                          wlm,
+                                          prm,
+                                          him,
+                                          rnd,
+                                          sink);
+                            }
                         }
-                        
-                        if(positions.size() > 0) {
-                            pairReads(
-                                      sc,
-                                      pepol,
-                                      tpol,
-                                      gpol,
-                                      gfm,
-                                      altdb,
-                                      repeatdb,
-                                      ref,
-                                      wlm,
-                                      prm,
-                                      him,
-                                      rnd,
-                                      sink);
+                    }
+                }
+                
+                if(!_paired || _concordantPairs.size() == 0) {
+                    // DK - to be implemented
+                    for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                        for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
+                            positions.clear();
+                            repeatdb.findCoords(_genomeHits_rep[rdi][i].refoff(),
+                                                 0, // DK right
+                                                 _snpIDs,
+                                                 raltdb,
+                                                 positions);
+                            
+                            for(size_t p = 0; p < positions.size(); p++) {
+                                _genomeHits.clear();
+                                _genomeHits.expand();
+                                _genomeHits.back() = _genomeHits_rep[rdi][i];
+                                _genomeHits.back()._tidx = positions[p].first.tid;
+                                _genomeHits.back()._toff = positions[p].first.toff;
+                                _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
+                                
+                                bool fw = (_genomeHits.back()._fw ? _genomeHits_rep[rdi][i].fw() : !_genomeHits_rep[rdi][i].fw());
+                                hybridSearch(sc,
+                                             pepol,
+                                             tpol,
+                                             gpol,
+                                             gfm,
+                                             altdb,
+                                             repeatdb,
+                                             ref,
+                                             swa,
+                                             ssdb,
+                                             rdi,
+                                             fw,
+                                             wlm,
+                                             prm,
+                                             swm,
+                                             him,
+                                             rnd,
+                                             sink);
+                            }
                         }
                     }
                 }
@@ -4580,7 +4625,8 @@ public:
                            RandomSource&                    rnd,
                            bool&                            uniqueStop,
                            local_index_t                    minUniqueLen,
-                           local_index_t                    maxHitLen = (local_index_t)INDEX_MAX);
+                           local_index_t                    maxHitLen = (local_index_t)INDEX_MAX,
+                           local_index_t                    maxHits = 0);
     
     /**
      * Convert FM offsets to the corresponding genomic offset (chromosome id, offset)
@@ -4658,7 +4704,6 @@ public:
         assert(hit.done());
         index_t offsetSize = hit.offsetSize();
         assert_gt(offsetSize, 0);
-        genomeHits.clear();
         for(size_t hi = 0; hi < offsetSize; hi++) {
             index_t hj = 0;
             for(; hj < offsetSize; hj++) {
@@ -5028,6 +5073,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     
     // choose candidate partial alignments for further alignment
     const index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
+    _genomeHits.clear();
     index_t numHits = getAnchorHits(gfm,
                                     pepol,
                                     tpol,
@@ -5144,6 +5190,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             local_index_t node_top = (local_index_t)INDEX_MAX, node_bot = (local_index_t)INDEX_MAX;
             _local_node_iedge_count.clear();
             bool uniqueStop = false;
+            // DK - check this out
+            const local_index_t maxHits = tpol.no_spliced_alignment() ? 64 : 0;
             index_t nelt = localGFMSearch(
                                           *lGFM,   // GFM index
                                           ord,     // read to align
@@ -5159,11 +5207,13 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                           _local_node_iedge_count,
                                           rnd,
                                           uniqueStop,
-                                          minHitLen);
+                                          minHitLen,
+                                          numeric_limits<local_index_t>::max(),
+                                          maxHits);
             assert_leq(top, bot);
             assert_eq(nelt, (index_t)(node_bot - node_top));
             assert_leq(hitlen, hitoff + 1);
-            if(nelt > 0 && nelt <= rp.kseeds && hitlen >= minHitLen) {
+            if(nelt > 0 && nelt <= max<index_t>(maxHits, rp.kseeds) && hitlen >= minHitLen) {
                 coords.clear();
                 bool straddled = false;
                 getGenomeCoords_local(
@@ -5188,6 +5238,11 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                 assert_leq(coords.size(), nelt);
                 for(index_t ri = 0; ri < coords.size(); ri++) {
                     const Coord& coord = coords[ri];
+                    if(tpol.no_spliced_alignment()) {
+                        if(coord.off() + pepol.maxFragLen() * 2 < toff || toff + pepol.maxFragLen() * 2 < coord.off())
+                            continue;
+                    }
+                    
                     GenomeHit<index_t>::adjustWithALT(
                                                       hitoff - hitlen + 1,
                                                       hitlen,
@@ -6238,8 +6293,10 @@ index_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
                                                            RandomSource&                    rnd,
                                                            bool&                            uniqueStop,
                                                            local_index_t                    minUniqueLen,
-                                                           local_index_t                    maxHitLen)
+                                                           local_index_t                    maxHitLen,
+                                                           local_index_t                    maxHits)
 {
+    maxHits = max<local_index_t>(maxHits, rp.kseeds);
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
     const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
@@ -6335,7 +6392,7 @@ index_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
     }
     
     // Done
-    if(node_range.first < node_range.second && node_range.second - node_range.first <= rp.kseeds) {
+    if(node_range.first < node_range.second && node_range.second - node_range.first <= maxHits) {
         assert_leq(node_range.second - node_range.first, range.second - range.first);
 #ifndef NDEBUG
         if(node_range.second - node_range.first < range.second - range.first) {
