@@ -78,6 +78,7 @@ static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
 static int repeat_count;
 static int repeat_length;
+static bool repeat_reverse;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -104,6 +105,7 @@ static void resetOptions() {
 	nthreads       = 1;
 	repeat_length  = 50;
 	repeat_count   = 5;
+	repeat_reverse = false;
     wrapper.clear();
 }
 
@@ -122,6 +124,7 @@ enum {
     ARG_SA,
 	ARG_REPEAT_LENGTH,
 	ARG_REPEAT_CNT,
+	ARG_REPEAT_REVERSE,
 	ARG_WRAPPER
 };
 
@@ -186,6 +189,7 @@ static struct option long_options[] = {
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
 	{(char*)"repeat-length",  required_argument, 0,            ARG_REPEAT_LENGTH},
 	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
+	{(char*)"repeat-reverse", no_argument,       0,            ARG_REPEAT_REVERSE},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
 	{(char*)0, 0, 0, 0} // terminator
 };
@@ -279,6 +283,9 @@ static void parseOptions(int argc, const char **argv) {
 				break;
 			case ARG_REPEAT_LENGTH:
 				repeat_length = parseNumber<int>(5, "--seed arg must be at least 5");
+				break;
+			case ARG_REPEAT_REVERSE:
+				repeat_reverse = true;
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -590,6 +597,16 @@ static void driver(
                                                   refparams,
                                                   seed);
     }
+
+    // for reverseComplement
+    TStr s_rc;
+    EList<RefRecord> szs_rc(MISC_CAT);
+    EList<string> ref_names_rc;
+	if (repeat_reverse) {
+        // copy
+        s_rc = s;
+		s_rc.reverseComplement(dnacomp);
+	}
         
     // Succesfully obtained joined reference string
     assert_geq(s.length(), jlen);
@@ -657,13 +674,23 @@ static void driver(
             KarkkainenBlockwiseSA<TStr> bsa(s, bmax, nthreads, dcv, seed, sanity, passMemExc, verbose, outfile);
             assert(bsa.suffixItrIsReset());
             assert_eq(bsa.size(), s.length() + 1);
-            cerr << "Converting suffix-array elements to index image" << endl;
-            EList<string> suffixes;
 
 			// NRG
-			NRG<TStr> nrg(szs, ref_names, s, infiles[0], bsa);
+			NRG<TStr> nrg(szs, ref_names, s, infiles[0], bsa, true);
 
 			nrg.build(repeat_length, repeat_count);
+
+            if (repeat_reverse) {
+                KarkkainenBlockwiseSA<TStr> bsa_rc(s_rc, bmax, nthreads, dcv, seed, sanity, passMemExc, verbose, outfile + ".rc");
+
+                string infile_rev = infiles[0] + ".rev";
+                NRG<TStr> nrg_rc(szs, ref_names, s_rc, infile_rev, bsa_rc, false);
+                nrg_rc.build(repeat_length, repeat_count);
+                //nrg_rc.saveFile();
+                nrg.merge(nrg_rc);
+            }
+
+            nrg.saveFile();
 
 			break;
 
@@ -779,20 +806,20 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
             }
         }
         return 0;
-    } catch(std::exception& e) {
-		cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
-		cerr << "Command: ";
-		for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
-		cerr << endl;
-		return 1;
-	} catch(int e) {
-		if(e != 0) {
-			cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
-			cerr << "Command: ";
-			for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
-			cerr << endl;
-		}
-		return e;
-	}
+        } catch(std::exception& e) {
+            cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
+            cerr << "Command: ";
+            for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+            cerr << endl;
+            return 1;
+        } catch(int e) {
+            if(e != 0) {
+                cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
+                cerr << "Command: ";
+                for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+                cerr << endl;
+            }
+            return e;
+        }
 }
 }

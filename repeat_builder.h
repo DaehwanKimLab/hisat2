@@ -30,10 +30,11 @@
 #include "ref_coord.h"
 #include "ref_read.h"
 #include "ds.h"
-//#include "sstring.h"
+#include "repeat.h"
 #include "blockwise_sa.h"
 
 using namespace std;
+
 
 struct Fragments {
 	bool contain(TIndexOffU pos) {
@@ -58,8 +59,12 @@ struct Fragments {
 
 struct RepeatGroup {
 	string seq;
-	EList<TIndexOffU> positions;
+
+    EList<RepeatCoord<TIndexOffU> > positions;
+	//EList<TIndexOffU> positions;
 	EList<string> alt_seq;
+
+	// EList<SNP> snps; 
 
 	void merge(const RepeatGroup& rg)
 	{
@@ -95,8 +100,9 @@ public:
 		EList<RefRecord>& szs,
 		EList<string>& ref_names,
 		TStr& s,
-		string& filename,
-		BlockwiseSA<TStr>& sa);
+        string& filename,
+        BlockwiseSA<TStr>& sa,
+        bool forward);
 
 public:
 	const int output_width = 60;
@@ -107,9 +113,8 @@ public:
 	TStr& s_;
 	string& filename_;
 
-
 	BlockwiseSA<TStr>& bsa_;
-
+    bool forward_;
 
 	// mapping info from joined string to genome
 	EList<Fragments> fraglist_;
@@ -126,29 +131,36 @@ public:
 public:
 
 	void build(int, int, bool flagGrouping = false);
-	void build_names(void);
-	int map_joined_pos_to_seq(TIndexOffU joined_pos);
-	int get_genome_coord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
+	void buildNames();
+	int mapJoinedOffToSeq(TIndexOffU joined_pos);
+	int getGenomeCoord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
 
-	void build_joined_fragment(void);
+	void buildJoinedFragment();
 
-	static bool repeat_group_cmp(const RepeatGroup& a, const RepeatGroup& b)
+	static bool compareRepeatGroupByJoinedOff(const RepeatGroup& a, const RepeatGroup& b)
 	{
-		return a.positions[0] < b.positions[0];
+		return a.positions[0].joinedOff < b.positions[0].joinedOff;
 	}
+	void sortRepeatGroup();
 
-	void sort_rpt_grp(void);
+	void saveFile();
+	void saveRepeatSequence();
+	void saveRepeatGroup();
 
-	void savefile(void);
-	void saveRepeatSequence(void);
-	void saveRepeatGroup(void);
+	void addRepeatGroup(const string&, const EList<RepeatCoord<TIndexOffU> >&);
+    void mergeRepeatGroup();
+    void groupRepeatGroup();
+	//void adjustRepeatGroup(bool flagGrouping = false);
+    RepeatGroup* findRepeatGroup(const string&);
 
+	int getLCP(TIndexOffU a, TIndexOffU b);
 
-	void add_repeat_group(string& rpt_seq, EList<TIndexOffU>& rpt_range);
-	void adjust_repeat_group(bool flagGrouping = false);
-	void repeat_masking(void);
+    void merge(NRG<TStr>& nrg);
 
-	int get_lcp(TIndexOffU a, TIndexOffU b);
+	void repeat_masking();
 };
+
+int strcmpPos(const string&, const string&, TIndexOffU&);
+template<typename TStr> void dump_tstr(TStr& s);
 
 #endif /* __REPEAT_BUILDER_H__ */
