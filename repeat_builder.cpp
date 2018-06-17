@@ -638,11 +638,20 @@ void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TI
 		}
 	}
 #endif
+    
+    // DK - check this out
+    size_t sense_mer_count = 0;
+    for(size_t i = 0; i < positions.size(); i++) {
+        if(positions[i].joinedOff < half_length_)
+            sense_mer_count++;
+    }
 
 	// add to last
-	rpt_grp_.expand();
-	rpt_grp_.back().seq = rpt_seq;
-	rpt_grp_.back().positions = positions;
+    if(sense_mer_count > 0) {
+        rpt_grp_.expand();
+        rpt_grp_.back().seq = rpt_seq;
+        rpt_grp_.back().positions = positions;
+    }
 }
 
 

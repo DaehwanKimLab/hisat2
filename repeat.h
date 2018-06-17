@@ -322,7 +322,7 @@ public:
         near_positions.clear();
         
         // Find a repeat corresponding to a given location (left, right)
-        pair<index_t, index_t> repeat(left, 0);
+        pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
         index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
         assert_lt(repeatIdx, _repeats.size());
         if(right > _repeatMap[repeatIdx].first)
@@ -380,7 +380,7 @@ public:
         
         // Find a repeat corresponding to a given location (left, right)
         assert_lt(left, right);
-        pair<index_t, index_t> repeat(left, 0);
+        pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
         index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
         assert_lt(repeatIdx, _repeats.size());
         if(right > _repeatMap[repeatIdx].first)
@@ -395,7 +395,7 @@ public:
         
         // Find a repeat cooresponding to a given location (left2, right2)
         assert_lt(left2, right2);
-        pair<index_t, index_t> repeat2(left2, 0);
+        pair<index_t, index_t> repeat2(left2, numeric_limits<index_t>::max());
         index_t repeatIdx2 = _repeatMap.bsearchLoBound(repeat2);
         assert_lt(repeatIdx2, _repeats.size());
         if(right2 > _repeatMap[repeatIdx2].first)
