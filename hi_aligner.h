@@ -4119,6 +4119,7 @@ public:
         // Determine whether reads map to repetitive sequences
         const ReportingParams& rp = sink.reportingParams();
         bool repeat[2][2] = {{false, false}, {false, false}};
+        bool perform_repeat_alignment = false;
         for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
             for(size_t fwi = 0; fwi < 2; fwi++) {
                 ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
@@ -4132,12 +4133,15 @@ public:
                         repeat[rdi][fwi] = partialHit.size() > rp.kseeds;
                     }
                 }
+                
+                perform_repeat_alignment |= repeat[rdi][fwi];
             }
         }
         
         // Handle alignment to repetitive regions
         if(rgfm != NULL &&
-           (sink.bestUnp1() >= _minsc[0] && sink.bestUnp2() >= _minsc[1])) {
+           perform_repeat_alignment) {
+           // (sink.bestUnp1() >= _minsc[0] && sink.bestUnp2() >= _minsc[1])) {
             
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 for(size_t fwi = 0; fwi < 2; fwi++) {
@@ -4153,7 +4157,11 @@ public:
                 for(size_t fwi = 0; fwi < 2; fwi++) {
                     if(!repeat[rdi][fwi]) continue;
                     // choose candidate partial alignments for further alignment
-                    const index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
+                    index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
+                    
+                    // DK - debugging purposes
+                    maxsize = numeric_limits<index_t>::max();
+                    
                     getAnchorHits(*rgfm,
                                   pepol,
                                   tpol,
@@ -4813,6 +4821,9 @@ public:
                                 false, // reject straddled
                                 straddled);
             } else {
+                // DK - debugging purposes
+                continue;
+                
                 index_t edgeIdx = 0;
                 index_t top = partialHit._top;
                 index_t added = 0;

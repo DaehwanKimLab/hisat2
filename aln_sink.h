@@ -2433,31 +2433,6 @@ bool AlnSinkWrap<index_t>::report(
     index_t num_spliced = (index_t)rsa->num_spliced();
     if(rsb != NULL) num_spliced += (index_t)rsb->num_spliced();
     
-    // DK CONCORDANT - debugging purposes
-#if 0
-    // Limit the size of alignments to be stored in order to save memory
-    if(rp_.khits > 10) {
-        if(paired) {
-            if(rs1_.size() >= rp_.khits * 2 && score < best2Pair_) {
-                return false;
-            }
-
-        } else {
-            if(!alignMate) {
-                if(one) {
-                    if(rs1u_.size() >= rp_.khits * 2 && score < best2Unp1_) {
-                        return false;
-                    }
-                } else {
-                    if(rs2u_.size() >= rp_.khits * 2 && score < best2Unp2_) {
-                        return false;
-                    }
-                }
-            }
-        }
-    }
-#endif
-    
 	if(paired) {
 		assert(readIsPair());
 		st_.foundConcordant();
