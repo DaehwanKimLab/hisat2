@@ -14,5 +14,5 @@ hisat2-construct-nonrepetitive-genome-s --repeat-edit 0 -p 3 --repeat-length 100
 
 hisat2_simulate_reads.py --dna --num-fragment 1000000 --repeat-info 22.fa.rep.info 22.fa /dev/null /dev/null sim
 
-hisat2-build -p 3 22.fa,22.rep.fa --repeat-ref 22.rep.fa --repeat-info 22.rep.info 22_rep
+hisat2-build -p 3 22.fa --repeat-ref 22.rep.fa --repeat-info 22.rep.info 22_rep
 
