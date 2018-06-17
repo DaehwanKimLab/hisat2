@@ -598,30 +598,18 @@ static void driver(
         cerr << "Reserving space for joined string" << endl;
         cerr << "Joining reference sequences" << endl;
         Timer timer(cerr, "  Time to join reference sequences: ", verbose);
-        
-        TStr s_ = GFM<TIndexOffU>::join<TStr>(
-                                              is,
-                                              szs,
-                                              (TIndexOffU)sztot.first,
-                                              refparams,
-                                              seed);
-        
-        assert_eq(s_.length(), jlen);
-        s.resize(jlen * 2);
-        
-        // Append reverse complement
-        for(TIndexOffU i = 0; i < jlen; i++) {
-            s[i] = s_[i];
-        }
-        for(TIndexOffU i = 0; i < jlen; i++) {
-            int nt = s[jlen - i - 1];
-            assert_range(0, 3, nt);
-            s[jlen + i] = dnacomp[nt];
-        }
+        GFM<TIndexOffU>::join<TStr>(
+                                    is,
+                                    szs,
+                                    (TIndexOffU)sztot.first,
+                                    refparams,
+                                    seed,
+                                    s,
+                                    true); // include reverse complemented sequence
     }
 
     // Succesfully obtained joined reference string
-    assert_geq(s.length(), jlen);
+    assert_geq(s.length(), jlen << 1);
 
     if(bmax != (TIndexOffU)OFF_MASK) {
         // VMSG_NL("bmax according to bmax setting: " << bmax);

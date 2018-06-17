@@ -591,12 +591,14 @@ static void driver(
 		hGFM.restore(s2);
 		hGFM.evictFromMemory();
 		{
-			SString<char> joinedss = GFM<>::join<SString<char> >(
-				is,          // list of input streams
-				szs,         // list of reference sizes
-				(TIndexOffU)sztot.first, // total size of all unambiguous ref chars
-				refparams,   // reference read-in parameters
-				seed);       // pseudo-random number generator seed
+            SString<char> joinedss;
+            GFM<>::join<SString<char> >(
+                                        is,          // list of input streams
+                                        szs,         // list of reference sizes
+                                        (TIndexOffU)sztot.first, // total size of all unambiguous ref chars
+                                        refparams,   // reference read-in parameters
+                                        seed,        // pseudo-random number generator seed
+                                        joinedss);
 			if(refparams.reverse == REF_READ_REVERSE) {
 				joinedss.reverse();
 			}

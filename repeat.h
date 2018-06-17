@@ -35,6 +35,15 @@ using namespace std;
 template <typename index_t>
 class RepeatCoord {
 public:
+    bool operator< (const RepeatCoord<index_t>& o) const {
+        if(joinedOff != o.joinedOff)
+            return joinedOff < o.joinedOff;
+        if(fw != o.fw)
+            return fw;
+        return false;
+    }
+        
+public:
     RepeatCoord() {};
     RepeatCoord(index_t l_tid, index_t l_toff, index_t l_joinedOff, bool l_fw) :
         tid(l_tid), toff(l_toff), joinedOff(l_joinedOff), fw(l_fw) {};
@@ -316,6 +325,9 @@ public:
         pair<index_t, index_t> repeat(left, 0);
         index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
         assert_lt(repeatIdx, _repeats.size());
+        if(right > _repeatMap[repeatIdx].first)
+            return false;
+        
         const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx].alleles;
         index_t adjLeft = left, adjRight = right;
         if(repeatIdx > 0) {
@@ -333,29 +345,46 @@ public:
             for(index_t p = 0; p < positions.size(); p++) {
                 near_positions.expand();
                 near_positions.back().first = positions[p];
-                near_positions.back().first.toff += adjLeft;
-                near_positions.back().first.joinedOff += adjLeft;
+                if(positions[p].fw) {
+                    near_positions.back().first.joinedOff += adjLeft;
+                    near_positions.back().first.toff += adjLeft;
+                } else {
+                    const index_t len = right - left;
+                    assert_leq(adjLeft + len, _repeats[repeatIdx].repLen);
+                    index_t rc_adjLeft = _repeats[repeatIdx].repLen - adjLeft - len;
+                    near_positions.back().first.joinedOff += rc_adjLeft;
+                    near_positions.back().first.toff += rc_adjLeft;
+                }
             }
         }
         
         return near_positions.size() > 0;
     }
     
-    bool findCommonCoords(index_t               left,  // left offset in the repeat sequence
-                          index_t               right, // right offset
-                          const EList<index_t>& snpIDs, // SNP IDs
-                          index_t               left2, // left offset 2 in the repeat sequence
-                          index_t               right2, // right offset 2
+    bool findCommonCoords(index_t               left,    // left offset in the repeat sequence
+                          index_t               right,   // right offset
+                          const EList<index_t>& snpIDs,  // SNP IDs
+                          index_t               left2,   // left offset 2 in the repeat sequence
+                          index_t               right2,  // right offset 2
                           const EList<index_t>& snpIDs2, // SNP IDs
                           const ALTDB<index_t>& altdb,
                           EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& common_positions,
                           index_t dist = 1000) const {
         common_positions.clear();
         
+        // DK - debugging purposes
+        if(left == 850250 && left2 == 836045) {
+            int kk = 20;
+            kk += 20;
+        }
+        
         // Find a repeat corresponding to a given location (left, right)
+        assert_lt(left, right);
         pair<index_t, index_t> repeat(left, 0);
         index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
         assert_lt(repeatIdx, _repeats.size());
+        if(right > _repeatMap[repeatIdx].first)
+            return false;
         const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx].alleles;
         index_t adjLeft = left, adjRight = right;
         if(repeatIdx > 0) {
@@ -365,9 +394,12 @@ public:
         pair<index_t, index_t> alt_range = get_alt_range(altdb, left, right);
         
         // Find a repeat cooresponding to a given location (left2, right2)
+        assert_lt(left2, right2);
         pair<index_t, index_t> repeat2(left2, 0);
         index_t repeatIdx2 = _repeatMap.bsearchLoBound(repeat2);
         assert_lt(repeatIdx2, _repeats.size());
+        if(right2 > _repeatMap[repeatIdx2].first)
+            return false;
         const EList<RepeatAllele<index_t> >& alleles2 = _repeats[repeatIdx2].alleles;
         index_t adjLeft2 = left2, adjRight2 = right2;
         if(repeatIdx2 > 0) {
@@ -393,29 +425,33 @@ public:
                 index_t i = 0, j = 0;
                 while(i < positions.size() && j < positions2.size()) {
                     index_t i_pos = positions[i].joinedOff, j_pos = positions2[j].joinedOff;
-                    if(i_pos <= j_pos) {
-                        if(i_pos + dist >= j_pos) {
-                            common_positions.expand();
-                            common_positions.back().first = positions[i];
-                            common_positions.back().first.toff += adjLeft;
+                    if(i_pos + dist >= j_pos && j_pos + dist >= i_pos) {
+                        common_positions.expand();
+                        common_positions.back().first = positions[i];
+                        if(positions[i].fw) {
                             common_positions.back().first.joinedOff += adjLeft;
-                            common_positions.back().second = positions2[j];
+                            common_positions.back().first.toff += adjLeft;
+                        } else {
+                            const index_t len = right - left;
+                            assert_leq(adjLeft + len, _repeats[repeatIdx].repLen);
+                            index_t rc_adjLeft = _repeats[repeatIdx].repLen - adjLeft - len;
+                            common_positions.back().first.joinedOff += rc_adjLeft;
+                            common_positions.back().first.toff += rc_adjLeft;
+                        }
+                        common_positions.back().second = positions2[j];
+                        if(positions2[j].fw) {
                             common_positions.back().second.toff += adjLeft2;
                             common_positions.back().second.joinedOff += adjLeft2;
+                        } else {
+                            const index_t len = right2 - left2;
+                            assert_leq(adjLeft2 + len, _repeats[repeatIdx2].repLen);
+                            index_t rc_adjLeft2 = _repeats[repeatIdx2].repLen - adjLeft2 - len;
+                            common_positions.back().second.joinedOff += rc_adjLeft2;
+                            common_positions.back().second.toff += rc_adjLeft2;
                         }
-                        i += 1;
-                    } else {
-                        if(i_pos <= j_pos + dist) {
-                            common_positions.expand();
-                            common_positions.back().first = positions[i];
-                            common_positions.back().first.toff += adjLeft;
-                            common_positions.back().first.joinedOff += adjLeft;
-                            common_positions.back().second = positions2[j];
-                            common_positions.back().second.toff += adjLeft2;
-                            common_positions.back().second.joinedOff += adjLeft2;
-                        }
-                        j += 1;
                     }
+                    if(i_pos <= j_pos) i++;
+                    else               j++;
                 }
             }
         }

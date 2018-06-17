@@ -500,9 +500,26 @@ void NRG<TStr>::saveRepeatGroup()
 		fp << "\t" << "0"; 
         // debugging
         // fp << "\t" << rg.seq;
-		fp << endl; 
+		fp << endl;
+        
+#ifndef NDEBUG
+        for(size_t j = 0; j < positions.size(); j += 10) {
+            string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
+            assert_eq(rg.seq, seq_cmp);
+        }
+#endif
 
 		acc_pos += rg.seq.length();
+        // Convert positions on antisense strand to those of sense strand
+        for(size_t j = 0; j < positions.size(); j++) {
+            if(positions[j].joinedOff < half_length_) {
+                positions[j].fw = true;
+            } else {
+                positions[j].joinedOff = s_.length() - positions[j].joinedOff - rg.seq.length();
+                positions[j].fw = false;
+            }
+        }
+        positions.sort();
 
 		// Positions
         for(size_t j = 0; j < positions.size(); j++) {
@@ -512,27 +529,12 @@ void NRG<TStr>::saveRepeatGroup()
 
 			if(j % 10 != 0) {
 				fp << " ";
-			}
-
-            TIndexOffU joinedOff;
-            char direction;
-            if(positions[j].joinedOff < half_length_) {
-                joinedOff = positions[j].joinedOff;
-                direction = '+';
-            } else {
-                joinedOff = s_.length() - positions[j].joinedOff - rg.seq.length();
-                direction = '-';
-            }
-            
-#ifndef NDEBUG
-            string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
-            assert_eq(rg.seq, seq_cmp);
-#endif
-
+			}            
             string chr_name;
             TIndexOffU pos_in_chr;
-			getGenomeCoord(joinedOff, chr_name, pos_in_chr);
+			getGenomeCoord(positions[j].joinedOff, chr_name, pos_in_chr);
 
+            char direction = (positions[j].fw ? '+' : '-');
 			fp << chr_name << ":" << pos_in_chr << ":" << direction;
 		}
 		fp << endl;

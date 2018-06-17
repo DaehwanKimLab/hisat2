@@ -2657,7 +2657,7 @@ public:
 
 	// Building
 	template <typename TStr> static TStr join(EList<TStr>& l, uint32_t seed);
-	template <typename TStr> static TStr join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed);
+	template <typename TStr> static void join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed, TStr& s, bool include_rc = false);
 	template <typename TStr> void joinToDisk(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, TStr& ret, ostream& out1, ostream& out2);
 	template <typename TStr> void buildToDisk(PathGraph<index_t>& gbwt, const TStr& s, ostream& out1, ostream& out2);
     template <typename TStr> void buildToDisk(InorderBlockwiseSA<TStr>& sa, const TStr& s, ostream& out1, ostream& out2);
@@ -4235,18 +4235,23 @@ TStr GFM<index_t>::join(EList<TStr>& l, uint32_t seed) {
  */
 template <typename index_t>
 template <typename TStr>
-TStr GFM<index_t>::join(EList<FileBuf*>& l,
-                EList<RefRecord>& szs,
-                index_t sztot,
-                const RefReadInParams& refparams,
-                uint32_t seed)
+void GFM<index_t>::join(EList<FileBuf*>& l,
+                        EList<RefRecord>& szs,
+                        index_t sztot,
+                        const RefReadInParams& refparams,
+                        uint32_t seed,
+                        TStr& s,
+                        bool include_rc)
 {
 	RandomSource rand; // reproducible given same seed
 	rand.init(seed);
 	RefReadInParams rpcp = refparams;
-	TStr ret;
 	index_t guessLen = sztot;
-	ret.resize(guessLen);
+    if(include_rc) {
+        s.resize(guessLen << 1);
+    } else {
+        s.resize(guessLen);
+    }
 	ASSERT_ONLY(index_t szsi = 0);
 	TIndexOffU dstoff = 0;
 	for(index_t i = 0; i < l.size(); i++) {
@@ -4254,7 +4259,7 @@ TStr GFM<index_t>::join(EList<FileBuf*>& l,
 		assert(!l[i]->eof());
 		bool first = true;
 		while(!l[i]->eof()) {
-			RefRecord rec = fastaRefReadAppend(*l[i], first, ret, dstoff, rpcp);
+			RefRecord rec = fastaRefReadAppend(*l[i], first, s, dstoff, rpcp);
 			first = false;
 			index_t bases = (index_t)rec.len;
 			assert_eq(rec.off, szs[szsi].off);
@@ -4264,7 +4269,13 @@ TStr GFM<index_t>::join(EList<FileBuf*>& l,
 			if(bases == 0) continue;
 		}
 	}
-	return ret;
+    
+    // Append reverse complement
+    for(TIndexOffU i = 0; i < guessLen; i++) {
+        int nt = s[guessLen - i - 1];
+        assert_range(0, 3, nt);
+        s[guessLen + i] = dnacomp[nt];
+    }
 }
 
 /**
