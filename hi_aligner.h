@@ -3983,7 +3983,6 @@ public:
         }
         _genomeHits.clear();
         _genomeHits_rep[0].clear();
-        _concordantPairs.clear();
         _hits_searched[0].clear();
         assert(!_paired);
     }
@@ -4009,7 +4008,7 @@ public:
         _genomeHits.clear();
         _genomeHits_rep[0].clear();
         _genomeHits_rep[1].clear();
-        _concordantPairs.clear();
+        _concordantIdxInspected.first = _concordantIdxInspected.second = 0;
         assert(_paired);
         assert(!_rightendonly);
     }
@@ -4063,7 +4062,7 @@ public:
         // if no concordant pair is found, try to use alignment of one-end
         // as an anchor to align the other-end
         if(this->_paired) {
-            if(_concordantPairs.size() == 0 &&
+            if(sink.numPair() == 0 &&
                (sink.bestUnp1() >= _minsc[0] || sink.bestUnp2() >= _minsc[1])) {
                 bool mate_found = false;
                 const EList<AlnRes> *rs[2] = {NULL, NULL};
@@ -4329,7 +4328,7 @@ public:
                                          ref,
                                          swa,
                                          ssdb,
-                                         0,
+                                         rdi,
                                          _genomeHits.back()._fw,
                                          wlm,
                                          prm,
@@ -4406,7 +4405,7 @@ public:
                             hit.done(true);
                             if(_paired) {
                                 if(sink.bestUnp2() >= _minsc[1-rdi] &&
-                                   _concordantPairs.size() > 0) return false;
+                                   sink.numPair() > 0) return false;
                                 else continue;
                             } else {
                                 return false;
@@ -4425,7 +4424,7 @@ public:
                             hit.done(true);
                             if(_paired) {
                                 if(sink.bestUnp1() >= _minsc[1-rdi] &&
-                                   _concordantPairs.size() > 0) return false;
+                                   sink.numPair() > 0) return false;
                                 else continue;
                             } else {
                                 return false;
@@ -5019,7 +5018,7 @@ protected:
     EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >     _positions;
     ELList<SpliceSite>             _spliceSites;
     
-    EList<pair<index_t, index_t> >  _concordantPairs;
+    pair<index_t, index_t>         _concordantIdxInspected;
     
     size_t _minK; // log4 of the size of a genome
     size_t _minK_local; // log4 of the size of a local index (8)
@@ -5562,17 +5561,11 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
     const EList<AlnRes> *rs1 = NULL, *rs2 = NULL;
     sink.getUnp1(rs1); assert(rs1 != NULL);
     sink.getUnp2(rs2); assert(rs2 != NULL);
+    index_t start_i = _concordantIdxInspected.first, start_j = _concordantIdxInspected.second;
+    _concordantIdxInspected.first = rs1->size();
+    _concordantIdxInspected.second = rs2->size();
     for(index_t i = 0; i < rs1->size(); i++) {
-        for(index_t j = 0; j < rs2->size(); j++) {
-            bool exists = false;
-            for(index_t k = 0; k < _concordantPairs.size(); k++) {
-                const pair<index_t, index_t>& p = _concordantPairs[k];
-                if(i == p.first && j == p.second) {
-                    exists = true;
-                    break;
-                }
-            }
-            if(exists) continue;
+        for(index_t j = (i >= start_i ? 0 : start_j); j < rs2->size(); j++) {
             if(sink.state().doneConcordant()) return true;
             const AlnRes& r1 = (*rs1)[i];
             Coord left = r1.refcoord(), right = r1.refcoord_right();
@@ -5627,9 +5620,6 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
                                                         sink.bestUnp1() + sink.bestUnp2() - (r1.readLength() + r2.readLength()) * 0.03 * sc.mm(255));
                 if(r1.score().score() + r2.score().score() >= threshold || _secondary) {
                     sink.report(0, &r1, &r2);
-                    _concordantPairs.expand();
-                    _concordantPairs.back().first = i;
-                    _concordantPairs.back().second = j;
                 }
             }
         }

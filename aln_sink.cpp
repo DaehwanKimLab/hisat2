@@ -74,7 +74,10 @@ bool ReportingState::foundConcordant() {
 	assert_geq(state_, ReportingState::CONCORDANT_PAIRS);
 	assert(!doneConcord_);
 	nconcord_++;
-	areDone(nconcord_, doneConcord_, exitConcord_);
+    
+    // DK CONCORDANT - debugging purpuses
+	// areDone(nconcord_, doneConcord_, exitConcord_);
+    
 	// No need to search for discordant alignments if there are one or more
 	// concordant alignments.
 	doneDiscord_ = true;

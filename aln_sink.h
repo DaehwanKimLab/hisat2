@@ -1265,6 +1265,10 @@ public:
     void getUnp1(const EList<AlnRes>*& rs) const { rs = &rs1u_; }
     void getUnp2(const EList<AlnRes>*& rs) const { rs = &rs2u_; }
     void getPair(const EList<AlnRes>*& rs1, const EList<AlnRes>*& rs2) const { rs1 = &rs1_; rs2 = &rs2_; }
+    
+    index_t numUnp1() const { return rs1u_.size(); }
+    index_t numUnp2() const { return rs2u_.size(); }
+    index_t numPair() const { assert_eq(rs1_.size(), rs2_.size()); return rs1_.size(); }
 
 protected:
 
@@ -1861,8 +1865,12 @@ void AlnSinkWrap<index_t>::finishRead(
 			// Possibly select a random subset
 			size_t off;
 			if(sortByScore) {
+                
+                // DK CONCORDANT - debugging purposes
+                nconcord = rs1_.size();
+                
 				// Sort by score then pick from low to high
-				off = selectByScore(&rs1_, &rs2_, nconcord, select1_, rnd);
+                off = selectByScore(&rs1_, &rs2_, nconcord, select1_, rnd);
 			} else {
 				// Select subset randomly
 				off = selectAlnsToReport(rs1_, nconcord, select1_, rnd);
@@ -2425,12 +2433,15 @@ bool AlnSinkWrap<index_t>::report(
     index_t num_spliced = (index_t)rsa->num_spliced();
     if(rsb != NULL) num_spliced += (index_t)rsb->num_spliced();
     
+    // DK CONCORDANT - debugging purposes
+#if 0
     // Limit the size of alignments to be stored in order to save memory
     if(rp_.khits > 10) {
         if(paired) {
             if(rs1_.size() >= rp_.khits * 2 && score < best2Pair_) {
                 return false;
             }
+
         } else {
             if(!alignMate) {
                 if(one) {
@@ -2445,6 +2456,7 @@ bool AlnSinkWrap<index_t>::report(
             }
         }
     }
+#endif
     
 	if(paired) {
 		assert(readIsPair());
