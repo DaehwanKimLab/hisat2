@@ -349,14 +349,14 @@ void NRG<TStr>::buildNames()
 }
 
 template<typename TStr>
-int NRG<TStr>::mapJoinedOffToSeq(TIndexOffU joined_pos)
+int NRG<TStr>::mapJoinedOffToSeq(TIndexOffU joinedOff)
 {
 
 	/* search from cached_list */
-	if (num_cached_ > 0) {
-		for (int i = 0; i < num_cached_; i++) {
+	if(num_cached_ > 0) {
+		for(size_t i = 0; i < num_cached_; i++) {
 			Fragments *frag = &cached_[i];
-			if (frag->contain(joined_pos)) {
+			if(frag->contain(joinedOff)) {
 				return frag->frag_id;
 			}
 		}
@@ -369,11 +369,11 @@ int NRG<TStr>::mapJoinedOffToSeq(TIndexOffU joined_pos)
 	int pos = 0;
 
 	Fragments *frag = &fraglist_[pos];
-	while ((bot - top) > 1) {
+	while((bot - top) > 1) {
 		pos = top + ((bot - top) >> 1);
 		frag = &fraglist_[pos];
 
-		if (joined_pos < frag->start) {
+		if (joinedOff < frag->joinedOff) {
 			bot = pos;
 		} else {
 			top = pos;
@@ -381,7 +381,7 @@ int NRG<TStr>::mapJoinedOffToSeq(TIndexOffU joined_pos)
 	}
 
 	frag = &fraglist_[top];
-	if (frag->contain(joined_pos)) {
+	if (frag->contain(joinedOff)) {
 		// update cache
 		if (num_cached_ < CACHE_SIZE_JOINEDFRG) {
 			cached_[num_cached_] = *frag;
@@ -399,18 +399,18 @@ int NRG<TStr>::mapJoinedOffToSeq(TIndexOffU joined_pos)
 }
 
 template<typename TStr>
-int NRG<TStr>::getGenomeCoord(TIndexOffU joined_pos, 
+int NRG<TStr>::getGenomeCoord(TIndexOffU joinedOff, 
 		string& chr_name, TIndexOffU& pos_in_chr)
 {
-	int seq_id = mapJoinedOffToSeq(joined_pos);
+	int seq_id = mapJoinedOffToSeq(joinedOff);
 	if (seq_id < 0) {
 		return -1;
 	}
 
 	Fragments *frag = &fraglist_[seq_id];
-	TIndexOffU offset = joined_pos - frag->start;
+	TIndexOffU offset = joinedOff - frag->joinedOff;
 
-	pos_in_chr = frag->start_in_seq + offset;
+	pos_in_chr = frag->seqOff + offset;
 	chr_name = ref_names_[frag->seq_id];
 
 	return 0;
@@ -419,46 +419,44 @@ int NRG<TStr>::getGenomeCoord(TIndexOffU joined_pos,
 template<typename TStr>
 void NRG<TStr>::buildJoinedFragment()
 {
-	int n_seq = 0;
-	int n_frag = 0;
+    TIndexOffU acc_joinedOff = 0;
+    TIndexOffU acc_seqOff = 0;
+    TIndexOffU seq_id = 0;
+    TIndexOffU frag_id = 0;
+    for(size_t i = 0; i < szs_.size(); i++) {
+        const RefRecord& rec = szs_[i];
+        if(rec.len == 0) {
+            continue;
+        }
+        if (rec.first) {
+            acc_seqOff = 0;
+            seq_id++;
+        }
 
-	for(size_t i = 0; i < szs_.size(); i++) {
-		if(szs_[i].len > 0) n_frag++;
-		if(szs_[i].first && szs_[i].len > 0) n_seq++;
-	}
+        fraglist_.expand();
 
-	int npos = 0;
-	int seq_id = -1;
-	TIndexOffU acc_frag_length = 0;
-	TIndexOffU acc_ref_length = 0;
-	fraglist_.resize(n_frag + 1);
+        fraglist_.back().joinedOff = acc_joinedOff;
+        fraglist_.back().length = rec.len;
 
-	for(size_t i = 0; i < szs_.size(); i++) {
-		if(szs_[i].len == 0) {
-			continue;
-		}
+        fraglist_.back().frag_id = frag_id++;
+        fraglist_.back().seq_id = seq_id - 1;
+        fraglist_.back().first = rec.first;
 
-		fraglist_[npos].start = acc_frag_length;
-		fraglist_[npos].length = szs_[i].len;
-		fraglist_[npos].start_in_seq = acc_ref_length + szs_[i].off;
-		fraglist_[npos].frag_id = i;
-		fraglist_[npos].frag_id = npos;
-		if(szs_[i].first) {
-			seq_id++;
-			fraglist_[npos].first = true;
-		}
-		fraglist_[npos].seq_id = seq_id;
+        acc_seqOff += rec.off;
+        fraglist_.back().seqOff = acc_seqOff;
 
-		acc_frag_length += szs_[i].len;
-		acc_ref_length += szs_[i].off + szs_[i].len;
-
-		npos++;
-	}
+        acc_joinedOff += rec.len;
+        acc_seqOff += rec.len;
+    }
 
 	// Add Last Fragment(empty)
-	fraglist_[npos].start = acc_frag_length;
-	fraglist_[npos].length = 0;
-	fraglist_[npos].start_in_seq = acc_ref_length + szs_.back().off;
+    fraglist_.expand();
+    fraglist_.back().joinedOff = acc_joinedOff;
+    fraglist_.back().length = 0;
+	fraglist_.back().seqOff = acc_seqOff;
+    fraglist_.back().first = false;
+    fraglist_.back().frag_id = frag_id; 
+    fraglist_.back().seq_id = seq_id;
 }
 
 template<typename TStr>
@@ -591,14 +589,6 @@ void NRG<TStr>::saveFile()
 }
 
 
-template<typename TStr>
-void NRG<TStr>::merge(NRG<TStr>& prev_repeat_groups)
-{
-
-}
-
-
-
 /**
  * TODO
  * @brief 
@@ -678,16 +668,16 @@ void NRG<TStr>::mergeRepeatGroup()
 	EList<RepeatRange> rpt_ranges;
 	rpt_ranges.reserveExact(range_count);
 
-	for(size_t i = 0; i < rpt_grp_.size(); i++) {
-		RepeatGroup& rg = rpt_grp_[i];
-		size_t s_len = rg.seq.length();
+    for(size_t i = 0; i < rpt_grp_.size(); i++) {
+        RepeatGroup& rg = rpt_grp_[i];
+        size_t s_len = rg.seq.length();
 
-		for(size_t j = 0; j < rg.positions.size(); j++) {
-			rpt_ranges.push_back(RepeatRange(
+        for(size_t j = 0; j < rg.positions.size(); j++) {
+            rpt_ranges.push_back(RepeatRange(
                         make_pair(rg.positions[j].joinedOff, rg.positions[j].joinedOff + s_len),
                         i, rg.positions[j].fw));
-		}
-	}
+        }
+    }
 
     assert_gt(rpt_ranges.size(), 0);
 
@@ -1162,14 +1152,14 @@ TIndexOffU NRG<TStr>::getEnd(TIndexOffU e) {
     if(e < half_length_) {
         int frag_id = mapJoinedOffToSeq(e);
         assert_geq(frag_id, 0);
-        end = fraglist_[frag_id].start + fraglist_[frag_id].length;
+        end = fraglist_[frag_id].joinedOff + fraglist_[frag_id].length;
     } else {
         // ReverseComplement
         // a, b are positions w.r.t reverse complement string.
         // fragment map is based on forward string
         int frag_id = mapJoinedOffToSeq(s_.length() - e - 1);
         assert_geq(frag_id, 0);
-        end = s_.length() - fraglist_[frag_id].start;
+        end = s_.length() - fraglist_[frag_id].joinedOff;
     }
     
     assert_leq(end, s_.length());

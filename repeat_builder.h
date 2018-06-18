@@ -38,23 +38,19 @@ using namespace std;
 
 struct Fragments {
 	bool contain(TIndexOffU pos) {
-		if (pos >= start && pos < (start + length)) {
+		if (pos >= joinedOff && pos < (joinedOff + length)) {
 			return true;
 		}
 		return false;
 	}
 
-	TIndexOffU start;   // index within joined text
+    TIndexOffU joinedOff;       // index within joined text
 	TIndexOffU length;
 
 	int frag_id;
 	int seq_id;
-	TIndexOffU start_in_seq;    // index within global 
-	TIndexOffU start_in_block;  // index within Fasta Block
+	TIndexOffU seqOff;          // index within sequence 
 	bool first;
-
-	string seq_name;
-	string nameline;
 };
 
 struct RepeatGroup {
@@ -158,8 +154,6 @@ public:
 
     TIndexOffU getEnd(TIndexOffU e);
 	TIndexOffU getLCP(TIndexOffU a, TIndexOffU b);
-
-    void merge(NRG<TStr>& nrg);
 
 	void repeat_masking();
 };
