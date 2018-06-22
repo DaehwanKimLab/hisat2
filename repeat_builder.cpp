@@ -21,9 +21,14 @@
 #include <vector>
 #include <algorithm>
 #include "timer.h"
+#include "aligner_sw.h"
+#include "aligner_result.h"
+#include "scoring.h"
+#include "sstring.h"
 
 #include "repeat_builder.h"
 
+#if 0 //{{{
 unsigned int levenshtein_distance(const std::string& s1, const std::string& s2) 
 {
 	const std::size_t len1 = s1.size(), len2 = s2.size();
@@ -41,12 +46,7 @@ unsigned int levenshtein_distance(const std::string& s1, const std::string& s2)
 	}
 	return prevCol[len2];
 }
-
-bool checkSequenceMergeable(const string& s1, const string& s2, TIndexOffU max_edit = 10)
-{
-	unsigned int ed = levenshtein_distance(s1, s2);
-	return (ed <= max_edit);
-}
+#endif//}}}
 
 typedef pair<TIndexOffU, TIndexOffU> Range;
 static const Range EMPTY_RANGE = Range(1, 0);
@@ -83,6 +83,22 @@ string reverseComplement(const string& str)
 		rc.push_back(asc2dnacomp[str[si - 1]]);
 	}
 	return rc;
+}
+
+
+string toMDZ(const EList<Edit>& edits, const string& read)
+{
+    StackedAln stk;
+    BTDnaString btread;
+    BTString buf;
+
+    btread.install(read.c_str(), true);
+
+    stk.init(btread, edits, 0, 0, 0, 0);
+    stk.buildMdz();
+    stk.writeMdz(&buf, NULL);
+
+    return string(buf.toZBuf());
 }
 
 /**
@@ -141,6 +157,7 @@ string getString(const TStr& ref, TIndexOffU start, size_t len)
 	return s;
 }
 
+#if 0//{{{
 template<typename TStr>
 void masking_with_N(TStr& s, TIndexOffU start, size_t length)
 {
@@ -150,6 +167,7 @@ void masking_with_N(TStr& s, TIndexOffU start, size_t length)
 		s[start + pos] = 0x04;
 	}
 }
+#endif//}}}
 
 template<typename TStr>
 void dump_tstr(const TStr& s)
@@ -169,6 +187,28 @@ void dump_tstr(const TStr& s)
 }
 
 
+size_t getMaxMatchLen(const EList<Edit>& edits, const size_t read_len)
+{
+    size_t max_length = 0;
+    uint32_t last_edit_pos = 0;
+    uint32_t len = 0;
+
+    for(size_t i = 0; i < edits.size(); i++) {
+        len = edits[i].pos - last_edit_pos;
+        if(len > max_length) {
+            max_length = len;
+        }
+        last_edit_pos = edits[i].pos + 1;
+    }
+
+    len = read_len - last_edit_pos;
+    if(len > max_length) {
+        max_length = len;
+    }
+
+    return max_length;
+}
+
 template<typename TStr>
 NRG<TStr>::NRG(
                const EList<RefRecord>& szs,
@@ -182,18 +222,75 @@ NRG<TStr>::NRG(
 {
 	cerr << "NRG: " << filename_ << endl;
 
+    rnd_.init(0);
+
 	// build ref_names_ from ref_namelines_
     buildNames();
     buildJoinedFragment();
 }
 
 template<typename TStr>
+NRG<TStr>::~NRG()
+{
+    if (sc_) {
+        delete sc_;
+    }
+}
+
+#define DMAX std::numeric_limits<double>::max()
+
+template<typename TStr>
+void NRG<TStr>::init_dyn()
+{
+
+#define MM_PEN  3
+//#define GAP_PEN_LIN 2
+#define GAP_PEN_LIN ((MM_PEN) * rpt_edit_ + 1)
+//#define GAP_PEN_CON 1
+#define GAP_PEN_CON ((MM_PEN) * rpt_edit_ + 1)
+#define MAX_PEN (MAX_I16)
+
+    scoreMin_.init(SIMPLE_FUNC_LINEAR, rpt_edit_ * MM_PEN * -1.0, 0.0);
+    nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
+
+    penCanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
+    penNoncanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
+
+    sc_ = new Scoring(
+            DEFAULT_MATCH_BONUS,     // constant reward for match
+            DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
+            MM_PEN,      // max mm penalty
+            MM_PEN,      // min mm penalty
+            MAX_PEN,      // max sc penalty
+            MAX_PEN,      // min sc penalty
+            scoreMin_,       // min score as function of read len
+            nCeil_,          // max # Ns as function of read len
+            DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
+            DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
+            DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
+
+            GAP_PEN_CON, //MM_PEN,  // constant coeff for read gap cost
+            GAP_PEN_CON, //MM_PEN,  // constant coeff for ref gap cost
+            GAP_PEN_LIN, //MM_PEN, // linear coeff for read gap cost
+            GAP_PEN_LIN, //MM_PEN, // linear coeff for ref gap cost
+            4 /* gGapBarrier */    // # rows at top/bot only entered diagonally
+            );
+}
+
+
+template<typename TStr>
 void NRG<TStr>::build(TIndexOffU rpt_len,
                       TIndexOffU rpt_cnt,
                       bool flagGrouping,
-                      TIndexOffU rpt_edit)
+                      TIndexOffU rpt_edit,
+                      TIndexOffU rpt_matchlen)
 {
 	TIndexOffU count = 0;
+
+    rpt_matchlen_ = rpt_matchlen;
+    rpt_edit_ = rpt_edit;
+
+    init_dyn();
 
 	EList<RepeatCoord<TIndexOffU> > rpt_positions;
 	TIndexOffU min_lcp_len = s_.length();
@@ -319,16 +416,10 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
     if(flagGrouping && rpt_edit > 0) {
         groupRepeatGroup(rpt_edit);
     }
-	//adjustRepeatGroup(flagGrouping);
+
 	// we found repeat_group
 	cerr << "CP " << rpt_grp_.size() << " groups found" << endl;
 
-	//dump_tstr(s);
-
-	// write to FA
-	// sequence
-	// repeat sequeuce
-	//saveFile();
 }
 
 template<typename TStr>
@@ -468,19 +559,72 @@ void NRG<TStr>::sortRepeatGroup()
 	}
 }
 
+
+template<typename TStr>
+void NRG<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
+{
+    EList<RepeatCoord<TIndexOffU> >& positions = rg.positions;
+
+#ifndef NDEBUG
+    for(size_t j = 0; j < positions.size(); j += 10) {
+        string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
+        assert_eq(rg.seq, seq_cmp);
+    }
+#endif
+
+    for(size_t j = 0; j < positions.size(); j++) {
+        if(positions[j].joinedOff < half_length_) {
+            positions[j].fw = true;
+        } else {
+            positions[j].joinedOff = s_.length() - positions[j].joinedOff - rg.seq.length();
+            positions[j].fw = false;
+        }
+    }
+    positions.sort();
+
+    // Positions
+    for(size_t j = 0; j < positions.size(); j++) {
+        if(j > 0 && (j % 10 == 0)) {
+            fp << endl;
+        }
+
+        if(j % 10 != 0) {
+            fp << " ";
+        }            
+        string chr_name;
+        TIndexOffU pos_in_chr;
+        getGenomeCoord(positions[j].joinedOff, chr_name, pos_in_chr);
+
+        char direction = (positions[j].fw ? '+' : '-');
+        fp << chr_name << ":" << pos_in_chr << ":" << direction;
+    }
+    fp << endl;
+}
+
+
 template<typename TStr>
 void NRG<TStr>::saveRepeatGroup()
 {
+    const string rep_basename = "rep";
 	string rptinfo_filename = filename_ + ".rep.info";
+    string snp_filename = filename_ + ".rep.snp";
+    string hapl_filename = filename_ + ".rep.haplotype";
 
 	int rpt_count = rpt_grp_.size();
 	TIndexOffU acc_pos = 0;
+    size_t snp_base_idx = 0;
+    size_t hapl_base_idx = 0;
 
 	ofstream fp(rptinfo_filename.c_str());
+    ofstream snp_fp(snp_filename.c_str());
+    ofstream hapl_fp(hapl_filename.c_str());
 
 	for(size_t i = 0; i < rpt_count; i++) {
 		RepeatGroup& rg = rpt_grp_[i];
 		EList<RepeatCoord<TIndexOffU> >& positions = rg.positions;
+
+        size_t allele_count = rg.alt_seq.size();
+        
 
 		// >rpt_name*0\trep\trep_pos\trep_len\tpos_count\t0
 		// chr_name:pos:direction chr_name:pos:direction
@@ -491,23 +635,51 @@ void NRG<TStr>::saveRepeatGroup()
 
 		// Header line
 		fp << ">" << "rpt_" << i << "*0";
-		fp << "\t" << "rep"; // TODO
-		fp << "\t" << acc_pos;
+		fp << "\t" << rep_basename; // TODO
+		fp << "\t" << rg.base_offset;
 		fp << "\t" << rg.seq.length();
 		fp << "\t" << positions.size();
 		fp << "\t" << "0"; 
         // debugging
         // fp << "\t" << rg.seq;
 		fp << endl;
-        
-#ifndef NDEBUG
-        for(size_t j = 0; j < positions.size(); j += 10) {
-            string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
-            assert_eq(rg.seq, seq_cmp);
-        }
-#endif
 
-		acc_pos += rg.seq.length();
+        saveRepeatPositions(fp, rg);
+
+
+        //save SNPs 
+        for(size_t j = 0; j < allele_count; j++) {
+            RepeatGroup& alt_rg = rg.alt_seq[j];
+
+            alt_rg.base_offset = rg.base_offset;
+
+            // save snps
+            alt_rg.buildSNPs(snp_base_idx);
+            alt_rg.writeSNPs(snp_fp, rep_basename);
+            alt_rg.writeHaploType(hapl_fp, rep_basename, hapl_base_idx);
+
+            // Header line
+            fp << ">" << "rpt_" << i << "*" << (j + 1);
+            fp << "\t" << "rep"; // TODO
+            fp << "\t" << rg.base_offset;
+            fp << "\t" << rg.seq.length();
+            fp << "\t" << alt_rg.positions.size();
+            fp << "\t" << alt_rg.edits.size(); 
+            fp << "\t";
+            for(size_t snp_idx = 0; snp_idx < alt_rg.edits.size(); snp_idx++) {
+                if (snp_idx != 0) { 
+                    fp << ",";
+                }
+                fp << alt_rg.snpIDs[snp_idx];
+            }
+            // debugging
+            // fp << "\t" << rg.seq;
+            fp << endl;
+
+            saveRepeatPositions(fp, alt_rg);
+        }
+
+#if 0//{{{
         // Convert positions on antisense strand to those of sense strand
         for(size_t j = 0; j < positions.size(); j++) {
             if(positions[j].joinedOff < half_length_) {
@@ -536,8 +708,11 @@ void NRG<TStr>::saveRepeatGroup()
 			fp << chr_name << ":" << pos_in_chr << ":" << direction;
 		}
 		fp << endl;
+#endif//}}}
 	}		
 	fp.close();
+    snp_fp.close();
+    hapl_fp.close();
 }
 	
 	
@@ -553,9 +728,14 @@ void NRG<TStr>::saveRepeatSequence()
 
 	int oskip = 0;
 
+    size_t acc_len = 0;
+
 	for(TIndexOffU grp_idx = 0; grp_idx < rpt_grp_.size(); grp_idx++) {
 		RepeatGroup& rg = rpt_grp_[grp_idx];
+
+        rg.base_offset = acc_len;
         size_t seq_len = rg.seq.length();
+        acc_len += seq_len;
 
 		TIndexOffU si = 0;
 		while(si < seq_len) {
@@ -770,10 +950,13 @@ void NRG<TStr>::mergeRepeatGroup()
 
 		// sort positions
         assert_gt(rpt_grp_.back().positions.size(), 0);
+        rpt_grp_.back().positions.sort();
+#if 0
         sort(rpt_grp_.back().positions.begin(), 
                 rpt_grp_.back().positions.begin()
                 + rpt_grp_.back().positions.size(),
                 compareRepeatCoordByJoinedOff<TIndexOffU>);
+#endif
 
 		i = j;
 	}
@@ -811,10 +994,11 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
 
         for(size_t j = i + 1; j < rpt_grp_.size(); j++) {
             string& str2 = rpt_grp_[j].seq;
+            EList<Edit> edits;
 
-            if(checkSequenceMergeable(str1, str2, rpt_edit)) {
+            if(checkSequenceMergeable(str1, str2, edits, rpt_edit)) {
                 /* i, j merge into i */
-                rpt_grp_[i].merge(rpt_grp_[j]);
+                rpt_grp_[i].merge(rpt_grp_[j], edits);
 
                 rpt_grp_[j].set_empty();
             }
@@ -839,15 +1023,17 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
         string fname = filename_ + ".altseq";
         ofstream fp(fname.c_str());
 
-        for (int i = 0; i < rpt_grp_.size(); i++) {
+        for(size_t i = 0; i < rpt_grp_.size(); i++) {
             RepeatGroup& rg = rpt_grp_[i];
-            if (rg.empty()) {
+            if(rg.empty()) {
                 continue;
             }
             fp << "CP " << i ;
+            fp << "\t" << rg.alt_seq.size();
             fp << "\t" << rg.seq;
-            for (int j = 0; j < rg.alt_seq.size(); j++) {
-                fp << "\t" << rg.alt_seq[j];
+            for(size_t j = 0; j < rg.alt_seq.size(); j++) {
+                fp << "\t" << toMDZ(rg.alt_seq[j].edits, rg.seq /* ref */);
+                fp << "\t" << rg.alt_seq[j].seq;
             }
             fp << endl;
         }
@@ -856,293 +1042,6 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
     }
 #endif
 }
-
-
-#if 0
-/**
- * @brief Remove empty repeat group
- */
-template<typename TStr>
-void NRG<TStr>::adjustRepeatGroup(bool flagGrouping, TIndexOffU rpt_edit)
-{
-	cerr << "CP " << "repeat_group size " << rpt_grp_.size() << endl;
-
-	int range_count = 0;
-	for(size_t i = 0; i < rpt_grp_.size(); i++) {
-		range_count += rpt_grp_[i].positions.size();
-	}
-
-	cerr << "CP " << "range_count " << range_count << endl;
-
-	if(range_count == 0) {
-		cerr << "CP " << "no repeat sequeuce" << endl; 
-		return;
-	}
-
-	cerr << "Build RepeatRange" << endl;
-
-	EList<RepeatRange> rpt_ranges;
-	rpt_ranges.reserveExact(range_count);
-
-	for(size_t i = 0; i < rpt_grp_.size(); i++) {
-		RepeatGroup& rg = rpt_grp_[i];
-		size_t s_len = rg.seq.length();
-
-		for(size_t j = 0; j < rg.positions.size(); j++) {
-			rpt_ranges.push_back(RepeatRange(
-                        make_pair(rg.positions[j].joinedOff, rg.positions[j].joinedOff + s_len),
-                        i, rg.positions[j].fw));
-		}
-	}
-    assert_eq(rpt_ranges.size(), range_count);
-
-	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
-            compareRepeatRangeByRange);
-
-	// Dump
-#if 0
-	for (int i = 0; i < rpt_ranges.size(); i++) {
-		cerr << "CP " << i ;
-		cerr << "\t" << rpt_ranges[i].range.first;
-		cerr << "\t" << rpt_ranges[i].range.second;
-		cerr << "\t" << rpt_grp_[rpt_ranges[i].rg_id].rpt_seq;
-		cerr << "\t" << rpt_ranges[i].rg_id;
-		cerr << endl;
-	}
-#endif
-
-#if 1	
-	// Merge
-    assert_gt(rpt_ranges.size(), 0);
-	int merged_count = 0;
-	for(size_t i = 0; i < rpt_ranges.size() - 1;) {
-		size_t j = i + 1;
-		for(; j < rpt_ranges.size(); j++) {
-			// check i, j can be merged 
-			//
-
-			if(!checkRangeMergeable(rpt_ranges[i].range, rpt_ranges[j].range)) {
-				break;
-			}
-
-			rpt_ranges[j].range = EMPTY_RANGE;
-			rpt_ranges[j].rg_id = std::numeric_limits<int>::max();
-			merged_count++;
-		}
-		i = j;
-	}
-
-	cerr << "CP ";
-	cerr << "merged_count: " << merged_count;
-	cerr << endl;
-#endif
-
-	// sort by rg_id
-	sort(rpt_ranges.begin(), rpt_ranges.begin() + rpt_ranges.size(), 
-            compareRepeatRangeByRgID);
-
-	// Dump
-#if 1
-	{
-		string fname = filename_ + ".rptinfo";
-		ofstream fp(fname.c_str());
-
-		for(size_t i = 0; i < rpt_ranges.size(); i++) {
-			if(rpt_ranges[i].range == EMPTY_RANGE) {
-				continue;
-			}
-			Range rc = reverseRange(rpt_ranges[i].range, s_.length());
-			fp << "CP " << i ;
-			fp << "\t" << rpt_ranges[i].range.first;
-			fp << "\t" << rpt_ranges[i].range.second;
-			fp << "\t" << rpt_grp_[rpt_ranges[i].rg_id].seq;
-			fp << "\t" << rc.first;
-			fp << "\t" << rc.second;
-			fp << "\t" << reverseComplement(rpt_grp_[rpt_ranges[i].rg_id].seq);
-			fp << "\t" << rpt_ranges[i].rg_id;
-			fp << endl;
-		}
-
-		fp.close();
-	}
-#endif
-
-	/***********/
-
-	/* rebuild rpt_grp_ */
-	EList<RepeatGroup> mgroup;
-
-	mgroup.reserveExact(rpt_grp_.size());
-	mgroup.swap(rpt_grp_);
-
-	for(size_t i = 0; i < rpt_ranges.size() - 1;) {
-		if(rpt_ranges[i].rg_id == std::numeric_limits<int>::max()) {
-			break;
-		}
-
-		size_t j = i + 1;
-		for(; j < rpt_ranges.size(); j++) {
-			if(rpt_ranges[i].rg_id != rpt_ranges[j].rg_id) {
-				break;
-			}
-		}
-
-		/* [i, j) has a same rg_id */
-
-		int rg_id = rpt_ranges[i].rg_id;
-		rpt_grp_.expand();
-		rpt_grp_.back().seq = mgroup[rg_id].seq;
-		for (int k = i; k < j; k++) {
-			rpt_grp_.back().positions.push_back(rpt_ranges[k].range.first);
-		}
-
-		// sort positions
-		rpt_grp_.back().positions.sort();
-
-		i = j;
-	}
-
-
-	if (flagGrouping) {
-		cerr << "CP " << "before grouping " << rpt_grp_.size() << endl;
-		int step = rpt_grp_.size() >> 8;
-
-		if (step == 0) {step = 1;}
-		cerr << "CP " << step << endl;
-		Timer timer(cerr, "Total time for grouping sequences: ", true);
-
-		for (int i = 0; i < rpt_grp_.size() - 1; i++) {
-
-			if (i % step == 0) {
-				cerr << "CP " << i << "/" << rpt_grp_.size() << endl;
-			}
-
-			if (rpt_grp_[i].empty()) {
-				// empty -> skip
-				continue;
-			}
-
-			string& str1 = rpt_grp_[i].seq;
-
-
-			for (int j = i + 1; j < rpt_grp_.size(); j++) {
-				string& str2 = rpt_grp_[j].seq;
-
-				if (checkSequenceMergeable(str1, str2, rpt_edit)) {
-					/* i, j merge into i */
-					rpt_grp_[i].merge(rpt_grp_[j]);
-
-					rpt_grp_[j].set_empty();
-				}
-			}
-		}
-
-		mgroup.clear();
-		mgroup.reserveExact(rpt_grp_.size());
-		mgroup.swap(rpt_grp_);
-
-		for (int i = 0; i < mgroup.size(); i++) {
-			if (!mgroup[i].empty()) {
-				rpt_grp_.expand();
-				rpt_grp_.back() = mgroup[i];
-			}
-		}
-
-		cerr << "CP " << "after merge " << rpt_grp_.size() << endl;
-#if 1
-		{
-			string fname = filename_ + ".altseq";
-			ofstream fp(fname.c_str());
-
-			for (int i = 0; i < rpt_grp_.size(); i++) {
-				RepeatGroup& rg = rpt_grp_[i];
-				if (rg.empty()) {
-					continue;
-				}
-				fp << "CP " << i ;
-				fp << "\t" << rg.seq;
-				for (int j = 0; j < rg.alt_seq.size(); j++) {
-					fp << "\t" << rg.alt_seq[j];
-				}
-				fp << endl;
-			}
-
-			fp.close();
-		}
-#endif
-	}
-
-
-}
-#endif
-
-
-
-template<typename TStr>
-void NRG<TStr>::repeat_masking()
-{
-	for(size_t i = 0; i < rpt_grp_.size(); i++) {
-		RepeatGroup *rg = &rpt_grp_[i];
-
-		size_t rpt_sqn_len = rg->seq.length();
-
-		for(size_t j = 0; j < rg->positions.size(); j++) {
-			TIndexOffU pos = rg->positions[j].joinedOff;
-
-			// masking [pos, pos + rpt_sqn_len) to 'N'
-			masking_with_N(s_, pos, rpt_sqn_len);
-		}
-	}
-}
-
-// Dump
-//
-// to_string
-static string to_string(int val)
-{
-	stringstream ss;
-	ss << val;
-	return ss.str();
-}
-
-
-template<typename TStr>
-int get_lcp_back(TStr& s, TIndexOffU a, TIndexOffU b)
-{
-	int k = 0;
-	TIndexOffU s_len = s.length();
-
-	if (a == s_len || b == s_len) {
-		return 0;
-	}
-
-	while ((a - k) > 0 && (b - k) > 0) {
-		if (s[a - k - 1] != s[b - k - 1]) {
-			break;
-		}
-		k++;
-	}
-
-	return k;
-}
-
-#if 0
-int get_lcp(string a, string b)
-{
-    int k = 0;
-    int a_len = a.length();
-    int b_len = b.length();
-    
-    while (k < a_len && k < b_len) {
-        if (a[k] != b[k]) {
-            break;
-        }
-        k++;
-    }
-    
-    return k;
-}
-#endif
 
 template<typename TStr>
 TIndexOffU NRG<TStr>::getEnd(TIndexOffU e) {
@@ -1169,13 +1068,9 @@ TIndexOffU NRG<TStr>::getEnd(TIndexOffU e) {
 template<typename TStr>
 TIndexOffU NRG<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 {
-#if 1
     size_t a_end = getEnd(a);
     size_t b_end = getEnd(b);
-#else
-    size_t a_end = s_.length();
-    size_t b_end = s_.length();
-#endif
+
     assert_leq(a_end, s_.length());
     assert_leq(b_end, s_.length());
     
@@ -1188,6 +1083,198 @@ TIndexOffU NRG<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
     }
     
     return k;
+}
+
+template<typename TStr>
+bool NRG<TStr>::checkSequenceMergeable(const string& s1, const string& s2, 
+        EList<Edit>& edits, TIndexOffU max_edit)
+{
+
+    // TODO:
+#if 1
+    // merge two strings if have same length
+    if (s1.length() != s2.length()) {
+        return false;
+    }
+#endif
+
+    return (alignStrings(s1, s2, edits) >= rpt_matchlen_);
+
+#if 0
+	unsigned int ed = levenshtein_distance(s1, s2);
+    return false;
+	//return (ed <= max_edit);
+    //return (alignStrings(s1, s2) >= 50);
+#endif
+
+}
+
+
+template<typename TStr>
+int NRG<TStr>::alignStrings(const string &read, const string &ref, EList<Edit>& edits)
+{
+    // Prepare Strings
+
+    // Read -> BTDnaString
+    // Ref -> bit-encoded string
+
+    //SwAligner swa;
+
+    BTDnaString btread;
+    BTString btqual;
+    BTString btref;
+    BTString btref2;
+
+    BTDnaString btreadrc;
+    BTString btqualrc;
+
+
+    string qual = "";
+    for(size_t i = 0; i < read.length(); i++) {
+        qual.push_back('I');
+    }
+
+#if 0
+    cerr << "REF : " << ref << endl;
+    cerr << "READ: " << read << endl;
+    cerr << "QUAL: " << qual << endl;
+#endif
+
+    btread.install(read.c_str(), true);
+    btreadrc = btread;
+    btreadrc.reverseComp();
+
+    btqual.install(qual.c_str());
+    btqualrc = btqual;
+
+    btref.install(ref.c_str());
+
+    TAlScore min_score = sc_->scoreMin.f<TAlScore >((double)btread.length());
+    TAlScore floor_score = sc_->scoreMin.f<TAlScore >((double)btread.length());
+
+    btref2 = btref;
+
+    size_t nceil = 0;
+    size_t nrow = btread.length();
+
+    // Convert reference string to mask
+    for(size_t i = 0; i < btref2.length(); i++) {
+        if(toupper(btref2[i]) == 'N') {
+            btref2.set(16, i);
+        } else {
+            int num = 0;
+            int alts[] = {4, 4, 4, 4};
+            decodeNuc(toupper(btref2[i]), num, alts);
+            assert_leq(num, 4);
+            assert_gt(num, 0);
+            btref2.set(0, i);
+            for(int j = 0; j < num; j++) {
+                btref2.set(btref2[i] | (1 << alts[j]), i);
+            }
+        }
+    }
+
+
+    bool fw = true;
+    uint32_t refidx = 0;
+    
+    swa.initRead(
+            btread,     // read sequence
+            btreadrc,
+            btqual,     // read qualities
+            btqualrc,
+            0,          // offset of first character within 'read' to consider
+            btread.length(), // offset of last char (exclusive) in 'read' to consider
+            *sc_);      // local-alignment score floor
+
+    DynProgFramer dpframe(false);
+    size_t readgaps = 0;
+    size_t refgaps = 0;
+    size_t maxhalf = 0;
+
+    DPRect rect;
+    dpframe.frameSeedExtensionRect(
+            0,              // ref offset implied by seed hit assuming no gaps
+            btread.length(),    // length of read sequence used in DP table
+            btref2.length(),    // length of reference
+            readgaps,   // max # of read gaps permitted in opp mate alignment
+            refgaps,    // max # of ref gaps permitted in opp mate alignment
+            (size_t)nceil,  // # Ns permitted
+            maxhalf, // max width in either direction
+            rect);      // DP Rectangle
+
+    assert(rect.repOk());
+
+    size_t cminlen = 2000, cpow2 = 4;
+
+    swa.initRef(
+            fw,                 // whether to align forward or revcomp read
+            refidx,             // reference ID
+            rect,               // DP rectangle
+            btref2.wbuf(),      // reference strings
+            0,                  // offset of first reference char to align to
+            btref2.length(),    // offset of last reference char to align to
+            btref2.length(),    // length of reference sequence
+            *sc_,               // scoring scheme
+            min_score,          // minimum score
+            true,               // use 8-bit SSE if positions
+            cminlen,            // minimum length for using checkpointing scheme
+            cpow2,              // interval b/t checkpointed diags; 1 << this
+            false,              // triangular mini-fills?
+            false               // is this a seed extension?
+            );
+
+
+    TAlScore best = std::numeric_limits<TAlScore>::min();
+    bool found = swa.align(rnd_, best);
+    //cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+
+    if (found) {
+#if 0
+        //cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+        cerr << "REF : " << ref << endl;
+        cerr << "READ: " << read << endl;
+#endif
+
+        SwResult res;
+        int max_match_len = 0;
+        res.reset();
+        res.alres.init_raw_edits(&rawEdits_);
+
+        found = swa.nextAlignment(res, best, rnd_);
+        if (found) {
+            edits = res.alres.ned();
+            //const TRefOff ref_off = res.alres.refoff();
+            const Coord& coord = res.alres.refcoord();
+            //assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
+
+#if 0
+            cerr << "CP ";
+            cerr << "num edits: " << edits.size() << endl;
+            cerr << "coord: " << coord.off();
+            cerr << ", " << coord.ref();
+            cerr << ", " << coord.orient();
+            cerr << ", " << coord.joinedOff();
+            cerr << endl;
+            Edit::print(cerr, edits); cerr << endl;
+#endif
+
+            max_match_len = getMaxMatchLen(edits, btread.length());
+
+#if 0
+            cerr << "max match length: " << max_match_len << endl;
+            Edit::printQAlign(cerr, btread, edits);
+#endif
+        }
+#if 0
+        cerr << "CP " << "nextAlignment: " << found << endl;
+        cerr << "CP -------------------------" << endl;
+#endif
+
+        return max_match_len;
+    }
+
+    return 0;
 }
 
 

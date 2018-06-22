@@ -79,7 +79,9 @@ static string wrapper;
 static TIndexOffU repeat_count;
 static TIndexOffU repeat_length;
 static TIndexOffU max_repeat_edit;
+static TIndexOffU max_repeat_matchlen;
 static bool repeat_reverse;
+static bool repeat_indel;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -107,7 +109,9 @@ static void resetOptions() {
 	repeat_length  = 50;
 	repeat_count   = 5;
     max_repeat_edit = 10;
+    max_repeat_matchlen = repeat_length / 2; // half of repeat_length
 	repeat_reverse = false;
+    repeat_indel = false;
     wrapper.clear();
 }
 
@@ -127,7 +131,9 @@ enum {
 	ARG_REPEAT_LENGTH,
 	ARG_REPEAT_CNT,
     ARG_REPEAT_EDIT,
+	ARG_REPEAT_MATCHLEN,
 	ARG_REPEAT_REVERSE,
+	ARG_REPEAT_INDEL,
 	ARG_WRAPPER
 };
 
@@ -165,6 +171,8 @@ static void printUsage(ostream& out) {
         << "    --repeat-length <int>   minimum repeat length (defaultL 50)" << endl
         << "    --repeat-count <int>    minimum repeat count (default: 5)" << endl
         << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
+        << "    --repeat-matchlen <int>" << endl
+        << "    --repeat-indel" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -196,7 +204,9 @@ static struct option long_options[] = {
 	{(char*)"repeat-length",  required_argument, 0,            ARG_REPEAT_LENGTH},
 	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
     {(char*)"repeat-edit",    required_argument, 0,            ARG_REPEAT_EDIT},
+    {(char*)"repeat-matchlen",required_argument, 0,            ARG_REPEAT_MATCHLEN},
 	{(char*)"repeat-reverse", no_argument,       0,            ARG_REPEAT_REVERSE},
+	{(char*)"repeat-indel",   no_argument,       0,            ARG_REPEAT_INDEL},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
 	{(char*)0, 0, 0, 0} // terminator
 };
@@ -230,6 +240,7 @@ static T parseNumber(T lower, const char *errmsg) {
 static void parseOptions(int argc, const char **argv) {
 	int option_index = 0;
 	int next_option;
+    bool saw_max_repeat_matchlen = false;
 	do {
 		next_option = getopt_long(
 			argc, const_cast<char**>(argv),
@@ -294,8 +305,15 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_REPEAT_EDIT:
                 max_repeat_edit = parseNumber<TIndexOffU>(0, "--repeat-edit arg must be at least 0");
                 break;
+            case ARG_REPEAT_MATCHLEN:
+                max_repeat_matchlen = parseNumber<TIndexOffU>(0, "--repeat-matchlen arg must be at least 0");
+                saw_max_repeat_matchlen = true;
+                break;
 			case ARG_REPEAT_REVERSE:
 				repeat_reverse = true;
+				break;
+			case ARG_REPEAT_INDEL:
+				repeat_indel = true;
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -314,11 +332,16 @@ static void parseOptions(int argc, const char **argv) {
 				throw 1;
 		}
 	} while(next_option != -1);
+
 	if(bmax < 40) {
 		cerr << "Warning: specified bmax is very small (" << bmax << ").  This can lead to" << endl
 		     << "extremely slow performance and memory exhaustion.  Perhaps you meant to specify" << endl
 		     << "a small --bmaxdivn?" << endl;
 	}
+
+    if(!saw_max_repeat_matchlen) {
+        max_repeat_matchlen = repeat_length / 2;
+    }
 }
 
 static EList<bool> stbuf, enbuf;
@@ -682,7 +705,8 @@ static void driver(
 			nrg.build(repeat_length,
                       repeat_count,
                       true,
-                      max_repeat_edit);
+                      max_repeat_edit,
+                      max_repeat_matchlen);
 
             nrg.saveFile();
 
