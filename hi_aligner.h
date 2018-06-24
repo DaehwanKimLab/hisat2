@@ -434,6 +434,7 @@ struct GenomeHit {
     _tidx((index_t)INDEX_MAX),
     _toff((index_t)INDEX_MAX),
     _joinedOff((index_t)INDEX_MAX),
+    _repeat(false),
     _edits(NULL),
     _ht_list(NULL),
     _score(MIN_I64),
@@ -462,6 +463,7 @@ struct GenomeHit {
              otherHit._toff,
              otherHit._joinedOff,
              *(otherHit._sharedVars),
+             otherHit._repeat,
              otherHit._edits,
              otherHit._ht_list,
              otherHit._score,
@@ -480,6 +482,7 @@ struct GenomeHit {
              otherHit._toff,
              otherHit._joinedOff,
              *(otherHit._sharedVars),
+             otherHit._repeat,
              otherHit._edits,
              otherHit._ht_list,
              otherHit._score,
@@ -517,6 +520,7 @@ struct GenomeHit {
               index_t                   toff,
               index_t                   joinedOff,
               SharedTempVars<index_t>&  sharedVars,
+              bool                      repeat = false,
               EList<Edit>*              edits = NULL,
               EList<pair<index_t, index_t> >* ht_list = NULL,
               int64_t                   score = 0,
@@ -531,6 +535,7 @@ struct GenomeHit {
         _tidx = tidx;
         _toff = toff;
         _joinedOff = joinedOff;
+        _repeat = repeat;
 		_score = score;
         _localscore = localscore;
         _splicescore = splicescore;
@@ -869,6 +874,9 @@ struct GenomeHit {
     index_t ref()    const { return _tidx; }
     index_t refoff() const { return _toff; }
     index_t fw()     const { return _fw; }
+    
+    bool    repeat() const { return _repeat; }
+    void    repeat(bool repeat) { _repeat = repeat;}
     
     index_t hitcount() const { return _hitcount; }
     
@@ -1326,6 +1334,7 @@ public:
     index_t         _tidx;
     index_t         _toff;
     index_t         _joinedOff;
+    bool            _repeat;
 	EList<Edit>*    _edits;
     EList<pair<index_t, index_t> >* _ht_list;
     int64_t         _score;
@@ -3937,14 +3946,8 @@ public:
 	HI_Aligner(
                const GFM<index_t>& gfm,
                bool anchorStop = true,
-               bool secondary = false,
-               bool local = false,
-               int bowtie2_dp = 0,
                uint64_t threads_rids_mindist = 0) :
     _anchorStop(anchorStop),
-    _secondary(secondary),
-    _local(local),
-    _bowtie2_dp(bowtie2_dp),
     _gwstate(GW_CAT),
     _gwstate_local(GW_CAT),
     _thread_rids_mindist(threads_rids_mindist)
@@ -4029,6 +4032,7 @@ public:
            const RepeatDB<index_t>&   repeatdb,
            const ALTDB<index_t>&      raltdb,
            const BitPairReference&    ref,
+           const BitPairReference*    rref,
            SwAligner&                 swa,
            SpliceSiteDB&              ssdb,
            WalkMetrics&               wlm,
@@ -4040,14 +4044,15 @@ public:
     {
         index_t rdi;
         bool fw;
-        bool found[2] = {true, this->_paired};
+        bool found[2][2] = {{true, true}, {this->_paired, this->_paired}};
         // given read and its reverse complement
         //  (and mate and the reverse complement of mate in case of pair alignment),
         // pick up one with best partial alignment
         while(nextBWT(sc, pepol, tpol, gpol, gfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
             // given the partial alignment, try to extend it to full alignments
-        	found[rdi] = align(sc, pepol, tpol, gpol, gfm, altdb, repeatdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
-            if(!found[0] && !found[1]) {
+            index_t fwi = (fw == true ? 0 : 1);
+            found[rdi][fwi] = align(sc, pepol, tpol, gpol, gfm, altdb, repeatdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
+            if(!found[0][0] && !found[0][1] && !found[1][0] && !found[1][1]) {
                 break;
             }
             
@@ -4133,16 +4138,22 @@ public:
                         repeat[rdi][fwi] = partialHit.size() > rp.kseeds;
                     }
                 }
-                
-                perform_repeat_alignment |= repeat[rdi][fwi];
             }
+            
+            // it's possible that the sum of mappings on both strands is larger than k
+            //    when the number of mappings on each strand is smaller than k.
+            pair<index_t, index_t> numBest = sink.numBestUnp(rdi);
+            if(numBest.first > rp.khits) {
+                repeat[rdi][0] = repeat[rdi][1] = true;
+            }
+            
+            perform_repeat_alignment |= repeat[rdi][0];
+            perform_repeat_alignment |= repeat[rdi][1];
         }
         
         // Handle alignment to repetitive regions
         if(rgfm != NULL &&
            perform_repeat_alignment) {
-           // (sink.bestUnp1() >= _minsc[0] && sink.bestUnp2() >= _minsc[1])) {
-            
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 for(size_t fwi = 0; fwi < 2; fwi++) {
                     if(!repeat[rdi][fwi]) continue;
@@ -4185,7 +4196,6 @@ public:
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
                     if(_genomeHits_rep[rdi][i].len() < (_minK << 1)) continue;
-                    
                     if(rdi == 0) {
                         for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
                             if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
@@ -4363,7 +4373,35 @@ public:
                                       sink);
                         }
                     }
-                } // for(size_t i = 0; i < _genomeHits_rep[0].size()
+                } // for(size_t i = 0; i < _genomeHits_rep[rdi].size()
+                
+                if(sink.numPair() <= 0) {
+                    for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
+                        _genomeHits.clear();
+                        _genomeHits.expand();
+                        _genomeHits.back() = _genomeHits_rep[rdi][i];
+                        _genomeHits.back()._repeat = true;
+                        hybridSearch(sc,
+                                     pepol,
+                                     tpol,
+                                     gpol,
+                                     *rgfm,
+                                     altdb,
+                                     repeatdb,
+                                     *rref,
+                                     swa,
+                                     ssdb,
+                                     rdi,
+                                     _genomeHits.back()._fw,
+                                     wlm,
+                                     prm,
+                                     swm,
+                                     him,
+                                     rnd,
+                                     sink);
+                    }
+                }
+                
             } // for(size_t rdi = 0
         } // repeat
         
@@ -4391,6 +4429,7 @@ public:
                  RandomSource&              rnd,
                  AlnSinkWrap<index_t>&      sink)
     {
+        const ReportingParams& rp = sink.reportingParams();
         // Pick up a candidate from a read or its reverse complement
         // (for pair, also consider mate and its reverse complement)
         while(pickNextReadToSearch(rdi, fw)) {
@@ -4400,7 +4439,7 @@ public:
             assert(!hit.done());
             bool pseudogeneStop = gfm.gh().linearFM() && !tpol.no_spliced_alignment();
             bool anchorStop = _anchorStop;
-            if(!_secondary) {
+            if(!rp.secondary) {
                 index_t numSearched = hit.numActualPartialSearch();
                 int64_t bestScore = 0;
                 if(rdi == 0) {
@@ -4791,6 +4830,9 @@ public:
             BWTHit<index_t>& partialHit = hit.getPartialHit(hj);
             assert(!partialHit.hasGenomeCoords());
             
+            if(!repeatdb.empty() && partialHit.size() > maxGenomeHitSize)
+                break;
+            
             // Retrieve genomic coordinates
             //  If there are too many genomic coordinates to get,
             //  then we randomly choose and retrieve a small set of them
@@ -4821,9 +4863,6 @@ public:
                                 false, // reject straddled
                                 straddled);
             } else {
-                // DK - debugging purposes
-                continue;
-                
                 index_t edgeIdx = 0;
                 index_t top = partialHit._top;
                 index_t added = 0;
@@ -4911,6 +4950,7 @@ public:
             }
             if(partialHit._hit_type == CANDIDATE_HIT && genomeHits.size() >= maxGenomeHitSize) break;
         }
+
         return (index_t)genomeHits.size();
     }
     
@@ -4991,14 +5031,6 @@ protected:
     TAlScore _maxpen[2];
     
     bool     _anchorStop;
-    
-    bool     _secondary;  // allow secondary alignments
-    bool     _local;      // perform local alignments
-    
-    int     _bowtie2_dp; // Bowtie2's dynamic programming alignment
-                         //   0: no dynamic programming
-                         //   1: conditional dynamic programming
-                         //   2: uncoditional dynamic programming
     
     ReadBWTHit<index_t> _hits[2][2];
     
@@ -5127,7 +5159,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     if(bestScore < _minsc[rdi]) bestScore = _minsc[rdi];
     index_t maxmm = (index_t)((-bestScore + sc.mmpMax - 1) / sc.mmpMax);
     index_t numActualPartialSearch = hit.numActualPartialSearch();
-    if(!_secondary && numActualPartialSearch > maxmm + num_spliced + 1) return true;
+    if(!rp.secondary && numActualPartialSearch > maxmm + num_spliced + 1) return true;
     
     // choose candidate partial alignments for further alignment
     const index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
@@ -5152,7 +5184,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
    
     // limit the number of local index searches used for alignment of the read
     uint64_t add = 0;
-    if(_secondary) add = (-_minsc[rdi] / sc.mmpMax) * numHits * 2;
+    if(rp.secondary) add = (-_minsc[rdi] / sc.mmpMax) * numHits * 2;
     else           add = (-_minsc[rdi] / sc.mmpMax) * numHits;
     max_localindexatts = him.localindexatts + max<uint64_t>(10, add);
     // extend the partial alignments bidirectionally using
@@ -5568,6 +5600,7 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
                                                    RandomSource&              rnd,
                                                    AlnSinkWrap<index_t>&      sink)
 {
+    const ReportingParams& rp = sink.reportingParams();
     assert(_paired);
     const EList<AlnRes> *rs1 = NULL, *rs2 = NULL;
     sink.getUnp1(rs1); assert(rs1 != NULL);
@@ -5629,7 +5662,7 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
             if(!tpol.no_spliced_alignment() || dna_frag_pass) {
                 TAlScore threshold = std::max<TAlScore>(sink.bestPair(),
                                                         sink.bestUnp1() + sink.bestUnp2() - (r1.readLength() + r2.readLength()) * 0.03 * sc.mm(255));
-                if(r1.score().score() + r2.score().score() >= threshold || _secondary) {
+                if(r1.score().score() + r2.score().score() >= threshold || rp.secondary) {
                     sink.report(0, &r1, &r2);
                 }
             }
@@ -5711,6 +5744,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                  hit.score(),       // numeric score
                  hit.ns(),          // # Ns
                  hit.ngaps(),       // # gaps
+                 hit.repeat(),
                  hit.splicescore(), // splice score
                  spliced.second,    // mapped to known transcripts?
                  spliced.first,     // spliced alignment or near splice sites (novel)?
@@ -5742,7 +5776,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
             0,                          // 3p pre-trimming
             softTrim,                   // soft trimming?
             hit.fw() ? hit.trim5() : hit.trim3(),  // 5p trimming
-            hit.fw() ? hit.trim3() : hit.trim5()); // 3p trimming
+            hit.fw() ? hit.trim3() : hit.trim5(),  // 3p trimming
+            hit.repeat());              // repeat?
     if(!hit.fw()) {
         Edit::invertPoss(edits, rdlen, false);
     }
@@ -5789,9 +5824,10 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
         Edit::invertPoss(oedits, ordlen, false);
     }
     AlnScore oasc(
-                  ohit->score(),  // numeric score
-                  ohit->ns(),     // # Ns
-                  ohit->ngaps()); // # gaps
+                  ohit->score(),   // numeric score
+                  ohit->ns(),      // # Ns
+                  ohit->ngaps(),   // # gaps
+                  ohit->repeat()); // repeat?
     bool osoftTrim = ohit->trim5() > 0 || ohit->trim3() > 0;
     AlnRes ors;
     ors.init(
@@ -5818,7 +5854,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
              0,                          // 3p pre-trimming
              osoftTrim,                  // soft trimming?
              ohit->fw() ? ohit->trim5() : ohit->trim3(),  // 5p trimming
-             ohit->fw() ? ohit->trim3() : ohit->trim5()); // 3p trimming
+             ohit->fw() ? ohit->trim3() : ohit->trim5(),  // 3p trimming
+             ohit->repeat());            // repeat?
     if(!ohit->fw()) {
         Edit::invertPoss(oedits, ordlen, false);
     }

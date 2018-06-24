@@ -145,8 +145,67 @@ def extract_splice_sites(gtf_fname):
 
     return junctions
 
+"""
+"""
+def read_repeat_info(repeat_filename):
+    repeat_info, repeat_dic = [], {}
+    if os.path.exists(repeat_filename):
+        for line in open(repeat_filename):
+            if line[0] == ">":
+                line = line.strip()[1:]
+                allele, _, pos, rep_len, _, _ = line.split()
+                common_allele = allele.split('*')[0]
+                if len(repeat_info) > 0 and repeat_info[-1][0] == common_allele:
+                    repeat_info[-1][-1].append(allele)
+                else:
+                    repeat_info.append([common_allele, int(pos), int(rep_len), [allele]])
+                repeat_dic[allele] = []
+            else:
+                coords = line.split()
+                for coord in coords:
+                    chr, pos, strand = coord.split(':')
+                    repeat_dic[allele].append([chr, int(pos), strand])
+
+    return repeat_info, repeat_dic
+
+
+"""
+"""
+def find_repeat(repeat_info, pos):
+    if len(repeat_info) <= 0:
+        return -1
+    
+    l, r = 0, len(repeat_info)
+    while l < r:
+        m = (l + r) / 2
+        _, rep_pos, rep_len, _ = repeat_info[m]
+        if rep_pos <= pos and pos < rep_pos + rep_len:
+            return m
+        elif pos < rep_pos:
+            r = m
+        else:
+            l = m + 1
+            
+    return -1
+
 
 cigar_re = re.compile('\d+\w')
+
+def reverse_cigar(cigar_str):
+    cigars = cigar_re.findall(cigar_str)
+    cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+    cigars[::-1]
+
+    read_len = 0
+    cigar_str = ""
+    for cigar in cigars:
+        cigar_op, length = cigar
+        cigar_str += ("%d%s" % (length, cigar_op))
+        if cigar_op in "MISH":
+            read_len += int(length)
+
+    return read_len, cigar_str
+
 
 
 def to_junction_str(junction):
@@ -333,7 +392,47 @@ def is_small_exon_junction_read(cigars, min_exon_len = 23):
 
 """
 """
-def extract_single(infilename, outfilename, chr_dic, aligner, version, debug_dic):
+def repeat_to_genome_alignment(repeat_info, repeat_dic, pos, cigar_str = ""):
+    left = pos - 1 # convert 1-based offset to zero-based
+    
+    alignments = []
+    rep_idx = find_repeat(repeat_info, left)
+    assert rep_idx >= 0 and rep_idx < len(repeat_info)
+
+    rpos, rlen, rep_alleles = repeat_info[rep_idx][1:]
+    for rep_allele in rep_alleles:
+        assert rep_allele in repeat_dic
+        coords = repeat_dic[rep_allele]
+        assert len(coords) > 0
+        for coord in coords:
+            cchr, cpos, cstrand = coord
+            adj_left = left - rpos
+            if cstrand == '+':
+                rep_left = cpos + adj_left
+                rep_cigar_str = cigar_str
+            else:
+                if cigar_str:
+                    read_len, rep_cigar_str = reverse_cigar(cigar_str)
+                else:
+                    read_len, rep_cigar_str = 0, ""
+                rc_adj_left = rlen - adj_left - read_len;
+                rep_left = cpos + rc_adj_left
+
+            alignments.append([cchr, rep_left + 1, rep_cigar_str])
+
+    return alignments
+
+
+"""
+"""
+def extract_single(infilename,
+                   outfilename,
+                   chr_dic,
+                   aligner,
+                   version,
+                   repeat_info,
+                   repeat_dic,
+                   debug_dic):
     infile = open(infilename)
     outfile = open(outfilename, "w")
     prev_read_id = ""
@@ -438,6 +537,7 @@ def extract_single(infilename, outfilename, chr_dic, aligner, version, debug_dic
 
             return pos, cigar_str, NM_real
 
+
         alignments = [[chr, pos, cigar_str]]
         if aligner == "bwa" and len(XA) > 0:
             for alignment in XA:
@@ -446,6 +546,10 @@ def extract_single(infilename, outfilename, chr_dic, aligner, version, debug_dic
                 if alt_NM > NM:
                     break
                 alignments.append([alt_chr, alt_pos, alt_cigar_str])
+
+        # Convert repeat alignments to genome alignments
+        if aligner == "hisat2" and chr == "rep" and len(repeat_info) > 0:
+            alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, pos, cigar_str)
             
         for i, alignment in enumerate(alignments):
             chr, pos, cigar_str = alignment
@@ -493,6 +597,7 @@ def extract_single(infilename, outfilename, chr_dic, aligner, version, debug_dic
                 assert hisat2_reads == hisat2_0aligned_reads + hisat2_ualigned_reads + num                
 
         hisat2_aligned_reads = hisat2_reads - hisat2_0aligned_reads
+
         assert hisat2_reads == num_reads
         assert hisat2_aligned_reads == num_aligned_reads
         assert hisat2_ualigned_reads == num_ualigned_reads
@@ -500,7 +605,14 @@ def extract_single(infilename, outfilename, chr_dic, aligner, version, debug_dic
 
 """
 """
-def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
+def extract_pair(infilename,
+                 outfilename,
+                 chr_dic,
+                 aligner,
+                 version,
+                 repeat_info,
+                 repeat_dic,
+                 debug_dic):
     read_dic = {}
     pair_reported = set()
 
@@ -644,7 +756,29 @@ def extract_pair(infilename, outfilename, chr_dic, aligner, version, debug_dic):
                 if alt_NM > NM1:
                     break
                 alignments.append([alt_chr, alt_pos, alt_cigar_str])
-            
+
+        # Convert repeat alignments to genome alignments
+        if aligner == "hisat2" and (chr1 == "rep" or chr2 == "rep") and len(repeat_info) > 0:
+            if chr1 == "rep":
+                alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, pos1, cigar1_str)
+            if chr2 == "rep" or (chr1 == "rep" and chr2 == "="):
+                alignments2 = repeat_to_genome_alignment(repeat_info, repeat_dic, int(pos2))
+            else:
+                alignments2 = [[chr2, int(pos2)]]
+
+            selected_alignments = []
+            for alignment in alignments:
+                _chr1, _pos1 = alignment[:2]
+                add = False
+                for alignment2 in alignments2:
+                    _chr2, _pos2 = alignment2[:2]
+                    if _chr1 == _chr2 and abs(_pos1 - _pos2) <= 1000:
+                        add = True
+                if add:
+                    selected_alignments.append(alignment)
+
+            alignments = selected_alignments
+                
         for i, alignment in enumerate(alignments):
             chr1, pos1, cigar1_str = alignment
             pos1, cigar_str, NM_real = adjust_alignment(chr1, pos1, cigar1_str)
@@ -825,9 +959,17 @@ def find_in_gtf_junctions(chr_dic, gtf_junctions, junction, relax_dist = 5):
 
     return -1
 
+
 """
 """
-def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set, ex_gtf_junctions):
+def compare_single_sam(RNA,
+                       reference_sam,
+                       query_sam,
+                       mapped_fname,
+                       chr_dic,
+                       gtf_junctions,
+                       gtf_junctions_set,
+                       ex_gtf_junctions):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic = {}, {}
     mapped_file = open(mapped_fname, "w")
@@ -1054,7 +1196,14 @@ def compare_single_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf
 
 """
 """
-def compare_paired_sam(RNA, reference_sam, query_sam, mapped_fname, chr_dic, gtf_junctions, gtf_junctions_set, ex_gtf_junctions):
+def compare_paired_sam(RNA,
+                       reference_sam,
+                       query_sam,
+                       mapped_fname,
+                       chr_dic,
+                       gtf_junctions,
+                       gtf_junctions_set,
+                       ex_gtf_junctions):
     aligned, multi_aligned = 0, 0
     db_dic, db_junction_dic, junction_pair_dic = {}, {}, {}
     mapped_file = open(mapped_fname, "w")
@@ -1511,7 +1660,7 @@ def calculate_read_cost(verbose):
         # ["bowtie2", "", "", "", "-k 1000 --extends 2000"],
         # ["gsnap", "", "", "", ""],
         # ["bwa", "mem", "", "", ""],
-        # ["bwa", "mem", "", "", "-a"],
+        ["bwa", "mem", "", "", "-a"],
         # ["hisat2", "", "snp", "", ""],
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],
@@ -1539,9 +1688,10 @@ def calculate_read_cost(verbose):
 
     chr_dic = read_genome("../../data/%s.fa" % genome)
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
+    repeat_info, repeat_dic = read_repeat_info("../../data/%s.rep.info" % genome)
     align_stat = []
-    # for paired in [False, True]:
-    for paired in [True]:
+    for paired in [False, True]:
+    # for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
@@ -2001,9 +2151,9 @@ def calculate_read_cost(verbose):
                 if not os.path.exists(out_fname2):
                     debug_dic = {}
                     if paired:
-                        extract_pair(out_fname, out_fname2, chr_dic, aligner, version, debug_dic)
+                        extract_pair(out_fname, out_fname2, chr_dic, aligner, version, repeat_info, repeat_dic, debug_dic)
                     else:
-                        extract_single(out_fname, out_fname2, chr_dic, aligner, version, debug_dic)
+                        extract_single(out_fname, out_fname2, chr_dic, aligner, version, repeat_info, repeat_dic, debug_dic)
 
                 for readtype2 in readtypes:
                     if not two_step and readtype != readtype2:

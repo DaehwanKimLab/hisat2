@@ -292,6 +292,8 @@ static int bowtie2_dp; // Bowtie2's dynamic programming alignment (0: no dynamic
 static bool sensitive;      // --sensitive
 static bool very_sensitive; // --very-sensitive
 
+static bool repeat;
+
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -522,6 +524,8 @@ static void resetOptions() {
     bowtie2_dp = 0; // disable Bowtie2's dynamic programming alignment
     sensitive = false;
     very_sensitive = false;
+    
+    repeat = false; // true iff alignments to repeat sequences are directly reported.
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -745,6 +749,7 @@ static struct option long_options[] = {
     {(char*)"new-summary",     no_argument,        0,        ARG_NEW_SUMMARY},
     {(char*)"enable-dp",       no_argument,        0,        ARG_DP},
     {(char*)"bowtie2-dp",      required_argument,  0,        ARG_DP},
+    {(char*)"repeat",          no_argument,        0,        ARG_REPEAT},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -864,7 +869,8 @@ static void printUsage(ostream& out) {
 		//<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		//<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
 		//<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
-        << "  --bowtie2-dp <int> use Bowtie2's dynamic programming alignment algorithm (0) - 0: no dynamic programming, 1: conditional dynamic programming, and 2: unconditional dynamic programming (slowest)"
+        << "  --repeat                           report alignments to repeat sequences directly"
+        << "  --bowtie2-dp <int>                 use Bowtie2's dynamic programming alignment algorithm (0) - 0: no dynamic programming, 1: conditional dynamic programming, and 2: unconditional dynamic programming (slowest)"
 		<< "  --n-ceil <func>    func for max # non-A/C/G/Ts permitted in aln (L,0,0.15)" << endl
 		//<< "  --dpad <int>       include <int> extra ref chars on sides of DP table (15)" << endl
 		//<< "  --gbar <int>       disallow gaps within <int> nucs of read extremes (4)" << endl
@@ -1736,6 +1742,10 @@ static void parseOption(int next_option, const char *arg) {
             bowtie2_dp = parseInt(0, "--bowtie2-dp arg must be 0, 1, or 2", arg);
             break;
         }
+        case ARG_REPEAT: {
+            repeat = true;
+            break;
+        }
 		default:
 			printUsage(cerr);
 			throw 1;
@@ -1956,6 +1966,7 @@ static HGFM<index_t>*                    multiseed_gfm;
 static HGFM<index_t>*                    multiseed_rgfm;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
+static BitPairReference*                 multiseed_rrefs;
 static AlnSink<index_t>*                 multiseed_msink;
 static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
@@ -3102,6 +3113,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     const HGFM<index_t>*             rgfm     = multiseed_rgfm;
 	const Scoring&                   sc       = *multiseed_sc;
     const BitPairReference&          ref      = *multiseed_refs;
+    const BitPairReference*          rref     = multiseed_rrefs;
 	AlnSink<index_t>&                msink    = *multiseed_msink;
 	OutFileBuf*                      metricsOfb = multiseed_metricsOfb;
     
@@ -3125,7 +3137,11 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                        0,                 // penalty gap (not used now)
                        msample,           // true -> -M was specified, otherwise assume -m
                        gReportDiscordant, // report discordang paired-end alignments?
-                       gReportMixed);     // report unpaired alignments for paired reads?
+                       gReportMixed,      // report unpaired alignments for paired reads?
+                       secondary,
+                       localAlign,
+                       bowtie2_dp,
+                       repeat);
     
 	// Instantiate a mapping quality calculator
 	auto_ptr<Mapq> bmapq(new_mapq(mapqv, scoreMin, sc));
@@ -3143,9 +3159,6 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     SplicedAligner<index_t, local_index_t> splicedAligner(
                                                           gfm,
                                                           anchorStop,
-                                                          secondary,
-                                                          localAlign,
-                                                          bowtie2_dp,
                                                           thread_rids_mindist);
 	SwAligner sw;
 	OuterLoopMetrics olm;
@@ -3490,6 +3503,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                                 *repeatdb,
                                                 *raltdb,
                                                 ref,
+                                                rref,
                                                 sw,
                                                 *ssdb,
                                                 wlm,
@@ -3603,7 +3617,8 @@ static void multiseedSearch(
                             AlnSink<index_t>& msink,      // hit sink
                             HGFM<index_t>& gfm,           // index of original text
                             HGFM<index_t>* rgfm,          // index of repeat sequences
-                            BitPairReference* refs,
+                            BitPairReference* refs,       // base reference
+                            BitPairReference* rrefs,      // repeat reference
                             OutFileBuf *metricsOfb)
 {
     multiseed_patsrc       = &patsrc;
@@ -3614,7 +3629,8 @@ static void multiseedSearch(
     multiseed_tpol         = &tpol;
     gpol                   = &gp;
 	multiseed_metricsOfb   = metricsOfb;
-	multiseed_refs = refs;
+	multiseed_refs         = refs;
+    multiseed_rrefs        = rrefs;
 	AutoArray<tthread::thread*> threads(nthreads);
 	AutoArray<int> tids(nthreads);	
 	// Start the metrics thread
@@ -3886,6 +3902,14 @@ static void driver(
 		}
 		EList<string> refnames;
 		readEbwtRefnames<index_t>(adjIdxBase, refnames);
+        EList<size_t> replens;
+        EList<string> repnames;
+        if(rep_index_exists) {
+            for(size_t i = 0; i < rgfm->nPat(); i++) {
+                replens.push_back(rgfm->plen()[i]);
+            }
+            readEbwtRefnames<index_t>(rep_adjIdxBase, repnames);
+        }
         if(rmChrName && addChrName) {
             cerr << "Error: --remove-chrname and --add-chrname cannot be used at the same time" << endl;
             throw 1;
@@ -3909,6 +3933,8 @@ static void driver(
 		SamConfig<index_t> samc(
 			refnames,               // reference sequence names
 			reflens,                // reference sequence lengths
+            repnames,               // repeat sequence names
+            replens,                // repeat sequence lengths
 			samTruncQname,          // whether to truncate QNAME to 255 chars
 			samOmitSecSeqQual,      // omit SEQ/QUAL for 2ndary alignments?
 			samNoUnal,              // omit unaligned-read records?
@@ -3979,6 +4005,23 @@ static void driver(
         delete _tRef;
         if(!refs->loaded()) throw 1;
         
+        BitPairReference* rrefs = NULL;
+        if(rep_index_exists) {
+            rrefs = new BitPairReference(
+                                         rep_adjIdxBase,
+                                         false,
+                                         sanityCheck,
+                                         NULL,
+                                         NULL,
+                                         false,
+                                         useMm,
+                                         useShmem,
+                                         mmSweep,
+                                         gVerbose,
+                                         startVerbose);
+            if(!rrefs->loaded()) throw 1;
+        }
+        
         bool xsOnly = (tranAssm_program == "cufflinks");
         TranscriptomePolicy tpol(minIntronLen,
                                  maxIntronLen,
@@ -4027,6 +4070,7 @@ static void driver(
                                                  oq,           // output queue
                                                  samc,         // settings & routines for SAM output
                                                  refnames,     // reference names
+                                                 repnames,     // repeat names
                                                  gQuiet,       // don't print alignment summary at end
                                                  altdb,
                                                  ssdb);
@@ -4062,6 +4106,7 @@ static void driver(
                         gfm,     // BWT
                         rgfm,
                         refs.get(),
+                        rrefs,
                         metricsOfb);
 		// Evict any loaded indexes from memory
 		if(gfm.isInMemory()) {
@@ -4111,6 +4156,7 @@ static void driver(
         delete ssdb;
 		delete metricsOfb;
         delete rgfm;
+        delete rrefs;
 		if(fout != NULL) {
 			delete fout;
 		}

@@ -223,9 +223,25 @@ struct ReportingParams {
                              THitInt pengap_,
                              bool msample_,
                              bool discord_,
-                             bool mixed_)
+                             bool mixed_,
+                             bool secondary_,
+                             bool localAlign_,
+                             int bowtie2_dp_,
+                             bool repeat_)
+                             
 	{
-		init(khits_, kseeds_, mhits_, pengap_, msample_, discord_, mixed_);
+		init(
+             khits_,
+             kseeds_,
+             mhits_,
+             pengap_,
+             msample_,
+             discord_,
+             mixed_,
+             secondary_,
+             localAlign_,
+             bowtie2_dp_,
+             repeat_);
 	}
 
 	void init(
@@ -235,7 +251,11 @@ struct ReportingParams {
               THitInt pengap_,
               bool msample_,
               bool discord_,
-              bool mixed_)
+              bool mixed_,
+              bool secondary_,
+              bool localAlign_,
+              int bowtie2_dp_,
+              bool repeat_)
 	{
 		khits   = khits_;     // -k (or high if -a)
         kseeds  = kseeds_;
@@ -244,6 +264,10 @@ struct ReportingParams {
 		msample = msample_;
 		discord = discord_;
 		mixed   = mixed_;
+        secondary = secondary_;
+        localAlign = localAlign_;
+        bowtie2_dp = bowtie2_dp_;
+        repeat = repeat_;
 	}
 	
 #ifndef NDEBUG
@@ -295,8 +319,8 @@ struct ReportingParams {
 	bool allHits() const {
 		return khits == std::numeric_limits<THitInt>::max();
 	}
-
-	// Number of alignments to report
+    
+    // Number of alignments to report
 	THitInt khits;
     
     // Number of seeds allowed to extend
@@ -319,6 +343,19 @@ struct ReportingParams {
 	// are paired-end alignments for a paired-end read, or if the number of
 	// paired-end alignments exceeds the -m ceiling.
 	bool mixed;
+    
+    // true iff we allow secondary alignments to be output (secondary alignments
+    // have lower scores)
+    bool secondary;
+    
+    // true iff we allow local alignment (not implemented yet)
+    bool localAlign;
+    
+    // true iff we allow dynamic alignment
+    int bowtie2_dp;
+                             
+    // true iff we output alignments to repeat sequences
+    bool repeat;
 };
 
 /**
@@ -608,11 +645,13 @@ public:
 	explicit AlnSink(
                      OutputQueue& oq,
                      const StrList& refnames,
+                     const StrList& repnames,
                      bool quiet,
                      ALTDB<index_t>* altdb = NULL,
                      SpliceSiteDB* ssdb = NULL) :
     oq_(oq),
     refnames_(refnames),
+    repnames_(repnames),
     quiet_(quiet),
     altdb_(altdb),
     spliceSiteDB_(ssdb)
@@ -887,6 +926,7 @@ protected:
 	OutputQueue&       oq_;           // output queue
 	int                numWrappers_;  // # threads owning a wrapper for this HitSink
 	const StrList&     refnames_;     // reference names
+    const StrList&     repnames_;     // repeat names
 	bool               quiet_;        // true -> don't print alignment stats at the end
 	ReportingMetrics   met_;          // global repository of reporting metrics
     ALTDB<index_t>*    altdb_;
@@ -1269,6 +1309,53 @@ public:
     index_t numUnp1() const { return rs1u_.size(); }
     index_t numUnp2() const { return rs2u_.size(); }
     index_t numPair() const { assert_eq(rs1_.size(), rs2_.size()); return rs1_.size(); }
+    
+    pair<index_t, index_t> numBestUnp(index_t rdi) const {
+        index_t numGenome = 0, numRepeat = 0;
+        TAlScore maxScore = numeric_limits<TAlScore>::min();
+        const EList<AlnRes>& rs = (rdi == 0 ? rs1u_ : rs2u_);
+        for(size_t i = 0; i < rs.size(); i++) {
+            TAlScore curScore = rs[i].score().score();
+            if(curScore > maxScore) {
+                numGenome = numRepeat = 0;
+                maxScore = curScore;
+            }
+            
+            if(curScore >= maxScore) {
+                if(rs[i].repeat()) {
+                    numRepeat++;
+                } else {
+                    numGenome++;
+                }
+            }
+        }
+        
+        return pair<index_t, index_t>(numGenome, numRepeat);
+    }
+    
+    pair<index_t, index_t> numBestPair() const {
+        index_t numGenome = 0, numRepeat = 0;
+        TAlScore maxScore = numeric_limits<TAlScore>::min();
+        assert_eq(rs1_.size(), rs2_.size());
+        for(size_t i = 0; i < rs1_.size(); i++) {
+            TAlScore curScore = rs1_[i].score().score() + rs2_[i].score().score();
+            if(curScore > maxScore) {
+                numGenome = numRepeat = 0;
+                maxScore = curScore;
+            }
+            
+            if(curScore >= maxScore) {
+                if(rs1_[i].repeat() || rs2_[i].repeat()) {
+                    assert(rs1_[i].repeat() && rs2_[i].repeat());
+                    numRepeat++;
+                } else {
+                    numGenome++;
+                }
+            }
+        }
+        
+        return pair<index_t, index_t>(numGenome, numRepeat);
+    }
 
 protected:
 
@@ -1375,12 +1462,14 @@ public:
                OutputQueue&     oq,            // output queue
                const SamConfig<index_t>& samc, // settings & routines for SAM output
                const StrList&   refnames,      // reference names
+               const StrList&   repnames,      // repeat names
                bool             quiet,         // don't print alignment summary at end
                ALTDB<index_t>*  altdb = NULL,
                SpliceSiteDB*    ssdb  = NULL) :
 		AlnSink<index_t>(
                          oq,
                          refnames,
+                         repnames,
                          quiet,
                          altdb,
                          ssdb),
@@ -2563,7 +2652,15 @@ const
 		buf.shufflePortion(buf.size() - streak, streak, rnd);
 	}
 	
-	for(size_t i = 0; i < num; i++) { select[i] = buf[i].second; }
+    select.clear();
+	for(size_t i = 0; i < buf.size(); i++) {
+        index_t add = buf[i].second;
+        if(i >= num && !(*rs1)[add].repeat()) {
+            assert(rs2 == NULL || !(*rs2)[add].repeat());
+            break;
+        }
+        select.push_back(add);
+    }
     
     if(!secondary_) {
         assert_geq(buf.size(), select.size());
@@ -2909,7 +3006,7 @@ void AlnSinkSam<index_t>::appendMate(
 	o.append('\t');
 	// RNAME
 	if(rs != NULL) {
-		samc_.printRefNameFromIndex(o, (size_t)rs->refid());
+		samc_.printRefNameFromIndex(o, (size_t)rs->refid(), rs->repeat());
 		o.append('\t');
 	} else {
 		if(summ.orefid() != -1) {
@@ -2966,8 +3063,8 @@ void AlnSinkSam<index_t>::appendMate(
 	}
 	// RNEXT
 	if(rs != NULL && flags.partOfPair()) {
-		if(rso != NULL && rs->refid() != rso->refid()) {
-			samc_.printRefNameFromIndex(o, (size_t)rso->refid());
+		if(rso != NULL && (rs->refid() != rso->refid() || rs->repeat() != rso->repeat())) {
+			samc_.printRefNameFromIndex(o, (size_t)rso->refid(), rso->repeat());
 			o.append('\t');
 		} else {
 			o.append("=\t");

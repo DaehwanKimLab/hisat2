@@ -64,6 +64,8 @@ public:
 	SamConfig(
               const StrList& refnames,  // reference sequence names
               const LenList& reflens,   // reference sequence lengths
+              const StrList& repnames,  // repeat sequence names
+              const LenList& replens,   // repeat sequence lengths
               bool truncQname,          // truncate read name to 255?
               bool omitsec,             // omit secondary SEQ/QUAL
               bool noUnal,              // omit unaligned reads
@@ -122,6 +124,8 @@ public:
 		rgs_(rgs),
 		refnames_(refnames),
 		reflens_(reflens),
+        repnames_(repnames),
+        replens_(replens),
         rna_strandness_(rna_strandness),
 		print_as_(print_as), // alignment score of best alignment
 		print_xs_(print_xs), // alignment score of second-best alignment
@@ -256,7 +260,8 @@ public:
 	 */
 	void printRefNameFromIndex(
 		BTString& o,
-		size_t i)
+		size_t i,
+        bool repeat = false)
 		const;
 	
 	/**
@@ -347,6 +352,9 @@ protected:
 	const StrList& refnames_; // reference sequence names
 	const LenList& reflens_;  // reference sequence lengths
     
+    const StrList& repnames_; // repeat sequence names
+    const LenList& replens_;  // repeat sequence lengths
+    
     int rna_strandness_;
 	
 	// Which alignment flags to print?
@@ -423,8 +431,12 @@ void SamConfig<index_t>::printRefName(
  * Print a reference name given a reference index.
  */
 template<typename index_t>
-void SamConfig<index_t>::printRefNameFromIndex(BTString& o, size_t i) const {
-    printRefName(o, refnames_[i]);
+void SamConfig<index_t>::printRefNameFromIndex(BTString& o, size_t i, bool repeat) const {
+    if(repeat) {
+        printRefName(o, repnames_[i]);
+    } else {
+        printRefName(o, refnames_[i]);
+    }
 }
 
 /**
@@ -471,6 +483,14 @@ void SamConfig<index_t>::printSqLines(BTString& o) const {
         printRefName(o, refnames_[i]);
         o.append("\tLN:");
         itoa10<size_t>(reflens_[i], buf);
+        o.append(buf);
+        o.append('\n');
+    }
+    for(size_t i = 0; i < repnames_.size(); i++) {
+        o.append("@SQ\tSN:");
+        printRefName(o, repnames_[i]);
+        o.append("\tLN:");
+        itoa10<size_t>(replens_[i], buf);
         o.append(buf);
         o.append('\n');
     }

@@ -68,6 +68,7 @@ public:
                     TAlScore score,
                     TAlScore ns,
                     TAlScore gaps,
+                    bool repeat = false,
                     TAlScore splicescore = 0,
                     bool knownTranscripts = false,
                     bool nearSpliceSites = false,
@@ -76,6 +77,7 @@ public:
 		score_ = score;
 		ns_ = ns;
 		gaps_ = gaps;
+        repeat_ = repeat;
         splicescore_ = splicescore;
         knownTranscripts_ = knownTranscripts;
         nearSpliceSites_ = nearSpliceSites;
@@ -90,6 +92,7 @@ public:
 	 */
 	void reset() {
 		score_ = hisat2_score_ = ns_ = gaps_ = 0;
+        repeat_ = false;
         splicescore_ = 0;
         knownTranscripts_ = false;
         nearSpliceSites_ = false;
@@ -161,6 +164,7 @@ public:
 		gaps_  = o.gaps_;
 		ns_    = o.ns_;
 		score_ = o.score_;
+        repeat_ = o.repeat_;
         hisat2_score_ = o.hisat2_score_;
         splicescore_ = o.splicescore_;
         knownTranscripts_ = o.knownTranscripts_;
@@ -242,6 +246,7 @@ public:
 		s.gaps_ = gaps_ + o.gaps_;
 		s.ns_ = ns_;
 		s.score_ = score_ + o.score_;
+        s.repeat_ = repeat_ | o.repeat_;
         s.splicescore_ = splicescore_ + o.splicescore_;
         s.hisat2_score_ = hisat2_score_ + o.hisat2_score_;
         s.knownTranscripts_ = knownTranscripts_ | o.knownTranscripts_;
@@ -259,6 +264,7 @@ public:
 		if(VALID_AL_SCORE(*this)) {
 			gaps_ += o.gaps_;
 			score_ += o.score_;
+            repeat_ |= o.repeat_;
             splicescore_ += o.splicescore_;
             hisat2_score_ += o.hisat2_score_;
             knownTranscripts_ |= o.knownTranscripts_;
@@ -307,6 +313,7 @@ public:
 	TAlScore penalty()          const { return -score_; }
 	TAlScore gaps()             const { return  gaps_;  }
 	TAlScore ns()               const { return  ns_;    }
+    bool     repeat()           const { return repeat_;}
     TAlScore splicescore()      const { return splicescore_; }
     bool     knownTranscripts() const { return knownTranscripts_; }
     bool     nearSpliceSites()  const { return nearSpliceSites_; }
@@ -319,7 +326,11 @@ public:
         if(score > MAX_I32) score = MAX_I32;
         else if(score < MIN_I32) score = MIN_I32;
         
-        // Next 8 bits for alignments against transcripts
+        // Next 4 bits for repeat score
+        TAlScore repeat_score = 0;
+        if(repeat_) repeat_score = 1;
+        
+        // Next 4 bits for alignments against transcripts
         TAlScore transcript_score = 0;
         if(knownTranscripts_) transcript_score = 2;
         else if(nearSpliceSites_) transcript_score = 1;
@@ -333,7 +344,7 @@ public:
         TAlScore trim = leftTrim_ + rightTrim_;
         if(trim > MAX_U16) trim = 0;
         else               trim = MAX_U16 - trim;
-        return (score << 32) | (transcript_score << 24) | (splicescore << 16) | trim;
+        return (score << 32) | (repeat_score << 28) | (transcript_score << 24) | (splicescore << 16) | trim;
     }
 
 	// Score accumulated so far (penalties are subtracted starting at 0)
@@ -350,6 +361,8 @@ public:
 	// target, in which case the score becomes invalid and therefore <=
 	// all other scores
 	TAlScore gaps_;
+    
+    bool repeat_;
     
     // splice scores
     TAlScore splicescore_;
@@ -932,6 +945,7 @@ public:
         trimSoft_ = other.trimSoft_;
         trim5p_ = other.trim5p_;
         trim3p_ = other.trim3p_;
+        repeat_ = other.repeat_;
         
         num_spliced_ = other.num_spliced_;
         raw_edits_ = other.raw_edits_;
@@ -978,6 +992,7 @@ public:
         trimSoft_ = other.trimSoft_;
         trim5p_ = other.trim5p_;
         trim3p_ = other.trim3p_;
+        repeat_ = other.repeat_;
         
         num_spliced_ = other.num_spliced_;
         assert(raw_edits_ == NULL || raw_edits_ == other.raw_edits_);
@@ -1699,7 +1714,8 @@ public:
 		size_t             pretrim3p    = 0, // trimming prior to alignment
 		bool               trimSoft     = true,
 		size_t             trim5p       = 0, // trimming from alignment
-		size_t             trim3p       = 0);// trimming from alignment
+		size_t             trim3p       = 0, // trimming from alignment
+        bool               repeat       = false); // repeat
 
 	/**
 	 * Return number of bases trimmed from the 5' end.  Argument determines
@@ -1738,6 +1754,8 @@ public:
 	size_t trimmedRight(bool soft) const {
 		return fw() ? trimmed3p(soft) : trimmed5p(soft);
 	}
+    
+    bool repeat() const { return repeat_; }
 
 	/**
 	 * Set the number of reference Ns covered by the alignment.
@@ -1811,6 +1829,7 @@ public:
 			trimSoft_     == o.trimSoft_ &&
 			trim5p_       == o.trim5p_ &&
 			trim3p_       == o.trim3p_ &&
+            repeat_       == o.repeat_ &&
             num_spliced_  == o.num_spliced_;
 	}
 	
@@ -1889,6 +1908,7 @@ protected:
 	bool        trimSoft_;     // trimming by local alignment is soft?
 	size_t      trim5p_;       // # bases trimmed from 5p end by local alignment
 	size_t      trim3p_;       // # bases trimmed from 3p end by local alignment
+    bool        repeat_;       // repeat?
     
     size_t                          num_spliced_;
     LinkedEListNode<EList<Edit> >*  ned_node_;

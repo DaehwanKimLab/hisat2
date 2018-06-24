@@ -184,7 +184,8 @@ enum {
     ARG_NO_TEMPLATELEN_ADJUSTMENT,
     ARG_SUMMARY_FILE,
     ARG_NEW_SUMMARY,
-    ARG_DP
+    ARG_DP,
+    ARG_REPEAT
 };
 
 #endif
