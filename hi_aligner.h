@@ -4927,7 +4927,8 @@ public:
                     assert_lt(rdoff, hit._len);
                     index_t hitoff = genomeHit.refoff() + hit._len - genomeHit.rdoff();
                     index_t hitoff2 = (index_t)coord.off() + hit._len - rdoff;
-                    if(abs((int64_t)hitoff - (int64_t)hitoff2) <= (int64_t)tpol.maxIntronLen()) {
+                    int64_t hitoff_diff = (tpol.no_spliced_alignment() ? 0 : tpol.maxIntronLen());
+                    if(abs((int64_t)hitoff - (int64_t)hitoff2) <= hitoff_diff) {
                         overlapped = true;
                         genomeHit._hitcount++;
                         break;
