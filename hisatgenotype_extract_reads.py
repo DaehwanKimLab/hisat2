@@ -226,22 +226,22 @@ def extract_reads(base_fname,
                 out_dir_slash += "/"
             for database in database_list:
                 if paired:
-                    # LP6005041-DNA_A01.extracted.1.fq.gz
+                    # LP6005041-DNA_A01-extracted-1.fq.gz
                     gzip1_proc = subprocess.Popen(["gzip"],
                                                   stdin=subprocess.PIPE,
-                                                  stdout=open("%s%s.%s.extracted.1.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
+                                                  stdout=open("%s%s-%s-extracted-1.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
                                                   stderr=open("/dev/null", 'w'))
 
-                    # LP6005041-DNA_A01.extracted.2.fq.gz
+                    # LP6005041-DNA_A01-extracted-2.fq.gz
                     gzip2_proc = subprocess.Popen(["gzip"],
                                                   stdin=subprocess.PIPE,
-                                                  stdout=open("%s%s.%s.extracted.2.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
+                                                  stdout=open("%s%s-%s-extracted-2.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
                                                   stderr=open("/dev/null", 'w'))
                 else:
-                    # LP6005041-DNA_A01.extracted.fq.gz
+                    # LP6005041-DNA_A01-extracted-fq.gz
                     gzip1_proc = subprocess.Popen(["gzip"],
                                                   stdin=subprocess.PIPE,
-                                                  stdout=open("%s%s.%s.extracted.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
+                                                  stdout=open("%s%s-%s-extracted.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
                                                   stderr=open("/dev/null", 'w'))
                 gzip_dic[database] = [gzip1_proc, gzip2_proc if paired else None]
 
@@ -261,19 +261,19 @@ def extract_reads(base_fname,
                             # LP6005041-DNA_A01.extracted.1.fq.gz
                             gzip1_proc = subprocess.Popen(["gzip"],
                                                           stdin=subprocess.PIPE,
-                                                          stdout=open("%s%s.%s.%d_%dM.extracted.1.fq.gz" % (out_dir_slash, fq_fname_base, chr, region_i * mult, (region_i + 1) * mult), 'w'),
+                                                          stdout=open("%s%s-%s-%d_%dM-extracted-1.fq.gz" % (out_dir_slash, fq_fname_base, chr, region_i * mult, (region_i + 1) * mult), 'w'),
                                                           stderr=open("/dev/null", 'w'))
 
                             # LP6005041-DNA_A01.extracted.2.fq.gz
                             gzip2_proc = subprocess.Popen(["gzip"],
                                                           stdin=subprocess.PIPE,
-                                                          stdout=open("%s%s.%s.%d_%dM.extracted.2.fq.gz" % (out_dir_slash, fq_fname_base, chr, region_i * mult, (region_i + 1) * mult), 'w'),
+                                                          stdout=open("%s%s-%s-%d_%dM-extracted-2.fq.gz" % (out_dir_slash, fq_fname_base, chr, region_i * mult, (region_i + 1) * mult), 'w'),
                                                           stderr=open("/dev/null", 'w'))
                         else:
                             # LP6005041-DNA_A01.extracted.fq.gz
                             gzip1_proc = subprocess.Popen(["gzip"],
                                                           stdin=subprocess.PIPE,
-                                                          stdout=open("%s%s.%s.%d_%dM.extracted.fq.gz" % (out_dir_slash, fq_fname_base, chr, region_i * mult, (region_i + 1) * mult), 'w'),
+                                                          stdout=open("%s%s-%s-%d_%dM-extracted.fq.gz" % (out_dir_slash, fq_fname_base, chr, region_i * mult, (region_i + 1) * mult), 'w'),
                                                           stderr=open("/dev/null", 'w'))
                         whole_gzip_dic[chr].append([gzip1_proc, gzip2_proc if paired else None])
 
@@ -289,6 +289,7 @@ def extract_reads(base_fname,
                     gzip_proc.stdin.write("%s\n" % seq)                    
 
             prev_read_name, extract_read, whole_extract_read, read1, read2, read1_first, read2_first = "", set(), set(), [], [], True, True
+            chk_line = True
             for line in align_proc.stdout:
                 if line.startswith('@'):
                     continue
@@ -296,7 +297,7 @@ def extract_reads(base_fname,
                 cols = line.split()
                 read_name, flag, chr, pos, mapQ, cigar, _, _, _, read, qual = cols[:11]
                 flag, pos = int(flag), int(pos) - 1
-                strand = '-' if flag & 0x10 else '+'                   
+                # strand = '-' if flag & 0x10 else '+'                   
                 AS, XS, NH = "", "", ""
                 for i in range(11, len(cols)):
                     col = cols[i]
@@ -306,6 +307,12 @@ def extract_reads(base_fname,
                         XS = int(col[5:])
                     elif col.startswith("NH"):
                         NH = int(col[5:])
+
+                if (chk_line and prev_read_name != ""):
+                    chk_line = False
+                    if (read_name != prev_read_name and not simulation and paired):
+                        print >> sys.stderr, "Error: Paired read names are not the same"
+                        sys.exit(1)
 
                 if (not simulation and read_name != prev_read_name) or \
                    (simulation and read_name.split('|')[0] != prev_read_name.split('|')[0]):

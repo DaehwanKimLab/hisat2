@@ -567,8 +567,8 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
         read_file = open('%s_input_%d.fa' % (base_fname, idx), 'w')
         for read_i in range(len(reads)):
             query_name = "%d|%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
-            if len(query_name) > 254:
-                query_name = query_name[:254]
+            if len(query_name) > 230:
+                query_name = query_name[:230]
             print >> read_file, ">%s" % query_name
             print >> read_file, reads[read_i][0]
         read_file.close()
