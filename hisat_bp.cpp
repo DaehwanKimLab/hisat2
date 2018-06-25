@@ -3834,7 +3834,7 @@ int hisat(int argc, const char **argv) {
 				cerr << endl;
 				if(mates1.size() > 0) {
 					cerr << "Note that if <mates> files are specified using -1/-2, a <singles> file cannot" << endl
-						 << "also be specified.  Please run bowtie separately for mates and singles." << endl;
+						 << "also be specified.  Please run HISAT2 separately for mates and singles." << endl;
 				}
 				throw 1;
 			}
