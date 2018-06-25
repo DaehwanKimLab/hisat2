@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		606F132420E1528D008903D6 /* hisat2_repeat.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 606F132220E1528D008903D6 /* hisat2_repeat.cpp */; };
+		606F132520E1528D008903D6 /* hisat2_repeat_main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 606F132320E1528D008903D6 /* hisat2_repeat_main.cpp */; };
 		E84A236320D2AF1600C12106 /* repeat_builder.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E84A236220D2AF1500C12106 /* repeat_builder.cpp */; };
 		E8D9218220C85FE900378C5B /* diff_sample.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CDF1C20B2B600C03464 /* diff_sample.cpp */; };
 		E8D9218520C85FE900378C5B /* limit.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CEC1C20B2B600C03464 /* limit.cpp */; };
@@ -21,8 +23,6 @@
 		E8D9218E20C85FE900378C5B /* ref_read.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CF91C20B2B600C03464 /* ref_read.cpp */; };
 		E8D9218F20C85FE900378C5B /* reference.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CFA1C20B2B600C03464 /* reference.cpp */; };
 		E8D9219020C85FE900378C5B /* shmem.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CFC1C20B2B600C03464 /* shmem.cpp */; };
-		E8D9219720C8601400378C5B /* hisat2_construct_nonrepetitive_genome_main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8D9215920C8449700378C5B /* hisat2_construct_nonrepetitive_genome_main.cpp */; };
-		E8D9219820C8601400378C5B /* hisat2_construct_nonrepetitive_genome.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8D9215820C8449700378C5B /* hisat2_construct_nonrepetitive_genome.cpp */; };
 		E8D9219920C878B700378C5B /* aligner_result.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CD01C20B2B600C03464 /* aligner_result.cpp */; };
 		E8D9219A20C878B700378C5B /* aligner_sw_driver.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CD41C20B2B600C03464 /* aligner_sw_driver.cpp */; };
 		E8D9219B20C878B700378C5B /* aligner_sw.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E8C30CD51C20B2B600C03464 /* aligner_sw.cpp */; };
@@ -226,6 +226,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		606F132220E1528D008903D6 /* hisat2_repeat.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_repeat.cpp; sourceTree = "<group>"; };
+		606F132320E1528D008903D6 /* hisat2_repeat_main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_repeat_main.cpp; sourceTree = "<group>"; };
 		E80538341DA83933008894D0 /* gp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gp.h; sourceTree = "<group>"; };
 		E84A236120D2AF0600C12106 /* repeat_builder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = repeat_builder.h; sourceTree = "<group>"; };
 		E84A236220D2AF1500C12106 /* repeat_builder.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = repeat_builder.cpp; sourceTree = "<group>"; };
@@ -367,9 +369,7 @@
 		E8C30D011C20B2B600C03464 /* sstring.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = sstring.cpp; sourceTree = "<group>"; };
 		E8C30D021C20B2B600C03464 /* tinythread.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = tinythread.cpp; sourceTree = "<group>"; };
 		E8C30D031C20B2B600C03464 /* unique.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = unique.cpp; sourceTree = "<group>"; };
-		E8D9215820C8449700378C5B /* hisat2_construct_nonrepetitive_genome.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_construct_nonrepetitive_genome.cpp; sourceTree = "<group>"; };
-		E8D9215920C8449700378C5B /* hisat2_construct_nonrepetitive_genome_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_construct_nonrepetitive_genome_main.cpp; sourceTree = "<group>"; };
-		E8D9219620C85FE900378C5B /* hisat2-construct-nonrepetitive-genomex */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-construct-nonrepetitive-genomex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E8D9219620C85FE900378C5B /* hisat2-repeatx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-repeatx"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8D921A720CC37B300378C5B /* repeat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = repeat.h; sourceTree = "<group>"; };
 		E8EAEDE71C24675500E62E69 /* hisat2-buildlx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-buildlx"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8FD97E41C81CCED00861B09 /* hisat2lx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = hisat2lx; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -438,7 +438,7 @@
 				E8C30C751C20A65400C03464 /* hisat2-inspectx */,
 				E8EAEDE71C24675500E62E69 /* hisat2-buildlx */,
 				E8FD97E41C81CCED00861B09 /* hisat2lx */,
-				E8D9219620C85FE900378C5B /* hisat2-construct-nonrepetitive-genomex */,
+				E8D9219620C85FE900378C5B /* hisat2-repeatx */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -446,6 +446,8 @@
 		E8C30C641C20A60F00C03464 /* Source */ = {
 			isa = PBXGroup;
 			children = (
+				606F132320E1528D008903D6 /* hisat2_repeat_main.cpp */,
+				606F132220E1528D008903D6 /* hisat2_repeat.cpp */,
 				E8C30C7C1C20B2B600C03464 /* aligner_bt.h */,
 				E8C30C7D1C20B2B600C03464 /* aligner_cache.h */,
 				E8C30C7E1C20B2B600C03464 /* aligner_driver.h */,
@@ -556,8 +558,6 @@
 				E8C30CE51C20B2B600C03464 /* hisat_bp.cpp */,
 				E8C30CE61C20B2B600C03464 /* hisat2_build_main.cpp */,
 				E8C30CE71C20B2B600C03464 /* hisat2_build.cpp */,
-				E8D9215920C8449700378C5B /* hisat2_construct_nonrepetitive_genome_main.cpp */,
-				E8D9215820C8449700378C5B /* hisat2_construct_nonrepetitive_genome.cpp */,
 				E8C30CE81C20B2B600C03464 /* hisat2_inspect.cpp */,
 				E8C30CE91C20B2B600C03464 /* hisat2_main.cpp */,
 				E8C30CEA1C20B2B600C03464 /* hisat2.cpp */,
@@ -652,9 +652,9 @@
 			productReference = E8C30C751C20A65400C03464 /* hisat2-inspectx */;
 			productType = "com.apple.product-type.tool";
 		};
-		E8D9218020C85FE900378C5B /* hisat2-construct-nonrepetitive-genomex */ = {
+		E8D9218020C85FE900378C5B /* hisat2-repeatx */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E8D9219320C85FE900378C5B /* Build configuration list for PBXNativeTarget "hisat2-construct-nonrepetitive-genomex" */;
+			buildConfigurationList = E8D9219320C85FE900378C5B /* Build configuration list for PBXNativeTarget "hisat2-repeatx" */;
 			buildPhases = (
 				E8D9218120C85FE900378C5B /* Sources */,
 				E8D9219120C85FE900378C5B /* Frameworks */,
@@ -664,9 +664,9 @@
 			);
 			dependencies = (
 			);
-			name = "hisat2-construct-nonrepetitive-genomex";
+			name = "hisat2-repeatx";
 			productName = "hisat2-buildx";
-			productReference = E8D9219620C85FE900378C5B /* hisat2-construct-nonrepetitive-genomex */;
+			productReference = E8D9219620C85FE900378C5B /* hisat2-repeatx */;
 			productType = "com.apple.product-type.tool";
 		};
 		E8EAEDD21C24675500E62E69 /* hisat2-buildlx */ = {
@@ -740,7 +740,7 @@
 				E8C30C741C20A65400C03464 /* hisat2-inspectx */,
 				E8EAEDD21C24675500E62E69 /* hisat2-buildlx */,
 				E8FD97B21C81CCED00861B09 /* hisat2lx */,
-				E8D9218020C85FE900378C5B /* hisat2-construct-nonrepetitive-genomex */,
+				E8D9218020C85FE900378C5B /* hisat2-repeatx */,
 			);
 		};
 /* End PBXProject section */
@@ -856,13 +856,13 @@
 				E8D9219E20C878B700378C5B /* aligner_swsse_loc_i16.cpp in Sources */,
 				E8D9219F20C878B700378C5B /* aligner_swsse_loc_u8.cpp in Sources */,
 				E8D921A020C878B700378C5B /* aligner_swsse.cpp in Sources */,
-				E8D9219720C8601400378C5B /* hisat2_construct_nonrepetitive_genome_main.cpp in Sources */,
-				E8D9219820C8601400378C5B /* hisat2_construct_nonrepetitive_genome.cpp in Sources */,
 				E8D9218220C85FE900378C5B /* diff_sample.cpp in Sources */,
 				E8D9218520C85FE900378C5B /* limit.cpp in Sources */,
 				E8D9218620C85FE900378C5B /* multikey_qsort.cpp in Sources */,
 				E8D9218720C85FE900378C5B /* random_source.cpp in Sources */,
 				E8D9218820C85FE900378C5B /* tinythread.cpp in Sources */,
+				606F132420E1528D008903D6 /* hisat2_repeat.cpp in Sources */,
+				606F132520E1528D008903D6 /* hisat2_repeat_main.cpp in Sources */,
 				E8D9218920C85FE900378C5B /* alphabet.cpp in Sources */,
 				E8D9218A20C85FE900378C5B /* ccnt_lut.cpp in Sources */,
 				E8D9218B20C85FE900378C5B /* ds.cpp in Sources */,
@@ -1246,7 +1246,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E8D9219320C85FE900378C5B /* Build configuration list for PBXNativeTarget "hisat2-construct-nonrepetitive-genomex" */ = {
+		E8D9219320C85FE900378C5B /* Build configuration list for PBXNativeTarget "hisat2-repeatx" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E8D9219420C85FE900378C5B /* Debug */,
