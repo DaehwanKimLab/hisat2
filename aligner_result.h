@@ -1832,6 +1832,7 @@ protected:
 		for(size_t i = 0; i < ned_->size(); i++) {
 			if((*ned_)[i].isRefGap()) rfextent_--;
 			if((*ned_)[i].isReadGap()) rfextent_++;
+            if((*ned_)[i].isSpliced()) rfextent_ += (*ned_)[i].splLen;
 		}
 	}
 

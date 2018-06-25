@@ -2530,6 +2530,58 @@ const
 		}
 		buf[i].second = i; // original offset
 	}
+    
+    // prefer exonic alignments to spliced alignments if they all map to the same region
+    for(size_t i = 0; i + 1 < sz; i++) {
+        const AlnRes& res = (*rs1)[i];
+        TAlScore sc = res.score().score();
+        if(rs2 != NULL) sc += (*rs2)[i].score().score();
+        for(size_t j = i + 1; j < sz; j++) {
+            const AlnRes& res2 = (*rs1)[j];
+            TAlScore sc2 = res2.score().score();
+            if(rs2 != NULL) sc2 += (*rs2)[j].score().score();
+            if(sc != sc2) continue;
+            
+            if(rs2 == NULL) {
+                if(res.spliced() != res2.spliced()) {
+                    if(res.spliced()) {
+                        if(res2.within(res.refid(), res.refoff(), res.fw(), res.refExtent())) {
+                            buf[i].first = numeric_limits<TAlScore>::min();
+                        }
+                    } else {
+                        if(res.within(res2.refid(), res2.refoff(), res2.fw(), res2.refExtent())) {
+                            buf[j].first = numeric_limits<TAlScore>::min();
+                        }
+                    }
+                }
+            } else {
+                const AlnRes& res_ = (*rs2)[i];
+                const AlnRes& res2_ = (*rs2)[j];
+                if(res.spliced() != res2.spliced() && res_.spliced() == res2_.spliced()) {
+                    if(res.spliced()) {
+                        if(res2.within(res.refid(), res.refoff(), res.fw(), res.refExtent())) {
+                            buf[i].first = numeric_limits<TAlScore>::min();
+                        }
+                    } else {
+                        if(res.within(res2.refid(), res2.refoff(), res2.fw(), res2.refExtent())) {
+                            buf[j].first = numeric_limits<TAlScore>::min();
+                        }
+                    }
+                } else if(res.spliced() == res2.spliced() && res_.spliced() != res2_.spliced()) {
+                    if(res_.spliced()) {
+                        if(res2_.within(res_.refid(), res_.refoff(), res_.fw(), res_.refExtent())) {
+                            buf[i].first = numeric_limits<TAlScore>::min();
+                        }
+                    } else {
+                        if(res_.within(res2_.refid(), res2_.refoff(), res2_.fw(), res2_.refExtent())) {
+                            buf[j].first = numeric_limits<TAlScore>::min();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 	buf.sort(); buf.reverse(); // sort in descending order by score
 	
 	// Randomize streaks of alignments that are equal by score
