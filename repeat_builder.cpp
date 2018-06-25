@@ -993,6 +993,10 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
         string& str1 = rpt_grp_[i].seq;
 
         for(size_t j = i + 1; j < rpt_grp_.size(); j++) {
+            if(rpt_grp_[j].empty()) {
+                // empty -> skip
+                continue;
+            }
             string& str2 = rpt_grp_[j].seq;
             EList<Edit> edits;
 
@@ -1032,7 +1036,7 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
             fp << "\t" << rg.alt_seq.size();
             fp << "\t" << rg.seq;
             for(size_t j = 0; j < rg.alt_seq.size(); j++) {
-                fp << "\t" << toMDZ(rg.alt_seq[j].edits, rg.seq /* ref */);
+                fp << "\t" << toMDZ(rg.alt_seq[j].edits, rg.alt_seq[j].seq /* read */);
                 fp << "\t" << rg.alt_seq[j].seq;
             }
             fp << endl;
@@ -1111,7 +1115,7 @@ bool NRG<TStr>::checkSequenceMergeable(const string& s1, const string& s2,
 
 
 template<typename TStr>
-int NRG<TStr>::alignStrings(const string &read, const string &ref, EList<Edit>& edits)
+int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits)
 {
     // Prepare Strings
 
