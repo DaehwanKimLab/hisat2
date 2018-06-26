@@ -161,21 +161,23 @@ class NRG {
 public:
 	NRG();
 	NRG(
-		const EList<RefRecord>& szs,
-		EList<string>& ref_names,
-		TStr& s,
-		const string& filename,
-		BlockwiseSA<TStr>& sa);
+        TStr& s,
+        const EList<RefRecord>& szs,
+        EList<string>& ref_names,
+        bool forward_only,
+        BlockwiseSA<TStr>& sa,
+        const string& filename);
     ~NRG();
 
 public:
 	const int output_width = 60;
 
-	const EList<RefRecord>& szs_;
-	EList<string>& ref_namelines_;
+    TStr& s_;
+    const EList<RefRecord>& szs_;
 	EList<string> ref_names_;
-	TStr& s_;
-	string filename_;
+    EList<string>& ref_namelines_;
+    bool forward_only_;
+    string filename_;
 
 	BlockwiseSA<TStr>& bsa_;
     

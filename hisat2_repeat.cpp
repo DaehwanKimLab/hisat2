@@ -173,6 +173,7 @@ static void printUsage(ostream& out) {
         << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
         << "    --repeat-matchlen <int>" << endl
         << "    --repeat-indel" << endl
+        << "    --forward-only          use forward strand only" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -546,14 +547,14 @@ static void driver(
                    EList<string>& infiles,
                    const string& outfile,
                    bool packed,
-                   int reverse)
+                   bool forward_only)
 {
     initializeCntLut();
     initializeCntBit();
 	EList<FileBuf*> is(MISC_CAT);
 	bool bisulfite = false;
     bool nsToAs = false;
-	RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
+	RefReadInParams refparams(false, false /* reverse */, nsToAs, bisulfite);
 	assert_gt(infiles.size(), 0);
 	if(format == CMDLINE) {
 		// Adapt sequence strings to stringstreams open for input
@@ -618,6 +619,7 @@ static void driver(
     
     TStr s;
     {
+        bool both_strand = forward_only ? false : true;
         cerr << "Reserving space for joined string" << endl;
         cerr << "Joining reference sequences" << endl;
         Timer timer(cerr, "  Time to join reference sequences: ", verbose);
@@ -628,11 +630,17 @@ static void driver(
                                     refparams,
                                     seed,
                                     s,
-                                    true); // include reverse complemented sequence
+                                    both_strand); // include reverse complemented sequence?
     }
 
     // Successfully obtained joined reference string
-    assert_geq(s.length(), jlen << 1);
+#ifndef NDEBUG
+    if(forward_only) {
+        assert_geq(s.length(), jlen);
+    } else {
+        assert_geq(s.length(), jlen << 1);
+    }
+#endif
 
     if(bmax != (TIndexOffU)OFF_MASK) {
         // VMSG_NL("bmax according to bmax setting: " << bmax);
@@ -700,11 +708,11 @@ static void driver(
             assert_eq(bsa.size(), s.length() + 1);
 
 			// NRG
-			NRG<TStr> nrg(szs, ref_names, s, outfile, bsa);
+			NRG<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
 
 			nrg.build(repeat_length,
                       repeat_count,
-                      true,
+                      false, // true,
                       max_repeat_edit,
                       max_repeat_matchlen);
 
@@ -811,7 +819,7 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, outfile, false, REF_READ_FORWARD);
+                driver<SString<char> >(infile, infiles, outfile, false, forward_only);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;
