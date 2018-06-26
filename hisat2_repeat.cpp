@@ -80,8 +80,8 @@ static TIndexOffU repeat_count;
 static TIndexOffU repeat_length;
 static TIndexOffU max_repeat_edit;
 static TIndexOffU max_repeat_matchlen;
-static bool repeat_reverse;
 static bool repeat_indel;
+static bool forward_only;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -110,8 +110,8 @@ static void resetOptions() {
 	repeat_count   = 5;
     max_repeat_edit = 10;
     max_repeat_matchlen = repeat_length / 2; // half of repeat_length
-	repeat_reverse = false;
     repeat_indel = false;
+    forward_only = false;
     wrapper.clear();
 }
 
@@ -132,9 +132,9 @@ enum {
 	ARG_REPEAT_CNT,
     ARG_REPEAT_EDIT,
 	ARG_REPEAT_MATCHLEN,
-	ARG_REPEAT_REVERSE,
 	ARG_REPEAT_INDEL,
-	ARG_WRAPPER
+	ARG_WRAPPER,
+	ARG_FORWARD_ONLY
 };
 
 /**
@@ -205,9 +205,9 @@ static struct option long_options[] = {
 	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
     {(char*)"repeat-edit",    required_argument, 0,            ARG_REPEAT_EDIT},
     {(char*)"repeat-matchlen",required_argument, 0,            ARG_REPEAT_MATCHLEN},
-	{(char*)"repeat-reverse", no_argument,       0,            ARG_REPEAT_REVERSE},
 	{(char*)"repeat-indel",   no_argument,       0,            ARG_REPEAT_INDEL},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
+	{(char*)"forward-only",   no_argument,       0,            ARG_FORWARD_ONLY},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -309,11 +309,11 @@ static void parseOptions(int argc, const char **argv) {
                 max_repeat_matchlen = parseNumber<TIndexOffU>(0, "--repeat-matchlen arg must be at least 0");
                 saw_max_repeat_matchlen = true;
                 break;
-			case ARG_REPEAT_REVERSE:
-				repeat_reverse = true;
-				break;
 			case ARG_REPEAT_INDEL:
 				repeat_indel = true;
+				break;
+			case ARG_FORWARD_ONLY:
+				forward_only = true;
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -631,7 +631,7 @@ static void driver(
                                     true); // include reverse complemented sequence
     }
 
-    // Succesfully obtained joined reference string
+    // Successfully obtained joined reference string
     assert_geq(s.length(), jlen << 1);
 
     if(bmax != (TIndexOffU)OFF_MASK) {
@@ -651,7 +651,7 @@ static void driver(
     // Look for bmax/dcv parameters that work.
     while(true) {
         if(!first && bmax < 40 && passMemExc) {
-            cerr << "Could not find approrpiate bmax/dcv settings for building this index." << endl;
+            cerr << "Could not find appropriate bmax/dcv settings for building this index." << endl;
             cerr << "Please try indexing this reference on a computer with more memory." << endl;
             if(sizeof(void*) == 4) {
                 cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
