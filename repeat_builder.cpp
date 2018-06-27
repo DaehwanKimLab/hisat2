@@ -198,7 +198,8 @@ size_t getMaxMatchLen(const EList<Edit>& edits, const size_t read_len)
     uint32_t len = 0;
 
     if (edits.size() == 0) {
-        return 0;
+        // no edits --> exact match
+        return read_len;
     }
 
     for(size_t i = 0; i < edits.size(); i++) {
@@ -259,12 +260,9 @@ template<typename TStr>
 void NRG<TStr>::init_dyn()
 {
 
-//#define MM_PEN  3
-#define MM_PEN  6
+#define MM_PEN  3
 #define GAP_PEN_LIN 2
-//#define GAP_PEN_LIN (((MM_PEN) * rpt_edit_ + 1) * 1.0)
-#define GAP_PEN_CON 1
-//#define GAP_PEN_CON (((MM_PEN) * rpt_edit_ + 1) * 1.0)
+#define GAP_PEN_CON 4
 #define MAX_PEN (MAX_I16)
 
     scoreMin_.init(SIMPLE_FUNC_LINEAR, rpt_edit_ * MM_PEN * -1.0, 0.0);
@@ -276,8 +274,8 @@ void NRG<TStr>::init_dyn()
     sc_ = new Scoring(
             DEFAULT_MATCH_BONUS,     // constant reward for match
             DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
-            DEFAULT_MM_PENALTY_MAX, //MM_PEN,      // max mm penalty
-            DEFAULT_MM_PENALTY_MAX, //MM_PEN,      // min mm penalty
+            MM_PEN,      // max mm penalty
+            MM_PEN,      // min mm penalty
             MAX_PEN,      // max sc penalty
             MAX_PEN,      // min sc penalty
             scoreMin_,       // min score as function of read len
@@ -286,10 +284,10 @@ void NRG<TStr>::init_dyn()
             DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
             DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
 
-            DEFAULT_READ_GAP_CONST, //GAP_PEN_CON, //MM_PEN,  // constant coeff for read gap cost
-            DEFAULT_REF_GAP_CONST, //GAP_PEN_CON, //MM_PEN,  // constant coeff for ref gap cost
-            DEFAULT_READ_GAP_LINEAR, //GAP_PEN_LIN, //MM_PEN, // linear coeff for read gap cost
-            DEFAULT_REF_GAP_LINEAR, //GAP_PEN_LIN, //MM_PEN, // linear coeff for ref gap cost
+            GAP_PEN_CON, // constant coeff for read gap cost
+            GAP_PEN_CON, // constant coeff for ref gap cost
+            GAP_PEN_LIN, // linear coeff for read gap cost
+            GAP_PEN_LIN, // linear coeff for ref gap cost
             1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
             );
 }
@@ -337,7 +335,7 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
 		TIndexOffU saElt = bsa_.nextSuffix();
 		count++;
 		
-		if(count && (count % 1000000 == 0)) {
+		if(count && (count % 10000000 == 0)) {
 			cerr << "SA count " << count << endl;
 		}
         
@@ -389,7 +387,7 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
     }
 
 	// we found repeat_group
-	cerr << "CP " << rpt_grp_.size() << " groups found" << endl;
+	cerr << rpt_grp_.size() << " groups found" << endl;
 
 }
 
@@ -786,10 +784,10 @@ void NRG<TStr>::mergeRepeatGroup()
 		range_count += rpt_grp_[i].positions.size();
 	}
 
-	cerr << "CP " << "range_count " << range_count << endl;
+	cerr << "range_count " << range_count << endl;
 
 	if(range_count == 0) {
-		cerr << "CP " << "no repeat sequeuce" << endl; 
+		cerr << "no repeat sequeuce" << endl; 
 		return;
 	}
 
@@ -831,7 +829,6 @@ void NRG<TStr>::mergeRepeatGroup()
 		i = j;
 	}
 
-	cerr << "CP ";
 	cerr << "merged_count: " << merged_count;
 	cerr << endl;
 
@@ -845,7 +842,7 @@ void NRG<TStr>::mergeRepeatGroup()
 				continue;
 			}
 			Range rc = reverseRange(rpt_ranges[i].range, s_.length());
-			fp << "CP " << i ;
+			fp << i;
 			fp << "\t" << rpt_ranges[i].range.first;
 			fp << "\t" << rpt_ranges[i].range.second;
 			fp << "\t" << rpt_grp_[rpt_ranges[i].rg_id].seq;
@@ -915,22 +912,21 @@ template<typename TStr>
 void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
 {
     if (rpt_grp_.size() == 0) {
-        cerr << "CP " << "no repeat group" << endl;
+        cerr << "no repeat group" << endl;
         return;
     }
 
-    cerr << "CP " << "before grouping " << rpt_grp_.size() << endl;
+    cerr << "before grouping " << rpt_grp_.size() << endl;
 
     int step = rpt_grp_.size() >> 8;
 
     if(step == 0) {step = 1;}
-    cerr << "CP " << step << endl;
 
     Timer timer(cerr, "Total time for grouping sequences: ", true);
 
     for(size_t i = 0; i < rpt_grp_.size() - 1; i++) {
         if(i % step == 0) {
-            cerr << "CP " << i << "/" << rpt_grp_.size() << endl;
+            cerr << i << "/" << rpt_grp_.size() << endl;
         }
 
         if(rpt_grp_[i].empty()) {
@@ -969,7 +965,7 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
         }
     }
 
-    cerr << "CP " << "after merge " << rpt_grp_.size() << endl;
+    cerr << "after merge " << rpt_grp_.size() << endl;
 
 #if 1
     {
@@ -981,7 +977,7 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
             if(rg.empty()) {
                 continue;
             }
-            fp << "CP " << i ;
+            fp << i;
             fp << "\t" << rg.alt_seq.size();
             fp << "\t" << rg.seq;
             for(size_t j = 0; j < rg.alt_seq.size(); j++) {
@@ -1039,20 +1035,81 @@ TIndexOffU NRG<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 }
 
 template<typename TStr>
+void NRG<TStr>::makePadString(const string& ref, const string& read, 
+        string& pad, size_t len)
+{
+    pad.resize(len);
+
+    for(size_t i = 0; i < len; i++) {
+        // shift A->C, C->G, G->T, T->A
+        pad[i] = "CGTA"[asc2dna[ref[i]]];
+
+        if(read[i] == pad[i]) {
+            // shift
+            pad[i] = "CGTA"[asc2dna[pad[i]]];
+        }
+    }
+
+    int head_len = len / 2;
+    size_t pad_start = len - head_len;
+
+    for(size_t i = 0; i < head_len; i++) {
+        if(read[i] == pad[pad_start + i]) {
+            // shift
+            pad[pad_start + i] = "CGTA"[asc2dna[pad[pad_start + i]]];
+        }
+    }
+}
+
+template<typename TStr>
 bool NRG<TStr>::checkSequenceMergeable(const string& ref, const string& read, 
         EList<Edit>& edits, Coord& coord, TIndexOffU max_edit)
 {
     size_t max_matchlen = 0;
+    EList<Edit> ed;
 
-    // TODO:
-    // merge two strings if have same length
-    if (ref.length() != read.length()) {
+    string pad;
+    makePadString(ref, read, pad, 5);
+
+    string ref2 = pad + ref;
+    string read2 = pad + read;
+
+    alignStrings(ref2, read2, ed, coord);
+
+    // match should start from pad string
+    if(coord.off() != 0) {
         return false;
     }
 
-    alignStrings(ref, read, edits, coord);
+    // no edits on pad string
+    if(ed.size() > 0 && ed[0].pos < pad.length()) {
+        return false;
+    }
+
+    size_t left = pad.length();
+    size_t right = left + read.length();
+
+    edits.clear();
+    edits.reserveExact(ed.size());
+    for(size_t i = 0; i < ed.size(); i++) {
+        if(ed[i].pos >= left && ed[i].pos <= right) {
+            edits.push_back(ed[i]);
+            edits.back().pos -= left;
+        }
+    }
 
     max_matchlen = getMaxMatchLen(edits, read.length());
+
+#ifdef DEBUGLOG
+    {
+        cerr << "After pad removed" << endl;
+        BTDnaString btread;
+        btread.install(read.c_str(), true);
+        Edit::print(cerr, edits); cerr << endl;
+        Edit::printQAlign(cerr, btread, edits);
+    }
+#endif
+
     return (max_matchlen >= rpt_matchlen_);
 }
 
@@ -1096,7 +1153,6 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
     btref.install(ref.c_str());
 
     TAlScore min_score = sc_->scoreMin.f<TAlScore >((double)btread.length());
-    TAlScore floor_score = sc_->scoreMin.f<TAlScore >((double)btread.length());
 
     btref2 = btref;
 
@@ -1174,7 +1230,7 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
     TAlScore best = std::numeric_limits<TAlScore>::min();
     bool found = swa.align(rnd_, best);
 #ifdef DEBUGLOG 
-    cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+    cerr << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
 #endif
 
     if (found) {
@@ -1198,7 +1254,6 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
             //assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
 
 #ifdef DEBUGLOG 
-            cerr << "CP ";
             cerr << "num edits: " << edits.size() << endl;
             cerr << "coord: " << coord.off();
             cerr << ", " << coord.ref();
@@ -1215,8 +1270,8 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
 #endif
         }
 #ifdef DEBUGLOG 
-        cerr << "CP " << "nextAlignment: " << found << endl;
-        cerr << "CP -------------------------" << endl;
+        cerr << "nextAlignment: " << found << endl;
+        cerr << "-------------------------" << endl;
 #endif
     }
 
@@ -1235,8 +1290,25 @@ void NRG<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexO
         return;
     }
 
-    //checkSequenceMergeable(refstr, readstr, edits, coord, rpt_edit);
+    EList<Edit> ed;
+
+    string pad;
+    makePadString(refstr, readstr, pad, 5);
+
+    string ref2 = pad + refstr + pad;
+    string read2 = pad + readstr + pad;
     alignStrings(refstr, readstr, edits, coord);
+
+    size_t left = pad.length();
+    size_t right = left + readstr.length();
+
+    edits.reserveExact(ed.size());
+    for(size_t i = 0; i < ed.size(); i++) {
+        if(ed[i].pos >= left && ed[i].pos <= right) {
+            edits.push_back(ed[i]);
+            edits.back().pos -= left;
+        }
+    }
 
 
     RepeatGroup rg;
