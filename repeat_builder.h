@@ -294,6 +294,7 @@ public:
     bool checkSequenceMergeable(const string&, const string&, 
             EList<Edit>&, Coord&, TIndexOffU max_edit = 10);
     int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
+    void makePadString(const string&, const string&, string&, size_t);
 
 	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
     void doTestCase1(const string&, const string&, TIndexOffU);
