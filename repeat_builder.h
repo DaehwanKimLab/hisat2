@@ -187,7 +187,7 @@ public:
 	//
 	EList<RepeatGroup> rpt_grp_;
     
-    TIndexOffU half_length_;
+    TIndexOffU forward_length_;
 
 	// Fragments Cache
 #define CACHE_SIZE_JOINEDFRG	10
