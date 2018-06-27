@@ -316,6 +316,27 @@ void NRG<TStr>::init_dyn()
 
 
 template<typename TStr>
+void NRG<TStr>::doTest(TIndexOffU rpt_len,
+               TIndexOffU rpt_cnt,
+               bool flagGrouping,
+               TIndexOffU rpt_edit,
+               TIndexOffU rpt_matchlen,
+               const string& refstr,
+               const string& readstr)
+{
+	TIndexOffU count = 0;
+
+    rpt_matchlen_ = rpt_matchlen;
+    rpt_edit_ = rpt_edit;
+
+    init_dyn();
+
+    doTestCase1(refstr, readstr, rpt_edit);
+}
+
+
+
+template<typename TStr>
 void NRG<TStr>::build(TIndexOffU rpt_len,
                       TIndexOffU rpt_cnt,
                       bool flagGrouping,
@@ -1335,6 +1356,39 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
 
     return 0;
 }
+
+template<typename TStr>
+void NRG<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
+{
+    EList<Edit> edits;
+    Coord coord;
+
+    if (refstr.length() == 0 ||
+            readstr.length() == 0) {
+        return;
+    }
+
+    //checkSequenceMergeable(refstr, readstr, edits, coord, rpt_edit);
+    alignStrings(refstr, readstr, edits, coord);
+
+
+    RepeatGroup rg;
+
+    rg.edits = edits;
+    rg.coord = coord;
+    rg.seq = readstr;
+    rg.base_offset = 0;
+
+    string chr_name = "rep";
+
+    cerr << "REF : " << refstr << endl;
+    cerr << "READ: " << readstr << endl;
+    size_t snpids = 0;
+    rg.buildSNPs(snpids);
+    rg.writeSNPs(cerr, chr_name); cerr << endl;
+
+}
+
 
 
 /****************************/

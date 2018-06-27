@@ -295,6 +295,8 @@ public:
             EList<Edit>&, Coord&, TIndexOffU max_edit = 10);
     int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
 
+	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
+    void doTestCase1(const string&, const string&, TIndexOffU);
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);
