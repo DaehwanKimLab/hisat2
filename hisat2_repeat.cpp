@@ -537,16 +537,6 @@ static void driver(
                 cerr << "  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv << endl;
                 cerr << "" << endl;
             }
-
-
-
-
-
-            cout <<	sztot.first <<" "<< sztot.second << "\n";
-            cout << szs.size() <<" "<< jlen << " " << s.length() << "\n";
-        	cout << bmax << " " << bmaxDivN << "\n";
-
-
             cerr << "Constructing suffix-array element generator" << endl;
             KarkkainenBlockwiseSA<TStr> bsa(s, bmax, nthreads, dcv, seed, sanity, passMemExc, false /* verbose */, outfile);
             
