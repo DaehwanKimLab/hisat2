@@ -297,7 +297,6 @@ public:
 
 	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
     void doTestCase1(const string&, const string&, TIndexOffU);
-    void doTestCase2(const string&, const string&, TIndexOffU);
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);

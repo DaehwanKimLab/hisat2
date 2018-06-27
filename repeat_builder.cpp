@@ -26,8 +26,6 @@
 #include "scoring.h"
 #include "sstring.h"
 
-#include "opal_wrapper.h"
-
 #include "repeat_builder.h"
 
 typedef pair<TIndexOffU, TIndexOffU> Range;
@@ -314,7 +312,6 @@ void NRG<TStr>::doTest(TIndexOffU rpt_len,
     init_dyn();
 
     doTestCase1(refstr, readstr, rpt_edit);
-    doTestCase2(refstr, readstr, rpt_edit);
 }
 
 
@@ -1048,31 +1045,15 @@ bool NRG<TStr>::checkSequenceMergeable(const string& ref, const string& read,
     size_t max_matchlen = 0;
 
     // TODO:
-#if 1
     // merge two strings if have same length
     if (ref.length() != read.length()) {
         return false;
     }
 
     alignStrings(ref, read, edits, coord);
-#else
-
-    coord.init(0, 0, true, 0);
-    opal.alignStrings(ref, read, edits);
-    //max_matchlen = getMaxMatchLen(edits, read.length());
-    //cerr << "max_matchlen: " << max_matchlen << endl;
-#endif
 
     max_matchlen = getMaxMatchLen(edits, read.length());
     return (max_matchlen >= rpt_matchlen_);
-
-#if 0
-	unsigned int ed = levenshtein_distance(s1, s2);
-    return false;
-	//return (ed <= max_edit);
-    //return (alignStrings(s1, s2) >= 50);
-#endif
-
 }
 
 template<typename TStr>
@@ -1274,43 +1255,6 @@ void NRG<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexO
     rg.writeSNPs(cerr, chr_name); cerr << endl;
 
 }
-
-template<typename TStr>
-void NRG<TStr>::doTestCase2(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
-{
-    cerr << "doTestCase2----------------" << endl;
-    EList<Edit> edits;
-    Coord coord;
-
-    if (refstr.length() == 0 ||
-            readstr.length() == 0) {
-        return;
-    }
-
-    OPAL opal;
-    opal.setMinScore(rpt_edit);
-
-    //checkSequenceMergeable(refstr, readstr, edits, coord, rpt_edit);
-    opal.alignStrings(refstr, readstr, edits);
-    coord.init(0, 0, true, 0);
-
-    RepeatGroup rg;
-
-    rg.edits = edits;
-    rg.coord = coord;
-    rg.seq = readstr;
-    rg.base_offset = 0;
-
-    string chr_name = "rep";
-
-    cerr << "REF : " << refstr << endl;
-    cerr << "READ: " << readstr << endl;
-    size_t snpids = 0;
-    rg.buildSNPs(snpids);
-    rg.writeSNPs(cerr, chr_name); cerr << endl;
-
-}
-
 
 
 /****************************/
