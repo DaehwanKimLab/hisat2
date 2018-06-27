@@ -2660,7 +2660,7 @@ public:
 
 	// Building
 	template <typename TStr> static TStr join(EList<TStr>& l, uint32_t seed);
-	template <typename TStr> static void join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed, TStr& s, bool include_rc = false);
+	template <typename TStr> static void join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed, TStr& s, bool include_rc = false, bool CGtoTG = false);
 	template <typename TStr> void joinToDisk(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, TStr& ret, ostream& out1, ostream& out2);
 	template <typename TStr> void buildToDisk(PathGraph<index_t>& gbwt, const TStr& s, ostream& out1, ostream& out2);
     template <typename TStr> void buildToDisk(InorderBlockwiseSA<TStr>& sa, const TStr& s, ostream& out1, ostream& out2);
@@ -4246,7 +4246,8 @@ void GFM<index_t>::join(EList<FileBuf*>& l,
                         const RefReadInParams& refparams,
                         uint32_t seed,
                         TStr& s,
-                        bool include_rc)
+                        bool include_rc,
+						bool CGtoTG)
 {
 	RandomSource rand; // reproducible given same seed
 	rand.init(seed);
@@ -4267,6 +4268,8 @@ void GFM<index_t>::join(EList<FileBuf*>& l,
 			RefRecord rec = fastaRefReadAppend(*l[i], first, s, dstoff, rpcp);
 			first = false;
 			index_t bases = (index_t)rec.len;
+			cout <<"bases " << bases << "\n";
+			cout<<rec.off<<" "<<rec.len<<" "<<rec.first<<"\n";
 			assert_eq(rec.off, szs[szsi].off);
 			assert_eq(rec.len, szs[szsi].len);
 			assert_eq(rec.first, szs[szsi].first);
