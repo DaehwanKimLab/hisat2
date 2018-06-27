@@ -224,6 +224,7 @@ struct ReadBWTHit {
         _done = false;
         _numPartialSearch = 0;
         _numUniqueSearch = 0;
+        _repeat = false;
         _partialHits.clear();
 	}
 
@@ -238,6 +239,7 @@ struct ReadBWTHit {
         _done = false;
         _numPartialSearch = 0;
         _numUniqueSearch = 0;
+        _repeat = false;
         _partialHits.clear();
 	}
     
@@ -259,6 +261,7 @@ struct ReadBWTHit {
     
     index_t len() const { return _len; }
     index_t cur() const { return _cur; }
+    bool    repeat() const { return _repeat; }
     
     index_t offsetSize()             { return (index_t)_partialHits.size(); }
     size_t  numPartialSearch()       { return _numPartialSearch; }
@@ -380,6 +383,7 @@ struct ReadBWTHit {
     index_t  _numPartialSearch;
     index_t  _numUniqueSearch;
     index_t  _cur_local;
+    bool     _repeat;
     
     EList<BWTHit<index_t> >       _partialHits;
 };
@@ -4128,6 +4132,10 @@ public:
         for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
             for(size_t fwi = 0; fwi < 2; fwi++) {
                 ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
+                if(hit.repeat()) {
+                    repeat[rdi][fwi] = true;
+                    continue;
+                }
                 index_t offsetSize = hit.offsetSize();
                 assert_gt(offsetSize, 0);
                 index_t maxlen = 0;
@@ -4927,7 +4935,8 @@ public:
                     assert_lt(rdoff, hit._len);
                     index_t hitoff = genomeHit.refoff() + hit._len - genomeHit.rdoff();
                     index_t hitoff2 = (index_t)coord.off() + hit._len - rdoff;
-                    if(abs((int64_t)hitoff - (int64_t)hitoff2) <= (int64_t)tpol.maxIntronLen()) {
+                    int64_t hitoff_diff = (tpol.no_spliced_alignment() ? 0 : tpol.maxIntronLen());
+                    if(abs((int64_t)hitoff - (int64_t)hitoff2) <= hitoff_diff) {
                         overlapped = true;
                         genomeHit._hitcount++;
                         break;
@@ -5282,7 +5291,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             bool uniqueStop = false;
             // DK - check this out
             // const local_index_t maxHits = tpol.no_spliced_alignment() ? 64 : 0;
-            const local_index_t maxHits = 0;
+            const local_index_t maxHits = numeric_limits<local_index_t>::max();
             index_t nelt = localGFMSearch(
                                           *lGFM,   // GFM index
                                           ord,     // read to align
@@ -5298,11 +5307,13 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                           _local_node_iedge_count,
                                           rnd,
                                           uniqueStop,
-                                          minHitLen);
+                                          minHitLen,
+                                          1000, // maxHitLen
+                                          maxHits);
             assert_leq(top, bot);
             assert_eq(nelt, (index_t)(node_bot - node_top));
             assert_leq(hitlen, hitoff + 1);
-            if(nelt > 0 && nelt <= max<index_t>(maxHits, rp.kseeds) && hitlen >= minHitLen) {
+            if(nelt > 0 && nelt <= rp.kseeds && hitlen >= minHitLen) {
                 coords.clear();
                 bool straddled = false;
                 getGenomeCoords_local(
@@ -5345,6 +5356,12 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                       gpol);
                 }
             }
+            // DK - debugging purposes
+#if 0
+            if(nelt >= rp.kseeds && hitlen > (_minK_local << 2)) {
+                _hits[rdi][fw ? 0 : 1]._repeat = true;
+            }
+#endif
             assert_leq(hitlen, hitoff + 1);
             if(hitlen == hitoff + 1) break;
             if(hitoff < minHitLen) break;
@@ -6096,6 +6113,19 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
         if(rangeTemp.first >= rangeTemp.second) {
             break;
         }
+        
+        // DK - debugging purposes
+#if 0
+        if(dep - offset >= _minK * 2) {
+            if((node_rangeTemp.second - node_rangeTemp.first) * 4 < node_range.second - node_range.first) {
+                if(gfm.repeat()) {
+                    break;
+                } else {
+                    hit._repeat = true;
+                }
+            }
+        }
+#endif
 
         if(pseudogeneStop_) {
             if(node_rangeTemp.second - node_rangeTemp.first < node_range.second - node_range.first && node_range.second - node_range.first <= min<index_t>(5, (index_t)rp.khits)) {
@@ -6138,6 +6168,8 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
             _node_iedge_count.clear();
         }
         dep++;
+        
+        
 
         if(anchorStop_) {
             if(dep - offset >= _minK + 12 && range.second - range.first == 1) {

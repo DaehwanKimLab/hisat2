@@ -981,7 +981,7 @@ def compare_single_sam(RNA,
             continue
 
         read_name, chr, pos, cigar, NM = line[:-1].split()
-        pos = int(pos)
+        pos, NM = int(pos), int(NM[5:])
                 
         if read_name.find("seq.") == 0:
             read_name = read_name[4:]
@@ -995,7 +995,7 @@ def compare_single_sam(RNA,
             aligned += 1
 
         pos2 = get_right(pos, cigar)
-        db_dic[read_name].append([chr, pos, pos2, cigar])
+        db_dic[read_name].append([chr, pos, pos2, cigar, NM])
 
         read_junctions = is_junction_read(gtf_junctions_set, chr, pos, cigar)
         if len(read_junctions) > 0:
@@ -1121,10 +1121,14 @@ def compare_single_sam(RNA,
         maps = db_dic[read_name]
         found = False
         found_at_first = False
-        if [chr, pos, pos2, cigar] in maps:
+        if [chr, pos, pos2, cigar, NM] in maps:
             found = True
-            if maps.index([chr, pos, pos2, cigar]) == 0:
+            if maps.index([chr, pos, pos2, cigar, NM]) == 0:
                 found_at_first = True
+
+        # DK - debugging purposes
+        if False and len(maps) > 0 and maps[0][-1] < NM:
+            found = True
 
         if not found:
             for idx, map in enumerate(maps):
@@ -1215,6 +1219,7 @@ def compare_paired_sam(RNA,
             continue
         read_name, chr, pos, cigar, chr2, pos2, cigar2, NM, NM2 = line[:-1].split()
         pos, pos2 = int(pos), int(pos2)
+        NM, NM2 = int(NM[5:]), int(NM2[5:])
 
         if read_name.find("seq.") == 0:
             read_name = read_name[4:]
@@ -1228,7 +1233,7 @@ def compare_paired_sam(RNA,
             aligned += 1
 
         pos_right, pos2_right = get_right(pos, cigar), get_right(pos2, cigar2)
-        db_dic[read_name].append([chr, pos, pos_right, cigar, pos2, pos2_right, cigar2])
+        db_dic[read_name].append([chr, pos, pos_right, cigar, pos2, pos2_right, cigar2, NM, NM2])
 
         pair_junctions = is_junction_pair(gtf_junctions_set, chr, pos, cigar, chr2, pos2, cigar2)
         if len(pair_junctions) > 0:
@@ -1388,10 +1393,14 @@ def compare_paired_sam(RNA,
         found = False
         found_at_first = False
 
-        if [chr, pos, pos_right, cigar, pos2, pos2_right, cigar2] in maps:
+        if [chr, pos, pos_right, cigar, pos2, pos2_right, cigar2, NM, NM2] in maps:
             found = True
-            if maps.index([chr, pos, pos_right, cigar, pos2, pos2_right, cigar2]) == 0:
+            if maps.index([chr, pos, pos_right, cigar, pos2, pos2_right, cigar2, NM, NM2]) == 0:
                 found_at_first = True
+
+        # DK - debugging purposes
+        if False and len(maps) > 0 and maps[0][-1] + maps[0][-2] < NM + NM2:
+            found = True
 
         if not found:
             for idx, map in enumerate(maps):
@@ -1635,7 +1644,7 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "tran", "210", ""],
         # ["hisat2", "", "snp_tran", "210", ""],
         # ["hisat2", "", "", "210", ""],
-        ["hisat2", "", "", "", ""],
+        # ["hisat2", "", "", "", ""],
         ["hisat2", "", "rep", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "rep", "", "--sensitive"],
@@ -1651,7 +1660,7 @@ def calculate_read_cost(verbose):
         # ["hisat2", "x1", "snp_tran_ercc", "", ""],
         # ["tophat2", "gtfonly", "", "", ""],
         # ["tophat2", "gtf", "", "", ""],
-        # ["star", "", "", "", ""],
+        ["star", "", "", "", ""],
         # ["star", "x2", "", "", ""],
         # ["star", "gtf", "", "", ""],
         # ["bowtie", "", "", "", ""],
@@ -1660,7 +1669,7 @@ def calculate_read_cost(verbose):
         # ["bowtie2", "", "", "", "-k 1000 --extends 2000"],
         # ["gsnap", "", "", "", ""],
         # ["bwa", "mem", "", "", ""],
-        ["bwa", "mem", "", "", "-a"],
+        # ["bwa", "mem", "", "", "-a"],
         # ["hisat2", "", "snp", "", ""],
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],
@@ -1691,7 +1700,7 @@ def calculate_read_cost(verbose):
     repeat_info, repeat_dic = read_repeat_info("../../data/%s.rep.info" % genome)
     align_stat = []
     for paired in [False, True]:
-    # for paired in [False]:
+    # for paired in [True]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"

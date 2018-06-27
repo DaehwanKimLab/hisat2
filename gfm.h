@@ -787,8 +787,10 @@ public:
         
         // Read repeats
         // Check if it hits the end of file, and this routine is needed for backward compatibility
+        _repeat = false;
         if(in7.peek() != std::ifstream::traits_type::eof()) {
             repeatdb->read(in7, this->toBe());
+            _repeat = !repeatdb->empty();
         }
         
         in7.close();
@@ -2223,6 +2225,7 @@ public:
 	bool        sanityCheck() const  { return _sanity; }
 	EList<string>& refnames()        { return _refnames; }
     bool        fw() const           { return fw_; }
+    bool        repeat() const       { return _repeat; }
     
 #ifdef POPCNT_CAPABILITY
     bool _usePOPCNTinstruction;
@@ -4068,6 +4071,8 @@ public:
     EList<string>              _altnames;
     EList<Haplotype<index_t> > _haplotypes;
     RepeatDB<index_t>          _repeatdb;
+    
+    bool _repeat;
 
 protected:
 
@@ -4271,10 +4276,12 @@ void GFM<index_t>::join(EList<FileBuf*>& l,
 	}
     
     // Append reverse complement
-    for(TIndexOffU i = 0; i < guessLen; i++) {
-        int nt = s[guessLen - i - 1];
-        assert_range(0, 3, nt);
-        s[guessLen + i] = dnacomp[nt];
+    if(include_rc) {
+        for(TIndexOffU i = 0; i < guessLen; i++) {
+            int nt = s[guessLen - i - 1];
+            assert_range(0, 3, nt);
+            s[guessLen + i] = dnacomp[nt];
+        }
     }
 }
 

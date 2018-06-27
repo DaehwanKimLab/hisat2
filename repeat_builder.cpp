@@ -245,15 +245,16 @@ size_t getMaxMatchLen(const EList<Edit>& edits, const size_t read_len)
 }
 
 template<typename TStr>
-NRG<TStr>::NRG(
+NRG<TStr>::NRG(TStr& s,
                const EList<RefRecord>& szs,
                EList<string>& ref_names,
-               TStr& s,
-               const string& filename,
-               BlockwiseSA<TStr>& sa) :
-	szs_(szs), ref_namelines_(ref_names),
-	s_(s), filename_(filename), bsa_(sa),
-    half_length_(s.length() / 2)
+               bool forward_only,
+               BlockwiseSA<TStr>& sa,
+               const string& filename) :
+	s_(s), szs_(szs), forward_only_(forward_only),
+    ref_namelines_(ref_names),
+    bsa_(sa), filename_(filename),
+    forward_length_(forward_only ? s.length() : s.length() / 2)
 {
 	cerr << "NRG: " << filename_ << endl;
 
@@ -609,7 +610,7 @@ void NRG<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
 #endif
 
     for(size_t j = 0; j < positions.size(); j++) {
-        if(positions[j].joinedOff < half_length_) {
+        if(positions[j].joinedOff < forward_length_) {
             positions[j].fw = true;
         } else {
             positions[j].joinedOff = s_.length() - positions[j].joinedOff - rg.seq.length();
@@ -856,7 +857,7 @@ void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TI
     // DK - check this out
     size_t sense_mer_count = 0;
     for(size_t i = 0; i < positions.size(); i++) {
-        if(positions[i].joinedOff < half_length_)
+        if(positions[i].joinedOff < forward_length_)
             sense_mer_count++;
     }
 
@@ -1097,7 +1098,7 @@ TIndexOffU NRG<TStr>::getEnd(TIndexOffU e) {
     assert_lt(e, s_.length())
     
     TIndexOffU end = 0;
-    if(e < half_length_) {
+    if(e < forward_length_) {
         int frag_id = mapJoinedOffToSeq(e);
         assert_geq(frag_id, 0);
         end = fraglist_[frag_id].joinedOff + fraglist_[frag_id].length;
