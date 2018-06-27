@@ -82,6 +82,8 @@ static TIndexOffU max_repeat_edit;
 static TIndexOffU max_repeat_matchlen;
 static bool repeat_indel;
 static bool forward_only;
+static string repeat_str1;
+static string repeat_str2;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -134,7 +136,9 @@ enum {
 	ARG_REPEAT_MATCHLEN,
 	ARG_REPEAT_INDEL,
 	ARG_WRAPPER,
-	ARG_FORWARD_ONLY
+	ARG_FORWARD_ONLY,
+    ARG_REPEAT_STR1,
+    ARG_REPEAT_STR2
 };
 
 /**
@@ -173,6 +177,8 @@ static void printUsage(ostream& out) {
         << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
         << "    --repeat-matchlen <int>" << endl
         << "    --repeat-indel" << endl
+        << "    --repeat-str1" << endl
+        << "    --repeat-str2" << endl
         << "    --forward-only          use forward strand only" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
@@ -209,6 +215,8 @@ static struct option long_options[] = {
 	{(char*)"repeat-indel",   no_argument,       0,            ARG_REPEAT_INDEL},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
 	{(char*)"forward-only",   no_argument,       0,            ARG_FORWARD_ONLY},
+	{(char*)"repeat-str1",    required_argument, 0,            ARG_REPEAT_STR1},
+	{(char*)"repeat-str2",    required_argument, 0,            ARG_REPEAT_STR2},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -315,6 +323,12 @@ static void parseOptions(int argc, const char **argv) {
 				break;
 			case ARG_FORWARD_ONLY:
 				forward_only = true;
+				break;
+			case ARG_REPEAT_STR1:
+				repeat_str1 = optarg;
+				break;
+			case ARG_REPEAT_STR2:
+				repeat_str2 = optarg;
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -521,13 +535,23 @@ static void driver(
 			// NRG
 			NRG<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
 
-			nrg.build(repeat_length,
-                      repeat_count,
-                      true,
-                      max_repeat_edit,
-                      max_repeat_matchlen);
+            if (repeat_str1.length() && repeat_str2.length()) {
+                nrg.doTest(repeat_length,
+                        repeat_count,
+                        true,
+                        max_repeat_edit,
+                        max_repeat_matchlen,
+                        repeat_str1,
+                        repeat_str2);
+            } else {
+                nrg.build(repeat_length,
+                        repeat_count,
+                        true,
+                        max_repeat_edit,
+                        max_repeat_matchlen);
+                nrg.saveFile();
+            }
 
-            nrg.saveFile();
 
 			break;
 

@@ -55,7 +55,7 @@ ifneq (,$(findstring Darwin,$(shell uname)))
 	MACOS = 1
 endif
 
-EXTRA_FLAGS += -DPOPCNT_CAPABILITY
+EXTRA_FLAGS += -DPOPCNT_CAPABILITY -std=c++11
 INC += -I third_party
 
 MM_DEF = 
@@ -128,6 +128,7 @@ SEARCH_CPPS = qual.cpp pat.cpp \
 BUILD_CPPS = diff_sample.cpp
 
 REPEAT_CPPS = \
+	opal.cpp \
 	mask.cpp \
 	qual.cpp \
 	aligner_bt.cpp \
@@ -171,9 +172,10 @@ endif
 ifeq (64,$(BITS))
 	BITS_FLAG = -m64
 endif
-SSE_FLAG=-msse2
+#SSE_FLAG=-msse2
+SSE_FLAG=-march=native
 
-DEBUG_FLAGS    = -O0 -g3 $(BIToS_FLAG) $(SSE_FLAG)
+DEBUG_FLAGS    = -O0 -g3 $(BITS_FLAG) $(SSE_FLAG) -DDEBUGLOG
 DEBUG_DEFS     = -DCOMPILER_OPTIONS="\"$(DEBUG_FLAGS) $(EXTRA_FLAGS)\""
 RELEASE_FLAGS  = -O3 $(BITS_FLAG) $(SSE_FLAG) -funroll-loops -g3
 RELEASE_DEFS   = -DCOMPILER_OPTIONS="\"$(RELEASE_FLAGS) $(EXTRA_FLAGS)\""
