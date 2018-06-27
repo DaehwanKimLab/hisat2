@@ -135,7 +135,7 @@ public:
             if (results[0]->score > minsc_) {
 
                 // Show alignment
-#if 0
+#if 1
                 printAlignments(
                         cerr, 
                         ref, read,

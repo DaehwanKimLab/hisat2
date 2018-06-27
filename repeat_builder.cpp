@@ -26,27 +26,9 @@
 #include "scoring.h"
 #include "sstring.h"
 
+#include "opal_wrapper.h"
+
 #include "repeat_builder.h"
-
-#if 0 //{{{
-unsigned int levenshtein_distance(const std::string& s1, const std::string& s2) 
-{
-	const std::size_t len1 = s1.size(), len2 = s2.size();
-	std::vector<unsigned int> col(len2+1), prevCol(len2+1);
-
-	for (unsigned int i = 0; i < prevCol.size(); i++)
-		prevCol[i] = i;
-	for (unsigned int i = 0; i < len1; i++) {
-		col[0] = i+1;
-		for (unsigned int j = 0; j < len2; j++)
-			// note that std::min({arg1, arg2, arg3}) works only in C++11,
-			// for C++98 use std::min(std::min(arg1, arg2), arg3)
-			col[j+1] = std::min( std::min(prevCol[1 + j] + 1, col[j] + 1), prevCol[j] + (s1[i]==s2[j] ? 0 : 1) );
-		col.swap(prevCol);
-	}
-	return prevCol[len2];
-}
-#endif//}}}
 
 typedef pair<TIndexOffU, TIndexOffU> Range;
 static const Range EMPTY_RANGE = Range(1, 0);
@@ -332,6 +314,7 @@ void NRG<TStr>::doTest(TIndexOffU rpt_len,
     init_dyn();
 
     doTestCase1(refstr, readstr, rpt_edit);
+    doTestCase2(refstr, readstr, rpt_edit);
 }
 
 
@@ -1360,6 +1343,7 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
 template<typename TStr>
 void NRG<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
 {
+    cerr << "doTestCase1----------------" << endl;
     EList<Edit> edits;
     Coord coord;
 
@@ -1371,6 +1355,42 @@ void NRG<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexO
     //checkSequenceMergeable(refstr, readstr, edits, coord, rpt_edit);
     alignStrings(refstr, readstr, edits, coord);
 
+
+    RepeatGroup rg;
+
+    rg.edits = edits;
+    rg.coord = coord;
+    rg.seq = readstr;
+    rg.base_offset = 0;
+
+    string chr_name = "rep";
+
+    cerr << "REF : " << refstr << endl;
+    cerr << "READ: " << readstr << endl;
+    size_t snpids = 0;
+    rg.buildSNPs(snpids);
+    rg.writeSNPs(cerr, chr_name); cerr << endl;
+
+}
+
+template<typename TStr>
+void NRG<TStr>::doTestCase2(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
+{
+    cerr << "doTestCase2----------------" << endl;
+    EList<Edit> edits;
+    Coord coord;
+
+    if (refstr.length() == 0 ||
+            readstr.length() == 0) {
+        return;
+    }
+
+    OPAL opal;
+    opal.setMinScore(rpt_edit);
+
+    //checkSequenceMergeable(refstr, readstr, edits, coord, rpt_edit);
+    opal.alignStrings(refstr, readstr, edits);
+    coord.init(0, 0, true, 0);
 
     RepeatGroup rg;
 
