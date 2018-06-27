@@ -258,14 +258,13 @@ NRG<TStr>::~NRG()
 template<typename TStr>
 void NRG<TStr>::init_dyn()
 {
-
-//#define MM_PEN  3
-#define MM_PEN  6
-#define GAP_PEN_LIN 2
-//#define GAP_PEN_LIN (((MM_PEN) * rpt_edit_ + 1) * 1.0)
-#define GAP_PEN_CON 1
-//#define GAP_PEN_CON (((MM_PEN) * rpt_edit_ + 1) * 1.0)
-#define MAX_PEN (MAX_I16)
+    // const int MM_PEN = 3;
+    const int MM_PEN = 6;
+    const int GAP_PEN_LIN = 2;
+    // const int GAP_PEN_LIN = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
+    const int GAP_PEN_CON = 1;
+    // const int GAP_PEN_CON = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
+    const int MAX_PEN = MAX_I16;
 
     scoreMin_.init(SIMPLE_FUNC_LINEAR, rpt_edit_ * MM_PEN * -1.0, 0.0);
     nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
@@ -286,10 +285,10 @@ void NRG<TStr>::init_dyn()
             DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
             DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
 
-            DEFAULT_READ_GAP_CONST, //GAP_PEN_CON, //MM_PEN,  // constant coeff for read gap cost
-            DEFAULT_REF_GAP_CONST, //GAP_PEN_CON, //MM_PEN,  // constant coeff for ref gap cost
-            DEFAULT_READ_GAP_LINEAR, //GAP_PEN_LIN, //MM_PEN, // linear coeff for read gap cost
-            DEFAULT_REF_GAP_LINEAR, //GAP_PEN_LIN, //MM_PEN, // linear coeff for ref gap cost
+            MAX_I8, // DEFAULT_READ_GAP_CONST, //GAP_PEN_CON, //MM_PEN,  // constant coeff for read gap cost
+            MAX_I8, // DEFAULT_REF_GAP_CONST, //GAP_PEN_CON, //MM_PEN,  // constant coeff for ref gap cost
+            MAX_I8, // DEFAULT_READ_GAP_LINEAR, //GAP_PEN_LIN, //MM_PEN, // linear coeff for read gap cost
+            MAX_I8, // DEFAULT_REF_GAP_LINEAR, //GAP_PEN_LIN, //MM_PEN, // linear coeff for ref gap cost
             1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
             );
 }

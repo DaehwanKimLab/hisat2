@@ -4268,15 +4268,23 @@ void GFM<index_t>::join(EList<FileBuf*>& l,
 			RefRecord rec = fastaRefReadAppend(*l[i], first, s, dstoff, rpcp);
 			first = false;
 			index_t bases = (index_t)rec.len;
-			cout <<"bases " << bases << "\n";
-			cout<<rec.off<<" "<<rec.len<<" "<<rec.first<<"\n";
-			assert_eq(rec.off, szs[szsi].off);
+            assert_eq(rec.off, szs[szsi].off);
 			assert_eq(rec.len, szs[szsi].len);
 			assert_eq(rec.first, szs[szsi].first);
 			ASSERT_ONLY(szsi++);
 			if(bases == 0) continue;
 		}
 	}
+    
+    // Change 'C' in CG to 'T' so that CG becomes TG
+    if(CGtoTG) {
+        for(TIndexOffU i = 0; i + 1 < guessLen; i++) {
+            int nt1 = s[i], nt2 = s[i+1];
+            if(nt1 == 1 && nt2 == 2) {
+                s[i] = 3;
+            }
+        }
+    }
     
     // Append reverse complement
     if(include_rc) {

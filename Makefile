@@ -194,16 +194,14 @@ HISAT2_BIN_LIST = hisat2-build-s \
 	hisat2-align-l \
 	hisat2-inspect-s \
 	hisat2-inspect-l \
-	hisat2-repeat-s \
-	hisat2-repeat-l
+	hisat2-repeat
 HISAT2_BIN_LIST_AUX = hisat2-build-s-debug \
 	hisat2-build-l-debug \
 	hisat2-align-s-debug \
 	hisat2-align-l-debug \
 	hisat2-inspect-s-debug \
 	hisat2-inspect-l-debug \
-	hisat2-repeat-s-debug \
-	hisat2-repeat-l-debug
+	hisat2-repeat-debug
 
 
 GENERAL_LIST = $(wildcard scripts/*.sh) \
@@ -258,9 +256,9 @@ both: hisat2-align-s hisat2-align-l hisat2-build-s hisat2-build-l
 
 both-debug: hisat2-align-s-debug hisat2-align-l-debug hisat2-build-s-debug hisat2-build-l-debug
 
-repeat: hisat2-repeat-s hisat2-repeat-l
+repeat: hisat2-repeat
 
-repeat-debug: repeat hisat2-repeat-s-debug hisat2-repeat-l-debug
+repeat-debug: hisat2-repeat-debug
 
 DEFS=-fno-strict-aliasing \
      -DHISAT2_VERSION="\"`cat VERSION`\"" \
@@ -297,15 +295,7 @@ hisat-bp-bin-debug: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEAR
 # hisat2-repeat targets
 #
 
-hisat2-repeat-s: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
-	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
-	$(DEFS) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall -DMASSIVE_DATA_RLCSA \
-	$(INC) \
-	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
-	$(LIBS) $(BUILD_LIBS)
-
-hisat2-repeat-l: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
+hisat2-repeat: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX $(NOASSERT_FLAGS) -Wall \
 	$(INC) \
@@ -313,15 +303,7 @@ hisat2-repeat-l: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
 	$(LIBS) $(BUILD_LIBS)
 
-hisat2-repeat-s-debug: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
-	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
-	$(DEFS) -DBOWTIE2 -Wall -DMASSIVE_DATA_RLCSA \
-	$(INC) \
-	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
-	$(LIBS) $(BUILD_LIBS)
-
-hisat2-repeat-l-debug: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
+hisat2-repeat-l: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -Wall \
 	$(INC) \
