@@ -33,6 +33,8 @@
 #include "repeat.h"
 #include "blockwise_sa.h"
 
+//#define DEBUGLOG
+
 using namespace std;
 
 // Dump
@@ -68,6 +70,7 @@ struct RepeatGroup {
 
     EList<RepeatCoord<TIndexOffU> > positions;
 
+    Coord coord; 
 	EList<Edit> edits; 
     EList<string> snpIDs;
 
@@ -89,10 +92,11 @@ struct RepeatGroup {
 #endif
 	}
 
-    void merge(const RepeatGroup& rg, const EList<Edit>& ed)
+    void merge(const RepeatGroup& rg, const EList<Edit>& ed, const Coord& coord)
     {
         merge(rg);
         alt_seq.back().edits = ed;
+        alt_seq.back().coord = coord;
     }
 
 	bool empty(void) 
@@ -106,19 +110,46 @@ struct RepeatGroup {
         assert(positions.size() == 0);
 	}
 
-    void writeSNPs(ofstream& fp, const string& rep_chr_name)
+    void writeSNPs(ostream& fp, const string& rep_chr_name)
     {
+        size_t ref_base = base_offset + coord.off();
+        int rd_gaps = 0;    // Read Gaps
+        int rf_gaps = 0;    // Ref Gaps
+
         for(size_t i = 0; i < edits.size(); i++) {
             Edit& ed = edits[i];
 
-            assert(ed.isMismatch());
+            assert_geq(edits[i].pos + rd_gaps - rf_gaps, 0);
+            if(ed.isMismatch()) {
 
-            fp << snpIDs[i];
-            fp << "\t" << "single";
-            fp << "\t" << rep_chr_name;
-            fp << "\t" << base_offset + edits[i].pos;
-            fp << "\t" << edits[i].qchr;
-            fp << endl;
+                fp << snpIDs[i];
+                fp << "\t" << "single";
+                fp << "\t" << rep_chr_name;
+                fp << "\t" << ref_base + edits[i].pos + rd_gaps - rf_gaps;
+                fp << "\t" << edits[i].qchr;
+                fp << endl;
+            } else if(ed.isReadGap()) {
+
+                fp << snpIDs[i];
+                fp << "\t" << "deletion";
+                fp << "\t" << rep_chr_name;
+                fp << "\t" << ref_base + edits[i].pos + rd_gaps - rf_gaps;
+                fp << "\t" << 1;    // TODO
+                fp << endl;
+
+                rd_gaps++;
+            } else if(ed.isRefGap()) {
+                fp << snpIDs[i];
+                fp << "\t" << "insertion";
+                fp << "\t" << rep_chr_name;
+                fp << "\t" << ref_base + edits[i].pos + rd_gaps - rf_gaps;
+                fp << "\t" << (char)edits[i].qchr;  // TODO
+                fp << endl;
+
+                rf_gaps++;
+            } else {
+                assert(false);
+            }
         }
     }
 
@@ -135,13 +166,26 @@ struct RepeatGroup {
         assert_gt(edits.size(), 0);
         assert_eq(edits.size(), snpIDs.size());
 
+        size_t ref_base = base_offset + coord.off();
+
+        int rd_gaps = 0;
+        int rf_gaps = 0;
+
+        for(size_t i = 0; i < edits.size(); i++) {
+            if(edits[i].isReadGap()) {
+                rd_gaps++;
+            } else if(edits[i].isRefGap()) {
+                rf_gaps++;
+            }
+        }
+
         size_t left = edits[0].pos;
-        size_t right = edits[edits.size() - 1].pos;
+        size_t right = edits[edits.size() - 1].pos + rd_gaps - rf_gaps;
 
         fp << "rpht" << base_idx++;
         fp << "\t" << rep_chr_name;
-        fp << "\t" << base_offset + left;
-        fp << "\t" << base_offset + right;
+        fp << "\t" << ref_base + left;
+        fp << "\t" << ref_base + right;
         fp << "\t";
         for(size_t i = 0; i < edits.size(); i++) {
             if (i != 0) {
@@ -154,6 +198,7 @@ struct RepeatGroup {
 
 };
 
+
 // build Non-repetitive Genome
 template<typename TStr>
 class NRG {
@@ -161,21 +206,23 @@ class NRG {
 public:
 	NRG();
 	NRG(
-		const EList<RefRecord>& szs,
-		EList<string>& ref_names,
-		TStr& s,
-		const string& filename,
-		BlockwiseSA<TStr>& sa);
+        TStr& s,
+        const EList<RefRecord>& szs,
+        EList<string>& ref_names,
+        bool forward_only,
+        BlockwiseSA<TStr>& sa,
+        const string& filename);
     ~NRG();
 
 public:
 	const int output_width = 60;
 
-	const EList<RefRecord>& szs_;
-	EList<string>& ref_namelines_;
+    TStr& s_;
+    const EList<RefRecord>& szs_;
 	EList<string> ref_names_;
-	TStr& s_;
-	string filename_;
+    EList<string>& ref_namelines_;
+    bool forward_only_;
+    string filename_;
 
 	BlockwiseSA<TStr>& bsa_;
     
@@ -185,7 +232,7 @@ public:
 	//
 	EList<RepeatGroup> rpt_grp_;
     
-    TIndexOffU half_length_;
+    TIndexOffU forward_length_;
 
 	// Fragments Cache
 #define CACHE_SIZE_JOINEDFRG	10
@@ -244,9 +291,12 @@ public:
 	void repeat_masking();
     void init_dyn();
 
-    bool checkSequenceMergeable(const string& s1, const string& s2, 
-            EList<Edit>&, TIndexOffU max_edit = 10);
-    int alignStrings(const string&, const string&, EList<Edit>&);
+    bool checkSequenceMergeable(const string&, const string&, 
+            EList<Edit>&, Coord&, TIndexOffU max_edit = 10);
+    int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
+
+	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
+    void doTestCase1(const string&, const string&, TIndexOffU);
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);

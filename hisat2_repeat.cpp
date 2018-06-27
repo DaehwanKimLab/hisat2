@@ -80,8 +80,10 @@ static TIndexOffU repeat_count;
 static TIndexOffU repeat_length;
 static TIndexOffU max_repeat_edit;
 static TIndexOffU max_repeat_matchlen;
-static bool repeat_reverse;
 static bool repeat_indel;
+static bool forward_only;
+static string repeat_str1;
+static string repeat_str2;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -110,8 +112,8 @@ static void resetOptions() {
 	repeat_count   = 5;
     max_repeat_edit = 10;
     max_repeat_matchlen = repeat_length / 2; // half of repeat_length
-	repeat_reverse = false;
     repeat_indel = false;
+    forward_only = false;
     wrapper.clear();
 }
 
@@ -132,9 +134,11 @@ enum {
 	ARG_REPEAT_CNT,
     ARG_REPEAT_EDIT,
 	ARG_REPEAT_MATCHLEN,
-	ARG_REPEAT_REVERSE,
 	ARG_REPEAT_INDEL,
-	ARG_WRAPPER
+	ARG_WRAPPER,
+	ARG_FORWARD_ONLY,
+    ARG_REPEAT_STR1,
+    ARG_REPEAT_STR2
 };
 
 /**
@@ -173,6 +177,9 @@ static void printUsage(ostream& out) {
         << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
         << "    --repeat-matchlen <int>" << endl
         << "    --repeat-indel" << endl
+        << "    --repeat-str1" << endl
+        << "    --repeat-str2" << endl
+        << "    --forward-only          use forward strand only" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -205,9 +212,11 @@ static struct option long_options[] = {
 	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
     {(char*)"repeat-edit",    required_argument, 0,            ARG_REPEAT_EDIT},
     {(char*)"repeat-matchlen",required_argument, 0,            ARG_REPEAT_MATCHLEN},
-	{(char*)"repeat-reverse", no_argument,       0,            ARG_REPEAT_REVERSE},
 	{(char*)"repeat-indel",   no_argument,       0,            ARG_REPEAT_INDEL},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
+	{(char*)"forward-only",   no_argument,       0,            ARG_FORWARD_ONLY},
+	{(char*)"repeat-str1",    required_argument, 0,            ARG_REPEAT_STR1},
+	{(char*)"repeat-str2",    required_argument, 0,            ARG_REPEAT_STR2},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -309,11 +318,17 @@ static void parseOptions(int argc, const char **argv) {
                 max_repeat_matchlen = parseNumber<TIndexOffU>(0, "--repeat-matchlen arg must be at least 0");
                 saw_max_repeat_matchlen = true;
                 break;
-			case ARG_REPEAT_REVERSE:
-				repeat_reverse = true;
-				break;
 			case ARG_REPEAT_INDEL:
 				repeat_indel = true;
+				break;
+			case ARG_FORWARD_ONLY:
+				forward_only = true;
+				break;
+			case ARG_REPEAT_STR1:
+				repeat_str1 = optarg;
+				break;
+			case ARG_REPEAT_STR2:
+				repeat_str2 = optarg;
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -344,195 +359,6 @@ static void parseOptions(int argc, const char **argv) {
     }
 }
 
-static EList<bool> stbuf, enbuf;
-static BTDnaString btread;
-static BTString btqual;
-static BTString btref;
-static BTString btref2;
-
-static BTDnaString readrc;
-static BTString qualrc;
-
-/**
- * Helper function for running a case consisting of a read (sequence
- * and quality), a reference string, and an offset that anchors the 0th
- * character of the read to a reference position.
- */
-static void doTestCase(
-                       SwAligner&         al,
-                       const BTDnaString& read,
-                       const BTString&    qual,
-                       const BTString&    refin,
-                       TRefOff            off,
-                       EList<bool>        *en,
-                       const Scoring&     sc,
-                       TAlScore           minsc,
-                       TAlScore           floorsc,
-                       SwResult&          res,
-                       bool               nsInclusive,
-                       bool               filterns,
-                       uint32_t           seed)
-{
-    RandomSource rnd(seed);
-    btref2 = refin;
-    assert_eq(read.length(), qual.length());
-    size_t nrow = read.length();
-    TRefOff rfi, rff;
-    // Calculate the largest possible number of read and reference gaps given
-    // 'minsc' and 'pens'
-    size_t maxgaps;
-    size_t padi, padf;
-    {
-        int readGaps = sc.maxReadGaps(minsc, read.length());
-        int refGaps = sc.maxRefGaps(minsc, read.length());
-        assert_geq(readGaps, 0);
-        assert_geq(refGaps, 0);
-        int maxGaps = max(readGaps, refGaps);
-        padi = 2 * maxGaps;
-        padf = maxGaps;
-        maxgaps = (size_t)maxGaps;
-    }
-    size_t nceil = 1; // (size_t)sc.nCeil.f((double)read.length());
-    size_t width = 1 + padi + padf;
-    rfi = off;
-    off = 0;
-    // Pad the beginning of the reference with Ns if necessary
-    if(rfi < padi) {
-        size_t beginpad = (size_t)(padi - rfi);
-        for(size_t i = 0; i < beginpad; i++) {
-            btref2.insert('N', 0);
-            off--;
-        }
-        rfi = 0;
-    } else {
-        rfi -= padi;
-    }
-    assert_geq(rfi, 0);
-    // Pad the end of the reference with Ns if necessary
-    while(rfi + nrow + padi + padf > btref2.length()) {
-        btref2.append('N');
-    }
-    rff = rfi + nrow + padi + padf;
-    // Convert reference string to masks
-    for(size_t i = 0; i < btref2.length(); i++) {
-        if(toupper(btref2[i]) == 'N' && !nsInclusive) {
-            btref2.set(16, i);
-        } else {
-            int num = 0;
-            int alts[] = {4, 4, 4, 4};
-            decodeNuc(toupper(btref2[i]), num, alts);
-            assert_leq(num, 4);
-            assert_gt(num, 0);
-            btref2.set(0, i);
-            for(int j = 0; j < num; j++) {
-                btref2.set(btref2[i] | (1 << alts[j]), i);
-            }
-        }
-    }
-    bool fw = true;
-    uint32_t refidx = 0;
-    size_t solwidth = width;
-    if(maxgaps >= solwidth) {
-        solwidth = 0;
-    } else {
-        solwidth -= maxgaps;
-    }
-    if(en == NULL) {
-        enbuf.resize(solwidth);
-        enbuf.fill(true);
-        en = &enbuf;
-    }
-    assert_geq(rfi, 0);
-    assert_gt(rff, rfi);
-    readrc = read;
-    qualrc = qual;
-    al.initRead(
-                read,          // read sequence
-                readrc,
-                qual,          // read qualities
-                qualrc,
-                0,             // offset of first character within 'read' to consider
-                read.length(), // offset of last char (exclusive) in 'read' to consider
-                sc);        // local-alignment score floor
-    
-    DynProgFramer dpframe(false);  // trimToRef
-    size_t readGaps = 10, refGaps = 10, maxhalf = 10;
-    DPRect rect;
-    dpframe.frameSeedExtensionRect(0,                // ref offset implied by seed hit assuming no gaps
-                                   read.length(),    // length of read sequence used in DP table
-                                   read.length(),    // length of reference
-                                   readGaps,       // max # of read gaps permitted in opp mate alignment
-                                   refGaps,        // max # of ref gaps permitted in opp mate alignment
-                                   (size_t)nceil,  // # Ns permitted
-                                   maxhalf,        // max width in either direction
-                                   rect);          // DP rectangle
-    assert(rect.repOk());
-    
-    size_t cminlen = 2000, cpow2 = 4;
-    al.initRef(fw,                // whether to align forward or revcomp read
-               refidx,            // reference aligned against
-               rect,              // DP rectangle
-               btref2.wbuf(),     // Reference strings
-               rfi,
-               rff,
-               read.length(),
-               sc,                // scoring scheme
-               minsc,             // minimum score permitted
-               true,              // use 8-bit SSE if possible?
-               cminlen,           // minimum length for using checkpointing scheme
-               cpow2,             // interval b/t checkpointed diags; 1 << this
-               false,             // triangular mini-fills?
-               true);              // this is a seed extension - not finding a mate
-    
-    TAlScore best = 0;
-    al.align(rnd, best);
-}
-
-/**
- * Another interface for running a case.
- */
-static void doTestCase2(
-                        SwAligner&         al,
-                        const char        *read,
-                        const char        *qual,
-                        const char        *refin,
-                        TRefOff            off,
-                        const Scoring&     sc,
-                        float              costMinConst,
-                        float              costMinLinear,
-                        SwResult&          res,
-                        bool               nsInclusive = false,
-                        bool               filterns = false,
-                        uint32_t           seed = 0)
-{
-    btread.install(read, true);
-    TAlScore minsc = (TAlScore)(Scoring::linearFunc(
-                                                    btread.length(),
-                                                    costMinConst,
-                                                    costMinLinear));
-    TAlScore floorsc = (TAlScore)(Scoring::linearFunc(
-                                                      btread.length(),
-                                                      costMinConst,
-                                                      costMinLinear));
-    btqual.install(qual);
-    btref.install(refin);
-    doTestCase(
-               al,
-               btread,
-               btqual,
-               btref,
-               off,
-               NULL,
-               sc,
-               minsc,
-               floorsc,
-               res,
-               nsInclusive,
-               filterns,
-               seed
-               );
-}
-
 extern void initializeCntLut();
 extern void initializeCntBit();
 
@@ -546,14 +372,14 @@ static void driver(
                    EList<string>& infiles,
                    const string& outfile,
                    bool packed,
-                   int reverse)
+                   bool forward_only)
 {
     initializeCntLut();
     initializeCntBit();
 	EList<FileBuf*> is(MISC_CAT);
 	bool bisulfite = false;
     bool nsToAs = false;
-	RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
+	RefReadInParams refparams(false, false /* reverse */, nsToAs, bisulfite);
 	assert_gt(infiles.size(), 0);
 	if(format == CMDLINE) {
 		// Adapt sequence strings to stringstreams open for input
@@ -618,6 +444,7 @@ static void driver(
     
     TStr s;
     {
+        bool both_strand = forward_only ? false : true;
         cerr << "Reserving space for joined string" << endl;
         cerr << "Joining reference sequences" << endl;
         Timer timer(cerr, "  Time to join reference sequences: ", verbose);
@@ -628,11 +455,17 @@ static void driver(
                                     refparams,
                                     seed,
                                     s,
-                                    true); // include reverse complemented sequence
+                                    both_strand); // include reverse complemented sequence?
     }
 
-    // Succesfully obtained joined reference string
-    assert_geq(s.length(), jlen << 1);
+    // Successfully obtained joined reference string
+#ifndef NDEBUG
+    if(forward_only) {
+        assert_geq(s.length(), jlen);
+    } else {
+        assert_geq(s.length(), jlen << 1);
+    }
+#endif
 
     if(bmax != (TIndexOffU)OFF_MASK) {
         // VMSG_NL("bmax according to bmax setting: " << bmax);
@@ -651,7 +484,7 @@ static void driver(
     // Look for bmax/dcv parameters that work.
     while(true) {
         if(!first && bmax < 40 && passMemExc) {
-            cerr << "Could not find approrpiate bmax/dcv settings for building this index." << endl;
+            cerr << "Could not find appropriate bmax/dcv settings for building this index." << endl;
             cerr << "Please try indexing this reference on a computer with more memory." << endl;
             if(sizeof(void*) == 4) {
                 cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
@@ -700,15 +533,25 @@ static void driver(
             assert_eq(bsa.size(), s.length() + 1);
 
 			// NRG
-			NRG<TStr> nrg(szs, ref_names, s, outfile, bsa);
+			NRG<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
 
-			nrg.build(repeat_length,
-                      repeat_count,
-                      true,
-                      max_repeat_edit,
-                      max_repeat_matchlen);
+            if (repeat_str1.length() && repeat_str2.length()) {
+                nrg.doTest(repeat_length,
+                        repeat_count,
+                        true,
+                        max_repeat_edit,
+                        max_repeat_matchlen,
+                        repeat_str1,
+                        repeat_str2);
+            } else {
+                nrg.build(repeat_length,
+                        repeat_count,
+                        true,
+                        max_repeat_edit,
+                        max_repeat_matchlen);
+                nrg.saveFile();
+            }
 
-            nrg.saveFile();
 
 			break;
 
@@ -811,7 +654,7 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, outfile, false, REF_READ_FORWARD);
+                driver<SString<char> >(infile, infiles, outfile, false, forward_only);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;
