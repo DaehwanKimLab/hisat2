@@ -101,6 +101,42 @@ string toMDZ(const EList<Edit>& edits, const string& read)
     return string(buf.toZBuf());
 }
 
+string applyEdits(const string& ref, size_t read_len, const EList<Edit>& edits, const Coord& coord)
+{
+    string read;
+    size_t ref_pos = coord.off();
+    size_t read_pos = 0;
+
+    for(size_t i = 0; i < edits.size(); i++) {
+        for(; read_pos < edits[i].pos; read_pos++, ref_pos++) {
+            read.push_back(ref[ref_pos]);
+        }
+
+        if(edits[i].type == EDIT_TYPE_READ_GAP) {
+            // delete on read
+            ref_pos++;
+        } else if(edits[i].type == EDIT_TYPE_REF_GAP) {
+            // insert on read
+            read.push_back(edits[i].qchr);
+            read_pos++;
+        } else if(edits[i].type == EDIT_TYPE_MM) {
+            assert_eq(ref[ref_pos], edits[i].chr);
+            read.push_back(edits[i].qchr);
+
+            read_pos++;
+            ref_pos++;
+        } else {
+            assert(false);
+        }
+    }
+
+    for(; read_pos < read_len; read_pos++, ref_pos++) {
+        read.push_back(ref[ref_pos]);
+    }
+
+    return read;
+}
+
 /**
  * @brief return true iff a U b = a 
  *
@@ -157,18 +193,6 @@ string getString(const TStr& ref, TIndexOffU start, size_t len)
 	return s;
 }
 
-#if 0//{{{
-template<typename TStr>
-void masking_with_N(TStr& s, TIndexOffU start, size_t length)
-{
-	size_t s_len = s.length();
-
-	for(size_t pos = 0; (pos < length) && (start + pos < s_len); pos++) {
-		s[start + pos] = 0x04;
-	}
-}
-#endif//}}}
-
 template<typename TStr>
 void dump_tstr(const TStr& s)
 {
@@ -193,17 +217,28 @@ size_t getMaxMatchLen(const EList<Edit>& edits, const size_t read_len)
     uint32_t last_edit_pos = 0;
     uint32_t len = 0;
 
+    if (edits.size() == 0) {
+        return 0;
+    }
+
     for(size_t i = 0; i < edits.size(); i++) {
+        if (last_edit_pos > edits[i].pos) {
+            continue;
+        }
+
         len = edits[i].pos - last_edit_pos;
         if(len > max_length) {
             max_length = len;
         }
+
         last_edit_pos = edits[i].pos + 1;
     }
 
-    len = read_len - last_edit_pos;
-    if(len > max_length) {
-        max_length = len;
+    if (last_edit_pos < read_len) {
+        len = read_len - last_edit_pos;
+        if(len > max_length) {
+            max_length = len;
+        }
     }
 
     return max_length;
@@ -243,11 +278,12 @@ template<typename TStr>
 void NRG<TStr>::init_dyn()
 {
 
-#define MM_PEN  3
-//#define GAP_PEN_LIN 2
-#define GAP_PEN_LIN ((MM_PEN) * rpt_edit_ + 1)
-//#define GAP_PEN_CON 1
-#define GAP_PEN_CON ((MM_PEN) * rpt_edit_ + 1)
+//#define MM_PEN  3
+#define MM_PEN  6
+#define GAP_PEN_LIN 2
+//#define GAP_PEN_LIN (((MM_PEN) * rpt_edit_ + 1) * 1.0)
+#define GAP_PEN_CON 1
+//#define GAP_PEN_CON (((MM_PEN) * rpt_edit_ + 1) * 1.0)
 #define MAX_PEN (MAX_I16)
 
     scoreMin_.init(SIMPLE_FUNC_LINEAR, rpt_edit_ * MM_PEN * -1.0, 0.0);
@@ -259,8 +295,8 @@ void NRG<TStr>::init_dyn()
     sc_ = new Scoring(
             DEFAULT_MATCH_BONUS,     // constant reward for match
             DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
-            MM_PEN,      // max mm penalty
-            MM_PEN,      // min mm penalty
+            DEFAULT_MM_PENALTY_MAX, //MM_PEN,      // max mm penalty
+            DEFAULT_MM_PENALTY_MAX, //MM_PEN,      // min mm penalty
             MAX_PEN,      // max sc penalty
             MAX_PEN,      // min sc penalty
             scoreMin_,       // min score as function of read len
@@ -269,11 +305,11 @@ void NRG<TStr>::init_dyn()
             DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
             DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
 
-            GAP_PEN_CON, //MM_PEN,  // constant coeff for read gap cost
-            GAP_PEN_CON, //MM_PEN,  // constant coeff for ref gap cost
-            GAP_PEN_LIN, //MM_PEN, // linear coeff for read gap cost
-            GAP_PEN_LIN, //MM_PEN, // linear coeff for ref gap cost
-            4 /* gGapBarrier */    // # rows at top/bot only entered diagonally
+            DEFAULT_READ_GAP_CONST, //GAP_PEN_CON, //MM_PEN,  // constant coeff for read gap cost
+            DEFAULT_REF_GAP_CONST, //GAP_PEN_CON, //MM_PEN,  // constant coeff for ref gap cost
+            DEFAULT_READ_GAP_LINEAR, //GAP_PEN_LIN, //MM_PEN, // linear coeff for read gap cost
+            DEFAULT_REF_GAP_LINEAR, //GAP_PEN_LIN, //MM_PEN, // linear coeff for ref gap cost
+            1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
             );
 }
 
@@ -653,6 +689,14 @@ void NRG<TStr>::saveRepeatGroup()
 
             alt_rg.base_offset = rg.base_offset;
 
+            assert_gt(alt_rg.edits.size(), 0);
+#ifndef NDEBUG
+            {
+                string seq_cmp = applyEdits(rg.seq, alt_rg.seq.length(), alt_rg.edits, alt_rg.coord); 
+                assert_eq(alt_rg.seq, seq_cmp);
+            }
+#endif
+
             // save snps
             alt_rg.buildSNPs(snp_base_idx);
             alt_rg.writeSNPs(snp_fp, rep_basename);
@@ -999,10 +1043,11 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
             }
             string& str2 = rpt_grp_[j].seq;
             EList<Edit> edits;
+            Coord coord;
 
-            if(checkSequenceMergeable(str1, str2, edits, rpt_edit)) {
+            if(checkSequenceMergeable(str1, str2, edits, coord, rpt_edit)) {
                 /* i, j merge into i */
-                rpt_grp_[i].merge(rpt_grp_[j], edits);
+                rpt_grp_[i].merge(rpt_grp_[j], edits, coord);
 
                 rpt_grp_[j].set_empty();
             }
@@ -1090,19 +1135,29 @@ TIndexOffU NRG<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 }
 
 template<typename TStr>
-bool NRG<TStr>::checkSequenceMergeable(const string& s1, const string& s2, 
-        EList<Edit>& edits, TIndexOffU max_edit)
+bool NRG<TStr>::checkSequenceMergeable(const string& ref, const string& read, 
+        EList<Edit>& edits, Coord& coord, TIndexOffU max_edit)
 {
+    size_t max_matchlen = 0;
 
     // TODO:
 #if 1
     // merge two strings if have same length
-    if (s1.length() != s2.length()) {
+    if (ref.length() != read.length()) {
         return false;
     }
+
+    alignStrings(ref, read, edits, coord);
+#else
+
+    coord.init(0, 0, true, 0);
+    opal.alignStrings(ref, read, edits);
+    //max_matchlen = getMaxMatchLen(edits, read.length());
+    //cerr << "max_matchlen: " << max_matchlen << endl;
 #endif
 
-    return (alignStrings(s1, s2, edits) >= rpt_matchlen_);
+    max_matchlen = getMaxMatchLen(edits, read.length());
+    return (max_matchlen >= rpt_matchlen_);
 
 #if 0
 	unsigned int ed = levenshtein_distance(s1, s2);
@@ -1113,9 +1168,8 @@ bool NRG<TStr>::checkSequenceMergeable(const string& s1, const string& s2,
 
 }
 
-
 template<typename TStr>
-int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits)
+int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits, Coord& coord)
 {
     // Prepare Strings
 
@@ -1231,10 +1285,12 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
 
     TAlScore best = std::numeric_limits<TAlScore>::min();
     bool found = swa.align(rnd_, best);
-    //cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+#ifdef DEBUGLOG 
+    cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+#endif
 
     if (found) {
-#if 0
+#ifdef DEBUGLOG 
         //cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
         cerr << "REF : " << ref << endl;
         cerr << "READ: " << read << endl;
@@ -1249,10 +1305,11 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
         if (found) {
             edits = res.alres.ned();
             //const TRefOff ref_off = res.alres.refoff();
-            const Coord& coord = res.alres.refcoord();
+            //const Coord& coord = res.alres.refcoord();
+            coord = res.alres.refcoord();
             //assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
 
-#if 0
+#ifdef DEBUGLOG 
             cerr << "CP ";
             cerr << "num edits: " << edits.size() << endl;
             cerr << "coord: " << coord.off();
@@ -1261,21 +1318,18 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
             cerr << ", " << coord.joinedOff();
             cerr << endl;
             Edit::print(cerr, edits); cerr << endl;
+            Edit::printQAlign(cerr, btread, edits);
 #endif
 
             max_match_len = getMaxMatchLen(edits, btread.length());
-
-#if 0
+#ifdef DEBUGLOG 
             cerr << "max match length: " << max_match_len << endl;
-            Edit::printQAlign(cerr, btread, edits);
 #endif
         }
-#if 0
+#ifdef DEBUGLOG 
         cerr << "CP " << "nextAlignment: " << found << endl;
         cerr << "CP -------------------------" << endl;
 #endif
-
-        return max_match_len;
     }
 
     return 0;
