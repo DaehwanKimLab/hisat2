@@ -292,7 +292,7 @@ static RefRecord fastaRefReadAppend(
 		if(cat == 1) {
 			// Consume it
 			if(!rparms.color || lc != -1) len++;
-			// Add it to referenece buffer
+			// Add it to reference buffer
 			if(rparms.color) {
 				dst.set((char)dinuc2color[asc2dna[(int)c]][lc], dstoff++);
 			} else if(!rparms.color) {

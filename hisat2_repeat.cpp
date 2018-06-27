@@ -82,6 +82,7 @@ static TIndexOffU max_repeat_edit;
 static TIndexOffU max_repeat_matchlen;
 static bool repeat_indel;
 static bool forward_only;
+static bool CGtoTG;
 static string repeat_str1;
 static string repeat_str2;
 
@@ -114,6 +115,7 @@ static void resetOptions() {
     max_repeat_matchlen = repeat_length / 2; // half of repeat_length
     repeat_indel = false;
     forward_only = false;
+    CGtoTG = false;
     wrapper.clear();
 }
 
@@ -137,6 +139,7 @@ enum {
 	ARG_REPEAT_INDEL,
 	ARG_WRAPPER,
 	ARG_FORWARD_ONLY,
+    ARG_CGTOTG,
     ARG_REPEAT_STR1,
     ARG_REPEAT_STR2
 };
@@ -180,6 +183,7 @@ static void printUsage(ostream& out) {
         << "    --repeat-str1" << endl
         << "    --repeat-str2" << endl
         << "    --forward-only          use forward strand only" << endl
+        << "    --CGtoTG                change CG to TG" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -215,6 +219,7 @@ static struct option long_options[] = {
 	{(char*)"repeat-indel",   no_argument,       0,            ARG_REPEAT_INDEL},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
 	{(char*)"forward-only",   no_argument,       0,            ARG_FORWARD_ONLY},
+	{(char*)"CGtoTG",   	  no_argument,       0,            ARG_CGTOTG},
 	{(char*)"repeat-str1",    required_argument, 0,            ARG_REPEAT_STR1},
 	{(char*)"repeat-str2",    required_argument, 0,            ARG_REPEAT_STR2},
 	{(char*)0, 0, 0, 0} // terminator
@@ -324,6 +329,9 @@ static void parseOptions(int argc, const char **argv) {
 			case ARG_FORWARD_ONLY:
 				forward_only = true;
 				break;
+			case ARG_CGTOTG:
+				CGtoTG = true;
+				break;
 			case ARG_REPEAT_STR1:
 				repeat_str1 = optarg;
 				break;
@@ -372,7 +380,8 @@ static void driver(
                    EList<string>& infiles,
                    const string& outfile,
                    bool packed,
-                   bool forward_only)
+                   bool forward_only,
+				   bool CGtoTG)
 {
     initializeCntLut();
     initializeCntBit();
@@ -419,6 +428,7 @@ static void driver(
 		cerr << "Warning: All fasta inputs were empty" << endl;
 		throw 1;
 	}
+
     // Vector for the ordered list of "records" comprising the input
 	// sequences.  A record represents a stretch of unambiguous
 	// characters in one of the input sequences.
@@ -441,7 +451,7 @@ static void driver(
         jlen += (TIndexOffU)szs[i].len;
     }
     // assert_geq(jlen, sztot);
-    
+
     TStr s;
     {
         bool both_strand = forward_only ? false : true;
@@ -455,7 +465,8 @@ static void driver(
                                     refparams,
                                     seed,
                                     s,
-                                    both_strand); // include reverse complemented sequence?
+                                    both_strand, // include reverse complemented sequence
+									CGtoTG); //Change CG to TG
     }
 
     // Successfully obtained joined reference string
@@ -526,6 +537,16 @@ static void driver(
                 cerr << "  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv << endl;
                 cerr << "" << endl;
             }
+
+
+
+
+
+            cout <<	sztot.first <<" "<< sztot.second << "\n";
+            cout << szs.size() <<" "<< jlen << " " << s.length() << "\n";
+        	cout << bmax << " " << bmaxDivN << "\n";
+
+
             cerr << "Constructing suffix-array element generator" << endl;
             KarkkainenBlockwiseSA<TStr> bsa(s, bmax, nthreads, dcv, seed, sanity, passMemExc, false /* verbose */, outfile);
             
@@ -654,7 +675,7 @@ int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, outfile, false, forward_only);
+                driver<SString<char> >(infile, infiles, outfile, false, forward_only, CGtoTG);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;
