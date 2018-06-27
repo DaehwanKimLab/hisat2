@@ -1139,6 +1139,7 @@
 					"BUILD_TIME=\"\\\"`date\\\"\"",
 					"COMPILER_VERSION=\"\\\"`$(CXX) -v 2>&1 | tail -1`\\\"\"",
 					"COMPILER_OPTIONS=\"\\\"test\\\"\"",
+					DEBUGLOG,
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};

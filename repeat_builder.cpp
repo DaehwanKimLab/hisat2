@@ -379,73 +379,6 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
 				min_lcp_len = s_.length();
 			}
 		}
-
-#if 0//{{{
-		// DK - debugging purposes
-		if(count < 100) {
-			suffixes.expand();
-			cerr << setw(12) << saElt << "\t";
-			for(int k = 0; k < 100; k++) {
-				char nt = "ACGT"[s[saElt+k]];
-				cerr << nt;
-				suffixes.back().push_back(nt);
-			}
-			cerr << endl;
-
-			if(count > 1) {
-				SwAligner al;
-				SwResult res;
-
-				SimpleFunc scoreMin;
-				scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -0.2f);
-
-				SimpleFunc nCeil;
-				nCeil.init(SIMPLE_FUNC_LINEAR, 0.0f, 0, 2.0f, 0.1f);
-
-				const string& str1 = suffixes[suffixes.size() - 2];
-				const string& str2 = suffixes[suffixes.size() - 1];
-
-				string qual = "";
-				for(int i = 0; i < str1.length(); i++) {
-					qual.push_back('I');
-				}
-
-				// Set up penalities
-				Scoring sc(
-						DEFAULT_MATCH_BONUS,     // constant reward for match
-						DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
-						30,        // constant if mm pelanty is a constant
-						30,        // penalty for decoded SNP
-						0,
-						0,
-						scoreMin,       // min score as function of read len
-						nCeil,          // max # Ns as function of read len
-						DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
-						DEFAULT_N_PENALTY,          // constant if N pelanty is a constant
-						DEFAULT_N_CAT_PAIR,      // true -> concatenate mates before N filtering
-						25,  // constant coeff for cost of gap in read
-						25,  // constant coeff for cost of gap in ref
-						15, // linear coeff for cost of gap in read
-						15, // linear coeff for cost of gap in ref
-						1,    // # rows at top/bot only entered diagonally
-						0,   // canonical splicing penalty
-						0,   // non-canonical splicing penalty
-						0);  // conflicting splice site penalt
-
-				doTestCase2(
-						al,
-						str1.c_str(),
-						qual.c_str(),
-						str2.c_str(),
-						0,
-						sc,
-						DEFAULT_MIN_CONST,
-						DEFAULT_MIN_LINEAR,
-						res);
-			}
-		}
-#endif//}}}
-
 	}
 
     mergeRepeatGroup();
@@ -723,37 +656,6 @@ void NRG<TStr>::saveRepeatGroup()
 
             saveRepeatPositions(fp, alt_rg);
         }
-
-#if 0//{{{
-        // Convert positions on antisense strand to those of sense strand
-        for(size_t j = 0; j < positions.size(); j++) {
-            if(positions[j].joinedOff < half_length_) {
-                positions[j].fw = true;
-            } else {
-                positions[j].joinedOff = s_.length() - positions[j].joinedOff - rg.seq.length();
-                positions[j].fw = false;
-            }
-        }
-        positions.sort();
-
-		// Positions
-        for(size_t j = 0; j < positions.size(); j++) {
-			if(j > 0 && (j % 10 == 0)) {
-				fp << endl;
-			}
-
-			if(j % 10 != 0) {
-				fp << " ";
-			}            
-            string chr_name;
-            TIndexOffU pos_in_chr;
-			getGenomeCoord(positions[j].joinedOff, chr_name, pos_in_chr);
-
-            char direction = (positions[j].fw ? '+' : '-');
-			fp << chr_name << ":" << pos_in_chr << ":" << direction;
-		}
-		fp << endl;
-#endif//}}}
 	}		
 	fp.close();
     snp_fp.close();
