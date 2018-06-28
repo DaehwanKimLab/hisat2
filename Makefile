@@ -303,7 +303,7 @@ hisat2-repeat: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
 	$(LIBS) $(BUILD_LIBS)
 
-hisat2-repeat-l: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
+hisat2-repeat-debug: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -Wall \
 	$(INC) \
