@@ -28,7 +28,7 @@
 using namespace std;
 
 extern "C" {
-	int hisat2_construct_nonrepetitive_genome(int argc, const char **argv);
+	int hisat2_repeat(int argc, const char **argv);
 }
 
 /**
@@ -56,7 +56,7 @@ int main(int argc, const char **argv) {
 				myargs[i] = args[i].c_str();
 			}
 			if(args.size() == 1) continue;
-			lastret = hisat2_construct_nonrepetitive_genome((int)args.size(), myargs);
+			lastret = hisat2_repeat((int)args.size(), myargs);
 			free(myargs);
 		}
 		if(lastret == -1) {
@@ -65,6 +65,6 @@ int main(int argc, const char **argv) {
 		}
 		return lastret;
 	} else {
-		return hisat2_construct_nonrepetitive_genome(argc, argv);
+		return hisat2_repeat(argc, argv);
 	}
 }

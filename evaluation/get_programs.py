@@ -11,7 +11,7 @@ def get_aligners():
     os.chdir("aligners")
     if not os.path.exists("bin"):
         os.mkdir("bin")
-    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks"]
+    programs = ["HISAT", "Bowtie2", "BWA", "Minimap2", "STAR", "Bowtie", "vg", "TopHat2", "GSNAP", "StringTie", "Cufflinks"]
     for program in programs:
         if program == "HISAT":
             dir = "hisat-0.1.6-beta"
@@ -23,6 +23,7 @@ def get_aligners():
             installs = bins + " hisat hisat-build hisat-inspect"
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
+            
         elif program == "Bowtie2":
             dir = "bowtie2-2.3.2"
             if os.path.exists(dir):
@@ -33,28 +34,24 @@ def get_aligners():
             installs = bins + " bowtie2 bowtie2-build bowtie2-inspect"
             cmd = "wget %s/%s; unzip %s; cd %s; make NO_TBB=1 %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
-        elif program == "Bowtie":
-            dir = "bowtie-1.1.2"
+            
+        elif program == "BWA":
+            dir = "bwa-0.7.12"
             if os.path.exists(dir):
                 continue
-            fname = dir + "-src.zip"
-            url = "http://sourceforge.net/projects/bowtie-bio/files/bowtie/1.1.2"
-            bins = "bowtie-align-s bowtie-build-s bowtie-inspect-s"
-            installs = bins + " bowtie bowtie-build bowtie-inspect"
-            cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
-                (url, fname, fname, dir, bins, installs)
-        elif program == "TopHat2":
-            if mac:
-                dir = "tophat-2.1.0.OSX_x86_64"
-            else:
-                dir = "tophat-2.1.0.Linux_x86_64"
+            url = "http://sourceforge.net/projects/bio-bwa/files/%s.tar.bz2" % (dir)
+            installs = "bwa"
+            cmd = "wget %s; tar xvjf %s.tar.bz2; cd %s; make; cp %s ../bin/; cd .." % (url, dir, dir, installs)
+        
+        elif program == "Minimap2":
+            version = "2.11"
+            dir = "minimap2-" + version
             if os.path.exists(dir):
                 continue
-            fname = dir + ".tar.gz"
-            url = "http://ccb.jhu.edu/software/tophat/downloads"
-            installs = "gtf_juncs juncs_db prep_reads segment_juncs tophat tophat_reports sra_to_solid samtools_0.1.18 map2gtf fix_map_ordering bam_merge long_spanning_reads sam_juncs gtf_to_fasta bam2fastx"
-            cmd = "wget %s/%s; tar xvzf %s; cd %s; cp %s ../bin; cd .." % \
-                (url, fname, fname, dir, installs)
+            url = "https://github.com/lh3/minimap2/archive/v%s.tar.gz" % (version)
+            installs = "minimap2"
+            cmd = "wget %s; tar xvzf v%s.tar.gz; cd %s; make; cp %s ../bin/; cd .." % (url, version, dir, installs)
+        
         elif program == "STAR":
             dir = "2.5.2b"
             if os.path.exists("STAR-" + dir):
@@ -69,6 +66,35 @@ def get_aligners():
             else:
                 cmd = "wget %s/%s; tar xvzf %s; cd STAR-%s/source; make; cp STAR ../../bin; cd ../.." % \
                     (url, fname, fname, dir)
+
+        elif program == "vg":
+            # to be implemented
+            continue
+                
+        elif program == "Bowtie":
+            dir = "bowtie-1.1.2"
+            if os.path.exists(dir):
+                continue
+            fname = dir + "-src.zip"
+            url = "http://sourceforge.net/projects/bowtie-bio/files/bowtie/1.1.2"
+            bins = "bowtie-align-s bowtie-build-s bowtie-inspect-s"
+            installs = bins + " bowtie bowtie-build bowtie-inspect"
+            cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
+                (url, fname, fname, dir, bins, installs)
+            
+        elif program == "TopHat2":
+            if mac:
+                dir = "tophat-2.1.0.OSX_x86_64"
+            else:
+                dir = "tophat-2.1.0.Linux_x86_64"
+            if os.path.exists(dir):
+                continue
+            fname = dir + ".tar.gz"
+            url = "http://ccb.jhu.edu/software/tophat/downloads"
+            installs = "gtf_juncs juncs_db prep_reads segment_juncs tophat tophat_reports sra_to_solid samtools_0.1.18 map2gtf fix_map_ordering bam_merge long_spanning_reads sam_juncs gtf_to_fasta bam2fastx"
+            cmd = "wget %s/%s; tar xvzf %s; cd %s; cp %s ../bin; cd .." % \
+                (url, fname, fname, dir, installs)
+            
         elif program == "GSNAP":
             dir = "gmap-2015-07-23"
             dir2 = "gmap-gsnap-2015-07-23"
@@ -79,23 +105,20 @@ def get_aligners():
             installs = "gmap gmapl get-genome gmapindex iit_store iit_get iit_dump gsnap gsnapl uniqscan uniqscanl snpindex cmetindex atoiindex sam_sort ../util/*"
             cmd = "wget %s/%s; tar xvzf %s; cd %s; ./configure; make; cd src; cp %s ../../bin; cd ../.." % \
                 (url, fname, fname, dir, installs)
-        elif program == "BWA":
-            dir = "bwa-0.7.12"
-            if os.path.exists(dir):
-                continue
-            url = "http://sourceforge.net/projects/bio-bwa/files/%s.tar.bz2" % (dir)
-            installs = "bwa"
-            cmd = "wget %s; tar xvjf %s.tar.bz2; cd %s; make; cp %s ../bin/; cd .." % (url, dir, dir, installs)
+            
         elif program == "StringTie":
             dir = "stringtie-1.0.4"
             url = "http://ccb.jhu.edu/software/stringtie/dl"
             bins =  "stringtie"
             cmd = "wget %s/%s.tar.gz; tar xvzf %s.tar.gz; cd %s; make release; cp %s ../bin; cd .." % \
                 (url, dir, dir, dir, bins)
+            
         elif program == "Cufflinks":
             cmd = ""
+            
         else:
             assert False
+            
         print >> sys.stderr, cmd
         os.system(cmd)
 

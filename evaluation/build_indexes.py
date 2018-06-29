@@ -10,8 +10,8 @@ def build_indexes():
     if not os.path.exists("indexes"):
         os.mkdir("indexes")
     os.chdir("indexes")
-    aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP", "BWA"]
-    genomes = ["22_20-21M", "22", "genome"]:
+    aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP", "BWA" , "Minimap2", "VG"]
+    genomes = ["22_20-21M", "22", "genome"]
     for genome in genomes:
         for aligner in aligners:
             if genome == "genome":
@@ -41,8 +41,11 @@ def build_indexes():
                 cmd = "../../aligners/bin/gmap_build -B ../../aligners/bin -D . -d %s ../../data/%s.fa" % (genome, genome)
             elif aligner == "BWA":
                 cmd = "../../aligners/bin/bwa index -p %s.fa ../../data/%s.fa" % (genome, genome)
+            elif aligner == "Minimap2":
+                cmd = "../../aligners/bin/minimap2 ../../data/%s.fa -d %s.fa" % (genome, genome)
             elif aligner == "VG":
-                assert False
+                # To be implemented
+                continue
             else:
                 assert False
             print >> sys.stderr, cmd
