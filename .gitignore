@@ -1,12 +1,14 @@
 *~
 *.dSYM
 .DS_Store
+tags
 *-debug
 *-s
 *-l
 hisat2.xcodeproj/project.xcworkspace
 hisat2.xcodeproj/xcuserdata
 hisat2.xcodeproj/xcshareddata
+*.patch
 
 build_automaton
 build_index
@@ -14,6 +16,7 @@ clean_alignment
 determinize
 gcsa_alignment
 gcsa_test
+hisat2-repeat
 
 hisat2_test/*.bt2
 hisat2_test/*.ht2
@@ -28,3 +31,8 @@ hisat2_test/genome*
 hisat2_test/2*
 hisat2_test/snp142*
 hisat2_test/testset*
+
+
+.idea
+.vscode
+CMakeLists.txt

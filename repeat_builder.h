@@ -198,6 +198,31 @@ struct RepeatGroup {
 
 };
 
+struct SeedExt {
+    // seed extended position [first, second)
+    pair<TIndexOffU, TIndexOffU> pos;
+
+    // extension bound. the seed must be placed on same fragment
+    // [first, second)
+    pair<TIndexOffU, TIndexOffU> bound;
+
+    bool fw;        // forward
+    uint32_t ed;    // edit distance
+    bool done;      // done flag
+
+    string seed;
+
+    SeedExt() {
+        done = false;
+        ed = 0;
+        pos.first = 0;
+        pos.second = 0;
+    };
+
+    //string left_ext;
+    //string right_ext;
+};
+
 
 // build Non-repetitive Genome
 template<typename TStr>
@@ -286,6 +311,7 @@ public:
     RepeatGroup* findRepeatGroup(const string&);
 
     TIndexOffU getEnd(TIndexOffU e);
+    TIndexOffU getStart(TIndexOffU e);
 	TIndexOffU getLCP(TIndexOffU a, TIndexOffU b);
 
 	void repeat_masking();
@@ -295,6 +321,9 @@ public:
             EList<Edit>&, Coord&, TIndexOffU max_edit = 10);
     int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
     void makePadString(const string&, const string&, string&, size_t);
+
+    void seedExtension(EList<SeedExt>&, TIndexOffU, TIndexOffU, ostream&);
+    void seedGrouping(TIndexOffU, TIndexOffU);
 
 	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
     void doTestCase1(const string&, const string&, TIndexOffU);

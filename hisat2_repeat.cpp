@@ -85,6 +85,8 @@ static bool forward_only;
 static bool CGtoTG;
 static string repeat_str1;
 static string repeat_str2;
+TIndexOffU max_seed_mm;
+TIndexOffU max_seed_repeat;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -116,6 +118,8 @@ static void resetOptions() {
     repeat_indel = false;
     forward_only = false;
     CGtoTG = false;
+    max_seed_mm = 5;
+    max_seed_repeat = 5;
     wrapper.clear();
 }
 
@@ -141,7 +145,9 @@ enum {
 	ARG_FORWARD_ONLY,
     ARG_CGTOTG,
     ARG_REPEAT_STR1,
-    ARG_REPEAT_STR2
+    ARG_REPEAT_STR2,
+    ARG_MAX_SEED_MM,
+    ARG_MAX_SEED_REPEAT,
 };
 
 /**
@@ -184,6 +190,8 @@ static void printUsage(ostream& out) {
         << "    --repeat-str2" << endl
         << "    --forward-only          use forward strand only" << endl
         << "    --CGtoTG                change CG to TG" << endl
+        << "    --max-seed-mm <int>" << endl
+        << "    --max-seed-repeat <int>" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -222,6 +230,8 @@ static struct option long_options[] = {
 	{(char*)"CGtoTG",   	  no_argument,       0,            ARG_CGTOTG},
 	{(char*)"repeat-str1",    required_argument, 0,            ARG_REPEAT_STR1},
 	{(char*)"repeat-str2",    required_argument, 0,            ARG_REPEAT_STR2},
+	{(char*)"max-seed-mm",    required_argument, 0,            ARG_MAX_SEED_MM},
+	{(char*)"max-seed-repeat",required_argument, 0,            ARG_MAX_SEED_REPEAT},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -337,6 +347,12 @@ static void parseOptions(int argc, const char **argv) {
 				break;
 			case ARG_REPEAT_STR2:
 				repeat_str2 = optarg;
+				break;
+			case ARG_MAX_SEED_MM:
+                max_seed_mm = parseNumber<TIndexOffU>(1, "--max_seed_mm arg must be at least 1");
+				break;
+			case ARG_MAX_SEED_REPEAT:
+                max_seed_repeat = parseNumber<TIndexOffU>(5, "--max_seed_repeat arg must be at least 5");
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
