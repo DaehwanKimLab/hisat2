@@ -12,11 +12,15 @@ hisat2-build -p 3 20.fa --repeat-ref 20_rep.fa --repeat-info 20_rep.info 20_mask
 
 hisat2-repeat -p 3 --repeat-length 100 --repeat-count 2 --repeat-edit 0 --forward-only --CGtoTG 22.fa 22_rep
 
+
+
 hisat2-repeat -p 3 --repeat-length 100 --repeat-count 5 --repeat-edit 10 22.fa 22_rep
+
+hisat2-build -p 3 22.fa --repeat-ref 22_rep.rep.fa --repeat-info 22_rep.rep.info --repeat-snp 22_rep.rep.snp 22_rep
 
 hisat2_simulate_reads.py --dna --num-fragment 1000000 --repeat-info 22.rep.info 22.fa /dev/null /dev/null sim
 
 hisat2_simulate_reads.py --dna --num-fragment 1000000 --error-rate 0.2 --repeat-info 22.rep.info 22.fa /dev/null /dev/null sim
 
-hisat2-build -p 3 22.fa --repeat-ref 22.rep.fa --repeat-info 22.rep.info 22_rep
+
 

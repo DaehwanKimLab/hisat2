@@ -444,7 +444,8 @@ def extract_single(infilename,
 
         cols = line[:-1].split()
         read_id, flag, chr, pos, mapQ, cigar_str = cols[:6]
-        read_seq = cols[9]
+        if cols[9] != '*':
+            read_seq = cols[9]
         if len(read_id) >= 3 and read_id[-2] == "/":
             read_id = read_id[:-2]
 
@@ -488,7 +489,7 @@ def extract_single(infilename,
                 num_ualigned_reads += 1
         else:
             # In case of Bowtie2, only consier the best alignments
-            if aligner in ["bowtie2", "bwa", "vg"]:
+            if aligner in ["bowtie2", "bwa", "minimap2", "vg"]:
                 if NM > prev_NM:
                     continue
 
@@ -511,6 +512,17 @@ def extract_single(infilename,
                     ref_seq = ref_seq.upper()
                     if length == len(ref_seq):
                         for j in range(length):
+
+                            # DK - debugging purposes
+                            if j >= len(ref_seq):
+                                print j, len(ref_seq)
+                                assert False
+
+                            if read_pos + j >= len(read_seq):
+                                print read_pos, j, len(read_seq)
+                                print line
+                                assert False
+                            
                             if ref_seq[j] != "N" and read_seq[read_pos+j] != ref_seq[j]:
                                 NM_real += 1
                     else:
@@ -800,7 +812,7 @@ def extract_pair(infilename,
                             if abs(pos1 - pos2) >= 1000:
                                 continue
 
-                        if aligner in ["bowtie2", "bwa"]:
+                        if aligner in ["bowtie2", "bwa", "minimap2"]:
                             if NM1 + NM2 > prev_NM:
                                 continue
                             else:
@@ -1644,9 +1656,8 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "tran", "210", ""],
         # ["hisat2", "", "snp_tran", "210", ""],
         # ["hisat2", "", "", "210", ""],
-        ["hisat2", "", "", "", ""],
-        ["hisat2", "", "rep", "", ""],
-        ["hisat2", "", "rep2", "", ""],
+        # ["hisat2", "", "", "", ""],
+        # ["hisat2", "", "rep", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
@@ -1665,15 +1676,14 @@ def calculate_read_cost(verbose):
         # ["star", "x2", "", "", ""],
         # ["star", "gtf", "", "", ""],
         # ["bowtie", "", "", "", ""],
-        # ["bowtie2", "", "", "", ""],
+        ["bowtie2", "", "", "", ""],
         # ["bowtie2", "", "", "", "-k 10"],
         # ["bowtie2", "", "", "", "-k 1000 --extends 2000"],
         # ["gsnap", "", "", "", ""],
         # ["bwa", "mem", "", "", ""],
-        # ["bwa", "mem", "", "", "-a"],
-        # ["hisat2", "", "snp", "", ""],
-        # ["hisat2", "", "tran", "", ""],
-        # ["hisat2", "", "snp_tran", "", ""],
+        ["bwa", "mem", "", "", "-a"],
+        # ["minimap2", "", "", "", ""],
+        # ["minimap2", "", "", "", "-a"],
         # ["vg", "", "", "", ""],
         # ["vg", "", "snp", "", ""],
         # ["vg", "", "snp", "", "-M 10"]
@@ -1768,6 +1778,10 @@ def calculate_read_cost(verbose):
                     cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                     version = cmd_process.communicate()[1][:-1].split("\n")[2]
                     version = version.split()[1]
+                elif aligner == "minimap2":
+                    cmd = ["%s/minimap2" % (aligner_bin_base), "--version"]
+                    cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                    version = cmd_process.communicate()[0][:-1]
                 elif aligner == "vg":
                     cmd = ["%s/vg" % (aligner_bin_base)]
                     cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
@@ -1984,6 +1998,26 @@ def calculate_read_cost(verbose):
                     cmd += [read1_fname]
                     if paired:
                         cmd += [read2_fname]
+                elif aligner == "minimap2":
+                    cmd += ["%s/minimap2" % (aligner_bin_base)]
+                    if num_threads > 1:
+                        cmd += ["-t", str(num_threads)]
+                    cmd += ["-a"]
+                    # DK - debugging purposes
+                    if paired:
+                        cmd += ["-x", "sr"]
+                        
+                    if not paired:
+                        cmd += ["-N", "500"]
+                        cmd += ["-f", "0.0"]
+
+                    if options != "":
+                        cmd += options.split(' ')
+                                        
+                    cmd += ["%s/MINIMAP2%s/%s.fa" % (index_base, index_add, genome)]
+                    cmd += [read1_fname]
+                    if paired:
+                        cmd += [read2_fname]
                 elif aligner == "vg":
                     # vg map -d 22 -t 6 -M 10 -f ../sim-1.fa -f ../sim-2.fa > result.sam.gam
                     cmd += ["%s/vg" % (aligner_bin_base)]
@@ -2062,7 +2096,7 @@ def calculate_read_cost(verbose):
                             start_time = datetime.now()
                             if verbose:
                                 print >> sys.stderr, start_time, "\t", " ".join(dummy_cmd)
-                            if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
+                            if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "minimap2", "vg"]:
                                 proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
                             else:
                                 proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -2079,7 +2113,7 @@ def calculate_read_cost(verbose):
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
-                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "vg"]:
+                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "minimap2", "vg"]:
                         proc = subprocess.Popen(aligner_cmd, stdout=open(out_fname, "w"), stderr=subprocess.PIPE)
                     else:
                         proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

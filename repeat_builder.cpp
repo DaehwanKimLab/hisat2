@@ -35,7 +35,7 @@ struct RepeatRange {
 	RepeatRange() {
         forward = true;
     };
-	RepeatRange(Range r, int id) : 
+	RepeatRange(Range r, int id) :
 		range(r), rg_id(id), forward(true) {};
     RepeatRange(Range r, int id, bool fw) :
         range(r), rg_id(id), forward(fw) {};
@@ -261,11 +261,15 @@ void NRG<TStr>::init_dyn()
 {
     const int MM_PEN = 3;
     // const int MM_PEN = 6;
-    const int GAP_PEN_LIN = 2;
-    // const int GAP_PEN_LIN = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
-    const int GAP_PEN_CON = 4;
-    // const int GAP_PEN_CON = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
     const int MAX_PEN = MAX_I16;
+    
+#if 0
+    const int GAP_PEN_LIN = 2;
+    const int GAP_PEN_CON = 4;
+#else
+    const int GAP_PEN_LIN = MAX_I8;
+    const int GAP_PEN_CON = MAX_I8;
+#endif
 
     scoreMin_.init(SIMPLE_FUNC_LINEAR, rpt_edit_ * MM_PEN * -1.0, 0.0);
     nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
@@ -807,6 +811,8 @@ void NRG<TStr>::mergeRepeatGroup()
                         i, rg.positions[j].fw));
         }
     }
+    
+    size_t dd = rpt_ranges.size() * sizeof(RepeatRange);
 
     assert_gt(rpt_ranges.size(), 0);
 
