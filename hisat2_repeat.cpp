@@ -87,6 +87,7 @@ static string repeat_str1;
 static string repeat_str2;
 TIndexOffU max_seed_mm;
 TIndexOffU max_seed_repeat;
+TIndexOffU max_seed_extlen;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -120,6 +121,7 @@ static void resetOptions() {
     CGtoTG = false;
     max_seed_mm = 5;
     max_seed_repeat = 5;
+    max_seed_extlen = 25;
     wrapper.clear();
 }
 
@@ -148,6 +150,7 @@ enum {
     ARG_REPEAT_STR2,
     ARG_MAX_SEED_MM,
     ARG_MAX_SEED_REPEAT,
+    ARG_MAX_SEED_EXTLEN,
 };
 
 /**
@@ -192,6 +195,7 @@ static void printUsage(ostream& out) {
         << "    --CGtoTG                change CG to TG" << endl
         << "    --max-seed-mm <int>" << endl
         << "    --max-seed-repeat <int>" << endl
+        << "    --max-seed-extlen <int>" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -232,6 +236,7 @@ static struct option long_options[] = {
 	{(char*)"repeat-str2",    required_argument, 0,            ARG_REPEAT_STR2},
 	{(char*)"max-seed-mm",    required_argument, 0,            ARG_MAX_SEED_MM},
 	{(char*)"max-seed-repeat",required_argument, 0,            ARG_MAX_SEED_REPEAT},
+	{(char*)"max-seed-extlen",required_argument, 0,            ARG_MAX_SEED_EXTLEN},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -353,6 +358,9 @@ static void parseOptions(int argc, const char **argv) {
 				break;
 			case ARG_MAX_SEED_REPEAT:
                 max_seed_repeat = parseNumber<TIndexOffU>(5, "--max_seed_repeat arg must be at least 5");
+				break;
+			case ARG_MAX_SEED_EXTLEN:
+                max_seed_extlen = parseNumber<TIndexOffU>(0, "--max_seed_extlen arg must be at least 0");
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;

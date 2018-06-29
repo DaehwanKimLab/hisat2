@@ -700,8 +700,10 @@ void NRG<TStr>::seedGrouping(TIndexOffU rpt_len, TIndexOffU rpt_cnt)
     for(size_t i = 0; i < rpt_grp_.size(); i++)
     {
         //size_t i = 3059;
+
         EList<SeedExt> seeds;
         EList<RepeatCoord<TIndexOffU> >& positions = rpt_grp_[i].positions;
+        string seed_str = rpt_grp_[i].seq.substr(0, rpt_len);
 
         seeds.reserveExact(positions.size());
 
@@ -710,11 +712,17 @@ void NRG<TStr>::seedGrouping(TIndexOffU rpt_len, TIndexOffU rpt_cnt)
             TIndexOffU right = positions[pi].joinedOff + rpt_len;
 
             seeds.expand();
+            seeds.back().reset();
             seeds.back().pos = pair<TIndexOffU, TIndexOffU>(left, right);
             seeds.back().bound = pair<TIndexOffU, TIndexOffU>(getStart(left), getEnd(left));
-            seeds.back().seed = getString(s_, left, right - left);
         }
-        seedExtension(seeds, i, rpt_len, fp);
+
+        assert(seeds.size() > 0);
+
+        string consensus;
+
+        seedExtension(seed_str, seeds, consensus);
+        saveSeedExtension(seed_str, seeds, i, fp, consensus);
     }
 
     fp.close();
@@ -722,31 +730,59 @@ void NRG<TStr>::seedGrouping(TIndexOffU rpt_len, TIndexOffU rpt_cnt)
 
 extern TIndexOffU max_seed_mm;
 extern TIndexOffU max_seed_repeat;
+extern TIndexOffU max_seed_extlen;
 
 template<typename TStr>
-void NRG<TStr>::seedExtension(EList<SeedExt>& seeds, TIndexOffU rpt_grp_id, TIndexOffU rpt_len, ostream& fp)
+void NRG<TStr>::saveSeedExtension(string& seed_string, EList<SeedExt>& seeds, 
+        TIndexOffU rpt_grp_id, ostream& fp, string& consensus_merged)
+{
+    for(size_t i = 0; i < seeds.size(); i++) {
+        assert(seeds[i].done);
+
+        size_t ext_len = seeds[i].pos.second - seeds[i].pos.first;
+        string deststr = getString(s_, seeds[i].pos.first, ext_len); 
+
+        fp << rpt_grp_id << "\t" << rpt_grp_[rpt_grp_id].positions.size();
+        fp << "\t" << ext_len;
+        fp << "\t" << seeds[i].ed;
+        fp << "\t" << seeds[i].pos.first << "\t" << seeds[i].pos.second;
+        fp << "\t" << seeds[i].bound.first << "\t" << seeds[i].bound.second;
+
+        string chr_name;
+        TIndexOffU pos_in_chr;
+        if (seeds[i].pos.first < forward_length_) {
+            getGenomeCoord(seeds[i].pos.first, chr_name, pos_in_chr);
+        } else {
+            getGenomeCoord(s_.length() - seeds[i].pos.first - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
+        }
+        fp << "\t" << chr_name << ":" << pos_in_chr;
+
+        if (seeds[i].pos.second < forward_length_) {
+            getGenomeCoord(seeds[i].pos.second, chr_name, pos_in_chr);
+        } else {
+            getGenomeCoord(s_.length() - seeds[i].pos.second - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
+        }
+        fp << "\t" << chr_name << ":" << pos_in_chr;
+
+        fp << "\t" << consensus_merged.substr(seeds[i].baseoff, ext_len);
+        fp << "\t" << deststr;
+
+        fp << endl;
+    }
+}
+
+
+template<typename TStr>
+void NRG<TStr>::seedExtension(string& seed_string, EList<SeedExt>& seeds, string& consensus_merged)
 {
     //ostream& fp = cerr;
 
-    //size_t max_seed_ext_len = 50;
-    size_t max_seed_ext_len = 25;
+    size_t max_seed_ext_len = max_seed_extlen; // default 25
     size_t max_ed = max_seed_mm; // default 5
 
-#if 0
-    for(size_t i = 0; i < seeds.size(); i++) {
-        string left_ext;
-        string right_ext;
-
-        left_ext = getString(s_, seeds[i].pos.first - max_seed_ext_len, max_seed_ext_len);
-        right_ext = getString(s_, seeds[i].pos.second, max_seed_ext_len);
-
-        fp << seeds[i].pos.first << "\t" << seeds[i].pos.second;
-        fp << "\t" << left_ext << seeds[i].seed << right_ext;
-        fp << endl;
-    }
-#endif
   
     size_t remains = seeds.size();
+    TIndexOffU baseoff = 0;
 
     while (remains > 5) {
         size_t seed_ext_len = 0;
@@ -853,7 +889,8 @@ void NRG<TStr>::seedExtension(EList<SeedExt>& seeds, TIndexOffU rpt_grp_id, TInd
             }
         }
 
-        string consensus = reverse(consensus_left) + seeds[0].seed + consensus_right;
+        string consensus = reverse(consensus_left) + seed_string + consensus_right;
+        consensus_merged += consensus;
 
         remains = 0;
         for(size_t i = 0; i < seeds.size(); i++) {
@@ -866,73 +903,34 @@ void NRG<TStr>::seedExtension(EList<SeedExt>& seeds, TIndexOffU rpt_grp_id, TInd
                 // select
                 seeds[i].done = true;
 
-                string deststr = getString(s_, seeds[i].pos.first - seed_ext_len, rpt_len + seed_ext_len * 2);
+                seeds[i].baseoff = baseoff;
+                seeds[i].pos.first = seeds[i].pos.first - seed_ext_len;
+                seeds[i].pos.second = seeds[i].pos.second + seed_ext_len;
 
-                int ed = hamming_distance(consensus, deststr);
-
-                fp << rpt_grp_id << "\t" << rpt_grp_[rpt_grp_id].positions.size();
-                fp << "\t" << consensus.length();
-                fp << "\t" << seeds[i].ed;
-                fp << "\t" << seeds[i].pos.first << "\t" << seeds[i].pos.second;
-                fp << "\t" << seeds[i].bound.first << "\t" << seeds[i].bound.second;
-
-                string chr_name;
-                TIndexOffU pos_in_chr;
-                if (seeds[i].pos.first < forward_length_) {
-                    getGenomeCoord(seeds[i].pos.first, chr_name, pos_in_chr);
-                } else {
-                    getGenomeCoord(s_.length() - seeds[i].pos.first - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
-                }
-                fp << "\t" << chr_name << ":" << pos_in_chr;
-                
-                if (seeds[i].pos.second < forward_length_) {
-                    getGenomeCoord(seeds[i].pos.second, chr_name, pos_in_chr);
-                } else {
-                    getGenomeCoord(s_.length() - seeds[i].pos.second - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
-                }
-                fp << "\t" << chr_name << ":" << pos_in_chr;
-
-                fp << "\t" << consensus;
-                fp << "\t" << deststr;
-
-                fp << endl;
             } else {
                 // reset
                 seeds[i].ed = 0;
                 remains++;
             }
         }
+
+        baseoff += consensus.length();
+
     }
 
-#if 0//{{{
-    for(size_t i = 0; i < seeds.size() - 1; i++) {
-        string seed_i = seeds[i].left_ext + seeds[i].right_ext;
-        for(size_t j = i + 1; j < seeds.size(); j++) {
-            string seed_j = seeds[j].left_ext + seeds[j].right_ext;
-            //int ed = levenshtein_distance(seed_i, seed_j);
-            int ed = hamming_distance(seed_i, seed_j);
-            fp << ed << " ";
+    if(remains > 0) {
+        consensus_merged += seed_string;
+
+        for(size_t i = 0; i < seeds.size(); i++) {
+            if(seeds[i].done) {
+                continue;
+            }
+
+            seeds[i].done = true;
+            seeds[i].baseoff = baseoff;
         }
-
-        fp << endl;
     }
 
-
-    string left_ext = makeAverageString(seeds, true);
-    string right_ext = makeAverageString(seeds, false);
-
-    // new consensus
-    string consen = left_ext + right_ext;
-
-    fp << "compare with consensus" << endl;
-    for(size_t j = 0; j < seeds.size(); j++) {
-        string seed_j = seeds[j].left_ext + seeds[j].right_ext;
-        //int ed = levenshtein_distance(consen, seed_j);
-        int ed = hamming_distance(consen, seed_j);
-        fp << ed << " ";
-    }
-    fp << endl;
-#endif//}}}
 }
 
 

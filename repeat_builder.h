@@ -206,21 +206,23 @@ struct SeedExt {
     // [first, second)
     pair<TIndexOffU, TIndexOffU> bound;
 
-    bool fw;        // forward
     uint32_t ed;    // edit distance
     bool done;      // done flag
-
-    string seed;
+    TIndexOffU baseoff;   // offset in consensus_merged
 
     SeedExt() {
+        reset();
+    };
+
+    void reset() {
         done = false;
         ed = 0;
         pos.first = 0;
         pos.second = 0;
+        bound.first = 0;
+        bound.second = 0;
+        baseoff = 0;
     };
-
-    //string left_ext;
-    //string right_ext;
 };
 
 
@@ -322,7 +324,9 @@ public:
     int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
     void makePadString(const string&, const string&, string&, size_t);
 
-    void seedExtension(EList<SeedExt>&, TIndexOffU, TIndexOffU, ostream&);
+    void seedExtension(string&, EList<SeedExt>&, string&);
+    void saveSeedExtension(string&, EList<SeedExt>&, TIndexOffU, ostream&, string&);
+
     void seedGrouping(TIndexOffU, TIndexOffU);
 
 	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
