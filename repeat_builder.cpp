@@ -391,7 +391,7 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
         }
 
 		if(rpt_positions.size() == 0) {
-			rpt_positions.expand();
+            rpt_positions.expand();
 			rpt_positions.back().joinedOff = saElt;
 		} else {
 			TIndexOffU prev_saElt = rpt_positions.back().joinedOff;
@@ -699,7 +699,8 @@ void NRG<TStr>::seedGrouping(TIndexOffU rpt_len, TIndexOffU rpt_cnt)
 
     for(size_t i = 0; i < rpt_grp_.size(); i++)
     {
-        //size_t i = 3059;
+        i = 3059;
+        
         EList<SeedExt> seeds;
         EList<RepeatCoord<TIndexOffU> >& positions = rpt_grp_[i].positions;
 
@@ -715,6 +716,9 @@ void NRG<TStr>::seedGrouping(TIndexOffU rpt_len, TIndexOffU rpt_cnt)
             seeds.back().seed = getString(s_, left, right - left);
         }
         seedExtension(seeds, i, rpt_len, fp);
+        
+        // DK - debugging purposes
+        break;
     }
 
     fp.close();
@@ -745,7 +749,7 @@ void NRG<TStr>::seedExtension(EList<SeedExt>& seeds, TIndexOffU rpt_grp_id, TInd
         fp << endl;
     }
 #endif
-  
+    
     size_t remains = seeds.size();
 
     while (remains > 5) {
@@ -855,6 +859,7 @@ void NRG<TStr>::seedExtension(EList<SeedExt>& seeds, TIndexOffU rpt_grp_id, TInd
 
         string consensus = reverse(consensus_left) + seeds[0].seed + consensus_right;
 
+        size_t dones = 0;
         remains = 0;
         for(size_t i = 0; i < seeds.size(); i++) {
             if (seeds[i].done) {
@@ -865,6 +870,7 @@ void NRG<TStr>::seedExtension(EList<SeedExt>& seeds, TIndexOffU rpt_grp_id, TInd
             if(seeds[i].ed <= max_ed) {
                 // select
                 seeds[i].done = true;
+                dones++;
 
                 string deststr = getString(s_, seeds[i].pos.first - seed_ext_len, rpt_len + seed_ext_len * 2);
 
@@ -902,6 +908,8 @@ void NRG<TStr>::seedExtension(EList<SeedExt>& seeds, TIndexOffU rpt_grp_id, TInd
                 remains++;
             }
         }
+        
+        fp << dones << endl << endl << endl;
     }
 
 #if 0//{{{
