@@ -206,21 +206,23 @@ struct SeedExt {
     // [first, second)
     pair<TIndexOffU, TIndexOffU> bound;
 
-    bool fw;        // forward
     uint32_t ed;    // edit distance
     bool done;      // done flag
-
-    string seed;
+    TIndexOffU baseoff;   // offset in consensus_merged
 
     SeedExt() {
+        reset();
+    };
+
+    void reset() {
         done = false;
         ed = 0;
         pos.first = 0;
         pos.second = 0;
+        bound.first = 0;
+        bound.second = 0;
+        baseoff = 0;
     };
-
-    //string left_ext;
-    //string right_ext;
 };
 
 
@@ -282,7 +284,8 @@ public:
 
 public:
 
-	void build(TIndexOffU rpt_len,
+	void build(TIndexOffU seed_len,
+               TIndexOffU rpt_len,
                TIndexOffU rpt_cnt,
                bool flagGrouping,
                TIndexOffU rpt_edit,
@@ -322,11 +325,28 @@ public:
     int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
     void makePadString(const string&, const string&, string&, size_t);
 
-    void seedExtension(EList<SeedExt>&, TIndexOffU, TIndexOffU, ostream&);
+    void seedExtension(string&, EList<SeedExt>&, string&);
+    void saveSeedExtension(const string& seed_string,
+                           const EList<SeedExt>& seeds,
+                           TIndexOffU rpt_grp_id,
+                           ostream& fp,
+                           const string& consensus_merged);
+
     void seedGrouping(TIndexOffU, TIndexOffU);
 
 	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
     void doTestCase1(const string&, const string&, TIndexOffU);
+    
+private:
+    void get_consensus_seq_CP(EList<SeedExt>& seeds,
+                              size_t from,
+                              string& left_consensus,
+                              string& right_consensus);
+    
+    void get_consensus_seq(EList<SeedExt>& seeds,
+                           size_t from,
+                           string& left_consensus,
+                           string& right_consensus);
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);

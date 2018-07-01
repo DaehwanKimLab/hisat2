@@ -76,6 +76,7 @@ static int  bigEndian;
 static bool autoMem;
 static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
+static TIndexOffU seed_length;
 static TIndexOffU repeat_count;
 static TIndexOffU repeat_length;
 static TIndexOffU max_repeat_edit;
@@ -87,6 +88,7 @@ static string repeat_str1;
 static string repeat_str2;
 TIndexOffU max_seed_mm;
 TIndexOffU max_seed_repeat;
+TIndexOffU max_seed_extlen;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -111,7 +113,8 @@ static void resetOptions() {
 	bigEndian      = 0;  // little endian
 	autoMem        = true;  // automatically adjust memory usage parameters
 	nthreads       = 1;
-	repeat_length  = 50;
+    seed_length    = 50;
+	repeat_length  = 100;
 	repeat_count   = 5;
     max_repeat_edit = 10;
     max_repeat_matchlen = repeat_length / 2; // half of repeat_length
@@ -120,6 +123,7 @@ static void resetOptions() {
     CGtoTG = false;
     max_seed_mm = 5;
     max_seed_repeat = 5;
+    max_seed_extlen = 25;
     wrapper.clear();
 }
 
@@ -136,6 +140,7 @@ enum {
 	ARG_USAGE,
 	ARG_REVERSE_EACH,
     ARG_SA,
+    ARG_SEED_LENGTH,
 	ARG_REPEAT_LENGTH,
 	ARG_REPEAT_CNT,
     ARG_REPEAT_EDIT,
@@ -148,6 +153,7 @@ enum {
     ARG_REPEAT_STR2,
     ARG_MAX_SEED_MM,
     ARG_MAX_SEED_REPEAT,
+    ARG_MAX_SEED_EXTLEN,
 };
 
 /**
@@ -156,15 +162,7 @@ enum {
 static void printUsage(ostream& out) {
 	out << "HISAT2 version " << string(HISAT2_VERSION).c_str() << " by Chanhee Park <parkchanhee@gmail.com> and Daehwan Kim <infphilo@gmail.com>" << endl;
     
-#ifdef BOWTIE_64BIT_INDEX
-	string tool_name = "hisat2-construct-nonrepetitive-genome-l";
-#else
-	string tool_name = "hisat2-construct-nonrepetitive-genome-s";
-#endif
-	if(wrapper == "basic-0") {
-		tool_name = "hisat2-build";
-	}
-    
+    string tool_name = "hisat2-repeat";
 	out << "Usage: " << tool_name << " [options]* <reference_in>" << endl
 	    << "    reference_in            comma-separated list of files with ref sequences" << endl
         << "Options:" << endl
@@ -180,8 +178,8 @@ static void printUsage(ostream& out) {
 	    << "    --bmaxdivn <int>        max bucket sz as divisor of ref len (default: 4)" << endl
 	    << "    --dcv <int>             diff-cover period for blockwise (default: 1024)" << endl
 	    << "    --nodc                  disable diff-cover (algorithm becomes quadratic)" << endl
-	    << "    --seed <int>            seed for random number generator" << endl
-        << "    --repeat-length <int>   minimum repeat length (defaultL 50)" << endl
+        << "    --seed-length <int>     seed length (default: 50)" << endl
+        << "    --repeat-length <int>   minimum repeat length (default: 100)" << endl
         << "    --repeat-count <int>    minimum repeat count (default: 5)" << endl
         << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
         << "    --repeat-matchlen <int>" << endl
@@ -192,6 +190,7 @@ static void printUsage(ostream& out) {
         << "    --CGtoTG                change CG to TG" << endl
         << "    --max-seed-mm <int>" << endl
         << "    --max-seed-repeat <int>" << endl
+        << "    --max-seed-extlen <int>" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -220,6 +219,7 @@ static struct option long_options[] = {
 	{(char*)"linerate",       required_argument, 0,            'l'},
 	{(char*)"linesperside",   required_argument, 0,            'i'},
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
+    {(char*)"seed-length",   required_argument, 0,             ARG_SEED_LENGTH},
 	{(char*)"repeat-length",  required_argument, 0,            ARG_REPEAT_LENGTH},
 	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
     {(char*)"repeat-edit",    required_argument, 0,            ARG_REPEAT_EDIT},
@@ -232,6 +232,7 @@ static struct option long_options[] = {
 	{(char*)"repeat-str2",    required_argument, 0,            ARG_REPEAT_STR2},
 	{(char*)"max-seed-mm",    required_argument, 0,            ARG_MAX_SEED_MM},
 	{(char*)"max-seed-repeat",required_argument, 0,            ARG_MAX_SEED_REPEAT},
+	{(char*)"max-seed-extlen",required_argument, 0,            ARG_MAX_SEED_EXTLEN},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -320,8 +321,11 @@ static void parseOptions(int argc, const char **argv) {
 			case ARG_SEED:
 				seed = parseNumber<int>(0, "--seed arg must be at least 0");
 				break;
+            case ARG_SEED_LENGTH:
+                seed_length = parseNumber<TIndexOffU>(1, "--seed-length arg must be at least 1");
+                break;
             case ARG_REPEAT_LENGTH:
-                repeat_length = parseNumber<TIndexOffU>(5, "--repeat-length arg must be at least 5");
+                repeat_length = parseNumber<TIndexOffU>(1, "--repeat-length arg must be at least 1");
                 break;
 			case ARG_REPEAT_CNT:
 				repeat_count = parseNumber<TIndexOffU>(2, "--repeat-count arg must be at least 2");
@@ -353,6 +357,9 @@ static void parseOptions(int argc, const char **argv) {
 				break;
 			case ARG_MAX_SEED_REPEAT:
                 max_seed_repeat = parseNumber<TIndexOffU>(5, "--max_seed_repeat arg must be at least 5");
+				break;
+			case ARG_MAX_SEED_EXTLEN:
+                max_seed_extlen = parseNumber<TIndexOffU>(0, "--max_seed_extlen arg must be at least 0");
 				break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -564,18 +571,19 @@ static void driver(
 
             if (repeat_str1.length() && repeat_str2.length()) {
                 nrg.doTest(repeat_length,
-                        repeat_count,
-                        true,
-                        max_repeat_edit,
-                        max_repeat_matchlen,
-                        repeat_str1,
-                        repeat_str2);
+                           repeat_count,
+                           true,
+                           max_repeat_edit,
+                           max_repeat_matchlen,
+                           repeat_str1,
+                           repeat_str2);
             } else {
-                nrg.build(repeat_length,
-                        repeat_count,
-                        true,
-                        max_repeat_edit,
-                        max_repeat_matchlen);
+                nrg.build(seed_length,
+                          repeat_length,
+                          repeat_count,
+                          true,
+                          max_repeat_edit,
+                          max_repeat_matchlen);
                 nrg.saveFile();
             }
 
