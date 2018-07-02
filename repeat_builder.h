@@ -343,21 +343,14 @@ public:
     void doTestCase1(const string&, const string&, TIndexOffU);
     
 private:
-    void get_consensus_seq_CP(EList<SeedExt>& seeds,
-                              size_t sb,
-                              size_t se,
-                              size_t min_left_ext,
-                              size_t min_right_ext,
-                              string& left_consensus,
-                              string& right_consensus);
-    
-    void get_consensus_seq(EList<SeedExt>& seeds,
+    void get_consensus_seq(EList<SeedExt>& seeds,     // seeds
                            size_t sb,                 // seed begin
                            size_t se,                 // seed end
-                           size_t min_left_ext,
+                           size_t min_left_ext,       
                            size_t min_right_ext,
-                           string& left_consensus,
-                           string& right_consensus);
+                           size_t max_ed,             // maximum edit distance allowed
+                           EList<string>& left_consensus,
+                           EList<string>& right_consensus);
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);
