@@ -206,8 +206,9 @@ struct SeedExt {
     // [first, second)
     pair<TIndexOffU, TIndexOffU> bound;
 
-    uint32_t ed;    // edit distance
-    bool done;      // done flag
+    uint32_t ed;          // edit distance
+    uint32_t prev_ed;     // previous edit distance (also used as backup)
+    bool done;            // done flag
     TIndexOffU baseoff;   // offset in consensus_merged
 
     SeedExt() {
@@ -216,7 +217,7 @@ struct SeedExt {
 
     void reset() {
         done = false;
-        ed = 0;
+        ed = prev_ed = 0;
         pos.first = 0;
         pos.second = 0;
         bound.first = 0;
@@ -325,7 +326,11 @@ public:
     int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
     void makePadString(const string&, const string&, string&, size_t);
 
-    void seedExtension(string&, EList<SeedExt>&, string&);
+    void seedExtension(string& seed_string,
+                       EList<SeedExt>& seeds,
+                       ELList<pair<size_t, size_t> >& seed_groups,
+                       string& consensus_merged);
+    
     void saveSeedExtension(const string& seed_string,
                            const EList<SeedExt>& seeds,
                            TIndexOffU rpt_grp_id,
@@ -339,12 +344,18 @@ public:
     
 private:
     void get_consensus_seq_CP(EList<SeedExt>& seeds,
-                              size_t from,
+                              size_t sb,
+                              size_t se,
+                              size_t min_left_ext,
+                              size_t min_right_ext,
                               string& left_consensus,
                               string& right_consensus);
     
     void get_consensus_seq(EList<SeedExt>& seeds,
-                           size_t from,
+                           size_t sb,                 // seed begin
+                           size_t se,                 // seed end
+                           size_t min_left_ext,
+                           size_t min_right_ext,
                            string& left_consensus,
                            string& right_consensus);
 };
