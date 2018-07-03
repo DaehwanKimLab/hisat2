@@ -28,7 +28,6 @@
 
 #include "repeat_builder.h"
 
-typedef pair<TIndexOffU, TIndexOffU> Range;
 static const Range EMPTY_RANGE = Range(1, 0);
 
 struct RepeatRange {
@@ -375,8 +374,7 @@ void NRG<TStr>::build(TIndexOffU rpt_len,
                             rpt_positions.begin() + rpt_positions.size(),
                             compareRepeatCoordByJoinedOff<TIndexOffU>);
 
-                    string ss = getString(s_, prev_saElt, min_lcp_len);
-					addRepeatGroup(ss, rpt_positions);
+					addRepeatGroup(rpt_positions, make_pair(prev_saElt, min_lcp_len));
 				}
 
 				// flush previous positions 
@@ -543,8 +541,8 @@ void NRG<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
 
 #ifndef NDEBUG
     for(size_t j = 0; j < positions.size(); j += 10) {
-        string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
-        assert_eq(rg.seq, seq_cmp);
+    	 string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
+    	 assert_eq(rg.seq, seq_cmp);
     }
 #endif
 
@@ -632,7 +630,7 @@ void NRG<TStr>::saveRepeatGroup()
             assert_gt(alt_rg.edits.size(), 0);
 #ifndef NDEBUG
             {
-                string seq_cmp = applyEdits(rg.seq, alt_rg.seq.length(), alt_rg.edits, alt_rg.coord); 
+                string seq_cmp = applyEdits(rg.seq, alt_rg.seq.length(), alt_rg.edits, alt_rg.coord);
                 assert_eq(alt_rg.seq, seq_cmp);
             }
 #endif
@@ -693,7 +691,6 @@ void NRG<TStr>::saveRepeatSequence()
 		TIndexOffU si = 0;
 		while(si < seq_len) {
 			size_t out_len = std::min((size_t)(output_width - oskip), (size_t)(seq_len - si));
-
 			fp << rg.seq.substr(si, out_len);
 
 			if((oskip + out_len) == output_width) {
@@ -730,7 +727,7 @@ void NRG<TStr>::saveFile()
  * @param rpt_range
  */
 template<typename TStr>
-void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TIndexOffU> >& positions)
+void NRG<TStr>::addRepeatGroup(const EList<RepeatCoord<TIndexOffU> >& positions, const Range& strSLpair)
 {
 #if 0
 	// rpt_seq is always > 0
@@ -747,13 +744,13 @@ void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TI
 		}
 
 		if (rlen > rpt_len) {
-			// check if rpt_seq is substring of rpt_groups sequeuce
+			// check if rpt_seq is substring of rpt_groups sequence
 			if (rseq.find(rpt_seq) != string::npos) {
 				// substring. exit
 				return;
 			}
 		} else if (rlen <= rpt_len) {
-			// check if rpt_groups sequeuce is substring of rpt_seq
+			// check if rpt_groups sequence is substring of rpt_seq
 			if (rpt_seq.find(rseq) != string::npos) {
 				// remove rseq
 				rg.rpt_seq = "";
@@ -761,7 +758,7 @@ void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TI
 		}
 	}
 #endif
-    
+
     // DK - check this out
     size_t sense_mer_count = 0;
     for(size_t i = 0; i < positions.size(); i++) {
@@ -772,9 +769,53 @@ void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TI
 	// add to last
     if(sense_mer_count > 0) {
         rpt_grp_.expand();
-        rpt_grp_.back().seq = rpt_seq;
         rpt_grp_.back().positions = positions;
+        rpt_grp_.back().strSLpair= strSLpair;
     }
+
+#if 0
+    //rough memory usage count
+    if (rpt_grp_.size() && rpt_grp_.size() % 1000000 == 0) {
+		size_t total_light = 0, total_detail = 0;
+		cout << rpt_grp_.size() << " rpt_grp_.size() "
+				<< rpt_grp_.capacity() << " rpt_grp_.capacity() " << endl;
+
+		total_light = sizeof(rpt_grp_[0])*rpt_grp_.capacity();
+		cout << total_light << " total_light = sizeof(rpt_grp_[0])*rpt_grp_.capacity() " << endl;
+
+		total_detail += sizeof(rpt_grp_[0])*(rpt_grp_.capacity()-rpt_grp_.size());
+		for (size_t i = 0; i < rpt_grp_.size(); i++){
+			size_t snpIDs_s = 0;
+			for (size_t j = 0; j < rpt_grp_[i].snpIDs.size(); j++){
+				snpIDs_s += (rpt_grp_[i].snpIDs[j].size() + 1);
+			}
+			snpIDs_s *= sizeof(char);
+
+			total_detail += sizeof(rpt_grp_[i].coord)
+					+ sizeof(rpt_grp_[i].seq)
+					+ sizeof(rpt_grp_[i].base_offset)
+					+ snpIDs_s
+					+ rpt_grp_[i].positions.size()*sizeof(RepeatCoord<TIndexOffU>)
+					+ rpt_grp_[i].alt_seq.size()*sizeof(Edit)
+					+ rpt_grp_[i].edits.size()*sizeof(RepeatGroup)
+					+sizeof(strSLpair)
+					+ 64;
+
+			/*
+			cout << sizeof(rpt_grp_[i].coord) << " "
+					<< sizeof(rpt_grp_[i].seq) << " "
+					<< sizeof(rpt_grp_[i].base_offset) << " "
+					<< snpIDs_s << " "
+					<< rpt_grp_[i].positions.size()*sizeof(RepeatCoord<TIndexOffU>) << " "
+					<< rpt_grp_[i].alt_seq.size()*sizeof(Edit) << " "
+					<< rpt_grp_[i].edits.size()*sizeof(RepeatGroup) << " "
+					<< sizeof(strSLpair);
+			*/
+		}
+		cout << total_detail <<  " total_detail "  << endl;
+	}
+#endif
+
 }
 
 
@@ -794,7 +835,7 @@ void NRG<TStr>::mergeRepeatGroup()
 	cerr << "range_count " << range_count << endl;
 
 	if(range_count == 0) {
-		cerr << "no repeat sequeuce" << endl; 
+		cerr << "no repeat sequence" << endl;
 		return;
 	}
 
@@ -803,7 +844,7 @@ void NRG<TStr>::mergeRepeatGroup()
 
     for(size_t i = 0; i < rpt_grp_.size(); i++) {
         RepeatGroup& rg = rpt_grp_[i];
-        size_t s_len = rg.seq.length();
+        size_t s_len = rg.strSLpair.second;
 
         for(size_t j = 0; j < rg.positions.size(); j++) {
             rpt_ranges.push_back(RepeatRange(
@@ -854,10 +895,13 @@ void NRG<TStr>::mergeRepeatGroup()
 			fp << i;
 			fp << "\t" << rpt_ranges[i].range.first;
 			fp << "\t" << rpt_ranges[i].range.second;
-			fp << "\t" << rpt_grp_[rpt_ranges[i].rg_id].seq;
+			RepeatGroup& rg = rpt_grp_[rpt_ranges[i].rg_id];
+			if (rg.seq.length() == 0)
+				rg.seq = getString(s_, rg.strSLpair.first, rg.strSLpair.second);
+			fp << "\t" << rg.seq;
 			fp << "\t" << rc.first;
 			fp << "\t" << rc.second;
-			fp << "\t" << reverseComplement(rpt_grp_[rpt_ranges[i].rg_id].seq);
+			fp << "\t" << reverseComplement(rg.seq);
 			fp << "\t" << rpt_ranges[i].rg_id;
 			fp << endl;
 		}
@@ -894,6 +938,7 @@ void NRG<TStr>::mergeRepeatGroup()
 
 		int rg_id = rpt_ranges[i].rg_id;
 		rpt_grp_.expand();
+		rpt_grp_.back().strSLpair = mgroup[rg_id].strSLpair;
 		rpt_grp_.back().seq = mgroup[rg_id].seq;
 		for (int k = i; k < j; k++) {
 			rpt_grp_.back().positions.push_back(

@@ -36,6 +36,7 @@
 //#define DEBUGLOG
 
 using namespace std;
+typedef pair<TIndexOffU, TIndexOffU> Range;
 
 // Dump
 //
@@ -76,6 +77,8 @@ struct RepeatGroup {
 
     EList<RepeatGroup> alt_seq;
     size_t base_offset;
+
+    Range strSLpair;
 
 	void merge(const RepeatGroup& rg)
 	{
@@ -279,7 +282,7 @@ public:
 	void saveRepeatSequence();
 	void saveRepeatGroup();
 
-	void addRepeatGroup(const string&, const EList<RepeatCoord<TIndexOffU> >&);
+	void addRepeatGroup(const EList<RepeatCoord<TIndexOffU> >&, const Range&);
     void mergeRepeatGroup();
     void groupRepeatGroup(TIndexOffU rpt_edit);
 	void adjustRepeatGroup(bool flagGrouping = false);
