@@ -67,13 +67,13 @@ struct Fragments {
 
 struct RepeatGroup {
 	string seq;
-
+    
     EList<RepeatCoord<TIndexOffU> > positions;
 
     Coord coord; 
 	EList<Edit> edits; 
     EList<string> snpIDs;
-
+    
     EList<RepeatGroup> alt_seq;
     size_t base_offset;
 
@@ -207,22 +207,32 @@ struct SeedExt {
     pair<TIndexOffU, TIndexOffU> bound;
 
     uint32_t ed;          // edit distance
-    uint32_t prev_ed;     // previous edit distance (also used as backup)
+    uint32_t total_ed;    // total edit distance
     bool done;            // done flag
     TIndexOffU baseoff;   // offset in consensus_merged
-
+    
+#ifndef NDEBUG
+    pair<TIndexOffU, TIndexOffU> debug_orig_pos;
+#endif
+    
     SeedExt() {
         reset();
     };
 
     void reset() {
         done = false;
-        ed = prev_ed = 0;
+        ed = total_ed = 0;
         pos.first = 0;
         pos.second = 0;
         bound.first = 0;
         bound.second = 0;
         baseoff = 0;
+        
+        
+#ifndef NDEBUG
+        debug_orig_pos.first = 0;
+        debug_orig_pos.second = 0;
+#endif
     };
 };
 
@@ -349,8 +359,9 @@ private:
                            size_t min_left_ext,       
                            size_t min_right_ext,
                            size_t max_ed,             // maximum edit distance allowed
-                           EList<string>& left_consensus,
-                           EList<string>& right_consensus);
+                           EList<size_t>& ed_seed_nums,
+                           EList<string>* left_consensus,
+                           EList<string>* right_consensus);
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);

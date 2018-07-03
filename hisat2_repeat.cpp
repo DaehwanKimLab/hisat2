@@ -610,7 +610,7 @@ extern "C" {
 /**
  * main function.  Parses command-line arguments.
  */
-int hisat2_construct_nonrepetitive_genome(int argc, const char **argv) {
+int hisat2_repeat(int argc, const char **argv) {
     string outfile;
 	try {
 		// Reset all global state, including getopt state
