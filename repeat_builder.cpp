@@ -709,7 +709,7 @@ void NRG<TStr>::seedGrouping(TIndexOffU rpt_len, TIndexOffU rpt_cnt)
         if(positions.size() < 50)
             continue;
         
-        if(i == 17663) {
+        if(i == 9282) {
             int kk = 20;
             kk += 20;
         } else {
@@ -1117,6 +1117,7 @@ void NRG<TStr>::seedExtension(string& seed_string,
                         }
                         allowed_seed_mm = (size_t)i;
                         assert(pleft_consensus->length() > 0 || pright_consensus->length() > 0);
+                        break;
                     }
                     
                     calc_edit_dist(s_,
