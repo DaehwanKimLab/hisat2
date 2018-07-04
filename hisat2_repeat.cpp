@@ -667,8 +667,8 @@ int hisat2_repeat(int argc, const char **argv) {
         
    		// Optionally summarize
 		if(verbose) {
-			cerr << "Settings:" << endl
-            << "  Output files: \"" << outfile.c_str() << ".*." << gfm_ext << "\"" << endl;
+            cerr << "Settings:" << endl;
+            // << "  Output files: \"" << outfile.c_str() << ".*." << gfm_ext << "\"" << endl;
 			cerr << "  Endianness: " << (bigEndian? "big":"little") << endl
 				 << "  Actual local endianness: " << (currentlyBigEndian()? "big":"little") << endl
 				 << "  Sanity checking: " << (sanityCheck? "enabled":"disabled") << endl;

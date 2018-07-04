@@ -439,7 +439,7 @@ void NRG<TStr>::build(TIndexOffU seed_len,
 
     // Seed extension
     //seedExtension(rpt_len, rpt_cnt);
-    seedGrouping(seed_len, rpt_cnt);
+    seedGrouping(seed_len, rpt_len, rpt_cnt);
 
 }
 
@@ -691,18 +691,21 @@ string makeAverageString(EList<SeedExt>& seeds, bool flag_left)
 #endif
 
 template<typename TStr>
-void NRG<TStr>::seedGrouping(TIndexOffU rpt_len, TIndexOffU rpt_cnt)
+void NRG<TStr>::seedGrouping(TIndexOffU seed_len,
+                             TIndexOffU rpt_len,
+                             TIndexOffU rpt_cnt)
 {
     string seed_filename = filename_ + ".rep.seed";
     ofstream fp(seed_filename.c_str());
     
-    ELList<pair<size_t, size_t> > seed_groups;
+    ELList<SeedExtInfo> seed_groups;
+    EList<TIndexOffU> dependency;
 
     for(size_t i = 0; i < rpt_grp_.size(); i++)
     {
         EList<SeedExt> seeds;
         EList<RepeatCoord<TIndexOffU> >& positions = rpt_grp_[i].positions;
-        string seed_str = rpt_grp_[i].seq.substr(0, rpt_len);
+        string seed_str = rpt_grp_[i].seq.substr(0, seed_len);
         
         // DK - debugging purposes
 #if 1
@@ -721,24 +724,30 @@ void NRG<TStr>::seedGrouping(TIndexOffU rpt_len, TIndexOffU rpt_cnt)
 
         for(size_t pi = 0; pi < positions.size(); pi++) {
             TIndexOffU left = positions[pi].joinedOff;
-            TIndexOffU right = positions[pi].joinedOff + rpt_len;
+            TIndexOffU right = positions[pi].joinedOff + seed_len;
 
             seeds.expand();
             seeds.back().reset();
-            seeds.back().pos = pair<TIndexOffU, TIndexOffU>(left, right);
+            seeds.back().orig_pos = pair<TIndexOffU, TIndexOffU>(left, right);
+            seeds.back().pos = seeds.back().orig_pos;
             seeds.back().bound = pair<TIndexOffU, TIndexOffU>(getStart(left), getEnd(left));
             
-#ifndef NDEBUG
-            seeds.back().debug_orig_pos = seeds.back().pos;
-#endif
+
         }
         assert(seeds.size() > 0);
         string consensus;
         seedExtension(seed_str,
                       seeds,
                       seed_groups,
-                      consensus);
-        saveSeedExtension(seed_str, seeds, i, fp, consensus);
+                      consensus,
+                      rpt_len);
+        
+        saveSeedExtension(seed_str,
+                          seeds,
+                          i,
+                          fp,
+                          consensus,
+                          rpt_len);
     }
 
     fp.close();
@@ -1021,8 +1030,9 @@ void NRG<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
 template<typename TStr>
 void NRG<TStr>::seedExtension(string& seed_string,
                               EList<SeedExt>& seeds,
-                              ELList<pair<size_t, size_t> >& seed_groups,
-                              string& consensus_merged)
+                              ELList<SeedExtInfo>& seed_groups,
+                              string& consensus_merged,
+                              TIndexOffU min_rpt_len)
 {
     const size_t seed_mm = max_seed_mm; // default 5
     TIndexOffU baseoff = 0;
@@ -1031,18 +1041,20 @@ void NRG<TStr>::seedExtension(string& seed_string,
     seed_groups.clear();
     seed_groups.expand();
     seed_groups.back().resize(1);
-    seed_groups.back().back().first = 0;
-    seed_groups.back().back().second = seeds.size();
+    seed_groups.back().back().sb = 0;
+    seed_groups.back().back().se = seeds.size();
+    seed_groups.back().back().left_ext_len = 0;
+    seed_groups.back().back().right_ext_len = 0;
     
     EList<string> left_consensuses, right_consensuses;
     EList<size_t> ed_seed_nums, ed_seed_nums2;
 
     for(size_t d = 0; d < seed_groups.size(); d++) {
         assert_eq(d+1, seed_groups.size());
-        EList<pair<size_t, size_t> >& d_seed_groups = seed_groups[d];
+        EList<SeedExtInfo>& d_seed_groups = seed_groups[d];
         for(size_t g = 0; g < d_seed_groups.size(); g++) {
-            size_t sb = d_seed_groups[g].first;  // seed begin
-            size_t se = d_seed_groups[g].second; // seed end
+            size_t sb = d_seed_groups[g].sb;  // seed begin
+            size_t se = d_seed_groups[g].se; // seed end
             assert_lt(sb, se);
             for(size_t i = sb; i < se; i++) {
 #ifndef NDEBUG
@@ -1183,14 +1195,24 @@ void NRG<TStr>::seedExtension(string& seed_string,
                 }
                 
                 if(num_passed_seeds >= max_seed_repeat) {
-                    if(d + 1 == seed_groups.size()) {
-                        seed_groups.expand();
-                        seed_groups.back().clear();
+                    bool further_extend = true;
+                    if(d == 0) {
+                        if(consensus.length() < min_rpt_len) {
+                            further_extend = false;
+                        }
                     }
-                    assert_eq(d+2, seed_groups.size());
-                    seed_groups[d+1].expand();
-                    seed_groups[d+1].back().first = sb;
-                    seed_groups[d+1].back().second = sb + num_passed_seeds;
+                    if(further_extend) {
+                        if(d + 1 == seed_groups.size()) {
+                            seed_groups.expand();
+                            seed_groups.back().clear();
+                        }
+                        assert_eq(d+2, seed_groups.size());
+                        seed_groups[d+1].expand();
+                        seed_groups[d+1].back().sb = sb;
+                        seed_groups[d+1].back().se = sb + num_passed_seeds;
+                        seed_groups[d+1].back().left_ext_len = left_consensus.length();
+                        seed_groups[d+1].back().right_ext_len = right_consensus.length();
+                    }
                 }
                 
                 baseoff += consensus.length();
@@ -1200,16 +1222,16 @@ void NRG<TStr>::seedExtension(string& seed_string,
             }
             
             if(se - sb > 0) {
-                if(d == 0) {
-                    consensus_merged += seed_string;
-                    baseoff += seed_string.length();
-                }
                 for(size_t i = sb; i < se; i++) {
                     assert(!seeds[i].done);
                     seeds[i].done = true;
                     if(d == 0) {
                         seeds[i].baseoff = baseoff;
                     }
+                }
+                if(d == 0) {
+                    consensus_merged += seed_string;
+                    baseoff += seed_string.length();
                 }
             }
         }
@@ -1219,7 +1241,7 @@ void NRG<TStr>::seedExtension(string& seed_string,
         EList<pair<TIndexOffU, TIndexOffU> > seed_poses;
         for(size_t i = 0; i < seeds.size(); i++) {
             seed_poses.expand();
-            seed_poses.back() = seeds[i].debug_orig_pos;
+            seed_poses.back() = seeds[i].orig_pos;
         }
         seed_poses.sort();
         for(size_t i = 0; i + 1 < seed_poses.size(); i++) {
@@ -1233,13 +1255,13 @@ void NRG<TStr>::seedExtension(string& seed_string,
     }
 }
 
-
 template<typename TStr>
 void NRG<TStr>::saveSeedExtension(const string& seed_string,
                                   const EList<SeedExt>& seeds,
                                   TIndexOffU rpt_grp_id,
                                   ostream& fp,
-                                  const string& consensus_merged)
+                                  const string& consensus_merged,
+                                  TIndexOffU min_rpt_len)
 {
     // apply color, which is compatible with linux commands such as cat and less -r
 #if 1
@@ -1247,6 +1269,15 @@ void NRG<TStr>::saveSeedExtension(const string& seed_string,
 #else
     const string red = "", reset = "";
 #endif
+    
+    TIndexOffU max_left_ext_len = 0;
+    for(size_t i = 0; i < seeds.size(); i++) {
+        assert_leq(seeds[i].pos.first, seeds[i].orig_pos.first);
+        TIndexOffU left_ext_len = seeds[i].orig_pos.first - seeds[i].pos.first;
+        if(max_left_ext_len < left_ext_len) {
+            max_left_ext_len = left_ext_len;
+        }
+    }
     
     TIndexOffU prev_consensus_baseoff = (TIndexOffU)-1;
     size_t count = 0;
@@ -1256,7 +1287,7 @@ void NRG<TStr>::saveSeedExtension(const string& seed_string,
         size_t ext_len = seeds[i].pos.second - seeds[i].pos.first;
         
         // DK - debugging purposes
-        if(ext_len < 100) continue;
+        if(ext_len < min_rpt_len) continue;
         
         string deststr = getString(s_, seeds[i].pos.first, ext_len);
         if(prev_consensus_baseoff == seeds[i].baseoff) {
@@ -1294,13 +1325,18 @@ void NRG<TStr>::saveSeedExtension(const string& seed_string,
         // fp << "\t" << constr;
         assert_eq(constr.length(), deststr.length());
         fp << "\t";
-        for(decltype(constr.length()) j = 0; j < constr.length(); j++) {
+        
+        assert_leq(seeds[i].pos.first, seeds[i].orig_pos.first);
+        TIndexOffU left_ext_len = seeds[i].orig_pos.first - seeds[i].pos.first;
+        assert_leq(left_ext_len, max_left_ext_len);
+        TIndexOffU left_indent = max_left_ext_len - left_ext_len;
+        for(size_t j = 0; j < left_indent; j++) fp << ' ';
+        for(size_t j = 0; j < constr.length(); j++) {
             bool different = (constr[j] != deststr[j]);
             if(different) fp << red;
             fp << deststr[j];
             if(different) fp << reset;
         }
-
         fp << endl;
     }
     

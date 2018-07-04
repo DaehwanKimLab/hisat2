@@ -200,6 +200,7 @@ struct RepeatGroup {
 
 struct SeedExt {
     // seed extended position [first, second)
+    pair<TIndexOffU, TIndexOffU> orig_pos;
     pair<TIndexOffU, TIndexOffU> pos;
 
     // extension bound. the seed must be placed on same fragment
@@ -211,10 +212,6 @@ struct SeedExt {
     bool done;            // done flag
     TIndexOffU baseoff;   // offset in consensus_merged
     
-#ifndef NDEBUG
-    pair<TIndexOffU, TIndexOffU> debug_orig_pos;
-#endif
-    
     SeedExt() {
         reset();
     };
@@ -222,18 +219,21 @@ struct SeedExt {
     void reset() {
         done = false;
         ed = total_ed = 0;
+        orig_pos.first = 0;
+        orig_pos.second = 0;
         pos.first = 0;
         pos.second = 0;
         bound.first = 0;
         bound.second = 0;
         baseoff = 0;
-        
-        
-#ifndef NDEBUG
-        debug_orig_pos.first = 0;
-        debug_orig_pos.second = 0;
-#endif
     };
+};
+
+struct SeedExtInfo {
+    TIndexOffU sb;
+    TIndexOffU se;
+    TIndexOffU left_ext_len;
+    TIndexOffU right_ext_len;
 };
 
 
@@ -338,16 +338,20 @@ public:
 
     void seedExtension(string& seed_string,
                        EList<SeedExt>& seeds,
-                       ELList<pair<size_t, size_t> >& seed_groups,
-                       string& consensus_merged);
-    
+                       ELList<SeedExtInfo>& seed_groups,
+                       string& consensus_merged,
+                       TIndexOffU min_rpt_len);
+
     void saveSeedExtension(const string& seed_string,
                            const EList<SeedExt>& seeds,
                            TIndexOffU rpt_grp_id,
                            ostream& fp,
-                           const string& consensus_merged);
+                           const string& consensus_merged,
+                           TIndexOffU min_rpt_len);
 
-    void seedGrouping(TIndexOffU, TIndexOffU);
+    void seedGrouping(TIndexOffU seed_len,
+                      TIndexOffU rpt_len,
+                      TIndexOffU rpt_count);
 
 	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
     void doTestCase1(const string&, const string&, TIndexOffU);
