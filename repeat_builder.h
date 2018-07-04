@@ -212,6 +212,8 @@ struct SeedExt {
     bool done;            // done flag
     TIndexOffU baseoff;   // offset in consensus_merged
     
+    TIndexOffU backbone;  // backbone seed number
+    
     SeedExt() {
         reset();
     };
@@ -226,16 +228,9 @@ struct SeedExt {
         bound.first = 0;
         bound.second = 0;
         baseoff = 0;
+        backbone = 0;
     };
 };
-
-struct SeedExtInfo {
-    TIndexOffU sb;
-    TIndexOffU se;
-    TIndexOffU left_ext_len;
-    TIndexOffU right_ext_len;
-};
-
 
 // build Non-repetitive Genome
 template<typename TStr>
@@ -338,7 +333,6 @@ public:
 
     void seedExtension(string& seed_string,
                        EList<SeedExt>& seeds,
-                       ELList<SeedExtInfo>& seed_groups,
                        string& consensus_merged,
                        TIndexOffU min_rpt_len);
 

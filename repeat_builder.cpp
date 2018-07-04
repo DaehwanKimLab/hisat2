@@ -698,9 +698,6 @@ void NRG<TStr>::seedGrouping(TIndexOffU seed_len,
     string seed_filename = filename_ + ".rep.seed";
     ofstream fp(seed_filename.c_str());
     
-    ELList<SeedExtInfo> seed_groups;
-    EList<TIndexOffU> dependency;
-
     for(size_t i = 0; i < rpt_grp_.size(); i++)
     {
         EList<SeedExt> seeds;
@@ -738,7 +735,6 @@ void NRG<TStr>::seedGrouping(TIndexOffU seed_len,
         string consensus;
         seedExtension(seed_str,
                       seeds,
-                      seed_groups,
                       consensus,
                       rpt_len);
         
@@ -1030,7 +1026,6 @@ void NRG<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
 template<typename TStr>
 void NRG<TStr>::seedExtension(string& seed_string,
                               EList<SeedExt>& seeds,
-                              ELList<SeedExtInfo>& seed_groups,
                               string& consensus_merged,
                               TIndexOffU min_rpt_len)
 {
@@ -1038,220 +1033,230 @@ void NRG<TStr>::seedExtension(string& seed_string,
     TIndexOffU baseoff = 0;
     
     // initialize the first group with the size of seeds
-    seed_groups.clear();
+    EList<pair<TIndexOffU, TIndexOffU> > seed_groups;
     seed_groups.expand();
-    seed_groups.back().resize(1);
-    seed_groups.back().back().sb = 0;
-    seed_groups.back().back().se = seeds.size();
-    seed_groups.back().back().left_ext_len = 0;
-    seed_groups.back().back().right_ext_len = 0;
+    seed_groups.back().first = 0;
+    seed_groups.back().second = seeds.size();
     
     EList<string> left_consensuses, right_consensuses;
     EList<size_t> ed_seed_nums, ed_seed_nums2;
-
-    for(size_t d = 0; d < seed_groups.size(); d++) {
-        assert_eq(d+1, seed_groups.size());
-        EList<SeedExtInfo>& d_seed_groups = seed_groups[d];
-        for(size_t g = 0; g < d_seed_groups.size(); g++) {
-            size_t sb = d_seed_groups[g].sb;  // seed begin
-            size_t se = d_seed_groups[g].se; // seed end
-            assert_lt(sb, se);
+    bool first_ext = true;
+    while(!seed_groups.empty()) {
+        size_t sb = seed_groups.back().first;  // seed begin
+        size_t se = seed_groups.back().second; // seed end
+        assert_lt(sb, se);
+        seed_groups.pop_back();
+        
+        size_t max_group_rep = 0, max_group_num = 0;
+    
+        for(size_t i = sb; i < se; i++) {
+#ifndef NDEBUG
+            if(!first_ext) assert(seeds[i].done);
+#endif
+            seeds[i].done = false;
+            seeds[i].ed = 0;
+        }
+        
+        while(se - sb >= 5) {
+#ifndef NDEBUG
             for(size_t i = sb; i < se; i++) {
-#ifndef NDEBUG
-                if(d > 0) assert(seeds[i].done);
-#endif
-                seeds[i].done = false;
-                seeds[i].ed = 0;
+                assert(!seeds[i].done);
             }
-            
-            while(se - sb >= 5) {
-#ifndef NDEBUG
-                for(size_t i = sb; i < se; i++) {
-                    assert(!seeds[i].done);
-                }
 #endif
-                static const string empty_string = "";
-                const string* pleft_consensus = NULL;
-                const string* pright_consensus = NULL;
-                size_t allowed_seed_mm = seed_mm;
-                if(d == 0) {
-                    get_consensus_seq(seeds,
-                                      sb,
-                                      se,
-                                      max_seed_extlen,
-                                      max_seed_extlen,
-                                      seed_mm,
-                                      ed_seed_nums,
-                                      &left_consensuses,
-                                      &right_consensuses);
-                    
-                    pleft_consensus = &left_consensuses[seed_mm];
-                    pright_consensus = &right_consensuses[seed_mm];
-                } else {
-                    get_consensus_seq(seeds,
-                                      sb,
-                                      se,
-                                      numeric_limits<size_t>::max(),
-                                      0,
-                                      seed_mm,
-                                      ed_seed_nums,
-                                      &left_consensuses,
-                                      NULL);
-                    
-                    get_consensus_seq(seeds,
-                                      sb,
-                                      se,
-                                      0,
-                                      numeric_limits<size_t>::max(),
-                                      seed_mm,
-                                      ed_seed_nums2,
-                                      NULL,
-                                      &right_consensuses);
-                    
-                    assert_eq(seed_mm, 1);
-                    pleft_consensus = &empty_string;
-                    pright_consensus = &empty_string;
-                    for(int i = (int)seed_mm; i >= 0; i--) {
-                        size_t left_extlen = (ed_seed_nums[i] < max_seed_repeat ? 0 : left_consensuses[i].length());
-                        size_t right_extlen = (ed_seed_nums2[i] < max_seed_repeat ? 0 : right_consensuses[i].length());
-                        if(i > 0) {
-                            if(max(left_extlen, right_extlen) < max_seed_extlen)
-                                continue;
-                        } else {
-                            if(max(left_extlen, right_extlen) <= 0)
-                                continue;
-                        }
-                        
-                        if(left_extlen >= right_extlen) {
-                            pleft_consensus = &left_consensuses[i];
-                        } else {
-                            pright_consensus = &right_consensuses[i];
-                        }
-                        allowed_seed_mm = (size_t)i;
-                        assert(pleft_consensus->length() > 0 || pright_consensus->length() > 0);
-                        break;
-                    }
-                    
-                    calc_edit_dist(s_,
-                                   seeds,
-                                   sb,
-                                   se,
-                                   *pleft_consensus,
-                                   *pright_consensus,
-                                   seed_mm);
-                }
+            static const string empty_string = "";
+            const string* pleft_consensus = NULL;
+            const string* pright_consensus = NULL;
+            size_t allowed_seed_mm = seed_mm;
+            if(first_ext) {
+                get_consensus_seq(seeds,
+                                  sb,
+                                  se,
+                                  max_seed_extlen,
+                                  max_seed_extlen,
+                                  seed_mm,
+                                  ed_seed_nums,
+                                  &left_consensuses,
+                                  &right_consensuses);
                 
-                const string& left_consensus = *pleft_consensus;
-                const string& right_consensus = *pright_consensus;
+                pleft_consensus = &left_consensuses[seed_mm];
+                pright_consensus = &right_consensuses[seed_mm];
+            } else {
+                get_consensus_seq(seeds,
+                                  sb,
+                                  se,
+                                  numeric_limits<size_t>::max(),
+                                  0,
+                                  seed_mm,
+                                  ed_seed_nums,
+                                  &left_consensuses,
+                                  NULL);
                 
-                if(left_consensus.empty() && right_consensus.empty())
-                    break;
+                get_consensus_seq(seeds,
+                                  sb,
+                                  se,
+                                  0,
+                                  numeric_limits<size_t>::max(),
+                                  seed_mm,
+                                  ed_seed_nums2,
+                                  NULL,
+                                  &right_consensuses);
                 
-                string consensus;
-                if(!left_consensus.empty()) consensus = reverse(left_consensus);
-                if(d == 0) {
-                    consensus += seed_string;
-                } else {
-                    consensus += consensus_merged.substr(seeds[sb].baseoff,
-                                                         seeds[sb].pos.second - seeds[sb].pos.first);
-                }
-                if(!right_consensus.empty()) consensus += right_consensus;
-                consensus_merged += consensus;
-                
-                // Move up "done" seeds
-                size_t num_passed_seeds = 0;
-                size_t j = sb;
-                for(size_t i = sb; i < se; i++) {
-                    assert(!seeds[i].done);
-                    if(seeds[i].ed > allowed_seed_mm) {
-                        // reset
-                        seeds[i].ed = 0;
-                        continue;
-                    }
-
-                    // select
-                    seeds[i].done = true;
-                    seeds[i].baseoff = baseoff;
-                    seeds[i].pos.first = seeds[i].pos.first - left_consensus.length();
-                    seeds[i].pos.second = seeds[i].pos.second + right_consensus.length();
-                    seeds[i].total_ed += seeds[i].ed;
-                    assert_eq(seeds[i].pos.second - seeds[i].pos.first, consensus.length());
-                    assert_geq(i, j);
-                    if(i > j) {
-                        assert(!seeds[j].done);
-                        SeedExt temp = seeds[j];
-                        seeds[j] = seeds[i];
-                        seeds[i] = temp;
-                        // Find next "undone" seed
-                        j++;
-                        while(j < i && seeds[j].done) {
-                            j++;
-                        }
-                        assert(j < seeds.size() && !seeds[j].done);
+                assert_eq(seed_mm, 1);
+                pleft_consensus = &empty_string;
+                pright_consensus = &empty_string;
+                for(int i = (int)seed_mm; i >= 0; i--) {
+                    size_t left_extlen = (ed_seed_nums[i] < max_seed_repeat ? 0 : left_consensuses[i].length());
+                    size_t right_extlen = (ed_seed_nums2[i] < max_seed_repeat ? 0 : right_consensuses[i].length());
+                    if(i > 0) {
+                        if(max(left_extlen, right_extlen) < max_seed_extlen)
+                            continue;
                     } else {
-                        j = i + 1;
+                        if(max(left_extlen, right_extlen) <= 0)
+                            continue;
                     }
-                    num_passed_seeds++;
+                    
+                    if(left_extlen >= right_extlen) {
+                        pleft_consensus = &left_consensuses[i];
+                    } else {
+                        pright_consensus = &right_consensuses[i];
+                    }
+                    allowed_seed_mm = (size_t)i;
+                    assert(pleft_consensus->length() > 0 || pright_consensus->length() > 0);
+                    break;
                 }
                 
-                if(num_passed_seeds >= max_seed_repeat) {
-                    bool further_extend = true;
-                    if(d == 0) {
-                        if(consensus.length() < min_rpt_len) {
-                            further_extend = false;
-                        }
-                    }
-                    if(further_extend) {
-                        if(d + 1 == seed_groups.size()) {
-                            seed_groups.expand();
-                            seed_groups.back().clear();
-                        }
-                        assert_eq(d+2, seed_groups.size());
-                        seed_groups[d+1].expand();
-                        seed_groups[d+1].back().sb = sb;
-                        seed_groups[d+1].back().se = sb + num_passed_seeds;
-                        seed_groups[d+1].back().left_ext_len = left_consensus.length();
-                        seed_groups[d+1].back().right_ext_len = right_consensus.length();
-                    }
-                }
-                
-                baseoff += consensus.length();
-                assert_eq(baseoff, consensus_merged.length());
-                sb += num_passed_seeds;
-                assert_leq(sb, se);
+                calc_edit_dist(s_,
+                               seeds,
+                               sb,
+                               se,
+                               *pleft_consensus,
+                               *pright_consensus,
+                               seed_mm);
             }
             
-            if(se - sb > 0) {
-                for(size_t i = sb; i < se; i++) {
-                    assert(!seeds[i].done);
-                    seeds[i].done = true;
-                    if(d == 0) {
-                        seeds[i].baseoff = baseoff;
+            const string& left_consensus = *pleft_consensus;
+            const string& right_consensus = *pright_consensus;
+            
+            if(left_consensus.empty() && right_consensus.empty())
+                break;
+            
+            string consensus;
+            if(!left_consensus.empty()) consensus = reverse(left_consensus);
+            if(first_ext) {
+                consensus += seed_string;
+            } else {
+                consensus += consensus_merged.substr(seeds[sb].baseoff,
+                                                     seeds[sb].pos.second - seeds[sb].pos.first);
+            }
+            if(!right_consensus.empty()) consensus += right_consensus;
+            consensus_merged += consensus;
+            
+            // Move up "done" seeds
+            size_t num_passed_seeds = 0;
+            size_t j = sb;
+            for(size_t i = sb; i < se; i++) {
+                assert(!seeds[i].done);
+                if(seeds[i].ed > allowed_seed_mm) {
+                    // reset
+                    seeds[i].ed = 0;
+                    continue;
+                }
+                
+                // select
+                seeds[i].done = true;
+                seeds[i].baseoff = baseoff;
+                seeds[i].pos.first = seeds[i].pos.first - left_consensus.length();
+                seeds[i].pos.second = seeds[i].pos.second + right_consensus.length();
+                seeds[i].total_ed += seeds[i].ed;
+                assert_eq(seeds[i].pos.second - seeds[i].pos.first, consensus.length());
+                seeds[i].backbone = sb;
+                assert_geq(i, j);
+                if(i > j) {
+                    assert(!seeds[j].done);
+                    SeedExt temp = seeds[j];
+                    seeds[j] = seeds[i];
+                    seeds[i] = temp;
+                    // Find next "undone" seed
+                    j++;
+                    while(j < i && seeds[j].done) {
+                        j++;
+                    }
+                    assert(j < seeds.size() && !seeds[j].done);
+                } else {
+                    j = i + 1;
+                }
+                num_passed_seeds++;
+            }
+            
+            if(num_passed_seeds >= max_seed_repeat) {
+                bool further_extend = true;
+                if(first_ext) {
+                    if(consensus.length() < min_rpt_len) {
+                        further_extend = false;
                     }
                 }
-                if(d == 0) {
-                    consensus_merged += seed_string;
-                    baseoff += seed_string.length();
+                if(further_extend) {
+                    seed_groups.expand();
+                    seed_groups.back().first = sb;
+                    seed_groups.back().second = sb + num_passed_seeds;
+                    if(num_passed_seeds > max_group_num) {
+                        max_group_rep = sb;
+                        max_group_num = num_passed_seeds;
+                    }
                 }
+            }
+            
+            baseoff += consensus.length();
+            assert_eq(baseoff, consensus_merged.length());
+            sb += num_passed_seeds;
+            assert_leq(sb, se);
+        } // while(se - sb >= 5)
+        
+        if(se - sb > 0) {
+            for(size_t i = sb; i < se; i++) {
+                assert(!seeds[i].done);
+                seeds[i].done = true;
+                if(first_ext) {
+                    seeds[i].baseoff = baseoff;
+                } else {
+                    if(max_group_num > 0) {
+                        seeds[i].backbone = max_group_rep;
+                    }
+                }
+            }
+            if(first_ext) {
+                consensus_merged += seed_string;
+                baseoff += seed_string.length();
             }
         }
         
+        first_ext = false;
+    } // while(!seed_groups.empty())
+    
 #ifndef NDEBUG
-        // make sure seed positions are unique
-        EList<pair<TIndexOffU, TIndexOffU> > seed_poses;
-        for(size_t i = 0; i < seeds.size(); i++) {
-            seed_poses.expand();
-            seed_poses.back() = seeds[i].orig_pos;
+    // make sure seed positions are unique
+    EList<pair<TIndexOffU, TIndexOffU> > seed_poses;
+    for(size_t i = 0; i < seeds.size(); i++) {
+        seed_poses.expand();
+        seed_poses.back() = seeds[i].orig_pos;
+    }
+    seed_poses.sort();
+    for(size_t i = 0; i + 1 < seed_poses.size(); i++) {
+        if(seed_poses[i].first == seed_poses[i+1].first) {
+            assert_lt(seed_poses[i].second, seed_poses[i+1].second);
+        } else {
+            assert_lt(seed_poses[i].first, seed_poses[i+1].first);
         }
-        seed_poses.sort();
-        for(size_t i = 0; i + 1 < seed_poses.size(); i++) {
-            if(seed_poses[i].first == seed_poses[i+1].first) {
-                assert_lt(seed_poses[i].second, seed_poses[i+1].second);
-            } else {
-                assert_lt(seed_poses[i].first, seed_poses[i+1].first);
-            }
-        }
+    }
 #endif
+    
+    // update seed dependency
+    for(size_t i = 0; i < seeds.size(); i++) {
+        size_t idep = i;
+        while(idep != seeds[idep].backbone) {
+            idep = seeds[idep].backbone;
+        }
+        seeds[i].backbone = idep;
     }
 }
 
@@ -1299,8 +1304,9 @@ void NRG<TStr>::saveSeedExtension(const string& seed_string,
         }
 
         fp << rpt_grp_id << "\t" << rpt_grp_[rpt_grp_id].positions.size();
+        fp << "\t" << setw(4) << i << " -> " << setw(4) << std::left << seeds[i].backbone << std::right;
         fp << "\t" << ext_len;
-        fp << "\t" << seeds[i].ed;
+        fp << "\t" << seeds[i].total_ed;
         fp << "\t" << setw(10) << seeds[i].pos.first << "\t" << setw(10) << seeds[i].pos.second;
         fp << "\t" << setw(10) << seeds[i].bound.first << "\t" << setw(10) << seeds[i].bound.second;
 
