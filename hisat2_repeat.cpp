@@ -567,7 +567,7 @@ static void driver(
             assert_eq(bsa.size(), s.length() + 1);
 
 			// NRG
-			NRG<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
+			RepeatGenerator<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
 
             if (repeat_str1.length() && repeat_str2.length()) {
                 nrg.doTest(repeat_length,

@@ -245,64 +245,23 @@ struct SeedExt {
     };
 };
 
-// build Non-repetitive Genome
+// find and write repeats
 template<typename TStr>
-class NRG {
+class RepeatGenerator {
 
 public:
-	NRG();
-	NRG(
-        TStr& s,
-        const EList<RefRecord>& szs,
-        EList<string>& ref_names,
-        bool forward_only,
-        BlockwiseSA<TStr>& sa,
-        const string& filename);
-    ~NRG();
-
-public:
-	const int output_width = 60;
-
-    TStr& s_;
-    const EList<RefRecord>& szs_;
-	EList<string> ref_names_;
-    EList<string>& ref_namelines_;
-    bool forward_only_;
-    string filename_;
-
-	BlockwiseSA<TStr>& bsa_;
-    
-	// mapping info from joined string to genome
-	EList<Fragments> fraglist_;
-
-	//
-	EList<RepeatGroup> rpt_grp_;
-    
-    TIndexOffU forward_length_;
-
-	// Fragments Cache
-#define CACHE_SIZE_JOINEDFRG	10
-	Fragments cached_[CACHE_SIZE_JOINEDFRG];
-	int num_cached_ = 0;
-	int victim_ = 0;	/* round-robin */
-
-    //
-    SimpleFunc scoreMin_;
-    SimpleFunc nCeil_;
-    SimpleFunc penCanIntronLen_;
-    SimpleFunc penNoncanIntronLen_;
-
-    Scoring *sc_;
-    SwAligner swa;
-    LinkedEList<EList<Edit> > rawEdits_;
-    RandomSource rnd_;
-
-    TIndexOffU rpt_matchlen_;
-    TIndexOffU rpt_edit_;
+	RepeatGenerator();
+	RepeatGenerator(
+                    TStr& s,
+                    const EList<RefRecord>& szs,
+                    EList<string>& ref_names,
+                    bool forward_only,
+                    BlockwiseSA<TStr>& sa,
+                    const string& filename);
+    ~RepeatGenerator();
 
 
 public:
-
 	void build(TIndexOffU seed_len,
                TIndexOffU rpt_len,
                TIndexOffU rpt_cnt,
@@ -326,7 +285,9 @@ public:
 	void saveRepeatSequence();
 	void saveRepeatGroup();
 
-	void addRepeatGroup(const string&, const EList<RepeatCoord<TIndexOffU> >&);
+    void addRepeatGroup(map<TIndexOffU, TIndexOffU>& seedpos_to_repeatgroup,
+                        const string& rpt_seq,
+                        const EList<RepeatCoord<TIndexOffU> >& positions);
     void mergeRepeatGroup();
     void groupRepeatGroup(TIndexOffU rpt_edit);
 	void adjustRepeatGroup(bool flagGrouping = false);
@@ -375,6 +336,47 @@ private:
                            EList<size_t>& ed_seed_nums,
                            EList<string>* left_consensus,
                            EList<string>* right_consensus);
+    
+    
+private:
+    const int output_width = 60;
+    
+    TStr& s_;
+    const EList<RefRecord>& szs_;
+    EList<string> ref_names_;
+    EList<string>& ref_namelines_;
+    bool forward_only_;
+    string filename_;
+    
+    BlockwiseSA<TStr>& bsa_;
+    
+    // mapping info from joined string to genome
+    EList<Fragments> fraglist_;
+    
+    //
+    EList<RepeatGroup> rpt_grp_;
+    
+    TIndexOffU forward_length_;
+    
+    // Fragments Cache
+#define CACHE_SIZE_JOINEDFRG    10
+    Fragments cached_[CACHE_SIZE_JOINEDFRG];
+    int num_cached_ = 0;
+    int victim_ = 0;    /* round-robin */
+    
+    //
+    SimpleFunc scoreMin_;
+    SimpleFunc nCeil_;
+    SimpleFunc penCanIntronLen_;
+    SimpleFunc penNoncanIntronLen_;
+    
+    Scoring *sc_;
+    SwAligner swa;
+    LinkedEList<EList<Edit> > rawEdits_;
+    RandomSource rnd_;
+    
+    TIndexOffU rpt_matchlen_;
+    TIndexOffU rpt_edit_;
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);

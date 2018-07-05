@@ -269,18 +269,18 @@ size_t getMaxMatchLen(const EList<Edit>& edits, const size_t read_len)
 }
 
 template<typename TStr>
-NRG<TStr>::NRG(TStr& s,
-               const EList<RefRecord>& szs,
-               EList<string>& ref_names,
-               bool forward_only,
-               BlockwiseSA<TStr>& sa,
-               const string& filename) :
+RepeatGenerator<TStr>::RepeatGenerator(TStr& s,
+                                       const EList<RefRecord>& szs,
+                                       EList<string>& ref_names,
+                                       bool forward_only,
+                                       BlockwiseSA<TStr>& sa,
+                                       const string& filename) :
 	s_(s), szs_(szs), forward_only_(forward_only),
     ref_namelines_(ref_names),
     bsa_(sa), filename_(filename),
     forward_length_(forward_only ? s.length() : s.length() / 2)
 {
-	cerr << "NRG: " << filename_ << endl;
+	cerr << "RepeatGenerator: " << filename_ << endl;
 
     rnd_.init(0);
 
@@ -290,7 +290,7 @@ NRG<TStr>::NRG(TStr& s,
 }
 
 template<typename TStr>
-NRG<TStr>::~NRG()
+RepeatGenerator<TStr>::~RepeatGenerator()
 {
     if (sc_) {
         delete sc_;
@@ -300,7 +300,7 @@ NRG<TStr>::~NRG()
 #define DMAX std::numeric_limits<double>::max()
 
 template<typename TStr>
-void NRG<TStr>::init_dyn()
+void RepeatGenerator<TStr>::init_dyn()
 {
     const int MM_PEN = 3;
     // const int MM_PEN = 6;
@@ -340,13 +340,13 @@ void NRG<TStr>::init_dyn()
 
 
 template<typename TStr>
-void NRG<TStr>::doTest(TIndexOffU rpt_len,
-               TIndexOffU rpt_cnt,
-               bool flagGrouping,
-               TIndexOffU rpt_edit,
-               TIndexOffU rpt_matchlen,
-               const string& refstr,
-               const string& readstr)
+void RepeatGenerator<TStr>::doTest(TIndexOffU rpt_len,
+                                   TIndexOffU rpt_cnt,
+                                   bool flagGrouping,
+                                   TIndexOffU rpt_edit,
+                                   TIndexOffU rpt_matchlen,
+                                   const string& refstr,
+                                   const string& readstr)
 {
 	TIndexOffU count = 0;
 
@@ -358,15 +358,13 @@ void NRG<TStr>::doTest(TIndexOffU rpt_len,
     doTestCase1(refstr, readstr, rpt_edit);
 }
 
-
-
 template<typename TStr>
-void NRG<TStr>::build(TIndexOffU seed_len,
-                      TIndexOffU rpt_len,
-                      TIndexOffU rpt_cnt,
-                      bool flagGrouping,
-                      TIndexOffU rpt_edit,
-                      TIndexOffU rpt_matchlen)
+void RepeatGenerator<TStr>::build(TIndexOffU seed_len,
+                                  TIndexOffU rpt_len,
+                                  TIndexOffU rpt_cnt,
+                                  bool flagGrouping,
+                                  TIndexOffU rpt_edit,
+                                  TIndexOffU rpt_matchlen)
 {
 	TIndexOffU count = 0;
 
@@ -375,6 +373,8 @@ void NRG<TStr>::build(TIndexOffU seed_len,
 
     init_dyn();
 
+    map<TIndexOffU, TIndexOffU>* seedpos_to_repeatgroup = new map<TIndexOffU, TIndexOffU>;
+    
 	EList<RepeatCoord<TIndexOffU> > rpt_positions;
 	TIndexOffU min_lcp_len = s_.length();
 
@@ -415,7 +415,7 @@ void NRG<TStr>::build(TIndexOffU seed_len,
                             compareRepeatCoordByJoinedOff<TIndexOffU>);
 
                     string ss = getString(s_, prev_saElt, min_lcp_len);
-					addRepeatGroup(ss, rpt_positions);
+					addRepeatGroup(*seedpos_to_repeatgroup, ss, rpt_positions);
 				}
 
 				// flush previous positions 
@@ -426,6 +426,10 @@ void NRG<TStr>::build(TIndexOffU seed_len,
 			}
 		}
 	}
+    
+    cerr << "number of seed positions is " << seedpos_to_repeatgroup->size() << endl;
+    delete seedpos_to_repeatgroup;
+    seedpos_to_repeatgroup = NULL;
 
     //mergeRepeatGroup();
     
@@ -444,7 +448,7 @@ void NRG<TStr>::build(TIndexOffU seed_len,
 }
 
 template<typename TStr>
-void NRG<TStr>::buildNames()
+void RepeatGenerator<TStr>::buildNames()
 {
 	ref_names_.resize(ref_namelines_.size());
 	for(size_t i = 0; i < ref_namelines_.size(); i++) {
@@ -474,7 +478,7 @@ string reverse(const string& str)
 }
 
 template<typename TStr>
-int NRG<TStr>::mapJoinedOffToSeq(TIndexOffU joinedOff)
+int RepeatGenerator<TStr>::mapJoinedOffToSeq(TIndexOffU joinedOff)
 {
 
 	/* search from cached_list */
@@ -524,7 +528,7 @@ int NRG<TStr>::mapJoinedOffToSeq(TIndexOffU joinedOff)
 }
 
 template<typename TStr>
-int NRG<TStr>::getGenomeCoord(TIndexOffU joinedOff, 
+int RepeatGenerator<TStr>::getGenomeCoord(TIndexOffU joinedOff,
 		string& chr_name, TIndexOffU& pos_in_chr)
 {
 	int seq_id = mapJoinedOffToSeq(joinedOff);
@@ -542,7 +546,7 @@ int NRG<TStr>::getGenomeCoord(TIndexOffU joinedOff,
 }
 
 template<typename TStr>
-void NRG<TStr>::buildJoinedFragment()
+void RepeatGenerator<TStr>::buildJoinedFragment()
 {
     TIndexOffU acc_joinedOff = 0;
     TIndexOffU acc_seqOff = 0;
@@ -585,7 +589,7 @@ void NRG<TStr>::buildJoinedFragment()
 }
 
 template<typename TStr>
-void NRG<TStr>::sortRepeatGroup()
+void RepeatGenerator<TStr>::sortRepeatGroup()
 {
 	if(rpt_grp_.size() > 0) {
 		sort(rpt_grp_.begin(), rpt_grp_.begin() + rpt_grp_.size(), 
@@ -595,7 +599,7 @@ void NRG<TStr>::sortRepeatGroup()
 
 
 template<typename TStr>
-void NRG<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
+void RepeatGenerator<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
 {
     EList<RepeatCoord<TIndexOffU> >& positions = rg.positions;
 
@@ -691,9 +695,9 @@ string makeAverageString(EList<SeedExt>& seeds, bool flag_left)
 #endif
 
 template<typename TStr>
-void NRG<TStr>::seedGrouping(TIndexOffU seed_len,
-                             TIndexOffU rpt_len,
-                             TIndexOffU rpt_cnt)
+void RepeatGenerator<TStr>::seedGrouping(TIndexOffU seed_len,
+                                         TIndexOffU rpt_len,
+                                         TIndexOffU rpt_cnt)
 {
     string seed_filename = filename_ + ".rep.seed";
     ofstream fp(seed_filename.c_str());
@@ -838,15 +842,15 @@ void calc_edit_dist(const TStr& s,
 }
 
 template<typename TStr>
-void NRG<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
-                                  size_t sb,
-                                  size_t se,
-                                  size_t min_left_ext,
-                                  size_t min_right_ext,
-                                  size_t max_ed,
-                                  EList<size_t>& ed_seed_nums,
-                                  EList<string>* left_consensuses,
-                                  EList<string>* right_consensuses)
+void RepeatGenerator<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
+                                              size_t sb,
+                                              size_t se,
+                                              size_t min_left_ext,
+                                              size_t min_right_ext,
+                                              size_t max_ed,
+                                              EList<size_t>& ed_seed_nums,
+                                              EList<string>* left_consensuses,
+                                              EList<string>* right_consensuses)
 {
     const TIndexOffU min_seed_repeat = max_seed_repeat;
     
@@ -1030,11 +1034,11 @@ void NRG<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
 }
 
 template<typename TStr>
-void NRG<TStr>::seedExtension(string& seed_string,
-                              EList<SeedExt>& seeds,
-                              string& consensus_merged,
-                              TIndexOffU min_rpt_len,
-                              TIndexOffU min_rpt_cnt)
+void RepeatGenerator<TStr>::seedExtension(string& seed_string,
+                                          EList<SeedExt>& seeds,
+                                          string& consensus_merged,
+                                          TIndexOffU min_rpt_len,
+                                          TIndexOffU min_rpt_cnt)
 {
     const size_t seed_mm = max_seed_mm; // default 5
     TIndexOffU baseoff = 0;
@@ -1268,13 +1272,13 @@ void NRG<TStr>::seedExtension(string& seed_string,
 }
 
 template<typename TStr>
-void NRG<TStr>::saveSeedExtension(const string& seed_string,
-                                  const EList<SeedExt>& seeds,
-                                  TIndexOffU rpt_grp_id,
-                                  ostream& fp,
-                                  const string& consensus_merged,
-                                  TIndexOffU min_rpt_len,
-                                  size_t& total_repeat_seq_len)
+void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
+                                              const EList<SeedExt>& seeds,
+                                              TIndexOffU rpt_grp_id,
+                                              ostream& fp,
+                                              const string& consensus_merged,
+                                              TIndexOffU min_rpt_len,
+                                              size_t& total_repeat_seq_len)
 {
     // apply color, which is compatible with linux commands such as cat and less -r
 #if 1
@@ -1361,7 +1365,7 @@ void NRG<TStr>::saveSeedExtension(const string& seed_string,
 
 
 template<typename TStr>
-void NRG<TStr>::saveRepeatGroup()
+void RepeatGenerator<TStr>::saveRepeatGroup()
 {
     const string rep_basename = "rep";
 	string rptinfo_filename = filename_ + ".rep.info";
@@ -1452,7 +1456,7 @@ void NRG<TStr>::saveRepeatGroup()
 	
 	
 template<typename TStr>
-void NRG<TStr>::saveRepeatSequence()
+void RepeatGenerator<TStr>::saveRepeatSequence()
 {
 	string fname = filename_ + ".rep.fa";
 
@@ -1497,7 +1501,7 @@ void NRG<TStr>::saveRepeatSequence()
 }
 
 template<typename TStr>
-void NRG<TStr>::saveFile()
+void RepeatGenerator<TStr>::saveFile()
 {
 	saveRepeatSequence();
 	saveRepeatGroup();
@@ -1512,7 +1516,9 @@ void NRG<TStr>::saveFile()
  * @param rpt_range
  */
 template<typename TStr>
-void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TIndexOffU> >& positions)
+void RepeatGenerator<TStr>::addRepeatGroup(map<TIndexOffU, TIndexOffU>& seedpos_to_repeatgroup,
+                                           const string& rpt_seq,
+                                           const EList<RepeatCoord<TIndexOffU> >& positions)
 {
 #if 0
 	// rpt_seq is always > 0
@@ -1544,17 +1550,71 @@ void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TI
 	}
 #endif
     
+    // count the number of seeds on the sense strand
     size_t sense_mer_count = 0;
     for(size_t i = 0; i < positions.size(); i++) {
         if(positions[i].joinedOff < forward_length_)
             sense_mer_count++;
     }
+    
+    // skip if there is no sense seeds
+    if(sense_mer_count <= 0)
+        return;
+    
+    // skip if a given set of seeds corresponds to an existing set of seeds
+    const TIndexOffU pos_diff = 5;
+    const size_t sampling = 10;
+    size_t add_idx = rpt_grp_.size();
+    for(size_t i = 0; i < positions.size(); i += sampling) {
+        TIndexOffU joinedOff = positions[i].joinedOff;
+        map<TIndexOffU, TIndexOffU>::iterator it = seedpos_to_repeatgroup.lower_bound(joinedOff >= pos_diff ? joinedOff - pos_diff : 0);
+        for(; it != seedpos_to_repeatgroup.end(); it++) {
+            if(it->first > joinedOff + pos_diff) {
+                break;
+            }
+            assert_geq(it->first + pos_diff, joinedOff);
+            assert_lt(it->second, rpt_grp_.size());
+            const EList<RepeatCoord<TIndexOffU> >& positions2 = rpt_grp_[it->second].positions;
+            
+            size_t num_match = 0;
+            size_t p = 0, p2 = 0;
+            while(p < positions.size() && p2 < positions2.size()) {
+                TIndexOffU pos = positions[p].joinedOff, pos2 = positions2[p2].joinedOff;
+                if(pos + pos_diff >= pos2 && pos2 + pos_diff >= pos) {
+                    num_match++;
+                }
+                if(pos <= pos2) p++;
+                else            p2++;
+            }
+            
+            // if the number of matches is >= 90% of positions in the smaller group
+            if(num_match * 10 >= min(positions.size(), positions2.size()) * 9) {
+                if(positions.size() <= positions2.size()) {
+                    return;
+                } else {
+                    add_idx = it->second;
+                    for(size_t p2 = 0; p2 < positions2.size(); p2++) {
+                        if(seedpos_to_repeatgroup[positions2[p2].joinedOff] == add_idx) {
+                            seedpos_to_repeatgroup.erase(positions2[p2].joinedOff);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        if(add_idx < rpt_grp_.size())
+            break;
+    }
 
-	// add to last
-    if(sense_mer_count > 0) {
+    assert_leq(add_idx, rpt_grp_.size());
+    if(add_idx == rpt_grp_.size()) {
         rpt_grp_.expand();
-        rpt_grp_.back().seq = rpt_seq;
-        rpt_grp_.back().positions = positions;
+    }
+    rpt_grp_[add_idx].seq = rpt_seq;
+    rpt_grp_[add_idx].positions = positions;
+    
+    for(size_t i = 0; i < positions.size(); i++) {
+        seedpos_to_repeatgroup[positions[i].joinedOff] = add_idx;
     }
 }
 
@@ -1565,7 +1625,7 @@ void NRG<TStr>::addRepeatGroup(const string& rpt_seq, const EList<RepeatCoord<TI
  * @tparam TStr
  */
 template<typename TStr> 
-void NRG<TStr>::mergeRepeatGroup()
+void RepeatGenerator<TStr>::mergeRepeatGroup()
 {
 	int range_count = 0;
 	for(size_t i = 0; i < rpt_grp_.size(); i++) {
@@ -1697,7 +1757,7 @@ void NRG<TStr>::mergeRepeatGroup()
 }
 
 template<typename TStr>
-void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
+void RepeatGenerator<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
 {
     if (rpt_grp_.size() == 0) {
         cerr << "no repeat group" << endl;
@@ -1781,7 +1841,7 @@ void NRG<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
 }
 
 template<typename TStr>
-TIndexOffU NRG<TStr>::getEnd(TIndexOffU e) {
+TIndexOffU RepeatGenerator<TStr>::getEnd(TIndexOffU e) {
     assert_lt(e, s_.length())
     
     TIndexOffU end = 0;
@@ -1803,7 +1863,7 @@ TIndexOffU NRG<TStr>::getEnd(TIndexOffU e) {
 }
 
 template<typename TStr>
-TIndexOffU NRG<TStr>::getStart(TIndexOffU e) {
+TIndexOffU RepeatGenerator<TStr>::getStart(TIndexOffU e) {
     assert_lt(e, s_.length())
     
     TIndexOffU start = 0;
@@ -1825,7 +1885,7 @@ TIndexOffU NRG<TStr>::getStart(TIndexOffU e) {
 }
 
 template<typename TStr>
-TIndexOffU NRG<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
+TIndexOffU RepeatGenerator<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 {
     size_t a_end = getEnd(a);
     size_t b_end = getEnd(b);
@@ -1845,7 +1905,7 @@ TIndexOffU NRG<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 }
 
 template<typename TStr>
-void NRG<TStr>::makePadString(const string& ref, const string& read, 
+void RepeatGenerator<TStr>::makePadString(const string& ref, const string& read,
         string& pad, size_t len)
 {
     pad.resize(len);
@@ -1872,7 +1932,7 @@ void NRG<TStr>::makePadString(const string& ref, const string& read,
 }
 
 template<typename TStr>
-bool NRG<TStr>::checkSequenceMergeable(const string& ref, const string& read, 
+bool RepeatGenerator<TStr>::checkSequenceMergeable(const string& ref, const string& read,
         EList<Edit>& edits, Coord& coord, TIndexOffU max_edit)
 {
     size_t max_matchlen = 0;
@@ -1924,7 +1984,7 @@ bool NRG<TStr>::checkSequenceMergeable(const string& ref, const string& read,
 }
 
 template<typename TStr>
-int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits, Coord& coord)
+int RepeatGenerator<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits, Coord& coord)
 {
     // Prepare Strings
 
@@ -2089,7 +2149,7 @@ int NRG<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& 
 }
 
 template<typename TStr>
-void NRG<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
+void RepeatGenerator<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
 {
     cerr << "doTestCase1----------------" << endl;
     EList<Edit> edits;
@@ -2140,6 +2200,6 @@ void NRG<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexO
 
 
 /****************************/
-template class NRG<SString<char> >;
+template class RepeatGenerator<SString<char> >;
 template void dump_tstr(const SString<char>& );
 template bool compareRepeatCoordByJoinedOff(const RepeatCoord<TIndexOffU>& , const RepeatCoord<TIndexOffU>&);
