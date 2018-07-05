@@ -42,12 +42,14 @@ using namespace std;
  */
 class RepeatParameter {
 public:
-    TIndexOffU seed_len;            // seed length
-    TIndexOffU seed_count;          // seed count
-    TIndexOffU repeat_count;        // repeat count
-    TIndexOffU min_repeat_length;   // minimum repeat length
-    TIndexOffU max_repeat_length;   // maximum repeat length
-    TIndexOffU max_edit;            // maximum edit distance allowed
+    TIndexOffU seed_len;         // seed length
+    TIndexOffU seed_count;       // seed count
+    TIndexOffU seed_mm;          // maximum edit distance allowed during initial seed extension
+    TIndexOffU repeat_count;     // repeat count
+    TIndexOffU min_repeat_len;   // minimum repeat length
+    TIndexOffU max_repeat_len;   // maximum repeat length
+    TIndexOffU max_edit;         // maximum edit distance allowed
+    bool       symmetric_extend; // extend symmetrically
 };
 
 // Dump
@@ -262,12 +264,7 @@ public:
 
 
 public:
-	void build(TIndexOffU seed_len,
-               TIndexOffU rpt_len,
-               TIndexOffU rpt_cnt,
-               bool flagGrouping,
-               TIndexOffU rpt_edit,
-               TIndexOffU rpt_matchlen);
+	void build(const RepeatParameter& rp);
 	void buildNames();
 	int mapJoinedOffToSeq(TIndexOffU joined_pos);
 	int getGenomeCoord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
@@ -298,18 +295,21 @@ public:
 	TIndexOffU getLCP(TIndexOffU a, TIndexOffU b);
 
 	void repeat_masking();
-    void init_dyn();
+    void init_dyn(const RepeatParameter& rp);
 
-    bool checkSequenceMergeable(const string&, const string&, 
-            EList<Edit>&, Coord&, TIndexOffU max_edit = 10);
+    bool checkSequenceMergeable(const string& ref,
+                                const string& read,
+                                EList<Edit>& edits,
+                                Coord& coord,
+                                TIndexOffU rpt_len,
+                                TIndexOffU max_edit = 10);
     int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
     void makePadString(const string&, const string&, string&, size_t);
 
     void seedExtension(string& seed_string,
                        EList<SeedExt>& seeds,
                        string& consensus_merged,
-                       TIndexOffU min_rpt_len,
-                       TIndexOffU min_rpt_cnt);
+                       const RepeatParameter& rp);
 
     void saveSeedExtension(const string& seed_string,
                            const EList<SeedExt>& seeds,
@@ -319,11 +319,11 @@ public:
                            TIndexOffU min_rpt_len,
                            size_t& total_rep_seq_len);
 
-    void seedGrouping(TIndexOffU seed_len,
-                      TIndexOffU rpt_len,
-                      TIndexOffU rpt_count);
+    void seedGrouping(const RepeatParameter& rp);
 
-	void doTest(TIndexOffU, TIndexOffU, bool, TIndexOffU, TIndexOffU, const string&, const string&);
+    void doTest(const RepeatParameter& rp,
+                const string& refstr,
+                const string& readstr);
     void doTestCase1(const string&, const string&, TIndexOffU);
     
 private:
@@ -333,6 +333,7 @@ private:
                            size_t min_left_ext,       
                            size_t min_right_ext,
                            size_t max_ed,             // maximum edit distance allowed
+                           const RepeatParameter& rp,
                            EList<size_t>& ed_seed_nums,
                            EList<string>* left_consensus,
                            EList<string>* right_consensus);
@@ -374,9 +375,6 @@ private:
     SwAligner swa;
     LinkedEList<EList<Edit> > rawEdits_;
     RandomSource rnd_;
-    
-    TIndexOffU rpt_matchlen_;
-    TIndexOffU rpt_edit_;
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);

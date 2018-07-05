@@ -77,10 +77,13 @@ static bool autoMem;
 static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;
 static TIndexOffU seed_length;
+static TIndexOffU seed_count;
 static TIndexOffU repeat_count;
-static TIndexOffU repeat_length;
+static TIndexOffU min_repeat_length;
+static TIndexOffU max_repeat_length;
 static TIndexOffU max_repeat_edit;
 static TIndexOffU max_repeat_matchlen;
+static bool       symmetric_extend;
 static bool repeat_indel;
 static bool forward_only;
 static bool CGtoTG;
@@ -114,11 +117,14 @@ static void resetOptions() {
 	autoMem        = true;  // automatically adjust memory usage parameters
 	nthreads       = 1;
     seed_length    = 50;
-	repeat_length  = 100;
+    seed_count     = 5;
+	min_repeat_length = 100;
+    max_repeat_length = numeric_limits<TIndexOffU>::max();
 	repeat_count   = 5;
     max_repeat_edit = 10;
-    max_repeat_matchlen = repeat_length / 2; // half of repeat_length
+    max_repeat_matchlen = min_repeat_length / 2; // half of repeat_length
     repeat_indel = false;
+    symmetric_extend = true;
     forward_only = false;
     CGtoTG = false;
     max_seed_mm = 5;
@@ -141,12 +147,15 @@ enum {
 	ARG_REVERSE_EACH,
     ARG_SA,
     ARG_SEED_LENGTH,
-	ARG_REPEAT_LENGTH,
-	ARG_REPEAT_CNT,
+    ARG_SEED_COUNT,
+    ARG_MIN_REPEAT_LENGTH,
+    ARG_MAX_REPEAT_LENGTH,
+	ARG_REPEAT_COUNT,
     ARG_REPEAT_EDIT,
 	ARG_REPEAT_MATCHLEN,
 	ARG_REPEAT_INDEL,
 	ARG_WRAPPER,
+    ARG_ASYMMETRIC_EXTEND,
 	ARG_FORWARD_ONLY,
     ARG_CGTOTG,
     ARG_REPEAT_STR1,
@@ -179,13 +188,16 @@ static void printUsage(ostream& out) {
 	    << "    --dcv <int>             diff-cover period for blockwise (default: 1024)" << endl
 	    << "    --nodc                  disable diff-cover (algorithm becomes quadratic)" << endl
         << "    --seed-length <int>     seed length (default: 50)" << endl
-        << "    --repeat-length <int>   minimum repeat length (default: 100)" << endl
+        << "    --seed-count <int>      seed count (default: 5)" << endl
+        << "    --min-repeat-length <int>   minimum repeat length (default: 100)" << endl
+        << "    --max-repeat-length <int>   maximum repeat length (default: max int)" << endl
         << "    --repeat-count <int>    minimum repeat count (default: 5)" << endl
         << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
         << "    --repeat-matchlen <int>" << endl
         << "    --repeat-indel" << endl
         << "    --repeat-str1" << endl
         << "    --repeat-str2" << endl
+        << "    --asymmetric-extend     extend seeds asymmetrically" << endl
         << "    --forward-only          use forward strand only" << endl
         << "    --CGtoTG                change CG to TG" << endl
         << "    --max-seed-mm <int>" << endl
@@ -219,13 +231,16 @@ static struct option long_options[] = {
 	{(char*)"linerate",       required_argument, 0,            'l'},
 	{(char*)"linesperside",   required_argument, 0,            'i'},
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
-    {(char*)"seed-length",   required_argument, 0,             ARG_SEED_LENGTH},
-	{(char*)"repeat-length",  required_argument, 0,            ARG_REPEAT_LENGTH},
-	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_CNT},
+    {(char*)"seed-length",    required_argument, 0,            ARG_SEED_LENGTH},
+    {(char*)"seed-count",     required_argument, 0,            ARG_SEED_COUNT},
+	{(char*)"min-repeat-length",  required_argument, 0,        ARG_MIN_REPEAT_LENGTH},
+    {(char*)"max-repeat-length",  required_argument, 0,        ARG_MAX_REPEAT_LENGTH},
+	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_COUNT},
     {(char*)"repeat-edit",    required_argument, 0,            ARG_REPEAT_EDIT},
     {(char*)"repeat-matchlen",required_argument, 0,            ARG_REPEAT_MATCHLEN},
 	{(char*)"repeat-indel",   no_argument,       0,            ARG_REPEAT_INDEL},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
+    {(char*)"asymmetric-extend",   no_argument,  0,            ARG_ASYMMETRIC_EXTEND},
 	{(char*)"forward-only",   no_argument,       0,            ARG_FORWARD_ONLY},
 	{(char*)"CGtoTG",   	  no_argument,       0,            ARG_CGTOTG},
 	{(char*)"repeat-str1",    required_argument, 0,            ARG_REPEAT_STR1},
@@ -324,10 +339,16 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_SEED_LENGTH:
                 seed_length = parseNumber<TIndexOffU>(1, "--seed-length arg must be at least 1");
                 break;
-            case ARG_REPEAT_LENGTH:
-                repeat_length = parseNumber<TIndexOffU>(1, "--repeat-length arg must be at least 1");
+            case ARG_SEED_COUNT:
+                seed_count = parseNumber<TIndexOffU>(2, "--repeat-count arg must be at least 2");
                 break;
-			case ARG_REPEAT_CNT:
+            case ARG_MIN_REPEAT_LENGTH:
+                min_repeat_length = parseNumber<TIndexOffU>(1, "--min-repeat-length arg must be at least 1");
+                break;
+            case ARG_MAX_REPEAT_LENGTH:
+                max_repeat_length = parseNumber<TIndexOffU>(1, "--max-repeat-length arg must be at least 1");
+                break;
+			case ARG_REPEAT_COUNT:
 				repeat_count = parseNumber<TIndexOffU>(2, "--repeat-count arg must be at least 2");
 				break;
             case ARG_REPEAT_EDIT:
@@ -340,6 +361,9 @@ static void parseOptions(int argc, const char **argv) {
 			case ARG_REPEAT_INDEL:
 				repeat_indel = true;
 				break;
+            case ARG_ASYMMETRIC_EXTEND:
+                symmetric_extend = false;
+                break;
 			case ARG_FORWARD_ONLY:
 				forward_only = true;
 				break;
@@ -386,7 +410,7 @@ static void parseOptions(int argc, const char **argv) {
 	}
 
     if(!saw_max_repeat_matchlen) {
-        max_repeat_matchlen = repeat_length / 2;
+        max_repeat_matchlen = min_repeat_length / 2;
     }
 }
 
@@ -568,22 +592,23 @@ static void driver(
 
 			// NRG
 			RepeatGenerator<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
+            
+            RepeatParameter rp;
+            rp.seed_len = seed_length;
+            rp.seed_count = seed_count;
+            rp.seed_mm = max_seed_mm;
+            rp.min_repeat_len = min_repeat_length;
+            rp.max_repeat_len = max_repeat_length;
+            rp.repeat_count = repeat_count;
+            rp.max_edit = max_repeat_edit;
+            rp.symmetric_extend = symmetric_extend;
 
             if (repeat_str1.length() && repeat_str2.length()) {
-                nrg.doTest(repeat_length,
-                           repeat_count,
-                           true,
-                           max_repeat_edit,
-                           max_repeat_matchlen,
+                nrg.doTest(rp,
                            repeat_str1,
                            repeat_str2);
             } else {
-                nrg.build(seed_length,
-                          repeat_length,
-                          repeat_count,
-                          true,
-                          max_repeat_edit,
-                          max_repeat_matchlen);
+                nrg.build(rp);
                 nrg.saveFile();
             }
 
