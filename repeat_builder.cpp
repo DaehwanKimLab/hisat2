@@ -116,6 +116,18 @@ string applyEdits(const string& ref, size_t read_len, const EList<Edit>& edits, 
     return read;
 }
 
+void computeMemory(size_t& rss, size_t& vm)
+{
+    string ignore;
+    ifstream ifs("/proc/self/stat", std::ios_base::in);
+    ifs >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore
+		>> ignore >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore >> ignore
+		>> ignore >> ignore >> vm >> rss;
+
+    size_t page_size_kb = sysconf(_SC_PAGE_SIZE); // in case x86-64 is configured to use 2MB pages
+    rss *= page_size_kb;
+}
+
 /**
  * @brief return true iff a U b = a 
  *
@@ -775,48 +787,51 @@ void NRG<TStr>::addRepeatGroup(const EList<RepeatCoord<TIndexOffU> >& positions,
 
 #if 0
     //rough memory usage count
-    if (rpt_grp_.size() && rpt_grp_.size() % 1000000 == 0) {
-		size_t total_light = 0, total_detail = 0;
-		cout << rpt_grp_.size() << " rpt_grp_.size() "
-				<< rpt_grp_.capacity() << " rpt_grp_.capacity() " << endl;
 
-		total_light = sizeof(rpt_grp_[0])*rpt_grp_.capacity();
-		cout << total_light << " total_light = sizeof(rpt_grp_[0])*rpt_grp_.capacity() " << endl;
-
-		total_detail += sizeof(rpt_grp_[0])*(rpt_grp_.capacity()-rpt_grp_.size());
-		for (size_t i = 0; i < rpt_grp_.size(); i++){
-			size_t snpIDs_s = 0;
-			for (size_t j = 0; j < rpt_grp_[i].snpIDs.size(); j++){
-				snpIDs_s += (rpt_grp_[i].snpIDs[j].size() + 1);
-			}
-			snpIDs_s *= sizeof(char);
-
-			total_detail += sizeof(rpt_grp_[i].coord)
-					+ sizeof(rpt_grp_[i].seq)
-					+ sizeof(rpt_grp_[i].base_offset)
-					+ snpIDs_s
-					+ rpt_grp_[i].positions.size()*sizeof(RepeatCoord<TIndexOffU>)
-					+ rpt_grp_[i].alt_seq.size()*sizeof(Edit)
-					+ rpt_grp_[i].edits.size()*sizeof(RepeatGroup)
-					+sizeof(strSLpair)
-					+ 64;
-
-			/*
-			cout << sizeof(rpt_grp_[i].coord) << " "
-					<< sizeof(rpt_grp_[i].seq) << " "
-					<< sizeof(rpt_grp_[i].base_offset) << " "
-					<< snpIDs_s << " "
-					<< rpt_grp_[i].positions.size()*sizeof(RepeatCoord<TIndexOffU>) << " "
-					<< rpt_grp_[i].alt_seq.size()*sizeof(Edit) << " "
-					<< rpt_grp_[i].edits.size()*sizeof(RepeatGroup) << " "
-					<< sizeof(strSLpair);
-			*/
-		}
-		cout << total_detail <<  " total_detail "  << endl;
-	}
+#ifndef NDEBUG
+    if (true) {
+#else
+    if (rpt_grp_.size() && rpt_grp_.size() % 10000 == 0) {
 #endif
+		cout << rpt_grp_.size() << " rpt_grp_.size() " << endl;
+		cout << rpt_grp_.capacity() << " rpt_grp_.capacity() " << endl;
 
+		size_t rgtm = sizeof(rpt_grp_[0]) * rpt_grp_.capacity();
+
+		for (size_t i = 0; i < rpt_grp_.size(); i++) {
+			size_t snpIDs_s = 0, positions_s = 0, alt_seq_s = 0, edits_s = 0;
+
+			if (rpt_grp_[i].snpIDs.size() > 0) {
+				snpIDs_s = rpt_grp_[i].snpIDs.capacity() * sizeof(string);
+				for (size_t j = 0; j < rpt_grp_[i].snpIDs.size(); j++) {
+					snpIDs_s += (rpt_grp_[i].snpIDs[j].capacity()) * sizeof(char);
+				}
+			}
+
+			if (rpt_grp_[i].positions.size() > 0) {
+				positions_s = rpt_grp_[i].positions.capacity()*sizeof(RepeatCoord<TIndexOffU>);
+			}
+			if (rpt_grp_[i].edits.size() > 0) {
+				edits_s = rpt_grp_[i].edits.capacity()*sizeof(Edit);
+			}
+			if (rpt_grp_[i].alt_seq.size() > 0) { //if actually allocated, dynamic part of the memory should be recalculated
+				alt_seq_s = rpt_grp_[i].alt_seq.capacity()*sizeof(RepeatGroup);
+			}
+			rgtm += (snpIDs_s + positions_s + edits_s + alt_seq_s);
+		}
+
+		cout << rgtm <<  " rpt_grp_memory "  << rgtm/rpt_grp_.capacity() <<  " per rpt_grp_ "  << endl;
+        size_t rss, vm;
+        computeMemory (rss, vm);
+        cout << rss << " resident_memory " <<  vm << " virtual_memory " << endl;
+        cout << rss - rgtm << " (resident_memory - rpt_grp_memory) " << endl;
+    }
+#endif
 }
+
+
+
+
 
 
 /**
