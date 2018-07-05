@@ -698,6 +698,8 @@ void NRG<TStr>::seedGrouping(TIndexOffU seed_len,
     string seed_filename = filename_ + ".rep.seed";
     ofstream fp(seed_filename.c_str());
     
+    size_t total_rep_seq_len = 0;
+    
     for(size_t i = 0; i < rpt_grp_.size(); i++)
     {
         EList<SeedExt> seeds;
@@ -736,15 +738,19 @@ void NRG<TStr>::seedGrouping(TIndexOffU seed_len,
         seedExtension(seed_str,
                       seeds,
                       consensus,
-                      rpt_len);
+                      rpt_len,
+                      rpt_cnt);
         
         saveSeedExtension(seed_str,
                           seeds,
                           i,
                           fp,
                           consensus,
-                          rpt_len);
+                          rpt_len,
+                          total_rep_seq_len);
     }
+    
+    fp << "total repeat sequence length: " << total_rep_seq_len << endl;
 
     fp.close();
 }
@@ -1027,7 +1033,8 @@ template<typename TStr>
 void NRG<TStr>::seedExtension(string& seed_string,
                               EList<SeedExt>& seeds,
                               string& consensus_merged,
-                              TIndexOffU min_rpt_len)
+                              TIndexOffU min_rpt_len,
+                              TIndexOffU min_rpt_cnt)
 {
     const size_t seed_mm = max_seed_mm; // default 5
     TIndexOffU baseoff = 0;
@@ -1057,7 +1064,7 @@ void NRG<TStr>::seedExtension(string& seed_string,
             seeds[i].ed = 0;
         }
         
-        while(se - sb >= 5) {
+        while(se - sb >= min_rpt_cnt) {
 #ifndef NDEBUG
             for(size_t i = sb; i < se; i++) {
                 assert(!seeds[i].done);
@@ -1105,8 +1112,8 @@ void NRG<TStr>::seedExtension(string& seed_string,
                 pleft_consensus = &empty_string;
                 pright_consensus = &empty_string;
                 for(int i = (int)seed_mm; i >= 0; i--) {
-                    size_t left_extlen = (ed_seed_nums[i] < max_seed_repeat ? 0 : left_consensuses[i].length());
-                    size_t right_extlen = (ed_seed_nums2[i] < max_seed_repeat ? 0 : right_consensuses[i].length());
+                    size_t left_extlen = (ed_seed_nums[i] < min_rpt_cnt ? 0 : left_consensuses[i].length());
+                    size_t right_extlen = (ed_seed_nums2[i] < min_rpt_cnt ? 0 : right_consensuses[i].length());
                     if(i > 0) {
                         if(max(left_extlen, right_extlen) < max_seed_extlen)
                             continue;
@@ -1188,7 +1195,7 @@ void NRG<TStr>::seedExtension(string& seed_string,
                 num_passed_seeds++;
             }
             
-            if(num_passed_seeds >= max_seed_repeat) {
+            if(num_passed_seeds >= min_rpt_cnt) {
                 bool further_extend = true;
                 if(first_ext) {
                     if(consensus.length() < min_rpt_len) {
@@ -1210,7 +1217,7 @@ void NRG<TStr>::seedExtension(string& seed_string,
             assert_eq(baseoff, consensus_merged.length());
             sb += num_passed_seeds;
             assert_leq(sb, se);
-        } // while(se - sb >= 5)
+        } // while(se - sb >= min_rpt_cnt)
         
         if(se - sb > 0) {
             for(size_t i = sb; i < se; i++) {
@@ -1266,7 +1273,8 @@ void NRG<TStr>::saveSeedExtension(const string& seed_string,
                                   TIndexOffU rpt_grp_id,
                                   ostream& fp,
                                   const string& consensus_merged,
-                                  TIndexOffU min_rpt_len)
+                                  TIndexOffU min_rpt_len,
+                                  size_t& total_repeat_seq_len)
 {
     // apply color, which is compatible with linux commands such as cat and less -r
 #if 1
@@ -1344,6 +1352,8 @@ void NRG<TStr>::saveSeedExtension(const string& seed_string,
             if(different) fp << reset;
         }
         fp << endl;
+        
+        if(seeds[i].backbone == i) total_repeat_seq_len += constr.length();
     }
     
     if(count > 0) fp << count << endl << endl;

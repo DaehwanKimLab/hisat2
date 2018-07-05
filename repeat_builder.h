@@ -37,6 +37,19 @@
 
 using namespace std;
 
+/**
+ * Encapsulates repeat parameters.
+ */
+class RepeatParameter {
+public:
+    TIndexOffU seed_len;            // seed length
+    TIndexOffU seed_count;          // seed count
+    TIndexOffU repeat_count;        // repeat count
+    TIndexOffU min_repeat_length;   // minimum repeat length
+    TIndexOffU max_repeat_length;   // maximum repeat length
+    TIndexOffU max_edit;            // maximum edit distance allowed
+};
+
 // Dump
 //
 // to_string
@@ -334,14 +347,16 @@ public:
     void seedExtension(string& seed_string,
                        EList<SeedExt>& seeds,
                        string& consensus_merged,
-                       TIndexOffU min_rpt_len);
+                       TIndexOffU min_rpt_len,
+                       TIndexOffU min_rpt_cnt);
 
     void saveSeedExtension(const string& seed_string,
                            const EList<SeedExt>& seeds,
                            TIndexOffU rpt_grp_id,
                            ostream& fp,
                            const string& consensus_merged,
-                           TIndexOffU min_rpt_len);
+                           TIndexOffU min_rpt_len,
+                           size_t& total_rep_seq_len);
 
     void seedGrouping(TIndexOffU seed_len,
                       TIndexOffU rpt_len,
