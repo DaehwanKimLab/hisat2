@@ -1875,6 +1875,51 @@ public:
 		erase(i);
 	}
 
+    /** 
+     * Get
+     */
+    T& get(const T& el) {
+		size_t i;
+		if(cur_ < 16) {
+			// Linear scan
+			i = scanLoBound(el);
+		} else {
+			// Binary search
+			i = bsearchLoBound(el);
+		}
+		assert(i != cur_ && list_[i] == el);
+        return list_[i];
+    }
+
+    const T& get(const T& el) const {
+		size_t i;
+		if(cur_ < 16) {
+			// Linear scan
+			i = scanLoBound(el);
+		} else {
+			// Binary search
+			i = bsearchLoBound(el);
+		}
+		assert(i != cur_ && list_[i] == el);
+        return list_[i];
+    }
+
+	/**
+	 * Return a reference to the ith element.
+	 */
+	inline T& operator[](size_t i) {
+		assert_lt(i, cur_);
+		return list_[i];
+	}
+
+	/**
+	 * Return a reference to the ith element.
+	 */
+	inline const T& operator[](size_t i) const {
+		assert_lt(i, cur_);
+		return list_[i];
+	}
+
 	/**
 	 * If size is less than requested size, resize up to at least sz
 	 * and set cur_ to requested sz.
