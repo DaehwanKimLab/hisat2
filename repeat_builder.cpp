@@ -1025,7 +1025,6 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
                                           const RepeatParameter& rp)
 {
     const size_t seed_mm = rp.seed_mm;
-    const size_t max_seed_extlen = (rp.min_repeat_len - rp.seed_len) / 2;
     TIndexOffU baseoff = 0;
     
     // initialize the first group with the size of seeds
@@ -1068,8 +1067,8 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
                 get_consensus_seq(seeds,
                                   sb,
                                   se,
-                                  max_seed_extlen,
-                                  max_seed_extlen,
+                                  rp.extend_unit_len,
+                                  rp.extend_unit_len,
                                   rp.seed_mm,
                                   rp,
                                   ed_seed_nums,
@@ -1081,8 +1080,9 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
             } else {
                 assert_lt(seeds[sb].pos.second - seeds[sb].pos.first, rp.max_repeat_len);
                 TIndexOffU max_ext_len = rp.max_repeat_len - (seeds[sb].pos.second - seeds[sb].pos.first);
-                if(max_ext_len > max_seed_extlen)
-                    max_ext_len = max_seed_extlen;
+                if(rp.symmetric_extend) max_ext_len /= 2;
+                if(max_ext_len > rp.extend_unit_len)
+                    max_ext_len = rp.extend_unit_len;
                 
                 if(rp.symmetric_extend) {
                     get_consensus_seq(seeds,
@@ -1103,7 +1103,7 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
                         ASSERT_ONLY(size_t right_extlen = (ed_seed_nums[i] < rp.repeat_count ? 0 : right_consensuses[i].length()));
                         assert_eq(left_extlen, right_extlen);
                         if(i > 0) {
-                            if(left_extlen < max_seed_extlen)
+                            if(left_extlen < max_ext_len)
                                 continue;
                         } else {
                             if(left_extlen <= 0)
@@ -1145,7 +1145,7 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
                         size_t left_extlen = (ed_seed_nums[i] < rp.repeat_count ? 0 : left_consensuses[i].length());
                         size_t right_extlen = (ed_seed_nums2[i] < rp.repeat_count ? 0 : right_consensuses[i].length());
                         if(i > 0) {
-                            if(max(left_extlen, right_extlen) < max_seed_extlen)
+                            if(max(left_extlen, right_extlen) < rp.extend_unit_len)
                                 continue;
                         } else {
                             if(max(left_extlen, right_extlen) <= 0)
@@ -1334,27 +1334,28 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
     }
     
     TIndexOffU prev_consensus_baseoff = (TIndexOffU)-1;
-    size_t count = 0;
+    size_t count = 0, total_count = 0;
     for(size_t i = 0; i < seeds.size(); i++) {
         assert(seeds[i].done);
         size_t ext_len = seeds[i].pos.second - seeds[i].pos.first;
         if(ext_len < rp.min_repeat_len) continue;
+        total_count++;
         
         string deststr = getString(s_, seeds[i].pos.first, ext_len);
         if(prev_consensus_baseoff == seeds[i].baseoff) {
             count++;
         } else {
-            if(count > 0) fp << count << endl << endl;
+            if(count > 0) fp << setw(5) << count << "  " << setw(5) << total_count << endl << endl;
             count = 1;
             prev_consensus_baseoff = seeds[i].baseoff;
         }
 
-        fp << rpt_grp_id << "\t" << rpt_grp_[rpt_grp_id].positions.size();
-        fp << "\t" << setw(4) << i << " -> " << setw(4) << std::left << seeds[i].backbone << std::right;
-        fp << "\t" << ext_len;
-        fp << "\t" << seeds[i].total_ed;
-        fp << "\t" << setw(10) << seeds[i].pos.first << "\t" << setw(10) << seeds[i].pos.second;
-        fp << "\t" << setw(10) << seeds[i].bound.first << "\t" << setw(10) << seeds[i].bound.second;
+        fp << rpt_grp_id << "  " << rpt_grp_[rpt_grp_id].positions.size();
+        fp << "  " << setw(4) << i << " -> " << setw(4) << std::left << seeds[i].backbone << std::right;
+        fp << "  " << ext_len;
+        fp << "  " << seeds[i].total_ed;
+        fp << "  " << setw(10) << seeds[i].pos.first << "  " << setw(10) << seeds[i].pos.second;
+        fp << "  " << setw(10) << seeds[i].bound.first << "  " << setw(10) << seeds[i].bound.second;
 
         string chr_name;
         TIndexOffU pos_in_chr;
@@ -1363,21 +1364,21 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
         } else {
             getGenomeCoord(s_.length() - seeds[i].pos.first - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
         }
-        fp << "\t" << chr_name << ":" << pos_in_chr;
+        fp << "  " << chr_name << ":" << pos_in_chr;
 
         if(seeds[i].pos.second < forward_length_) {
             getGenomeCoord(seeds[i].pos.second, chr_name, pos_in_chr);
         } else {
             getGenomeCoord(s_.length() - seeds[i].pos.second - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
         }
-        fp << "\t" << chr_name << ":" << pos_in_chr;
+        fp << "  " << chr_name << ":" << pos_in_chr;
         
         string constr = consensus_merged.substr(seeds[i].baseoff, ext_len);
         if(seeds[i].backbone == i) total_repeat_seq_len += constr.length();
 
         // fp << "\t" << constr;
         assert_eq(constr.length(), deststr.length());
-        fp << "\t";
+        fp << "  ";
         
         // print sequence w.r.t. the current group
         assert_leq(seeds[i].pos.first, seeds[i].orig_pos.first);
@@ -1432,7 +1433,7 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
         fp << endl;
     }
     
-    if(count > 0) fp << count << endl << endl;
+    if(count > 0) fp << setw(5) << count << "  " << setw(5) << total_count << endl << endl;
 }
 
 

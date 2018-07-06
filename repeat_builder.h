@@ -50,6 +50,7 @@ public:
     TIndexOffU max_repeat_len;   // maximum repeat length
     TIndexOffU max_edit;         // maximum edit distance allowed
     bool       symmetric_extend; // extend symmetrically
+    TIndexOffU extend_unit_len;  // extend seeds no longer than this length at a time
 };
 
 // Dump

@@ -602,6 +602,7 @@ static void driver(
             rp.repeat_count = repeat_count;
             rp.max_edit = max_repeat_edit;
             rp.symmetric_extend = symmetric_extend;
+            rp.extend_unit_len = max_seed_extlen;
 
             if (repeat_str1.length() && repeat_str2.length()) {
                 nrg.doTest(rp,
