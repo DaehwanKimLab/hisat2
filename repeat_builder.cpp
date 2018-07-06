@@ -62,7 +62,6 @@ unsigned int hamming_distance(const string& s1, const string& s2)
     return cnt;
 }
 
-typedef pair<TIndexOffU, TIndexOffU> Range;
 static const Range EMPTY_RANGE = Range(1, 0);
 
 struct RepeatRange {
@@ -355,6 +354,7 @@ template<typename TStr>
 void RepeatGenerator<TStr>::build(const RepeatParameter& rp)
 {
 	TIndexOffU count = 0;
+    min_repeat_len_ = rp.min_repeat_len;
     
     init_dyn(rp);
 
@@ -687,10 +687,11 @@ void RepeatGenerator<TStr>::seedGrouping(const RepeatParameter& rp)
     ofstream fp(seed_filename.c_str());
     
     size_t total_rep_seq_len = 0;
+
+    seeds_.clear();
     
     for(size_t i = 0; i < rpt_grp_.size(); i++)
     {
-        EList<SeedExt> seeds;
         EList<RepeatCoord<TIndexOffU> >& positions = rpt_grp_[i].positions;
         string seed_str = rpt_grp_[i].seq.substr(0, rp.seed_len);
         
@@ -706,6 +707,9 @@ void RepeatGenerator<TStr>::seedGrouping(const RepeatParameter& rp)
             // continue;
         }
 #endif
+
+        seeds_.expand();
+        EList<SeedExt>& seeds = seeds_.back();
 
         seeds.reserveExact(positions.size());
 
@@ -723,20 +727,41 @@ void RepeatGenerator<TStr>::seedGrouping(const RepeatParameter& rp)
         }
         assert(seeds.size() > 0);
         string consensus;
+        consensus_all_.expand();
+        string& refined_consensus = consensus_all_.back();
         seedExtension(seed_str,
                       seeds,
                       consensus,
                       rp);
-        
+
+        refineConsensus(
+                seed_str,
+                seeds,
+                consensus,
+                refined_consensus,
+                rp.min_repeat_len,
+                fp);
+
         saveSeedExtension(seed_str,
                           seeds,
                           i,
                           fp,
-                          consensus,
+                          refined_consensus,
                           rp.min_repeat_len,
                           total_rep_seq_len);
     }
-    
+
+
+    assert_eq(consensus_all_.size(), seeds_.size());
+#ifndef NDEBUG
+    {
+        size_t tot_len = 0;
+        for(size_t i = 0; i < consensus_all_.size(); i++) {
+            tot_len += consensus_all_[i].length();
+        }
+        assert_eq(total_rep_seq_len, tot_len); 
+    }
+#endif
     fp << "total repeat sequence length: " << total_rep_seq_len << endl;
 
     fp.close();
@@ -1303,6 +1328,510 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
     }
 }
 
+
+#if 0
+template<typename TStr>
+void RepeatGenerator<TStr>::saveSeedEdit(
+        const string& consensus_merged,
+        EList<SeedExt>& seeds,
+        TIndexOffU min_rpt_len,
+        ostream& fp)
+{
+    // TODO
+    // check ESet performance 
+    ESet<Edit> editset;
+
+    size_t org_edit_count = 0;
+
+    // get unique edit list (wrt consensus_merged)
+    for(size_t i = 0; i < seeds.size(); i++) {
+        size_t ext_len = seeds[i].getExtLength();
+        if (ext_len < min_rpt_len) continue;
+
+        for(size_t j = 0; j < seeds[i].edits.size(); j++) {
+            editset.insert(seeds[i].edits[j]);
+            org_edit_count++;
+        }
+    }
+
+    fp << "org_edit_count: " << org_edit_count << endl;
+    fp << "uniq edit_count: " << editset.size() << endl;
+
+    // assign id
+    for(size_t i = 0; i < editset.size(); i++) {
+        editset[i].snpID = i;
+    }
+
+    for(size_t i = 0; i < seeds.size(); i++) {
+        size_t ext_len = seeds[i].getExtLength();
+        if (ext_len < min_rpt_len) continue;
+
+        for(size_t j = 0; j < seeds[i].edits.size(); j++) {
+            const Edit& e = editset.get(seeds[i].edits[j]);
+            seeds[i].edits[j].snpID = e.snpID;
+        }
+    }
+
+    // write SNPs
+    writeSNPs(fp, "rep", editset);
+
+    // group by baseoff
+    for(size_t sb = 0; sb < seeds.size(); ) {
+        size_t se = sb + 1;
+        size_t count = 1;
+        for(; se < seeds.size(); se++) {
+            if(!SeedExt::isSameConsensus(seeds[sb], seeds[se])) {
+                break;
+            }
+            count++;
+        }
+
+        // [sb, se) has same baseoff
+        size_t ext_len = seeds[sb].getExtLength();
+        cerr << sb << ", " << se << ", " << count << endl;
+        // DK
+        if(ext_len < min_rpt_len) {
+            // go baseoff
+            sb = se;
+            continue;
+        }
+
+        // sort by edits
+        sort(seeds.begin() + sb, seeds.begin() + se, SeedExt::sort_by_edits);
+
+
+        // write SNP, Haplotype
+        // group by allele
+        get_alleles(sb, se, seeds, fp);
+
+        sb = se;
+    }
+}
+#endif
+
+template<typename TStr>
+void RepeatGenerator<TStr>::get_alleles(TIndexOffU grp_id,
+                                        const string& seq_name, 
+                                        TIndexOffU baseoff,
+                                        TIndexOffU& hapl_id_base,
+                                        const Range range, 
+                                        EList<SeedExt>& seeds, 
+                                        ostream& info_fp,
+                                        ostream& hapl_fp)
+{
+    // [ragne.first, range.last)
+    TIndexOffU allele_id = 0;
+
+    for(size_t sb = range.first; sb < range.second;) {
+        size_t se = sb + 1;
+        for(; se < range.second; se++) {
+            if(!SeedExt::isSameAllele(seeds[sb], seeds[se])) {
+                break;
+            }
+        }
+
+        // [sb, se) are same allele
+
+        writeAllele(grp_id, allele_id, baseoff, Range(sb, se), seq_name, seeds, info_fp);
+        writeHaploType(hapl_id_base, baseoff, Range(sb, se), seq_name, seeds, hapl_fp);
+
+        allele_id++;
+        sb = se;
+    }
+    
+}
+
+
+template<typename TStr>
+void RepeatGenerator<TStr>::updateSeedBaseoff(EList<SeedExt>& seeds, Range range, size_t diff)
+{
+    for(size_t i = range.first; i < range.second; i++) {
+        seeds[i].baseoff += diff;
+    }
+}
+
+
+#if 1
+template<typename TStr>
+void RepeatGenerator<TStr>::saveConsensusSequence()
+{
+    string fname = filename_ + ".rep.fa";
+    ofstream fp(fname.c_str());
+
+	/* TODO */
+	fp << ">" << "rep" << endl;
+
+	int oskip = 0;
+
+    size_t acc_len = 0;
+
+    assert_eq(consensus_all_.size(), seeds_.size());
+
+	for(size_t idx = 0; idx < consensus_all_.size(); idx++) {
+        string& constr = consensus_all_[idx];
+        size_t constr_len = constr.length();
+        acc_len += constr_len;
+
+		size_t si = 0;
+		while(si < constr_len) {
+			size_t out_len = std::min((size_t)(output_width - oskip), (size_t)(constr_len - si));
+
+			fp << constr.substr(si, out_len);
+
+			if((oskip + out_len) == output_width) {
+				fp << endl;
+				oskip = 0;
+			} else {
+				// last line
+				oskip = oskip + out_len;
+			}
+
+			si += out_len;
+		}
+	}
+	if(oskip) {
+		fp << endl;
+	}
+
+	fp.close();
+}
+
+
+template<typename TStr>
+void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
+                                         TIndexOffU& snp_id_base, 
+                                         TIndexOffU& hapl_id_base,
+                                         TIndexOffU baseoff,
+                                         EList<SeedExt>& seeds,
+                                         ostream& info_fp,
+                                         ostream& snp_fp,
+                                         ostream& hapl_fp)
+{
+    const string rep_basename = "rep";
+
+    // TODO
+    // check ESet performance 
+    ESet<Edit> editset;
+
+    size_t org_edit_count = 0;
+
+    // get unique edit list
+    for(size_t i = 0; i < seeds.size(); i++) {
+        size_t ext_len = seeds[i].getExtLength();
+        // DK
+        if (ext_len < min_repeat_len_) continue;
+
+        for(size_t j = 0; j < seeds[i].edits.size(); j++) {
+            editset.insert(seeds[i].edits[j]);
+            org_edit_count++;
+        }
+    }
+
+    //cerr << "org_edit_count: " << org_edit_count << endl;
+    //cerr << "uniq edit_count: " << editset.size() << endl;
+
+    // assign id
+    for(size_t i = 0; i < editset.size(); i++) {
+        editset[i].snpID = snp_id_base + i;
+    }
+    for(size_t i = 0; i < seeds.size(); i++) {
+        size_t ext_len = seeds[i].getExtLength();
+        //DK
+        if (ext_len < min_repeat_len_) continue;
+
+        for(size_t j = 0; j < seeds[i].edits.size(); j++) {
+            const Edit& e = editset.get(seeds[i].edits[j]);
+            seeds[i].edits[j].snpID = e.snpID;
+        }
+    }
+
+    // write SNPs
+    writeSNPs(snp_fp, baseoff, rep_basename, editset);
+
+    // group by baseoff
+    for(size_t sb = 0; sb < seeds.size(); ) {
+        size_t se = sb + 1;
+        size_t count = 1;
+        for(; se < seeds.size(); se++) {
+            if(!SeedExt::isSameConsensus(seeds[sb], seeds[se])) {
+                break;
+            }
+            count++;
+        }
+
+        // [sb, se) has same baseoff
+        size_t ext_len = seeds[sb].getExtLength();
+
+        // DK
+        if(ext_len < min_repeat_len_) {
+            // go baseoff
+            sb = se;
+            continue;
+        }
+
+        // sort by edits
+        sort(seeds.begin() + sb, seeds.begin() + se, SeedExt::sort_by_edits);
+
+        // write SNP, Haplotype
+        // group by allele
+        get_alleles(seed_group_id, 
+                    rep_basename, 
+                    baseoff, 
+                    hapl_id_base, 
+                    Range(sb, se), 
+                    seeds, 
+                    info_fp, 
+                    hapl_fp);
+
+        sb = se;
+    }
+
+    // Update snpIDBase
+    snp_id_base += editset.size();
+}
+
+
+template<typename TStr>
+void RepeatGenerator<TStr>::saveSeeds()
+{
+
+	string rptinfo_filename = filename_ + ".rep.info";
+    string snp_filename = filename_ + ".rep.snp";
+    string hapl_filename = filename_ + ".rep.haplotype";
+
+	ofstream info_fp(rptinfo_filename.c_str());
+    ofstream snp_fp(snp_filename.c_str());
+    ofstream hapl_fp(hapl_filename.c_str());
+
+    TIndexOffU snp_id_base = 0;
+    TIndexOffU hapl_id_base = 0;
+    TIndexOffU baseoff = 0;
+
+    assert_eq(seeds_.size(), consensus_all_.size());
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        saveSeedSNPs(i, snp_id_base, hapl_id_base, baseoff, seeds_[i], info_fp, snp_fp, hapl_fp);
+
+        baseoff += consensus_all_[i].length();
+    }
+
+    info_fp.close();
+    snp_fp.close();
+    hapl_fp.close();
+
+    saveConsensusSequence();
+}
+
+#endif
+
+template<typename TStr>
+void RepeatGenerator<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
+                                           TIndexOffU baseoff,
+                                           Range range,
+                                           const string& seq_name,
+                                           EList<SeedExt>& seeds,
+                                           ostream &fp)
+{
+    EList<Edit>& edits = seeds[range.first].edits;
+
+    if(edits.size() == 0) {
+        return;
+    }
+
+    // left-most, right-most pos
+    size_t left_pos = edits[0].pos;
+    size_t right_pos = edits[edits.size() - 1].pos;
+
+
+    fp << "rpht" << hapl_id_base++;
+    fp << "\t" << seq_name;
+    fp << "\t" << left_pos + baseoff;
+    fp << "\t" << right_pos + baseoff;
+    fp << "\t";
+    for(size_t i = 0; i < edits.size(); i++) {
+        if(i != 0) {
+            fp << ",";
+        }
+        fp << "rps" << edits[i].snpID;
+    }
+    fp << endl;
+}
+
+template<typename TStr>
+void RepeatGenerator<TStr>::writeAllele(TIndexOffU grp_id, 
+                                        TIndexOffU allele_id,
+                                        TIndexOffU baseoff,
+                                        Range range,
+                                        const string& seq_name,
+                                        EList<SeedExt>& seeds,
+                                        ostream &fp)
+{
+    // >rpt_name*0\trep\trep_pos\trep_len\tpos_count\t0
+    // chr_name:pos:direction chr_name:pos:direction
+    //
+    // >rep1*0	rep	0	100	470	0
+    // 22:112123123:+ 22:1232131113:+
+    //
+    size_t snp_size = seeds[range.first].edits.size();
+    size_t pos_size = range.second - range.first;
+    fp << ">";
+    fp << "rpt_" << grp_id << "*" << allele_id;
+    fp << "\t" << seq_name;
+    fp << "\t" << seeds[range.first].baseoff + baseoff;
+    fp << "\t" << seeds[range.first].getExtLength();
+    fp << "\t" << range.second - range.first;
+    fp << "\t" << snp_size;
+
+    fp << "\t";
+    for(size_t i = 0; i < snp_size; i++) {
+        if(i) {fp << ",";}
+        fp << "rps" << seeds[range.first].edits[i].snpID;
+    }
+    fp << endl;
+
+    // print positions
+    for(size_t i = 0; i < pos_size; i++) {
+        if(i > 0 && (i % 10 == 0)) {
+            fp << endl;
+        }
+
+        if(i % 10 != 0) {
+            fp << " ";
+        }            
+        string chr_name;
+        TIndexOffU pos_in_chr;
+        TIndexOffU joinedOff = seeds[range.first + i].pos.first;
+
+        bool fw = true;
+        if(joinedOff < forward_length_) {
+            fw = true;
+        } else {
+            fw = false;
+            joinedOff = s_.length() - joinedOff - seeds[range.first].getExtLength();
+        }
+
+        getGenomeCoord(joinedOff, chr_name, pos_in_chr);
+
+        char direction = fw ? '+' : '-';
+        fp << chr_name << ":" << pos_in_chr << ":" << direction;
+    }
+
+    fp << endl;
+}
+
+template<typename TStr>
+void RepeatGenerator<TStr>::writeSNPs(ostream& fp, 
+                                      TIndexOffU baseoff,
+                                      const string& rep_chr_name, 
+                                      const ESet<Edit>& editset)
+{
+    for(size_t i = 0; i < editset.size(); i++) {
+        const Edit& ed = editset[i];
+
+        if(ed.isMismatch()) {
+            fp << "rps" << ed.snpID;
+            fp << "\t" << "single";
+            fp << "\t" << rep_chr_name;
+            fp << "\t" << ed.pos + baseoff;
+            fp << "\t" << ed.qchr;
+            fp << endl;
+        } else {
+            assert(false);
+        }
+    }
+}
+
+template<typename TStr>
+void RepeatGenerator<TStr>::refineConsensus(const string& seed_string,
+        EList<SeedExt>& seeds,
+        const string& old_consensus,
+        string& refined_consensus,
+        TIndexOffU min_rpt_len,
+        ostream& fp)
+{
+    size_t tot_exp_len = 0;
+    for(size_t i = 0; i < seeds.size(); i++) {
+        if(seeds[i].backbone == i) {
+            size_t ext_len = seeds[i].getExtLength();
+            // DK
+            if (ext_len < min_rpt_len) continue;
+            tot_exp_len += ext_len;
+        }
+    }
+
+    refined_consensus.clear();
+    TIndexOffU refined_baseoff = 0;
+
+    // group by baseoff
+    for(size_t sb = 0; sb < seeds.size(); ) {
+        size_t se = sb + 1;
+        size_t count = 1;
+        for(; se < seeds.size(); se++) {
+            if(!SeedExt::isSameConsensus(seeds[sb], seeds[se])) {
+                break;
+            }
+            count++;
+        }
+
+        // [sb, se) has same baseoff
+        size_t ext_len = seeds[sb].getExtLength();
+        string constr = old_consensus.substr(seeds[sb].baseoff, ext_len);
+
+        // DK
+        if(ext_len < min_rpt_len) {
+            // go baseoff
+            sb = se;
+            continue;
+        }
+
+        // check backbone
+        if(seeds[sb].backbone == sb) {
+            // this group has own consensus string
+
+            // update baseoff
+            for(size_t i = sb; i < se; i++) {
+                seeds[i].baseoff = refined_baseoff;
+            }
+
+            refined_consensus += constr;
+            refined_baseoff += ext_len;
+
+        } else {
+            // This group's consensus is located on backbone's one
+            // Reuse backbone's consensus
+            TIndexOffU backbone = seeds[sb].backbone;
+            assert_leq(backbone, sb);
+
+            TIndexOffU backbone_baseoff = seeds[backbone].baseoff;
+            size_t backbone_leftext = seeds[backbone].leftExtLength();
+            size_t leftext = seeds[sb].leftExtLength();
+            assert_geq(backbone_leftext, leftext);
+            size_t diff = backbone_leftext - leftext;
+
+#ifndef NDEBUG
+            {
+                string bb_con = refined_consensus.substr(backbone_baseoff + diff, ext_len);
+                string cons = old_consensus.substr(seeds[sb].baseoff, ext_len);
+                assert_eq(bb_con, cons);
+            }
+#endif
+
+            // update baseoff
+            for(size_t i = sb; i < se; i++) {
+                seeds[i].baseoff = backbone_baseoff + diff; 
+            }
+        }
+
+        for(size_t i = sb; i < se; i++) {
+            string deststr = getString(s_, seeds[i].pos.first, ext_len);
+            seeds[i].generateEdits(refined_consensus, deststr);
+        }
+
+        sb = se;
+    }
+
+    assert_eq(refined_consensus.length(), tot_exp_len);
+}
+
 template<typename TStr>
 void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
                                               const EList<SeedExt>& seeds,
@@ -1321,8 +1850,7 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
     
     TIndexOffU max_left_ext_len = 0;
     for(size_t i = 0; i < seeds.size(); i++) {
-        assert_leq(seeds[i].pos.first, seeds[i].orig_pos.first);
-        TIndexOffU left_ext_len = seeds[i].orig_pos.first - seeds[i].pos.first;
+        TIndexOffU left_ext_len = seeds[i].leftExtLength();
         if(max_left_ext_len < left_ext_len) {
             max_left_ext_len = left_ext_len;
         }
@@ -1333,7 +1861,7 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
     for(size_t i = 0; i < seeds.size(); i++) {
         assert(seeds[i].done);
         
-        size_t ext_len = seeds[i].pos.second - seeds[i].pos.first;
+        size_t ext_len = seeds[i].getExtLength();
         
         // DK - debugging purposes
         if(ext_len < min_rpt_len) continue;
@@ -1351,9 +1879,11 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
         fp << "\t" << setw(4) << i << " -> " << setw(4) << std::left << seeds[i].backbone << std::right;
         fp << "\t" << ext_len;
         fp << "\t" << seeds[i].total_ed;
+        fp << "\t" << seeds[i].baseoff;
         fp << "\t" << setw(10) << seeds[i].pos.first << "\t" << setw(10) << seeds[i].pos.second;
         fp << "\t" << setw(10) << seeds[i].bound.first << "\t" << setw(10) << seeds[i].bound.second;
 
+#if 1
         string chr_name;
         TIndexOffU pos_in_chr;
         if(seeds[i].pos.first < forward_length_) {
@@ -1369,15 +1899,16 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
             getGenomeCoord(s_.length() - seeds[i].pos.second - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
         }
         fp << "\t" << chr_name << ":" << pos_in_chr;
-        
+#endif
+    
         string constr = consensus_merged.substr(seeds[i].baseoff, ext_len);
+#if 1
 
         // fp << "\t" << constr;
         assert_eq(constr.length(), deststr.length());
         fp << "\t";
         
-        assert_leq(seeds[i].pos.first, seeds[i].orig_pos.first);
-        TIndexOffU left_ext_len = seeds[i].orig_pos.first - seeds[i].pos.first;
+        TIndexOffU left_ext_len = seeds[i].leftExtLength();
         assert_leq(left_ext_len, max_left_ext_len);
         TIndexOffU left_indent = max_left_ext_len - left_ext_len;
         for(size_t j = 0; j < left_indent; j++) fp << ' ';
@@ -1387,6 +1918,20 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
             fp << deststr[j];
             if(different) fp << reset;
         }
+#endif
+
+#if 0
+        fp << "\t";
+        for(size_t ei = 0; ei < seeds[i].edits.size(); ei++) {
+            const Edit& edit = seeds[i].edits[ei];
+            if(ei > 0) fp << ",";
+            fp << edit;
+            if (edit.snpID != std::numeric_limits<uint32_t>::max()) {
+                fp << "@" << edit.snpID;
+            }
+        }
+#endif
+
         fp << endl;
         
         if(seeds[i].backbone == i) total_repeat_seq_len += constr.length();
@@ -1535,8 +2080,9 @@ void RepeatGenerator<TStr>::saveRepeatSequence()
 template<typename TStr>
 void RepeatGenerator<TStr>::saveFile()
 {
-	saveRepeatSequence();
-	saveRepeatGroup();
+    saveSeeds();
+	//saveRepeatSequence();
+	//saveRepeatGroup();
 }
 
 

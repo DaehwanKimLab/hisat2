@@ -52,6 +52,8 @@ public:
     bool       symmetric_extend; // extend symmetrically
 };
 
+typedef pair<TIndexOffU, TIndexOffU> Range;
+
 // Dump
 //
 // to_string
@@ -228,6 +230,8 @@ struct SeedExt {
     TIndexOffU baseoff;   // offset in consensus_merged
     
     TIndexOffU backbone;  // backbone seed number
+
+    EList<Edit> edits;      // edits w.r.t. consensus_merged
     
     SeedExt() {
         reset();
@@ -245,6 +249,94 @@ struct SeedExt {
         baseoff = 0;
         backbone = 0;
     };
+
+    size_t leftExtLength() const {
+        assert_leq(pos.first, orig_pos.first);
+        return orig_pos.first - pos.first;
+    }
+
+    size_t rightExtLength() const {
+        assert_geq(pos.second, orig_pos.second);
+        return pos.second - orig_pos.second;
+    }
+
+    size_t getExtLength() const {
+        return pos.second - pos.first;
+    }
+
+    static bool isSameConsensus(const SeedExt& a, const SeedExt& b) {
+        // TODO
+        // ext_len check?
+        return a.baseoff == b.baseoff;
+    }
+
+    static bool isSameAllele(const SeedExt& a, const SeedExt& b) {
+        const EList<Edit>& a_edit = a.edits;
+        const EList<Edit>& b_edit = b.edits;
+
+        if(a_edit.size() != b_edit.size()) {
+            return false;
+        }
+
+        for(size_t i = 0; i < a_edit.size(); i++) {
+            if(!(a_edit[i] == b_edit[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static bool sort_by_edits(const SeedExt& a, const SeedExt& b) {
+        const EList<Edit>& a_edit = a.edits;
+        const EList<Edit>& b_edit = b.edits;
+
+        size_t i = 0;
+
+        while((i < a_edit.size())
+                && (i < b_edit.size())) {
+
+            if(!(a_edit[i] == b_edit[i])) {
+                if(a_edit[i] < b_edit[i]) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+
+            i++;
+        }
+
+        if(a_edit.size() < b_edit.size()) {
+            return true;
+        }
+
+        if((a_edit.size() == b_edit.size())
+                && (a.pos.first < b.pos.first)) {
+            return true;
+        }
+        return false;
+    }
+
+    void generateEdits(const string& consensus_merged, const string& seed_ext)
+    {
+        size_t ed_done = 0;
+        size_t ext_len = getExtLength();
+        assert_eq(ext_len, seed_ext.length());
+
+        edits.clear();
+
+        for(size_t i = 0; i < ext_len && ed_done < total_ed; i++) {
+            char con_base = consensus_merged[baseoff + i];
+            char seed_base = seed_ext[i];
+
+            if (con_base != seed_base) {
+                edits.expand();
+                edits.back().init(baseoff + i,
+                        con_base, seed_base, EDIT_TYPE_MM);
+                ed_done++;
+            }
+        }
+    }
 };
 
 // find and write repeats
@@ -319,6 +411,18 @@ public:
                            TIndexOffU min_rpt_len,
                            size_t& total_rep_seq_len);
 
+    void saveSeedEdit(const string& consensus_merged,
+                      EList<SeedExt>& seeds,
+                      TIndexOffU min_rpt_len,
+                      ostream& fp);
+
+    void refineConsensus(const string& seed_string,
+            EList<SeedExt>& seeds,
+            const string& old_consensus,
+            string& refined_consensus,
+            TIndexOffU min_rpt_len,
+            ostream& fp);
+
     void seedGrouping(const RepeatParameter& rp);
 
     void doTest(const RepeatParameter& rp,
@@ -337,10 +441,53 @@ private:
                            EList<size_t>& ed_seed_nums,
                            EList<string>* left_consensus,
                            EList<string>* right_consensus);
-    
+
+    void get_alleles(TIndexOffU grp_id,
+                     const string& seq_name, 
+                     TIndexOffU baseoff,
+                     TIndexOffU& hapl_id_base,
+                     const Range range, 
+                     EList<SeedExt>& seeds, 
+                     ostream& info_fp,
+                     ostream& hapl_fp);
+
+    void updateSeedBaseoff(EList<SeedExt>&, Range, size_t);
+
+    void writeAllele(TIndexOffU grp_id, 
+                     TIndexOffU allele_id,
+                     TIndexOffU baseoff,
+                     Range range,
+                     const string& seq_name,
+                     EList<SeedExt>& seeds,
+                     ostream &fp);
+
+    void writeSNPs(ostream& fp, 
+                   TIndexOffU baseoff,
+                   const string& rep_chr_name, 
+                   const ESet<Edit>& editset);
+
+    void writeHaploType(TIndexOffU& hapl_id_base,
+                        TIndexOffU baseoff,
+                        Range range,
+                        const string& seq_name,
+                        EList<SeedExt>& seeds,
+                        ostream &fp);
+
+    void saveSeedSNPs(TIndexOffU seed_group_id,
+                      TIndexOffU& snp_id_base, 
+                      TIndexOffU& hapl_id_base,
+                      TIndexOffU baseoff,
+                      EList<SeedExt>& seeds,
+                      ostream& info_fp,
+                      ostream& snp_fp,
+                      ostream& hapl_fp);
+
+    void saveSeeds();
+    void saveConsensusSequence();
     
 private:
     const int output_width = 60;
+    TIndexOffU min_repeat_len_;
     
     TStr& s_;
     const EList<RefRecord>& szs_;
@@ -375,6 +522,12 @@ private:
     SwAligner swa;
     LinkedEList<EList<Edit> > rawEdits_;
     RandomSource rnd_;
+
+
+    // Seeds
+    EList<string> consensus_all_;
+    ELList<SeedExt> seeds_;
+
 };
 
 int strcmpPos(const string&, const string&, TIndexOffU&);
