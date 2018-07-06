@@ -1413,6 +1413,7 @@ template<typename TStr>
 void RepeatGenerator<TStr>::get_alleles(TIndexOffU grp_id,
                                         const string& seq_name, 
                                         TIndexOffU baseoff,
+                                        TIndexOffU& allele_id,
                                         TIndexOffU& hapl_id_base,
                                         const Range range, 
                                         EList<SeedExt>& seeds, 
@@ -1420,7 +1421,6 @@ void RepeatGenerator<TStr>::get_alleles(TIndexOffU grp_id,
                                         ostream& hapl_fp)
 {
     // [ragne.first, range.last)
-    TIndexOffU allele_id = 0;
 
     for(size_t sb = range.first; sb < range.second;) {
         size_t se = sb + 1;
@@ -1548,6 +1548,8 @@ void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
     // write SNPs
     writeSNPs(snp_fp, baseoff, rep_basename, editset);
 
+    TIndexOffU allele_id = 0;
+
     // group by baseoff
     for(size_t sb = 0; sb < seeds.size(); ) {
         size_t se = sb + 1;
@@ -1577,6 +1579,7 @@ void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
         get_alleles(seed_group_id, 
                     rep_basename, 
                     baseoff, 
+                    allele_id,
                     hapl_id_base, 
                     Range(sb, se), 
                     seeds, 

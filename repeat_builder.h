@@ -266,9 +266,8 @@ struct SeedExt {
     }
 
     static bool isSameConsensus(const SeedExt& a, const SeedExt& b) {
-        // TODO
-        // ext_len check?
-        return a.baseoff == b.baseoff;
+        return (a.baseoff == b.baseoff) 
+            && (a.getExtLength() == b.getExtLength());
     }
 
     static bool isSameAllele(const SeedExt& a, const SeedExt& b) {
@@ -446,6 +445,7 @@ private:
     void get_alleles(TIndexOffU grp_id,
                      const string& seq_name, 
                      TIndexOffU baseoff,
+                     TIndexOffU& allele_id,
                      TIndexOffU& hapl_id_base,
                      const Range range, 
                      EList<SeedExt>& seeds, 
