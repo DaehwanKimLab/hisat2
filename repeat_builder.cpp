@@ -744,10 +744,10 @@ void RepeatGenerator<TStr>::seedGrouping(const RepeatParameter& rp)
 
         saveSeedExtension(seed_str,
                           seeds,
+                          rp,
                           i,
                           fp,
                           refined_consensus,
-                          rp.min_repeat_len,
                           total_rep_seq_len);
     }
 
@@ -1835,10 +1835,10 @@ void RepeatGenerator<TStr>::refineConsensus(const string& seed_string,
 template<typename TStr>
 void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
                                               const EList<SeedExt>& seeds,
+                                              const RepeatParameter& rp,
                                               TIndexOffU rpt_grp_id,
                                               ostream& fp,
                                               const string& consensus_merged,
-                                              TIndexOffU min_rpt_len,
                                               size_t& total_repeat_seq_len)
 {
     // apply color, which is compatible with linux commands such as cat and less -r
@@ -1848,11 +1848,16 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
     const string red = "", reset = "";
 #endif
     
-    TIndexOffU max_left_ext_len = 0;
+    TIndexOffU max_left_ext_len = 0, max_right_ext_len = 0;
     for(size_t i = 0; i < seeds.size(); i++) {
         TIndexOffU left_ext_len = seeds[i].leftExtLength();
         if(max_left_ext_len < left_ext_len) {
             max_left_ext_len = left_ext_len;
+        }
+        assert_leq(seeds[i].orig_pos.second, seeds[i].pos.second);
+        TIndexOffU right_ext_len = seeds[i].rightExtLength();
+        if(max_right_ext_len < right_ext_len) {
+            max_right_ext_len = right_ext_len;
         }
     }
     
@@ -1860,11 +1865,8 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
     size_t count = 0;
     for(size_t i = 0; i < seeds.size(); i++) {
         assert(seeds[i].done);
-        
         size_t ext_len = seeds[i].getExtLength();
-        
-        // DK - debugging purposes
-        if(ext_len < min_rpt_len) continue;
+        if(ext_len < rp.min_repeat_len) continue;
         
         string deststr = getString(s_, seeds[i].pos.first, ext_len);
         if(prev_consensus_baseoff == seeds[i].baseoff) {
@@ -1883,7 +1885,6 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
         fp << "\t" << setw(10) << seeds[i].pos.first << "\t" << setw(10) << seeds[i].pos.second;
         fp << "\t" << setw(10) << seeds[i].bound.first << "\t" << setw(10) << seeds[i].bound.second;
 
-#if 1
         string chr_name;
         TIndexOffU pos_in_chr;
         if(seeds[i].pos.first < forward_length_) {
@@ -1899,15 +1900,15 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
             getGenomeCoord(s_.length() - seeds[i].pos.second - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
         }
         fp << "\t" << chr_name << ":" << pos_in_chr;
-#endif
     
         string constr = consensus_merged.substr(seeds[i].baseoff, ext_len);
-#if 1
+        if(seeds[i].backbone == i) total_repeat_seq_len += constr.length();
 
         // fp << "\t" << constr;
         assert_eq(constr.length(), deststr.length());
         fp << "\t";
         
+        // print sequence w.r.t. the current group
         TIndexOffU left_ext_len = seeds[i].leftExtLength();
         assert_leq(left_ext_len, max_left_ext_len);
         TIndexOffU left_indent = max_left_ext_len - left_ext_len;
@@ -1918,7 +1919,6 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
             fp << deststr[j];
             if(different) fp << reset;
         }
-#endif
 
 #if 0
         fp << "\t";
@@ -1931,10 +1931,44 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
             }
         }
 #endif
-
-        fp << endl;
         
-        if(seeds[i].backbone == i) total_repeat_seq_len += constr.length();
+        // print sequence w.r.t. the backbone sequence
+        if(rp.symmetric_extend) {
+            TIndexOffU right_ext_len = seeds[i].rightExtLength();
+            assert_leq(right_ext_len, max_right_ext_len);
+            TIndexOffU right_indent = max_right_ext_len - right_ext_len;
+            for(size_t j = 0; j < right_indent; j++) fp << ' ';
+            fp << "  ";
+
+            TIndexOffU max_backbone = 0, max_ext_len = 0;
+            for(int j = (int)seeds[i].backbone; j >= 0; j--) {
+                TIndexOffU backbone_ext_len = seeds[j].getExtLength();
+                if(backbone_ext_len > max_ext_len) {
+                    max_backbone = (TIndexOffU)j;
+                    max_ext_len = backbone_ext_len;
+                }
+            }
+            const SeedExt& backbone_seed = seeds[max_backbone];
+            size_t backbone_ext_len = backbone_seed.getExtLength();
+            string backbone_constr = consensus_merged.substr(backbone_seed.baseoff, backbone_ext_len);
+            TIndexOffU backbone_left_ext_len = backbone_seed.leftExtLength();
+            assert_leq(backbone_left_ext_len, max_left_ext_len);
+            TIndexOffU backbone_left_indent = max_left_ext_len - backbone_left_ext_len;
+            assert_leq(left_ext_len, backbone_left_ext_len);
+            if(seeds[i].pos.first >= backbone_left_ext_len - left_ext_len) {
+                string backbone_deststr = getString(s_, seeds[i].pos.first - (backbone_left_ext_len - left_ext_len), backbone_ext_len);
+                assert_eq(backbone_constr.length(), backbone_deststr.length());
+                for(size_t j = 0; j < backbone_left_indent; j++) fp << ' ';
+                for(size_t j = 0; j < backbone_constr.length(); j++) {
+                    bool different = (backbone_constr[j] != backbone_deststr[j]);
+                    if(different) fp << red;
+                    fp << backbone_deststr[j];
+                    if(different) fp << reset;
+                }
+            }
+        }
+        
+        fp << endl;
     }
     
     if(count > 0) fp << count << endl << endl;

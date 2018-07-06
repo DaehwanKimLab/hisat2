@@ -405,10 +405,10 @@ public:
 
     void saveSeedExtension(const string& seed_string,
                            const EList<SeedExt>& seeds,
+                           const RepeatParameter& rp,
                            TIndexOffU rpt_grp_id,
                            ostream& fp,
                            const string& consensus_merged,
-                           TIndexOffU min_rpt_len,
                            size_t& total_rep_seq_len);
 
     void saveSeedEdit(const string& consensus_merged,
