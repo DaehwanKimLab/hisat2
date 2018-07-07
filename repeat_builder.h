@@ -266,7 +266,7 @@ struct SeedExt {
     }
 
     static bool isSameConsensus(const SeedExt& a, const SeedExt& b) {
-        return (a.baseoff == b.baseoff) 
+        return (a.baseoff == b.baseoff)
             && (a.getExtLength() == b.getExtLength());
     }
 
@@ -415,13 +415,17 @@ public:
                       EList<SeedExt>& seeds,
                       TIndexOffU min_rpt_len,
                       ostream& fp);
+    
+    void refineSeed(const string& consensus,
+                    EList<SeedExt>& seeds,
+                    const RepeatParameter& rp);
 
     void refineConsensus(const string& seed_string,
-            EList<SeedExt>& seeds,
-            const string& old_consensus,
-            string& refined_consensus,
-            TIndexOffU min_rpt_len,
-            ostream& fp);
+                         EList<SeedExt>& seeds,
+                         const RepeatParameter& rp,
+                         const string& old_consensus,
+                         string& refined_consensus,
+                         ostream& fp);
 
     void seedGrouping(const RepeatParameter& rp);
 
