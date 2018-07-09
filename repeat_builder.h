@@ -484,7 +484,7 @@ private:
                       ostream& hapl_fp);
 
     void saveSeeds();
-    void saveConsensusSequence();
+    void saveConsensusSequence(const EList<bool>& filter_out);
     
 private:
     const int output_width = 60;

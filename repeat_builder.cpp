@@ -1554,7 +1554,7 @@ void RepeatGenerator<TStr>::updateSeedBaseoff(EList<SeedExt>& seeds, Range range
 
 #if 1
 template<typename TStr>
-void RepeatGenerator<TStr>::saveConsensusSequence()
+void RepeatGenerator<TStr>::saveConsensusSequence(const EList<bool>& filter_out)
 {
     string fname = filename_ + ".rep.fa";
     ofstream fp(fname.c_str());
@@ -1569,6 +1569,7 @@ void RepeatGenerator<TStr>::saveConsensusSequence()
     assert_eq(consensus_all_.size(), seeds_.size());
 
 	for(size_t idx = 0; idx < consensus_all_.size(); idx++) {
+        if(filter_out[idx]) continue;
         string& constr = consensus_all_[idx];
         size_t constr_len = constr.length();
         acc_len += constr_len;
@@ -1691,6 +1692,82 @@ void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
     snp_id_base += editset.size();
 }
 
+void filter_seeds(const ELList<SeedExt>& seedss,
+                  EList<bool>& filter_out) {
+    if(seedss.size() <= 0)
+        return;
+    filter_out.resizeExact(seedss.size());
+    filter_out.fill(false);
+    
+    EList<TIndexOffU> positions, positions2;
+    map<TIndexOffU, TIndexOffU> seedpos_to_group;
+    
+    // skip if a given set of seeds corresponds to an existing set of seeds
+    const TIndexOffU pos_diff = 50;
+    const size_t sampling = 10;
+    for(size_t s = 0; s < seedss.size(); s++) {
+        const EList<SeedExt>& seeds = seedss[s];
+        bool add = true;
+        positions.clear();
+        for(size_t i = 0; i < seeds.size(); i++) {
+            positions.push_back(seeds[i].pos.first);
+        }
+        positions.sort();
+        
+        for(size_t i = 0; i < seeds.size(); i += sampling) {
+            TIndexOffU joinedOff = seeds[i].pos.first;
+            map<TIndexOffU, TIndexOffU>::iterator it = seedpos_to_group.lower_bound(joinedOff >= pos_diff ? joinedOff - pos_diff : 0);
+            for(; it != seedpos_to_group.end(); it++) {
+                if(it->first > joinedOff + pos_diff) {
+                    break;
+                }
+                assert_geq(it->first + pos_diff, joinedOff);
+                assert_lt(it->second, seedss.size());
+                size_t s2 = it->second;
+                const EList<SeedExt>& seeds2 = seedss[s2];
+                
+                positions2.clear();
+                for(size_t i2 = 0; i2 < seeds2.size(); i2++) {
+                    positions2.push_back(seeds2[i2].pos.first);
+                }
+                positions2.sort();
+                
+                size_t num_match = 0;
+                size_t p = 0, p2 = 0;
+                while(p < positions.size() && p2 < positions2.size()) {
+                    TIndexOffU pos = positions[p], pos2 = positions2[p2];
+                    if(pos + pos_diff >= pos2 && pos2 + pos_diff >= pos) {
+                        num_match++;
+                    }
+                    if(pos <= pos2) p++;
+                    else            p2++;
+                }
+                
+                // if the number of matches is >= 10% of positions in the smaller group
+                if(num_match * 10 >= min(positions.size(), positions2.size()) * 1) {
+                    if(seeds.size() <= seeds.size()) {
+                        add = false;
+                        filter_out[s] = true;
+                        break;
+                    } else {
+                        filter_out[s2] = true;
+                        for(size_t p2 = 0; p2 < seeds2.size(); p2++) {
+                            if(seedpos_to_group[positions[p2]] == s2) {
+                                seedpos_to_group.erase(positions[p2]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if(add) {
+            for(size_t i = 0; i < positions.size(); i++) {
+                seedpos_to_group[positions[i]] = s;
+            }
+        }
+    }
+}
+
 
 template<typename TStr>
 void RepeatGenerator<TStr>::saveSeeds()
@@ -1698,7 +1775,7 @@ void RepeatGenerator<TStr>::saveSeeds()
 	string rptinfo_filename = filename_ + ".rep.info";
     string snp_filename = filename_ + ".rep.snp";
     string hapl_filename = filename_ + ".rep.haplotype";
-
+    
 	ofstream info_fp(rptinfo_filename.c_str());
     ofstream snp_fp(snp_filename.c_str());
     ofstream hapl_fp(hapl_filename.c_str());
@@ -1706,11 +1783,14 @@ void RepeatGenerator<TStr>::saveSeeds()
     TIndexOffU snp_id_base = 0;
     TIndexOffU hapl_id_base = 0;
     TIndexOffU baseoff = 0;
+    
+    EList<bool> filter_out;
+    filter_seeds(seeds_, filter_out);
 
     assert_eq(seeds_.size(), consensus_all_.size());
     for(size_t i = 0; i < seeds_.size(); i++) {
+        if(filter_out[i]) continue;
         saveSeedSNPs(i, snp_id_base, hapl_id_base, baseoff, seeds_[i], info_fp, snp_fp, hapl_fp);
-
         baseoff += consensus_all_[i].length();
     }
 
@@ -1718,7 +1798,19 @@ void RepeatGenerator<TStr>::saveSeeds()
     snp_fp.close();
     hapl_fp.close();
 
-    saveConsensusSequence();
+    saveConsensusSequence(filter_out);
+    
+    // DK - debugging purposes
+#if 1
+    string test_filename = filename_ + ".rep.test";
+    ofstream test_fp(test_filename.c_str());
+
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        test_fp << i << '\t' << seeds_[i].size() << '\t' << seeds_[i][0].pos.first << '\t' << (filter_out[i] ? "filtered_out" : "filtered_in") << endl;
+    }
+    
+    test_fp.close();
+#endif
 }
 
 #endif
@@ -1732,28 +1824,38 @@ void RepeatGenerator<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
                                            ostream &fp)
 {
     EList<Edit>& edits = seeds[range.first].edits;
-
-    if(edits.size() == 0) {
+    if(edits.size() == 0)
         return;
-    }
+    
+    // right-most position
+    TIndexOffU max_right_pos = seeds[range.first].getExtLength() - 1;
 
-    // left-most, right-most pos
-    size_t left_pos = edits[0].pos;
-    size_t right_pos = edits[edits.size() - 1].pos;
-
-
-    fp << "rpht" << hapl_id_base++;
-    fp << "\t" << seq_name;
-    fp << "\t" << left_pos + baseoff;
-    fp << "\t" << right_pos + baseoff;
-    fp << "\t";
-    for(size_t i = 0; i < edits.size(); i++) {
-        if(i != 0) {
-            fp << ",";
+    // create haplotypes of at least 16 bp long to prevent combinations of SNPs
+    // break a list of SNPs into several haplotypes if a SNP is far from the next SNP in the list
+    const TIndexOffU min_ht_len = 16;
+    size_t eb = 0, ee = 1;
+    while(ee < edits.size() + 1) {
+        if(ee == edits.size() ||
+           edits[eb].pos + (min_ht_len << 1) < edits[ee].pos) {
+            TIndexOffU left_pos = edits[eb].pos + baseoff;
+            TIndexOffU right_pos = (ee == edits.size() ? edits[ee-1].pos : edits[ee].pos);
+            right_pos = min<TIndexOffU>(max_right_pos, right_pos + min_ht_len) + baseoff;
+            fp << "rpht" << hapl_id_base++;
+            fp << "\t" << seq_name;
+            fp << "\t" << left_pos;
+            fp << "\t" << right_pos;
+            fp << "\t";
+            for(size_t i = eb; i < ee; i++) {
+                if(i > eb) {
+                    fp << ",";
+                }
+                fp << "rps" << edits[i].snpID;
+            }
+            fp << endl;
+            eb = ee;
         }
-        fp << "rps" << edits[i].snpID;
+        ee++;
     }
-    fp << endl;
 }
 
 template<typename TStr>

@@ -20,5 +20,5 @@ hisat2_simulate_reads.py --dna --num-fragment 1000000 --repeat-info 22.rep.info 
 
 hisat2_simulate_reads.py --dna --num-fragment 1000000 --error-rate 0.2 --repeat-info 22.rep.info 22.fa /dev/null /dev/null sim
 
-hisat2-build -p 3 22.fa --repeat-ref 22.rep.fa --repeat-info 22.rep.info 22_rep
+hisat2-build -p 3 22.fa --repeat-ref 22_rep.rep.fa --repeat-info 22_rep.rep.info --repeat-snp 22_rep.rep.snp --repeat-haplotype 22_rep.rep.haplotype 22_rep
 
