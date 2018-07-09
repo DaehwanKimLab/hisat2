@@ -231,8 +231,6 @@
 		E80538341DA83933008894D0 /* gp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gp.h; sourceTree = "<group>"; };
 		E84A236120D2AF0600C12106 /* repeat_builder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = repeat_builder.h; sourceTree = "<group>"; };
 		E84A236220D2AF1500C12106 /* repeat_builder.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = repeat_builder.cpp; sourceTree = "<group>"; };
-		E84A236420E2DCBC00C12106 /* hisat2_repeat.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_repeat.cpp; sourceTree = "<group>"; };
-		E84A236520E2DCBC00C12106 /* hisat2_repeat_main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hisat2_repeat_main.cpp; sourceTree = "<group>"; };
 		E8C30C5A1C20A5DD00C03464 /* hisat2x */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = hisat2x; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8C30C6A1C20A64A00C03464 /* hisat2-buildx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-buildx"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8C30C751C20A65400C03464 /* hisat2-inspectx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-inspectx"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -448,9 +446,6 @@
 		E8C30C641C20A60F00C03464 /* Source */ = {
 			isa = PBXGroup;
 			children = (
-				606F132320E1528D008903D6 /* hisat2_repeat_main.cpp */,
-				E84A236520E2DCBC00C12106 /* hisat2_repeat_main.cpp */,
-				606F132220E1528D008903D6 /* hisat2_repeat.cpp */,
 				E8C30C7C1C20B2B600C03464 /* aligner_bt.h */,
 				E8C30C7D1C20B2B600C03464 /* aligner_cache.h */,
 				E8C30C7E1C20B2B600C03464 /* aligner_driver.h */,
@@ -563,7 +558,8 @@
 				E8C30CE71C20B2B600C03464 /* hisat2_build.cpp */,
 				E8C30CE81C20B2B600C03464 /* hisat2_inspect.cpp */,
 				E8C30CE91C20B2B600C03464 /* hisat2_main.cpp */,
-				E84A236420E2DCBC00C12106 /* hisat2_repeat.cpp */,
+				606F132320E1528D008903D6 /* hisat2_repeat_main.cpp */,
+				606F132220E1528D008903D6 /* hisat2_repeat.cpp */,
 				E8C30CEA1C20B2B600C03464 /* hisat2.cpp */,
 				E8C30CEB1C20B2B600C03464 /* ival_list.cpp */,
 				E8C30CEC1C20B2B600C03464 /* limit.cpp */,

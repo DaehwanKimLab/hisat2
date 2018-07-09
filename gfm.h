@@ -1879,15 +1879,24 @@ public:
                         index_t numCoords, numAlts;
                         repeat_file >> numCoords >> numAlts;
                         EList<index_t> snpIDs;
-                        while(snpIDs.size() < numAlts) {
-                            string snpID;
-                            repeat_file >> snpID;
-                            if(snpID2num.find(snpID) == snpID2num.end()) {
-                                cerr << "Error: " << snpID << " is not found" << endl;
+                        EList<string> snpStrIDs;
+                        if(numAlts > 0) {
+                            string snpStrID;
+                            repeat_file >> snpStrID;
+                            tokenize(snpStrID, ",", snpStrIDs);
+                            if(snpStrIDs.size() != numAlts) {
+                                assert(false);
+                                cerr << "Error: the number of SNPs (" << snpIDs.size() << ", " << snpStrID << ") does not equal to " << numAlts << endl;
                                 throw 1;
                             }
-                            index_t numID = snpID2num[snpID];
-                            snpIDs.push_back(numID);
+                            for(index_t i = 0; i < snpStrIDs.size(); i++) {
+                                if(snpID2num.find(snpStrIDs[i]) == snpID2num.end()) {
+                                    cerr << "Error: " << snpStrIDs[i] << " is not found" << endl;
+                                    throw 1;
+                                }
+                                index_t numID = snpID2num[snpStrIDs[i]];
+                                snpIDs.push_back(numID);
+                            }
                         }
                         
                         EList<RepeatCoord<index_t> > positions;

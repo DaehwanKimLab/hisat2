@@ -119,7 +119,7 @@ static void resetOptions() {
     seed_length    = 50;
     seed_count     = 5;
 	min_repeat_length = 100;
-    max_repeat_length = numeric_limits<TIndexOffU>::max();
+    max_repeat_length = numeric_limits<uint16_t>::max();
 	repeat_count   = 5;
     max_repeat_edit = 10;
     max_repeat_matchlen = min_repeat_length / 2; // half of repeat_length
@@ -190,7 +190,7 @@ static void printUsage(ostream& out) {
         << "    --seed-length <int>     seed length (default: 50)" << endl
         << "    --seed-count <int>      seed count (default: 5)" << endl
         << "    --min-repeat-length <int>   minimum repeat length (default: 100)" << endl
-        << "    --max-repeat-length <int>   maximum repeat length (default: max int)" << endl
+        << "    --max-repeat-length <int>   maximum repeat length (default: 65535)" << endl
         << "    --repeat-count <int>    minimum repeat count (default: 5)" << endl
         << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
         << "    --repeat-matchlen <int>" << endl

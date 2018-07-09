@@ -415,10 +415,6 @@ public:
                       EList<SeedExt>& seeds,
                       TIndexOffU min_rpt_len,
                       ostream& fp);
-    
-    void refineSeed(const string& consensus,
-                    EList<SeedExt>& seeds,
-                    const RepeatParameter& rp);
 
     void refineConsensus(const string& seed_string,
                          EList<SeedExt>& seeds,

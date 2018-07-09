@@ -733,21 +733,13 @@ void RepeatGenerator<TStr>::seedGrouping(const RepeatParameter& rp)
                       seeds,
                       consensus,
                       rp);
-        
-        refineSeed(consensus,
-                   seeds,
-                   rp);
 
-#if 1
         refineConsensus(seed_str,
                         seeds,
                         rp,
                         consensus,
                         refined_consensus,
                         fp);
-#else
-        refined_consensus = consensus;
-#endif
 
         saveSeedExtension(seed_str,
                           seeds,
@@ -758,8 +750,6 @@ void RepeatGenerator<TStr>::seedGrouping(const RepeatParameter& rp)
                           total_rep_seq_len);
     }
 
-
-#if 0
     assert_eq(consensus_all_.size(), seeds_.size());
 #ifndef NDEBUG
     {
@@ -770,7 +760,7 @@ void RepeatGenerator<TStr>::seedGrouping(const RepeatParameter& rp)
         assert_eq(total_rep_seq_len, tot_len); 
     }
 #endif
-#endif
+
     fp << "total repeat sequence length: " << total_rep_seq_len << endl;
 
     fp.close();
@@ -1045,12 +1035,73 @@ void RepeatGenerator<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
     }
 }
 
+template<typename TStr>
+void refineSeed(const TStr& s,
+                const string& consensus,
+                EList<SeedExt>& seeds,
+                TIndexOffU backbone_seed_idx,
+                TIndexOffU seed_idx,
+                const RepeatParameter& rp)
+{
+    const SeedExt& backbone_seed = seeds[backbone_seed_idx];
+    SeedExt& seed = seeds[seed_idx];
+    
+    TIndexOffU ext_len = seed.getExtLength();
+    TIndexOffU backbone_ext_len = backbone_seed.getExtLength();
+    if(ext_len >= backbone_ext_len ||
+       seed.leftExtLength() > backbone_seed.leftExtLength() ||
+       seed.rightExtLength() > backbone_seed.rightExtLength())
+        return;
+
+    string constr = consensus.substr(backbone_seed.baseoff, backbone_ext_len);
+    TIndexOffU l_diff = backbone_seed.leftExtLength() - seed.leftExtLength();
+    TIndexOffU r_diff = backbone_seed.rightExtLength() - seed.rightExtLength();
+    
+    if(seed.bound.first + l_diff > seed.pos.first ||
+       seed.pos.second + r_diff > seed.bound.second)
+        return;
+    
+    string seqstr = getString(s, seed.pos.first - l_diff, backbone_ext_len);
+    assert_eq(constr.length(), seqstr.length());
+    
+    TIndexOffU l = 0;
+    for(; l < l_diff; l++) {
+        TIndexOffU str_i = l_diff - l - 1;
+        if(constr[str_i] != seqstr[str_i])
+            break;
+    }
+    
+    TIndexOffU r = 0;
+    for(; r < r_diff; r++) {
+        TIndexOffU str_i = l_diff + ext_len + r;
+        if(constr[str_i] != seqstr[str_i])
+            break;
+    }
+    
+    if(l <= 0 && r <= 0)
+        return;
+    
+    seed.backbone = backbone_seed_idx;
+    seed.baseoff = backbone_seed.baseoff + l_diff - l;
+    seed.pos.first -= l;
+    seed.pos.second += r;
+}
+
 struct SeedExtInfo {
     TIndexOffU sb;
     TIndexOffU se;
     TIndexOffU left_ext_len;
     TIndexOffU right_ext_len;
 };
+
+bool cmpSeed(const SeedExt& s, const SeedExt& s2) {
+    if(s.backbone != s2.backbone)
+        return s.backbone < s2.backbone;
+    if(s.getExtLength() != s2.getExtLength())
+        return s.getExtLength() > s2.getExtLength();
+    assert_neq(s.orig_pos.first, s2.orig_pos.second);
+    return s.orig_pos.first > s2.orig_pos.second;
+}
 
 template<typename TStr>
 void RepeatGenerator<TStr>::seedExtension(string& seed_string,
@@ -1071,13 +1122,16 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
     EList<size_t> ed_seed_nums, ed_seed_nums2;
     bool first_ext = true;
     while(!seed_groups.empty()) {
-        TIndexOffU sb = seed_groups.back().sb;  // seed begin
-        TIndexOffU se = seed_groups.back().se;  // seed end
+        TIndexOffU orig_sb = seed_groups.back().sb;  // seed begin
+        TIndexOffU sb = orig_sb;                     // seed begin
+        TIndexOffU se = seed_groups.back().se;       // seed end
         bool left_extended = seed_groups.back().left_ext_len > 0;
         assert_lt(sb, se);
         seed_groups.pop_back();
         
         size_t max_group_rep = 0, max_group_num = 0;
+        TIndexOffU prev_left_ext_len = seeds[sb].leftExtLength();
+        TIndexOffU prev_right_ext_len = seeds[sb].rightExtLength();
     
         for(size_t i = sb; i < se; i++) {
 #ifndef NDEBUG
@@ -1260,27 +1314,10 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
                 num_passed_seeds++;
             }
             
-            if(num_passed_seeds >= rp.repeat_count) {
-                bool further_extend = true;
-                if(first_ext) {
-                    if(consensus.length() < rp.repeat_count) {
-                        further_extend = false;
-                    }
-                }
-                if(consensus.length() >= rp.max_repeat_len) {
-                    further_extend = false;
-                }
-                if(further_extend) {
-                    seed_groups.expand();
-                    seed_groups.back().sb = sb;
-                    seed_groups.back().se = sb + num_passed_seeds;
-                    seed_groups.back().left_ext_len = left_consensus.length();
-                    seed_groups.back().right_ext_len = right_consensus.length();
-                    if(num_passed_seeds > max_group_num) {
-                        max_group_rep = sb;
-                        max_group_num = num_passed_seeds;
-                    }
-                }
+            if(num_passed_seeds >= (first_ext ? rp.seed_count : rp.repeat_count) &&
+               num_passed_seeds > max_group_num) {
+                max_group_rep = sb;
+                max_group_num = num_passed_seeds;
             }
             
             baseoff += consensus.length();
@@ -1292,12 +1329,17 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
         if(se - sb > 0) {
             for(size_t i = sb; i < se; i++) {
                 assert(!seeds[i].done);
-                seeds[i].done = true;
                 if(first_ext) {
                     seeds[i].baseoff = baseoff;
                 } else {
                     if(max_group_num > 0) {
                         seeds[i].backbone = max_group_rep;
+                        refineSeed(s_,
+                                   consensus_merged,
+                                   seeds,
+                                   max_group_rep,
+                                   i,
+                                   rp);
                     }
                 }
             }
@@ -1305,6 +1347,56 @@ void RepeatGenerator<TStr>::seedExtension(string& seed_string,
                 consensus_merged += seed_string;
                 baseoff += seed_string.length();
             }
+        }
+        
+        sort(seeds.begin() + orig_sb, seeds.begin() + se, cmpSeed);
+        // update backbone
+        for(size_t i = orig_sb; i < se;) {
+            size_t j = i + 1;
+            for(; j < se; j++) {
+                if(seeds[i].backbone != seeds[j].backbone) break;
+                seeds[j].backbone = i;
+            }
+            seeds[i].backbone = i;
+            i = j;
+        }
+        
+        const TIndexOffU repeat_count = (first_ext ? rp.seed_count : rp.repeat_count);
+        for(size_t i = orig_sb; i + repeat_count < se;) {
+            if(!seeds[i].done) {
+                i++;
+                continue;
+            }
+            size_t j = i + 1;
+            for(; j < se; j++) {
+                if(!seeds[j].done) break;
+                assert_leq(seeds[i].backbone, seeds[j].backbone);
+                if(seeds[i].backbone != seeds[j].backbone) break;
+                assert_geq(seeds[i].getExtLength(), seeds[j].getExtLength());
+                if(seeds[i].getExtLength() > seeds[j].getExtLength()) break;
+            }
+            if(j - i >= repeat_count) {
+                bool further_extend = true;
+                if(first_ext) {
+                    if(seeds[i].getExtLength() < rp.min_repeat_len) {
+                        further_extend = false;
+                    }
+                }
+                if(seeds[i].getExtLength() >= rp.max_repeat_len) {
+                    further_extend = false;
+                }
+                if(further_extend) {
+                    seed_groups.expand();
+                    seed_groups.back().sb = i;
+                    seed_groups.back().se = j;
+                    assert_leq(prev_left_ext_len, seeds[i].leftExtLength());
+                    seed_groups.back().left_ext_len = seeds[i].leftExtLength() - prev_left_ext_len;
+                    assert_leq(prev_right_ext_len, seeds[i].rightExtLength());
+                    seed_groups.back().right_ext_len = seeds[i].rightExtLength() - prev_right_ext_len;
+                    
+                }
+            }
+            i = j;
         }
         
         first_ext = false;
@@ -1527,7 +1619,6 @@ void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
     // get unique edit list
     for(size_t i = 0; i < seeds.size(); i++) {
         size_t ext_len = seeds[i].getExtLength();
-        // DK
         if (ext_len < min_repeat_len_) continue;
 
         for(size_t j = 0; j < seeds[i].edits.size(); j++) {
@@ -1545,7 +1636,6 @@ void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
     }
     for(size_t i = 0; i < seeds.size(); i++) {
         size_t ext_len = seeds[i].getExtLength();
-        //DK
         if (ext_len < min_repeat_len_) continue;
 
         for(size_t j = 0; j < seeds[i].edits.size(); j++) {
@@ -1573,7 +1663,6 @@ void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
         // [sb, se) has same baseoff
         size_t ext_len = seeds[sb].getExtLength();
 
-        // DK
         if(ext_len < min_repeat_len_) {
             // go baseoff
             sb = se;
@@ -1606,7 +1695,6 @@ void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
 template<typename TStr>
 void RepeatGenerator<TStr>::saveSeeds()
 {
-
 	string rptinfo_filename = filename_ + ".rep.info";
     string snp_filename = filename_ + ".rep.snp";
     string hapl_filename = filename_ + ".rep.haplotype";
@@ -1695,7 +1783,7 @@ void RepeatGenerator<TStr>::writeAllele(TIndexOffU grp_id,
 
     fp << "\t";
     for(size_t i = 0; i < snp_size; i++) {
-        if(i) {fp << ",";}
+        if(i > 0) {fp << ",";}
         fp << "rps" << seeds[range.first].edits[i].snpID;
     }
     fp << endl;
@@ -1750,74 +1838,6 @@ void RepeatGenerator<TStr>::writeSNPs(ostream& fp,
             assert(false);
         }
     }
-}
-
-template<typename TStr>
-void RepeatGenerator<TStr>::refineSeed(const string& consensus,
-                                       EList<SeedExt>& seeds,
-                                       const RepeatParameter& rp)
-{
-#if 0
-    // Extend further
-    for(size_t sb = 0; sb < seeds.size(); sb++) {
-        size_t se = sb + 1;
-        
-        for(; sb < seeds.size(); sb++) {
-            if(seeds[sb].backbone != seeds[se].backbone)
-                break;
-            assert_eq(seeds[sb].leftExtLength(), seeds[se].leftExtLength());
-            assert_eq(seeds[sb].rightExtLength(), seeds[se].rightExtLength());
-        }
-        TIndexOffU ext_len = seeds[sb].getExtLength();
-        if(ext_len >= rp.max_repeat_len) {
-            sb = se;
-            continue;
-        }
-        int backbone = (int)seed.backbone;
-        for(; backbone >= 0; backbone--) {
-            if(i == j) continue;
-            SeedExt& seed2 = seeds[j];
-            TIndexOffU ext_len2 = seed2.getExtLength();
-            if(ext_len >= ext_len2) continue;
-            if(seed.leftExtLength() > seed2.leftExtLength()) continue;
-            if(seed.rightExtLength() > seed2.rightExtLength()) continue;
-            string constr = consensus.substr(seed2.baseoff, ext_len2);
-            TIndexOffU l_diff = seed2.leftExtLength() - seed.leftExtLength();
-            TIndexOffU r_diff = seed2.rightExtLength() - seed.rightExtLength();
-            
-            if(seed.bound.first + l_diff > seed.pos.first ||
-               seed.pos.second + r_diff > seed.bound.second)
-                break;
-            
-            string seqstr = getString(s_, seed.pos.first - l_diff, ext_len2);
-            assert_eq(constr.length(), seqstr.length());
-            
-            TIndexOffU l = 0;
-            for(; l < l_diff; l++) {
-                TIndexOffU str_i = l_diff - l - 1;
-                if(constr[str_i] != seqstr[str_i])
-                    break;
-            }
-            
-            TIndexOffU r = 0;
-            for(; r < r_diff; r++) {
-                TIndexOffU str_i = l_diff + ext_len + r;
-                if(constr[str_i] != seqstr[str_i])
-                    break;
-            }
-            
-            if(l > 0 || r > 0) {
-                seed.backbone = j;
-                seed.baseoff = seed2.baseoff + l_diff - l;
-                seed.pos.first -= l;
-                seed.pos.second += r;
-            }
-            break;
-        }
-        
-        sb = se;
-    }
-#endif
 }
 
 template<typename TStr>
@@ -1944,7 +1964,7 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
     TIndexOffU prev_consensus_baseoff = (TIndexOffU)-1;
     size_t count = 0, total_count = 0;
     for(size_t i = 0; i < seeds.size(); i++) {
-        assert(seeds[i].done);
+        // assert(seeds[i].done);
         size_t ext_len = seeds[i].getExtLength();
         if(ext_len < rp.min_repeat_len) continue;
         total_count++;
