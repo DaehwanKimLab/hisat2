@@ -1974,6 +1974,8 @@ public:
                         }
                         repeats.back().alleles.expand();
                         repeats.back().alleles.back().init(alleleID,
+                                                           repPos,
+                                                           repLen,
                                                            snpIDs,
                                                            positions);
                         

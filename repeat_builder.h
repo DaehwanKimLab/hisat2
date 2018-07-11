@@ -370,7 +370,7 @@ public:
 	void sortRepeatGroup();
 
     void saveRepeatPositions(ofstream& fp, RepeatGroup& rg);
-	void saveFile();
+	void saveFile(const RepeatParameter& rp);
 	void saveRepeatSequence();
 	void saveRepeatGroup();
 
@@ -407,6 +407,7 @@ public:
                            const EList<SeedExt>& seeds,
                            const RepeatParameter& rp,
                            TIndexOffU rpt_grp_id,
+                           TIndexOffU seed_grp_id,
                            ostream& fp,
                            const string& consensus_merged,
                            size_t& total_rep_seq_len);
@@ -483,7 +484,7 @@ private:
                       ostream& snp_fp,
                       ostream& hapl_fp);
 
-    void saveSeeds();
+    void saveSeeds(const RepeatParameter& rp);
     void saveConsensusSequence(const EList<bool>& filter_out);
     
 private:

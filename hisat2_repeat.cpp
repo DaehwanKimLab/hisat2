@@ -610,7 +610,7 @@ static void driver(
                            repeat_str2);
             } else {
                 nrg.build(rp);
-                nrg.saveFile();
+                nrg.saveFile(rp);
             }
 
 

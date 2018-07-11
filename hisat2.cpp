@@ -3812,7 +3812,7 @@ static void driver(
                                                 startVerbose, // talkative during initialization
                                                 false /*passMemExc*/,
                                                 sanityCheck,
-                                                use_haplotype); //use haplotypes?
+                                                false); //use haplotypes?
 
         // CP to do
 #if 0

@@ -4187,7 +4187,7 @@ public:
                                   gpol,
                                   altdb,
                                   repeatdb,
-                                  ref,
+                                  *rref,
                                   rnd,
                                   rdi,
                                   fwi == 0, // fw

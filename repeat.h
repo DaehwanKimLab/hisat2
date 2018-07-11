@@ -61,15 +61,21 @@ public:
     }
     
     void init(index_t                             alleleID_,
+              index_t                             allelePos_,
+              index_t                             alleleLen_,
               const EList<index_t>&               snpIDs_,
               const EList<RepeatCoord<index_t> >& positions_) {
         alleleID = alleleID_;
+        allelePos = allelePos_;
+        alleleLen = alleleLen_;
         snpIDs = snpIDs_;
         positions = positions_;
     }
     
     void reset() {
         alleleID = 0;
+        allelePos = 0;
+        alleleLen = 0;
         snpIDs.clear();
         positions.clear();
     }
@@ -95,6 +101,8 @@ public:
     
     bool write(ofstream& f_out, bool bigEndian) const {
         writeIndex<index_t>(f_out, alleleID, bigEndian);
+        writeIndex<index_t>(f_out, allelePos, bigEndian);
+        writeIndex<index_t>(f_out, alleleLen, bigEndian);
         writeIndex<index_t>(f_out, snpIDs.size(), bigEndian);
         for(index_t i = 0; i < snpIDs.size(); i++) {
             writeIndex<index_t>(f_out, snpIDs[i], bigEndian);
@@ -109,6 +117,8 @@ public:
     
     bool read(ifstream& f_in, bool bigEndian) {
         alleleID = readIndex<index_t>(f_in, bigEndian);
+        allelePos = readIndex<index_t>(f_in, bigEndian);
+        alleleLen = readIndex<index_t>(f_in, bigEndian);
         index_t numSNPs = readIndex<index_t>(f_in, bigEndian);
         snpIDs.resizeExact(numSNPs);
         for(index_t i = 0; i < numSNPs; i++) {
@@ -153,6 +163,8 @@ public:
     
 public:
     index_t                      alleleID;
+    index_t                      allelePos;
+    index_t                      alleleLen;
     EList<index_t>               snpIDs;
     EList<RepeatCoord<index_t> > positions;
 };
