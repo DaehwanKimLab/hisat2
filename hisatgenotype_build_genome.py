@@ -96,7 +96,7 @@ def build_genotype_genome(base_fname,
 
     if use_commonvar:
         # Extract variants from dbSNP database
-        commonvar_fbase = "snp144Common"
+        commonvar_fbase = "snp150Common"
         commonvar_fnames = ["%s.snp" % commonvar_fbase,
                             "%s.haplotype" % commonvar_fbase]
         if not typing_common.check_files(commonvar_fnames):

@@ -244,7 +244,7 @@ def extract_vars(base_fname,
     remove_locus_list = []
     for gene in locus_list:
         aligner_cmd = ["hisat2"]
-        if base_fname in ["hla", "coids"]:
+        if base_fname in ["hla", "codis"]:
             aligner_cmd += ["--score-min", "C,0"]
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",
