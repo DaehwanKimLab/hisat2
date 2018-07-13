@@ -92,11 +92,11 @@ def build_genotype_genome(base_fname,
         genotype_haplotypes = typing_common.read_haplotypes("clinvar.haplotype")
 
         # Read information about clinical significance
-        genotype_clnsig = typing_common.read_clnsig("clinvar.clnsig")
+        genotype_clnsig = read_clnsig("clinvar.clnsig")
 
     if use_commonvar:
         # Extract variants from dbSNP database
-        commonvar_fbase = "snp150Common"
+        commonvar_fbase = "snp151Common"
         commonvar_fnames = ["%s.snp" % commonvar_fbase,
                             "%s.haplotype" % commonvar_fbase]
         if not typing_common.check_files(commonvar_fnames):
@@ -284,7 +284,7 @@ def build_genotype_genome(base_fname,
             if prev_right < left:
                 out_chr_seq += chr_seq[prev_right:left]
 
-            # Output gene (genotype_genome.gene)
+            # Output gene (genotype_genome.locus)
             print >> locus_out_file, "%s\t%s\t%s\t%d\t%d\t%s\t%s" % \
                 (family.upper(), name, chr, len(out_chr_seq), len(out_chr_seq) + length - 1, exon_str, strand)
 
