@@ -62,6 +62,18 @@ unsigned int hamming_distance(const string& s1, const string& s2)
     return cnt;
 }
 
+string reverse(const string& str)
+{
+    string rev = str;
+    size_t str_len = str.length();
+    
+    for(size_t i = 0; i < str_len; i++) {
+        rev[i] = str[str_len - i - 1];
+    }
+    
+    return rev;
+}
+
 static const Range EMPTY_RANGE = Range(1, 0);
 
 struct RepeatRange {
@@ -267,272 +279,120 @@ size_t getMaxMatchLen(const EList<Edit>& edits, const size_t read_len)
     return max_length;
 }
 
-template<typename TStr>
-RepeatGenerator<TStr>::RepeatGenerator(TStr& s,
-                                       const EList<RefRecord>& szs,
-                                       EList<string>& ref_names,
-                                       bool forward_only,
-                                       BlockwiseSA<TStr>& sa,
-                                       const string& filename) :
-	s_(s), szs_(szs), forward_only_(forward_only),
-    ref_namelines_(ref_names),
-    bsa_(sa), filename_(filename),
-    forward_length_(forward_only ? s.length() : s.length() / 2)
+int max_index(size_t array[4])
 {
-	cerr << "RepeatGenerator: " << filename_ << endl;
+    int max_idx = 0;
+    
+    for(size_t i = 1; i < 4; i++) {
+        if(array[max_idx] < array[i]) {
+            max_idx = i;
+        }
+    }
+    
+    return max_idx;
+}
 
-    rnd_.init(0);
-
-	// build ref_names_ from ref_namelines_
+CoordHelper::CoordHelper(TIndexOffU length,
+                         TIndexOffU forward_length,
+                         const EList<RefRecord>& szs,
+                         const EList<string>& ref_names) :
+length_(length),
+forward_length_(forward_length),
+szs_(szs),
+ref_namelines_(ref_names)
+{
+    // build ref_names_ from ref_namelines_
     buildNames();
     buildJoinedFragment();
 }
 
-template<typename TStr>
-RepeatGenerator<TStr>::~RepeatGenerator()
+CoordHelper::~CoordHelper()
 {
-    if (sc_) {
-        delete sc_;
-    }
 }
 
-#define DMAX std::numeric_limits<double>::max()
-
-template<typename TStr>
-void RepeatGenerator<TStr>::init_dyn(const RepeatParameter& rp)
+void CoordHelper::buildNames()
 {
-    const int MM_PEN = 3;
-    // const int MM_PEN = 6;
-    const int GAP_PEN_LIN = 2;
-    // const int GAP_PEN_LIN = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
-    const int GAP_PEN_CON = 4;
-    // const int GAP_PEN_CON = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
-    const int MAX_PEN = MAX_I16;
-
-    scoreMin_.init(SIMPLE_FUNC_LINEAR, rp.max_edit * MM_PEN * -1.0, 0.0);
-    nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
-
-    penCanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
-    penNoncanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
-
-    sc_ = new Scoring(
-            DEFAULT_MATCH_BONUS,     // constant reward for match
-            DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
-            MM_PEN,      // max mm penalty
-            MM_PEN,      // min mm penalty
-            MAX_PEN,      // max sc penalty
-            MAX_PEN,      // min sc penalty
-            scoreMin_,       // min score as function of read len
-            nCeil_,          // max # Ns as function of read len
-            DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
-            DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
-            DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
-
-
-            GAP_PEN_CON, // constant coeff for read gap cost
-            GAP_PEN_CON, // constant coeff for ref gap cost
-            GAP_PEN_LIN, // linear coeff for read gap cost
-            GAP_PEN_LIN, // linear coeff for ref gap cost
-            1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
-            );
-}
-
-
-template<typename TStr>
-void RepeatGenerator<TStr>::doTest(const RepeatParameter& rp,
-                                   const string& refstr,
-                                   const string& readstr)
-{
-	TIndexOffU count = 0;
-
-    init_dyn(rp);
-
-    doTestCase1(refstr, readstr, rp.max_edit);
-}
-
-template<typename TStr>
-void RepeatGenerator<TStr>::build(const RepeatParameter& rp)
-{
-	TIndexOffU count = 0;
-    min_repeat_len_ = rp.min_repeat_len;
-    
-    init_dyn(rp);
-
-    map<TIndexOffU, TIndexOffU>* seedpos_to_repeatgroup = new map<TIndexOffU, TIndexOffU>;
-    
-	EList<RepeatCoord<TIndexOffU> > rpt_positions;
-	TIndexOffU min_lcp_len = s_.length();
-
-	while(count < s_.length() + 1) {
-		TIndexOffU saElt = bsa_.nextSuffix();
-		count++;
-		
-		if(count && (count % 10000000 == 0)) {
-			cerr << "SA count " << count << endl;
-		}
+    ref_names_.resize(ref_namelines_.size());
+    for(size_t i = 0; i < ref_namelines_.size(); i++) {
+        string& nameline = ref_namelines_[i];
         
-        if(saElt == s_.length()) {
-            assert_eq(count, s_.length() + 1);
-            break;
+        for(size_t j = 0; j < nameline.length(); j++) {
+            char n = nameline[j];
+            if(n == ' ') {
+                break;
+            }
+            ref_names_[i].push_back(n);
         }
-
-		if(rpt_positions.size() == 0) {
-            rpt_positions.expand();
-			rpt_positions.back().joinedOff = saElt;
-		} else {
-			TIndexOffU prev_saElt = rpt_positions.back().joinedOff;
-
-			// calculate common prefix length between two text.
-			//   text1 is started from prev_saElt and text2 is started from saElt
-			int lcp_len = getLCP(prev_saElt, saElt);
-
-			if(lcp_len >= rp.seed_len) {
-				rpt_positions.expand();
-				rpt_positions.back().joinedOff = saElt;
-
-				if(min_lcp_len > lcp_len) {
-					min_lcp_len = lcp_len;
-				}
-			} else {
-				if (rpt_positions.size() >= rp.seed_count) {
-                    sort(rpt_positions.begin(), 
-                            rpt_positions.begin() + rpt_positions.size(),
-                            compareRepeatCoordByJoinedOff<TIndexOffU>);
-
-                    string ss = getString(s_, prev_saElt, min_lcp_len);
-                    addRepeatGroup(*seedpos_to_repeatgroup, ss, rpt_positions);
-				}
-
-				// flush previous positions 
-                // clear and expand
-				rpt_positions.resize(1);
-				rpt_positions.back().joinedOff = saElt;
-				min_lcp_len = s_.length();
-			}
-		}
-	}
-    
-    cerr << "number of seed positions is " << seedpos_to_repeatgroup->size() << endl;
-    delete seedpos_to_repeatgroup;
-    seedpos_to_repeatgroup = NULL;
-
-    //mergeRepeatGroup();
-    
-#if 0
-    if(rp.max_edit > 0) {
-        groupRepeatGroup(rp.max_edit);
     }
-#endif
-
-	// we found repeat_group
-	cerr << rpt_grp_.size() << " groups found" << endl;
-
-
-    // Seed extension
-    seedGrouping(rp);
-
 }
 
-template<typename TStr>
-void RepeatGenerator<TStr>::buildNames()
+int CoordHelper::mapJoinedOffToSeq(TIndexOffU joinedOff)
 {
-	ref_names_.resize(ref_namelines_.size());
-	for(size_t i = 0; i < ref_namelines_.size(); i++) {
-		string& nameline = ref_namelines_[i];
-
-		for(size_t j = 0; j < nameline.length(); j++) {
-			char n = nameline[j];
-			if(n == ' ') {
-				break;
-			}
-			ref_names_[i].push_back(n);
-		}
-	}
-}
-
-
-string reverse(const string& str)
-{
-    string rev = str;
-    size_t str_len = str.length();
-
-    for(size_t i = 0; i < str_len; i++) {
-        rev[i] = str[str_len - i - 1];
+    /* search from cached_list */
+    if(num_cached_ > 0) {
+        for(size_t i = 0; i < num_cached_; i++) {
+            Fragments *frag = &cached_[i];
+            if(frag->contain(joinedOff)) {
+                return frag->frag_id;
+            }
+        }
+        /* fall through */
     }
-
-    return rev;
+    
+    /* search list */
+    int top = 0;
+    int bot = fraglist_.size() - 1;
+    int pos = 0;
+    
+    Fragments *frag = &fraglist_[pos];
+    while((bot - top) > 1) {
+        pos = top + ((bot - top) >> 1);
+        frag = &fraglist_[pos];
+        
+        if (joinedOff < frag->joinedOff) {
+            bot = pos;
+        } else {
+            top = pos;
+        }
+    }
+    
+    frag = &fraglist_[top];
+    if (frag->contain(joinedOff)) {
+        // update cache
+        if (num_cached_ < CACHE_SIZE_JOINEDFRG) {
+            cached_[num_cached_] = *frag;
+            num_cached_++;
+        } else {
+            cached_[victim_] = *frag;
+            victim_++; // round-robin
+            victim_ %= CACHE_SIZE_JOINEDFRG;
+        }
+        
+        return top;
+    }
+    
+    return -1;
 }
 
-template<typename TStr>
-int RepeatGenerator<TStr>::mapJoinedOffToSeq(TIndexOffU joinedOff)
+int CoordHelper::getGenomeCoord(TIndexOffU joinedOff,
+                                  string& chr_name,
+                                  TIndexOffU& pos_in_chr)
 {
-
-	/* search from cached_list */
-	if(num_cached_ > 0) {
-		for(size_t i = 0; i < num_cached_; i++) {
-			Fragments *frag = &cached_[i];
-			if(frag->contain(joinedOff)) {
-				return frag->frag_id;
-			}
-		}
-		/* fall through */
-	}
-
-	/* search list */
-	int top = 0;
-	int bot = fraglist_.size() - 1; 
-	int pos = 0;
-
-	Fragments *frag = &fraglist_[pos];
-	while((bot - top) > 1) {
-		pos = top + ((bot - top) >> 1);
-		frag = &fraglist_[pos];
-
-		if (joinedOff < frag->joinedOff) {
-			bot = pos;
-		} else {
-			top = pos;
-		}
-	}
-
-	frag = &fraglist_[top];
-	if (frag->contain(joinedOff)) {
-		// update cache
-		if (num_cached_ < CACHE_SIZE_JOINEDFRG) {
-			cached_[num_cached_] = *frag;
-			num_cached_++;
-		} else {
-			cached_[victim_] = *frag;
-			victim_++; // round-robin
-			victim_ %= CACHE_SIZE_JOINEDFRG;
-		}
-
-		return top;
-	}
-
-	return -1;
+    int seq_id = mapJoinedOffToSeq(joinedOff);
+    if (seq_id < 0) {
+        return -1;
+    }
+    
+    Fragments *frag = &fraglist_[seq_id];
+    TIndexOffU offset = joinedOff - frag->joinedOff;
+    
+    pos_in_chr = frag->seqOff + offset;
+    chr_name = ref_names_[frag->seq_id];
+    
+    return 0;
 }
 
-template<typename TStr>
-int RepeatGenerator<TStr>::getGenomeCoord(TIndexOffU joinedOff,
-		string& chr_name, TIndexOffU& pos_in_chr)
-{
-	int seq_id = mapJoinedOffToSeq(joinedOff);
-	if (seq_id < 0) {
-		return -1;
-	}
-
-	Fragments *frag = &fraglist_[seq_id];
-	TIndexOffU offset = joinedOff - frag->joinedOff;
-
-	pos_in_chr = frag->seqOff + offset;
-	chr_name = ref_names_[frag->seq_id];
-
-	return 0;
-}
-
-template<typename TStr>
-void RepeatGenerator<TStr>::buildJoinedFragment()
+void CoordHelper::buildJoinedFragment()
 {
     TIndexOffU acc_joinedOff = 0;
     TIndexOffU acc_seqOff = 0;
@@ -547,230 +407,73 @@ void RepeatGenerator<TStr>::buildJoinedFragment()
             acc_seqOff = 0;
             seq_id++;
         }
-
+        
         fraglist_.expand();
-
+        
         fraglist_.back().joinedOff = acc_joinedOff;
         fraglist_.back().length = rec.len;
-
+        
         fraglist_.back().frag_id = frag_id++;
         fraglist_.back().seq_id = seq_id - 1;
         fraglist_.back().first = rec.first;
-
+        
         acc_seqOff += rec.off;
         fraglist_.back().seqOff = acc_seqOff;
-
+        
         acc_joinedOff += rec.len;
         acc_seqOff += rec.len;
     }
-
-	// Add Last Fragment(empty)
+    
+    // Add Last Fragment(empty)
     fraglist_.expand();
     fraglist_.back().joinedOff = acc_joinedOff;
     fraglist_.back().length = 0;
-	fraglist_.back().seqOff = acc_seqOff;
+    fraglist_.back().seqOff = acc_seqOff;
     fraglist_.back().first = false;
-    fraglist_.back().frag_id = frag_id; 
+    fraglist_.back().frag_id = frag_id;
     fraglist_.back().seq_id = seq_id;
 }
 
-template<typename TStr>
-void RepeatGenerator<TStr>::sortRepeatGroup()
-{
-	if(rpt_grp_.size() > 0) {
-		sort(rpt_grp_.begin(), rpt_grp_.begin() + rpt_grp_.size(), 
-                compareRepeatGroupByJoinedOff);
-	}
-}
-
-
-template<typename TStr>
-void RepeatGenerator<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
-{
-    EList<RepeatCoord<TIndexOffU> >& positions = rg.positions;
-
-#ifndef NDEBUG
-    for(size_t j = 0; j < positions.size(); j += 10) {
-        string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
-        assert_eq(rg.seq, seq_cmp);
-    }
-#endif
-
-    for(size_t j = 0; j < positions.size(); j++) {
-        if(positions[j].joinedOff < forward_length_) {
-            positions[j].fw = true;
-        } else {
-            positions[j].joinedOff = s_.length() - positions[j].joinedOff - rg.seq.length();
-            positions[j].fw = false;
-        }
-    }
-    positions.sort();
-
-    // Positions
-    for(size_t j = 0; j < positions.size(); j++) {
-        if(j > 0 && (j % 10 == 0)) {
-            fp << endl;
-        }
-
-        if(j % 10 != 0) {
-            fp << " ";
-        }            
-        string chr_name;
-        TIndexOffU pos_in_chr;
-        getGenomeCoord(positions[j].joinedOff, chr_name, pos_in_chr);
-
-        char direction = (positions[j].fw ? '+' : '-');
-        fp << chr_name << ":" << pos_in_chr << ":" << direction;
-    }
-    fp << endl;
-}
-
-
-int max_index(size_t array[4])
-{
-    int max_idx = 0;
-
-    for(size_t i = 1; i < 4; i++) {
-        if(array[max_idx] < array[i]) {
-            max_idx = i;
-        }
-    }
-
-    return max_idx;
-}
-
-#if 0
-string makeAverageString(EList<SeedExt>& seeds, bool flag_left)
-{
-    string ext = "";
-
-    size_t ext_len = flag_left ? seeds[0].left_ext.length() : seeds[0].right_ext.length();
-
-    for(size_t i = 0; i < ext_len; i++) {
-
-        char cand = 'A';
-
-        size_t count[4] = {0,};
-
-        for(size_t si = 0; si < seeds.size(); si++) {
-            string& seed_ext = flag_left ? seeds[si].left_ext : seeds[si].right_ext;
-
-            uint8_t code = asc2dna[seed_ext[i]];
-            count[code]++;
-        }
-
-        int max_code = 0;
-        cerr << count[0];
-        cerr << ", " << count[1];
-        cerr << ", " << count[2];
-        cerr << ", " << count[3];
-        cerr << endl;
-        for(size_t si = 1; si < 4; si++) {
-            if (count[max_code] < count[si]) {
-                max_code = si;
-            }
-        }
-
-        cand = "ACGT"[max_code];
-
-        ext = ext + cand;
-    }
-
-    return ext;
-}
-#endif
-
-template<typename TStr>
-void RepeatGenerator<TStr>::seedGrouping(const RepeatParameter& rp)
-{
-    string seed_filename = filename_ + ".rep.seed";
-    ofstream fp(seed_filename.c_str());
+TIndexOffU CoordHelper::getEnd(TIndexOffU e) {
+    assert_lt(e, length_)
     
-    size_t total_rep_seq_len = 0;
-
-    seeds_.clear();
+    TIndexOffU end = 0;
+    if(e < forward_length_) {
+        int frag_id = mapJoinedOffToSeq(e);
+        assert_geq(frag_id, 0);
+        end = fraglist_[frag_id].joinedOff + fraglist_[frag_id].length;
+    } else {
+        // ReverseComplement
+        // a, b are positions w.r.t reverse complement string.
+        // fragment map is based on forward string
+        int frag_id = mapJoinedOffToSeq(length_ - e - 1);
+        assert_geq(frag_id, 0);
+        end = length_ - fraglist_[frag_id].joinedOff;
+    }
     
-    for(size_t i = 0; i < rpt_grp_.size(); i++)
-    {
-        EList<RepeatCoord<TIndexOffU> >& positions = rpt_grp_[i].positions;
-        string seed_str = rpt_grp_[i].seq.substr(0, rp.seed_len);
-        
-        // DK - debugging purposes
-#if 1
-        if(positions.size() < 50)
-            continue;
-        
-        if(i == 1961) {
-            int kk = 20;
-            kk += 20;
-        } else {
-            // continue;
-        }
-#endif
+    assert_leq(end, length_);
+    return end;
+}
 
-        seeds_.expand();
-        EList<SeedExt>& seeds = seeds_.back();
-
-        seeds.reserveExact(positions.size());
-        
-        // DK - debugging purposes
-        string test_seq = "GAAATTTCTTTCGGATATTTCCATTCAACTCATAGAGATGAACATGGCCTTTCATAGAGCAGGTTTGAAACACTCTTTTTGTAGTTTGTGGAAGTGGACA";
-        if(test_seq.find(seed_str) != std::string::npos) {
-            cout << i << "\t" << seeds_.size() - 1 << "\t" << positions.size() << "\t" << positions[0].joinedOff << "\t" << test_seq.find(seed_str) << endl;
-        }
-
-        for(size_t pi = 0; pi < positions.size(); pi++) {
-            TIndexOffU left = positions[pi].joinedOff;
-            TIndexOffU right = positions[pi].joinedOff + rp.seed_len;
-
-            seeds.expand();
-            seeds.back().reset();
-            seeds.back().orig_pos = pair<TIndexOffU, TIndexOffU>(left, right);
-            seeds.back().pos = seeds.back().orig_pos;
-            seeds.back().bound = pair<TIndexOffU, TIndexOffU>(getStart(left), getEnd(left));
-            
-
-        }
-        assert(seeds.size() > 0);
-        string consensus;
-        consensus_all_.expand();
-        string& refined_consensus = consensus_all_.back();
-        seedExtension(seed_str,
-                      seeds,
-                      consensus,
-                      rp);
-
-        refineConsensus(seed_str,
-                        seeds,
-                        rp,
-                        consensus,
-                        refined_consensus,
-                        fp);
-
-        saveSeedExtension(seed_str,
-                          seeds,
-                          rp,
-                          i,
-                          seeds_.size() - 1,
-                          fp,
-                          refined_consensus,
-                          total_rep_seq_len);
+TIndexOffU CoordHelper::getStart(TIndexOffU e) {
+    assert_lt(e, length_)
+    
+    TIndexOffU start = 0;
+    if(e < forward_length_) {
+        int frag_id = mapJoinedOffToSeq(e);
+        assert_geq(frag_id, 0);
+        start = fraglist_[frag_id].joinedOff;
+    } else {
+        // ReverseComplement
+        // a, b are positions w.r.t reverse complement string.
+        // fragment map is based on forward string
+        int frag_id = mapJoinedOffToSeq(length_ - e - 1);
+        assert_geq(frag_id, 0);
+        start = length_ - (fraglist_[frag_id].joinedOff + fraglist_[frag_id].length);
     }
-
-    assert_eq(consensus_all_.size(), seeds_.size());
-#ifndef NDEBUG
-    {
-        size_t tot_len = 0;
-        for(size_t i = 0; i < consensus_all_.size(); i++) {
-            tot_len += consensus_all_[i].length();
-        }
-        assert_eq(total_rep_seq_len, tot_len); 
-    }
-#endif
-
-    fp << "total repeat sequence length: " << total_rep_seq_len << endl;
-
-    fp.close();
+    
+    assert_leq(start, length_);
+    return start;
 }
 
 template<typename TStr>
@@ -824,7 +527,6 @@ void calc_edit_dist(const TStr& s,
     size_t right_ext = right_consensus.length();
     for(size_t i = sb; i < se; i++) {
         SeedExt& seed = seeds[i];
-        assert(!seed.done);
         uint32_t ed = 0;
         if(seed.bound.first + left_ext > seed.pos.first ||
            seed.pos.second + right_ext > seed.bound.second) {
@@ -832,7 +534,7 @@ void calc_edit_dist(const TStr& s,
             seed.ed = ed;
             continue;
         }
-            
+        
         for(size_t j = 0; j < left_ext; j++) {
             int ch = getSequenceBase(s, seed.pos.first - j - 1);
             assert_range(0, 3, ch);
@@ -852,16 +554,16 @@ void calc_edit_dist(const TStr& s,
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
-                                              size_t sb,
-                                              size_t se,
-                                              size_t min_left_ext,
-                                              size_t min_right_ext,
-                                              size_t max_ed,
-                                              const RepeatParameter& rp,
-                                              EList<size_t>& ed_seed_nums,
-                                              EList<string>* left_consensuses,
-                                              EList<string>* right_consensuses)
+void RepeatBuilder<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
+                                            size_t sb,
+                                            size_t se,
+                                            size_t min_left_ext,
+                                            size_t min_right_ext,
+                                            size_t max_ed,
+                                            const RepeatParameter& rp,
+                                            EList<size_t>& ed_seed_nums,
+                                            EList<string>* left_consensuses,
+                                            EList<string>* right_consensuses)
 {
     assert_lt(sb, se);
     assert_leq(se, seeds.size());
@@ -931,7 +633,7 @@ void RepeatGenerator<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
         // count base
         size_t l_count[4] = {0, };
         size_t r_count[4] = {0, };
-
+        
         for(size_t i = 0; i < consensus_group.size(); i++) {
             size_t si = sb + consensus_group[i];
             assert(!seeds[si].done);
@@ -952,7 +654,7 @@ void RepeatGenerator<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
         uint8_t left_ext_base = 0;
         if(seed_ext_len < min_left_ext) left_ext_base = max_index(l_count);
         uint8_t right_ext_base = 0;
-        if(seed_ext_len < min_right_ext) right_ext_base= max_index(r_count);
+        if(seed_ext_len < min_right_ext) right_ext_base = max_index(r_count);
         
         // estimate extended ed
         next_ed_seed_nums.fillZero();
@@ -1107,10 +809,759 @@ bool cmpSeed(const SeedExt& s, const SeedExt& s2) {
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::seedExtension(string& seed_string,
-                                          EList<SeedExt>& seeds,
-                                          string& consensus_merged,
-                                          const RepeatParameter& rp)
+void get_consensus_seq(const TStr& s,
+                       EList<SeedExt>& seeds,
+                       size_t sb,
+                       size_t se,
+                       size_t min_left_ext,
+                       size_t min_right_ext,
+                       size_t max_ed,
+                       const RepeatParameter& rp,
+                       EList<size_t>& ed_seed_nums,
+                       EList<string>* left_consensuses,
+                       EList<string>* right_consensuses)
+{
+    assert_lt(sb, se);
+    assert_leq(se, seeds.size());
+    if(left_consensuses != NULL) {
+        left_consensuses->clear(); left_consensuses->resize(max_ed + 1);
+        for(size_t i = 0; i < max_ed + 1; i++) {
+            (*left_consensuses)[i].clear();
+        }
+    }
+    if(right_consensuses != NULL) {
+        right_consensuses->clear(); right_consensuses->resize(max_ed + 1);
+        for(size_t i = 0; i < max_ed + 1; i++) {
+            (*right_consensuses)[i].clear();
+        }
+    }
+    
+    // cluster sequences
+    EList<size_t> belongto;
+    belongto.resizeExact(se - sb);
+    for(size_t i = 0; i < belongto.size(); i++) belongto[i] = i;
+    
+    for(size_t i = 0; i + 1 < belongto.size(); i++) {
+        for(size_t j = i + 1; j < belongto.size(); j++) {
+            if(belongto[j] != j) continue;
+            size_t ed = calc_edit_dist(s,
+                                       seeds[sb + i],
+                                       seeds[sb + j],
+                                       min_left_ext,
+                                       min_right_ext,
+                                       max_ed + 1);
+            if(ed <= max_ed + 1) {
+                belongto[j] = belongto[i];
+            }
+            
+        }
+    }
+    
+    // find the maximum group that has the most sequences
+    EList<size_t> vote;
+    vote.resizeExact(seeds.size());
+    vote.fillZero();
+    size_t max_group = 0;
+    for(size_t i = 0; i < belongto.size(); i++) {
+        size_t cur_group = belongto[i];
+        assert_lt(cur_group, vote.size());
+        vote[cur_group]++;
+        if(cur_group != max_group && vote[cur_group] > vote[max_group]) {
+            max_group = cur_group;
+        }
+    }
+    
+    // reuse vote to store seeds
+    EList<size_t>& consensus_group = vote;
+    consensus_group.clear();
+    for(size_t i = 0; i < belongto.size(); i++) {
+        if(belongto[i] == max_group)
+            consensus_group.push_back(i);
+    }
+    
+    // update ed
+    // extend consensus string
+    ed_seed_nums.resize(max_ed + 1); ed_seed_nums.fillZero();
+    EList<size_t> next_ed_seed_nums; next_ed_seed_nums.resize(max_ed + 1);
+    for(size_t i = sb; i < se; i++) seeds[i].ed = 0;
+    size_t seed_ext_len = 0;
+    while(seed_ext_len < max(min_left_ext, min_right_ext)) {
+        // count base
+        size_t l_count[4] = {0, };
+        size_t r_count[4] = {0, };
+        
+        for(size_t i = 0; i < consensus_group.size(); i++) {
+            size_t si = sb + consensus_group[i];
+            int ch;
+            if(seed_ext_len < min_left_ext) {
+                ch = getSequenceBase(s, seeds[si].pos.first - seed_ext_len - 1);
+                assert_range(0, 3, ch);
+                l_count[ch]++;
+            }
+            if(seed_ext_len < min_right_ext) {
+                ch = getSequenceBase(s, seeds[si].pos.second + seed_ext_len);
+                assert_range(0, 3, ch);
+                r_count[ch]++;
+            }
+        }
+        
+        // select base to be used for extension
+        uint8_t left_ext_base = 0;
+        if(seed_ext_len < min_left_ext) left_ext_base = max_index(l_count);
+        uint8_t right_ext_base = 0;
+        if(seed_ext_len < min_right_ext) right_ext_base = max_index(r_count);
+        
+        // estimate extended ed
+        next_ed_seed_nums.fillZero();
+        for(size_t i = sb; i < se; i++) {
+            uint32_t est_ed = seeds[i].ed;
+            if(seed_ext_len < min_left_ext) {
+                TIndexOffU left_pos = seeds[i].pos.first - seed_ext_len - 1;
+                if(left_pos < seeds[i].bound.first) {
+                    est_ed = max_ed + 1;
+                } else {
+                    int ch = getSequenceBase(s, left_pos);
+                    assert_range(0, 3, ch);
+                    if (ch != left_ext_base) {
+                        est_ed++;
+                    }
+                }
+            }
+            
+            if(seed_ext_len < min_right_ext) {
+                TIndexOffU right_pos = seeds[i].pos.second + seed_ext_len;
+                if(right_pos >= seeds[i].bound.second) {
+                    est_ed = max_ed + 1;
+                } else {
+                    int ch = getSequenceBase(s, right_pos);
+                    assert_range(0, 3, ch);
+                    if (ch != right_ext_base) {
+                        est_ed++;
+                    }
+                }
+            }
+            
+            if(est_ed <= max_ed) {
+                next_ed_seed_nums[est_ed]++;
+            }
+        }
+        
+        for(size_t i = 1; i < next_ed_seed_nums.size(); i++) next_ed_seed_nums[i] += next_ed_seed_nums[i-1];
+        if(next_ed_seed_nums[max_ed] < rp.repeat_count) {
+            break;
+        }
+        
+        for(size_t i = sb; i < se; i++) {
+            if(seed_ext_len < min_left_ext) {
+                TIndexOffU left_pos = seeds[i].pos.first - seed_ext_len - 1;
+                if(left_pos < seeds[i].bound.first) {
+                    seeds[i].ed = max_ed + 1;
+                } else {
+                    int ch = getSequenceBase(s, left_pos);
+                    assert_range(0, 3, ch);
+                    if (ch != left_ext_base) {
+                        seeds[i].ed++;
+                    }
+                }
+            }
+            
+            if(seed_ext_len < min_right_ext) {
+                TIndexOffU right_pos = seeds[i].pos.second + seed_ext_len;
+                if(right_pos >= seeds[i].bound.second) {
+                    seeds[i].ed = max_ed + 1;
+                } else {
+                    int ch = getSequenceBase(s, right_pos);
+                    assert_range(0, 3, ch);
+                    if (ch != right_ext_base) {
+                        seeds[i].ed++;
+                    }
+                }
+            }
+        }
+        
+        for(size_t i = 0; i < next_ed_seed_nums.size(); i++) {
+            if(next_ed_seed_nums[i] < rp.repeat_count)
+                continue;
+            ed_seed_nums[i] = next_ed_seed_nums[i];
+            if(seed_ext_len < min_left_ext) {
+                assert(left_consensuses != NULL);
+                (*left_consensuses)[i] += (char)("ACGT"[left_ext_base]);
+            }
+            if(seed_ext_len < min_right_ext) {
+                assert(right_consensuses != NULL);
+                (*right_consensuses)[i] += (char)("ACGT"[right_ext_base]);
+            }
+        }
+        
+        seed_ext_len++;
+    }
+}
+
+template<typename TStr>
+void RB_Repeat::extendConsensus(const RepeatParameter& rp,
+                                const TStr& s)
+{
+    size_t remain = seeds_.size();
+    EList<string> consensuses;
+    EList<size_t> ed_seed_nums;
+    bool left = true;
+    
+    const TIndexOffU max_ext_len = 100;
+    const TIndexOffU seed_mm = 4;
+    const string empty_string = "";
+    
+    while(remain >= rp.repeat_count) {
+        // DK - debugging purposes
+        for(size_t i = 0; i < remain; i++) {
+            seeds_[i].done = false;
+        }
+            
+        // extend seeds in left or right direction
+        get_consensus_seq(s,
+                          seeds_,
+                          0,      // seed begin
+                          remain, // seed end
+                          left ? max_ext_len : 0,
+                          left ? 0 : max_ext_len,
+                          seed_mm,
+                          rp,
+                          ed_seed_nums,
+                          left ? &consensuses : NULL,
+                          left ? NULL : &consensuses);
+        
+        size_t allowed_seed_mm = 0;
+        const string* pconsensus = &empty_string;
+        for(int i = (int)seed_mm; i >= 0; i--) {
+            size_t extlen = (ed_seed_nums[i] < rp.repeat_count ? 0 : consensuses[i].length());
+            if(extlen <= 0 || extlen < max_ext_len * i / seed_mm)
+                continue;
+            
+            pconsensus = &consensuses[i];
+            allowed_seed_mm = (size_t)i;
+            assert(pconsensus->length() > 0);
+            break;
+        }
+        if(pconsensus->length() <= 0) {
+            if(left) {
+                left = false;
+                remain = seeds_.size();
+            } else break;
+        }
+        if(left) consensus_ = reverse(*pconsensus) + consensus_;
+        else consensus_ += *pconsensus;
+        
+        calc_edit_dist(s,
+                       seeds_,
+                       0,
+                       remain,
+                       left ? *pconsensus : "",
+                       left ? "" : *pconsensus,
+                       allowed_seed_mm);
+        
+        // update the number of seeds to be used for extension
+        // Move up "done" seeds
+        size_t num_passed_seeds = 0;
+        size_t j = 0;
+        for(size_t i = 0; i < remain; i++) {
+            SeedExt& seed = seeds_[i];
+            assert(!seed.done);
+            if(seed.ed > allowed_seed_mm) {
+                // reset
+                seed.ed = 0;
+                if(left) {
+                    seed.consensus_pos.first += pconsensus->length();
+                    seed.consensus_pos.second += pconsensus->length();;
+                }
+                continue;
+            }
+            
+            // select
+            seed.done = true;
+            if(left) {
+                seed.pos.first = seed.pos.first - pconsensus->length();
+                seed.consensus_pos.first = 0;
+                seed.consensus_pos.second = consensus_.length();
+            } else {
+                seed.pos.second = seed.pos.second + pconsensus->length();
+                seed.consensus_pos.second = consensus_.length();
+            }
+            seed.total_ed += seed.ed;
+            assert_geq(i, j);
+            if(i > j) {
+                assert(!seeds_[j].done);
+                SeedExt temp = seeds_[j];
+                seeds_[j] = seeds_[i];
+                seeds_[i] = temp;
+                // Find next "undone" seed
+                j++;
+                while(j < i && seeds_[j].done) {
+                    j++;
+                }
+                assert(j < seeds_.size() && !seeds_[j].done);
+            } else {
+                j = i + 1;
+            }
+            num_passed_seeds++;
+        }
+        
+        // DK - debugging purposes
+        if(left) left = false;
+        else break;
+        
+        if(remain < rp.repeat_count && left) {
+            left = false;
+            remain = seeds_.size();
+        }
+    } // while(remain >= rp.repeat_count)
+    
+#ifndef NDEBUG
+    // make sure seed positions are unique
+    EList<pair<TIndexOffU, TIndexOffU> > seed_poses;
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        seed_poses.expand();
+        seed_poses.back() = seeds_[i].orig_pos;
+    }
+    seed_poses.sort();
+    for(size_t i = 0; i + 1 < seed_poses.size(); i++) {
+        if(seed_poses[i].first == seed_poses[i+1].first) {
+            assert_lt(seed_poses[i].second, seed_poses[i+1].second);
+        } else {
+            assert_lt(seed_poses[i].first, seed_poses[i+1].first);
+        }
+    }
+#endif
+}
+
+template<typename TStr>
+void RB_Repeat::saveSeedExtension(const RepeatParameter& rp,
+                                  const TStr& s,
+                                  CoordHelper& coordHelper,
+                                  TIndexOffU rpt_grp_id,
+                                  TIndexOffU seed_grp_id,
+                                  ostream& fp,
+                                  size_t& total_repeat_seq_len)
+{
+    // apply color, which is compatible with linux commands such as cat and less -r
+#if 1
+    const string red = "\033[31m", reset = "\033[0m";
+#else
+    const string red = "", reset = "";
+#endif
+    
+    size_t total_count = 0;
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        const SeedExt& seed = seeds_[i];
+        size_t ext_len = seed.getExtLength();
+        if(ext_len < rp.min_repeat_len) continue;
+        total_count++;
+        
+        string deststr = getString(s, seed.pos.first, ext_len);
+        fp << seed_grp_id << "  " << seeds_.size();
+        fp << "  " << setw(4) << i;
+        fp << "  " << setw(4) << ext_len;
+        fp << "  " << setw(3) << seed.total_ed;
+        fp << "  " << setw(5) << seed.baseoff;
+        fp << "  " << setw(10) << seed.pos.first << "  " << setw(10) << seed.pos.second;
+        fp << "  " << setw(10) << seed.bound.first << "  " << setw(10) << seed.bound.second;
+        
+        string chr_name;
+        TIndexOffU pos_in_chr;
+        if(seed.pos.first < coordHelper.forward_length()) {
+            coordHelper.getGenomeCoord(seed.pos.first, chr_name, pos_in_chr);
+        } else {
+            coordHelper.getGenomeCoord(s.length() - seed.pos.first - (seed.pos.second - seed.pos.first), chr_name, pos_in_chr);
+        }
+        fp << "  " << setw(5) << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
+        
+        if(seed.pos.second < coordHelper.forward_length()) {
+            coordHelper.getGenomeCoord(seed.pos.second, chr_name, pos_in_chr);
+        } else {
+            coordHelper.getGenomeCoord(s.length() - seed.pos.second - (seed.pos.second - seed.pos.first), chr_name, pos_in_chr);
+        }
+        fp << "  " << setw(5) << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
+        
+        string constr = consensus_.substr(seed.consensus_pos.first, seed.consensus_pos.second - seed.consensus_pos.first);
+        assert_eq(constr.length(), deststr.length());
+        fp << "  ";
+        
+        // print sequence w.r.t. the current group
+        TIndexOffU left_indent = seed.consensus_pos.first;
+        for(size_t j = 0; j < left_indent; j++) fp << ' ';
+        for(size_t j = 0; j < constr.length(); j++) {
+            bool different = (constr[j] != deststr[j]);
+            if(different) fp << red;
+            fp << deststr[j];
+            if(different) fp << reset;
+        }
+        
+#if 0
+        fp << "\t";
+        for(size_t ei = 0; ei < seed.edits.size(); ei++) {
+            const Edit& edit = seed.edits[ei];
+            if(ei > 0) fp << ",";
+            fp << edit;
+            if (edit.snpID != std::numeric_limits<uint32_t>::max()) {
+                fp << "@" << edit.snpID;
+            }
+        }
+#endif
+        
+        // print sequence w.r.t. the backbone sequence
+        if(true) {
+            assert_leq(seed.consensus_pos.second, consensus_.length());
+            TIndexOffU right_indent = consensus_.length() - seed.consensus_pos.second;
+            for(size_t j = 0; j < right_indent; j++) fp << ' ';
+            fp << "  ";
+            
+            if(seed.pos.first >= seed.consensus_pos.first) {
+                string backbone_deststr = getString(s, seed.pos.first - seed.consensus_pos.first, consensus_.length());
+                assert_eq(consensus_.length(), backbone_deststr.length());
+                for(size_t j = 0; j < consensus_.length(); j++) {
+                    bool different = (consensus_[j] != backbone_deststr[j]);
+                    if(different) fp << red;
+                    fp << backbone_deststr[j];
+                    if(different) fp << reset;
+                }
+            }
+        }
+        
+        fp << endl;
+    }
+    
+    if(total_count > 0) fp << setw(5) << total_count << endl << endl;
+    total_repeat_seq_len += consensus_.length();
+}
+
+template<typename TStr>
+RepeatBuilder<TStr>::RepeatBuilder(TStr& s,
+                                   const EList<RefRecord>& szs,
+                                   const EList<string>& ref_names,
+                                   bool forward_only,
+                                   BlockwiseSA<TStr>& sa,
+                                   const string& filename) :
+s_(s),
+coordHelper_(s.length(), forward_only ? s.length() : s.length() / 2, szs, ref_names),
+forward_only_(forward_only),
+bsa_(sa), filename_(filename),
+forward_length_(forward_only ? s.length() : s.length() / 2)
+{
+	cerr << "RepeatGenerator: " << filename_ << endl;
+
+    rnd_.init(0);
+}
+
+template<typename TStr>
+RepeatBuilder<TStr>::~RepeatBuilder()
+{
+    if(sc_) {
+        delete sc_;
+    }
+}
+
+#define DMAX std::numeric_limits<double>::max()
+
+template<typename TStr>
+void RepeatBuilder<TStr>::init_dyn(const RepeatParameter& rp)
+{
+    const int MM_PEN = 3;
+    // const int MM_PEN = 6;
+    const int GAP_PEN_LIN = 2;
+    // const int GAP_PEN_LIN = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
+    const int GAP_PEN_CON = 4;
+    // const int GAP_PEN_CON = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
+    const int MAX_PEN = MAX_I16;
+
+    scoreMin_.init(SIMPLE_FUNC_LINEAR, rp.max_edit * MM_PEN * -1.0, 0.0);
+    nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
+
+    penCanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
+    penNoncanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
+
+    sc_ = new Scoring(
+            DEFAULT_MATCH_BONUS,     // constant reward for match
+            DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
+            MM_PEN,      // max mm penalty
+            MM_PEN,      // min mm penalty
+            MAX_PEN,      // max sc penalty
+            MAX_PEN,      // min sc penalty
+            scoreMin_,       // min score as function of read len
+            nCeil_,          // max # Ns as function of read len
+            DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
+            DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
+            DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
+
+
+            GAP_PEN_CON, // constant coeff for read gap cost
+            GAP_PEN_CON, // constant coeff for ref gap cost
+            GAP_PEN_LIN, // linear coeff for read gap cost
+            GAP_PEN_LIN, // linear coeff for ref gap cost
+            1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
+            );
+}
+
+
+template<typename TStr>
+void RepeatBuilder<TStr>::doTest(const RepeatParameter& rp,
+                                 const string& refstr,
+                                 const string& readstr)
+{
+	TIndexOffU count = 0;
+
+    init_dyn(rp);
+
+    doTestCase1(refstr, readstr, rp.max_edit);
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
+{
+	TIndexOffU count = 0;
+    min_repeat_len_ = rp.min_repeat_len;
+    
+    init_dyn(rp);
+
+    map<TIndexOffU, TIndexOffU>* seedpos_to_repeatgroup = new map<TIndexOffU, TIndexOffU>;
+    
+	EList<RepeatCoord<TIndexOffU> > rpt_positions;
+	TIndexOffU min_lcp_len = s_.length();
+
+	while(count < s_.length() + 1) {
+		TIndexOffU saElt = bsa_.nextSuffix();
+		count++;
+		
+		if(count && (count % 10000000 == 0)) {
+			cerr << "SA count " << count << endl;
+		}
+        
+        if(saElt == s_.length()) {
+            assert_eq(count, s_.length() + 1);
+            break;
+        }
+
+		if(rpt_positions.size() == 0) {
+            rpt_positions.expand();
+			rpt_positions.back().joinedOff = saElt;
+		} else {
+			TIndexOffU prev_saElt = rpt_positions.back().joinedOff;
+
+			// calculate common prefix length between two text.
+			//   text1 is started from prev_saElt and text2 is started from saElt
+			int lcp_len = getLCP(prev_saElt, saElt);
+
+			if(lcp_len >= rp.seed_len) {
+				rpt_positions.expand();
+				rpt_positions.back().joinedOff = saElt;
+
+				if(min_lcp_len > lcp_len) {
+					min_lcp_len = lcp_len;
+				}
+			} else {
+				if (rpt_positions.size() >= rp.seed_count) {
+                    sort(rpt_positions.begin(), 
+                            rpt_positions.begin() + rpt_positions.size(),
+                            compareRepeatCoordByJoinedOff<TIndexOffU>);
+
+                    string ss = getString(s_, prev_saElt, min_lcp_len);
+                    addRepeatGroup(*seedpos_to_repeatgroup, ss, rpt_positions);
+				}
+
+				// flush previous positions 
+                // clear and expand
+				rpt_positions.resize(1);
+				rpt_positions.back().joinedOff = saElt;
+				min_lcp_len = s_.length();
+			}
+		}
+	}
+    
+    cerr << "number of seed positions is " << seedpos_to_repeatgroup->size() << endl;
+    delete seedpos_to_repeatgroup;
+    seedpos_to_repeatgroup = NULL;
+
+    //mergeRepeatGroup();
+    
+#if 0
+    if(rp.max_edit > 0) {
+        groupRepeatGroup(rp.max_edit);
+    }
+#endif
+
+	// we found repeat_group
+	cerr << rpt_grp_.size() << " groups found" << endl;
+
+
+    // Seed extension
+    seedGrouping(rp);
+
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::sortRepeatGroup()
+{
+	if(rpt_grp_.size() > 0) {
+		sort(rpt_grp_.begin(), rpt_grp_.begin() + rpt_grp_.size(), 
+                compareRepeatGroupByJoinedOff);
+	}
+}
+
+
+template<typename TStr>
+void RepeatBuilder<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
+{
+    EList<RepeatCoord<TIndexOffU> >& positions = rg.positions;
+
+#ifndef NDEBUG
+    for(size_t j = 0; j < positions.size(); j += 10) {
+        string seq_cmp = getString(s_, positions[j].joinedOff, rg.seq.length());
+        assert_eq(rg.seq, seq_cmp);
+    }
+#endif
+
+    for(size_t j = 0; j < positions.size(); j++) {
+        if(positions[j].joinedOff < forward_length_) {
+            positions[j].fw = true;
+        } else {
+            positions[j].joinedOff = s_.length() - positions[j].joinedOff - rg.seq.length();
+            positions[j].fw = false;
+        }
+    }
+    positions.sort();
+
+    // Positions
+    for(size_t j = 0; j < positions.size(); j++) {
+        if(j > 0 && (j % 10 == 0)) {
+            fp << endl;
+        }
+
+        if(j % 10 != 0) {
+            fp << " ";
+        }            
+        string chr_name;
+        TIndexOffU pos_in_chr;
+        coordHelper_.getGenomeCoord(positions[j].joinedOff, chr_name, pos_in_chr);
+
+        char direction = (positions[j].fw ? '+' : '-');
+        fp << chr_name << ":" << pos_in_chr << ":" << direction;
+    }
+    fp << endl;
+}
+
+
+#if 0
+string makeAverageString(EList<SeedExt>& seeds, bool flag_left)
+{
+    string ext = "";
+
+    size_t ext_len = flag_left ? seeds[0].left_ext.length() : seeds[0].right_ext.length();
+
+    for(size_t i = 0; i < ext_len; i++) {
+
+        char cand = 'A';
+
+        size_t count[4] = {0,};
+
+        for(size_t si = 0; si < seeds.size(); si++) {
+            string& seed_ext = flag_left ? seeds[si].left_ext : seeds[si].right_ext;
+
+            uint8_t code = asc2dna[seed_ext[i]];
+            count[code]++;
+        }
+
+        int max_code = 0;
+        cerr << count[0];
+        cerr << ", " << count[1];
+        cerr << ", " << count[2];
+        cerr << ", " << count[3];
+        cerr << endl;
+        for(size_t si = 1; si < 4; si++) {
+            if (count[max_code] < count[si]) {
+                max_code = si;
+            }
+        }
+
+        cand = "ACGT"[max_code];
+
+        ext = ext + cand;
+    }
+
+    return ext;
+}
+#endif
+
+template<typename TStr>
+void RepeatBuilder<TStr>::seedGrouping(const RepeatParameter& rp)
+{
+    string seed_filename = filename_ + ".rep.seed";
+    ofstream fp(seed_filename.c_str());
+    
+    size_t total_rep_seq_len = 0;
+
+    seeds_.clear();
+    
+    EList<RB_Repeat> repeats;
+    
+    for(size_t i = 0; i < rpt_grp_.size(); i++)
+    {
+        EList<RepeatCoord<TIndexOffU> >& positions = rpt_grp_[i].positions;
+        string seed_str = rpt_grp_[i].seq.substr(0, rp.seed_len);
+        
+        // DK - debugging purposes
+#if 1
+        if(positions.size() < 50)
+            continue;
+        
+        if(i == 29966 || i == 1172 || i == 3105) {
+            int kk = 20;
+            kk += 20;
+        } else {
+            continue;
+        }
+#endif
+
+        repeats.expand();
+        repeats.back().consensus() = seed_str;
+        EList<SeedExt>& seeds = repeats.back().seeds();
+        seeds.reserveExact(positions.size());
+        
+        // DK - debugging purposes
+        string test_seq = "GAAATTTCTTTCGGATATTTCCATTCAACTCATAGAGATGAACATGGCCTTTCATAGAGCAGGTTTGAAACACTCTTTTTGTAGTTTGTGGAAGTGGACA";
+        if(test_seq.find(seed_str) != std::string::npos) {
+            cout << i << "\t" << seeds_.size() - 1 << "\t" << positions.size() << "\t" << positions[0].joinedOff << "\t" << test_seq.find(seed_str) << endl;
+        }
+
+        for(size_t pi = 0; pi < positions.size(); pi++) {
+            TIndexOffU left = positions[pi].joinedOff;
+            TIndexOffU right = positions[pi].joinedOff + rp.seed_len;
+
+            seeds.expand();
+            seeds.back().reset();
+            seeds.back().orig_pos = pair<TIndexOffU, TIndexOffU>(left, right);
+            seeds.back().pos = seeds.back().orig_pos;
+            seeds.back().consensus_pos.first = 0;
+            seeds.back().consensus_pos.second = rp.seed_len;
+            seeds.back().bound = pair<TIndexOffU, TIndexOffU>(coordHelper_.getStart(left), coordHelper_.getEnd(left));
+        }
+        
+        repeats.back().extendConsensus(rp, s_);
+        
+        repeats.back().saveSeedExtension(rp,
+                                         s_,
+                                         coordHelper_,
+                                         i,
+                                         repeats.size() - 1,
+                                         fp,
+                                         total_rep_seq_len);
+    }
+
+    fp << "total repeat sequence length: " << total_rep_seq_len << endl;
+    fp.close();
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::seedExtension(string& seed_string,
+                                        EList<SeedExt>& seeds,
+                                        string& consensus_merged,
+                                        const RepeatParameter& rp)
 {
     const size_t seed_mm = rp.seed_mm;
     TIndexOffU baseoff = 0;
@@ -1584,15 +2035,15 @@ void RepeatGenerator<TStr>::saveSeedEdit(
 #endif
 
 template<typename TStr>
-void RepeatGenerator<TStr>::get_alleles(TIndexOffU grp_id,
-                                        const string& seq_name, 
-                                        TIndexOffU baseoff,
-                                        TIndexOffU& allele_id,
-                                        TIndexOffU& hapl_id_base,
-                                        const Range range, 
-                                        EList<SeedExt>& seeds, 
-                                        ostream& info_fp,
-                                        ostream& hapl_fp)
+void RepeatBuilder<TStr>::get_alleles(TIndexOffU grp_id,
+                                      const string& seq_name,
+                                      TIndexOffU baseoff,
+                                      TIndexOffU& allele_id,
+                                      TIndexOffU& hapl_id_base,
+                                      const Range range,
+                                      EList<SeedExt>& seeds,
+                                      ostream& info_fp,
+                                      ostream& hapl_fp)
 {
     // [ragne.first, range.last)
     for(size_t sb = range.first; sb < range.second;) {
@@ -1616,7 +2067,7 @@ void RepeatGenerator<TStr>::get_alleles(TIndexOffU grp_id,
 
 
 template<typename TStr>
-void RepeatGenerator<TStr>::updateSeedBaseoff(EList<SeedExt>& seeds, Range range, size_t diff)
+void RepeatBuilder<TStr>::updateSeedBaseoff(EList<SeedExt>& seeds, Range range, size_t diff)
 {
     for(size_t i = range.first; i < range.second; i++) {
         seeds[i].baseoff += diff;
@@ -1626,7 +2077,7 @@ void RepeatGenerator<TStr>::updateSeedBaseoff(EList<SeedExt>& seeds, Range range
 
 #if 1
 template<typename TStr>
-void RepeatGenerator<TStr>::saveConsensusSequence(const EList<bool>& filter_out)
+void RepeatBuilder<TStr>::saveConsensusSequence(const EList<bool>& filter_out)
 {
     string fname = filename_ + ".rep.fa";
     ofstream fp(fname.c_str());
@@ -1672,14 +2123,14 @@ void RepeatGenerator<TStr>::saveConsensusSequence(const EList<bool>& filter_out)
 
 
 template<typename TStr>
-void RepeatGenerator<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
-                                         TIndexOffU& snp_id_base, 
-                                         TIndexOffU& hapl_id_base,
-                                         TIndexOffU baseoff,
-                                         EList<SeedExt>& seeds,
-                                         ostream& info_fp,
-                                         ostream& snp_fp,
-                                         ostream& hapl_fp)
+void RepeatBuilder<TStr>::saveSeedSNPs(TIndexOffU seed_group_id,
+                                       TIndexOffU& snp_id_base,
+                                       TIndexOffU& hapl_id_base,
+                                       TIndexOffU baseoff,
+                                       EList<SeedExt>& seeds,
+                                       ostream& info_fp,
+                                       ostream& snp_fp,
+                                       ostream& hapl_fp)
 {
     const string rep_basename = "rep";
 
@@ -1857,7 +2308,7 @@ void filter_seeds(const RepeatParameter& rp,
 
 
 template<typename TStr>
-void RepeatGenerator<TStr>::saveSeeds(const RepeatParameter& rp)
+void RepeatBuilder<TStr>::saveSeeds(const RepeatParameter& rp)
 {
 	string rptinfo_filename = filename_ + ".rep.info";
     string snp_filename = filename_ + ".rep.snp";
@@ -1903,12 +2354,12 @@ void RepeatGenerator<TStr>::saveSeeds(const RepeatParameter& rp)
 #endif
 
 template<typename TStr>
-void RepeatGenerator<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
-                                           TIndexOffU baseoff,
-                                           Range range,
-                                           const string& seq_name,
-                                           EList<SeedExt>& seeds,
-                                           ostream &fp)
+void RepeatBuilder<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
+                                         TIndexOffU baseoff,
+                                         Range range,
+                                         const string& seq_name,
+                                         EList<SeedExt>& seeds,
+                                         ostream &fp)
 {
     EList<Edit>& edits = seeds[range.first].edits;
     if(edits.size() == 0)
@@ -1953,13 +2404,13 @@ void RepeatGenerator<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::writeAllele(TIndexOffU grp_id, 
-                                        TIndexOffU allele_id,
-                                        TIndexOffU baseoff,
-                                        Range range,
-                                        const string& seq_name,
-                                        EList<SeedExt>& seeds,
-                                        ostream &fp)
+void RepeatBuilder<TStr>::writeAllele(TIndexOffU grp_id,
+                                      TIndexOffU allele_id,
+                                      TIndexOffU baseoff,
+                                      Range range,
+                                      const string& seq_name,
+                                      EList<SeedExt>& seeds,
+                                      ostream &fp)
 {
     // >rpt_name*0\trep\trep_pos\trep_len\tpos_count\t0
     // chr_name:pos:direction chr_name:pos:direction
@@ -2005,7 +2456,7 @@ void RepeatGenerator<TStr>::writeAllele(TIndexOffU grp_id,
             joinedOff = s_.length() - joinedOff - seeds[range.first].getExtLength();
         }
 
-        getGenomeCoord(joinedOff, chr_name, pos_in_chr);
+        coordHelper_.getGenomeCoord(joinedOff, chr_name, pos_in_chr);
 
         char direction = fw ? '+' : '-';
         fp << chr_name << ":" << pos_in_chr << ":" << direction;
@@ -2015,10 +2466,10 @@ void RepeatGenerator<TStr>::writeAllele(TIndexOffU grp_id,
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::writeSNPs(ostream& fp, 
-                                      TIndexOffU baseoff,
-                                      const string& rep_chr_name, 
-                                      const ESet<Edit>& editset)
+void RepeatBuilder<TStr>::writeSNPs(ostream& fp,
+                                    TIndexOffU baseoff,
+                                    const string& rep_chr_name,
+                                    const ESet<Edit>& editset)
 {
     for(size_t i = 0; i < editset.size(); i++) {
         const Edit& ed = editset[i];
@@ -2037,12 +2488,12 @@ void RepeatGenerator<TStr>::writeSNPs(ostream& fp,
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::refineConsensus(const string& seed_string,
-                                            EList<SeedExt>& seeds,
-                                            const RepeatParameter& rp,
-                                            const string& old_consensus,
-                                            string& refined_consensus,
-                                            ostream& fp)
+void RepeatBuilder<TStr>::refineConsensus(const string& seed_string,
+                                          EList<SeedExt>& seeds,
+                                          const RepeatParameter& rp,
+                                          const string& old_consensus,
+                                          string& refined_consensus,
+                                          ostream& fp)
 {
 #ifndef NDEBUG
     size_t tot_exp_len = 0;
@@ -2130,14 +2581,14 @@ void RepeatGenerator<TStr>::refineConsensus(const string& seed_string,
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
-                                              const EList<SeedExt>& seeds,
-                                              const RepeatParameter& rp,
-                                              TIndexOffU rpt_grp_id,
-                                              TIndexOffU seed_grp_id,
-                                              ostream& fp,
-                                              const string& consensus_merged,
-                                              size_t& total_repeat_seq_len)
+void RepeatBuilder<TStr>::saveSeedExtension(const string& seed_string,
+                                            const EList<SeedExt>& seeds,
+                                            const RepeatParameter& rp,
+                                            TIndexOffU rpt_grp_id,
+                                            TIndexOffU seed_grp_id,
+                                            ostream& fp,
+                                            const string& consensus_merged,
+                                            size_t& total_repeat_seq_len)
 {
     // apply color, which is compatible with linux commands such as cat and less -r
 #if 1
@@ -2187,16 +2638,16 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
         string chr_name;
         TIndexOffU pos_in_chr;
         if(seeds[i].pos.first < forward_length_) {
-            getGenomeCoord(seeds[i].pos.first, chr_name, pos_in_chr);
+            coordHelper_.getGenomeCoord(seeds[i].pos.first, chr_name, pos_in_chr);
         } else {
-            getGenomeCoord(s_.length() - seeds[i].pos.first - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
+            coordHelper_.getGenomeCoord(s_.length() - seeds[i].pos.first - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
         }
         fp << "  " << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
 
         if(seeds[i].pos.second < forward_length_) {
-            getGenomeCoord(seeds[i].pos.second, chr_name, pos_in_chr);
+            coordHelper_.getGenomeCoord(seeds[i].pos.second, chr_name, pos_in_chr);
         } else {
-            getGenomeCoord(s_.length() - seeds[i].pos.second - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
+            coordHelper_.getGenomeCoord(s_.length() - seeds[i].pos.second - (seeds[i].pos.second - seeds[i].pos.first), chr_name, pos_in_chr);
         }
         fp << "  " << setw(5) << chr_name << ":" << pos_in_chr;
         string constr = consensus_merged.substr(seeds[i].baseoff, ext_len);
@@ -2274,7 +2725,7 @@ void RepeatGenerator<TStr>::saveSeedExtension(const string& seed_string,
 
 
 template<typename TStr>
-void RepeatGenerator<TStr>::saveRepeatGroup()
+void RepeatBuilder<TStr>::saveRepeatGroup()
 {
     const string rep_basename = "rep";
 	string rptinfo_filename = filename_ + ".rep.info";
@@ -2365,7 +2816,7 @@ void RepeatGenerator<TStr>::saveRepeatGroup()
 	
 	
 template<typename TStr>
-void RepeatGenerator<TStr>::saveRepeatSequence()
+void RepeatBuilder<TStr>::saveRepeatSequence()
 {
 	string fname = filename_ + ".rep.fa";
 
@@ -2410,7 +2861,7 @@ void RepeatGenerator<TStr>::saveRepeatSequence()
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::saveFile(const RepeatParameter& rp)
+void RepeatBuilder<TStr>::saveFile(const RepeatParameter& rp)
 {
     saveSeeds(rp);
 	//saveRepeatSequence();
@@ -2426,9 +2877,9 @@ void RepeatGenerator<TStr>::saveFile(const RepeatParameter& rp)
  * @param rpt_range
  */
 template<typename TStr>
-void RepeatGenerator<TStr>::addRepeatGroup(map<TIndexOffU, TIndexOffU>& seedpos_to_repeatgroup,
-                                           const string& rpt_seq,
-                                           const EList<RepeatCoord<TIndexOffU> >& positions)
+void RepeatBuilder<TStr>::addRepeatGroup(map<TIndexOffU, TIndexOffU>& seedpos_to_repeatgroup,
+                                         const string& rpt_seq,
+                                         const EList<RepeatCoord<TIndexOffU> >& positions)
 {
 #if 0
 	// rpt_seq is always > 0
@@ -2535,7 +2986,7 @@ void RepeatGenerator<TStr>::addRepeatGroup(map<TIndexOffU, TIndexOffU>& seedpos_
  * @tparam TStr
  */
 template<typename TStr> 
-void RepeatGenerator<TStr>::mergeRepeatGroup()
+void RepeatBuilder<TStr>::mergeRepeatGroup()
 {
 	int range_count = 0;
 	for(size_t i = 0; i < rpt_grp_.size(); i++) {
@@ -2667,7 +3118,7 @@ void RepeatGenerator<TStr>::mergeRepeatGroup()
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
+void RepeatBuilder<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
 {
     if (rpt_grp_.size() == 0) {
         cerr << "no repeat group" << endl;
@@ -2751,54 +3202,10 @@ void RepeatGenerator<TStr>::groupRepeatGroup(TIndexOffU rpt_edit)
 }
 
 template<typename TStr>
-TIndexOffU RepeatGenerator<TStr>::getEnd(TIndexOffU e) {
-    assert_lt(e, s_.length())
-    
-    TIndexOffU end = 0;
-    if(e < forward_length_) {
-        int frag_id = mapJoinedOffToSeq(e);
-        assert_geq(frag_id, 0);
-        end = fraglist_[frag_id].joinedOff + fraglist_[frag_id].length;
-    } else {
-        // ReverseComplement
-        // a, b are positions w.r.t reverse complement string.
-        // fragment map is based on forward string
-        int frag_id = mapJoinedOffToSeq(s_.length() - e - 1);
-        assert_geq(frag_id, 0);
-        end = s_.length() - fraglist_[frag_id].joinedOff;
-    }
-    
-    assert_leq(end, s_.length());
-    return end;
-}
-
-template<typename TStr>
-TIndexOffU RepeatGenerator<TStr>::getStart(TIndexOffU e) {
-    assert_lt(e, s_.length())
-    
-    TIndexOffU start = 0;
-    if(e < forward_length_) {
-        int frag_id = mapJoinedOffToSeq(e);
-        assert_geq(frag_id, 0);
-        start = fraglist_[frag_id].joinedOff;
-    } else {
-        // ReverseComplement
-        // a, b are positions w.r.t reverse complement string.
-        // fragment map is based on forward string
-        int frag_id = mapJoinedOffToSeq(s_.length() - e - 1);
-        assert_geq(frag_id, 0);
-        start = s_.length() - (fraglist_[frag_id].joinedOff + fraglist_[frag_id].length);
-    }
-    
-    assert_leq(start, s_.length());
-    return start;
-}
-
-template<typename TStr>
-TIndexOffU RepeatGenerator<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
+TIndexOffU RepeatBuilder<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 {
-    size_t a_end = getEnd(a);
-    size_t b_end = getEnd(b);
+    size_t a_end = coordHelper_.getEnd(a);
+    size_t b_end = coordHelper_.getEnd(b);
 
     assert_leq(a_end, s_.length());
     assert_leq(b_end, s_.length());
@@ -2815,7 +3222,7 @@ TIndexOffU RepeatGenerator<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::makePadString(const string& ref, const string& read,
+void RepeatBuilder<TStr>::makePadString(const string& ref, const string& read,
         string& pad, size_t len)
 {
     pad.resize(len);
@@ -2842,7 +3249,7 @@ void RepeatGenerator<TStr>::makePadString(const string& ref, const string& read,
 }
 
 template<typename TStr>
-bool RepeatGenerator<TStr>::checkSequenceMergeable(const string& ref,
+bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
                                                    const string& read,
                                                    EList<Edit>& edits,
                                                    Coord& coord,
@@ -2898,7 +3305,7 @@ bool RepeatGenerator<TStr>::checkSequenceMergeable(const string& ref,
 }
 
 template<typename TStr>
-int RepeatGenerator<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits, Coord& coord)
+int RepeatBuilder<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits, Coord& coord)
 {
     // Prepare Strings
 
@@ -3063,7 +3470,7 @@ int RepeatGenerator<TStr>::alignStrings(const string &ref, const string &read, E
 }
 
 template<typename TStr>
-void RepeatGenerator<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
+void RepeatBuilder<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
 {
     cerr << "doTestCase1----------------" << endl;
     EList<Edit> edits;
@@ -3114,6 +3521,6 @@ void RepeatGenerator<TStr>::doTestCase1(const string& refstr, const string& read
 
 
 /****************************/
-template class RepeatGenerator<SString<char> >;
+template class RepeatBuilder<SString<char> >;
 template void dump_tstr(const SString<char>& );
 template bool compareRepeatCoordByJoinedOff(const RepeatCoord<TIndexOffU>& , const RepeatCoord<TIndexOffU>&);

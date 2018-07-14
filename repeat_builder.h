@@ -65,7 +65,6 @@ static string to_string(int val)
 	return ss.str();
 }
 
-
 struct Fragments {
 	bool contain(TIndexOffU pos) {
 		if (pos >= joinedOff && pos < (joinedOff + length)) {
@@ -81,6 +80,41 @@ struct Fragments {
 	int seq_id;
 	TIndexOffU seqOff;          // index within sequence 
 	bool first;
+};
+
+class CoordHelper {
+public:
+    CoordHelper(TIndexOffU length,
+                TIndexOffU forward_length,
+                const EList<RefRecord>& szs,
+                const EList<string>& ref_names);
+    ~CoordHelper();
+    int mapJoinedOffToSeq(TIndexOffU joined_pos);
+    int getGenomeCoord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
+    
+    TIndexOffU getEnd(TIndexOffU e);
+    TIndexOffU getStart(TIndexOffU e);
+    TIndexOffU forward_length() const { return forward_length_; }
+    
+private:
+    void buildNames();
+    void buildJoinedFragment();
+    
+private:
+    TIndexOffU       length_;
+    TIndexOffU       forward_length_;
+    EList<RefRecord> szs_;
+    EList<string>    ref_names_;
+    EList<string>    ref_namelines_;
+    
+    // mapping info from joined string to genome
+    EList<Fragments> fraglist_;
+    
+    // Fragments Cache
+#define CACHE_SIZE_JOINEDFRG    10
+    Fragments cached_[CACHE_SIZE_JOINEDFRG];
+    int num_cached_ = 0;
+    int victim_ = 0;    /* round-robin */
 };
 
 struct RepeatGroup {
@@ -220,6 +254,9 @@ struct SeedExt {
     // seed extended position [first, second)
     pair<TIndexOffU, TIndexOffU> orig_pos;
     pair<TIndexOffU, TIndexOffU> pos;
+    
+    // positions relative to consensus sequence
+    pair<TIndexOffU, TIndexOffU> consensus_pos;
 
     // extension bound. the seed must be placed on same fragment
     // [first, second)
@@ -245,6 +282,8 @@ struct SeedExt {
         orig_pos.second = 0;
         pos.first = 0;
         pos.second = 0;
+        consensus_pos.first = 0;
+        consensus_pos.second = 0;
         bound.first = 0;
         bound.second = 0;
         baseoff = 0;
@@ -339,30 +378,51 @@ struct SeedExt {
     }
 };
 
+class RB_Repeat {
+public:
+    RB_Repeat() {}
+    ~RB_Repeat() {}
+    
+    string& consensus() { return consensus_; }
+    EList<SeedExt>& seeds() { return seeds_; }
+    
+    template<typename TStr>
+    void extendConsensus(const RepeatParameter& rp,
+                         const TStr& s);
+    
+    template<typename TStr>
+    void saveSeedExtension(const RepeatParameter& rp,
+                           const TStr& s,
+                           CoordHelper& coordHelper,
+                           TIndexOffU rpt_grp_id,
+                           TIndexOffU seed_grp_id,
+                           ostream& fp,
+                           size_t& total_repeat_seq_len);
+    
+
+private:
+    string         consensus_;
+    EList<SeedExt> seeds_;
+};
+
 // find and write repeats
 template<typename TStr>
-class RepeatGenerator {
+class RepeatBuilder {
 
 public:
-	RepeatGenerator();
-	RepeatGenerator(
-                    TStr& s,
-                    const EList<RefRecord>& szs,
-                    EList<string>& ref_names,
-                    bool forward_only,
-                    BlockwiseSA<TStr>& sa,
-                    const string& filename);
-    ~RepeatGenerator();
+	RepeatBuilder();
+	RepeatBuilder(TStr& s,
+                  const EList<RefRecord>& szs,
+                  const EList<string>& ref_names,
+                  bool forward_only,
+                  BlockwiseSA<TStr>& sa,
+                  const string& filename);
+    ~RepeatBuilder();
 
 
 public:
 	void build(const RepeatParameter& rp);
-	void buildNames();
-	int mapJoinedOffToSeq(TIndexOffU joined_pos);
-	int getGenomeCoord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
-
-	void buildJoinedFragment();
-
+    
 	static bool compareRepeatGroupByJoinedOff(const RepeatGroup& a, const RepeatGroup& b)
 	{
 		return a.positions[0].joinedOff < b.positions[0].joinedOff;
@@ -382,8 +442,6 @@ public:
 	void adjustRepeatGroup(bool flagGrouping = false);
     RepeatGroup* findRepeatGroup(const string&);
 
-    TIndexOffU getEnd(TIndexOffU e);
-    TIndexOffU getStart(TIndexOffU e);
 	TIndexOffU getLCP(TIndexOffU a, TIndexOffU b);
 
 	void repeat_masking();
@@ -492,27 +550,17 @@ private:
     TIndexOffU min_repeat_len_;
     
     TStr& s_;
-    const EList<RefRecord>& szs_;
-    EList<string> ref_names_;
-    EList<string>& ref_namelines_;
     bool forward_only_;
     string filename_;
     
     BlockwiseSA<TStr>& bsa_;
-    
-    // mapping info from joined string to genome
-    EList<Fragments> fraglist_;
     
     //
     EList<RepeatGroup> rpt_grp_;
     
     TIndexOffU forward_length_;
     
-    // Fragments Cache
-#define CACHE_SIZE_JOINEDFRG    10
-    Fragments cached_[CACHE_SIZE_JOINEDFRG];
-    int num_cached_ = 0;
-    int victim_ = 0;    /* round-robin */
+    CoordHelper coordHelper_;
     
     //
     SimpleFunc scoreMin_;

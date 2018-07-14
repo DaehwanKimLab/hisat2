@@ -479,7 +479,7 @@ static void driver(
     // Vector for the ordered list of "records" comprising the input
 	// sequences.  A record represents a stretch of unambiguous
 	// characters in one of the input sequences.
-	EList<RefRecord> szs(MISC_CAT);
+	EList<RefRecord> szs;
 	EList<string> ref_names;
 	std::pair<size_t, size_t> sztot;
 	{
@@ -591,7 +591,7 @@ static void driver(
             assert_eq(bsa.size(), s.length() + 1);
 
 			// NRG
-			RepeatGenerator<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
+			RepeatBuilder<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
             
             RepeatParameter rp;
             rp.seed_len = seed_length;
@@ -604,7 +604,7 @@ static void driver(
             rp.symmetric_extend = symmetric_extend;
             rp.extend_unit_len = max_seed_extlen;
 
-            if (repeat_str1.length() && repeat_str2.length()) {
+            if(repeat_str1.length() && repeat_str2.length()) {
                 nrg.doTest(rp,
                            repeat_str1,
                            repeat_str2);
@@ -612,7 +612,6 @@ static void driver(
                 nrg.build(rp);
                 nrg.saveFile(rp);
             }
-
 
 			break;
 
