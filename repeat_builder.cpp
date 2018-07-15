@@ -489,6 +489,308 @@ TIndexOffU CoordHelper::getStart(TIndexOffU e) {
 }
 
 template<typename TStr>
+void RB_Repeat::getExtendedSeedSequence(const TStr& s,
+                                        const SeedExt& seed,
+                                        string& seq)
+{
+    seq.clear();
+    TIndexOffU prev_end = seed.orig_pos.first;
+    for(size_t j = 0; j < seed.left_gaps.size(); j++) {
+        TIndexOffU curr_end = seed.orig_pos.first - seed.left_gaps[j].first;
+        assert_leq(curr_end, prev_end);
+        if(curr_end < prev_end) {
+            seq = getString(s, curr_end, prev_end - curr_end) + seq;
+        }
+        int gap_len = seed.left_gaps[j].second;
+        assert_neq(gap_len, 0);
+        if(gap_len > 0) { // deletion
+            string gap_str(gap_len, '-');
+            seq = gap_str + seq;
+        } else {
+            curr_end += gap_len;
+        }
+        prev_end = curr_end;
+    }
+    assert_leq(seed.pos.first, prev_end);
+    if(seed.pos.first < prev_end) {
+        seq = getString(s, seed.pos.first, prev_end - seed.pos.first) + seq;
+    }
+    seq += getString(s, seed.orig_pos.first, seed.orig_pos.second - seed.orig_pos.first);
+    TIndexOffU prev_begin = seed.orig_pos.second;
+    for(size_t j = 0; j < seed.right_gaps.size(); j++) {
+        TIndexOffU curr_begin = seed.orig_pos.second + seed.right_gaps[j].first;
+        assert_leq(prev_begin, curr_begin);
+        if(prev_begin < curr_begin) {
+            seq += getString(s, prev_begin, curr_begin - prev_begin);
+        }
+        int gap_len = seed.right_gaps[j].second;
+        assert_neq(gap_len, 0);
+        if(gap_len > 0) { // deletion
+            string gap_str(gap_len, '-');
+            seq += gap_str;
+        } else {
+            curr_begin -= gap_len;
+        }
+        prev_begin = curr_begin;
+    }
+    assert_leq(prev_begin, seed.pos.second);
+    if(prev_begin < seed.pos.second) {
+        seq += getString(s, prev_begin, seed.pos.second - prev_begin);
+    }
+}
+
+template<typename TStr>
+void RB_Repeat::extendConsensus(const RepeatParameter& rp,
+                                const TStr& s)
+{
+    size_t remain = seeds_.size();
+    EList<string> consensuses;
+    EList<size_t> ed_seed_nums;
+    bool left = true;
+    
+    const TIndexOffU max_ext_len = 100;
+    const TIndexOffU seed_mm = 4;
+    string ext_consensus = "";
+    
+    while(remain >= rp.repeat_count) {
+        for(size_t i = 0; i < remain; i++) {
+            seeds_[i].done = false;
+        }
+            
+        // extend seeds in left or right direction
+        get_consensus_seq(s,
+                          seeds_,
+                          0,      // seed begin
+                          remain, // seed end
+                          left ? max_ext_len : 0,
+                          left ? 0 : max_ext_len,
+                          seed_mm,
+                          rp,
+                          ed_seed_nums,
+                          left ? &consensuses : NULL,
+                          left ? NULL : &consensuses);
+        
+        size_t allowed_seed_mm = 0;
+        ext_consensus.clear();
+        for(int i = (int)seed_mm; i >= 0; i--) {
+            size_t extlen = (ed_seed_nums[i] < rp.repeat_count ? 0 : consensuses[i].length());
+            if(extlen <= 0 || extlen < max_ext_len * i / seed_mm)
+                continue;
+            
+            ext_consensus = consensuses[i];
+            allowed_seed_mm = (size_t)i;
+            assert(ext_consensus.length() > 0);
+            break;
+        }
+        size_t num_passed_seeds = 0;
+        if(ext_consensus.length() > 0) {
+            if(left) consensus_ = reverse(ext_consensus) + consensus_;
+            else consensus_ += ext_consensus;
+            
+            calc_edit_dist(s,
+                           seeds_,
+                           0,
+                           remain,
+                           left ? ext_consensus : "",
+                           left ? "" : ext_consensus,
+                           allowed_seed_mm);
+            
+            // update seeds
+            for(size_t i = 0; i < seeds_.size(); i++) {
+                SeedExt& seed = seeds_[i];
+
+                // DK - debugging purposes
+                if(seed.orig_pos.second == 6454671) {
+                    int qq = 0;
+                    qq += 1;
+                }
+                
+                if(seed.ed <= allowed_seed_mm && i < remain) {
+                    num_passed_seeds++;
+                    seed.done = true;
+                    seed.total_ed += seed.ed;
+                    if(left) {
+                        if(seed.left_gaps.size() > 0 &&
+                           seed.left_gaps.back().first > seed.orig_pos.first - seed.pos.first) {
+                            int gap_len = seed.left_gaps.back().second;
+                            seed.pos.first += gap_len;
+                        }
+                        seed.pos.first -= ext_consensus.length();
+                        seed.consensus_pos.first = 0;
+                        seed.consensus_pos.second = consensus_.length();
+                    } else {
+                        if(seed.right_gaps.size() > 0 &&
+                           seed.right_gaps.back().first >= seed.pos.second - seed.orig_pos.second) {
+                            int gap_len = seed.right_gaps.back().second;
+                            seed.pos.second -= gap_len;
+                        }
+                        seed.pos.second += ext_consensus.length();
+                        seed.consensus_pos.second = consensus_.length();
+                    }
+                } else {
+                    if(left) {
+                        seed.consensus_pos.first += ext_consensus.length();
+                        seed.consensus_pos.second += ext_consensus.length();
+                    }
+                }
+            }
+            
+            // move up "done" seeds
+            size_t j = 0;
+            for(size_t i = 0; i < remain; i++) {
+                if(!seeds_[i].done) continue;
+                assert_geq(i, j);
+                if(i > j) {
+                    SeedExt temp = seeds_[j];
+                    seeds_[j] = seeds_[i];
+                    seeds_[i] = temp;
+                    // Find next "undone" seed
+                    j++;
+                    while(j < i && seeds_[j].done) {
+                        j++;
+                    }
+                    assert(j < remain && !seeds_[j].done);
+                } else {
+                    j = i + 1;
+                }
+            }
+        }
+        
+        remain = num_passed_seeds;
+        if(remain < rp.repeat_count) {
+            if(left) {
+                left = false;
+                remain = seeds_.size();
+            }
+        }
+    } // while(remain >= rp.repeat_count)
+    
+#ifndef NDEBUG
+    // make sure seed positions are unique
+    EList<pair<TIndexOffU, TIndexOffU> > seed_poses;
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        seed_poses.expand();
+        seed_poses.back() = seeds_[i].orig_pos;
+    }
+    seed_poses.sort();
+    for(size_t i = 0; i + 1 < seed_poses.size(); i++) {
+        if(seed_poses[i].first == seed_poses[i+1].first) {
+            assert_lt(seed_poses[i].second, seed_poses[i+1].second);
+        } else {
+            assert_lt(seed_poses[i].first, seed_poses[i+1].first);
+        }
+    }
+#endif
+}
+
+template<typename TStr>
+void RB_Repeat::saveSeedExtension(const RepeatParameter& rp,
+                                  const TStr& s,
+                                  CoordHelper& coordHelper,
+                                  TIndexOffU rpt_grp_id,
+                                  TIndexOffU seed_grp_id,
+                                  ostream& fp,
+                                  size_t& total_repeat_seq_len)
+{
+    // apply color, which is compatible with linux commands such as cat and less -r
+#if 1
+    const string red = "\033[31m", reset = "\033[0m", gray = "\033[37m", redline = "\033[4;31m";
+#else
+    const string red = "", reset = "", gray = "", redline = "";
+#endif
+    bool show_exterior_seq = true;
+    
+    size_t total_count = 0;
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        const SeedExt& seed = seeds_[i];
+        size_t ext_len = seed.getExtLength();
+        if(ext_len < rp.min_repeat_len) continue;
+        total_count++;
+        bool sense_strand = seed.pos.first < coordHelper.forward_length();
+        
+        fp << seed_grp_id << "  " << seeds_.size();
+        fp << "  " << setw(4) << i;
+        fp << "  " << setw(4) << ext_len;
+        fp << "  " << (sense_strand ? '+' : '-');
+        fp << "  " << setw(10) << seed.pos.first << "  " << setw(10) << seed.pos.second;
+        fp << "  " << setw(10) << seed.orig_pos.first << "  " << setw(10) << seed.orig_pos.second;
+        
+        string chr_name;
+        TIndexOffU pos_in_chr;
+        if(sense_strand) {
+            coordHelper.getGenomeCoord(seed.pos.first, chr_name, pos_in_chr);
+        } else {
+            coordHelper.getGenomeCoord(s.length() - seed.pos.first - (seed.pos.second - seed.pos.first), chr_name, pos_in_chr);
+        }
+        fp << "  " << setw(5) << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
+        
+        if(sense_strand) {
+            coordHelper.getGenomeCoord(seed.pos.second, chr_name, pos_in_chr);
+        } else {
+            coordHelper.getGenomeCoord(s.length() - seed.pos.second - (seed.pos.second - seed.pos.first), chr_name, pos_in_chr);
+        }
+        fp << "  " << setw(5) << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
+        
+        string deststr = "";
+        getExtendedSeedSequence(s, seed, deststr);
+        
+        // add exterior sequences
+        if(seed.consensus_pos.first > 0) {
+            deststr = getString(s, seed.pos.first - seed.consensus_pos.first, seed.consensus_pos.first) + deststr;
+        }
+        if(seed.consensus_pos.second < consensus_.length()) {
+            deststr += getString(s, seed.pos.second, consensus_.length() - seed.consensus_pos.second);
+        }
+        
+        assert_eq(consensus_.length(), deststr.length());
+        fp << "  ";
+        
+        // print sequence w.r.t. the current group
+        for(size_t j = 0; j < consensus_.length(); j++) {
+            bool outside = j < seed.consensus_pos.first || j >= seed.consensus_pos.second;
+            bool different = (consensus_[j] != deststr[j]);
+            if(outside) {
+                if(show_exterior_seq) {
+                    if(different) {
+                        fp << redline;
+                        fp << deststr[j];
+                        fp << reset;
+                    } else {
+                        fp << gray;
+                        fp << deststr[j];
+                        fp << reset;
+                    }
+                } else {
+                    if(j < seed.consensus_pos.first)
+                        fp << " ";
+                }
+            } else {
+                if(different) fp << red;
+                fp << deststr[j];
+                if(different) fp << reset;
+            }
+        }
+        
+#if 0
+        fp << "\t";
+        for(size_t ei = 0; ei < seed.edits.size(); ei++) {
+            const Edit& edit = seed.edits[ei];
+            if(ei > 0) fp << ",";
+            fp << edit;
+            if (edit.snpID != std::numeric_limits<uint32_t>::max()) {
+                fp << "@" << edit.snpID;
+            }
+        }
+#endif
+        
+        fp << endl;
+    }
+    
+    if(total_count > 0) fp << setw(5) << total_count << endl << endl;
+    total_repeat_seq_len += consensus_.length();
+}
+
+template<typename TStr>
 size_t calc_edit_dist(const TStr& s,
                       const SeedExt& seed,
                       const SeedExt& seed2,
@@ -526,12 +828,12 @@ size_t calc_edit_dist(const TStr& s,
     return ed;
 }
 
-size_t extract_kmer(const string& consensus, size_t offset, size_t k = 5)
+size_t extract_kmer(const string& seq, size_t offset, size_t k = 5)
 {
-    assert_leq(offset + k, consensus.length());
+    assert_leq(offset + k, seq.length());
     size_t kmer = 0;
     for(size_t i = 0; i < k; i++) {
-        kmer = (kmer << 2) | asc2dna[consensus[i]];
+        kmer = (kmer << 2) | asc2dna[seq[offset + i]];
     }
     return kmer;
 }
@@ -562,7 +864,6 @@ void align_with_one_gap(const string& s,
                         EList<size_t>& counts,
                         size_t max_gap,
                         size_t max_mm,
-                        bool left,
                         size_t& mm,
                         size_t& gap_pos,
                         int& gap_len,
@@ -574,7 +875,7 @@ void align_with_one_gap(const string& s,
     counts.resizeExact(max_gap * 2 + 1);
     counts.fillZero();
     size_t max_count = 0, max_count_i = 0;
-    for(size_t i = 0; i + k <= s2.length(); i += k) {
+    for(size_t i = 0; i + k <= s2.length(); i += 1) {
         pair<size_t, size_t> kmer(0, 0);
         kmer.first = extract_kmer(s2, i, k);
         size_t lb = s_kmer_table.bsearchLoBound(kmer);
@@ -599,54 +900,31 @@ void align_with_one_gap(const string& s,
     int gap = (int)max_count_i - (int)max_gap;
     assert_neq(gap, 0);
     size_t abs_gap = abs(gap);
-    bool del;
-    if(left) {
-        del = gap < 0;
-    } else {
-        del = gap > 0;
-    }
+    bool del = gap > 0;
     
     EList<size_t> ed, ed2;
     ed.resizeExact(seq_len); ed.fill(max_mm + 1);
     ed2.resizeExact(seq_len); ed2.fill(max_mm + 1);
-    if(left) {
-        // from left to right
-        size_t s_add  = del ? 0 : abs_gap;
-        size_t s2_add = del ? abs_gap : 0;
-        for(size_t i = 0; i + abs_gap < seq_len; i++) {
-            size_t add = (s[i+s_add] == s2[i+s2_add] ? 0 : 1);
-            if(i == 0) ed[i] = add;
-            else       ed[i] = ed[i-1] + add;
-            if(ed[i] >= max_mm) break;
-        }
-        
-        // from right to left
-        for(int i = seq_len - 1; i >= 0; i--) {
-            size_t add = (s[i] == s2[i] ? 0 : 1);
-            if(i == seq_len - 1) ed2[i] = add;
-            else                 ed2[i] = ed2[i+1] + add;
-            if(ed2[i] >= max_mm) break;
-        }
-    } else {
-        // from left to right
-        for(size_t i = 0; i < seq_len; i++) {
-            size_t add = (s[i] == s2[i] ? 0 : 1);
-            if(i == 0) ed[i] = add;
-            else       ed[i] = ed[i-1] + add;
-            if(ed[i] >= max_mm) break;
-        }
-        
-        // from right to left
-        size_t s_sub  = del ? 0 : abs_gap;
-        size_t s2_sub = del ? abs_gap : 0;
-        for(int i = seq_len - 1; i >= abs_gap; i--) {
-            size_t add = (s[i - s_sub] == s2[i - s2_sub] ? 0 : 1);
-            if(i == seq_len - 1) ed2[i] = add;
-            else                 ed2[i] = ed2[i+1] + add;
-            if(ed2[i] >= max_mm) break;
-        }
+    
+    // from left to right
+    for(size_t i = 0; i < seq_len; i++) {
+        size_t add = (s[i] == s2[i] ? 0 : 1);
+        if(i == 0) ed[i] = add;
+        else       ed[i] = ed[i-1] + add;
+        if(ed[i] >= max_mm) break;
     }
     
+    // from right to left
+    size_t s_sub  = del ? 0 : abs_gap;
+    size_t s2_sub = del ? abs_gap : 0;
+    for(int i = seq_len - 1; i >= abs_gap; i--) {
+        size_t add = (s[i - s_sub] == s2[i - s2_sub] ? 0 : 1);
+        if(i == seq_len - 1) ed2[i] = add;
+        else                 ed2[i] = ed2[i+1] + add;
+        if(ed2[i] >= max_mm) break;
+    }
+    
+#if 0
     cout << s << endl << s2 << endl;
     for(size_t i = 0; i < ed.size(); i++) {
         cout << ed[i];
@@ -656,11 +934,13 @@ void align_with_one_gap(const string& s,
         cout << ed2[i];
     }
     cout << endl;
+#endif
     
     size_t min_mm = max_mm + 1, min_mm_i = 0;
-    for(size_t i = 0; i + abs_gap < ed.size(); i++) {
+    assert_eq(ed.size(), ed2.size());
+    for(size_t i = 0; i + abs_gap + 1 < ed.size(); i++) {
         if(ed[i] > max_mm) break;
-        size_t cur_mm = ed[i] + ed2[i + abs_gap];
+        size_t cur_mm = ed[i] + ed2[i + abs_gap + 1];
         if(cur_mm < min_mm) {
             min_mm = cur_mm;
             min_mm_i = i;
@@ -671,39 +951,22 @@ void align_with_one_gap(const string& s,
     if(mm > max_mm)
         return;
     
-    if(left) {
-        gap_pos = min_mm_i + abs_gap - 1;
-        gap_pos = seq_len - gap_pos - 1;
-    } else {
-        gap_pos = min_mm_i + 1;
-    }
+    gap_pos = min_mm_i + 1;
     gap_len = del ? abs_gap : -abs_gap;
     
 #ifndef NDEBUG
     assert_leq(mm, max_mm);
     string ds = s, ds2 = s2;
     size_t debug_mm = 0;
-    if(del) ds.erase(min_mm_i + 1, abs_gap);
-    else    ds2.erase(min_mm_i + 1, abs_gap);
-    if(left) {
-        for(size_t i = 0; i < min(ds.length(), ds2.length()); i++) {
-            if(ds[ds.length() - i - 1] != ds2[ds2.length() - i - 1])
-                debug_mm++;
-        }
-    } else {
-        for(size_t i = 0; i < min(ds.length(), ds2.length()); i++) {
-            if(ds[i] != ds2[i])
-                debug_mm++;
-        }
+    if(del) ds.erase(gap_pos, abs_gap);
+    else    ds2.erase(gap_pos, abs_gap);
+    
+    for(size_t i = 0; i < min(ds.length(), ds2.length()); i++) {
+        if(ds[i] != ds2[i])
+            debug_mm++;
     }
     assert_eq(debug_mm, mm);
 #endif
-
-    // DK - debugging purposes
-    if(left && del && s.length() == 100) {
-        int cc = 0;
-        cc += 1;
-    }
 }
 
 template<typename TStr>
@@ -736,10 +999,9 @@ void calc_edit_dist(const TStr& s,
         size_t left_ed = 0;
         if(left_ext > 0) {
             getString(s, seed.pos.first - left_ext, left_ext, left_seq);
+            reverse(left_seq.begin(), left_seq.end());
             for(size_t j = 0; j < left_ext; j++) {
-                int ch = left_seq[j];
-                if(ch != left_consensus[j]) left_ed++;
-                if(left_ed > max_ed) break;
+                if(left_seq[j] != left_consensus[j]) left_ed++;
             }
             
             if(left_ed > max_ed) {
@@ -749,9 +1011,8 @@ void calc_edit_dist(const TStr& s,
                                    left_kmer_table,
                                    left_seq,
                                    counts,
-                                   max_gap,
+                                   min(left_ed - max_ed, max_gap),
                                    max_ed,
-                                   true,
                                    left_ed,
                                    gap_pos,
                                    gap_len);
@@ -769,22 +1030,17 @@ void calc_edit_dist(const TStr& s,
         if(right_ext > 0) {
             getString(s, seed.pos.second, right_ext, right_seq);
             for(size_t j = 0; j < right_ext; j++) {
-                int ch = right_seq[j];
-                if(ch != right_consensus[j]) right_ed++;
-                if(right_ed > max_ed) break;
+                if(right_seq[j] != right_consensus[j]) right_ed++;
             }
             if(right_ed > max_ed) {
-                // DK - debugging purposes
-#if 0
                 size_t gap_pos = 0;
                 int gap_len = 0;
                 align_with_one_gap(right_consensus,
                                    right_kmer_table,
                                    right_seq,
                                    counts,
-                                   max_gap,
+                                   min(right_ed - max_ed, max_gap),
                                    max_ed,
-                                   true,
                                    right_ed,
                                    gap_pos,
                                    gap_len);
@@ -793,7 +1049,6 @@ void calc_edit_dist(const TStr& s,
                     seed.right_gaps.back().first = seed.rightExtLength() + gap_pos;
                     seed.right_gaps.back().second = gap_len;
                 }
-#endif
             }
         } else {
             right_seq.clear();
@@ -804,208 +1059,17 @@ void calc_edit_dist(const TStr& s,
 }
 
 template<typename TStr>
-void RepeatBuilder<TStr>::get_consensus_seq(EList<SeedExt>& seeds,
-                                            size_t sb,
-                                            size_t se,
-                                            size_t min_left_ext,
-                                            size_t min_right_ext,
-                                            size_t max_ed,
-                                            const RepeatParameter& rp,
-                                            EList<size_t>& ed_seed_nums,
-                                            EList<string>* left_consensuses,
-                                            EList<string>* right_consensuses)
-{
-    assert_lt(sb, se);
-    assert_leq(se, seeds.size());
-    if(left_consensuses != NULL) {
-        left_consensuses->clear(); left_consensuses->resize(max_ed + 1);
-        for(size_t i = 0; i < max_ed + 1; i++) {
-            (*left_consensuses)[i].clear();
-        }
-    }
-    if(right_consensuses != NULL) {
-        right_consensuses->clear(); right_consensuses->resize(max_ed + 1);
-        for(size_t i = 0; i < max_ed + 1; i++) {
-            (*right_consensuses)[i].clear();
-        }
-    }
-    
-    // cluster sequences
-    EList<size_t> belongto;
-    belongto.resizeExact(se - sb);
-    for(size_t i = 0; i < belongto.size(); i++) belongto[i] = i;
-    
-    for(size_t i = 0; i + 1 < belongto.size(); i++) {
-        for(size_t j = i + 1; j < belongto.size(); j++) {
-            if(belongto[j] != j) continue;
-            size_t ed = calc_edit_dist(s_,
-                                       seeds[sb + i],
-                                       seeds[sb + j],
-                                       min_left_ext,
-                                       min_right_ext,
-                                       max_ed + 1);
-            if(ed <= max_ed + 1) {
-                belongto[j] = belongto[i];
-            }
-            
-        }
-    }
-    
-    // find the maximum group that has the most sequences
-    EList<size_t> vote;
-    vote.resizeExact(seeds.size());
-    vote.fillZero();
-    size_t max_group = 0;
-    for(size_t i = 0; i < belongto.size(); i++) {
-        size_t cur_group = belongto[i];
-        assert_lt(cur_group, vote.size());
-        vote[cur_group]++;
-        if(cur_group != max_group && vote[cur_group] > vote[max_group]) {
-            max_group = cur_group;
-        }
-    }
-    
-    // reuse vote to store seeds
-    EList<size_t>& consensus_group = vote;
-    consensus_group.clear();
-    for(size_t i = 0; i < belongto.size(); i++) {
-        if(belongto[i] == max_group)
-            consensus_group.push_back(i);
-    }
-    
-    // update ed
-    // extend consensus string
-    ed_seed_nums.resize(max_ed + 1); ed_seed_nums.fillZero();
-    EList<size_t> next_ed_seed_nums; next_ed_seed_nums.resize(max_ed + 1);
-    for(size_t i = sb; i < se; i++) seeds[i].ed = 0;
-    size_t seed_ext_len = 0;
-    while(seed_ext_len < max(min_left_ext, min_right_ext)) {
-        // count base
-        size_t l_count[4] = {0, };
-        size_t r_count[4] = {0, };
-        
-        for(size_t i = 0; i < consensus_group.size(); i++) {
-            size_t si = sb + consensus_group[i];
-            assert(!seeds[si].done);
-            int ch;
-            if(seed_ext_len < min_left_ext) {
-                ch = getSequenceBase(s_, seeds[si].pos.first - seed_ext_len - 1);
-                assert_range(0, 3, ch);
-                l_count[ch]++;
-            }
-            if(seed_ext_len < min_right_ext) {
-                ch = getSequenceBase(s_, seeds[si].pos.second + seed_ext_len);
-                assert_range(0, 3, ch);
-                r_count[ch]++;
-            }
-        }
-        
-        // select base to be used for extension
-        uint8_t left_ext_base = 0;
-        if(seed_ext_len < min_left_ext) left_ext_base = max_index(l_count);
-        uint8_t right_ext_base = 0;
-        if(seed_ext_len < min_right_ext) right_ext_base = max_index(r_count);
-        
-        // estimate extended ed
-        next_ed_seed_nums.fillZero();
-        for(size_t i = sb; i < se; i++) {
-            assert(!seeds[i].done);
-            uint32_t est_ed = seeds[i].ed;
-            if(seed_ext_len < min_left_ext) {
-                TIndexOffU left_pos = seeds[i].pos.first - seed_ext_len - 1;
-                if(left_pos < seeds[i].bound.first) {
-                    est_ed = max_ed + 1;
-                } else {
-                    int ch = getSequenceBase(s_, left_pos);
-                    assert_range(0, 3, ch);
-                    if (ch != left_ext_base) {
-                        est_ed++;
-                    }
-                }
-            }
-            
-            if(seed_ext_len < min_right_ext) {
-                TIndexOffU right_pos = seeds[i].pos.second + seed_ext_len;
-                if(right_pos >= seeds[i].bound.second) {
-                    est_ed = max_ed + 1;
-                } else {
-                    int ch = getSequenceBase(s_, right_pos);
-                    assert_range(0, 3, ch);
-                    if (ch != right_ext_base) {
-                        est_ed++;
-                    }
-                }
-            }
-            
-            if(est_ed <= max_ed) {
-                next_ed_seed_nums[est_ed]++;
-            }
-        }
-        
-        for(size_t i = 1; i < next_ed_seed_nums.size(); i++) next_ed_seed_nums[i] += next_ed_seed_nums[i-1];
-        if(next_ed_seed_nums[max_ed] < rp.repeat_count) {
-            break;
-        }
-        
-        for(size_t i = sb; i < se; i++) {
-            assert(!seeds[i].done);
-            if(seed_ext_len < min_left_ext) {
-                TIndexOffU left_pos = seeds[i].pos.first - seed_ext_len - 1;
-                if(left_pos < seeds[i].bound.first) {
-                    seeds[i].ed = max_ed + 1;
-                } else {
-                    int ch = getSequenceBase(s_, left_pos);
-                    assert_range(0, 3, ch);
-                    if (ch != left_ext_base) {
-                        seeds[i].ed++;
-                    }
-                }
-            }
-            
-            if(seed_ext_len < min_right_ext) {
-                TIndexOffU right_pos = seeds[i].pos.second + seed_ext_len;
-                if(right_pos >= seeds[i].bound.second) {
-                    seeds[i].ed = max_ed + 1;
-                } else {
-                    int ch = getSequenceBase(s_, right_pos);
-                    assert_range(0, 3, ch);
-                    if (ch != right_ext_base) {
-                        seeds[i].ed++;
-                    }
-                }
-            }
-        }
-        
-        for(size_t i = 0; i < next_ed_seed_nums.size(); i++) {
-            if(next_ed_seed_nums[i] < rp.repeat_count)
-                continue;
-            ed_seed_nums[i] = next_ed_seed_nums[i];
-            if(seed_ext_len < min_left_ext) {
-                assert(left_consensuses != NULL);
-                (*left_consensuses)[i] += (char)("ACGT"[left_ext_base]);
-            }
-            if(seed_ext_len < min_right_ext) {
-                assert(right_consensuses != NULL);
-                (*right_consensuses)[i] += (char)("ACGT"[right_ext_base]);
-            }
-        }
-        
-        seed_ext_len++;
-    }
-}
-
-template<typename TStr>
-void get_consensus_seq(const TStr& s,
-                       EList<SeedExt>& seeds,
-                       size_t sb,
-                       size_t se,
-                       size_t min_left_ext,
-                       size_t min_right_ext,
-                       size_t max_ed,
-                       const RepeatParameter& rp,
-                       EList<size_t>& ed_seed_nums,
-                       EList<string>* left_consensuses,
-                       EList<string>* right_consensuses)
+void RB_Repeat::get_consensus_seq(const TStr& s,
+                                  EList<SeedExt>& seeds,
+                                  size_t sb,
+                                  size_t se,
+                                  size_t min_left_ext,
+                                  size_t min_right_ext,
+                                  size_t max_ed,
+                                  const RepeatParameter& rp,
+                                  EList<size_t>& ed_seed_nums,
+                                  EList<string>* left_consensuses,
+                                  EList<string>* right_consensuses)
 {
     assert_lt(sb, se);
     assert_leq(se, seeds.size());
@@ -1184,284 +1248,6 @@ void get_consensus_seq(const TStr& s,
 }
 
 template<typename TStr>
-void RB_Repeat::extendConsensus(const RepeatParameter& rp,
-                                const TStr& s)
-{
-    size_t remain = seeds_.size();
-    EList<string> consensuses;
-    EList<size_t> ed_seed_nums;
-    bool left = true;
-    
-    const TIndexOffU max_ext_len = 100;
-    const TIndexOffU seed_mm = 4;
-    string ext_consensus = "";
-    
-    while(remain >= rp.repeat_count) {
-        for(size_t i = 0; i < remain; i++) {
-            seeds_[i].done = false;
-        }
-            
-        // extend seeds in left or right direction
-        get_consensus_seq(s,
-                          seeds_,
-                          0,      // seed begin
-                          remain, // seed end
-                          left ? max_ext_len : 0,
-                          left ? 0 : max_ext_len,
-                          seed_mm,
-                          rp,
-                          ed_seed_nums,
-                          left ? &consensuses : NULL,
-                          left ? NULL : &consensuses);
-        
-        size_t allowed_seed_mm = 0;
-        ext_consensus.clear();
-        for(int i = (int)seed_mm; i >= 0; i--) {
-            size_t extlen = (ed_seed_nums[i] < rp.repeat_count ? 0 : consensuses[i].length());
-            if(extlen <= 0 || extlen < max_ext_len * i / seed_mm)
-                continue;
-            
-            ext_consensus = consensuses[i];
-            allowed_seed_mm = (size_t)i;
-            assert(ext_consensus.length() > 0);
-            break;
-        }
-        size_t num_passed_seeds = 0;
-        if(ext_consensus.length() > 0) {
-            if(left) ext_consensus = reverse(ext_consensus);
-            if(left) consensus_ = ext_consensus + consensus_;
-            else consensus_ += ext_consensus;
-            
-            calc_edit_dist(s,
-                           seeds_,
-                           0,
-                           remain,
-                           left ? ext_consensus : "",
-                           left ? "" : ext_consensus,
-                           allowed_seed_mm);
-            
-            // update seeds
-            for(size_t i = 0; i < seeds_.size(); i++) {
-                SeedExt& seed = seeds_[i];
-                assert(!seed.done);
-                
-                // DK - debugging purposes
-                if(seed.orig_pos.second == 1878444) {
-                    int qq = 0;
-                    qq += 1;
-                }
-                
-                if(seed.ed <= allowed_seed_mm) {
-                    num_passed_seeds++;
-                    seed.done = true;
-                    seed.total_ed += seed.ed;
-                    if(left) {
-                        if(seed.left_gaps.size() > 0 &&
-                           seed.left_gaps.back().first > seed.orig_pos.first - seed.pos.first) {
-                            int gap_len = seed.left_gaps.back().second;
-                            seed.pos.first += gap_len;
-                        }
-                        seed.pos.first -= ext_consensus.length();
-                        seed.consensus_pos.first = 0;
-                        seed.consensus_pos.second = consensus_.length();
-                    } else {
-                        if(seed.right_gaps.size() > 0 &&
-                           seed.right_gaps.back().first >= seed.pos.second - seed.orig_pos.second) {
-                            int gap_len = seed.right_gaps.back().second;
-                            seed.pos.second -= gap_len;
-                        }
-                        seed.pos.second += ext_consensus.length();
-                        seed.consensus_pos.second = consensus_.length();
-                    }
-                } else {
-                    if(left) {
-                        seed.consensus_pos.first += ext_consensus.length();
-                        seed.consensus_pos.second += ext_consensus.length();
-                    }
-                }
-            }
-            
-            // move up "done" seeds
-            size_t j = 0;
-            for(size_t i = 0; i < remain; i++) {
-                if(!seeds_[i].done) continue;
-                assert_geq(i, j);
-                if(i > j) {
-                    SeedExt temp = seeds_[j];
-                    seeds_[j] = seeds_[i];
-                    seeds_[i] = temp;
-                    // Find next "undone" seed
-                    j++;
-                    while(j < i && seeds_[j].done) {
-                        j++;
-                    }
-                    assert(j < remain && !seeds_[j].done);
-                } else {
-                    j = i + 1;
-                }
-            }
-        }
-        
-        remain = num_passed_seeds;
-        if(remain < rp.repeat_count) {
-            if(left) {
-                left = false;
-                remain = seeds_.size();
-            }
-        }
-    } // while(remain >= rp.repeat_count)
-    
-#ifndef NDEBUG
-    // make sure seed positions are unique
-    EList<pair<TIndexOffU, TIndexOffU> > seed_poses;
-    for(size_t i = 0; i < seeds_.size(); i++) {
-        seed_poses.expand();
-        seed_poses.back() = seeds_[i].orig_pos;
-    }
-    seed_poses.sort();
-    for(size_t i = 0; i + 1 < seed_poses.size(); i++) {
-        if(seed_poses[i].first == seed_poses[i+1].first) {
-            assert_lt(seed_poses[i].second, seed_poses[i+1].second);
-        } else {
-            assert_lt(seed_poses[i].first, seed_poses[i+1].first);
-        }
-    }
-#endif
-}
-
-template<typename TStr>
-void RB_Repeat::saveSeedExtension(const RepeatParameter& rp,
-                                  const TStr& s,
-                                  CoordHelper& coordHelper,
-                                  TIndexOffU rpt_grp_id,
-                                  TIndexOffU seed_grp_id,
-                                  ostream& fp,
-                                  size_t& total_repeat_seq_len)
-{
-    // apply color, which is compatible with linux commands such as cat and less -r
-#if 1
-    const string red = "\033[31m", reset = "\033[0m", redline = "\033[4;31m", resetline = "\033[4m";
-#else
-    const string red = "", reset = "", redline = "", resetline = "";
-#endif
-    
-    size_t total_count = 0;
-    for(size_t i = 0; i < seeds_.size(); i++) {
-        const SeedExt& seed = seeds_[i];
-        size_t ext_len = seed.getExtLength();
-        if(ext_len < rp.min_repeat_len) continue;
-        total_count++;
-        
-        fp << seed_grp_id << "  " << seeds_.size();
-        fp << "  " << setw(4) << i;
-        fp << "  " << setw(4) << ext_len;
-        fp << "  " << setw(3) << seed.total_ed;
-        fp << "  " << setw(5) << seed.baseoff;
-        fp << "  " << setw(10) << seed.pos.first << "  " << setw(10) << seed.pos.second;
-        fp << "  " << setw(10) << seed.bound.first << "  " << setw(10) << seed.bound.second;
-        
-        string chr_name;
-        TIndexOffU pos_in_chr;
-        if(seed.pos.first < coordHelper.forward_length()) {
-            coordHelper.getGenomeCoord(seed.pos.first, chr_name, pos_in_chr);
-        } else {
-            coordHelper.getGenomeCoord(s.length() - seed.pos.first - (seed.pos.second - seed.pos.first), chr_name, pos_in_chr);
-        }
-        fp << "  " << setw(5) << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
-        
-        if(seed.pos.second < coordHelper.forward_length()) {
-            coordHelper.getGenomeCoord(seed.pos.second, chr_name, pos_in_chr);
-        } else {
-            coordHelper.getGenomeCoord(s.length() - seed.pos.second - (seed.pos.second - seed.pos.first), chr_name, pos_in_chr);
-        }
-        fp << "  " << setw(5) << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
-        
-        string deststr = "";
-        getSequence(s, seed, deststr);
-        
-        // add exterior sequences
-        if(seed.consensus_pos.first > 0) {
-            deststr = getString(s, seed.pos.first - seed.consensus_pos.first, seed.consensus_pos.first) + deststr;
-        }
-        if(seed.consensus_pos.second < consensus_.length()) {
-            deststr += getString(s, seed.pos.second, consensus_.length() - seed.consensus_pos.second);
-        }
-        
-        assert_eq(consensus_.length(), deststr.length());
-        fp << "  ";
-        
-        // print sequence w.r.t. the current group
-        for(size_t j = 0; j < consensus_.length(); j++) {
-            bool outside = j < seed.consensus_pos.first || j >= seed.consensus_pos.second;
-            bool different = (consensus_[j] != deststr[j]);
-            if(outside) {
-                if(different) {
-                    fp << redline;
-                    fp << deststr[j];
-                    fp << reset;
-                } else {
-                    fp << resetline;
-                    fp << deststr[j];
-                    fp << reset;
-                }
-            } else {
-                if(different) fp << red;
-                fp << deststr[j];
-                if(different) fp << reset;
-            }
-        }
-        
-#if 0
-        fp << "\t";
-        for(size_t ei = 0; ei < seed.edits.size(); ei++) {
-            const Edit& edit = seed.edits[ei];
-            if(ei > 0) fp << ",";
-            fp << edit;
-            if (edit.snpID != std::numeric_limits<uint32_t>::max()) {
-                fp << "@" << edit.snpID;
-            }
-        }
-#endif
-        
-        fp << endl;
-    }
-    
-    if(total_count > 0) fp << setw(5) << total_count << endl << endl;
-    total_repeat_seq_len += consensus_.length();
-}
-
-template<typename TStr>
-void RB_Repeat::getSequence(const TStr& s,
-                            const SeedExt& seed,
-                            string& seq)
-{
-    seq.clear();
-    TIndexOffU prev_end = seed.orig_pos.first;
-    for(size_t j = 0; j < seed.left_gaps.size(); j++) {
-        TIndexOffU curr_end = seed.orig_pos.first - seed.left_gaps[j].first;
-        assert_leq(curr_end, prev_end);
-        if(curr_end < prev_end) {
-            seq = getString(s, curr_end, prev_end - curr_end) + seq;
-        }
-        int gap_len = seed.left_gaps[j].second;
-        assert_neq(gap_len, 0);
-        if(gap_len > 0) { // deletion
-            string gap_str(gap_len, '-');
-            seq = gap_str + seq;
-        } else {
-            curr_end += gap_len;
-        }
-        prev_end = curr_end;
-    }
-    assert_leq(seed.pos.first, prev_end);
-    if(seed.pos.first < prev_end) {
-        seq = getString(s, seed.pos.first, prev_end - seed.pos.first) + seq;
-    }
-    seq += getString(s, seed.orig_pos.first, seed.orig_pos.second - seed.orig_pos.first);
-    seq += getString(s, seed.orig_pos.second, seed.pos.second - seed.orig_pos.second);
-}
-
-template<typename TStr>
 RepeatBuilder<TStr>::RepeatBuilder(TStr& s,
                                    const EList<RefRecord>& szs,
                                    const EList<string>& ref_names,
@@ -1607,14 +1393,6 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     delete seedpos_to_repeatgroup;
     seedpos_to_repeatgroup = NULL;
 
-    //mergeRepeatGroup();
-    
-#if 0
-    if(rp.max_edit > 0) {
-        groupRepeatGroup(rp.max_edit);
-    }
-#endif
-
 	// we found repeat_group
 	cerr << rpt_grp_.size() << " groups found" << endl;
 
@@ -1675,48 +1453,6 @@ void RepeatBuilder<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
     fp << endl;
 }
 
-
-#if 0
-string makeAverageString(EList<SeedExt>& seeds, bool flag_left)
-{
-    string ext = "";
-
-    size_t ext_len = flag_left ? seeds[0].left_ext.length() : seeds[0].right_ext.length();
-
-    for(size_t i = 0; i < ext_len; i++) {
-
-        char cand = 'A';
-
-        size_t count[4] = {0,};
-
-        for(size_t si = 0; si < seeds.size(); si++) {
-            string& seed_ext = flag_left ? seeds[si].left_ext : seeds[si].right_ext;
-
-            uint8_t code = asc2dna[seed_ext[i]];
-            count[code]++;
-        }
-
-        int max_code = 0;
-        cerr << count[0];
-        cerr << ", " << count[1];
-        cerr << ", " << count[2];
-        cerr << ", " << count[3];
-        cerr << endl;
-        for(size_t si = 1; si < 4; si++) {
-            if (count[max_code] < count[si]) {
-                max_code = si;
-            }
-        }
-
-        cand = "ACGT"[max_code];
-
-        ext = ext + cand;
-    }
-
-    return ext;
-}
-#endif
-
 template<typename TStr>
 void RepeatBuilder<TStr>::seedGrouping(const RepeatParameter& rp)
 {
@@ -1736,7 +1472,7 @@ void RepeatBuilder<TStr>::seedGrouping(const RepeatParameter& rp)
         
         // DK - debugging purposes
 #if 1
-        if(positions.size() < 50)
+        if(positions.size() < 50 && false)
             continue;
         
         if(i == 29966 || i == 1172 || i == 3105) {

@@ -395,6 +395,11 @@ public:
     EList<SeedExt>& seeds() { return seeds_; }
     
     template<typename TStr>
+    void getExtendedSeedSequence(const TStr& s,
+                                 const SeedExt& seed,
+                                 string& seq);
+    
+    template<typename TStr>
     void extendConsensus(const RepeatParameter& rp,
                          const TStr& s);
     
@@ -407,11 +412,19 @@ public:
                            ostream& fp,
                            size_t& total_repeat_seq_len);
     
+private:
     template<typename TStr>
-    void getSequence(const TStr& s,
-                     const SeedExt& seed,
-                     string& seq);
-    
+    void get_consensus_seq(const TStr& s,
+                           EList<SeedExt>& seeds,
+                           size_t sb,
+                           size_t se,
+                           size_t min_left_ext,
+                           size_t min_right_ext,
+                           size_t max_ed,
+                           const RepeatParameter& rp,
+                           EList<size_t>& ed_seed_nums,
+                           EList<string>* left_consensuses,
+                           EList<string>* right_consensuses);
 
 private:
     string         consensus_;
