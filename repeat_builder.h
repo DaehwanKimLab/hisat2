@@ -255,12 +255,18 @@ struct SeedExt {
     pair<TIndexOffU, TIndexOffU> orig_pos;
     pair<TIndexOffU, TIndexOffU> pos;
     
-    // positions relative to consensus sequence
-    pair<TIndexOffU, TIndexOffU> consensus_pos;
-
     // extension bound. the seed must be placed on same fragment
     // [first, second)
     pair<TIndexOffU, TIndexOffU> bound;
+    
+    // positions relative to consensus sequence
+    pair<TIndexOffU, TIndexOffU> consensus_pos;
+    
+    // a list of gaps (deletions and insertions) in both directions
+    // offsets from seed's left and right ("pos" above)
+    // positive and negative values indicate deletions and insertions, resp.
+    EList<pair<TIndexOffU, int> > left_gaps;
+    EList<pair<TIndexOffU, int> > right_gaps;
 
     uint32_t ed;          // edit distance
     uint32_t total_ed;    // total edit distance
@@ -282,10 +288,12 @@ struct SeedExt {
         orig_pos.second = 0;
         pos.first = 0;
         pos.second = 0;
-        consensus_pos.first = 0;
-        consensus_pos.second = 0;
         bound.first = 0;
         bound.second = 0;
+        consensus_pos.first = 0;
+        consensus_pos.second = 0;
+        left_gaps.clear();
+        right_gaps.clear();
         baseoff = 0;
         backbone = 0;
     };
@@ -399,6 +407,11 @@ public:
                            ostream& fp,
                            size_t& total_repeat_seq_len);
     
+    template<typename TStr>
+    void getSequence(const TStr& s,
+                     const SeedExt& seed,
+                     string& seq);
+    
 
 private:
     string         consensus_;
@@ -455,20 +468,6 @@ public:
                                 TIndexOffU max_edit = 10);
     int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
     void makePadString(const string&, const string&, string&, size_t);
-
-    void seedExtension(string& seed_string,
-                       EList<SeedExt>& seeds,
-                       string& consensus_merged,
-                       const RepeatParameter& rp);
-
-    void saveSeedExtension(const string& seed_string,
-                           const EList<SeedExt>& seeds,
-                           const RepeatParameter& rp,
-                           TIndexOffU rpt_grp_id,
-                           TIndexOffU seed_grp_id,
-                           ostream& fp,
-                           const string& consensus_merged,
-                           size_t& total_rep_seq_len);
 
     void saveSeedEdit(const string& consensus_merged,
                       EList<SeedExt>& seeds,
