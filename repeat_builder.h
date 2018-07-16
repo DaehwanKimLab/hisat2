@@ -298,23 +298,27 @@ struct SeedExt {
         backbone = 0;
     };
 
-    size_t leftExtLength() const {
+    TIndexOffU getLeftExtLength() const {
         assert_leq(pos.first, orig_pos.first);
-        return orig_pos.first - pos.first;
+        TIndexOffU len = orig_pos.first - pos.first;
+        return len;
     }
 
-    size_t rightExtLength() const {
+    TIndexOffU getRightExtLength() const {
         assert_geq(pos.second, orig_pos.second);
         return pos.second - orig_pos.second;
     }
 
-    size_t getExtLength() const {
-        return pos.second - pos.first;
+    TIndexOffU getLength() const {
+        TIndexOffU len = orig_pos.second - orig_pos.first;
+        len += getLeftExtLength();
+        len += getRightExtLength();
+        return len;
     }
 
     static bool isSameConsensus(const SeedExt& a, const SeedExt& b) {
         return (a.baseoff == b.baseoff)
-            && (a.getExtLength() == b.getExtLength());
+            && (a.getLength() == b.getLength());
     }
 
     static bool isSameAllele(const SeedExt& a, const SeedExt& b) {
@@ -367,7 +371,7 @@ struct SeedExt {
     void generateEdits(const string& consensus_merged, const string& seed_ext)
     {
         size_t ed_done = 0;
-        size_t ext_len = getExtLength();
+        size_t ext_len = getLength();
         assert_eq(ext_len, seed_ext.length());
 
         edits.clear();
@@ -384,6 +388,42 @@ struct SeedExt {
             }
         }
     }
+    
+#ifndef NDEBUG
+    bool valid() const {
+        assert_leq(consensus_pos.first, consensus_pos.second);
+        TIndexOffU constr_len = consensus_pos.second - consensus_pos.first;
+        TIndexOffU allele_len = getLength();
+        
+        TIndexOffU cur_off = 0;
+        for(size_t i = 0; i < left_gaps.size(); i++) {
+            assert_geq(left_gaps[i].first, cur_off);
+            cur_off = left_gaps[i].first;
+            int gap_len = left_gaps[i].second;
+            assert_neq(gap_len, 0);
+            if(gap_len > 0) { // deletion
+                allele_len += gap_len;
+            } else {
+                allele_len += gap_len;
+                cur_off = (-gap_len);
+            }
+        }
+        cur_off = 0;
+        for(size_t i = 0; i < right_gaps.size(); i++) {
+            assert_geq(right_gaps[i].first, cur_off);
+            cur_off = right_gaps[i].first;
+            int gap_len = right_gaps[i].second;
+            assert_neq(gap_len, 0);
+            if(gap_len > 0) { // deletion
+                allele_len += gap_len;
+            } else {
+                allele_len += gap_len;
+                cur_off += (-gap_len);
+            }
+        }
+        return true;
+    }
+#endif
 };
 
 class RB_Repeat {
@@ -407,7 +447,6 @@ public:
     void saveSeedExtension(const RepeatParameter& rp,
                            const TStr& s,
                            CoordHelper& coordHelper,
-                           TIndexOffU rpt_grp_id,
                            TIndexOffU seed_grp_id,
                            ostream& fp,
                            size_t& total_repeat_seq_len);
@@ -460,9 +499,12 @@ public:
 	void saveRepeatSequence();
 	void saveRepeatGroup();
 
-    void addRepeatGroup(map<TIndexOffU, TIndexOffU>& seedpos_to_repeatgroup,
-                        const string& rpt_seq,
-                        const EList<RepeatCoord<TIndexOffU> >& positions);
+    void addRepeatGroup(const RepeatParameter& rp,
+                        map<TIndexOffU, TIndexOffU>& seedpos_to_repeatgroup,
+                        const string& seed_str,
+                        const EList<RepeatCoord<TIndexOffU> >& positions,
+                        ostream& fp);
+    
     void mergeRepeatGroup();
     void groupRepeatGroup(TIndexOffU rpt_edit);
 	void adjustRepeatGroup(bool flagGrouping = false);
@@ -502,17 +544,6 @@ public:
     void doTestCase1(const string&, const string&, TIndexOffU);
     
 private:
-    void get_consensus_seq(EList<SeedExt>& seeds,     // seeds
-                           size_t sb,                 // seed begin
-                           size_t se,                 // seed end
-                           size_t min_left_ext,       
-                           size_t min_right_ext,
-                           size_t max_ed,             // maximum edit distance allowed
-                           const RepeatParameter& rp,
-                           EList<size_t>& ed_seed_nums,
-                           EList<string>* left_consensus,
-                           EList<string>* right_consensus);
-
     void get_alleles(TIndexOffU grp_id,
                      const string& seq_name, 
                      TIndexOffU baseoff,
@@ -589,6 +620,7 @@ private:
     // Seeds
     EList<string> consensus_all_;
     ELList<SeedExt> seeds_;
+    EList<RB_Repeat> repeats_;
 
 };
 
