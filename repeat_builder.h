@@ -268,12 +268,10 @@ struct SeedExt {
     EList<pair<TIndexOffU, int> > left_gaps;
     EList<pair<TIndexOffU, int> > right_gaps;
 
-    uint32_t ed;          // edit distance
-    uint32_t total_ed;    // total edit distance
-    bool done;            // done flag
-    TIndexOffU baseoff;   // offset in consensus_merged
-    
-    TIndexOffU backbone;  // backbone seed number
+    uint32_t ed;            // edit distance
+    uint32_t total_ed;      // total edit distance
+    bool done;              // done flag
+    uint32_t curr_ext_len;  //
 
     EList<Edit> edits;      // edits w.r.t. consensus_merged
     
@@ -283,6 +281,7 @@ struct SeedExt {
 
     void reset() {
         done = false;
+        curr_ext_len = 0;
         ed = total_ed = 0;
         orig_pos.first = 0;
         orig_pos.second = 0;
@@ -294,8 +293,6 @@ struct SeedExt {
         consensus_pos.second = 0;
         left_gaps.clear();
         right_gaps.clear();
-        baseoff = 0;
-        backbone = 0;
     };
 
     TIndexOffU getLeftExtLength() const {
@@ -317,7 +314,7 @@ struct SeedExt {
     }
 
     static bool isSameConsensus(const SeedExt& a, const SeedExt& b) {
-        return (a.baseoff == b.baseoff)
+        return (a.consensus_pos == b.consensus_pos)
             && (a.getLength() == b.getLength());
     }
 
@@ -377,13 +374,13 @@ struct SeedExt {
         edits.clear();
 
         for(size_t i = 0; i < ext_len && ed_done < total_ed; i++) {
-            char con_base = consensus_merged[baseoff + i];
+            char con_base = consensus_merged[consensus_pos.first + i];
             char seed_base = seed_ext[i];
 
             if (con_base != seed_base) {
                 edits.expand();
-                edits.back().init(baseoff + i,
-                        con_base, seed_base, EDIT_TYPE_MM);
+                edits.back().init(consensus_pos.first + i,
+                                  con_base, seed_base, EDIT_TYPE_MM);
                 ed_done++;
             }
         }
@@ -405,7 +402,7 @@ struct SeedExt {
                 allele_len += gap_len;
             } else {
                 allele_len += gap_len;
-                cur_off = (-gap_len);
+                cur_off -= (-gap_len);
             }
         }
         cur_off = 0;
@@ -421,6 +418,7 @@ struct SeedExt {
                 cur_off += (-gap_len);
             }
         }
+        assert_eq(constr_len, allele_len);
         return true;
     }
 #endif
@@ -433,6 +431,7 @@ public:
     
     string& consensus() { return consensus_; }
     EList<SeedExt>& seeds() { return seeds_; }
+    EList<Range>& seed_ranges() { return seed_ranges_; }
     
     template<typename TStr>
     void getExtendedSeedSequence(const TStr& s,
@@ -451,6 +450,15 @@ public:
                            ostream& fp,
                            size_t& total_repeat_seq_len);
     
+    void reset() {
+        consensus_.clear();
+        for(size_t i = 0; i < seeds_.size(); i++) {
+            seeds_[i].reset();
+        }
+        seeds_.clear();
+        seed_ranges_.clear();
+    }
+    
 private:
     template<typename TStr>
     void get_consensus_seq(const TStr& s,
@@ -468,6 +476,7 @@ private:
 private:
     string         consensus_;
     EList<SeedExt> seeds_;
+    EList<Range>   seed_ranges_;
 };
 
 // find and write repeats
@@ -500,7 +509,7 @@ public:
 	void saveRepeatGroup();
 
     void addRepeatGroup(const RepeatParameter& rp,
-                        map<TIndexOffU, TIndexOffU>& seedpos_to_repeatgroup,
+                        map<Range, TIndexOffU>& range_to_repeatgroup,
                         const string& seed_str,
                         const EList<RepeatCoord<TIndexOffU> >& positions,
                         ostream& fp);
