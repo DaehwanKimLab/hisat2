@@ -491,7 +491,7 @@ TIndexOffU CoordHelper::getStart(TIndexOffU e) {
 template<typename TStr>
 void RB_Repeat::getExtendedSeedSequence(const TStr& s,
                                         const SeedExt& seed,
-                                        string& seq)
+                                        string& seq) const
 {
     seq.clear();
     TIndexOffU prev_end = seed.orig_pos.first;
@@ -731,7 +731,7 @@ void RB_Repeat::saveSeedExtension(const RepeatParameter& rp,
                                   TIndexOffU seed_grp_id,
                                   ostream& fp,
                                   size_t& total_repeat_seq_len,
-                                  size_t& total_allele_seq_len)
+                                  size_t& total_allele_seq_len) const
 {
     // apply color, which is compatible with linux commands such as cat and less -r
 #if 1
@@ -1133,7 +1133,7 @@ void RB_Repeat::get_consensus_seq(const TStr& s,
                                   const RepeatParameter& rp,
                                   EList<size_t>& ed_seed_nums,
                                   EList<string>* left_consensuses,
-                                  EList<string>* right_consensuses)
+                                  EList<string>* right_consensuses) const
 {
     assert_lt(sb, se);
     assert_leq(se, seeds.size());
@@ -1315,6 +1315,76 @@ void RB_Repeat::get_consensus_seq(const TStr& s,
     }
 }
 
+bool contain(const RB_Repeat& a,
+             const RB_Repeat& b)
+{
+    const EList<SeedExt>& seeds = a.seeds();
+    const EList<SeedExt>& seeds2 = b.seeds();
+    for(size_t i = 0; i < seeds.size(); i++) {
+        const SeedExt& seed = seeds[i];
+        if((float)seed.getLength() < a.consensus().length() * 0.95)
+            break;
+        for(size_t j = 0; j < seeds2.size(); j++) {
+            const SeedExt& seed2 = seeds2[j];
+            if((float)seed2.getLength() < b.consensus().length() * 0.95)
+                break;
+            if(seed.pos.first <= seed2.pos.first && seed2.pos.second <= seed.pos.second) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+float mergeable(const RB_Repeat& a,
+                const RB_Repeat& b)
+{
+    const EList<Range>& ranges = a.seed_ranges();
+    const EList<Range>& ranges2 = b.seed_ranges();
+    size_t num_contain = 0, num_overlap = 0, num_overlap_bp = 0;
+    size_t p = 0, p2 = 0;
+    while(p < ranges.size() && p2 < ranges2.size()) {
+        Range range = ranges[p];
+        Range range2 = ranges2[p2];
+        if(range.first >= range2.first && range.second <= range2.second) {
+            num_contain++;
+            num_overlap_bp += (range.second - range.first);
+            p++;
+        } else if(range2.first >= range.first && range2.second <= range.second) {
+            num_contain++;
+            num_overlap_bp += (range2.second - range2.first);
+            p2++;
+        } else {
+            if(!(range.first >= range2.second || range.second <= range2.first)) {
+                num_overlap++;
+                if(range.first >= range2.first) {
+                    assert_lt(range.first, range2.second);
+                    num_overlap_bp += (range2.second - range.first);
+                } else {
+                    assert_lt(range.second, range2.second);
+                    assert_lt(range2.first, range.second);
+                    num_overlap_bp += (range.second - range2.first);
+                }
+            }
+            if(range.second <= range2.second) p++;
+            else                              p2++;
+        }
+    }
+    size_t num_total_bp = 0;
+    for(size_t r = 0; r < ranges.size(); r++) num_total_bp += (ranges[r].second - ranges[r].first);
+    float portion = float(num_overlap_bp) / float(num_total_bp);
+    return portion;
+}
+
+template<typename TStr>
+bool RB_Repeat::merge(const RepeatParameter& rp,
+                      const TStr& s,
+                      const RB_Repeat& o)
+{
+    float portion = mergeable(*this, o);
+    return true;
+}
+
 template<typename TStr>
 RepeatBuilder<TStr>::RepeatBuilder(TStr& s,
                                    const EList<RefRecord>& szs,
@@ -1394,48 +1464,6 @@ void RepeatBuilder<TStr>::doTest(const RepeatParameter& rp,
 
     doTestCase1(refstr, readstr, rp.max_edit);
 }
-
-float mergeable(const RepeatParameter& rp,
-                RB_Repeat& a,
-                RB_Repeat& b)
-{
-    const EList<Range>& ranges = a.seed_ranges();
-    const EList<Range>& ranges2 = b.seed_ranges();
-    size_t num_contain = 0, num_overlap = 0, num_overlap_bp = 0;
-    size_t p = 0, p2 = 0;
-    while(p < ranges.size() && p2 < ranges2.size()) {
-        Range range = ranges[p];
-        Range range2 = ranges2[p2];
-        if(range.first >= range2.first && range.second <= range2.second) {
-            num_contain++;
-            num_overlap_bp += (range.second - range.first);
-            p++;
-        } else if(range2.first >= range.first && range2.second <= range.second) {
-            num_contain++;
-            num_overlap_bp += (range2.second - range2.first);
-            p2++;
-        } else {
-            if(!(range.first >= range2.second || range.second <= range2.first)) {
-                num_overlap++;
-                if(range.first >= range2.first) {
-                    assert_lt(range.first, range2.second);
-                    num_overlap_bp += (range2.second - range.first);
-                } else {
-                    assert_lt(range.second, range2.second);
-                    assert_lt(range2.first, range.second);
-                    num_overlap_bp += (range.second - range2.first);
-                }
-            }
-            if(range.second <= range2.second) p++;
-            else                              p2++;
-        }
-    }
-    size_t num_total_bp = 0;
-    for(size_t r = 0; r < ranges.size(); r++) num_total_bp += (ranges[r].second - ranges[r].first);
-    float portion = float(num_overlap_bp) / float(num_total_bp);
-    return portion;
-}
-
 
 template<typename TStr>
 void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
@@ -1541,12 +1569,12 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                 size_t overlap = ranges[i].first.second - ranges[j].first.first;
                 if(ranges[i].first.second - ranges[i].first.first >= ranges[j].first.second - ranges[j].first.first) {
                     if(overlap * 10 >= (ranges[j].first.second - ranges[j].first.first) * 8) {
-                        repeats_[ranges[j].second].reset();
+                        //repeats_[ranges[j].second].reset();
                     }
                 } else {
                     if(overlap * 10 >= (ranges[i].first.second - ranges[i].first.first) * 8) {
-                        repeats_[ranges[i].second].reset();
-                        show = false;
+                        //repeats_[ranges[i].second].reset();
+                        //show = false;
                         break;
                     }
                 }
@@ -1582,7 +1610,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                 dk += 1;
             }
             
-            float portion = mergeable(rp, repeats_[i], repeats_[j]);
+            float portion = mergeable(repeats_[i], repeats_[j]);
             if(portion > max_portion) {
                 max_portion = portion;
                 max_portion_i = j;
@@ -1591,10 +1619,17 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             // DK - debugging purposes
 #if 1
             if(portion >= 0.8f) {
-                if(repeats_[i].consensus().length() > repeats_[j].consensus().length())
-                    repeats_[j].reset();
-                else
-                    repeats_[i].reset();
+                size_t a, b;
+                if(repeats_[i].consensus().length() > repeats_[j].consensus().length()) {
+                    a = i; b = j;
+                } else {
+                    a = j; b = i;
+                }
+                
+                if(contain(repeats_[a], repeats_[b])) {
+                    repeats_[a].merge(rp, s_, repeats_[b]);
+                }
+                repeats_[b].reset();
             }
 #endif
         }

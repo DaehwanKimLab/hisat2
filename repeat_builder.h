@@ -430,13 +430,18 @@ public:
     ~RB_Repeat() {}
     
     string& consensus() { return consensus_; }
+    const string& consensus() const { return consensus_; }
+    
     EList<SeedExt>& seeds() { return seeds_; }
+    const EList<SeedExt>& seeds() const { return seeds_; }
+    
     EList<Range>& seed_ranges() { return seed_ranges_; }
+    const EList<Range>& seed_ranges() const { return seed_ranges_; }
     
     template<typename TStr>
     void getExtendedSeedSequence(const TStr& s,
                                  const SeedExt& seed,
-                                 string& seq);
+                                 string& seq) const;
     
     template<typename TStr>
     void extendConsensus(const RepeatParameter& rp,
@@ -449,9 +454,14 @@ public:
                            TIndexOffU seed_grp_id,
                            ostream& fp,
                            size_t& total_repeat_seq_len,
-                           size_t& total_allele_seq_len);
+                           size_t& total_allele_seq_len) const;
     
-    bool satisfy(const RepeatParameter& rp)
+    template<typename TStr>
+    bool merge(const RepeatParameter& rp,
+               const TStr& s,
+               const RB_Repeat& o);
+    
+    bool satisfy(const RepeatParameter& rp) const
     {
         if(consensus_.length() < rp.min_repeat_len)
             return false;
@@ -482,7 +492,7 @@ private:
                            const RepeatParameter& rp,
                            EList<size_t>& ed_seed_nums,
                            EList<string>* left_consensuses,
-                           EList<string>* right_consensuses);
+                           EList<string>* right_consensuses) const;
 
 private:
     string         consensus_;
