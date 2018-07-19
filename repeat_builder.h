@@ -402,7 +402,7 @@ struct SeedExt {
                 allele_len += gap_len;
             } else {
                 allele_len += gap_len;
-                cur_off -= (-gap_len);
+                cur_off += (-gap_len);
             }
         }
         cur_off = 0;
@@ -448,13 +448,24 @@ public:
                            CoordHelper& coordHelper,
                            TIndexOffU seed_grp_id,
                            ostream& fp,
-                           size_t& total_repeat_seq_len);
+                           size_t& total_repeat_seq_len,
+                           size_t& total_allele_seq_len);
+    
+    bool satisfy(const RepeatParameter& rp)
+    {
+        if(consensus_.length() < rp.min_repeat_len)
+            return false;
+        if(seeds_.size() < rp.repeat_count)
+            return false;
+        if(seeds_[rp.repeat_count - 1].getLength() < rp.min_repeat_len)
+            return false;
+        return true;
+    }
     
     void reset() {
         consensus_.clear();
-        for(size_t i = 0; i < seeds_.size(); i++) {
+        for(size_t i = 0; i < seeds_.size(); i++)
             seeds_[i].reset();
-        }
         seeds_.clear();
         seed_ranges_.clear();
     }
@@ -509,7 +520,7 @@ public:
 	void saveRepeatGroup();
 
     void addRepeatGroup(const RepeatParameter& rp,
-                        map<Range, TIndexOffU>& range_to_repeatgroup,
+                        map<Range, EList<TIndexOffU> >& range_to_repeatgroup,
                         const string& seed_str,
                         const EList<RepeatCoord<TIndexOffU> >& positions,
                         ostream& fp);
@@ -595,7 +606,7 @@ private:
                       ostream& hapl_fp);
 
     void saveSeeds(const RepeatParameter& rp);
-    void saveConsensusSequence(const EList<bool>& filter_out);
+    void saveConsensusSequence();
     
 private:
     const int output_width = 60;
