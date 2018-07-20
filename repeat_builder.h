@@ -578,7 +578,7 @@ public:
 	void saveRepeatGroup();
 
     void addRepeatGroup(const RepeatParameter& rp,
-                        map<Range, EList<TIndexOffU> >& range_to_repeatgroup,
+                        map<Range, EList<RB_Repeat*> >& range_to_repeatgroup,
                         const string& seed_str,
                         const EList<RepeatCoord<TIndexOffU> >& positions,
                         ostream& fp);
@@ -698,7 +698,7 @@ private:
     // Seeds
     EList<string> consensus_all_;
     ELList<SeedExt> seeds_;
-    EList<RB_Repeat> repeats_;
+    set<RB_Repeat*> repeat_set_;
 
 };
 
