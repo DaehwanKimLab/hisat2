@@ -424,6 +424,52 @@ struct SeedExt {
 #endif
 };
 
+class RB_AlleleCoord {
+public:
+    TIndexOffU len() const { return right - left; }
+    
+    bool operator<(const RB_AlleleCoord& o) const
+    {
+        if(left != o.left)
+            return left < o.left;
+        if(right != o.right)
+            return right < o.right;
+        return false;
+    }
+    
+    bool contain(const RB_AlleleCoord& o) const
+    {
+        if(o.left >= left && o.right <= right)
+            return true;
+        else
+            return false;
+    }
+    
+    bool contained(const RB_AlleleCoord& o) const
+    {
+        return o.contain(*this);
+    }
+    
+    TIndexOffU overlap_len(const RB_AlleleCoord& o) const
+    {
+        if(contain(o)) return o.len();
+        else if(o.contain(*this)) return len();
+        else if(left < o.right && right > o.left) {
+            if(left <= o.left) {
+                return right - o.left;
+            } else {
+                return o.right - left;
+            }
+        }
+        return 0;
+    }
+    
+public:
+    TIndexOffU left;
+    TIndexOffU right;
+    size_t     idx;
+};
+
 class RB_Repeat {
 public:
     RB_Repeat() {}
@@ -435,8 +481,8 @@ public:
     EList<SeedExt>& seeds() { return seeds_; }
     const EList<SeedExt>& seeds() const { return seeds_; }
     
-    EList<Range>& seed_ranges() { return seed_ranges_; }
-    const EList<Range>& seed_ranges() const { return seed_ranges_; }
+    EList<RB_AlleleCoord>& seed_ranges() { return seed_ranges_; }
+    const EList<RB_AlleleCoord>& seed_ranges() const { return seed_ranges_; }
     
     template<typename TStr>
     void getExtendedSeedSequence(const TStr& s,
@@ -457,9 +503,11 @@ public:
                            size_t& total_allele_seq_len) const;
     
     template<typename TStr>
-    bool merge(const RepeatParameter& rp,
+    void merge(const RepeatParameter& rp,
                const TStr& s,
-               const RB_Repeat& o);
+               const RB_Repeat& o,
+               bool& updated,
+               bool debug = false);
     
     bool satisfy(const RepeatParameter& rp) const
     {
@@ -495,9 +543,9 @@ private:
                            EList<string>* right_consensuses) const;
 
 private:
-    string         consensus_;
-    EList<SeedExt> seeds_;
-    EList<Range>   seed_ranges_;
+    string                consensus_;
+    EList<SeedExt>        seeds_;
+    EList<RB_AlleleCoord> seed_ranges_;
 };
 
 // find and write repeats
