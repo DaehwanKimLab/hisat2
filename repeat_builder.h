@@ -58,12 +58,14 @@ typedef pair<TIndexOffU, TIndexOffU> Range;
 // Dump
 //
 // to_string
+#if 0
 static string to_string(int val)
 {
 	stringstream ss;
 	ss << val;
 	return ss.str();
 }
+#endif
 
 struct Fragments {
 	bool contain(TIndexOffU pos) {
@@ -470,10 +472,15 @@ public:
     size_t     idx;
 };
 
+class RB_RepeatManager;
+
 class RB_Repeat {
 public:
     RB_Repeat() {}
     ~RB_Repeat() {}
+    
+    void repeat_id(size_t repeat_id) { repeat_id_ = repeat_id; }
+    size_t repeat_id() const { return repeat_id_; }
     
     string& consensus() { return consensus_; }
     const string& consensus() const { return consensus_; }
@@ -543,10 +550,36 @@ private:
                            EList<string>* right_consensuses) const;
 
 private:
+    size_t                repeat_id_;
     string                consensus_;
     EList<SeedExt>        seeds_;
     EList<RB_AlleleCoord> seed_ranges_;
 };
+
+
+// check if a set of seeds are already processed
+class RB_RepeatManager {
+public:
+    size_t numCoords() const { return range_to_repeats_.size(); }
+    
+    bool checkRedundant(const RepeatParameter& rp,
+                        const map<size_t, RB_Repeat*>& repeat_map,
+                        const EList<RepeatCoord<TIndexOffU> >& positions,
+                        EList<size_t>& to_remove) const;
+    
+    void addRepeat(map<size_t, RB_Repeat*>& repeat_map,
+                   RB_Repeat* repeat);
+    
+    void removeRepeat(map<size_t, RB_Repeat*>& repeat_map,
+                      size_t repeat_id);
+    
+    void removeRepeats(map<size_t, RB_Repeat*>& repeat_map,
+                       const EList<size_t>& to_remove);
+    
+private:
+    map<Range, EList<size_t> > range_to_repeats_;
+};
+
 
 // find and write repeats
 template<typename TStr>
@@ -578,7 +611,8 @@ public:
 	void saveRepeatGroup();
 
     void addRepeatGroup(const RepeatParameter& rp,
-                        map<Range, EList<RB_Repeat*> >& range_to_repeatgroup,
+                        size_t repeat_id,
+                        RB_RepeatManager& repeat_checker,
                         const string& seed_str,
                         const EList<RepeatCoord<TIndexOffU> >& positions,
                         ostream& fp);
@@ -698,7 +732,7 @@ private:
     // Seeds
     EList<string> consensus_all_;
     ELList<SeedExt> seeds_;
-    set<RB_Repeat*> repeat_set_;
+    map<size_t, RB_Repeat*> repeat_map_;
 
 };
 

@@ -729,7 +729,7 @@ template<typename TStr>
 void RB_Repeat::saveSeedExtension(const RepeatParameter& rp,
                                   const TStr& s,
                                   CoordHelper& coordHelper,
-                                  TIndexOffU seed_grp_id,
+                                  TIndexOffU grp_id,
                                   ostream& fp,
                                   size_t& total_repeat_seq_len,
                                   size_t& total_allele_seq_len) const
@@ -752,7 +752,7 @@ void RB_Repeat::saveSeedExtension(const RepeatParameter& rp,
         total_count++;
         bool sense_strand = seed.pos.first < coordHelper.forward_length();
         
-        fp << seed_grp_id << "  " << seeds_.size();
+        fp << setw(4) << grp_id << "  " << setw(6) << repeat_id_ << "  " << setw(5) << seeds_.size();
         fp << "  " << setw(4) << i;
         fp << "  " << setw(4) << ext_len;
         fp << "  " << (sense_strand ? '+' : '-');
@@ -1365,10 +1365,11 @@ float mergeable(const RB_Repeat& a,
     return portion;
 }
 
-void align(const string& s,
+bool align(const string& s,
            const EList<pair<size_t, size_t> >& s_kmer_table,
            const string& s2,
            EList<int>& offsets,
+           SeedExt& seed,
            size_t k)
 {
     offsets.resize(s2.length());
@@ -1390,8 +1391,77 @@ void align(const string& s,
             lb++;
         }
     }
+    // remove inconsistent positions
+    for(size_t i = 1; i < offsets.size(); i++) {
+        if(offsets[i-1] < 0 || offsets[i] < 0) continue;
+        if(offsets[i-1] > offsets[i]) {
+            offsets[i-1] = - 1;
+            offsets[i] = -1;
+        }
+    }
     
-    // replace -1 with consecutive positions
+    // DK - debugging purposes
+    if(false) {
+        for(size_t j = 0; j < offsets.size(); j++) {
+            cout << j << ": " << offsets[j] << endl;
+        }
+    }
+    
+    // DK - debugging purposes
+    return false;
+    
+    seed.reset();
+    
+    int i = 0;
+    while(i < offsets.size()) {
+        // skip non-negative offsets
+        for(; i < offsets.size() && offsets[i] >= 0; i++);
+        if(i >= offsets.size()) break;
+        int j = i;
+        for(; j < offsets.size(); j++) {
+            if(offsets[j] >= 0)
+                break;
+        }
+        assert(i >= offsets.size() || offsets[i] < 0);
+        assert(j >= offsets.size() || offsets[j] >= 0);
+        if(i == 0) { // front
+            if(j == offsets.size()) return false;
+            assert_geq(offsets[j], 0);
+            for(int k = j - 1, k2 = 1; k >= 0; k--, k2++) {
+                int s_pos = (int)offsets[j] - k2;
+                if(s_pos < 0) break;
+                if(s2[k] != s[s_pos]) break;
+                offsets[k] = s_pos;
+            }
+        } else if(j == offsets.size()) { // back
+        } else {
+            assert_leq(offsets[i-1], offsets[j]);
+            if(j - i + 1 == offsets[j] - offsets[i-1]) { // match
+                for(size_t k = i; k < j; k++)
+                    offsets[k] = offsets[k-1] + 1;
+            } else { // deletion or insertion
+                // assert(false);
+            }
+        }
+        
+        i = j;
+    }
+    
+    // DK - debugging purposes
+    if(true) {
+        for(size_t j = 0; j < offsets.size(); j++) {
+            cout << j << ": " << offsets[j] << endl;
+        }
+    }
+    
+#ifndef NDEBUG
+    for(size_t i = 1; i < offsets.size(); i++) {
+        if(offsets[i-1] < 0 || offsets[i] < 0) continue;
+        assert_leq(offsets[i-1], offsets[i]);
+    }
+#endif
+    
+    return true;
 }
 
 template<typename TStr>
@@ -1490,17 +1560,15 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         const SeedExt& seed = o.seeds_[to_merge];
         getString(s, seed.pos.first, seed.pos.second - seed.pos.first, seq);
         
+        seeds_.expand();
+        SeedExt& new_seed = seeds_.back();
+        
         align(consensus_,
               kmer_table,
               seq,
               offsets,
+              new_seed,
               kmer_len);
-        
-        if(debug) {
-            for(size_t j = 0; j < offsets.size(); j++) {
-                cout << j << ": " << offsets[j] << endl;
-            }
-        }
         
         // DK - debugging purposes
         int dk = 0;
@@ -1534,10 +1602,10 @@ RepeatBuilder<TStr>::~RepeatBuilder()
     if(sc_) {
         delete sc_;
     }
-    for(set<RB_Repeat*>::iterator it = repeat_set_.begin(); it != repeat_set_.end(); it++) {
-        delete *it;
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
+        delete it->second;
     }
-    repeat_set_.clear();
+    repeat_map_.clear();
 }
 
 #define DMAX std::numeric_limits<double>::max()
@@ -1587,9 +1655,7 @@ void RepeatBuilder<TStr>::doTest(const RepeatParameter& rp,
                                  const string& refstr,
                                  const string& readstr)
 {
-	TIndexOffU count = 0;
-
-    init_dyn(rp);
+	init_dyn(rp);
 
     doTestCase1(refstr, readstr, rp.max_edit);
 }
@@ -1607,11 +1673,12 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     
     init_dyn(rp);
 
-    map<Range, EList<RB_Repeat*> >* range_to_repeatgroup = new map<Range, EList<RB_Repeat*> >;
+    RB_RepeatManager* repeat_checker = new RB_RepeatManager;
     
 	EList<RepeatCoord<TIndexOffU> > rpt_positions;
 	TIndexOffU min_lcp_len = s_.length();
 
+    size_t repeat_id = 0;
 	while(count < s_.length() + 1) {
 		TIndexOffU saElt = bsa_.nextSuffix();
 		count++;
@@ -1651,10 +1718,12 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                     assert_geq(min_lcp_len, rp.seed_len);
                     string seed_seq = getString(s_, prev_saElt, rp.seed_len);
                     addRepeatGroup(rp,
-                                   *range_to_repeatgroup,
+                                   repeat_id,
+                                   *repeat_checker,
                                    seed_seq,
                                    rpt_positions,
                                    fp);
+                    repeat_id++;
 				}
 
 				// flush previous positions 
@@ -1666,100 +1735,103 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 		}
 	}
     
-    cerr << "number of seed positions is " << range_to_repeatgroup->size() << endl;
-    delete range_to_repeatgroup;
-    range_to_repeatgroup = NULL;
+    cerr << "number of seed positions is " << repeat_checker->numCoords() << endl;
+    delete repeat_checker;
+    repeat_checker = NULL;
 
     // DK - debugging purposes
-    EList<RB_Repeat*> output_list;
+    EList<size_t> output_list;
     
-    set<RB_Repeat*> to_remove;
-    for(set<RB_Repeat*>::iterator it = repeat_set_.begin(); it != repeat_set_.end(); it++) {
-        if(to_remove.find(*it) != to_remove.end())
+    set<size_t> to_remove;
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
+        if(to_remove.find(it->first) != to_remove.end())
             continue;
         
-        RB_Repeat& repeat_i = *(*it);
+        RB_Repeat& repeat_i = *(it->second);
         if(!repeat_i.satisfy(rp))
             continue;
         
         float max_portion = 0.0;
         RB_Repeat* max_portion_i = NULL;
-        set<RB_Repeat*>::iterator jt = it; jt++;
-        for(; jt != repeat_set_.end(); jt++) {
-            if(to_remove.find(*jt) != to_remove.end())
+        map<size_t, RB_Repeat*>::iterator jt = it; jt++;
+        for(; jt != repeat_map_.end(); jt++) {
+            if(to_remove.find(jt->first) != to_remove.end())
                 continue;
             
-            RB_Repeat& repeat_j = *(*jt);
+            RB_Repeat& repeat_j = *(jt->second);
             if(!repeat_j.satisfy(rp))
                 continue;
 
             float portion = mergeable(repeat_i, repeat_j);
             if(portion > max_portion) {
                 max_portion = portion;
-                max_portion_i = *jt;
+                max_portion_i = jt->second;
             }
             
-            RB_Repeat *a, *b;
+            map<size_t, RB_Repeat*>::iterator a, b;
             if(repeat_i.consensus().length() > repeat_j.consensus().length()) {
-                a = *it; b = *jt;
+                a = it; b = jt;
             } else {
-                a = *jt; b = *it;
+                a = jt; b = it;
             }
-            if(contain(*a, *b)) {
+            if(contain(*(a->second), *(b->second))) {
                 bool updated = false;
                 // DK - debugging purposes
                 bool debug = portion < 0.5f;
                 debug = false;
-                a->merge(rp,
-                         s_,
-                         *b,
-                         updated,
-                         debug);
+                a->second->merge(rp,
+                                 s_,
+                                 *(b->second),
+                                 updated,
+                                 debug);
                 if(debug) {
                     if(output_list.size() == 0) {
-                        output_list.push_back(a);
-                        output_list.push_back(b);
+                        output_list.push_back(a->first);
+                        output_list.push_back(b->first);
                     }
                 }
-                delete b;
-                to_remove.insert(b);
-                
+                delete b->second;
+                to_remove.insert(b->first);
+                if(it->first == b->first)
+                    break;
             }
         }
         
+#if 0
         if(max_portion > 0.9f && false) {
             cout << repeat_i.seeds()[0].orig_pos.first << "-" << max_portion_i->seeds()[0].orig_pos.first << ": " << max_portion << "\t";
             cout << repeat_i.seeds().size() << " " << max_portion_i->seeds().size() << "\t";
             cout << repeat_i.consensus().length() << " " << max_portion_i->consensus().length() << endl;
             
         }
+#endif
     }
     
-    for(set<RB_Repeat*>::iterator it = to_remove.begin(); it != to_remove.end(); it++) {
-        assert(repeat_set_.find(*it) != repeat_set_.end());
-        repeat_set_.erase(*it);
+    for(set<size_t>::iterator it = to_remove.begin(); it != to_remove.end(); it++) {
+        assert(repeat_map_.find(*it) != repeat_map_.end());
+        repeat_map_.erase(*it);
     }
     
     size_t disqualified = 0;
-    for(set<RB_Repeat*>::iterator it = repeat_set_.begin(); it != repeat_set_.end(); it++) {
-        RB_Repeat& repeat = *(*it);
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
+        RB_Repeat& repeat = *(it->second);
         if(!repeat.satisfy(rp))
             disqualified++;
         
     }
-    cerr << "number of repeats is " << repeat_set_.size() - disqualified;
+    cerr << "number of repeats is " << repeat_map_.size() - disqualified;
     cerr << " (with " << disqualified << " disqualified)" << endl;
     
     size_t total_rep_seq_len = 0, total_allele_seq_len = 0;
     size_t i = 0;
-    for(set<RB_Repeat*>::iterator it = repeat_set_.begin(); it != repeat_set_.end(); it++, i++) {
-        RB_Repeat& repeat = *(*it);
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
+        RB_Repeat& repeat = *(it->second);
         if(!repeat.satisfy(rp))
             continue;
         
         bool found = true;
         for(size_t j = 0; j < output_list.size(); j++) {
-            if(*it == output_list[j]) {
+            if(it->first == output_list[j]) {
                 found = true;
                 break;
             }
@@ -2281,8 +2353,7 @@ void RepeatBuilder<TStr>::saveRepeatGroup()
     string hapl_filename = filename_ + ".rep.haplotype";
 
 	int rpt_count = rpt_grp_.size();
-	TIndexOffU acc_pos = 0;
-    size_t snp_base_idx = 0;
+	size_t snp_base_idx = 0;
     size_t hapl_base_idx = 0;
 
 	ofstream fp(rptinfo_filename.c_str());
@@ -2416,41 +2487,41 @@ void RepeatBuilder<TStr>::saveFile(const RepeatParameter& rp)
 	//saveRepeatGroup();
 }
 
-bool checkRedundant(const RepeatParameter& rp,
-                    map<Range, EList<RB_Repeat*> >& range_to_repeatgroup,
-                    set<RB_Repeat*>& repeat_set,
-                    const EList<RepeatCoord<TIndexOffU> >& positions,
-                    EList<RB_Repeat*>& to_remove)
+bool RB_RepeatManager::checkRedundant(const RepeatParameter& rp,
+                                      const map<size_t, RB_Repeat*>& repeat_map,
+                                      const EList<RepeatCoord<TIndexOffU> >& positions,
+                                      EList<size_t>& to_remove) const
 {
     to_remove.clear();
     bool replace = false;
     for(size_t i = 0; i < positions.size(); i++) {
         TIndexOffU seed_pos = positions[i].joinedOff;
         Range seed_range(seed_pos + rp.seed_len, 0);
-        map<Range, EList<RB_Repeat*> >::iterator it = range_to_repeatgroup.upper_bound(seed_range);
-        if(it == range_to_repeatgroup.end())
+        map<Range, EList<size_t> >::const_iterator it = range_to_repeats_.upper_bound(seed_range);
+        if(it == range_to_repeats_.end())
             continue;
         
-        for(map<Range, EList<RB_Repeat*> >::reverse_iterator rit(it); rit != range_to_repeatgroup.rend(); rit++) {
+        for(map<Range, EList<size_t> >::const_reverse_iterator rit(it); rit != range_to_repeats_.rend(); rit++) {
             Range repeat_range = rit->first;
             if(repeat_range.first + rp.max_repeat_len <= seed_pos)
                 break;
             
-            const EList<RB_Repeat*>& repeats = rit->second;
-            assert_gt(repeats.size(), 0);
-            for(size_t r = 0; r < repeats.size(); r++) {
-                RB_Repeat* repeat = repeats[r];
-                assert(repeat_set.find(repeat) != repeat_set.end());
-                
-                size_t idx = to_remove.bsearchLoBound(repeat);
-                if(idx < to_remove.size() && to_remove[idx] == repeat)
+            const EList<size_t>& repeat_ids = rit->second;
+            assert_gt(repeat_ids.size(), 0);
+            for(size_t r = 0; r < repeat_ids.size(); r++) {
+                size_t repeat_id = repeat_ids[r];
+                size_t idx = to_remove.bsearchLoBound(repeat_id);
+                if(idx < to_remove.size() && to_remove[idx] == repeat_id)
                     continue;
                 
                 bool overlap = seed_pos < repeat_range.second && seed_pos + rp.seed_len > repeat_range.first;
                 if(!overlap)
                     continue;
                 
-                const EList<RB_AlleleCoord>& allele_ranges = repeat->seed_ranges();
+                map<size_t, RB_Repeat*>::const_iterator it2 = repeat_map.find(repeat_id);
+                assert(it2 != repeat_map.end());
+                const RB_Repeat& repeat = *(it2->second);
+                const EList<RB_AlleleCoord>& allele_ranges = repeat.seed_ranges();
                 size_t num_contain = 0, num_overlap = 0, num_close = 0, num_overlap_bp = 0;
                 size_t p = 0, p2 = 0;
                 while(p < positions.size() && p2 < allele_ranges.size()) {
@@ -2480,16 +2551,64 @@ bool checkRedundant(const RepeatParameter& rp,
                         return true;
                     } else {
                         replace = true;
-                        to_remove.push_back(repeat);
+                        to_remove.push_back(repeat_id);
                         to_remove.sort();
                     }
                 }
             }
         }
+        
+        // DK - check this out
         if(replace)
             break;
     }
     return false;
+}
+
+void RB_RepeatManager::addRepeat(map<size_t, RB_Repeat*>& repeat_map,
+                                 RB_Repeat* repeat)
+{
+    assert(repeat_map.find(repeat->repeat_id()) == repeat_map.end());
+    repeat_map[repeat->repeat_id()] = repeat;
+    
+    const EList<RB_AlleleCoord>& allele_ranges = repeat->seed_ranges();
+    for(size_t i = 0; i < allele_ranges.size(); i++) {
+        Range allele_range(allele_ranges[i].left, allele_ranges[i].right);
+        if(range_to_repeats_.find(allele_range) == range_to_repeats_.end()) {
+            range_to_repeats_[allele_range] = EList<size_t>();
+        }
+        EList<size_t>& repeat_ids = range_to_repeats_[allele_range];
+        repeat_ids.push_back(repeat->repeat_id());
+        repeat_ids.sort();
+    }
+}
+
+void RB_RepeatManager::removeRepeat(map<size_t, RB_Repeat*>& repeat_map,
+                                    size_t repeat_id)
+{
+    map<size_t, RB_Repeat*>::iterator it = repeat_map.find(repeat_id);
+    assert(it != repeat_map.end());
+    const EList<RB_AlleleCoord>& allele_ranges = it->second->seed_ranges();
+    for(size_t p = 0; p < allele_ranges.size(); p++) {
+        Range range(allele_ranges[p].left, allele_ranges[p].right);
+        EList<size_t>& repeat_ids = range_to_repeats_[range];
+        TIndexOffU idx = repeat_ids.bsearchLoBound(repeat_id);
+        if(idx < repeat_ids.size() && repeat_id == repeat_ids[idx]) {
+            repeat_ids.erase(idx);
+            if(repeat_ids.empty())
+                range_to_repeats_.erase(range);
+        }
+    }
+    delete it->second;
+    repeat_map.erase(it);
+}
+
+void RB_RepeatManager::removeRepeats(map<size_t, RB_Repeat*>& repeat_map,
+                                     const EList<size_t>& to_remove)
+{
+    for(size_t i = 0; i < to_remove.size(); i++) {
+        removeRepeat(repeat_map, to_remove[i]);
+    }
 }
 
 /**
@@ -2501,7 +2620,8 @@ bool checkRedundant(const RepeatParameter& rp,
  */
 template<typename TStr>
 void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
-                                         map<Range, EList<RB_Repeat*> >& range_to_repeatgroup,
+                                         size_t repeat_id,
+                                         RB_RepeatManager& repeat_checker,
                                          const string& seed_str,
                                          const EList<RepeatCoord<TIndexOffU> >& positions,
                                          ostream& fp)
@@ -2537,33 +2657,15 @@ void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
         if(positions[0].joinedOff > sense_pos) return;
     }
     
-    EList<RB_Repeat*> to_remove;
+    EList<size_t> to_remove;
 
     // skip if a given set of seeds corresponds to an existing set of seeds
-    bool redundant = checkRedundant(rp,
-                                    range_to_repeatgroup,
-                                    repeat_set_,
-                                    positions,
-                                    to_remove);
+    bool redundant = repeat_checker.checkRedundant(rp,
+                                                   repeat_map_,
+                                                   positions,
+                                                   to_remove);
     if(redundant)
         return;
-    
-    for(size_t i = 0; i < to_remove.size(); i++) {
-        RB_Repeat* repeat = to_remove[i];
-        const EList<RB_AlleleCoord>& allele_ranges = repeat->seed_ranges();
-        for(size_t p = 0; p < allele_ranges.size(); p++) {
-            Range range(allele_ranges[p].left, allele_ranges[p].right);
-            EList<RB_Repeat*>& repeats = range_to_repeatgroup[range];
-            TIndexOffU idx = repeats.bsearchLoBound(repeat);
-            if(idx < repeats.size() && repeat == repeats[idx]) {
-                repeats.erase(idx);
-                if(repeats.empty())
-                    range_to_repeatgroup.erase(range);
-            }
-        }
-        delete to_remove[i];
-        repeat_set_.erase(to_remove[i]);
-    }
     
     // find an empty spot
     RB_Repeat* repeat = new RB_Repeat;
@@ -2600,18 +2702,9 @@ void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
         return;
     }
     
-    repeat_set_.insert(repeat);
-    
-    const EList<RB_AlleleCoord>& allele_ranges = repeat->seed_ranges();
-    for(size_t i = 0; i < allele_ranges.size(); i++) {
-        Range allele_range(allele_ranges[i].left, allele_ranges[i].right);
-        if(range_to_repeatgroup.find(allele_range) == range_to_repeatgroup.end()) {
-            range_to_repeatgroup[allele_range] = EList<RB_Repeat*>();
-        }
-        EList<RB_Repeat*>& repeats = range_to_repeatgroup[allele_range];
-        repeats.push_back(repeat);
-        repeats.sort();
-    }
+    repeat->repeat_id(repeat_id);
+    repeat_checker.removeRepeats(repeat_map_, to_remove);
+    repeat_checker.addRepeat(repeat_map_, repeat);
 }
 
 
@@ -2983,7 +3076,7 @@ int RepeatBuilder<TStr>::alignStrings(const string &ref, const string &read, ELi
     btref2 = btref;
 
     size_t nceil = 0;
-    size_t nrow = btread.length();
+    // size_t nrow = btread.length();
 
     // Convert reference string to mask
     for(size_t i = 0; i < btref2.length(); i++) {
