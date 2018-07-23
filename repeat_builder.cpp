@@ -1402,6 +1402,23 @@ float RB_Repeat::mergeable(const RB_Repeat& o) const
     return portion;
 }
 
+inline void get_next_range(const EList<int>& offsets, size_t i, Range& r, float& avg)
+{
+    r.first = i;
+    for(; r.first < offsets.size() && offsets[r.first] < 0; r.first++);
+    r.second = r.first + 1;
+    avg = 0.0f;
+    for(; r.second < offsets.size() &&
+        offsets[r.second] >= 0 &&
+        (r.second == 0 || offsets[r.second] >= offsets[r.second - 1]);
+        r.second++) {
+        float diff = (float)offsets[r.second] - (float)r.second;
+        avg += diff;
+    }
+    avg /= (float)(r.second - r.first);
+    return;
+}
+
 bool RB_Repeat::align(const string& s,
                       const EList<pair<size_t, size_t> >& s_kmer_table,
                       const string& s2,
@@ -1444,6 +1461,33 @@ bool RB_Repeat::align(const string& s,
     }
     
     // remove inconsistent positions
+    Range range; float range_avg;
+    get_next_range(offsets, 0, range, range_avg);
+    while(range.second < offsets.size()) {
+        Range range2; float range_avg2;
+        get_next_range(offsets, range.second, range2, range_avg2);
+        if(range2.first >= offsets.size())
+            break;
+        
+        assert_leq(range.second, range2.first);
+        if(offsets[range.second - 1] > offsets[range2.first] || abs(range_avg - range_avg2) > 10.0f) {
+            if(range.second - range.first < range2.second - range2.first) {
+                for(size_t i = range.first; i < range.second; i++) {
+                    offsets[i] = -1;
+                }
+                range = range2;
+                range_avg = range_avg2;
+            } else {
+                for(size_t i = range2.first; i < range2.second; i++) {
+                    offsets[i] = -1;
+                }
+            }
+        } else {
+            range = range2;
+            range_avg = range_avg2;
+        }
+    }
+    
     bool weighted_avg_inited = false;
     float weighted_avg = -1.0f;
     for(size_t i = 0; i < offsets.size(); i++) {
@@ -1463,15 +1507,6 @@ bool RB_Repeat::align(const string& s,
             weighted_avg_inited = true;
         } else {
             weighted_avg = 0.8f * weighted_avg + 0.2f * diff;
-        }
-    }
-    
-    for(size_t i = 0; i + 1 < offsets.size(); i++) {
-        if(offsets[i] < 0 || offsets[i+1] < 0)
-            continue;
-        if(offsets[i] > offsets[i+1]) {
-            offsets[i] = -1;
-            offsets[i+1] = -1;
         }
     }
     
@@ -1693,14 +1728,7 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         RB_Repeat::seed_merge_tried++;
         
         getString(s, left, right - left, seq);
-        
-        // DK - debugging purposes
-        if(oseed.pos.first == 2424552 - 134) {
-            int dk = 10;
-            dk += 1;
-            debug = true;
-        }
-        
+
         size_t b = 0, e = 0;
         bool succ = align(consensus_,
                           kmer_table,
@@ -1711,18 +1739,12 @@ void RB_Repeat::merge(const RepeatParameter& rp,
                           e, // end
                           debug);
         
-        // DK - debugging purposes
-        if(!succ && merge_list[i].first >= seeds_.size()) {
-            int dk = 0;
-            dk++;
-        }
-        
         if(!succ)
             continue;
         
         RB_Repeat::seed_merged++;
         
-        SeedExt* p_new_seed =NULL;
+        SeedExt* p_new_seed = NULL;
         if(merge_list[i].first >= seeds_.size()) {
             seeds_.expand();
             p_new_seed = &(seeds_.back());
@@ -1977,18 +1999,15 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                 a = jt; b = it;
             }
             // DK - debugging purposes
-            bool debug = (a->second->repeat_id() == 184 && b->second->repeat_id() == 0);
+            bool debug = (a->second->repeat_id() == 213 && b->second->repeat_id() == 21);
             if(a->second->contain(*(b->second))) {
                 bool updated = false;
-                // DK - debugging purposes
-#if 1
                 a->second->merge(rp,
                                  s_,
                                  *(b->second),
                                  *repeat_manager,
                                  updated,
                                  debug);
-#endif
                 if(debug) {
                     if(output_list.size() == 0) {
                         output_list.push_back(a->first);
