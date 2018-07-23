@@ -314,6 +314,10 @@ struct SeedExt {
         len += getRightExtLength();
         return len;
     }
+    
+    template<typename TStr>
+    void getExtendedSeedSequence(const TStr& s,
+                                 string& seq) const;
 
     static bool isSameConsensus(const SeedExt& a, const SeedExt& b) {
         return (a.consensus_pos == b.consensus_pos)
@@ -492,11 +496,6 @@ public:
     const EList<RB_AlleleCoord>& seed_ranges() const { return seed_ranges_; }
     
     template<typename TStr>
-    void getExtendedSeedSequence(const TStr& s,
-                                 const SeedExt& seed,
-                                 string& seq) const;
-    
-    template<typename TStr>
     void extendConsensus(const RepeatParameter& rp,
                          const TStr& s);
     
@@ -509,10 +508,15 @@ public:
                            size_t& total_repeat_seq_len,
                            size_t& total_allele_seq_len) const;
     
+    bool contain(const RB_Repeat& o) const;
+
+    float mergeable(const RB_Repeat& o) const;
+    
     template<typename TStr>
     void merge(const RepeatParameter& rp,
-               const TStr& s,
+               const TStr& s,               
                const RB_Repeat& o,
+               RB_RepeatManager& repeat_manger,
                bool& updated,
                bool debug = false);
     
@@ -548,12 +552,32 @@ private:
                            EList<size_t>& ed_seed_nums,
                            EList<string>* left_consensuses,
                            EList<string>* right_consensuses) const;
+    
+    bool align(const string& s,
+               const EList<pair<size_t, size_t> >& s_kmer_table,
+               const string& s2,
+               EList<int>& offsets,
+               size_t k,
+               size_t& begin,
+               size_t& end,
+               bool debug = false);
+    
+    void internal_update();
 
 private:
     size_t                repeat_id_;
     string                consensus_;
     EList<SeedExt>        seeds_;
     EList<RB_AlleleCoord> seed_ranges_;
+    
+    static EList<size_t>  ca_ed_;
+    static EList<size_t>  ca_ed2_;
+    static string         ca_s_;
+    static string         ca_s2_;
+    
+public:
+    static size_t         seed_merge_tried;
+    static size_t         seed_merged;
 };
 
 
@@ -575,6 +599,12 @@ public:
     
     void removeRepeats(map<size_t, RB_Repeat*>& repeat_map,
                        const EList<size_t>& to_remove);
+    
+    void addRepeat(Range range, size_t repeat_id);
+    void removeRepeat(Range range, size_t repeat_id);
+    
+public:
+    void showInfo(const map<size_t, RB_Repeat*>& repeat_map) const;
     
 private:
     map<Range, EList<size_t> > range_to_repeats_;
@@ -612,7 +642,7 @@ public:
 
     void addRepeatGroup(const RepeatParameter& rp,
                         size_t repeat_id,
-                        RB_RepeatManager& repeat_checker,
+                        RB_RepeatManager& repeat_manger,
                         const string& seed_str,
                         const EList<RepeatCoord<TIndexOffU> >& positions,
                         ostream& fp);
