@@ -1579,7 +1579,7 @@ bool RB_Repeat::align(const string& s,
     for(begin = 0; begin < offsets.size() && offsets[begin] < 0; begin++);
     if(begin >= offsets.size()) return false;
     assert_lt((size_t)begin, offsets.size());
-    for(end = offsets.size() - 1; end > i && offsets[end] < 0; end--);
+    for(end = offsets.size() - 1; end > begin && offsets[end] < 0; end--);
     if(begin == end) return false;
     for(size_t p = begin; p <= end; p++) {
         if(offsets[p] < 0) return false;
@@ -1600,30 +1600,31 @@ void RB_Repeat::merge(const RepeatParameter& rp,
     EList<pair<size_t, size_t> > merge_list;
     merge_list.reserveExact(o.seed_ranges_.size());
     size_t p = 0, p2 = 0;
+    const size_t relax = 5;
     while(p < seed_ranges_.size() && p2 < o.seed_ranges_.size()) {
         const RB_AlleleCoord& range = seed_ranges_[p];
         const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
-        if(range.contain(range2)) {
+        if(range.contain(range2, relax)) {
             if(debug) {
                 cout << p << ":" << range.left << "-" << range.right << " > "
                      << p2 << ":" << range2.left << "-" << range2.right << endl;
             }
-        } else if(range2.contain(range)) {
+        } else if(range2.contain(range, relax)) {
             if(debug) {
                 cout << p << ":" << range.left << "-" << range.right << " < "
                      << p2 << ":" << range2.left << "-" << range2.right << endl;
             }
             merge_list.expand();
-            merge_list.back().first = p;
-            merge_list.back().second = p2;
+            merge_list.back().first = range.idx;
+            merge_list.back().second = range2.idx;
         } else {
             TIndexOffU overlap_len = range.overlap_len(range2);
             bool stored = !merge_list.empty() && merge_list.back().second == p2;
             if(overlap_len > 0) {
                 if(!stored) {
                     merge_list.expand();
-                    merge_list.back().first = p;
-                    merge_list.back().second = p2;
+                    merge_list.back().first = range.idx;
+                    merge_list.back().second = range2.idx;
                     
                     if(debug) {
                         cout << p << ":" << range.left << "-" << range.right << " ol "
@@ -1635,7 +1636,7 @@ void RB_Repeat::merge(const RepeatParameter& rp,
                     if(!stored) {
                         merge_list.expand();
                         merge_list.back().first = numeric_limits<size_t>::max();
-                        merge_list.back().second = p2;
+                        merge_list.back().second = range2.idx;
                         
                         if(debug) {
                             cout << p << ":" << range.left << "-" << range.right << " <> "
@@ -1652,7 +1653,7 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
         merge_list.expand();
         merge_list.back().first = numeric_limits<size_t>::max();
-        merge_list.back().second = p2;
+        merge_list.back().second = range2.idx;
         
         if(debug) {
             cout << ": <> " << p2 << ":" << range2.left << "-" << range2.right << endl;
@@ -1675,20 +1676,26 @@ void RB_Repeat::merge(const RepeatParameter& rp,
             cout << "\t" << (merge_list[i].first < seed_ranges_.size() ? (int)merge_list[i].first : -1) << " " << merge_list[i].second << endl;
         }
         
-        // DK - debugging purposes
-        if(merge_list[i].first < seeds_.size())
-            continue;
+        size_t to_merge = merge_list[i].second;
+        assert_lt(to_merge, o.seeds_.size());
+        const SeedExt& oseed = o.seeds_[merge_list[i].second];
+        size_t left = oseed.pos.first, right = oseed.pos.second;
+        if(merge_list[i].first < seeds_.size()) {
+            const SeedExt& seed = seeds_[merge_list[i].first];
+            if(seed.pos.first < oseed.pos.first) {
+                left = seed.pos.first;
+            }
+            if(seed.pos.second > oseed.pos.second) {
+                right = seed.pos.second;
+            }
+        }
         
         RB_Repeat::seed_merge_tried++;
         
-        size_t to_merge = merge_list[i].second;
-        assert_lt(to_merge, o.seeds_.size());
-        
-        const SeedExt& seed = o.seeds_[to_merge];
-        getString(s, seed.pos.first, seed.pos.second - seed.pos.first, seq);
+        getString(s, left, right - left, seq);
         
         // DK - debugging purposes
-        if(seed.pos.first == 2424552 - 134) {
+        if(oseed.pos.first == 2424552 - 134) {
             int dk = 10;
             dk += 1;
             debug = true;
@@ -1703,6 +1710,12 @@ void RB_Repeat::merge(const RepeatParameter& rp,
                           b, // begin
                           e, // end
                           debug);
+        
+        // DK - debugging purposes
+        if(!succ && merge_list[i].first >= seeds_.size()) {
+            int dk = 0;
+            dk++;
+        }
         
         if(!succ)
             continue;
@@ -1720,11 +1733,12 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         }
         SeedExt& new_seed = *p_new_seed;
         new_seed.reset();
-        new_seed.pos = seed.pos;
+        new_seed.pos.first = left;
+        new_seed.pos.second = right;
         
         assert_geq(new_seed.pos.first, (TIndexOffU)b);
         new_seed.pos.first += (TIndexOffU)b;
-        new_seed.pos.second = new_seed.pos.first + offsets.size() - b;
+        new_seed.pos.second = new_seed.pos.first + e - b + 1;
         new_seed.orig_pos.first = new_seed.pos.first;
         new_seed.orig_pos.second = new_seed.pos.first + 1;
         new_seed.consensus_pos.first = offsets[b];
@@ -1963,7 +1977,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                 a = jt; b = it;
             }
             // DK - debugging purposes
-            bool debug = (a->second->repeat_id() == 48699 && b->second->repeat_id() == 41025);
+            bool debug = (a->second->repeat_id() == 184 && b->second->repeat_id() == 0);
             if(a->second->contain(*(b->second))) {
                 bool updated = false;
                 // DK - debugging purposes

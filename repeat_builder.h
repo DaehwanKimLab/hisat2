@@ -58,14 +58,12 @@ typedef pair<TIndexOffU, TIndexOffU> Range;
 // Dump
 //
 // to_string
-#if 0
 static string to_string(int val)
 {
 	stringstream ss;
 	ss << val;
 	return ss.str();
 }
-#endif
 
 struct Fragments {
 	bool contain(TIndexOffU pos) {
@@ -443,9 +441,9 @@ public:
         return false;
     }
     
-    bool contain(const RB_AlleleCoord& o) const
+    bool contain(const RB_AlleleCoord& o, size_t relax = 0) const
     {
-        if(o.left >= left && o.right <= right)
+        if(o.left + relax >= left && o.right <= right + relax)
             return true;
         else
             return false;
