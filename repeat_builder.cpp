@@ -727,6 +727,52 @@ void RB_Repeat::internal_update()
         seed_ranges_[i].idx = i;
     }
     seed_ranges_.sort();
+    
+    // check repeats within a repeat sequence
+    size_t remove_count = 0;
+    for(size_t i = 0; i + 1 < seed_ranges_.size(); i++) {
+        const RB_AlleleCoord& range = seed_ranges_[i];
+        if(range.left == numeric_limits<size_t>::max())
+            continue;
+        for(size_t j = i + 1; j < seed_ranges_.size(); j++) {
+            RB_AlleleCoord& range2 = seed_ranges_[j];
+            if(range2.left == numeric_limits<size_t>::max())
+                continue;
+            if(range.right <= range2.left)
+                break;
+            if(range.right >= range2.right) {
+                range2.left = numeric_limits<size_t>::max();
+                remove_count++;
+            }
+        }
+    }
+    if(remove_count <= 0)
+        return;
+    
+    for(size_t i = 0; i < seed_ranges_.size(); i++) {
+        if(seed_ranges_[i].left == numeric_limits<size_t>::max())
+            seeds_[seed_ranges_[i].idx].reset();
+    }
+    sort(seeds_.begin(), seeds_.end(), seedCmp);
+    
+#ifndef NDEBUG
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        if(i < seeds_.size() - remove_count) {
+            assert_lt(seeds_[i].pos.first, seeds_[i].pos.second);
+        } else {
+            assert_eq(seeds_[i].pos.first, seeds_[i].pos.second);
+        }
+    }
+#endif
+    
+    seeds_.resize(seeds_.size() - remove_count);
+    seed_ranges_.resize(seeds_.size());
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        seed_ranges_[i].left = seeds_[i].pos.first;
+        seed_ranges_[i].right = seeds_[i].pos.second;
+        seed_ranges_[i].idx = i;
+    }
+    seed_ranges_.sort();
 }
 
 template<typename TStr>
@@ -1750,8 +1796,8 @@ void RB_Repeat::merge(const RepeatParameter& rp,
             p_new_seed = &(seeds_.back());
         } else {
             p_new_seed = &(seeds_[merge_list[i].first]);
-            Range range(p_new_seed->pos.first, p_new_seed->pos.second);
-            repeat_manager.removeRepeat(range, repeat_id_);
+            //Range range(p_new_seed->pos.first, p_new_seed->pos.second);
+            //repeat_manager.removeRepeat(range, repeat_id_);
         }
         SeedExt& new_seed = *p_new_seed;
         new_seed.reset();
@@ -1795,13 +1841,35 @@ void RB_Repeat::merge(const RepeatParameter& rp,
             cerr << "seed     : " << seed_str << endl;
         }
         
-        Range range(new_seed.pos.first, new_seed.pos.second);
-        repeat_manager.addRepeat(range, repeat_id_);
+        //Range range(new_seed.pos.first, new_seed.pos.second);
+        //repeat_manager.addRepeat(range, repeat_id_);
     }
     
     internal_update();
 
     return;
+}
+
+
+void RB_Repeat::showInfo(const RepeatParameter& rp,
+                         CoordHelper& coordHelper) const
+{
+    cerr << "\trepeat id: " << repeat_id_ << endl;
+    cerr << "\tnumber of alleles: " << seeds_.size() << endl;
+    cerr << "\tconsensus length: " << consensus_.length() << endl;
+    for(size_t i = 0; i < seeds_.size(); i++) {
+        const SeedExt& seed = seeds_[i];
+        size_t ext_len = seed.getLength();
+        if(ext_len < rp.min_repeat_len) continue;
+        bool sense_strand = seed.pos.first < coordHelper.forward_length();
+        
+        cerr << "\t\t" << setw(4) << i << " " << setw(4) << ext_len;
+        cerr << " " << (sense_strand ? '+' : '-');
+        cerr << " " << setw(10) << seed.pos.first << "  " << setw(10) << seed.pos.second;
+        
+        // string deststr = "";
+        // seed.getExtendedSeedSequence(s, deststr);
+    }
 }
 
 template<typename TStr>
@@ -1999,22 +2067,25 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                 a = jt; b = it;
             }
             // DK - debugging purposes
-            bool debug = (a->second->repeat_id() == 213 && b->second->repeat_id() == 21);
+            bool debug = (a->second->repeat_id() == 213 && b->second->repeat_id() == 210000000);
             if(a->second->contain(*(b->second))) {
                 bool updated = false;
+                repeat_manager->removeRepeat(a->second);
                 a->second->merge(rp,
                                  s_,
                                  *(b->second),
                                  *repeat_manager,
                                  updated,
                                  debug);
+                
+                repeat_manager->addRepeat(a->second);
+                
                 if(debug) {
                     if(output_list.size() == 0) {
                         output_list.push_back(a->first);
                         output_list.push_back(b->first);
                     }
                 }
-                delete b->second;
                 to_remove.insert(b->first);
                 if(it->first == b->first)
                     break;
@@ -2032,8 +2103,11 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     }
     
     for(set<size_t>::iterator it = to_remove.begin(); it != to_remove.end(); it++) {
-        assert(repeat_map_.find(*it) != repeat_map_.end());
-        repeat_map_.erase(*it);
+        map<size_t, RB_Repeat*>::iterator repeat_it = repeat_map_.find(*it);
+        assert(repeat_it != repeat_map_.end());
+        repeat_manager->removeRepeat(repeat_it->second);
+        delete repeat_it->second;
+        repeat_map_.erase(repeat_it);
     }
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
@@ -2072,7 +2146,9 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     cerr << "number of seeds tried to merge: " << RB_Repeat::seed_merge_tried << endl;
     cerr << "number of seeds merged: " << RB_Repeat::seed_merged << endl;
 
-    // repeat_manager->showInfo(repeat_map_);
+    repeat_manager->showInfo(rp,
+                             coordHelper_,
+                             repeat_map_);
     delete repeat_manager;
     repeat_manager = NULL;
 }
@@ -2788,39 +2864,12 @@ bool RB_RepeatManager::checkRedundant(const RepeatParameter& rp,
     return false;
 }
 
-void RB_RepeatManager::addRepeat(map<size_t, RB_Repeat*>& repeat_map,
-                                 RB_Repeat* repeat)
+void RB_RepeatManager::addRepeat(const RB_Repeat* repeat)
 {
-    assert(repeat_map.find(repeat->repeat_id()) == repeat_map.end());
-    repeat_map[repeat->repeat_id()] = repeat;
-    
     const EList<RB_AlleleCoord>& allele_ranges = repeat->seed_ranges();
     for(size_t i = 0; i < allele_ranges.size(); i++) {
         Range allele_range(allele_ranges[i].left, allele_ranges[i].right);
         addRepeat(allele_range, repeat->repeat_id());
-        
-    }
-}
-
-void RB_RepeatManager::removeRepeat(map<size_t, RB_Repeat*>& repeat_map,
-                                    size_t repeat_id)
-{
-    map<size_t, RB_Repeat*>::iterator it = repeat_map.find(repeat_id);
-    assert(it != repeat_map.end());
-    const EList<RB_AlleleCoord>& allele_ranges = it->second->seed_ranges();
-    for(size_t p = 0; p < allele_ranges.size(); p++) {
-        Range range(allele_ranges[p].left, allele_ranges[p].right);
-        removeRepeat(range, repeat_id);
-    }
-    delete it->second;
-    repeat_map.erase(it);
-}
-
-void RB_RepeatManager::removeRepeats(map<size_t, RB_Repeat*>& repeat_map,
-                                     const EList<size_t>& to_remove)
-{
-    for(size_t i = 0; i < to_remove.size(); i++) {
-        removeRepeat(repeat_map, to_remove[i]);
     }
 }
 
@@ -2830,8 +2879,20 @@ void RB_RepeatManager::addRepeat(Range range, size_t repeat_id)
         range_to_repeats_[range] = EList<size_t>();
     }
     EList<size_t>& repeat_ids = range_to_repeats_[range];
+    size_t idx = repeat_ids.bsearchLoBound(repeat_id);
+    if(idx < repeat_ids.size() && repeat_ids[idx] == repeat_id)
+        return;
     repeat_ids.push_back(repeat_id);
     repeat_ids.sort();
+}
+
+void RB_RepeatManager::removeRepeat(const RB_Repeat* repeat)
+{
+    const EList<RB_AlleleCoord>& allele_ranges = repeat->seed_ranges();
+    for(size_t p = 0; p < allele_ranges.size(); p++) {
+        Range range(allele_ranges[p].left, allele_ranges[p].right);
+        removeRepeat(range, repeat->repeat_id());
+    }
 }
 
 void RB_RepeatManager::removeRepeat(Range range, size_t repeat_id)
@@ -2845,27 +2906,41 @@ void RB_RepeatManager::removeRepeat(Range range, size_t repeat_id)
     }
 }
 
-void RB_RepeatManager::showInfo(const map<size_t, RB_Repeat*>& repeat_map) const
+void RB_RepeatManager::showInfo(const RepeatParameter& rp,
+                                CoordHelper& coordHelper,
+                                const map<size_t, RB_Repeat*>& repeat_map) const
 {
+    size_t count = 0;
     for(map<Range, EList<size_t> >::const_iterator it = range_to_repeats_.begin();
         it != range_to_repeats_.end(); it++) {
         const Range& range = it->first;
-        if(range.second - range.first < 100) continue;
+        if(range.second - range.first < rp.min_repeat_len) continue;
         map<Range, EList<size_t> >::const_iterator jt = it; jt++;
         for(; jt != range_to_repeats_.end(); jt++) {
             const Range& range2 = jt->first;
-            if(range2.second - range2.first < 100) continue;
+            if(range2.second - range2.first < rp.min_repeat_len) continue;
             if(range.second <= range2.first)
                 break;
             cerr << "range (" << range.first << ", " << range.second << ") vs. range2 (";
             cerr << range2.first << ", " << range2.second << ")" << endl;
-            for(size_t i = 0; i < it->second.size(); i++)
+            for(size_t i = 0; i < it->second.size(); i++) {
                 cerr << "\t1 " << it->second[i] << endl;
-            for(size_t i = 0; i < jt->second.size(); i++)
+                const RB_Repeat* repeat = repeat_map.find(it->second[i])->second;
+                repeat->showInfo(rp, coordHelper);
+            }
+            for(size_t i = 0; i < jt->second.size(); i++) {
                 cerr << "\t2 " << jt->second[i] << endl;
+                const RB_Repeat* repeat = repeat_map.find(jt->second[i])->second;
+                repeat->showInfo(rp, coordHelper);
+            }
             cerr << endl << endl;
+            
+            // DK - debugging purposes
+            return;
+            count++;
         }
     }
+    cerr << "ShowInfo - count: " << count << endl;
 }
 
 /**
@@ -2926,6 +3001,7 @@ void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
     
     // find an empty spot
     RB_Repeat* repeat = new RB_Repeat;
+    repeat->repeat_id(repeat_id);
     repeat->consensus() = seed_str;
     EList<SeedExt>& seeds = repeat->seeds();
     seeds.reserveExact(positions.size());
@@ -2958,10 +3034,17 @@ void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
         repeat = NULL;
         return;
     }
-    
-    repeat->repeat_id(repeat_id);
-    repeat_manager.removeRepeats(repeat_map_, to_remove);
-    repeat_manager.addRepeat(repeat_map_, repeat);
+
+    for(size_t i = 0; i < to_remove.size(); i++) {
+        map<size_t, RB_Repeat*>::iterator it = repeat_map_.find(to_remove[i]);
+        assert(it != repeat_map_.end());
+        repeat_manager.removeRepeat(it->second);
+        delete it->second;
+        repeat_map_.erase(it);
+    }
+    repeat_manager.addRepeat(repeat);
+    assert(repeat_map_.find(repeat->repeat_id()) == repeat_map_.end());
+    repeat_map_[repeat->repeat_id()] = repeat;
 }
 
 

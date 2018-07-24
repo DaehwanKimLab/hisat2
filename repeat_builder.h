@@ -1,4 +1,4 @@
-/*
+ /*
  * Copyright 2018, Chanhee Park <parkchanhee@gmail.com> and Daehwan Kim <infphilo@gmail.com>
  *
  * This file is part of HISAT 2.
@@ -437,7 +437,7 @@ public:
         if(left != o.left)
             return left < o.left;
         if(right != o.right)
-            return right < o.right;
+            return right > o.right;
         return false;
     }
     
@@ -537,6 +537,9 @@ public:
         seed_ranges_.clear();
     }
     
+    void showInfo(const RepeatParameter& rp,
+                  CoordHelper& coordHelper) const;
+    
 private:
     template<typename TStr>
     void get_consensus_seq(const TStr& s,
@@ -589,20 +592,18 @@ public:
                         const EList<RepeatCoord<TIndexOffU> >& positions,
                         EList<size_t>& to_remove) const;
     
-    void addRepeat(map<size_t, RB_Repeat*>& repeat_map,
-                   RB_Repeat* repeat);
-    
-    void removeRepeat(map<size_t, RB_Repeat*>& repeat_map,
-                      size_t repeat_id);
-    
-    void removeRepeats(map<size_t, RB_Repeat*>& repeat_map,
-                       const EList<size_t>& to_remove);
+    void addRepeat(const RB_Repeat* repeat);
     
     void addRepeat(Range range, size_t repeat_id);
+    
+    void removeRepeat(const RB_Repeat* repeat);
+    
     void removeRepeat(Range range, size_t repeat_id);
     
 public:
-    void showInfo(const map<size_t, RB_Repeat*>& repeat_map) const;
+    void showInfo(const RepeatParameter& rp,
+                  CoordHelper& coordHelper,
+                  const map<size_t, RB_Repeat*>& repeat_map) const;
     
 private:
     map<Range, EList<size_t> > range_to_repeats_;
