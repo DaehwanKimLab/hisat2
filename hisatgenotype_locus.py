@@ -1546,7 +1546,7 @@ def typing(simulation,
                 asm_graph.predicted_allele_nodes = predicted_allele_nodes
                 asm_graph.allele_node_order = allele_node_order
                 asm_graph.calculate_coverage()
-
+                
                 # Start drawing assembly graph
                 asm_graph.begin_draw("%s.%s.%s" % (output_base, base_fname, gene))
 
@@ -1558,7 +1558,7 @@ def typing(simulation,
                 asm_graph.guided_DeBruijn(assembly_verbose)
 
                 # Draw assembly graph
-                begin_y = asm_graph.draw(begin_y, "b. Asssembly")
+                begin_y = asm_graph.draw(begin_y, "b. Assembly")
                 begin_y += 200
 
                 # Draw assembly graph
@@ -1568,7 +1568,7 @@ def typing(simulation,
 
                 # End drawing assembly graph
                 asm_graph.end_draw()
-
+                
                 # Compare two alleles
                 if simulation and len(test_Gene_names) == 2:
                     allele_name1, allele_name2 = test_Gene_names

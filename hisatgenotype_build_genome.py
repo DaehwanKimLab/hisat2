@@ -97,7 +97,7 @@ def build_genotype_genome(base_fname,
     if use_commonvar:
         # Extract variants from dbSNP database
         # TODO: CB Write script to make local uptodate SNP database from dbSNP ftp://ftp.ncbi.nlm.nih.gov/snp/database/README.create_local_dbSNP.txt 
-        commonvar_fbase = "snp150Common"
+        commonvar_fbase = "snp144Common"
         commonvar_fnames = ["%s.snp" % commonvar_fbase,
                             "%s.haplotype" % commonvar_fbase]
         if not typing_common.check_files(commonvar_fnames):

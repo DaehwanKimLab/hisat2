@@ -229,7 +229,7 @@ def extract_vars(base_fname,
     if base_fname == "hla":
         fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
     else:
-        assert base_fname in ["codis", "cyp"]
+        assert base_fname in ["codis", "cyp", "rRNA"]
         fasta_fnames = glob.glob("%s/*.fasta" % fasta_dname)
     for gen_fname in fasta_fnames:
         gene_name = gen_fname.split('/')[-1].split('_')[0]
@@ -434,6 +434,9 @@ def extract_vars(base_fname,
                     continue
 
                 if line.startswith("MSF"):
+                    continue
+
+                if line.startswith("PileUp"):
                     continue
 
                 if line.startswith("Name"):
@@ -991,7 +994,7 @@ def extract_vars(base_fname,
                 if exon_seq_ != cmp_exon_seq_:
                     print >> sys.stderr, "Waring: exonic sequences do not match (%s)" % gene
         else:
-            exon_str = "%d-%d" % (left, right - 1)
+            exon_str = "%d-%d" % (left - left + 1, right - left + 1)
 
         print >> locus_file, "%s\t%s\t%d\t%d\t%d\t%s\t%s" % \
             (backbone_name, chr, left, right - 1, len(backbone_seq.replace('.', '')), exon_str, gene_strand[gene])
