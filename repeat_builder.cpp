@@ -825,6 +825,9 @@ void RB_Repeat::saveSeedExtension(const RepeatParameter& rp,
         }
         fp << "  " << setw(5) << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
         
+        if(!seed.aligned)
+            continue;
+        
         string deststr = "";
         seed.getExtendedSeedSequence(s, deststr);
         
@@ -1410,12 +1413,22 @@ bool RB_Repeat::contain(const RB_Repeat& o) const
     while(p < seed_ranges_.size() && p2 < o.seed_ranges_.size()) {
         const RB_AlleleCoord& range = seed_ranges_[p];
         const SeedExt& seed = seeds_[range.idx];
+        if(!seed.aligned) {
+            p++;
+            continue;
+        }
         RB_AlleleCoord range_extended;
         range_extended.left = seed.pos.first - seed.consensus_pos.first;
         range_extended.right = seed.pos.second + (consensus_.length() - seed.consensus_pos.second);
         range_extended.idx = range.idx;
         
         const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
+        const SeedExt& seed2 = o.seeds_[range2.idx];
+        if(!seed2.aligned) {
+            p2++;
+            continue;
+        }
+        
         if((float)range2.len() < o.consensus_.length() * 0.95f) {
             p2++;
             continue;
@@ -1788,24 +1801,26 @@ void RB_Repeat::merge(const RepeatParameter& rp,
                           e, // end
                           debug);
         
-        if(!succ)
-            continue;
-        
-        RB_Repeat::seed_merged++;
-        
         SeedExt* p_new_seed = NULL;
         if(merge_list[i].first >= seeds_.size()) {
             seeds_.expand();
             p_new_seed = &(seeds_.back());
         } else {
             p_new_seed = &(seeds_[merge_list[i].first]);
-            //Range range(p_new_seed->pos.first, p_new_seed->pos.second);
-            //repeat_manager.removeRepeat(range, repeat_id_);
         }
         SeedExt& new_seed = *p_new_seed;
         new_seed.reset();
         new_seed.pos.first = left;
         new_seed.pos.second = right;
+        
+        if(!succ) {
+            new_seed.orig_pos.first = new_seed.pos.first;
+            new_seed.orig_pos.second = new_seed.pos.first + 1;
+            new_seed.aligned = false;
+            continue;
+        }
+        
+        RB_Repeat::seed_merged++;
         
         assert_geq(new_seed.pos.first, (TIndexOffU)b);
         new_seed.pos.first += (TIndexOffU)b;
@@ -1843,9 +1858,6 @@ void RB_Repeat::merge(const RepeatParameter& rp,
             cerr << "consensus: " << consensus_str << endl;
             cerr << "seed     : " << seed_str << endl;
         }
-        
-        //Range range(new_seed.pos.first, new_seed.pos.second);
-        //repeat_manager.addRepeat(range, repeat_id_);
     }
     
     internal_update();
@@ -1870,6 +1882,7 @@ void RB_Repeat::showInfo(const RepeatParameter& rp,
         cerr << " " << (sense_strand ? '+' : '-');
         cerr << " " << setw(10) << seed.pos.first << "  " << setw(10) << seed.pos.second;
         cerr << " " << setw(4) << seed.consensus_pos.first << "  " << setw(4) << seed.consensus_pos.second;
+        cerr << " " << (seed.aligned ? "aligned" : "unaligned");
         cerr << endl;
     }
 }
@@ -2093,15 +2106,6 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                     break;
             }
         }
-        
-#if 0
-        if(max_portion > 0.9f && false) {
-            cout << repeat_i.seeds()[0].orig_pos.first << "-" << max_portion_i->seeds()[0].orig_pos.first << ": " << max_portion << "\t";
-            cout << repeat_i.seeds().size() << " " << max_portion_i->seeds().size() << "\t";
-            cout << repeat_i.consensus().length() << " " << max_portion_i->consensus().length() << endl;
-            
-        }
-#endif
     }
     
     for(set<size_t>::iterator it = to_remove.begin(); it != to_remove.end(); it++) {

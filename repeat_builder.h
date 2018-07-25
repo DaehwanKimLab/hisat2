@@ -272,6 +272,8 @@ struct SeedExt {
     uint32_t total_ed;      // total edit distance
     bool done;              // done flag
     uint32_t curr_ext_len;  //
+    
+    bool aligned;
 
     EList<Edit> edits;      // edits w.r.t. consensus_merged
     
@@ -293,6 +295,7 @@ struct SeedExt {
         consensus_pos.second = 0;
         left_gaps.clear();
         right_gaps.clear();
+        aligned = true;
     };
 
     TIndexOffU getLeftExtLength() const {
