@@ -1409,16 +1409,19 @@ bool RB_Repeat::contain(const RB_Repeat& o) const
     size_t p = 0, p2 = 0;
     while(p < seed_ranges_.size() && p2 < o.seed_ranges_.size()) {
         const RB_AlleleCoord& range = seed_ranges_[p];
-        if((float)range.len() < consensus_.length() * 0.95f) {
-            p++;
-            continue;
-        }
+        const SeedExt& seed = seeds_[range.idx];
+        RB_AlleleCoord range_extended;
+        range_extended.left = seed.pos.first - seed.consensus_pos.first;
+        range_extended.right = seed.pos.second + (consensus_.length() - seed.consensus_pos.second);
+        range_extended.idx = range.idx;
+        
         const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
         if((float)range2.len() < o.consensus_.length() * 0.95f) {
             p2++;
             continue;
         }
-        if(range.contain(range2)) {
+        const size_t relax = 5;
+        if(range_extended.contain(range2, relax)) {
             return true;
         }
         if(range.right <= range2.right) p++;
@@ -1866,9 +1869,8 @@ void RB_Repeat::showInfo(const RepeatParameter& rp,
         cerr << "\t\t" << setw(4) << i << " " << setw(4) << ext_len;
         cerr << " " << (sense_strand ? '+' : '-');
         cerr << " " << setw(10) << seed.pos.first << "  " << setw(10) << seed.pos.second;
-        
-        // string deststr = "";
-        // seed.getExtendedSeedSequence(s, deststr);
+        cerr << " " << setw(4) << seed.consensus_pos.first << "  " << setw(4) << seed.consensus_pos.second;
+        cerr << endl;
     }
 }
 
@@ -2146,9 +2148,13 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     cerr << "number of seeds tried to merge: " << RB_Repeat::seed_merge_tried << endl;
     cerr << "number of seeds merged: " << RB_Repeat::seed_merged << endl;
 
+    // DK - debugging purposes
+#if 0
     repeat_manager->showInfo(rp,
                              coordHelper_,
                              repeat_map_);
+#endif
+    
     delete repeat_manager;
     repeat_manager = NULL;
 }
@@ -2934,9 +2940,6 @@ void RB_RepeatManager::showInfo(const RepeatParameter& rp,
                 repeat->showInfo(rp, coordHelper);
             }
             cerr << endl << endl;
-            
-            // DK - debugging purposes
-            return;
             count++;
         }
     }
