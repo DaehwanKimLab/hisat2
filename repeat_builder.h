@@ -33,6 +33,9 @@
 #include "ds.h"
 #include "repeat.h"
 #include "blockwise_sa.h"
+#include "simple_func.h"
+#include "scoring.h"
+#include "aligner_sw.h"
 
 //#define DEBUGLOG
 
@@ -55,16 +58,6 @@ public:
 };
 
 typedef pair<TIndexOffU, TIndexOffU> Range;
-
-// Dump
-//
-// to_string
-static string to_string(int val)
-{
-	stringstream ss;
-	ss << val;
-	return ss.str();
-}
 
 struct Fragments {
 	bool contain(TIndexOffU pos) {
@@ -809,19 +802,13 @@ public:
 
 public:
 	void build(const RepeatParameter& rp);
-    
-	static bool compareRepeatGroupByJoinedOff(const RepeatGroup& a, const RepeatGroup& b)
-	{
-		return a.positions[0].joinedOff < b.positions[0].joinedOff;
-	}
+
 	void sortRepeatGroup();
 
     void saveRepeats(const RepeatParameter& rp);
     void saveConsensus(const RepeatParameter& rp);
     void saveRepeatPositions(ofstream& fp, RepeatGroup& rg);
 	void saveFile(const RepeatParameter& rp);
-	void saveRepeatSequence();
-	void saveRepeatGroup();
 
     void addRepeatGroup(const RepeatParameter& rp,
                         size_t repeat_id,
@@ -830,14 +817,7 @@ public:
                         const EList<RepeatCoord<TIndexOffU> >& positions,
                         ostream& fp);
     
-    void mergeRepeatGroup();
-    void groupRepeatGroup(TIndexOffU rpt_edit);
-	void adjustRepeatGroup(bool flagGrouping = false);
-    RepeatGroup* findRepeatGroup(const string&);
-
 	TIndexOffU getLCP(TIndexOffU a, TIndexOffU b);
-
-	void repeat_masking();
 
     bool checkSequenceMergeable(const string& ref,
                                 const string& read,
@@ -846,20 +826,6 @@ public:
                                 TIndexOffU rpt_len,
                                 TIndexOffU max_edit = 10);
 
-    void saveSeedEdit(const string& consensus_merged,
-                      EList<SeedExt>& seeds,
-                      TIndexOffU min_rpt_len,
-                      ostream& fp);
-
-    void refineConsensus(const string& seed_string,
-                         EList<SeedExt>& seeds,
-                         const RepeatParameter& rp,
-                         const string& old_consensus,
-                         string& refined_consensus,
-                         ostream& fp);
-
-    void seedGrouping(const RepeatParameter& rp);
-    
     void doTest(const RepeatParameter& rp,
                 const string& refstr,
                 const string& readstr)
@@ -868,18 +834,6 @@ public:
     }
     
 private:
-    void get_alleles(TIndexOffU grp_id,
-                     const string& seq_name, 
-                     TIndexOffU baseoff,
-                     TIndexOffU& allele_id,
-                     TIndexOffU& hapl_id_base,
-                     const Range range, 
-                     EList<SeedExt>& seeds, 
-                     ostream& info_fp,
-                     ostream& hapl_fp);
-
-    void updateSeedBaseoff(EList<SeedExt>&, Range, size_t);
-
     void saveAlleles(const RepeatParameter& rp,
                      RB_Repeat& repeat,
                      ofstream&,
@@ -909,18 +863,6 @@ private:
                         const EList<SeedExt>& seeds,
                         ostream &fp);
 
-    void saveSeedSNPs(TIndexOffU seed_group_id,
-                      TIndexOffU& snp_id_base, 
-                      TIndexOffU& hapl_id_base,
-                      TIndexOffU baseoff,
-                      EList<SeedExt>& seeds,
-                      ostream& info_fp,
-                      ostream& snp_fp,
-                      ostream& hapl_fp);
-
-    void saveSeeds(const RepeatParameter& rp);
-    void saveConsensusSequence();
-    
 private:
     const int output_width = 60;
     TIndexOffU min_repeat_len_;
