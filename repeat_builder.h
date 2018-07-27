@@ -501,6 +501,7 @@ public:
 };
 
 class RB_RepeatManager;
+class RB_SWAligner;
 
 class RB_Repeat {
 public:
@@ -542,7 +543,8 @@ public:
     
     template<typename TStr>
     void merge(const RepeatParameter& rp,
-               const TStr& s,               
+               const TStr& s,
+               RB_SWAligner& swalginer,
                const RB_Repeat& o,
                bool contain,
                size_t seed_i,
@@ -616,7 +618,6 @@ public:
     static size_t         seed_merged;
 };
 
-
 // check if a set of seeds are already processed
 class RB_RepeatManager {
 public:
@@ -628,11 +629,8 @@ public:
                         EList<size_t>& to_remove) const;
     
     void addRepeat(const RB_Repeat* repeat);
-    
     void addRepeat(Range range, size_t repeat_id);
-    
     void removeRepeat(const RB_Repeat* repeat);
-    
     void removeRepeat(Range range, size_t repeat_id);
     
 public:
@@ -643,6 +641,44 @@ public:
     
 private:
     map<Range, EList<size_t> > range_to_repeats_;
+};
+
+class RB_SWAligner {
+public:
+    RB_SWAligner();
+    ~RB_SWAligner();
+    
+    void init_dyn(const RepeatParameter& rp);
+    
+    int alignStrings(const string &ref,
+                     const string &read,
+                     EList<Edit>& edits,
+                     Coord& coord);
+    
+    void makePadString(const string& ref,
+                       const string& read,
+                       string& pad,
+                       size_t len);
+    
+    void doTest(const RepeatParameter& rp,
+                const string& refstr,
+                const string& readstr);
+    
+    void doTestCase1(const string& refstr,
+                     const string& readstr,
+                     TIndexOffU rpt_edit);
+    
+private:
+    //
+    SimpleFunc scoreMin_;
+    SimpleFunc nCeil_;
+    SimpleFunc penCanIntronLen_;
+    SimpleFunc penNoncanIntronLen_;
+    
+    Scoring *sc_;
+    SwAligner swa;
+    LinkedEList<EList<Edit> > rawEdits_;
+    RandomSource rnd_;
 };
 
 
@@ -690,7 +726,6 @@ public:
 	TIndexOffU getLCP(TIndexOffU a, TIndexOffU b);
 
 	void repeat_masking();
-    void init_dyn(const RepeatParameter& rp);
 
     bool checkSequenceMergeable(const string& ref,
                                 const string& read,
@@ -698,8 +733,6 @@ public:
                                 Coord& coord,
                                 TIndexOffU rpt_len,
                                 TIndexOffU max_edit = 10);
-    int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
-    void makePadString(const string&, const string&, string&, size_t);
 
     void saveSeedEdit(const string& consensus_merged,
                       EList<SeedExt>& seeds,
@@ -714,11 +747,13 @@ public:
                          ostream& fp);
 
     void seedGrouping(const RepeatParameter& rp);
-
+    
     void doTest(const RepeatParameter& rp,
                 const string& refstr,
-                const string& readstr);
-    void doTestCase1(const string&, const string&, TIndexOffU);
+                const string& readstr)
+    {
+        swaligner_.doTest(rp, refstr, readstr);
+    }
     
 private:
     void get_alleles(TIndexOffU grp_id,
@@ -783,15 +818,7 @@ private:
     CoordHelper coordHelper_;
     
     //
-    SimpleFunc scoreMin_;
-    SimpleFunc nCeil_;
-    SimpleFunc penCanIntronLen_;
-    SimpleFunc penNoncanIntronLen_;
-    
-    Scoring *sc_;
-    SwAligner swa;
-    LinkedEList<EList<Edit> > rawEdits_;
-    RandomSource rnd_;
+    RB_SWAligner swaligner_;
 
 
     // Seeds

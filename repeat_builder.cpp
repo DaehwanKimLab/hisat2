@@ -1728,6 +1728,7 @@ bool RB_Repeat::align(const string& s,
 template<typename TStr>
 void RB_Repeat::merge(const RepeatParameter& rp,
                       const TStr& s,
+                      RB_SWAligner& swalginer,
                       const RB_Repeat& o,
                       bool contain,
                       size_t seed_i,
@@ -1867,6 +1868,25 @@ void RB_Repeat::merge(const RepeatParameter& rp,
     EList<pair<size_t, size_t> > kmer_table;
     build_kmer_table(consensus_, kmer_table, kmer_len);
     
+    // DP alignment related variables
+    EList<Edit> edits;
+    Coord coord;
+    EList<Edit> ed;
+    // string pad;
+    // makePadString(refstr, readstr, pad, 5);
+    // string ref2 = pad + refstr + pad;
+    // string read2 = pad + readstr + pad;
+    
+    // size_t left = pad.length();
+    // size_t right = left + readstr.length();
+    // edits.reserveExact(ed.size());
+    // for(size_t i = 0; i < ed.size(); i++) {
+    //    if(ed[i].pos >= left && ed[i].pos <= right) {
+    //        edits.push_back(ed[i]);
+    //        edits.back().pos -= left;
+    //    }
+    // }
+    
     EList<int> offsets;
     string seq;
     for(size_t i = 0; i < merge_list.size(); i++) {
@@ -1902,6 +1922,10 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         RB_Repeat::seed_merge_tried++;
         
         getString(s, left, right - left, seq);
+        
+        // DK - debugging purposes
+        edits.clear();
+        // swalginer.alignStrings(consensus_, seq, edits, coord);
 
         size_t b = 0, e = 0;
         bool succ = align(consensus_,
@@ -2001,6 +2025,320 @@ void RB_Repeat::showInfo(const RepeatParameter& rp,
     }
 }
 
+#define DMAX std::numeric_limits<double>::max()
+
+RB_SWAligner::RB_SWAligner()
+{
+    rnd_.init(0);
+}
+
+RB_SWAligner::~RB_SWAligner()
+{
+    if(sc_) {
+        delete sc_;
+    }
+}
+
+void RB_SWAligner::init_dyn(const RepeatParameter& rp)
+{
+    const int MM_PEN = 3;
+    // const int MM_PEN = 6;
+    const int GAP_PEN_LIN = 2;
+    // const int GAP_PEN_LIN = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
+    const int GAP_PEN_CON = 4;
+    // const int GAP_PEN_CON = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
+    const int MAX_PEN = MAX_I16;
+    
+    scoreMin_.init(SIMPLE_FUNC_LINEAR, rp.max_edit * MM_PEN * -1.0, 0.0);
+    nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
+    
+    penCanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
+    penNoncanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
+    
+    sc_ = new Scoring(
+                      DEFAULT_MATCH_BONUS,     // constant reward for match
+                      DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
+                      MM_PEN,      // max mm penalty
+                      MM_PEN,      // min mm penalty
+                      MAX_PEN,      // max sc penalty
+                      MAX_PEN,      // min sc penalty
+                      scoreMin_,       // min score as function of read len
+                      nCeil_,          // max # Ns as function of read len
+                      DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
+                      DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
+                      DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
+                      
+                      
+                      GAP_PEN_CON, // constant coeff for read gap cost
+                      GAP_PEN_CON, // constant coeff for ref gap cost
+                      GAP_PEN_LIN, // linear coeff for read gap cost
+                      GAP_PEN_LIN, // linear coeff for ref gap cost
+                      1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
+                      );
+}
+
+void RB_SWAligner::makePadString(const string& ref,
+                                 const string& read,
+                                 string& pad,
+                                 size_t len)
+{
+    pad.resize(len);
+    
+    for(size_t i = 0; i < len; i++) {
+        // shift A->C, C->G, G->T, T->A
+        pad[i] = "CGTA"[asc2dna[ref[i]]];
+        
+        if(read[i] == pad[i]) {
+            // shift
+            pad[i] = "CGTA"[asc2dna[pad[i]]];
+        }
+    }
+    
+    int head_len = len / 2;
+    size_t pad_start = len - head_len;
+    
+    for(size_t i = 0; i < head_len; i++) {
+        if(read[i] == pad[pad_start + i]) {
+            // shift
+            pad[pad_start + i] = "CGTA"[asc2dna[pad[pad_start + i]]];
+        }
+    }
+}
+
+int RB_SWAligner::alignStrings(const string &ref,
+                               const string &read,
+                               EList<Edit>& edits,
+                               Coord& coord)
+{
+    // Prepare Strings
+    
+    // Read -> BTDnaString
+    // Ref -> bit-encoded string
+    
+    //SwAligner swa;
+    
+    BTDnaString btread;
+    BTString btqual;
+    BTString btref;
+    BTString btref2;
+    
+    BTDnaString btreadrc;
+    BTString btqualrc;
+    
+    
+    string qual = "";
+    for(size_t i = 0; i < read.length(); i++) {
+        qual.push_back('I');
+    }
+    
+#if 0
+    cerr << "REF : " << ref << endl;
+    cerr << "READ: " << read << endl;
+    cerr << "QUAL: " << qual << endl;
+#endif
+    
+    btread.install(read.c_str(), true);
+    btreadrc = btread;
+    btreadrc.reverseComp();
+    
+    btqual.install(qual.c_str());
+    btqualrc = btqual;
+    
+    btref.install(ref.c_str());
+    
+    TAlScore min_score = sc_->scoreMin.f<TAlScore >((double)btread.length());
+    
+    btref2 = btref;
+    
+    size_t nceil = 0;
+    // size_t nrow = btread.length();
+    
+    // Convert reference string to mask
+    for(size_t i = 0; i < btref2.length(); i++) {
+        if(toupper(btref2[i]) == 'N') {
+            btref2.set(16, i);
+        } else {
+            int num = 0;
+            int alts[] = {4, 4, 4, 4};
+            decodeNuc(toupper(btref2[i]), num, alts);
+            assert_leq(num, 4);
+            assert_gt(num, 0);
+            btref2.set(0, i);
+            for(int j = 0; j < num; j++) {
+                btref2.set(btref2[i] | (1 << alts[j]), i);
+            }
+        }
+    }
+    
+    
+    bool fw = true;
+    uint32_t refidx = 0;
+    
+    swa.initRead(
+                 btread,     // read sequence
+                 btreadrc,
+                 btqual,     // read qualities
+                 btqualrc,
+                 0,          // offset of first character within 'read' to consider
+                 btread.length(), // offset of last char (exclusive) in 'read' to consider
+                 *sc_);      // local-alignment score floor
+    
+    DynProgFramer dpframe(false);
+    size_t readgaps = 0;
+    size_t refgaps = 0;
+    size_t maxhalf = 0;
+    
+    DPRect rect;
+    dpframe.frameSeedExtensionRect(
+                                   0,              // ref offset implied by seed hit assuming no gaps
+                                   btread.length(),    // length of read sequence used in DP table
+                                   btref2.length(),    // length of reference
+                                   readgaps,   // max # of read gaps permitted in opp mate alignment
+                                   refgaps,    // max # of ref gaps permitted in opp mate alignment
+                                   (size_t)nceil,  // # Ns permitted
+                                   maxhalf, // max width in either direction
+                                   rect);      // DP Rectangle
+    
+    assert(rect.repOk());
+    
+    size_t cminlen = 2000, cpow2 = 4;
+    
+    swa.initRef(
+                fw,                 // whether to align forward or revcomp read
+                refidx,             // reference ID
+                rect,               // DP rectangle
+                btref2.wbuf(),      // reference strings
+                0,                  // offset of first reference char to align to
+                btref2.length(),    // offset of last reference char to align to
+                btref2.length(),    // length of reference sequence
+                *sc_,               // scoring scheme
+                min_score,          // minimum score
+                true,               // use 8-bit SSE if positions
+                cminlen,            // minimum length for using checkpointing scheme
+                cpow2,              // interval b/t checkpointed diags; 1 << this
+                false,              // triangular mini-fills?
+                false               // is this a seed extension?
+                );
+    
+    
+    TAlScore best = std::numeric_limits<TAlScore>::min();
+    bool found = swa.align(rnd_, best);
+    
+    // DK - debugging purposes
+    return 0;
+    
+#ifdef DEBUGLOG
+    cerr << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+#endif
+    
+    if (found) {
+#ifdef DEBUGLOG
+        //cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+        cerr << "REF : " << ref << endl;
+        cerr << "READ: " << read << endl;
+#endif
+        
+        SwResult res;
+        int max_match_len = 0;
+        res.reset();
+        res.alres.init_raw_edits(&rawEdits_);
+        
+        found = swa.nextAlignment(res, best, rnd_);
+        if (found) {
+            edits = res.alres.ned();
+            //const TRefOff ref_off = res.alres.refoff();
+            //const Coord& coord = res.alres.refcoord();
+            coord = res.alres.refcoord();
+            //assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
+            
+#ifdef DEBUGLOG
+            cerr << "num edits: " << edits.size() << endl;
+            cerr << "coord: " << coord.off();
+            cerr << ", " << coord.ref();
+            cerr << ", " << coord.orient();
+            cerr << ", " << coord.joinedOff();
+            cerr << endl;
+            Edit::print(cerr, edits); cerr << endl;
+            Edit::printQAlign(cerr, btread, edits);
+#endif
+            
+            max_match_len = getMaxMatchLen(edits, btread.length());
+#ifdef DEBUGLOG
+            cerr << "max match length: " << max_match_len << endl;
+#endif
+        }
+#ifdef DEBUGLOG
+        cerr << "nextAlignment: " << found << endl;
+        cerr << "-------------------------" << endl;
+#endif
+    }
+    
+    return 0;
+}
+
+void RB_SWAligner::doTest(const RepeatParameter& rp,
+                          const string& refstr,
+                          const string& readstr)
+{
+    init_dyn(rp);
+    
+    doTestCase1(refstr,
+                readstr,
+                rp.max_edit);
+}
+
+void RB_SWAligner::doTestCase1(const string& refstr,
+                               const string& readstr,
+                               TIndexOffU rpt_edit)
+{
+    cerr << "doTestCase1----------------" << endl;
+    EList<Edit> edits;
+    Coord coord;
+    
+    if (refstr.length() == 0 ||
+        readstr.length() == 0) {
+        return;
+    }
+    
+    EList<Edit> ed;
+    
+    string pad;
+    makePadString(refstr, readstr, pad, 5);
+    
+    string ref2 = pad + refstr + pad;
+    string read2 = pad + readstr + pad;
+    alignStrings(refstr, readstr, edits, coord);
+    
+    size_t left = pad.length();
+    size_t right = left + readstr.length();
+    
+    edits.reserveExact(ed.size());
+    for(size_t i = 0; i < ed.size(); i++) {
+        if(ed[i].pos >= left && ed[i].pos <= right) {
+            edits.push_back(ed[i]);
+            edits.back().pos -= left;
+        }
+    }
+    
+    
+    RepeatGroup rg;
+    
+    rg.edits = edits;
+    rg.coord = coord;
+    rg.seq = readstr;
+    rg.base_offset = 0;
+    
+    string chr_name = "rep";
+    
+    cerr << "REF : " << refstr << endl;
+    cerr << "READ: " << readstr << endl;
+    size_t snpids = 0;
+    rg.buildSNPs(snpids);
+    rg.writeSNPs(cerr, chr_name); cerr << endl;
+    
+}
+
+
 template<typename TStr>
 RepeatBuilder<TStr>::RepeatBuilder(TStr& s,
                                    const EList<RefRecord>& szs,
@@ -2015,72 +2353,15 @@ bsa_(sa), filename_(filename),
 forward_length_(forward_only ? s.length() : s.length() / 2)
 {
 	cerr << "RepeatBuilder: " << filename_ << endl;
-
-    rnd_.init(0);
 }
 
 template<typename TStr>
 RepeatBuilder<TStr>::~RepeatBuilder()
 {
-    if(sc_) {
-        delete sc_;
-    }
     for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
         delete it->second;
     }
     repeat_map_.clear();
-}
-
-#define DMAX std::numeric_limits<double>::max()
-
-template<typename TStr>
-void RepeatBuilder<TStr>::init_dyn(const RepeatParameter& rp)
-{
-    const int MM_PEN = 3;
-    // const int MM_PEN = 6;
-    const int GAP_PEN_LIN = 2;
-    // const int GAP_PEN_LIN = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
-    const int GAP_PEN_CON = 4;
-    // const int GAP_PEN_CON = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
-    const int MAX_PEN = MAX_I16;
-
-    scoreMin_.init(SIMPLE_FUNC_LINEAR, rp.max_edit * MM_PEN * -1.0, 0.0);
-    nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
-
-    penCanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
-    penNoncanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
-
-    sc_ = new Scoring(
-            DEFAULT_MATCH_BONUS,     // constant reward for match
-            DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
-            MM_PEN,      // max mm penalty
-            MM_PEN,      // min mm penalty
-            MAX_PEN,      // max sc penalty
-            MAX_PEN,      // min sc penalty
-            scoreMin_,       // min score as function of read len
-            nCeil_,          // max # Ns as function of read len
-            DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
-            DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
-            DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
-
-
-            GAP_PEN_CON, // constant coeff for read gap cost
-            GAP_PEN_CON, // constant coeff for ref gap cost
-            GAP_PEN_LIN, // linear coeff for read gap cost
-            GAP_PEN_LIN, // linear coeff for ref gap cost
-            1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
-            );
-}
-
-
-template<typename TStr>
-void RepeatBuilder<TStr>::doTest(const RepeatParameter& rp,
-                                 const string& refstr,
-                                 const string& readstr)
-{
-	init_dyn(rp);
-
-    doTestCase1(refstr, readstr, rp.max_edit);
 }
 
 template<typename TStr>
@@ -2094,7 +2375,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 	TIndexOffU count = 0;
     min_repeat_len_ = rp.min_repeat_len;
     
-    init_dyn(rp);
+    swaligner_.init_dyn(rp);
 
     RB_RepeatManager* repeat_manager = new RB_RepeatManager;
     
@@ -2206,7 +2487,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                         seed_a = seed_j; seed_b = seed_i;
                     }
                     // DK - debugging purposes
-                    bool debug = (a->second->repeat_id() == 526 && b->second->repeat_id() == 1303);
+                    bool debug = (a->second->repeat_id() == 526 && b->second->repeat_id() == 1303333);
                     if(debug) {
                         int dk = 0;
                         dk++;
@@ -2216,6 +2497,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                     
                     a->second->merge(rp,
                                      s_,
+                                     swaligner_,
                                      *(b->second),
                                      contain,
                                      seed_a,
@@ -3422,33 +3704,6 @@ TIndexOffU RepeatBuilder<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 }
 
 template<typename TStr>
-void RepeatBuilder<TStr>::makePadString(const string& ref, const string& read,
-        string& pad, size_t len)
-{
-    pad.resize(len);
-
-    for(size_t i = 0; i < len; i++) {
-        // shift A->C, C->G, G->T, T->A
-        pad[i] = "CGTA"[asc2dna[ref[i]]];
-
-        if(read[i] == pad[i]) {
-            // shift
-            pad[i] = "CGTA"[asc2dna[pad[i]]];
-        }
-    }
-
-    int head_len = len / 2;
-    size_t pad_start = len - head_len;
-
-    for(size_t i = 0; i < head_len; i++) {
-        if(read[i] == pad[pad_start + i]) {
-            // shift
-            pad[pad_start + i] = "CGTA"[asc2dna[pad[pad_start + i]]];
-        }
-    }
-}
-
-template<typename TStr>
 bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
                                                    const string& read,
                                                    EList<Edit>& edits,
@@ -3460,12 +3715,12 @@ bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
     EList<Edit> ed;
 
     string pad;
-    makePadString(ref, read, pad, 5);
+    swaligner_.makePadString(ref, read, pad, 5);
 
     string ref2 = pad + ref;
     string read2 = pad + read;
 
-    alignStrings(ref2, read2, ed, coord);
+    swaligner_.alignStrings(ref2, read2, ed, coord);
 
     // match should start from pad string
     if(coord.off() != 0) {
@@ -3503,222 +3758,6 @@ bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
 
     return (max_matchlen >= rpt_len);
 }
-
-template<typename TStr>
-int RepeatBuilder<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits, Coord& coord)
-{
-    // Prepare Strings
-
-    // Read -> BTDnaString
-    // Ref -> bit-encoded string
-
-    //SwAligner swa;
-
-    BTDnaString btread;
-    BTString btqual;
-    BTString btref;
-    BTString btref2;
-
-    BTDnaString btreadrc;
-    BTString btqualrc;
-
-
-    string qual = "";
-    for(size_t i = 0; i < read.length(); i++) {
-        qual.push_back('I');
-    }
-
-#if 0
-    cerr << "REF : " << ref << endl;
-    cerr << "READ: " << read << endl;
-    cerr << "QUAL: " << qual << endl;
-#endif
-
-    btread.install(read.c_str(), true);
-    btreadrc = btread;
-    btreadrc.reverseComp();
-
-    btqual.install(qual.c_str());
-    btqualrc = btqual;
-
-    btref.install(ref.c_str());
-
-    TAlScore min_score = sc_->scoreMin.f<TAlScore >((double)btread.length());
-
-    btref2 = btref;
-
-    size_t nceil = 0;
-    // size_t nrow = btread.length();
-
-    // Convert reference string to mask
-    for(size_t i = 0; i < btref2.length(); i++) {
-        if(toupper(btref2[i]) == 'N') {
-            btref2.set(16, i);
-        } else {
-            int num = 0;
-            int alts[] = {4, 4, 4, 4};
-            decodeNuc(toupper(btref2[i]), num, alts);
-            assert_leq(num, 4);
-            assert_gt(num, 0);
-            btref2.set(0, i);
-            for(int j = 0; j < num; j++) {
-                btref2.set(btref2[i] | (1 << alts[j]), i);
-            }
-        }
-    }
-
-
-    bool fw = true;
-    uint32_t refidx = 0;
-    
-    swa.initRead(
-            btread,     // read sequence
-            btreadrc,
-            btqual,     // read qualities
-            btqualrc,
-            0,          // offset of first character within 'read' to consider
-            btread.length(), // offset of last char (exclusive) in 'read' to consider
-            *sc_);      // local-alignment score floor
-
-    DynProgFramer dpframe(false);
-    size_t readgaps = 0;
-    size_t refgaps = 0;
-    size_t maxhalf = 0;
-
-    DPRect rect;
-    dpframe.frameSeedExtensionRect(
-            0,              // ref offset implied by seed hit assuming no gaps
-            btread.length(),    // length of read sequence used in DP table
-            btref2.length(),    // length of reference
-            readgaps,   // max # of read gaps permitted in opp mate alignment
-            refgaps,    // max # of ref gaps permitted in opp mate alignment
-            (size_t)nceil,  // # Ns permitted
-            maxhalf, // max width in either direction
-            rect);      // DP Rectangle
-
-    assert(rect.repOk());
-
-    size_t cminlen = 2000, cpow2 = 4;
-
-    swa.initRef(
-            fw,                 // whether to align forward or revcomp read
-            refidx,             // reference ID
-            rect,               // DP rectangle
-            btref2.wbuf(),      // reference strings
-            0,                  // offset of first reference char to align to
-            btref2.length(),    // offset of last reference char to align to
-            btref2.length(),    // length of reference sequence
-            *sc_,               // scoring scheme
-            min_score,          // minimum score
-            true,               // use 8-bit SSE if positions
-            cminlen,            // minimum length for using checkpointing scheme
-            cpow2,              // interval b/t checkpointed diags; 1 << this
-            false,              // triangular mini-fills?
-            false               // is this a seed extension?
-            );
-
-
-    TAlScore best = std::numeric_limits<TAlScore>::min();
-    bool found = swa.align(rnd_, best);
-#ifdef DEBUGLOG 
-    cerr << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
-#endif
-
-    if (found) {
-#ifdef DEBUGLOG 
-        //cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
-        cerr << "REF : " << ref << endl;
-        cerr << "READ: " << read << endl;
-#endif
-
-        SwResult res;
-        int max_match_len = 0;
-        res.reset();
-        res.alres.init_raw_edits(&rawEdits_);
-
-        found = swa.nextAlignment(res, best, rnd_);
-        if (found) {
-            edits = res.alres.ned();
-            //const TRefOff ref_off = res.alres.refoff();
-            //const Coord& coord = res.alres.refcoord();
-            coord = res.alres.refcoord();
-            //assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
-
-#ifdef DEBUGLOG 
-            cerr << "num edits: " << edits.size() << endl;
-            cerr << "coord: " << coord.off();
-            cerr << ", " << coord.ref();
-            cerr << ", " << coord.orient();
-            cerr << ", " << coord.joinedOff();
-            cerr << endl;
-            Edit::print(cerr, edits); cerr << endl;
-            Edit::printQAlign(cerr, btread, edits);
-#endif
-
-            max_match_len = getMaxMatchLen(edits, btread.length());
-#ifdef DEBUGLOG 
-            cerr << "max match length: " << max_match_len << endl;
-#endif
-        }
-#ifdef DEBUGLOG 
-        cerr << "nextAlignment: " << found << endl;
-        cerr << "-------------------------" << endl;
-#endif
-    }
-
-    return 0;
-}
-
-template<typename TStr>
-void RepeatBuilder<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
-{
-    cerr << "doTestCase1----------------" << endl;
-    EList<Edit> edits;
-    Coord coord;
-
-    if (refstr.length() == 0 ||
-            readstr.length() == 0) {
-        return;
-    }
-
-    EList<Edit> ed;
-
-    string pad;
-    makePadString(refstr, readstr, pad, 5);
-
-    string ref2 = pad + refstr + pad;
-    string read2 = pad + readstr + pad;
-    alignStrings(refstr, readstr, edits, coord);
-
-    size_t left = pad.length();
-    size_t right = left + readstr.length();
-
-    edits.reserveExact(ed.size());
-    for(size_t i = 0; i < ed.size(); i++) {
-        if(ed[i].pos >= left && ed[i].pos <= right) {
-            edits.push_back(ed[i]);
-            edits.back().pos -= left;
-        }
-    }
-
-
-    RepeatGroup rg;
-
-    rg.edits = edits;
-    rg.coord = coord;
-    rg.seq = readstr;
-    rg.base_offset = 0;
-
-    string chr_name = "rep";
-
-    cerr << "REF : " << refstr << endl;
-    cerr << "READ: " << readstr << endl;
-    size_t snpids = 0;
-    rg.buildSNPs(snpids);
-    rg.writeSNPs(cerr, chr_name); cerr << endl;
-
-}
-
 
 /****************************/
 template class RepeatBuilder<SString<char> >;
