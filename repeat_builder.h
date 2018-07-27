@@ -29,6 +29,7 @@
 #include "mem_ids.h"
 #include "ref_coord.h"
 #include "ref_read.h"
+#include "edit.h"
 #include "ds.h"
 #include "repeat.h"
 #include "blockwise_sa.h"
@@ -91,7 +92,7 @@ public:
     ~CoordHelper();
     int mapJoinedOffToSeq(TIndexOffU joined_pos);
     int getGenomeCoord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
-    
+
     TIndexOffU getEnd(TIndexOffU e);
     TIndexOffU getStart(TIndexOffU e);
     TIndexOffU forward_length() const { return forward_length_; }
@@ -250,6 +251,65 @@ struct RepeatGroup {
 
 };
 
+struct SeedSNP {
+    int type; // EDIT_TYPE_MM, EDIT_TYPE_READ_GAP, EDIT_TYPE_REF_GAP
+    TIndexOffU pos;
+    size_t len;
+    string base; // valid when ty = MM, REF_GAP
+    TIndexOffU id;
+
+    SeedSNP() {}
+
+    void init(int ty, TIndexOffU po, size_t ln, string bs) {
+        type = ty;
+        pos = po;
+        len = ln;
+        base = bs;
+    }
+    void init(int ty, TIndexOffU po, size_t ln, char bs) {
+        type = ty;
+        pos = po;
+        len = ln;
+        base.assign(1, bs);
+    }
+
+    friend ostream &operator<<(ostream &os, const SeedSNP &snp) {
+
+        if(snp.type == EDIT_TYPE_MM) {
+            os << "single";
+        } else if(snp.type == EDIT_TYPE_REF_GAP) {
+            os << "insertion";
+        } else if(snp.type == EDIT_TYPE_READ_GAP) {
+            os << "deletion";
+        }
+        os << " ";
+        os << snp.pos << " ";
+
+        if(snp.type == EDIT_TYPE_MM || snp.type == EDIT_TYPE_REF_GAP) {
+            os << snp.base;
+        } else if(snp.type == EDIT_TYPE_READ_GAP) {
+            os << snp.len;
+        }
+        return os;
+    }
+
+    bool operator==(const SeedSNP &rhs) const {
+        return type == rhs.type &&
+               pos == rhs.pos &&
+               len == rhs.len &&
+               base == rhs.base;
+    }
+
+    bool operator!=(const SeedSNP &rhs) const {
+        return !(rhs == *this);
+    }
+
+    static bool cmpSeedSNPByPos( SeedSNP * const& a,  SeedSNP * const& b)  {
+        return a->pos < b->pos;
+    }
+
+};
+
 struct SeedExt {
     // seed extended position [first, second)
     pair<TIndexOffU, TIndexOffU> orig_pos;
@@ -274,7 +334,9 @@ struct SeedExt {
     uint32_t curr_ext_len;  //
 
     EList<Edit> edits;      // edits w.r.t. consensus_merged
-    
+
+    EList<SeedSNP *> snps;
+
     SeedExt() {
         reset();
     };
@@ -312,14 +374,47 @@ struct SeedExt {
         len += getRightExtLength();
         return len;
     }
-    
+
+    template<typename TStr>
+    void getLeftExtString(const TStr& s, string& seq)
+    {
+        seq.clear();
+        seq = getString(s, pos.first, orig_pos.first - pos.first);
+    }
+
+    template<typename TStr>
+    void getRightExtString(const TStr& s, string& seq)
+    {
+        seq.clear();
+        seq = getString(s, orig_pos.second, pos.second - orig_pos.second);
+    }
+
     template<typename TStr>
     void getExtendedSeedSequence(const TStr& s,
                                  string& seq) const;
 
+    template<typename TStr>
+    void generateSNPs(const TStr& s, const string& consensus, EList<SeedSNP *>& repeat_snps);
+
     static bool isSameConsensus(const SeedExt& a, const SeedExt& b) {
-        return (a.consensus_pos == b.consensus_pos)
-            && (a.getLength() == b.getLength());
+        return (a.consensus_pos == b.consensus_pos);
+            //&& (a.getLength() == b.getLength());
+    }
+
+    static bool isSameSNPs(const SeedExt& a, const SeedExt& b) {
+        const EList<SeedSNP *>& a_edit = a.snps;
+        const EList<SeedSNP *>& b_edit = b.snps;
+
+        if(a_edit.size() != b_edit.size()) {
+            return false;
+        }
+
+        for(size_t i = 0; i < a_edit.size(); i++) {
+            if(!(*a_edit[i] == *b_edit[i])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static bool isSameAllele(const SeedExt& a, const SeedExt& b) {
@@ -479,7 +574,13 @@ class RB_RepeatManager;
 class RB_Repeat {
 public:
     RB_Repeat() {}
-    ~RB_Repeat() {}
+    ~RB_Repeat() {
+        if(snps_.size() > 0) {
+            for(size_t i = 0; i < snps_.size(); i++) {
+                delete snps_[i];
+            }
+        }
+    }
     
     void repeat_id(size_t repeat_id) { repeat_id_ = repeat_id; }
     size_t repeat_id() const { return repeat_id_; }
@@ -492,7 +593,10 @@ public:
     
     EList<RB_AlleleCoord>& seed_ranges() { return seed_ranges_; }
     const EList<RB_AlleleCoord>& seed_ranges() const { return seed_ranges_; }
-    
+
+    EList<SeedSNP *>& snps() { return snps_; }
+    const EList<SeedSNP *>& snps() const { return snps_; }
+
     template<typename TStr>
     void extendConsensus(const RepeatParameter& rp,
                          const TStr& s);
@@ -505,7 +609,10 @@ public:
                            ostream& fp,
                            size_t& total_repeat_seq_len,
                            size_t& total_allele_seq_len) const;
-    
+
+    void saveSNPs(ofstream& fp, TIndexOffU grp_id, TIndexOffU& snp_id_base, TIndexOffU consensus_baseoff);
+    void saveConsensus(ofstream& fp, TIndexOffU grp_id, TIndexOffU consensus_baseoff);
+
     bool contain(const RB_Repeat& o) const;
 
     float mergeable(const RB_Repeat& o) const;
@@ -539,7 +646,9 @@ public:
     
     void showInfo(const RepeatParameter& rp,
                   CoordHelper& coordHelper) const;
-    
+
+    template<typename TStr>
+    void generateSNPs(const RepeatParameter&, const TStr& s, TIndexOffU grp_id);
 private:
     template<typename TStr>
     void get_consensus_seq(const TStr& s,
@@ -570,7 +679,8 @@ private:
     string                consensus_;
     EList<SeedExt>        seeds_;
     EList<RB_AlleleCoord> seed_ranges_;
-    
+    EList<SeedSNP*>       snps_;
+
     static EList<size_t>  ca_ed_;
     static EList<size_t>  ca_ed2_;
     static string         ca_s_;
@@ -634,6 +744,8 @@ public:
 	}
 	void sortRepeatGroup();
 
+    void saveRepeats(const RepeatParameter& rp);
+    void saveConsensus(const RepeatParameter& rp);
     void saveRepeatPositions(ofstream& fp, RepeatGroup& rg);
 	void saveFile(const RepeatParameter& rp);
 	void saveRepeatSequence();
@@ -697,13 +809,22 @@ private:
 
     void updateSeedBaseoff(EList<SeedExt>&, Range, size_t);
 
+    void saveAlleles(const RepeatParameter& rp,
+                     RB_Repeat& repeat,
+                     ofstream&,
+                     ofstream&,
+                     TIndexOffU grp_id,
+                     TIndexOffU consensus_baseoff,
+                     TIndexOffU&);
+
     void writeAllele(TIndexOffU grp_id, 
                      TIndexOffU allele_id,
                      TIndexOffU baseoff,
                      Range range,
                      const string& seq_name,
-                     EList<SeedExt>& seeds,
+                     const EList<SeedExt>& seeds,
                      ostream &fp);
+
 
     void writeSNPs(ostream& fp, 
                    TIndexOffU baseoff,
@@ -714,7 +835,7 @@ private:
                         TIndexOffU baseoff,
                         Range range,
                         const string& seq_name,
-                        EList<SeedExt>& seeds,
+                        const EList<SeedExt>& seeds,
                         ostream &fp);
 
     void saveSeedSNPs(TIndexOffU seed_group_id,

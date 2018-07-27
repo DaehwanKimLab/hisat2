@@ -538,6 +538,116 @@ void SeedExt::getExtendedSeedSequence(const TStr& s,
     }
 }
 
+SeedSNP *lookup_add_SNP(EList<SeedSNP *>& repeat_snps, SeedSNP& snp)
+{
+    for(size_t i = 0; i < repeat_snps.size(); i++) {
+        if(*repeat_snps[i] == snp) {
+            return repeat_snps[i];
+        }
+    }
+
+    repeat_snps.expand();
+    repeat_snps.back() = new SeedSNP();
+    *(repeat_snps.back()) = snp;
+    return repeat_snps.back();
+}
+
+template<typename TStr>
+void SeedExt::generateSNPs(const TStr &s, const string& consensus, EList<SeedSNP *>& repeat_snps)
+{
+    ostream& fp = cerr;
+    EList<pair<TIndexOffU, int> > gaps;
+
+    // Merge Gaps
+    {
+        TIndexOffU left_ext_len = getLeftExtLength();
+        for(size_t g = 0; g < left_gaps.size(); g++) {
+            gaps.expand();
+            gaps.back().first = left_ext_len - left_gaps[g].first + left_gaps[g].second;
+            gaps.back().second = left_gaps[g].second;
+        }
+        TIndexOffU right_base = orig_pos.second - pos.first;
+        for(size_t g = 0; g < right_gaps.size(); g++) {
+            gaps.expand();
+            gaps.back().first = right_base + right_gaps[g].first;
+            gaps.back().second = right_gaps[g].second;
+        }
+        gaps.sort();
+    }
+
+    //
+    string con_ref;
+    string seq_read;
+    TIndexOffU prev_con_pos = consensus_pos.first;
+    TIndexOffU prev_seq_pos = pos.first;
+
+    for(size_t g = 0; g < gaps.size(); g++) {
+        TIndexOffU curr_seq_pos = pos.first + gaps[g].first;
+        TIndexOffU curr_con_pos = prev_con_pos + (curr_seq_pos - prev_seq_pos);
+
+        con_ref = consensus.substr(prev_con_pos, curr_con_pos - prev_con_pos);
+        seq_read = getString(s, prev_seq_pos, curr_seq_pos - prev_seq_pos);
+        for(size_t l = 0; l < con_ref.length(); l++) {
+            if(seq_read[l] != con_ref[l]) {
+                // Single
+                SeedSNP snp;
+                snp.init(EDIT_TYPE_MM, prev_con_pos + l, 1, seq_read[l]);
+
+                // lookup repeat_snp
+                snps.expand();
+                snps.back() = lookup_add_SNP(repeat_snps, snp);
+            }
+        }
+
+        int gap_len = gaps[g].second;
+        assert_neq(gap_len, 0);
+        if(gap_len > 0) {
+            // Deletion (gap on read)
+
+            string gap_str(gap_len, '-');
+
+            SeedSNP snp;
+            snp.init(EDIT_TYPE_READ_GAP, curr_con_pos, gap_len, consensus.substr(curr_con_pos, gap_len));
+
+            snps.expand();
+            snps.back() = lookup_add_SNP(repeat_snps, snp);
+
+            curr_con_pos += gap_len;
+
+        } else {
+            // Insertion (gap on reference)
+            string gap_str(abs(gap_len), '-');
+
+            SeedSNP snp;
+            snp.init(EDIT_TYPE_REF_GAP, curr_con_pos, abs(gap_len), getString(s, curr_seq_pos, abs(gap_len)));
+
+            snps.expand();
+            snps.back() = lookup_add_SNP(repeat_snps, snp);
+
+            curr_seq_pos += abs(gap_len);
+        }
+
+        prev_con_pos = curr_con_pos;
+        prev_seq_pos = curr_seq_pos;
+    }
+
+    assert_eq(consensus_pos.second - prev_con_pos, pos.second - prev_seq_pos);
+    con_ref = consensus.substr(prev_con_pos, consensus_pos.second - prev_con_pos);
+    seq_read = getString(s, prev_seq_pos, pos.second - prev_seq_pos);
+
+    for(size_t l = 0; l < con_ref.length(); l++) {
+        if(seq_read[l] != con_ref[l]) {
+            // Single
+            
+            SeedSNP snp;
+            snp.init(EDIT_TYPE_MM, prev_con_pos + l, 1, seq_read[l]);
+
+            snps.expand();
+            snps.back() = lookup_add_SNP(repeat_snps, snp);
+        }
+    }
+}
+
 bool seedCmp(const SeedExt& s, const SeedExt& s2)
 {
     if(s.getLength() != s2.getLength())
@@ -1873,6 +1983,64 @@ void RB_Repeat::showInfo(const RepeatParameter& rp,
 }
 
 template<typename TStr>
+void RB_Repeat::generateSNPs(const RepeatParameter& rp, const TStr& s, TIndexOffU grp_id) {
+    EList<SeedExt>& seeds = this->seeds();
+
+    for(size_t i = 0; i < seeds.size(); i++) {
+        SeedExt& seed = seeds[i];
+
+        if(seed.getLength() < rp.min_repeat_len) {
+            continue;
+        }
+        assert_eq(seed.getLength(), seed.pos.second - seed.pos.first);
+        seed.generateSNPs(s, consensus(), snps());
+        if(snps().size() > 0) {
+            sort(snps().begin(), snps().end(), SeedSNP::cmpSeedSNPByPos);
+        }
+    }
+}
+
+void RB_Repeat::saveSNPs(ofstream &fp, TIndexOffU grp_id, TIndexOffU& snp_id_base, TIndexOffU consensus_baseoff)
+{
+    string chr_name = "rep";
+
+    for(size_t j = 0; j < snps_.size(); j++) {
+        SeedSNP& snp = *snps_[j];
+        // assign SNPid
+        snp.id = (snp_id_base++);
+
+        fp << "rps" << snp.id;
+        fp << "\t";
+
+        if(snp.type == EDIT_TYPE_MM) {
+            fp << "single";
+        } else if(snp.type == EDIT_TYPE_READ_GAP) {
+            fp << "deletion";
+        } else if(snp.type == EDIT_TYPE_REF_GAP) {
+            fp << "insertion";
+        } else {
+            assert(false);
+        }
+        fp << "\t";
+
+        fp << chr_name;
+        fp << "\t";
+
+        fp << snp.pos + consensus_baseoff;
+        fp << "\t";
+        if(snp.type == EDIT_TYPE_MM || snp.type == EDIT_TYPE_REF_GAP) {
+            fp << snp.base;
+        } else if(snp.type == EDIT_TYPE_READ_GAP) {
+            fp << snp.len;
+        } else {
+            assert(false);
+        }
+        fp << endl;
+    }
+}
+
+
+template<typename TStr>
 RepeatBuilder<TStr>::RepeatBuilder(TStr& s,
                                    const EList<RefRecord>& szs,
                                    const EList<string>& ref_names,
@@ -2417,19 +2585,19 @@ void RepeatBuilder<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
                                          TIndexOffU baseoff,
                                          Range range,
                                          const string& seq_name,
-                                         EList<SeedExt>& seeds,
+                                         const EList<SeedExt>& seeds,
                                          ostream &fp)
 {
-    EList<Edit>& edits = seeds[range.first].edits;
-    if(edits.size() == 0)
+    const EList<SeedSNP*>& snps = seeds[range.first].snps;
+    if(snps.size() == 0)
         return;
     
     // right-most position
-    TIndexOffU max_right_pos = seeds[range.first].consensus_pos.first + seeds[range.first].getLength() - 1;
+    TIndexOffU max_right_pos = seeds[range.first].consensus_pos.second - 1;
     
 #ifndef NDEBUG
-    for(size_t i = 0; i < edits.size(); i++) {
-        assert_leq(edits[i].pos, max_right_pos);
+    for(size_t i = 0; i < snps.size(); i++) {
+        assert_leq(snps[i]->pos, max_right_pos);
     }
 #endif
     
@@ -2437,11 +2605,11 @@ void RepeatBuilder<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
     // break a list of SNPs into several haplotypes if a SNP is far from the next SNP in the list
     const TIndexOffU min_ht_len = 16;
     size_t eb = 0, ee = 1;
-    while(ee < edits.size() + 1) {
-        if(ee == edits.size() ||
-           edits[eb].pos + (min_ht_len << 1) < edits[ee].pos) {
-            TIndexOffU left_pos = edits[eb].pos + baseoff;
-            TIndexOffU right_pos = edits[ee-1].pos;
+    while(ee < snps.size() + 1) {
+        if(ee == snps.size() ||
+           snps[eb]->pos + (min_ht_len << 1) < snps[ee]->pos) {
+            TIndexOffU left_pos = snps[eb]->pos + baseoff;
+            TIndexOffU right_pos = snps[ee-1]->pos;
             right_pos = min<TIndexOffU>(max_right_pos, right_pos + min_ht_len) + baseoff;
             assert_leq(left_pos, right_pos);
             fp << "rpht" << hapl_id_base++;
@@ -2453,7 +2621,7 @@ void RepeatBuilder<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
                 if(i > eb) {
                     fp << ",";
                 }
-                fp << "rps" << edits[i].snpID;
+                fp << "rps" << snps[i]->id;
             }
             fp << endl;
             eb = ee;
@@ -2468,7 +2636,7 @@ void RepeatBuilder<TStr>::writeAllele(TIndexOffU grp_id,
                                       TIndexOffU baseoff,
                                       Range range,
                                       const string& seq_name,
-                                      EList<SeedExt>& seeds,
+                                      const EList<SeedExt>& seeds,
                                       ostream &fp)
 {
     // >rpt_name*0\trep\trep_pos\trep_len\tpos_count\t0
@@ -2477,20 +2645,20 @@ void RepeatBuilder<TStr>::writeAllele(TIndexOffU grp_id,
     // >rep1*0	rep	0	100	470	0
     // 22:112123123:+ 22:1232131113:+
     //
-    size_t snp_size = seeds[range.first].edits.size();
+    size_t snp_size = seeds[range.first].snps.size();
     size_t pos_size = range.second - range.first;
     fp << ">";
     fp << "rpt_" << grp_id << "*" << allele_id;
     fp << "\t" << seq_name;
     fp << "\t" << seeds[range.first].consensus_pos.first + baseoff;
-    fp << "\t" << seeds[range.first].getLength();
-    fp << "\t" << range.second - range.first;
+    fp << "\t" << seeds[range.first].consensus_pos.second - seeds[range.first].consensus_pos.first;
+    fp << "\t" << pos_size;
     fp << "\t" << snp_size;
 
     fp << "\t";
     for(size_t i = 0; i < snp_size; i++) {
         if(i > 0) {fp << ",";}
-        fp << "rps" << seeds[range.first].edits[i].snpID;
+        fp << "rps" << seeds[range.first].snps[i]->id;
     }
     fp << endl;
 
@@ -2781,9 +2949,7 @@ void RepeatBuilder<TStr>::saveRepeatSequence()
 template<typename TStr>
 void RepeatBuilder<TStr>::saveFile(const RepeatParameter& rp)
 {
-    saveSeeds(rp);
-	//saveRepeatSequence();
-	//saveRepeatGroup();
+    saveRepeats(rp);
 }
 
 bool RB_RepeatManager::checkRedundant(const RepeatParameter& rp,
@@ -3585,6 +3751,147 @@ void RepeatBuilder<TStr>::doTestCase1(const string& refstr, const string& readst
     rg.buildSNPs(snpids);
     rg.writeSNPs(cerr, chr_name); cerr << endl;
 
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
+{
+
+    // Generate SNPs
+    size_t i = 0;
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
+        RB_Repeat& repeat = *(it->second);
+        if(!repeat.satisfy(rp))
+            continue;
+
+        // for each repeats
+        repeat.generateSNPs(rp, s_, i);
+    }
+
+    // save snp, consensus sequenuce, info
+    string snp_fname = filename_ + ".rep.snp";
+    string info_fname = filename_ + ".rep.info";
+    string hapl_fname = filename_ + ".rep.haplotype";
+
+    ofstream snp_fp(snp_fname.c_str());
+    ofstream info_fp(info_fname.c_str());
+    ofstream hapl_fp(hapl_fname.c_str());
+
+    i = 0;
+    TIndexOffU consensus_baseoff = 0;
+    TIndexOffU snp_id_base = 0;
+    TIndexOffU hapl_id_base = 0;
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
+        RB_Repeat& repeat = *(it->second);
+        if(!repeat.satisfy(rp))
+            continue;
+
+        // for each repeats
+        repeat.saveSNPs(snp_fp, i, snp_id_base, consensus_baseoff);
+        saveAlleles(rp, repeat, info_fp, hapl_fp, i, consensus_baseoff, hapl_id_base);
+
+        consensus_baseoff += repeat.consensus().length();
+    }
+
+    snp_fp.close();
+    info_fp.close();
+    hapl_fp.close();
+
+    // save all consensus sequence
+    saveConsensus(rp);
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp) {
+    string fa_fname = filename_ + ".rep.fa";
+    ofstream fa_fp(fa_fname.c_str());
+
+    // TODO
+    fa_fp << ">" << "rep" << endl;
+
+    int oskip = 0;
+
+    int i =0;
+
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
+        RB_Repeat& repeat = *(it->second);
+        if(!repeat.satisfy(rp))
+            continue;
+
+        // for each repeats
+        const string& constr = repeat.consensus();
+
+        size_t constr_len = constr.length();
+        size_t si = 0;
+
+        while(si < constr_len) {
+            size_t out_len = std::min((size_t)(output_width - oskip), (size_t)(constr_len - si));
+
+            fa_fp << constr.substr(si, out_len);
+
+            if((oskip + out_len) == output_width) {
+                fa_fp << endl;
+                oskip = 0;
+            } else {
+                // last line
+                oskip = oskip + out_len;
+            }
+
+            si += out_len;
+        }
+
+    }
+
+    if(oskip) {
+        fa_fp << endl;
+    }
+
+    fa_fp.close();
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::saveAlleles(
+        const RepeatParameter& rp,
+        RB_Repeat& repeat,
+        ofstream& fp,
+        ofstream& hapl_fp,
+        TIndexOffU grp_id,
+        TIndexOffU consensus_baseoff,
+        TIndexOffU& hapl_id_base
+        )
+{
+
+    static const string seq_name = "rep";
+    const EList<SeedExt>& seeds = repeat.seeds();
+    Range range(0, seeds.size());
+
+    int allele_id = 0;
+
+    for(size_t sb = range.first; sb < range.second;) {
+        size_t se = sb + 1;
+        for(; se < range.second; se++) {
+            if(!(SeedExt::isSameConsensus(seeds[sb], seeds[se])
+                 && SeedExt::isSameSNPs(seeds[sb], seeds[se]))) {
+                break;
+            }
+        }
+
+        if(seeds[sb].getLength() < rp.min_repeat_len) {
+            sb = se;
+            continue;
+        }
+
+        // [sb, se) are same alleles
+        writeAllele(grp_id, allele_id, consensus_baseoff, Range(sb, se),
+                    seq_name, seeds,
+                    fp);
+        writeHaploType(hapl_id_base, consensus_baseoff, Range(sb, se),
+                seq_name, seeds, hapl_fp);
+
+
+        allele_id++;
+        sb = se;
+    }
 }
 
 
