@@ -310,33 +310,8 @@ struct SeedSNP {
 
 };
 
-struct SeedExt {
-    // seed extended position [first, second)
-    pair<TIndexOffU, TIndexOffU> orig_pos;
-    pair<TIndexOffU, TIndexOffU> pos;
-    
-    // extension bound. the seed must be placed on same fragment
-    // [first, second)
-    pair<TIndexOffU, TIndexOffU> bound;
-    
-    // positions relative to consensus sequence
-    pair<TIndexOffU, TIndexOffU> consensus_pos;
-    
-    // a list of gaps (deletions and insertions) in both directions
-    // offsets from seed's left and right ("pos" above)
-    // positive and negative values indicate deletions and insertions, resp.
-    EList<pair<TIndexOffU, int> > left_gaps;
-    EList<pair<TIndexOffU, int> > right_gaps;
-
-    uint32_t ed;            // edit distance
-    uint32_t total_ed;      // total edit distance
-    bool done;              // done flag
-    uint32_t curr_ext_len;  //
-
-    EList<Edit> edits;      // edits w.r.t. consensus_merged
-
-    EList<SeedSNP *> snps;
-
+class SeedExt {
+public:
     SeedExt() {
         reset();
     };
@@ -355,6 +330,7 @@ struct SeedExt {
         consensus_pos.second = 0;
         left_gaps.clear();
         right_gaps.clear();
+        aligned = true;
     };
 
     TIndexOffU getLeftExtLength() const {
@@ -485,6 +461,15 @@ struct SeedExt {
         }
     }
     
+    Range getExtendedRange(size_t consensus_len) const
+    {
+        assert_leq(consensus_pos.second, consensus_len);
+        Range range;
+        range.first = (pos.first < consensus_pos.first ? 0 : pos.first - consensus_pos.first);
+        range.second = pos.second + (consensus_len - consensus_pos.second);
+        return range;
+    }
+    
 #ifndef NDEBUG
     bool valid() const {
         assert_leq(consensus_pos.first, consensus_pos.second);
@@ -521,10 +506,51 @@ struct SeedExt {
         return true;
     }
 #endif
+    
+public:
+    // seed extended position [first, second)
+    pair<TIndexOffU, TIndexOffU> orig_pos;
+    pair<TIndexOffU, TIndexOffU> pos;
+    
+    // extension bound. the seed must be placed on same fragment
+    // [first, second)
+    pair<TIndexOffU, TIndexOffU> bound;
+    
+    // positions relative to consensus sequence
+    pair<TIndexOffU, TIndexOffU> consensus_pos;
+    
+    // a list of gaps (deletions and insertions) in both directions
+    // offsets from seed's left and right ("pos" above)
+    // positive and negative values indicate deletions and insertions, resp.
+    EList<pair<TIndexOffU, int> > left_gaps;
+    EList<pair<TIndexOffU, int> > right_gaps;
+    
+    uint32_t ed;            // edit distance
+    uint32_t total_ed;      // total edit distance
+    bool done;              // done flag
+    uint32_t curr_ext_len;  //
+    
+    bool aligned;
+    
+    EList<Edit> edits;      // edits w.r.t. consensus_merged
+
+    EList<SeedSNP *> snps;
 };
 
 class RB_AlleleCoord {
 public:
+    RB_AlleleCoord() :
+    left(0),
+    right(0),
+    idx(0)
+    {}
+    
+    RB_AlleleCoord(TIndexOffU l, TIndexOffU r, size_t i) :
+    left(l),
+    right(r),
+    idx(i)
+    {}
+    
     TIndexOffU len() const { return right - left; }
     
     bool operator<(const RB_AlleleCoord& o) const
@@ -570,6 +596,7 @@ public:
 };
 
 class RB_RepeatManager;
+class RB_SWAligner;
 
 class RB_Repeat {
 public:
@@ -612,17 +639,23 @@ public:
 
     void saveSNPs(ofstream& fp, TIndexOffU grp_id, TIndexOffU& snp_id_base, TIndexOffU consensus_baseoff);
     void saveConsensus(ofstream& fp, TIndexOffU grp_id, TIndexOffU consensus_baseoff);
-
-    bool contain(const RB_Repeat& o) const;
+    
+    bool overlap(const RB_Repeat& o,
+                 bool& contain,
+                 bool& left,
+                 size_t& seed_i,
+                 size_t& seed_j) const;
 
     float mergeable(const RB_Repeat& o) const;
     
     template<typename TStr>
     void merge(const RepeatParameter& rp,
-               const TStr& s,               
+               const TStr& s,
+               RB_SWAligner& swalginer,
                const RB_Repeat& o,
-               RB_RepeatManager& repeat_manger,
-               bool& updated,
+               bool contain,
+               size_t seed_i,
+               size_t seed_j,
                bool debug = false);
     
     bool satisfy(const RepeatParameter& rp) const
@@ -649,6 +682,9 @@ public:
 
     template<typename TStr>
     void generateSNPs(const RepeatParameter&, const TStr& s, TIndexOffU grp_id);
+    
+    bool self_repeat() const { return self_repeat_; }
+    
 private:
     template<typename TStr>
     void get_consensus_seq(const TStr& s,
@@ -680,7 +716,8 @@ private:
     EList<SeedExt>        seeds_;
     EList<RB_AlleleCoord> seed_ranges_;
     EList<SeedSNP*>       snps_;
-
+    bool                  self_repeat_;
+    
     static EList<size_t>  ca_ed_;
     static EList<size_t>  ca_ed2_;
     static string         ca_s_;
@@ -690,7 +727,6 @@ public:
     static size_t         seed_merge_tried;
     static size_t         seed_merged;
 };
-
 
 // check if a set of seeds are already processed
 class RB_RepeatManager {
@@ -703,20 +739,56 @@ public:
                         EList<size_t>& to_remove) const;
     
     void addRepeat(const RB_Repeat* repeat);
-    
     void addRepeat(Range range, size_t repeat_id);
-    
     void removeRepeat(const RB_Repeat* repeat);
-    
     void removeRepeat(Range range, size_t repeat_id);
     
 public:
     void showInfo(const RepeatParameter& rp,
                   CoordHelper& coordHelper,
-                  const map<size_t, RB_Repeat*>& repeat_map) const;
+                  const map<size_t, RB_Repeat*>& repeat_map,
+                  size_t num_case = 5) const;
     
 private:
     map<Range, EList<size_t> > range_to_repeats_;
+};
+
+class RB_SWAligner {
+public:
+    RB_SWAligner();
+    ~RB_SWAligner();
+    
+    void init_dyn(const RepeatParameter& rp);
+    
+    int alignStrings(const string &ref,
+                     const string &read,
+                     EList<Edit>& edits,
+                     Coord& coord);
+    
+    void makePadString(const string& ref,
+                       const string& read,
+                       string& pad,
+                       size_t len);
+    
+    void doTest(const RepeatParameter& rp,
+                const string& refstr,
+                const string& readstr);
+    
+    void doTestCase1(const string& refstr,
+                     const string& readstr,
+                     TIndexOffU rpt_edit);
+    
+private:
+    //
+    SimpleFunc scoreMin_;
+    SimpleFunc nCeil_;
+    SimpleFunc penCanIntronLen_;
+    SimpleFunc penNoncanIntronLen_;
+    
+    Scoring *sc_;
+    SwAligner swa;
+    LinkedEList<EList<Edit> > rawEdits_;
+    RandomSource rnd_;
 };
 
 
@@ -766,7 +838,6 @@ public:
 	TIndexOffU getLCP(TIndexOffU a, TIndexOffU b);
 
 	void repeat_masking();
-    void init_dyn(const RepeatParameter& rp);
 
     bool checkSequenceMergeable(const string& ref,
                                 const string& read,
@@ -774,8 +845,6 @@ public:
                                 Coord& coord,
                                 TIndexOffU rpt_len,
                                 TIndexOffU max_edit = 10);
-    int alignStrings(const string&, const string&, EList<Edit>&, Coord&);
-    void makePadString(const string&, const string&, string&, size_t);
 
     void saveSeedEdit(const string& consensus_merged,
                       EList<SeedExt>& seeds,
@@ -790,11 +859,13 @@ public:
                          ostream& fp);
 
     void seedGrouping(const RepeatParameter& rp);
-
+    
     void doTest(const RepeatParameter& rp,
                 const string& refstr,
-                const string& readstr);
-    void doTestCase1(const string&, const string&, TIndexOffU);
+                const string& readstr)
+    {
+        swaligner_.doTest(rp, refstr, readstr);
+    }
     
 private:
     void get_alleles(TIndexOffU grp_id,
@@ -868,15 +939,7 @@ private:
     CoordHelper coordHelper_;
     
     //
-    SimpleFunc scoreMin_;
-    SimpleFunc nCeil_;
-    SimpleFunc penCanIntronLen_;
-    SimpleFunc penNoncanIntronLen_;
-    
-    Scoring *sc_;
-    SwAligner swa;
-    LinkedEList<EList<Edit> > rawEdits_;
-    RandomSource rnd_;
+    RB_SWAligner swaligner_;
 
 
     // Seeds

@@ -824,6 +824,18 @@ void RB_Repeat::extendConsensus(const RepeatParameter& rp,
 #endif
     
     internal_update();
+    
+    // check repeats within a repeat sequence
+    self_repeat_ = false;
+    for(size_t i = 0; i + 1 < seed_ranges_.size(); i++) {
+        const RB_AlleleCoord& range = seed_ranges_[i];
+        for(size_t j = i + 1; j < seed_ranges_.size(); j++) {
+            RB_AlleleCoord& range2 = seed_ranges_[j];
+            if(range.right <= range2.left)
+                break;
+            self_repeat_  = true;
+        }
+    }
 }
 
 void RB_Repeat::internal_update()
@@ -934,6 +946,11 @@ void RB_Repeat::saveSeedExtension(const RepeatParameter& rp,
             coordHelper.getGenomeCoord(s.length() - seed.pos.second - (seed.pos.second - seed.pos.first), chr_name, pos_in_chr);
         }
         fp << "  " << setw(5) << chr_name << ":" << setw(10) << std::left << pos_in_chr << std::right;
+        
+        if(!seed.aligned) {
+            fp << endl;
+            continue;
+        }
         
         string deststr = "";
         seed.getExtendedSeedSequence(s, deststr);
@@ -1514,23 +1531,61 @@ string RB_Repeat::ca_s2_;
 size_t RB_Repeat::seed_merge_tried = 0;
 size_t RB_Repeat::seed_merged = 0;
 
-bool RB_Repeat::contain(const RB_Repeat& o) const
+bool RB_Repeat::overlap(const RB_Repeat& o,
+                        bool& contain,
+                        bool& left,
+                        size_t& seed_i,
+                        size_t& seed_j) const
 {
+    contain = left = false;
+    seed_i = seed_j = 0;
+    
     size_t p = 0, p2 = 0;
     while(p < seed_ranges_.size() && p2 < o.seed_ranges_.size()) {
         const RB_AlleleCoord& range = seed_ranges_[p];
-        if((float)range.len() < consensus_.length() * 0.95f) {
-            p++;
-            continue;
+        const SeedExt& seed = seeds_[range.idx];
+        if(!seed.aligned) {
+            // p++;
+            // continue;
         }
+        Range range_ = seed.getExtendedRange(consensus_.length());
+        RB_AlleleCoord ex_range(range_.first, range_.second, p);
+        bool representative = (float)range.len() >= consensus_.length() * 0.95f;
+        
         const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
-        if((float)range2.len() < o.consensus_.length() * 0.95f) {
-            p2++;
-            continue;
+        const SeedExt& seed2 = o.seeds_[range2.idx];
+        if(!seed2.aligned) {
+            // p2++;
+            // continue;
         }
-        if(range.contain(range2)) {
-            return true;
+        Range range2_ = seed2.getExtendedRange(o.consensus().length());
+        RB_AlleleCoord ex_range2(range2_.first, range2_.second, p2);
+        bool representative2 = (float)range2.len() >= o.consensus_.length() * 0.95f;
+        
+        const size_t relax = 5;
+        if(representative) {
+            if(ex_range2.contain(range, relax)) {
+                contain = true;
+                left = false;
+                return true;
+            }
         }
+        if(representative2) {
+            if(ex_range.contain(range2, relax)) {
+                contain = true;
+                left = true;
+                return true;
+            }
+        }
+        if(representative && representative2) {
+            if(ex_range.overlap_len(ex_range2) > 0) {
+                left = ex_range.left < ex_range2.left;
+                seed_i = range.idx;
+                seed_j = range2.idx;
+                return true;
+            }
+        }
+        
         if(range.right <= range2.right) p++;
         if(range2.right <= range.right) p2++;
     }
@@ -1595,11 +1650,14 @@ bool RB_Repeat::align(const string& s,
         }
         size_t lb = s_kmer_table.bsearchLoBound(kmer);
         while(lb < s_kmer_table.size() && kmer.first == s_kmer_table[lb].first) {
-            if(offsets[i] >= 0) {
-                offsets[i] = -1;
-                break;
+            if(offsets[i] == -1) {
+                offsets[i] = (int)s_kmer_table[lb].second;
+            } else if(offsets[i] >= 0) {
+                offsets[i] = -2;
+            } else {
+                assert_lt(offsets[i], -1);
+                offsets[i] -= 1;
             }
-            offsets[i] = (int)s_kmer_table[lb].second;
             lb++;
         }
         if(offsets[i] > 0 && i + k == s2.length()) {
@@ -1782,56 +1840,90 @@ bool RB_Repeat::align(const string& s,
 template<typename TStr>
 void RB_Repeat::merge(const RepeatParameter& rp,
                       const TStr& s,
+                      RB_SWAligner& swalginer,
                       const RB_Repeat& o,
-                      RB_RepeatManager& repeat_manager,
-                      bool& updated,
+                      bool contain,
+                      size_t seed_i,
+                      size_t seed_j,
                       bool debug)
 {
-    updated = false;
+    // construct a new consensus sequence
+    bool new_consensus = false;
+    if(!contain) {
+        assert_lt(seed_i, seeds_.size());
+        assert_lt(seed_j, o.seeds_.size());
+        const SeedExt& seed = seeds_[seed_i];
+        const SeedExt& oseed = o.seeds_[seed_j];
+
+        Range range = seed.getExtendedRange(consensus_.length());
+        Range orange = oseed.getExtendedRange(o.consensus_.length());
+        assert_leq(range.first, orange.first);
+        consensus_ += o.consensus_.substr(range.second - orange.first);
+        new_consensus = true;
+    }
+    
     EList<pair<size_t, size_t> > merge_list;
     merge_list.reserveExact(o.seed_ranges_.size());
     size_t p = 0, p2 = 0;
     const size_t relax = 5;
     while(p < seed_ranges_.size() && p2 < o.seed_ranges_.size()) {
         const RB_AlleleCoord& range = seed_ranges_[p];
+        assert_lt(range.idx, seeds_.size());
         const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
+        assert_lt(range2.idx, o.seeds_.size());
         if(range.contain(range2, relax)) {
+            merge_list.expand();
+            merge_list.back().first = p;
+            merge_list.back().second = numeric_limits<size_t>::max();
             if(debug) {
-                cout << p << ":" << range.left << "-" << range.right << " > "
-                     << p2 << ":" << range2.left << "-" << range2.right << endl;
+                cerr << p << ":" << range.left << "-" << range.right << " > ";
+                cerr << p2 << ":" << range2.left << "-" << range2.right << endl;
             }
         } else if(range2.contain(range, relax)) {
-            if(debug) {
-                cout << p << ":" << range.left << "-" << range.right << " < "
-                     << p2 << ":" << range2.left << "-" << range2.right << endl;
-            }
             merge_list.expand();
-            merge_list.back().first = range.idx;
-            merge_list.back().second = range2.idx;
+            merge_list.back().first = p;
+            merge_list.back().second = p2;
+            if(debug) {
+                cerr << p << ":" << range.left << "-" << range.right << " < ";
+                cerr << p2 << ":" << range2.left << "-" << range2.right << endl;
+            }
         } else {
             TIndexOffU overlap_len = range.overlap_len(range2);
-            bool stored = !merge_list.empty() && merge_list.back().second == p2;
+            bool stored = !merge_list.empty() && merge_list.back().first == p;
+            bool stored2 = !merge_list.empty() && merge_list.back().second == p2;
             if(overlap_len > 0) {
-                if(!stored) {
+                if(!stored && !stored2) {
                     merge_list.expand();
-                    merge_list.back().first = range.idx;
-                    merge_list.back().second = range2.idx;
+                    merge_list.back().first = p;
+                    merge_list.back().second = p2;
                     
                     if(debug) {
-                        cout << p << ":" << range.left << "-" << range.right << " ol "
-                             << p2 << ":" << range2.left << "-" << range2.right << endl;
+                        cerr << p << ":" << range.left << "-" << range.right << " ol ";
+                        cerr << p2 << ":" << range2.left << "-" << range2.right << endl;
                     }
                 }
             } else {
-                if(range2.right < range.left) {
-                    if(!stored) {
+                if(range2.right <= range.left) {
+                    if(!stored2) {
                         merge_list.expand();
                         merge_list.back().first = numeric_limits<size_t>::max();
-                        merge_list.back().second = range2.idx;
+                        merge_list.back().second = p2;
                         
                         if(debug) {
-                            cout << p << ":" << range.left << "-" << range.right << " <> "
-                                 << p2 << ":" << range2.left << "-" << range2.right << endl;
+                            cerr << p << ":" << range.left << "-" << range.right << " <> ";
+                            cerr << p2 << ":" << range2.left << "-" << range2.right << endl;
+                        }
+                    }
+                } else {
+                    assert_leq(range.right, range2.left);
+                    if(!stored) {
+                        merge_list.expand();
+                        merge_list.back().first = p;
+                        merge_list.back().second = numeric_limits<size_t>::max();
+                        
+                        if(debug) {
+                            cerr << p << ":" << range.left << "-" << range.right << " <> ";
+                            cerr << p2 << ":" << range2.left << "-" << range2.right << endl;
                         }
                     }
                 }
@@ -1840,14 +1932,35 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         if(range.right <= range2.right) p++;
         if(range2.right <= range.right) p2++;
     }
-    while(p2 < o.seed_ranges_.size()) {
-        const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
-        merge_list.expand();
-        merge_list.back().first = numeric_limits<size_t>::max();
-        merge_list.back().second = range2.idx;
+    assert(p == seeds_.size() || p2 == o.seeds_.size());
+    
+    while(p < seed_ranges_.size()) {
+        bool stored = !merge_list.empty() && merge_list.back().first == p;
+        if(!stored) {
+            const RB_AlleleCoord& range = seed_ranges_[p];
+            merge_list.expand();
+            merge_list.back().first = p;
+            merge_list.back().second = numeric_limits<size_t>::max();
+            
+            if(debug) {
+                cerr << p << ":" << range.left << "-" << range.right << " : <> " << endl;
+            }
+        }
         
-        if(debug) {
-            cout << ": <> " << p2 << ":" << range2.left << "-" << range2.right << endl;
+        p++;
+    }
+    
+    while(p2 < o.seed_ranges_.size()) {
+        bool stored2 = !merge_list.empty() && merge_list.back().second == p2;
+        if(!stored2) {
+            const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
+            merge_list.expand();
+            merge_list.back().first = numeric_limits<size_t>::max();
+            merge_list.back().second = p2;
+            
+            if(debug) {
+                cerr << ": <> " << p2 << ":" << range2.left << "-" << range2.right << endl;
+            }
         }
         
         p2++;
@@ -1855,35 +1968,76 @@ void RB_Repeat::merge(const RepeatParameter& rp,
     
     if(merge_list.empty()) return;
     
+    if(debug) {
+        for(size_t i = 0; i < merge_list.size(); i++) {
+            cerr << "merge list:" << endl;
+            cerr << "\t" << (merge_list[i].first < seed_ranges_.size() ? (int)merge_list[i].first : -1);
+            cerr << " " << (merge_list[i].second < o.seed_ranges_.size() ? (int)merge_list[i].second : -1) << endl;
+        }
+    }
+    
     const size_t kmer_len = 10;
     EList<pair<size_t, size_t> > kmer_table;
     build_kmer_table(consensus_, kmer_table, kmer_len);
     
+    // DP alignment related variables
+    EList<Edit> edits;
+    Coord coord;
+    EList<Edit> ed;
+    // string pad;
+    // makePadString(refstr, readstr, pad, 5);
+    // string ref2 = pad + refstr + pad;
+    // string read2 = pad + readstr + pad;
+    
+    // size_t left = pad.length();
+    // size_t right = left + readstr.length();
+    // edits.reserveExact(ed.size());
+    // for(size_t i = 0; i < ed.size(); i++) {
+    //    if(ed[i].pos >= left && ed[i].pos <= right) {
+    //        edits.push_back(ed[i]);
+    //        edits.back().pos -= left;
+    //    }
+    // }
+    
     EList<int> offsets;
     string seq;
     for(size_t i = 0; i < merge_list.size(); i++) {
-        if(debug) {
-            cout << "merge list:" << endl;
-            cout << "\t" << (merge_list[i].first < seed_ranges_.size() ? (int)merge_list[i].first : -1) << " " << merge_list[i].second << endl;
+        size_t seed_id = (merge_list[i].first < seed_ranges_.size() ? seed_ranges_[merge_list[i].first].idx : merge_list[i].first);
+        size_t oseed_id = (merge_list[i].second < o.seed_ranges_.size() ? o.seed_ranges_[merge_list[i].second].idx : merge_list[i].second);
+        
+        if(!new_consensus &&
+           seed_id < seeds_.size() &&
+           oseed_id >= o.seeds_.size())
+            continue;
+        
+        const SeedExt* seed = (seed_id < seeds_.size() ? &seeds_[seed_id] : NULL);
+        const SeedExt* oseed = (oseed_id < o.seeds_.size() ? &o.seeds_[oseed_id] : NULL);
+        assert(seed != NULL || oseed != NULL);
+        
+        size_t left = (seed != NULL ? seed->pos.first : numeric_limits<size_t>::max());
+        size_t right = (seed != NULL ? seed->pos.second : 0);
+        if(oseed != NULL) {
+            if(oseed->pos.first < left) {
+                left = oseed->pos.first;
+            }
+            if(oseed->pos.second > right) {
+                right = oseed->pos.second;
+            }
         }
         
-        size_t to_merge = merge_list[i].second;
-        assert_lt(to_merge, o.seeds_.size());
-        const SeedExt& oseed = o.seeds_[merge_list[i].second];
-        size_t left = oseed.pos.first, right = oseed.pos.second;
-        if(merge_list[i].first < seeds_.size()) {
-            const SeedExt& seed = seeds_[merge_list[i].first];
-            if(seed.pos.first < oseed.pos.first) {
-                left = seed.pos.first;
-            }
-            if(seed.pos.second > oseed.pos.second) {
-                right = seed.pos.second;
-            }
+        // DK - debugging purposes
+        if(debug && seed && oseed) {
+            int dk = 0;
+            dk += 1;
         }
-        
+
         RB_Repeat::seed_merge_tried++;
         
         getString(s, left, right - left, seq);
+        
+        // DK - debugging purposes
+        edits.clear();
+        // swalginer.alignStrings(consensus_, seq, edits, coord);
 
         size_t b = 0, e = 0;
         bool succ = align(consensus_,
@@ -1893,32 +2047,36 @@ void RB_Repeat::merge(const RepeatParameter& rp,
                           kmer_len,
                           b, // begin
                           e, // end
-                          debug);
-        
-        if(!succ)
-            continue;
-        
-        RB_Repeat::seed_merged++;
+                          debug && seed && oseed);
         
         SeedExt* p_new_seed = NULL;
-        if(merge_list[i].first >= seeds_.size()) {
+        if(seed_id >= seeds_.size()) {
             seeds_.expand();
             p_new_seed = &(seeds_.back());
         } else {
-            p_new_seed = &(seeds_[merge_list[i].first]);
-            //Range range(p_new_seed->pos.first, p_new_seed->pos.second);
-            //repeat_manager.removeRepeat(range, repeat_id_);
+            p_new_seed = &(seeds_[seed_id]);
         }
         SeedExt& new_seed = *p_new_seed;
         new_seed.reset();
         new_seed.pos.first = left;
         new_seed.pos.second = right;
         
+        if(!succ) {
+            new_seed.orig_pos.first = new_seed.pos.first;
+            new_seed.orig_pos.second = new_seed.pos.first;
+            new_seed.consensus_pos.first = 0;
+            new_seed.consensus_pos.second = consensus_.length();
+            new_seed.aligned = false;
+            continue;
+        }
+        
+        RB_Repeat::seed_merged++;
+        
         assert_geq(new_seed.pos.first, (TIndexOffU)b);
         new_seed.pos.first += (TIndexOffU)b;
         new_seed.pos.second = new_seed.pos.first + e - b + 1;
         new_seed.orig_pos.first = new_seed.pos.first;
-        new_seed.orig_pos.second = new_seed.pos.first + 1;
+        new_seed.orig_pos.second = new_seed.pos.first;
         new_seed.consensus_pos.first = offsets[b];
         new_seed.consensus_pos.second = offsets[e] + 1;
         
@@ -1950,9 +2108,6 @@ void RB_Repeat::merge(const RepeatParameter& rp,
             cerr << "consensus: " << consensus_str << endl;
             cerr << "seed     : " << seed_str << endl;
         }
-        
-        //Range range(new_seed.pos.first, new_seed.pos.second);
-        //repeat_manager.addRepeat(range, repeat_id_);
     }
     
     internal_update();
@@ -1976,9 +2131,9 @@ void RB_Repeat::showInfo(const RepeatParameter& rp,
         cerr << "\t\t" << setw(4) << i << " " << setw(4) << ext_len;
         cerr << " " << (sense_strand ? '+' : '-');
         cerr << " " << setw(10) << seed.pos.first << "  " << setw(10) << seed.pos.second;
-        
-        // string deststr = "";
-        // seed.getExtendedSeedSequence(s, deststr);
+        cerr << " " << setw(4) << seed.consensus_pos.first << "  " << setw(4) << seed.consensus_pos.second;
+        cerr << " " << (seed.aligned ? "aligned" : "unaligned");
+        cerr << endl;
     }
 }
 
@@ -1988,6 +2143,10 @@ void RB_Repeat::generateSNPs(const RepeatParameter& rp, const TStr& s, TIndexOff
 
     for(size_t i = 0; i < seeds.size(); i++) {
         SeedExt& seed = seeds[i];
+
+        if(!seed.aligned) {
+            continue;
+        }
 
         if(seed.getLength() < rp.min_repeat_len) {
             continue;
@@ -2039,6 +2198,319 @@ void RB_Repeat::saveSNPs(ofstream &fp, TIndexOffU grp_id, TIndexOffU& snp_id_bas
     }
 }
 
+#define DMAX std::numeric_limits<double>::max()
+
+RB_SWAligner::RB_SWAligner()
+{
+    rnd_.init(0);
+}
+
+RB_SWAligner::~RB_SWAligner()
+{
+    if(sc_) {
+        delete sc_;
+    }
+}
+
+void RB_SWAligner::init_dyn(const RepeatParameter& rp)
+{
+    const int MM_PEN = 3;
+    // const int MM_PEN = 6;
+    const int GAP_PEN_LIN = 2;
+    // const int GAP_PEN_LIN = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
+    const int GAP_PEN_CON = 4;
+    // const int GAP_PEN_CON = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
+    const int MAX_PEN = MAX_I16;
+    
+    scoreMin_.init(SIMPLE_FUNC_LINEAR, rp.max_edit * MM_PEN * -1.0, 0.0);
+    nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
+    
+    penCanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
+    penNoncanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
+    
+    sc_ = new Scoring(
+                      DEFAULT_MATCH_BONUS,     // constant reward for match
+                      DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
+                      MM_PEN,      // max mm penalty
+                      MM_PEN,      // min mm penalty
+                      MAX_PEN,      // max sc penalty
+                      MAX_PEN,      // min sc penalty
+                      scoreMin_,       // min score as function of read len
+                      nCeil_,          // max # Ns as function of read len
+                      DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
+                      DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
+                      DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
+                      
+                      
+                      GAP_PEN_CON, // constant coeff for read gap cost
+                      GAP_PEN_CON, // constant coeff for ref gap cost
+                      GAP_PEN_LIN, // linear coeff for read gap cost
+                      GAP_PEN_LIN, // linear coeff for ref gap cost
+                      1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
+                      );
+}
+
+void RB_SWAligner::makePadString(const string& ref,
+                                 const string& read,
+                                 string& pad,
+                                 size_t len)
+{
+    pad.resize(len);
+    
+    for(size_t i = 0; i < len; i++) {
+        // shift A->C, C->G, G->T, T->A
+        pad[i] = "CGTA"[asc2dna[ref[i]]];
+        
+        if(read[i] == pad[i]) {
+            // shift
+            pad[i] = "CGTA"[asc2dna[pad[i]]];
+        }
+    }
+    
+    int head_len = len / 2;
+    size_t pad_start = len - head_len;
+    
+    for(size_t i = 0; i < head_len; i++) {
+        if(read[i] == pad[pad_start + i]) {
+            // shift
+            pad[pad_start + i] = "CGTA"[asc2dna[pad[pad_start + i]]];
+        }
+    }
+}
+
+int RB_SWAligner::alignStrings(const string &ref,
+                               const string &read,
+                               EList<Edit>& edits,
+                               Coord& coord)
+{
+    // Prepare Strings
+    
+    // Read -> BTDnaString
+    // Ref -> bit-encoded string
+    
+    //SwAligner swa;
+    
+    BTDnaString btread;
+    BTString btqual;
+    BTString btref;
+    BTString btref2;
+    
+    BTDnaString btreadrc;
+    BTString btqualrc;
+    
+    
+    string qual = "";
+    for(size_t i = 0; i < read.length(); i++) {
+        qual.push_back('I');
+    }
+    
+#if 0
+    cerr << "REF : " << ref << endl;
+    cerr << "READ: " << read << endl;
+    cerr << "QUAL: " << qual << endl;
+#endif
+    
+    btread.install(read.c_str(), true);
+    btreadrc = btread;
+    btreadrc.reverseComp();
+    
+    btqual.install(qual.c_str());
+    btqualrc = btqual;
+    
+    btref.install(ref.c_str());
+    
+    TAlScore min_score = sc_->scoreMin.f<TAlScore >((double)btread.length());
+    
+    btref2 = btref;
+    
+    size_t nceil = 0;
+    // size_t nrow = btread.length();
+    
+    // Convert reference string to mask
+    for(size_t i = 0; i < btref2.length(); i++) {
+        if(toupper(btref2[i]) == 'N') {
+            btref2.set(16, i);
+        } else {
+            int num = 0;
+            int alts[] = {4, 4, 4, 4};
+            decodeNuc(toupper(btref2[i]), num, alts);
+            assert_leq(num, 4);
+            assert_gt(num, 0);
+            btref2.set(0, i);
+            for(int j = 0; j < num; j++) {
+                btref2.set(btref2[i] | (1 << alts[j]), i);
+            }
+        }
+    }
+    
+    
+    bool fw = true;
+    uint32_t refidx = 0;
+    
+    swa.initRead(
+                 btread,     // read sequence
+                 btreadrc,
+                 btqual,     // read qualities
+                 btqualrc,
+                 0,          // offset of first character within 'read' to consider
+                 btread.length(), // offset of last char (exclusive) in 'read' to consider
+                 *sc_);      // local-alignment score floor
+    
+    DynProgFramer dpframe(false);
+    size_t readgaps = 0;
+    size_t refgaps = 0;
+    size_t maxhalf = 0;
+    
+    DPRect rect;
+    dpframe.frameSeedExtensionRect(
+                                   0,              // ref offset implied by seed hit assuming no gaps
+                                   btread.length(),    // length of read sequence used in DP table
+                                   btref2.length(),    // length of reference
+                                   readgaps,   // max # of read gaps permitted in opp mate alignment
+                                   refgaps,    // max # of ref gaps permitted in opp mate alignment
+                                   (size_t)nceil,  // # Ns permitted
+                                   maxhalf, // max width in either direction
+                                   rect);      // DP Rectangle
+    
+    assert(rect.repOk());
+    
+    size_t cminlen = 2000, cpow2 = 4;
+    
+    swa.initRef(
+                fw,                 // whether to align forward or revcomp read
+                refidx,             // reference ID
+                rect,               // DP rectangle
+                btref2.wbuf(),      // reference strings
+                0,                  // offset of first reference char to align to
+                btref2.length(),    // offset of last reference char to align to
+                btref2.length(),    // length of reference sequence
+                *sc_,               // scoring scheme
+                min_score,          // minimum score
+                true,               // use 8-bit SSE if positions
+                cminlen,            // minimum length for using checkpointing scheme
+                cpow2,              // interval b/t checkpointed diags; 1 << this
+                false,              // triangular mini-fills?
+                false               // is this a seed extension?
+                );
+    
+    
+    TAlScore best = std::numeric_limits<TAlScore>::min();
+    bool found = swa.align(rnd_, best);
+    
+    // DK - debugging purposes
+    return 0;
+    
+#ifdef DEBUGLOG
+    cerr << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+#endif
+    
+    if (found) {
+#ifdef DEBUGLOG
+        //cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
+        cerr << "REF : " << ref << endl;
+        cerr << "READ: " << read << endl;
+#endif
+        
+        SwResult res;
+        int max_match_len = 0;
+        res.reset();
+        res.alres.init_raw_edits(&rawEdits_);
+        
+        found = swa.nextAlignment(res, best, rnd_);
+        if (found) {
+            edits = res.alres.ned();
+            //const TRefOff ref_off = res.alres.refoff();
+            //const Coord& coord = res.alres.refcoord();
+            coord = res.alres.refcoord();
+            //assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
+            
+#ifdef DEBUGLOG
+            cerr << "num edits: " << edits.size() << endl;
+            cerr << "coord: " << coord.off();
+            cerr << ", " << coord.ref();
+            cerr << ", " << coord.orient();
+            cerr << ", " << coord.joinedOff();
+            cerr << endl;
+            Edit::print(cerr, edits); cerr << endl;
+            Edit::printQAlign(cerr, btread, edits);
+#endif
+            
+            max_match_len = getMaxMatchLen(edits, btread.length());
+#ifdef DEBUGLOG
+            cerr << "max match length: " << max_match_len << endl;
+#endif
+        }
+#ifdef DEBUGLOG
+        cerr << "nextAlignment: " << found << endl;
+        cerr << "-------------------------" << endl;
+#endif
+    }
+    
+    return 0;
+}
+
+void RB_SWAligner::doTest(const RepeatParameter& rp,
+                          const string& refstr,
+                          const string& readstr)
+{
+    init_dyn(rp);
+    
+    doTestCase1(refstr,
+                readstr,
+                rp.max_edit);
+}
+
+void RB_SWAligner::doTestCase1(const string& refstr,
+                               const string& readstr,
+                               TIndexOffU rpt_edit)
+{
+    cerr << "doTestCase1----------------" << endl;
+    EList<Edit> edits;
+    Coord coord;
+    
+    if (refstr.length() == 0 ||
+        readstr.length() == 0) {
+        return;
+    }
+    
+    EList<Edit> ed;
+    
+    string pad;
+    makePadString(refstr, readstr, pad, 5);
+    
+    string ref2 = pad + refstr + pad;
+    string read2 = pad + readstr + pad;
+    alignStrings(refstr, readstr, edits, coord);
+    
+    size_t left = pad.length();
+    size_t right = left + readstr.length();
+    
+    edits.reserveExact(ed.size());
+    for(size_t i = 0; i < ed.size(); i++) {
+        if(ed[i].pos >= left && ed[i].pos <= right) {
+            edits.push_back(ed[i]);
+            edits.back().pos -= left;
+        }
+    }
+    
+    
+    RepeatGroup rg;
+    
+    rg.edits = edits;
+    rg.coord = coord;
+    rg.seq = readstr;
+    rg.base_offset = 0;
+    
+    string chr_name = "rep";
+    
+    cerr << "REF : " << refstr << endl;
+    cerr << "READ: " << readstr << endl;
+    size_t snpids = 0;
+    rg.buildSNPs(snpids);
+    rg.writeSNPs(cerr, chr_name); cerr << endl;
+    
+}
+
 
 template<typename TStr>
 RepeatBuilder<TStr>::RepeatBuilder(TStr& s,
@@ -2054,72 +2526,15 @@ bsa_(sa), filename_(filename),
 forward_length_(forward_only ? s.length() : s.length() / 2)
 {
 	cerr << "RepeatBuilder: " << filename_ << endl;
-
-    rnd_.init(0);
 }
 
 template<typename TStr>
 RepeatBuilder<TStr>::~RepeatBuilder()
 {
-    if(sc_) {
-        delete sc_;
-    }
     for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
         delete it->second;
     }
     repeat_map_.clear();
-}
-
-#define DMAX std::numeric_limits<double>::max()
-
-template<typename TStr>
-void RepeatBuilder<TStr>::init_dyn(const RepeatParameter& rp)
-{
-    const int MM_PEN = 3;
-    // const int MM_PEN = 6;
-    const int GAP_PEN_LIN = 2;
-    // const int GAP_PEN_LIN = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
-    const int GAP_PEN_CON = 4;
-    // const int GAP_PEN_CON = (((MM_PEN) * rpt_edit_ + 1) * 1.0);
-    const int MAX_PEN = MAX_I16;
-
-    scoreMin_.init(SIMPLE_FUNC_LINEAR, rp.max_edit * MM_PEN * -1.0, 0.0);
-    nCeil_.init(SIMPLE_FUNC_LINEAR, 0.0, 0.0);
-
-    penCanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
-    penNoncanIntronLen_.init(SIMPLE_FUNC_LOG, -8, 1);
-
-    sc_ = new Scoring(
-            DEFAULT_MATCH_BONUS,     // constant reward for match
-            DEFAULT_MM_PENALTY_TYPE,     // how to penalize mismatches
-            MM_PEN,      // max mm penalty
-            MM_PEN,      // min mm penalty
-            MAX_PEN,      // max sc penalty
-            MAX_PEN,      // min sc penalty
-            scoreMin_,       // min score as function of read len
-            nCeil_,          // max # Ns as function of read len
-            DEFAULT_N_PENALTY_TYPE,      // how to penalize Ns in the read
-            DEFAULT_N_PENALTY,           // constant if N pelanty is a constant
-            DEFAULT_N_CAT_PAIR,    // whether to concat mates before N filtering
-
-
-            GAP_PEN_CON, // constant coeff for read gap cost
-            GAP_PEN_CON, // constant coeff for ref gap cost
-            GAP_PEN_LIN, // linear coeff for read gap cost
-            GAP_PEN_LIN, // linear coeff for ref gap cost
-            1 /* gGapBarrier */    // # rows at top/bot only entered diagonally
-            );
-}
-
-
-template<typename TStr>
-void RepeatBuilder<TStr>::doTest(const RepeatParameter& rp,
-                                 const string& refstr,
-                                 const string& readstr)
-{
-	init_dyn(rp);
-
-    doTestCase1(refstr, readstr, rp.max_edit);
 }
 
 template<typename TStr>
@@ -2133,7 +2548,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 	TIndexOffU count = 0;
     min_repeat_len_ = rp.min_repeat_len;
     
-    init_dyn(rp);
+    swaligner_.init_dyn(rp);
 
     RB_RepeatManager* repeat_manager = new RB_RepeatManager;
     
@@ -2199,84 +2614,95 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     
     cerr << "number of seed positions is " << repeat_manager->numCoords() << endl;
 
-    // DK - debugging purposes
-    EList<size_t> output_list;
-    
-    set<size_t> to_remove;
-    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
-        if(to_remove.find(it->first) != to_remove.end())
-            continue;
-        
-        RB_Repeat& repeat_i = *(it->second);
-        if(!repeat_i.satisfy(rp))
-            continue;
-        
-        float max_portion = 0.0;
-        RB_Repeat* max_portion_i = NULL;
-        map<size_t, RB_Repeat*>::iterator jt = it; jt++;
-        for(; jt != repeat_map_.end(); jt++) {
-            if(to_remove.find(jt->first) != to_remove.end())
+    while(true) {
+        set<size_t> to_remove;
+        for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
+            if(to_remove.find(it->first) != to_remove.end())
                 continue;
             
-            RB_Repeat& repeat_j = *(jt->second);
-            if(!repeat_j.satisfy(rp))
+            RB_Repeat& repeat_i = *(it->second);
+            if(!repeat_i.satisfy(rp))
                 continue;
-
-            float portion = repeat_i.mergeable(repeat_j);
-            if(portion > max_portion) {
-                max_portion = portion;
-                max_portion_i = jt->second;
-            }
             
-            map<size_t, RB_Repeat*>::iterator a, b;
-            if(repeat_i.consensus().length() > repeat_j.consensus().length()) {
-                a = it; b = jt;
-            } else {
-                a = jt; b = it;
-            }
-            // DK - debugging purposes
-            bool debug = (a->second->repeat_id() == 213 && b->second->repeat_id() == 210000000);
-            if(a->second->contain(*(b->second))) {
-                bool updated = false;
-                repeat_manager->removeRepeat(a->second);
-                a->second->merge(rp,
-                                 s_,
-                                 *(b->second),
-                                 *repeat_manager,
-                                 updated,
-                                 debug);
+            float max_portion = 0.0;
+            RB_Repeat* max_portion_i = NULL;
+            map<size_t, RB_Repeat*>::iterator jt = it; jt++;
+            for(; jt != repeat_map_.end(); jt++) {
+                if(to_remove.find(jt->first) != to_remove.end())
+                    continue;
                 
-                repeat_manager->addRepeat(a->second);
+                RB_Repeat& repeat_j = *(jt->second);
+                if(!repeat_j.satisfy(rp))
+                    continue;
                 
-                if(debug) {
-                    if(output_list.size() == 0) {
-                        output_list.push_back(a->first);
-                        output_list.push_back(b->first);
-                    }
+                float portion = repeat_i.mergeable(repeat_j);
+                if(portion > max_portion) {
+                    max_portion = portion;
+                    max_portion_i = jt->second;
                 }
-                to_remove.insert(b->first);
-                if(it->first == b->first)
-                    break;
+                
+                bool contain, left;
+                size_t seed_i, seed_j;
+                
+                bool overlap = it->second->overlap(*(jt->second),
+                                                   contain,
+                                                   left,
+                                                   seed_i,
+                                                   seed_j);
+                if(overlap) {
+                    map<size_t, RB_Repeat*>::iterator a, b;
+                    size_t seed_a, seed_b;
+                    if(left) {
+                        a = it; b = jt;
+                        seed_a = seed_i; seed_b = seed_j;
+                    } else {
+                        a = jt; b = it;
+                        seed_a = seed_j; seed_b = seed_i;
+                    }
+                    // DK - debugging purposes
+                    bool debug = (a->second->repeat_id() == 526 && b->second->repeat_id() == 1303333);
+                    if(debug) {
+                        int dk = 0;
+                        dk++;
+                    }
+                    
+                    repeat_manager->removeRepeat(a->second);
+                    
+                    a->second->merge(rp,
+                                     s_,
+                                     swaligner_,
+                                     *(b->second),
+                                     contain,
+                                     seed_a,
+                                     seed_b,
+                                     debug);
+                    
+                    repeat_manager->addRepeat(a->second);
+                    
+                    to_remove.insert(b->first);
+                    if(it->first == b->first)
+                        break;
+                }
             }
         }
         
-#if 0
-        if(max_portion > 0.9f && false) {
-            cout << repeat_i.seeds()[0].orig_pos.first << "-" << max_portion_i->seeds()[0].orig_pos.first << ": " << max_portion << "\t";
-            cout << repeat_i.seeds().size() << " " << max_portion_i->seeds().size() << "\t";
-            cout << repeat_i.consensus().length() << " " << max_portion_i->consensus().length() << endl;
-            
+        if(to_remove.empty())
+            break;
+        
+        for(set<size_t>::iterator it = to_remove.begin(); it != to_remove.end(); it++) {
+            map<size_t, RB_Repeat*>::iterator repeat_it = repeat_map_.find(*it);
+            assert(repeat_it != repeat_map_.end());
+            repeat_manager->removeRepeat(repeat_it->second);
+            delete repeat_it->second;
+            repeat_map_.erase(repeat_it);
         }
-#endif
     }
     
-    for(set<size_t>::iterator it = to_remove.begin(); it != to_remove.end(); it++) {
-        map<size_t, RB_Repeat*>::iterator repeat_it = repeat_map_.find(*it);
-        assert(repeat_it != repeat_map_.end());
-        repeat_manager->removeRepeat(repeat_it->second);
-        delete repeat_it->second;
-        repeat_map_.erase(repeat_it);
-    }
+#ifndef NDEBUG
+    repeat_manager->showInfo(rp,
+                             coordHelper_,
+                             repeat_map_);
+#endif
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
     
@@ -2286,15 +2712,6 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
         RB_Repeat& repeat = *(it->second);
         if(!repeat.satisfy(rp))
             continue;
-        
-        bool found = true;
-        for(size_t j = 0; j < output_list.size(); j++) {
-            if(it->first == output_list[j]) {
-                found = true;
-                break;
-            }
-        }
-        if(!found) continue;
         
         repeat.saveSeedExtension(rp,
                                  s_,
@@ -2313,10 +2730,19 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 
     cerr << "number of seeds tried to merge: " << RB_Repeat::seed_merge_tried << endl;
     cerr << "number of seeds merged: " << RB_Repeat::seed_merged << endl;
-
-    repeat_manager->showInfo(rp,
-                             coordHelper_,
-                             repeat_map_);
+    
+    size_t total_seeds = 0, aligned_seeds = 0;
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
+        RB_Repeat& repeat = *(it->second);
+        EList<SeedExt>& seeds = repeat.seeds();
+        for(size_t i = 0; i < seeds.size(); i++) {
+            total_seeds++;
+            if(seeds[i].aligned) aligned_seeds++;
+        }
+    }
+    
+    cerr << "total number of seeds: " << total_seeds << " (" << aligned_seeds << " aligned)" << endl;
+    
     delete repeat_manager;
     repeat_manager = NULL;
 }
@@ -3074,7 +3500,8 @@ void RB_RepeatManager::removeRepeat(Range range, size_t repeat_id)
 
 void RB_RepeatManager::showInfo(const RepeatParameter& rp,
                                 CoordHelper& coordHelper,
-                                const map<size_t, RB_Repeat*>& repeat_map) const
+                                const map<size_t, RB_Repeat*>& repeat_map,
+                                size_t num_case) const
 {
     size_t count = 0;
     for(map<Range, EList<size_t> >::const_iterator it = range_to_repeats_.begin();
@@ -3087,22 +3514,21 @@ void RB_RepeatManager::showInfo(const RepeatParameter& rp,
             if(range2.second - range2.first < rp.min_repeat_len) continue;
             if(range.second <= range2.first)
                 break;
-            cerr << "range (" << range.first << ", " << range.second << ") vs. range2 (";
-            cerr << range2.first << ", " << range2.second << ")" << endl;
-            for(size_t i = 0; i < it->second.size(); i++) {
-                cerr << "\t1 " << it->second[i] << endl;
-                const RB_Repeat* repeat = repeat_map.find(it->second[i])->second;
-                repeat->showInfo(rp, coordHelper);
+            if(count < num_case) {
+                cerr << "range (" << range.first << ", " << range.second << ") vs. range2 (";
+                cerr << range2.first << ", " << range2.second << ")" << endl;
+                for(size_t i = 0; i < it->second.size(); i++) {
+                    cerr << "\t1 " << it->second[i] << endl;
+                    const RB_Repeat* repeat = repeat_map.find(it->second[i])->second;
+                    repeat->showInfo(rp, coordHelper);
+                }
+                for(size_t i = 0; i < jt->second.size(); i++) {
+                    cerr << "\t2 " << jt->second[i] << endl;
+                    const RB_Repeat* repeat = repeat_map.find(jt->second[i])->second;
+                    repeat->showInfo(rp, coordHelper);
+                }
+                cerr << endl << endl;
             }
-            for(size_t i = 0; i < jt->second.size(); i++) {
-                cerr << "\t2 " << jt->second[i] << endl;
-                const RB_Repeat* repeat = repeat_map.find(jt->second[i])->second;
-                repeat->showInfo(rp, coordHelper);
-            }
-            cerr << endl << endl;
-            
-            // DK - debugging purposes
-            return;
             count++;
         }
     }
@@ -3124,14 +3550,6 @@ void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
                                          const EList<RepeatCoord<TIndexOffU> >& positions,
                                          ostream& fp)
 {
-    // DK - debugging purposes
-    if(positions.size() < 50 && false)
-        return;
-    
-    // DK - debugging purposes
-    if(positions[0].joinedOff != 151977 && false)
-        return;
-    
     // count the number of seeds on the sense strand
     size_t sense_mer_count = 0;
     for(size_t i = 0; i < positions.size(); i++) {
@@ -3195,7 +3613,8 @@ void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
     
     repeat->extendConsensus(rp, s_);
     
-    if(!repeat->satisfy(rp)) {
+    if(!repeat->satisfy(rp) ||
+       repeat->self_repeat()) {
         delete repeat;
         repeat = NULL;
         return;
@@ -3456,33 +3875,6 @@ TIndexOffU RepeatBuilder<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 }
 
 template<typename TStr>
-void RepeatBuilder<TStr>::makePadString(const string& ref, const string& read,
-        string& pad, size_t len)
-{
-    pad.resize(len);
-
-    for(size_t i = 0; i < len; i++) {
-        // shift A->C, C->G, G->T, T->A
-        pad[i] = "CGTA"[asc2dna[ref[i]]];
-
-        if(read[i] == pad[i]) {
-            // shift
-            pad[i] = "CGTA"[asc2dna[pad[i]]];
-        }
-    }
-
-    int head_len = len / 2;
-    size_t pad_start = len - head_len;
-
-    for(size_t i = 0; i < head_len; i++) {
-        if(read[i] == pad[pad_start + i]) {
-            // shift
-            pad[pad_start + i] = "CGTA"[asc2dna[pad[pad_start + i]]];
-        }
-    }
-}
-
-template<typename TStr>
 bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
                                                    const string& read,
                                                    EList<Edit>& edits,
@@ -3494,12 +3886,12 @@ bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
     EList<Edit> ed;
 
     string pad;
-    makePadString(ref, read, pad, 5);
+    swaligner_.makePadString(ref, read, pad, 5);
 
     string ref2 = pad + ref;
     string read2 = pad + read;
 
-    alignStrings(ref2, read2, ed, coord);
+    swaligner_.alignStrings(ref2, read2, ed, coord);
 
     // match should start from pad string
     if(coord.off() != 0) {
@@ -3538,220 +3930,6 @@ bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
     return (max_matchlen >= rpt_len);
 }
 
-template<typename TStr>
-int RepeatBuilder<TStr>::alignStrings(const string &ref, const string &read, EList<Edit>& edits, Coord& coord)
-{
-    // Prepare Strings
-
-    // Read -> BTDnaString
-    // Ref -> bit-encoded string
-
-    //SwAligner swa;
-
-    BTDnaString btread;
-    BTString btqual;
-    BTString btref;
-    BTString btref2;
-
-    BTDnaString btreadrc;
-    BTString btqualrc;
-
-
-    string qual = "";
-    for(size_t i = 0; i < read.length(); i++) {
-        qual.push_back('I');
-    }
-
-#if 0
-    cerr << "REF : " << ref << endl;
-    cerr << "READ: " << read << endl;
-    cerr << "QUAL: " << qual << endl;
-#endif
-
-    btread.install(read.c_str(), true);
-    btreadrc = btread;
-    btreadrc.reverseComp();
-
-    btqual.install(qual.c_str());
-    btqualrc = btqual;
-
-    btref.install(ref.c_str());
-
-    TAlScore min_score = sc_->scoreMin.f<TAlScore >((double)btread.length());
-
-    btref2 = btref;
-
-    size_t nceil = 0;
-    // size_t nrow = btread.length();
-
-    // Convert reference string to mask
-    for(size_t i = 0; i < btref2.length(); i++) {
-        if(toupper(btref2[i]) == 'N') {
-            btref2.set(16, i);
-        } else {
-            int num = 0;
-            int alts[] = {4, 4, 4, 4};
-            decodeNuc(toupper(btref2[i]), num, alts);
-            assert_leq(num, 4);
-            assert_gt(num, 0);
-            btref2.set(0, i);
-            for(int j = 0; j < num; j++) {
-                btref2.set(btref2[i] | (1 << alts[j]), i);
-            }
-        }
-    }
-
-
-    bool fw = true;
-    uint32_t refidx = 0;
-    
-    swa.initRead(
-            btread,     // read sequence
-            btreadrc,
-            btqual,     // read qualities
-            btqualrc,
-            0,          // offset of first character within 'read' to consider
-            btread.length(), // offset of last char (exclusive) in 'read' to consider
-            *sc_);      // local-alignment score floor
-
-    DynProgFramer dpframe(false);
-    size_t readgaps = 0;
-    size_t refgaps = 0;
-    size_t maxhalf = 0;
-
-    DPRect rect;
-    dpframe.frameSeedExtensionRect(
-            0,              // ref offset implied by seed hit assuming no gaps
-            btread.length(),    // length of read sequence used in DP table
-            btref2.length(),    // length of reference
-            readgaps,   // max # of read gaps permitted in opp mate alignment
-            refgaps,    // max # of ref gaps permitted in opp mate alignment
-            (size_t)nceil,  // # Ns permitted
-            maxhalf, // max width in either direction
-            rect);      // DP Rectangle
-
-    assert(rect.repOk());
-
-    size_t cminlen = 2000, cpow2 = 4;
-
-    swa.initRef(
-            fw,                 // whether to align forward or revcomp read
-            refidx,             // reference ID
-            rect,               // DP rectangle
-            btref2.wbuf(),      // reference strings
-            0,                  // offset of first reference char to align to
-            btref2.length(),    // offset of last reference char to align to
-            btref2.length(),    // length of reference sequence
-            *sc_,               // scoring scheme
-            min_score,          // minimum score
-            true,               // use 8-bit SSE if positions
-            cminlen,            // minimum length for using checkpointing scheme
-            cpow2,              // interval b/t checkpointed diags; 1 << this
-            false,              // triangular mini-fills?
-            false               // is this a seed extension?
-            );
-
-
-    TAlScore best = std::numeric_limits<TAlScore>::min();
-    bool found = swa.align(rnd_, best);
-#ifdef DEBUGLOG 
-    cerr << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
-#endif
-
-    if (found) {
-#ifdef DEBUGLOG 
-        //cerr << "CP " << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
-        cerr << "REF : " << ref << endl;
-        cerr << "READ: " << read << endl;
-#endif
-
-        SwResult res;
-        int max_match_len = 0;
-        res.reset();
-        res.alres.init_raw_edits(&rawEdits_);
-
-        found = swa.nextAlignment(res, best, rnd_);
-        if (found) {
-            edits = res.alres.ned();
-            //const TRefOff ref_off = res.alres.refoff();
-            //const Coord& coord = res.alres.refcoord();
-            coord = res.alres.refcoord();
-            //assert_geq(genomeHit._joinedOff + coord.off(), genomeHit.refoff());
-
-#ifdef DEBUGLOG 
-            cerr << "num edits: " << edits.size() << endl;
-            cerr << "coord: " << coord.off();
-            cerr << ", " << coord.ref();
-            cerr << ", " << coord.orient();
-            cerr << ", " << coord.joinedOff();
-            cerr << endl;
-            Edit::print(cerr, edits); cerr << endl;
-            Edit::printQAlign(cerr, btread, edits);
-#endif
-
-            max_match_len = getMaxMatchLen(edits, btread.length());
-#ifdef DEBUGLOG 
-            cerr << "max match length: " << max_match_len << endl;
-#endif
-        }
-#ifdef DEBUGLOG 
-        cerr << "nextAlignment: " << found << endl;
-        cerr << "-------------------------" << endl;
-#endif
-    }
-
-    return 0;
-}
-
-template<typename TStr>
-void RepeatBuilder<TStr>::doTestCase1(const string& refstr, const string& readstr, TIndexOffU rpt_edit)
-{
-    cerr << "doTestCase1----------------" << endl;
-    EList<Edit> edits;
-    Coord coord;
-
-    if (refstr.length() == 0 ||
-            readstr.length() == 0) {
-        return;
-    }
-
-    EList<Edit> ed;
-
-    string pad;
-    makePadString(refstr, readstr, pad, 5);
-
-    string ref2 = pad + refstr + pad;
-    string read2 = pad + readstr + pad;
-    alignStrings(refstr, readstr, edits, coord);
-
-    size_t left = pad.length();
-    size_t right = left + readstr.length();
-
-    edits.reserveExact(ed.size());
-    for(size_t i = 0; i < ed.size(); i++) {
-        if(ed[i].pos >= left && ed[i].pos <= right) {
-            edits.push_back(ed[i]);
-            edits.back().pos -= left;
-        }
-    }
-
-
-    RepeatGroup rg;
-
-    rg.edits = edits;
-    rg.coord = coord;
-    rg.seq = readstr;
-    rg.base_offset = 0;
-
-    string chr_name = "rep";
-
-    cerr << "REF : " << refstr << endl;
-    cerr << "READ: " << readstr << endl;
-    size_t snpids = 0;
-    rg.buildSNPs(snpids);
-    rg.writeSNPs(cerr, chr_name); cerr << endl;
-
-}
 
 template<typename TStr>
 void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
@@ -3871,9 +4049,15 @@ void RepeatBuilder<TStr>::saveAlleles(
         size_t se = sb + 1;
         for(; se < range.second; se++) {
             if(!(SeedExt::isSameConsensus(seeds[sb], seeds[se])
-                 && SeedExt::isSameSNPs(seeds[sb], seeds[se]))) {
+                 && SeedExt::isSameSNPs(seeds[sb], seeds[se])
+                 && seeds[sb].aligned == seeds[se].aligned)) {
                 break;
             }
+        }
+
+        if(!seeds[sb].aligned) {
+            sb = se;
+            continue;
         }
 
         if(seeds[sb].getLength() < rp.min_repeat_len) {
