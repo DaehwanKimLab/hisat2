@@ -250,33 +250,8 @@ struct RepeatGroup {
 
 };
 
-struct SeedExt {
-    // seed extended position [first, second)
-    pair<TIndexOffU, TIndexOffU> orig_pos;
-    pair<TIndexOffU, TIndexOffU> pos;
-    
-    // extension bound. the seed must be placed on same fragment
-    // [first, second)
-    pair<TIndexOffU, TIndexOffU> bound;
-    
-    // positions relative to consensus sequence
-    pair<TIndexOffU, TIndexOffU> consensus_pos;
-    
-    // a list of gaps (deletions and insertions) in both directions
-    // offsets from seed's left and right ("pos" above)
-    // positive and negative values indicate deletions and insertions, resp.
-    EList<pair<TIndexOffU, int> > left_gaps;
-    EList<pair<TIndexOffU, int> > right_gaps;
-
-    uint32_t ed;            // edit distance
-    uint32_t total_ed;      // total edit distance
-    bool done;              // done flag
-    uint32_t curr_ext_len;  //
-    
-    bool aligned;
-
-    EList<Edit> edits;      // edits w.r.t. consensus_merged
-    
+class SeedExt {
+public:
     SeedExt() {
         reset();
     };
@@ -393,6 +368,15 @@ struct SeedExt {
         }
     }
     
+    Range getExtendedRange(size_t consensus_len) const
+    {
+        assert_leq(consensus_pos.second, consensus_len);
+        Range range;
+        range.first = (pos.first < consensus_pos.first ? 0 : pos.first - consensus_pos.first);
+        range.second = pos.second + (consensus_len - consensus_pos.second);
+        return range;
+    }
+    
 #ifndef NDEBUG
     bool valid() const {
         assert_leq(consensus_pos.first, consensus_pos.second);
@@ -429,10 +413,49 @@ struct SeedExt {
         return true;
     }
 #endif
+    
+public:
+    // seed extended position [first, second)
+    pair<TIndexOffU, TIndexOffU> orig_pos;
+    pair<TIndexOffU, TIndexOffU> pos;
+    
+    // extension bound. the seed must be placed on same fragment
+    // [first, second)
+    pair<TIndexOffU, TIndexOffU> bound;
+    
+    // positions relative to consensus sequence
+    pair<TIndexOffU, TIndexOffU> consensus_pos;
+    
+    // a list of gaps (deletions and insertions) in both directions
+    // offsets from seed's left and right ("pos" above)
+    // positive and negative values indicate deletions and insertions, resp.
+    EList<pair<TIndexOffU, int> > left_gaps;
+    EList<pair<TIndexOffU, int> > right_gaps;
+    
+    uint32_t ed;            // edit distance
+    uint32_t total_ed;      // total edit distance
+    bool done;              // done flag
+    uint32_t curr_ext_len;  //
+    
+    bool aligned;
+    
+    EList<Edit> edits;      // edits w.r.t. consensus_merged
 };
 
 class RB_AlleleCoord {
 public:
+    RB_AlleleCoord() :
+    left(0),
+    right(0),
+    idx(0)
+    {}
+    
+    RB_AlleleCoord(TIndexOffU l, TIndexOffU r, size_t i) :
+    left(l),
+    right(r),
+    idx(i)
+    {}
+    
     TIndexOffU len() const { return right - left; }
     
     bool operator<(const RB_AlleleCoord& o) const
@@ -509,7 +532,11 @@ public:
                            size_t& total_repeat_seq_len,
                            size_t& total_allele_seq_len) const;
     
-    bool contain(const RB_Repeat& o) const;
+    bool overlap(const RB_Repeat& o,
+                 bool& contain,
+                 bool& left,
+                 size_t& seed_i,
+                 size_t& seed_j) const;
 
     float mergeable(const RB_Repeat& o) const;
     
@@ -517,8 +544,9 @@ public:
     void merge(const RepeatParameter& rp,
                const TStr& s,               
                const RB_Repeat& o,
-               RB_RepeatManager& repeat_manger,
-               bool& updated,
+               bool contain,
+               size_t seed_i,
+               size_t seed_j,
                bool debug = false);
     
     bool satisfy(const RepeatParameter& rp) const
@@ -542,6 +570,8 @@ public:
     
     void showInfo(const RepeatParameter& rp,
                   CoordHelper& coordHelper) const;
+    
+    bool self_repeat() const { return self_repeat_; }
     
 private:
     template<typename TStr>
@@ -573,6 +603,8 @@ private:
     string                consensus_;
     EList<SeedExt>        seeds_;
     EList<RB_AlleleCoord> seed_ranges_;
+    
+    bool                  self_repeat_;
     
     static EList<size_t>  ca_ed_;
     static EList<size_t>  ca_ed2_;
@@ -606,7 +638,8 @@ public:
 public:
     void showInfo(const RepeatParameter& rp,
                   CoordHelper& coordHelper,
-                  const map<size_t, RB_Repeat*>& repeat_map) const;
+                  const map<size_t, RB_Repeat*>& repeat_map,
+                  size_t num_case = 5) const;
     
 private:
     map<Range, EList<size_t> > range_to_repeats_;

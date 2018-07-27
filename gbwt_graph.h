@@ -62,7 +62,7 @@ class RefGraph {
     friend class PathGraph<index_t>;
 public:
     struct Node {
-        char    label; // ACGTN + Y(head) + Z(tail)
+        char    label; // ACGT + Y(head) + Z(tail)
         index_t value; // location in a whole genome
         
         Node() { reset(); }
