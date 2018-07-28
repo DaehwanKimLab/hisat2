@@ -692,7 +692,8 @@ private:
                            EList<string>* left_consensuses,
                            EList<string>* right_consensuses) const;
     
-    bool align(const string& s,
+    bool align(const RepeatParameter& rp,
+               const string& s,
                const EList<pair<size_t, size_t> >& s_kmer_table,
                const string& s2,
                EList<int>& offsets,
