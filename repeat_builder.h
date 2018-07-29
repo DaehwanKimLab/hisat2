@@ -84,7 +84,9 @@ public:
                 const EList<string>& ref_names);
     ~CoordHelper();
     int mapJoinedOffToSeq(TIndexOffU joined_pos);
-    int getGenomeCoord(TIndexOffU joined_pos, string& chr_name, TIndexOffU& pos_in_chr);
+    int getGenomeCoord(TIndexOffU joined_pos,
+                       string& chr_name,
+                       TIndexOffU& pos_in_chr);
 
     TIndexOffU getEnd(TIndexOffU e);
     TIndexOffU getStart(TIndexOffU e);
@@ -630,8 +632,11 @@ public:
                            size_t& total_repeat_seq_len,
                            size_t& total_allele_seq_len) const;
 
-    void saveSNPs(ofstream& fp, TIndexOffU grp_id, TIndexOffU& snp_id_base, TIndexOffU consensus_baseoff);
-    void saveConsensus(ofstream& fp, TIndexOffU grp_id, TIndexOffU consensus_baseoff);
+    void saveSNPs(ofstream& fp,
+                  TIndexOffU grp_id,
+                  TIndexOffU& snp_id_base);
+    void saveConsensus(ofstream& fp,
+                       TIndexOffU grp_id);
     
     bool overlap(const RB_Repeat& o,
                  bool& contain,
@@ -692,14 +697,19 @@ private:
                            EList<string>* left_consensuses,
                            EList<string>* right_consensuses) const;
     
+    template<typename TStr>
     bool align(const RepeatParameter& rp,
+               const TStr& ref,
                const string& s,
                const EList<pair<size_t, size_t> >& s_kmer_table,
                const string& s2,
                EList<int>& offsets,
                size_t k,
-               size_t& begin,
-               size_t& end,
+               SeedExt& seed,
+               int consensus_approx_left,
+               int consensus_approx_right,
+               size_t left,
+               size_t right,
                bool debug = false);
     
     void internal_update();
@@ -840,12 +850,10 @@ private:
                      ofstream&,
                      ofstream&,
                      TIndexOffU grp_id,
-                     TIndexOffU consensus_baseoff,
                      TIndexOffU&);
 
     void writeAllele(TIndexOffU grp_id, 
                      TIndexOffU allele_id,
-                     TIndexOffU baseoff,
                      Range range,
                      const string& seq_name,
                      const EList<SeedExt>& seeds,
@@ -853,12 +861,10 @@ private:
 
 
     void writeSNPs(ostream& fp, 
-                   TIndexOffU baseoff,
-                   const string& rep_chr_name, 
+                   const string& rep_chr_name,
                    const ESet<Edit>& editset);
 
     void writeHaploType(TIndexOffU& hapl_id_base,
-                        TIndexOffU baseoff,
                         Range range,
                         const string& seq_name,
                         const EList<SeedExt>& seeds,

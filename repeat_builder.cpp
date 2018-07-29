@@ -162,40 +162,6 @@ string applyEdits(const string& ref, size_t read_len, const EList<Edit>& edits, 
     return read;
 }
 
-/**
- * @brief return true iff a U b = a 
- *
- * @param a
- * @param b
- *
- * @return 
- */
-static bool checkRangeMergeable(const Range& a, const Range& b)
-{
-	if(a.first <= b.first && a.second >= b.second) {
-		return true;
-	}
-
-	return false;
-}
-
-
-static bool compareRepeatRangeByRange(const RepeatRange& a, const RepeatRange& b)
-{
-	if((a.range.second > b.range.second) ||
-			(a.range.second == b.range.second && a.range.first < b.range.first)) {
-		return true;
-	}
-
-	return false;
-}
-
-static bool compareRepeatRangeByRgID(const RepeatRange& a, const RepeatRange& b)
-{
-	return a.rg_id < b.rg_id;
-}
-
-
 template<typename index_t>
 static bool compareRepeatCoordByJoinedOff(const RepeatCoord<index_t>& a, const RepeatCoord<index_t>& b)
 {
@@ -514,7 +480,8 @@ void SeedExt::getExtendedSeedSequence(const TStr& s,
     if(pos.first < prev_end) {
         seq = getString(s, pos.first, prev_end - pos.first) + seq;
     }
-    seq += getString(s, orig_pos.first, orig_pos.second - orig_pos.first);
+    if(orig_pos.second - orig_pos.first > 0)
+        seq += getString(s, orig_pos.first, orig_pos.second - orig_pos.first);
     TIndexOffU prev_begin = orig_pos.second;
     for(size_t j = 0; j < right_gaps.size(); j++) {
         TIndexOffU curr_begin = orig_pos.second + right_gaps[j].first;
@@ -1541,53 +1508,51 @@ bool RB_Repeat::overlap(const RB_Repeat& o,
 {
     contain = left = false;
     seed_i = seed_j = 0;
-    
     size_t p = 0, p2 = 0;
     while(p < seed_ranges_.size() && p2 < o.seed_ranges_.size()) {
         const RB_AlleleCoord& range = seed_ranges_[p];
         const SeedExt& seed = seeds_[range.idx];
-        if(!seed.aligned) {
-            // p++;
-            // continue;
-        }
         Range range_ = seed.getExtendedRange(consensus_.length());
         RB_AlleleCoord ex_range(range_.first, range_.second, p);
         bool representative = (float)range.len() >= consensus_.length() * 0.95f;
         
         const RB_AlleleCoord& range2 = o.seed_ranges_[p2];
         const SeedExt& seed2 = o.seeds_[range2.idx];
-        if(!seed2.aligned) {
-            // p2++;
-            // continue;
-        }
         Range range2_ = seed2.getExtendedRange(o.consensus().length());
         RB_AlleleCoord ex_range2(range2_.first, range2_.second, p2);
         bool representative2 = (float)range2.len() >= o.consensus_.length() * 0.95f;
         
+        seed_i = range.idx;
+        seed_j = range2.idx;
+        
         const size_t relax = 5;
-        if(representative) {
-            if(ex_range2.contain(range, relax)) {
+        if(representative && representative2) {
+            if(ex_range.overlap_len(ex_range2) > 0) {
+                if(ex_range.contain(ex_range2, relax)) {
+                    contain = true;
+                    left = true;
+                } else if(ex_range2.contain(ex_range, relax)) {
+                    contain = true;
+                    left = false;
+                } else {
+                    left = ex_range.left <= ex_range2.left;
+                }
+                return true;
+            }
+        } else if(representative) {
+            if(range2.contain(ex_range, relax)) {
                 contain = true;
                 left = false;
                 return true;
             }
-        }
-        if(representative2) {
-            if(ex_range.contain(range2, relax)) {
+        } else if(representative2) {
+            if(range.contain(ex_range2, relax)) {
                 contain = true;
                 left = true;
                 return true;
             }
         }
-        if(representative && representative2) {
-            if(ex_range.overlap_len(ex_range2) > 0) {
-                left = ex_range.left < ex_range2.left;
-                seed_i = range.idx;
-                seed_j = range2.idx;
-                return true;
-            }
-        }
-        
+
         if(range.right <= range2.right) p++;
         if(range2.right <= range.right) p2++;
     }
@@ -1621,6 +1586,10 @@ inline void get_next_range(const EList<int>& offsets, size_t i, Range& r, float&
     for(; r.first < offsets.size() && offsets[r.first] < 0; r.first++);
     r.second = r.first + 1;
     avg = 0.0f;
+    if(r.first < offsets.size()) {
+        float diff = (float)offsets[r.first] - (float)r.first;
+        avg += diff;
+    }
     for(; r.second < offsets.size() &&
         offsets[r.second] >= 0 &&
         (r.second == 0 || offsets[r.second] >= offsets[r.second - 1]);
@@ -1632,16 +1601,32 @@ inline void get_next_range(const EList<int>& offsets, size_t i, Range& r, float&
     return;
 }
 
+template<typename TStr>
 bool RB_Repeat::align(const RepeatParameter& rp,
+                      const TStr& ref,
                       const string& s,
                       const EList<pair<size_t, size_t> >& s_kmer_table,
                       const string& s2,
                       EList<int>& offsets,
                       size_t k,
-                      size_t& begin,
-                      size_t& end,
+                      SeedExt& seed,
+                      int consensus_approx_left,
+                      int consensus_approx_right,
+                      size_t left,
+                      size_t right,
                       bool debug)
 {
+    RB_Repeat::seed_merge_tried++;
+    
+    seed.reset();
+    seed.pos.first = left;
+    seed.pos.second = right;
+    seed.orig_pos.first = seed.pos.first;
+    seed.orig_pos.second = seed.orig_pos.first;
+    seed.consensus_pos.first = 0;
+    seed.consensus_pos.second = consensus_.length();
+    seed.aligned = false;
+    
     offsets.resize(s2.length());
     offsets.fill(-1);
     pair<size_t, size_t> kmer(0, 0);
@@ -1727,18 +1712,6 @@ bool RB_Repeat::align(const RepeatParameter& rp,
         }
     }
     
-    for(size_t i = 0; i < offsets.size(); i++) {
-        if(offsets[i] < 0)
-            continue;
-        size_t j = i + 1;
-        for(; j < offsets.size() && offsets[j] >= 0; j++);
-        if(j - i <= 10 && j + 1 < offsets.size()) {
-            for(size_t i2 = i; i2 < j; i2++)
-                offsets[i2] = -1;
-        }
-        i = j;
-    }
-    
     if(debug) {
         cerr << "after filtering" << endl;
         for(size_t j = 0; j < offsets.size(); j++) {
@@ -1773,31 +1746,27 @@ bool RB_Repeat::align(const RepeatParameter& rp,
                 bool del = query_len < ref_len;
                 size_t gap_len = del ? ref_len - query_len : query_len - ref_len;
                 size_t max_len = max(ref_len, query_len);
-                const size_t max_mm = max_len / 20 + 1;
+                const size_t max_mm = max_len / 25 + 1;
+                const size_t very_max_mm = max<size_t>(max_len / 2, max_mm);
                 ca_s_ = s.substr(left, max_len);
                 ca_s2_ = s2.substr(i, max_len);
                 
-                size_t gap_pos = 0, mm = max_mm + 1;
+                size_t gap_pos = 0, mm = very_max_mm + 1;
                 find_gap_pos(ca_s_,
                              ca_s2_,
                              ca_ed_,
                              ca_ed2_,
                              del,
                              gap_len,
-                             max_mm,
+                             very_max_mm,
                              gap_pos,
                              mm,
                              debug);
-                if(mm > max_mm) {
-                    // DK - debugging purposes
-                    if(debug) {
-                        int dk = 0;
-                        dk += 1;
-                    }
-                    
+                
+                if(mm > very_max_mm) {
                     return false;
                 }
-
+                
                 assert_lt(gap_pos, query_len);
                 if(del) {
                     for(size_t i2 = i + 1; i2 < j; i2++) {
@@ -1836,31 +1805,32 @@ bool RB_Repeat::align(const RepeatParameter& rp,
     }
 #endif
     
-    for(begin = 0; begin < offsets.size() && offsets[begin] < 0; begin++);
-    if(begin >= offsets.size()) return false;
-    assert_lt((size_t)begin, offsets.size());
-    for(end = offsets.size() - 1; end > begin && offsets[end] < 0; end--);
-    if(begin == end) return false;
-    for(size_t p = begin; p <= end; p++) {
+    size_t b, e;
+    for(b = 0; b < offsets.size() && offsets[b] < 0; b++);
+    if(b >= offsets.size()) return false;
+    assert_lt((size_t)b, offsets.size());
+    for(e = offsets.size() - 1; e > b && offsets[e] < 0; e--);
+    if(b == e) return false;
+    for(size_t p = b; p <= e; p++) {
         if(offsets[p] < 0) return false;
     }
 
     // try to fill the ends
-    if(begin > 0) {
-        int mm = 0, prev_begin = (int)begin;
-        for(int i = prev_begin - 1; i >= 0; i--) {
+    if(b > 0) {
+        int mm = 0, pb = (int)b;
+        for(int i = pb - 1; i >= 0; i--) {
             assert_geq(offsets[i+1], 0);
             if(offsets[i+1] == 0) break;
             if(s2[i] != s[offsets[i+1] - 1])
                 mm++;
-            if(prev_begin - i < 25 * (mm - 1))
+            if(pb - i < 25 * (mm - 1))
                 break;
             offsets[i] = offsets[i+1] - 1;
-            begin = (size_t)i;
+            b = (size_t)i;
         }
     }
-    if(end + 1 < offsets.size()) {
-        int mm = 0, prev_end = (int)end;
+    if(e + 1 < offsets.size()) {
+        int mm = 0, prev_end = (int)e;
         for(int i = prev_end + 1; i < offsets.size(); i++) {
             assert_geq(offsets[i-1], 0);
             if(offsets[i-1] + 1 >= s.length()) break;
@@ -1869,9 +1839,49 @@ bool RB_Repeat::align(const RepeatParameter& rp,
             if(i - prev_end < 25 * (mm - 1))
                 break;
             offsets[i] = offsets[i-1] + 1;
-            end = (size_t)i;
+            e = (size_t)i;
         }
     }
+    
+    assert_geq(seed.pos.first, (TIndexOffU)b);
+    seed.pos.first += (TIndexOffU)b;
+    seed.pos.second = seed.pos.first + e - b + 1;
+    seed.orig_pos.first = seed.pos.first;
+    seed.orig_pos.second = seed.pos.first;
+    seed.consensus_pos.first = offsets[b];
+    seed.consensus_pos.second = offsets[e] + 1;
+    seed.aligned = true;
+    
+    for(int p = b; p < e; p++) {
+        assert_geq(offsets[p], 0);
+        assert_leq(offsets[p], offsets[p+1]);
+        if(offsets[p] + 1 == offsets[p+1]) { // match
+            continue;
+        } else if(offsets[p] + 1 < offsets[p+1]) { // deletion
+            seed.right_gaps.expand();
+            seed.right_gaps.back().first = p + 1 - b;
+            seed.right_gaps.back().second = offsets[p+1] - offsets[p] - 1;
+        } else {
+            assert_eq(offsets[p], offsets[p+1]);
+            int p2 = p + 1;
+            for(; offsets[p2] == offsets[p2+1]; p2++);
+            seed.right_gaps.expand();
+            seed.right_gaps.back().first = p + 1 - b;
+            seed.right_gaps.back().second = (int)p - (int)p2;
+            p = p2;
+        }
+    }
+    
+    if(debug) {
+        string consensus_str = consensus_.substr(seed.consensus_pos.first, seed.consensus_pos.second - seed.consensus_pos.first);
+        string seed_str;
+        seed.getExtendedSeedSequence(ref, seed_str);
+        assert_eq(consensus_str.length(), seed_str.length());
+        cerr << "consensus: " << consensus_str << endl;
+        cerr << "seed     : " << seed_str << endl;
+    }
+    
+    RB_Repeat::seed_merged++;
     
     return true;
 }
@@ -1887,18 +1897,24 @@ void RB_Repeat::merge(const RepeatParameter& rp,
                       bool debug)
 {
     // construct a new consensus sequence
-    bool new_consensus = false;
-    if(!contain) {
+    size_t consensus_add_len = 0;
+    {
         assert_lt(seed_i, seeds_.size());
         assert_lt(seed_j, o.seeds_.size());
         const SeedExt& seed = seeds_[seed_i];
         const SeedExt& oseed = o.seeds_[seed_j];
-
+        
         Range range = seed.getExtendedRange(consensus_.length());
         Range orange = oseed.getExtendedRange(o.consensus_.length());
-        assert_leq(range.first, orange.first);
-        consensus_ += o.consensus_.substr(range.second - orange.first);
-        new_consensus = true;
+        assert_leq(range.first, orange.first + 10);
+        
+        if(contain) {
+            consensus_add_len = (int)orange.first - (int)range.first;
+        } else {
+            assert_lt(orange.first, range.second);
+            consensus_ += o.consensus_.substr(range.second - orange.first);
+            consensus_add_len = (int)range.second - (int)orange.first - (int)range.first;
+        }
     }
     
     EList<pair<size_t, size_t> > merge_list;
@@ -2044,8 +2060,7 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         size_t seed_id = (merge_list[i].first < seed_ranges_.size() ? seed_ranges_[merge_list[i].first].idx : merge_list[i].first);
         size_t oseed_id = (merge_list[i].second < o.seed_ranges_.size() ? o.seed_ranges_[merge_list[i].second].idx : merge_list[i].second);
         
-        if(!new_consensus &&
-           seed_id < seeds_.size() &&
+        if(seed_id < seeds_.size() &&
            oseed_id >= o.seeds_.size())
             continue;
         
@@ -2055,6 +2070,8 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         
         size_t left = (seed != NULL ? seed->pos.first : numeric_limits<size_t>::max());
         size_t right = (seed != NULL ? seed->pos.second : 0);
+        int consensus_approx_left = (seed != NULL ? seed->consensus_pos.first : numeric_limits<int>::max());
+        int consensus_approx_right = (seed != NULL ? seed->consensus_pos.second : 0);
         if(oseed != NULL) {
             if(oseed->pos.first < left) {
                 left = oseed->pos.first;
@@ -2062,12 +2079,17 @@ void RB_Repeat::merge(const RepeatParameter& rp,
             if(oseed->pos.second > right) {
                 right = oseed->pos.second;
             }
+            
+            int oconsensus_approx_left = oseed->consensus_pos.first + consensus_add_len;
+            if(oconsensus_approx_left < consensus_approx_left) {
+                consensus_approx_left = oconsensus_approx_left;
+            }
+            int oconsensus_approx_right = oseed->consensus_pos.second + consensus_add_len;
+            if(oconsensus_approx_right > consensus_approx_right) {
+                consensus_approx_right = oconsensus_approx_right;
+            }
         }
 
-        RB_Repeat::seed_merge_tried++;
-        
-        getString(s, left, right - left, seq);
-        
         // DK - debugging purposes
 #if 0
         if(consensus_.length() >= 2000 && seq.length() >= 2000) {
@@ -2082,91 +2104,83 @@ void RB_Repeat::merge(const RepeatParameter& rp,
 #endif
         
         // DK - debugging purposes
-        if(debug && left == 2160290 && right == 2161467) {
+        if(debug && left == 692422) {
             int dk = 0;
             dk += 1;
         }
-
-        size_t b = 0, e = 0;
+        
+        getString(s, left, right - left, seq);
+        if(seed_id >= seeds_.size()) {
+            seed_id = seeds_.size();
+            seeds_.expand();
+        }
+        
         bool succ = align(rp,
+                          s,
                           consensus_,
                           kmer_table,
                           seq,
                           offsets,
                           kmer_len,
-                          b, // begin
-                          e, // end
-                          debug && left == 2160290 && right == 2161467);
-        
-        SeedExt* p_new_seed = NULL;
-        if(seed_id >= seeds_.size()) {
-            seeds_.expand();
-            p_new_seed = &(seeds_.back());
-        } else {
-            p_new_seed = &(seeds_[seed_id]);
-        }
-        SeedExt& new_seed = *p_new_seed;
-        new_seed.reset();
-        new_seed.pos.first = left;
-        new_seed.pos.second = right;
-        
-        if(!succ) {
-            new_seed.orig_pos.first = new_seed.pos.first;
-            new_seed.orig_pos.second = new_seed.pos.first;
-            new_seed.consensus_pos.first = 0;
-            new_seed.consensus_pos.second = consensus_.length();
-            new_seed.aligned = false;
-            continue;
-        }
-        
-        RB_Repeat::seed_merged++;
-        
-        assert_geq(new_seed.pos.first, (TIndexOffU)b);
-        new_seed.pos.first += (TIndexOffU)b;
-        new_seed.pos.second = new_seed.pos.first + e - b + 1;
-        new_seed.orig_pos.first = new_seed.pos.first;
-        new_seed.orig_pos.second = new_seed.pos.first;
-        new_seed.consensus_pos.first = offsets[b];
-        new_seed.consensus_pos.second = offsets[e] + 1;
+                          seeds_[seed_id],
+                          consensus_approx_left,
+                          consensus_approx_right,
+                          left,
+                          right,
+                          debug && right - left == 1489);
         
         // DK - debugging purposes
-        if(debug && new_seed.pos.second == 338108) {
+        if(!succ && right - left > 1000) {
             int dk = 0;
             dk += 1;
         }
+    }
+    
+    while(true) {
+        internal_update();
         
-        for(int p = b; p < e; p++) {
-            assert_geq(offsets[p], 0);
-            assert_leq(offsets[p], offsets[p+1]);
-            if(offsets[p] + 1 == offsets[p+1]) { // match
-                continue;
-            } else if(offsets[p] + 1 < offsets[p+1]) { // deletion
-                new_seed.right_gaps.expand();
-                new_seed.right_gaps.back().first = p + 1 - b;
-                new_seed.right_gaps.back().second = offsets[p+1] - offsets[p] - 1;
-            } else {
-                assert_eq(offsets[p], offsets[p+1]);
-                int p2 = p + 1;
-                for(; offsets[p2] == offsets[p2+1]; p2++);
-                new_seed.right_gaps.expand();
-                new_seed.right_gaps.back().first = p + 1 - b;
-                new_seed.right_gaps.back().second = (int)p - (int)p2;
-                p = p2;
+        size_t remove_count = 0;
+        for(size_t i = 0; i + 1 < seed_ranges_.size(); i++) {
+            RB_AlleleCoord& range = seed_ranges_[i];
+            if(range.left == numeric_limits<size_t>::max())
+                break;
+            for(size_t j = i + 1; j < seed_ranges_.size(); j++) {
+                RB_AlleleCoord& range2 = seed_ranges_[j];
+                if(range2.left == numeric_limits<size_t>::max())
+                    break;
+                if(range.right <= range2.left)
+                    break;
+                
+                getString(s, range.left, range2.right - range.left, seq);
+                
+                /* bool succ = */ align(rp,
+                                        s,
+                                        consensus_,
+                                        kmer_table,
+                                        seq,
+                                        offsets,
+                                        kmer_len,
+                                        seeds_[range.idx],
+                                        seeds_[range.idx].consensus_pos.first,
+                                        seeds_[range2.idx].consensus_pos.second,
+                                        range.left,
+                                        range2.right,
+                                        debug && range.left == 692422);
+                
+                range.left = seeds_[range.idx].pos.first;
+                range.right = seeds_[range.idx].pos.second;
+                seeds_[range2.idx].reset();
+                range2.left = numeric_limits<size_t>::max();
+                remove_count++;
             }
         }
         
-        if(debug) {
-            string consensus_str = consensus_.substr(new_seed.consensus_pos.first, new_seed.consensus_pos.second - new_seed.consensus_pos.first);
-            string seed_str;
-            new_seed.getExtendedSeedSequence(s, seed_str);
-            assert_eq(consensus_str.length(), seed_str.length());
-            cerr << "consensus: " << consensus_str << endl;
-            cerr << "seed     : " << seed_str << endl;
-        }
+        if(remove_count <= 0) break;
+        
+        sort(seeds_.begin(), seeds_.end(), seedCmp);
+        seeds_.resize(seeds_.size() - remove_count);
     }
     
-    internal_update();
-
     return;
 }
 
@@ -2177,6 +2191,7 @@ void RB_Repeat::showInfo(const RepeatParameter& rp,
     cerr << "\trepeat id: " << repeat_id_ << endl;
     cerr << "\tnumber of alleles: " << seeds_.size() << endl;
     cerr << "\tconsensus length: " << consensus_.length() << endl;
+    cerr << consensus_ << endl;
     for(size_t i = 0; i < seeds_.size(); i++) {
         const SeedExt& seed = seeds_[i];
         size_t ext_len = seed.getLength();
@@ -2214,9 +2229,9 @@ void RB_Repeat::generateSNPs(const RepeatParameter& rp, const TStr& s, TIndexOff
     }
 }
 
-void RB_Repeat::saveSNPs(ofstream &fp, TIndexOffU grp_id, TIndexOffU& snp_id_base, TIndexOffU consensus_baseoff)
+void RB_Repeat::saveSNPs(ofstream &fp, TIndexOffU grp_id, TIndexOffU& snp_id_base)
 {
-    string chr_name = "rep";
+    string chr_name = "rep" + to_string(repeat_id_);
 
     for(size_t j = 0; j < snps_.size(); j++) {
         SeedSNP& snp = *snps_[j];
@@ -2240,7 +2255,7 @@ void RB_Repeat::saveSNPs(ofstream &fp, TIndexOffU grp_id, TIndexOffU& snp_id_bas
         fp << chr_name;
         fp << "\t";
 
-        fp << snp.pos + consensus_baseoff;
+        fp << snp.pos;
         fp << "\t";
         if(snp.type == EDIT_TYPE_MM || snp.type == EDIT_TYPE_REF_GAP) {
             fp << snp.base;
@@ -2715,7 +2730,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                         seed_a = seed_j; seed_b = seed_i;
                     }
                     // DK - debugging purposes
-                    bool debug = (a->second->repeat_id() == 108 /* && b->second->repeat_id() == 327 */);
+                    bool debug = (a->second->repeat_id() == 8611 && b->second->repeat_id() == 576);
                     if(debug) {
                         int dk = 0;
                         dk++;
@@ -2800,6 +2815,24 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     
     delete repeat_manager;
     repeat_manager = NULL;
+    
+    // remove non-qualifying repeats
+    //  and update repeat IDs for those remaining
+    {
+        map<size_t, RB_Repeat*> temp_repeat_map;
+        size_t i = 0;
+        for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
+            RB_Repeat* repeat = it->second;
+            if(!repeat->satisfy(rp)) {
+                delete repeat;
+                continue;
+            }
+            repeat->repeat_id(i);
+            temp_repeat_map[repeat->repeat_id()] = repeat;
+            i++;
+        }
+        repeat_map_ = temp_repeat_map;
+    }
 }
 
 template<typename TStr>
@@ -2845,7 +2878,6 @@ void RepeatBuilder<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
 
 template<typename TStr>
 void RepeatBuilder<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
-                                         TIndexOffU baseoff,
                                          Range range,
                                          const string& seq_name,
                                          const EList<SeedExt>& seeds,
@@ -2871,9 +2903,9 @@ void RepeatBuilder<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
     while(ee < snps.size() + 1) {
         if(ee == snps.size() ||
            snps[eb]->pos + (min_ht_len << 1) < snps[ee]->pos) {
-            TIndexOffU left_pos = snps[eb]->pos + baseoff;
+            TIndexOffU left_pos = snps[eb]->pos;
             TIndexOffU right_pos = snps[ee-1]->pos;
-            right_pos = min<TIndexOffU>(max_right_pos, right_pos + min_ht_len) + baseoff;
+            right_pos = min<TIndexOffU>(max_right_pos, right_pos + min_ht_len);
             assert_leq(left_pos, right_pos);
             fp << "rpht" << hapl_id_base++;
             fp << "\t" << seq_name;
@@ -2896,7 +2928,6 @@ void RepeatBuilder<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
 template<typename TStr>
 void RepeatBuilder<TStr>::writeAllele(TIndexOffU grp_id,
                                       TIndexOffU allele_id,
-                                      TIndexOffU baseoff,
                                       Range range,
                                       const string& seq_name,
                                       const EList<SeedExt>& seeds,
@@ -2913,7 +2944,7 @@ void RepeatBuilder<TStr>::writeAllele(TIndexOffU grp_id,
     fp << ">";
     fp << "rpt_" << grp_id << "*" << allele_id;
     fp << "\t" << seq_name;
-    fp << "\t" << seeds[range.first].consensus_pos.first + baseoff;
+    fp << "\t" << seeds[range.first].consensus_pos.first;
     fp << "\t" << seeds[range.first].consensus_pos.second - seeds[range.first].consensus_pos.first;
     fp << "\t" << pos_size;
     fp << "\t" << snp_size;
@@ -2957,7 +2988,6 @@ void RepeatBuilder<TStr>::writeAllele(TIndexOffU grp_id,
 
 template<typename TStr>
 void RepeatBuilder<TStr>::writeSNPs(ostream& fp,
-                                    TIndexOffU baseoff,
                                     const string& rep_chr_name,
                                     const ESet<Edit>& editset)
 {
@@ -2968,7 +2998,7 @@ void RepeatBuilder<TStr>::writeSNPs(ostream& fp,
             fp << "rps" << ed.snpID;
             fp << "\t" << "single";
             fp << "\t" << rep_chr_name;
-            fp << "\t" << ed.pos + baseoff;
+            fp << "\t" << ed.pos;
             fp << "\t" << ed.qchr;
             fp << endl;
         } else {
@@ -3349,8 +3379,8 @@ void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
             continue;
 
         // for each repeats
-        repeat.saveSNPs(snp_fp, i, snp_id_base, consensus_baseoff);
-        saveAlleles(rp, repeat, info_fp, hapl_fp, i, consensus_baseoff, hapl_id_base);
+        repeat.saveSNPs(snp_fp, i, snp_id_base);
+        saveAlleles(rp, repeat, info_fp, hapl_fp, i, hapl_id_base);
 
         consensus_baseoff += repeat.consensus().length();
     }
@@ -3368,22 +3398,21 @@ void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp) {
     string fa_fname = filename_ + ".rep.fa";
     ofstream fa_fp(fa_fname.c_str());
 
-    // TODO
-    fa_fp << ">" << "rep" << endl;
-
-    int oskip = 0;
-
-    int i =0;
-
-    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
+    for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
         RB_Repeat& repeat = *(it->second);
         if(!repeat.satisfy(rp))
             continue;
-
+        
         // for each repeats
         const string& constr = repeat.consensus();
-
         size_t constr_len = constr.length();
+        
+        fa_fp << ">" << "rep" << repeat.repeat_id() << " ";
+        fa_fp << "len:" << constr_len << " ";
+        fa_fp << "seeds:" << repeat.seeds().size() << " ";
+        fa_fp << "snps:to_be_filled" << endl;
+
+        size_t oskip = 0;
         size_t si = 0;
 
         while(si < constr_len) {
@@ -3401,11 +3430,10 @@ void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp) {
 
             si += out_len;
         }
-
-    }
-
-    if(oskip) {
-        fa_fp << endl;
+        
+        if(oskip) {
+            fa_fp << endl;
+        }
     }
 
     fa_fp.close();
@@ -3418,12 +3446,11 @@ void RepeatBuilder<TStr>::saveAlleles(
         ofstream& fp,
         ofstream& hapl_fp,
         TIndexOffU grp_id,
-        TIndexOffU consensus_baseoff,
         TIndexOffU& hapl_id_base
         )
 {
 
-    static const string seq_name = "rep";
+    static const string seq_name = "rep" + to_string(repeat.repeat_id());
     const EList<SeedExt>& seeds = repeat.seeds();
     Range range(0, seeds.size());
 
@@ -3450,11 +3477,11 @@ void RepeatBuilder<TStr>::saveAlleles(
         }
 
         // [sb, se) are same alleles
-        writeAllele(grp_id, allele_id, consensus_baseoff, Range(sb, se),
+        writeAllele(grp_id, allele_id, Range(sb, se),
                     seq_name, seeds,
                     fp);
-        writeHaploType(hapl_id_base, consensus_baseoff, Range(sb, se),
-                seq_name, seeds, hapl_fp);
+        writeHaploType(hapl_id_base, Range(sb, se),
+                       seq_name, seeds, hapl_fp);
 
 
         allele_id++;
