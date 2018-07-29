@@ -2056,25 +2056,6 @@ void RB_Repeat::merge(const RepeatParameter& rp,
     EList<pair<size_t, size_t> > kmer_table;
     build_kmer_table(consensus_, kmer_table, kmer_len);
     
-    // DP alignment related variables
-    EList<Edit> edits;
-    Coord coord;
-    EList<Edit> ed;
-    // string pad;
-    // makePadString(refstr, readstr, pad, 5);
-    // string ref2 = pad + refstr + pad;
-    // string read2 = pad + readstr + pad;
-    
-    // size_t left = pad.length();
-    // size_t right = left + readstr.length();
-    // edits.reserveExact(ed.size());
-    // for(size_t i = 0; i < ed.size(); i++) {
-    //    if(ed[i].pos >= left && ed[i].pos <= right) {
-    //        edits.push_back(ed[i]);
-    //        edits.back().pos -= left;
-    //    }
-    // }
-    
     EList<int> offsets;
     string seq;
     for(size_t i = 0; i < merge_list.size(); i++) {
@@ -2114,19 +2095,6 @@ void RB_Repeat::merge(const RepeatParameter& rp,
             }
         }
 
-        // DK - debugging purposes
-#if 0
-        if(consensus_.length() >= 2000 && seq.length() >= 2000) {
-            Timer timer(cerr, "total time: ", true);
-            for(size_t dk = 0; dk < 100; dk++) {
-                edits.clear();
-                swalginer.alignStrings(consensus_, seq, edits, coord);
-                if(dk % 10 == 0)
-                    cerr << "dk: " << dk << endl;
-            }
-        }
-#endif
-        
         getString(s, left, right - left, seq);
         if(seed_id >= seeds_.size()) {
             seed_id = seeds_.size();
