@@ -1627,30 +1627,42 @@ bool RB_Repeat::align(const RepeatParameter& rp,
     seed.consensus_pos.second = consensus_.length();
     seed.aligned = false;
     
-    offsets.resize(s2.length());
-    offsets.fill(-1);
-    pair<size_t, size_t> kmer(0, 0);
-    for(size_t i = 0; i + k <= s2.length(); i++) {
-        if(i == 0) {
-            kmer.first = extract_kmer(s2, i, k);
-        } else {
-            kmer.first = next_kmer(kmer.first, s2[i+k-1], k);
-        }
-        size_t lb = s_kmer_table.bsearchLoBound(kmer);
-        while(lb < s_kmer_table.size() && kmer.first == s_kmer_table[lb].first) {
-            if(offsets[i] == -1) {
-                offsets[i] = (int)s_kmer_table[lb].second;
-            } else if(offsets[i] >= 0) {
-                offsets[i] = -2;
+    {
+        const int query_len = right - left;
+        const int consensus_len = consensus_approx_right - consensus_approx_left;
+        const int abs_gap_len = max<int>(abs(consensus_len - query_len), 5);
+        
+        offsets.resize(s2.length());
+        offsets.fill(-1);
+        pair<size_t, size_t> kmer(0, 0);
+        for(size_t i = 0; i + k <= s2.length(); i++) {
+            if(i == 0) {
+                kmer.first = extract_kmer(s2, i, k);
             } else {
-                assert_lt(offsets[i], -1);
-                offsets[i] -= 1;
+                kmer.first = next_kmer(kmer.first, s2[i+k-1], k);
             }
-            lb++;
-        }
-        if(offsets[i] > 0 && i + k == s2.length()) {
-            for(size_t j = i + 1; j < s2.length(); j++) {
-                offsets[j] = offsets[j-1] + 1;
+            size_t lb = s_kmer_table.bsearchLoBound(kmer);
+            int best_abs_diff = numeric_limits<int>::max();
+            while(lb < s_kmer_table.size() && kmer.first == s_kmer_table[lb].first) {
+                int expected = (int)i + consensus_approx_left;
+                int real = (int)s_kmer_table[lb].second;
+                int abs_diff = abs(expected - real);
+                if(abs_diff <= abs_gap_len * 2) {
+                    if(offsets[i] == -1) {
+                        offsets[i] = (int)s_kmer_table[lb].second;
+                    } else if(offsets[i] >= 0) {
+                        offsets[i] = -2;
+                    } else {
+                        assert_lt(offsets[i], -1);
+                        offsets[i] -= 1;
+                    }
+                }
+                lb++;
+            }
+            if(offsets[i] > 0 && i + k == s2.length()) {
+                for(size_t j = i + 1; j < s2.length(); j++) {
+                    offsets[j] = offsets[j-1] + 1;
+                }
             }
         }
     }
@@ -1672,7 +1684,11 @@ bool RB_Repeat::align(const RepeatParameter& rp,
             break;
         
         assert_leq(range.second, range2.first);
-        if(offsets[range.second - 1] > offsets[range2.first] || abs(range_avg - range_avg2) > 10.0f) {
+        
+        float abs_diff = abs(range_avg - range_avg2);
+        if(offsets[range.second - 1] > offsets[range2.first] ||
+           (abs_diff > 10.0f && (range.second - range.first < 5 || range2.second - range2.first < 5)) ||
+           abs_diff > 20.0f) {
             if(range.second - range.first < range2.second - range2.first) {
                 for(size_t i = range.first; i < range.second; i++) {
                     offsets[i] = -1;
@@ -1698,7 +1714,7 @@ bool RB_Repeat::align(const RepeatParameter& rp,
 
         float diff = (float)offsets[i] - (float)i;
         if(weighted_avg_inited) {
-            if(abs(diff - weighted_avg) > 10.0f) {
+            if(abs(diff - weighted_avg) > 20.0f) {
                 offsets[i] = -1;
                 continue;
             }
@@ -1764,6 +1780,13 @@ bool RB_Repeat::align(const RepeatParameter& rp,
                              debug);
                 
                 if(mm > very_max_mm) {
+                    
+                    // DK - debugging purposes
+                    if(debug) {
+                        int dk = 0;
+                        dk += 1;
+                    }
+                    
                     return false;
                 }
                 
@@ -1908,12 +1931,10 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         Range orange = oseed.getExtendedRange(o.consensus_.length());
         assert_leq(range.first, orange.first + 10);
         
-        if(contain) {
-            consensus_add_len = (int)orange.first - (int)range.first;
-        } else {
+        consensus_add_len = (int)orange.first - (int)range.first;
+        if(!contain) {
             assert_lt(orange.first, range.second);
             consensus_ += o.consensus_.substr(range.second - orange.first);
-            consensus_add_len = (int)range.second - (int)orange.first - (int)range.first;
         }
     }
     
@@ -2060,9 +2081,12 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         size_t seed_id = (merge_list[i].first < seed_ranges_.size() ? seed_ranges_[merge_list[i].first].idx : merge_list[i].first);
         size_t oseed_id = (merge_list[i].second < o.seed_ranges_.size() ? o.seed_ranges_[merge_list[i].second].idx : merge_list[i].second);
         
-        if(seed_id < seeds_.size() &&
-           oseed_id >= o.seeds_.size())
-            continue;
+        if(seed_id < seeds_.size()) {
+            if(oseed_id >= o.seeds_.size())
+                continue;
+            else if(seed_ranges_[merge_list[i].first].contain(o.seed_ranges_[merge_list[i].second]))
+                continue;
+        }
         
         const SeedExt* seed = (seed_id < seeds_.size() ? &seeds_[seed_id] : NULL);
         const SeedExt* oseed = (oseed_id < o.seeds_.size() ? &o.seeds_[oseed_id] : NULL);
@@ -2103,12 +2127,6 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         }
 #endif
         
-        // DK - debugging purposes
-        if(debug && left == 692422) {
-            int dk = 0;
-            dk += 1;
-        }
-        
         getString(s, left, right - left, seq);
         if(seed_id >= seeds_.size()) {
             seed_id = seeds_.size();
@@ -2127,7 +2145,7 @@ void RB_Repeat::merge(const RepeatParameter& rp,
                           consensus_approx_right,
                           left,
                           right,
-                          debug && right - left == 1489);
+                          debug && right - left == 1080);
         
         // DK - debugging purposes
         if(!succ && right - left > 1000) {
@@ -2467,9 +2485,6 @@ int RB_SWAligner::alignStrings(const string &ref,
     TAlScore best = std::numeric_limits<TAlScore>::min();
     bool found = swa.align(rnd_, best);
     
-    // DK - debugging purposes
-    return 0;
-    
 #ifdef DEBUGLOG
     cerr << "found: " << found << "\t" << best << "\t" << "minsc: " << min_score << endl;
 #endif
@@ -2729,12 +2744,9 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                         a = jt; b = it;
                         seed_a = seed_j; seed_b = seed_i;
                     }
+                    
                     // DK - debugging purposes
-                    bool debug = (a->second->repeat_id() == 8611 && b->second->repeat_id() == 576);
-                    if(debug) {
-                        int dk = 0;
-                        dk++;
-                    }
+                    bool debug = (a->second->repeat_id() == 216 && b->second->repeat_id() == 2785711);
                     
                     repeat_manager->removeRepeat(a->second);
                     
