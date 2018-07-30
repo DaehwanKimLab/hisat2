@@ -1986,6 +1986,8 @@ HGFM<index_t, local_index_t>::HGFM(
     _in5Str = outfile + ".5." + gfm_ext;
     _in6Str = outfile + ".6." + gfm_ext;
     
+    const bool repeat_index = (parent_szs != NULL);
+    
     int32_t local_lineRate;
     if(snpfile == "" && ssfile == "" && exonfile == "") {
         local_lineRate = local_lineRate_fm;
@@ -2333,6 +2335,8 @@ HGFM<index_t, local_index_t>::HGFM(
 #endif
                     }
                     
+                    const local_index_t new_localFtabChars = (repeat_index ? 4 : localFtabChars);
+                    
                     LocalGFM<local_index_t, index_t>(
                                                      tParam.s,
                                                      tParam.sa,
@@ -2345,21 +2349,21 @@ HGFM<index_t, local_index_t>::HGFM(
                                                      packed,
                                                      needEntireReverse,
                                                      local_lineRate,
-                                                     localOffRate,      // suffix-array sampling rate
-                                                     localFtabChars,    // number of chars in initial arrow-pair calc
-                                                     outfile,           // basename for .?.ebwt files
-                                                     fw,                 // fw
-                                                     dcv,                // difference-cover period
-                                                     tParam.conv_local_szs,     // list of reference sizes
-                                                     tParam.local_sztot,        // total size of all unambiguous ref chars
-                                                     refparams,          // reference read-in parameters
-                                                     seed,               // pseudo-random number generator seed
+                                                     localOffRate,          // suffix-array sampling rate
+                                                     new_localFtabChars,    // number of chars in initial arrow-pair calc
+                                                     outfile,               // basename for .?.ebwt files
+                                                     fw,                    // fw
+                                                     dcv,                   // difference-cover period
+                                                     tParam.conv_local_szs, // list of reference sizes
+                                                     tParam.local_sztot,    // total size of all unambiguous ref chars
+                                                     refparams,             // reference read-in parameters
+                                                     seed,                  // pseudo-random number generator seed
                                                      fout5,
                                                      fout6,
-                                                     -1,                 // override offRate
-                                                     false,              // be silent
-                                                     passMemExc,         // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                                                     sanityCheck);       // verify results and internal consistency
+                                                     -1,                    // override offRate
+                                                     false,                 // be silent
+                                                     passMemExc,            // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                                                     sanityCheck);          // verify results and internal consistency
                     tParam.s.clear();
                     if(tParam.rg != NULL) {
                         assert(tParam.pg != NULL);

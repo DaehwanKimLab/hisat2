@@ -2036,6 +2036,9 @@ public:
 			bmax = (uint32_t)sqrt(s.length());
 			// VMSG_NL("bmax defaulted to: " << bmax);
 		}
+        
+        const bool repeat_index = (parent_szs != NULL);
+        
 		int iter = 0;
 		bool first = true;
 		streampos out1pos = out1.tellp();
@@ -2070,7 +2073,7 @@ public:
 			}
 			iter++;
 			try {
-                if(_alts.empty()) {
+                if(_alts.empty() || repeat_index) {
                     VMSG("Using parameters --bmax " << bmax);
                     if(dcv == 0) {
                         VMSG_NL(" and *no difference cover*");
