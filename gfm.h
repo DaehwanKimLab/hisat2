@@ -1854,7 +1854,7 @@ public:
                             repName = repAlleleName;
                         } else {
                             repName = repAlleleName.substr(0, star_pos);
-                            string strID = repAlleleName.substr(star_pos);
+                            string strID = repAlleleName.substr(star_pos + 1);
                             istringstream(strID) >> alleleID;
                         }
                         

@@ -522,7 +522,6 @@ SeedSNP *lookup_add_SNP(EList<SeedSNP *>& repeat_snps, SeedSNP& snp)
 template<typename TStr>
 void SeedExt::generateSNPs(const TStr &s, const string& consensus, EList<SeedSNP *>& repeat_snps)
 {
-    ostream& fp = cerr;
     EList<pair<TIndexOffU, int> > gaps;
 
     // Merge Gaps
@@ -1642,7 +1641,6 @@ bool RB_Repeat::align(const RepeatParameter& rp,
                 kmer.first = next_kmer(kmer.first, s2[i+k-1], k);
             }
             size_t lb = s_kmer_table.bsearchLoBound(kmer);
-            int best_abs_diff = numeric_limits<int>::max();
             while(lb < s_kmer_table.size() && kmer.first == s_kmer_table[lb].first) {
                 int expected = (int)i + consensus_approx_left;
                 int real = (int)s_kmer_table[lb].second;
@@ -3437,7 +3435,7 @@ void RepeatBuilder<TStr>::saveAlleles(
         )
 {
 
-    static const string seq_name = "rep" + to_string(repeat.repeat_id());
+    const string seq_name = "rep" + to_string(repeat.repeat_id());
     const EList<SeedExt>& seeds = repeat.seeds();
     Range range(0, seeds.size());
 
