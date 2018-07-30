@@ -2214,9 +2214,9 @@ void RB_Repeat::generateSNPs(const RepeatParameter& rp, const TStr& s, TIndexOff
         }
         assert_eq(seed.getLength(), seed.pos.second - seed.pos.first);
         seed.generateSNPs(s, consensus(), snps());
-        if(snps().size() > 0) {
-            sort(snps().begin(), snps().end(), SeedSNP::cmpSeedSNPByPos);
-        }
+    }
+    if(snps().size() > 0) {
+        sort(snps_.begin(), snps().end(), SeedSNP::cmpSeedSNPByPos);
     }
 }
 
@@ -2669,7 +2669,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 			}
 		}
 	}
-    
+
     cerr << "number of seed positions is " << repeat_manager->numCoords() << endl;
 
     while(true) {
@@ -2862,51 +2862,34 @@ void RepeatBuilder<TStr>::saveRepeatPositions(ofstream& fp, RepeatGroup& rg)
 }
 
 template<typename TStr>
-void RepeatBuilder<TStr>::writeHaploType(TIndexOffU& hapl_id_base,
-                                         Range range,
-                                         const string& seq_name,
+void RepeatBuilder<TStr>::writeHaploType(const EList<SeedHP>& haplo_lists,
                                          const EList<SeedExt>& seeds,
+                                         TIndexOffU& hapl_id_base,
+                                         const string& seq_name,
                                          ostream &fp)
 {
-    const EList<SeedSNP*>& snps = seeds[range.first].snps;
-    if(snps.size() == 0)
+    if(haplo_lists.size() == 0) {
         return;
-    
-    // right-most position
-    TIndexOffU max_right_pos = seeds[range.first].consensus_pos.second - 1;
-    
-#ifndef NDEBUG
-    for(size_t i = 0; i < snps.size(); i++) {
-        assert_leq(snps[i]->pos, max_right_pos);
     }
-#endif
-    
-    // create haplotypes of at least 16 bp long to prevent combinations of SNPs
-    // break a list of SNPs into several haplotypes if a SNP is far from the next SNP in the list
-    const TIndexOffU min_ht_len = 16;
-    size_t eb = 0, ee = 1;
-    while(ee < snps.size() + 1) {
-        if(ee == snps.size() ||
-           snps[eb]->pos + (min_ht_len << 1) < snps[ee]->pos) {
-            TIndexOffU left_pos = snps[eb]->pos;
-            TIndexOffU right_pos = snps[ee-1]->pos;
-            right_pos = min<TIndexOffU>(max_right_pos, right_pos + min_ht_len);
-            assert_leq(left_pos, right_pos);
-            fp << "rpht" << hapl_id_base++;
-            fp << "\t" << seq_name;
-            fp << "\t" << left_pos;
-            fp << "\t" << right_pos;
-            fp << "\t";
-            for(size_t i = eb; i < ee; i++) {
-                if(i > eb) {
-                    fp << ",";
-                }
-                fp << "rps" << snps[i]->id;
+
+    for(size_t i = 0; i < haplo_lists.size(); i++) {
+        const SeedHP &haploType = haplo_lists[i];
+
+        fp << "rpht" << hapl_id_base++;
+        fp << "\t" << seq_name;
+        fp << "\t" << haploType.range.first;
+        fp << "\t" << haploType.range.second;
+        fp << "\t";
+
+        assert_gt(haploType.snpIDs.size(), 0);
+
+        for (size_t j = 0; j < haploType.snpIDs.size(); j++) {
+            if(j) {
+                fp << ",";
             }
-            fp << endl;
-            eb = ee;
+            fp << haploType.snpIDs[j];
         }
-        ee++;
+        fp << endl;
     }
 }
 
@@ -3437,6 +3420,7 @@ void RepeatBuilder<TStr>::saveAlleles(
 
     const string seq_name = "rep" + to_string(repeat.repeat_id());
     const EList<SeedExt>& seeds = repeat.seeds();
+    EList<SeedHP> haplo_lists;
     Range range(0, seeds.size());
 
     int allele_id = 0;
@@ -3465,12 +3449,70 @@ void RepeatBuilder<TStr>::saveAlleles(
         writeAllele(grp_id, allele_id, Range(sb, se),
                     seq_name, seeds,
                     fp);
-        writeHaploType(hapl_id_base, Range(sb, se),
-                       seq_name, seeds, hapl_fp);
-
+        generateHaploType(Range(sb, se), seeds, haplo_lists);
 
         allele_id++;
         sb = se;
+    }
+
+    // sort HaploType List by pos
+    haplo_lists.sort();
+    writeHaploType(haplo_lists, seeds, hapl_id_base, seq_name, hapl_fp);
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::generateHaploType(Range range, const EList<SeedExt> &seeds, EList<SeedHP> &haplo_list)
+{
+    const EList<SeedSNP *>& snps = seeds[range.first].snps;
+    if(snps.size() == 0)
+        return;
+
+    // right-most position
+    TIndexOffU max_right_pos = seeds[range.first].consensus_pos.second - 1;
+
+#ifndef NDEBUG
+    for(size_t i = 0; i < snps.size(); i++) {
+        assert_leq(snps[i]->pos, max_right_pos);
+    }
+#endif
+
+    // create haplotypes of at least 16 bp long to prevent combinations of SNPs
+    // break a list of SNPs into several haplotypes if a SNP is far from the next SNP in the list
+    const TIndexOffU min_ht_len = 16;
+    size_t eb = 0, ee = 1;
+    while(ee < snps.size() + 1) {
+        if(ee == snps.size() ||
+           snps[eb]->pos + (min_ht_len << 1) < snps[ee]->pos) {
+            TIndexOffU left_pos = snps[eb]->pos;
+            TIndexOffU right_pos = snps[ee-1]->pos;
+            right_pos = min<TIndexOffU>(max_right_pos, right_pos);
+            assert_leq(left_pos, right_pos);
+
+            SeedHP seedHP;
+
+            seedHP.range.first = left_pos;
+            seedHP.range.second = right_pos;
+            for(size_t i = eb; i < ee; i++) {
+                string snp_ids = "rps" + to_string(snps[i]->id);
+                seedHP.snpIDs.push_back(snp_ids);
+            }
+
+            // Add to haplo_list
+            bool found = false;
+            for(size_t i = 0; i < haplo_list.size(); i++) {
+                if(haplo_list[i] == seedHP) {
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) {
+                // Add
+                haplo_list.push_back(seedHP);
+            }
+
+            eb = ee;
+        }
+        ee++;
     }
 }
 

@@ -209,41 +209,37 @@ struct RepeatGroup {
         }
     }
 
-    void writeHaploType(ofstream& fp, const string& rep_chr_name, size_t& base_idx)
-    {
-        assert_gt(edits.size(), 0);
-        assert_eq(edits.size(), snpIDs.size());
 
-        size_t ref_base = base_offset + coord.off();
+};
 
-        int rd_gaps = 0;
-        int rf_gaps = 0;
-
-        for(size_t i = 0; i < edits.size(); i++) {
-            if(edits[i].isReadGap()) {
-                rd_gaps++;
-            } else if(edits[i].isRefGap()) {
-                rf_gaps++;
-            }
-        }
-
-        size_t left = edits[0].pos;
-        size_t right = edits[edits.size() - 1].pos + rd_gaps - rf_gaps;
-
-        fp << "rpht" << base_idx++;
-        fp << "\t" << rep_chr_name;
-        fp << "\t" << ref_base + left;
-        fp << "\t" << ref_base + right;
-        fp << "\t";
-        for(size_t i = 0; i < edits.size(); i++) {
-            if (i != 0) {
-                fp << ",";
-            }
-            fp << snpIDs[i];
-        }
-        fp << endl;
+struct SeedHP {
+    bool operator==(const SeedHP &rhs) const {
+        return range == rhs.range &&
+               snpIDs == rhs.snpIDs;
     }
 
+    bool operator!=(const SeedHP &rhs) const {
+        return !(rhs == *this);
+    }
+
+    bool operator<(const SeedHP &rhs) const {
+        return range < rhs.range;
+    }
+
+    bool operator>(const SeedHP &rhs) const {
+        return rhs < *this;
+    }
+
+    bool operator<=(const SeedHP &rhs) const {
+        return !(rhs < *this);
+    }
+
+    bool operator>=(const SeedHP &rhs) const {
+        return !(*this < rhs);
+    }
+
+    Range range;
+    EList<string> snpIDs;
 };
 
 struct SeedSNP {
@@ -864,11 +860,15 @@ private:
                    const string& rep_chr_name,
                    const ESet<Edit>& editset);
 
-    void writeHaploType(TIndexOffU& hapl_id_base,
-                        Range range,
-                        const string& seq_name,
+    void writeHaploType(const EList<SeedHP>& haplo_list,
                         const EList<SeedExt>& seeds,
-                        ostream &fp);
+                        TIndexOffU& hapl_id_base,
+                        const string& seq_name,
+                        ostream& fp);
+
+    void generateHaploType(Range range,
+                           const EList<SeedExt>& seeds,
+                           EList<SeedHP>& haplo_list);
 
 private:
     const int output_width = 60;
