@@ -1933,8 +1933,15 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         
         consensus_add_len = (int)orange.first - (int)range.first;
         if(!contain) {
-            assert_lt(orange.first, range.second);
-            consensus_ += o.consensus_.substr(range.second - orange.first);
+            if(range.second <= orange.first) {
+                cerr << "something wrong: " << range.first << "-" << range.second << " ";
+                cerr << orange.first << "-" << orange.second << " " << o.consensus_.length() << endl;
+                assert(false);
+            }
+            if(range.second > orange.first &&
+               range.second - orange.first < o.consensus_.length()) {
+                consensus_ += o.consensus_.substr(range.second - orange.first);
+            }
         }
     }
     
