@@ -2169,6 +2169,8 @@ HGFM<index_t, local_index_t>::HGFM(
     assert(fout5.good());
     assert(fout6.good());
     
+    const local_index_t new_localFtabChars = (repeat_index ? 4 : localFtabChars);
+    
     // When building an Ebwt, these header parameters are known
     // "up-front", i.e., they can be written to disk immediately,
     // before we join() or buildToDisk()
@@ -2178,7 +2180,7 @@ HGFM<index_t, local_index_t>::HGFM(
     writeI32(fout5, local_lineRate,  be); // 2^lineRate = size in bytes of 1 line
     writeI32(fout5, 2, be); // not used
     writeI32(fout5, (int32_t)localOffRate,   be); // every 2^offRate chars is "marked"
-    writeI32(fout5, (int32_t)localFtabChars, be); // number of 2-bit chars used to address ftab
+    writeI32(fout5, (int32_t)new_localFtabChars, be); // number of 2-bit chars used to address ftab
     int32_t flags = 1;
     if(this->_gh._entireReverse) flags |= GFM_ENTIRE_REV;
     writeI32(fout5, -flags, be); // BTL: chunkRate is now deprecated
@@ -2336,8 +2338,6 @@ HGFM<index_t, local_index_t>::HGFM(
                         nanosleep(&ts, NULL);
 #endif
                     }
-                    
-                    const local_index_t new_localFtabChars = (repeat_index ? 4 : localFtabChars);
                     
                     LocalGFM<local_index_t, index_t>(
                                                      tParam.s,
