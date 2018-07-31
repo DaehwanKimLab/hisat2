@@ -643,7 +643,7 @@ public:
     float mergeable(const RB_Repeat& o) const;
     
     template<typename TStr>
-    void merge(const RepeatParameter& rp,
+    bool merge(const RepeatParameter& rp,
                const TStr& s,
                RB_SWAligner& swalginer,
                const RB_Repeat& o,
@@ -707,6 +707,13 @@ private:
                size_t left,
                size_t right,
                bool debug = false);
+    
+    bool isSelfRepeat(const RepeatParameter& rp,
+                      const string& s,
+                      const EList<pair<size_t, size_t> >& s_kmer_table,
+                      EList<int>& offsets,
+                      size_t k,
+                      bool debug);
     
     void internal_update();
 

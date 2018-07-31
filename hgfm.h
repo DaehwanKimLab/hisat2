@@ -1874,6 +1874,8 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                     exploded = tParam.pg->getNumEdges() > local_max_gbwt;
                 }
                 if(exploded) {
+                    cerr << "Warning: a local graph exploded (offset: " << tParam.curr_sztot << ", length: " << tParam.local_sztot << ")" << endl;
+                    
                     delete tParam.pg; tParam.pg = NULL;
                     delete tParam.rg; tParam.rg = NULL;
                     if(tParam.alts.size() <= 1) {

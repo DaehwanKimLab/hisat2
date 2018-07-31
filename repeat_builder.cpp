@@ -1645,7 +1645,7 @@ bool RB_Repeat::align(const RepeatParameter& rp,
                 int expected = (int)i + consensus_approx_left;
                 int real = (int)s_kmer_table[lb].second;
                 int abs_diff = abs(expected - real);
-                if(abs_diff <= abs_gap_len * 2) {
+                if(abs_diff <= abs_gap_len * 2 || debug) {
                     if(offsets[i] == -1) {
                         offsets[i] = (int)s_kmer_table[lb].second;
                     } else if(offsets[i] >= 0) {
@@ -1907,8 +1907,65 @@ bool RB_Repeat::align(const RepeatParameter& rp,
     return true;
 }
 
+bool RB_Repeat::isSelfRepeat(const RepeatParameter& rp,
+                             const string& s,
+                             const EList<pair<size_t, size_t> >& s_kmer_table,
+                             EList<int>& offsets,
+                             size_t k,
+                             bool debug)
+{
+    offsets.resize(s.length());
+    offsets.fill(-1);
+    pair<size_t, size_t> kmer(0, 0);
+    for(size_t i = 0; i + k <= s.length(); i++) {
+        if(i == 0) {
+            kmer.first = extract_kmer(s, i, k);
+        } else {
+            kmer.first = next_kmer(kmer.first, s[i+k-1], k);
+        }
+        size_t lb = s_kmer_table.bsearchLoBound(kmer);
+        while(lb < s_kmer_table.size() && kmer.first == s_kmer_table[lb].first) {
+            if(offsets[i] == -1) {
+                offsets[i] = (int)s_kmer_table[lb].second;
+            } else if(offsets[i] >= 0) {
+                offsets[i] = -2;
+            } else {
+                assert_lt(offsets[i], -1);
+                offsets[i] -= 1;
+            }
+            lb++;
+        }
+        if(offsets[i] > 0 && i + k == s.length()) {
+            for(size_t j = i + 1; j < s.length(); j++) {
+                offsets[j] = offsets[j-1] + 1;
+            }
+        }
+    }
+    
+    if(debug) {
+        cerr << "offsets" << endl;
+        for(size_t j = 0; j < offsets.size(); j++) {
+            cout << j << ": " << offsets[j] << " " << s[j] << ": " << (offsets[j] < 0 ? ' ' : s[offsets[j]]) << endl;
+        }
+    }
+    
+    const size_t min_repeat_size = 100;
+    size_t repeat_count = 0;
+    for(size_t i = 0; i + min_repeat_size < offsets.size(); i++) {
+        if(offsets[i] >= -1)
+            continue;
+        size_t j = i + 1;
+        for(; j < offsets.size() && offsets[j] <= -2; j++);
+        if(j - i >= min_repeat_size)
+            repeat_count++;
+        i = j;
+    }
+
+    return repeat_count >= 2;
+}
+
 template<typename TStr>
-void RB_Repeat::merge(const RepeatParameter& rp,
+bool RB_Repeat::merge(const RepeatParameter& rp,
                       const TStr& s,
                       RB_SWAligner& swalginer,
                       const RB_Repeat& o,
@@ -1918,6 +1975,7 @@ void RB_Repeat::merge(const RepeatParameter& rp,
                       bool debug)
 {
     // construct a new consensus sequence
+    string prev_consensus = consensus_;
     size_t consensus_add_len = 0;
     {
         assert_lt(seed_i, seeds_.size());
@@ -2047,7 +2105,7 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         p2++;
     }
     
-    if(merge_list.empty()) return;
+    assert(!merge_list.empty());
     
     if(debug) {
         for(size_t i = 0; i < merge_list.size(); i++) {
@@ -2060,8 +2118,19 @@ void RB_Repeat::merge(const RepeatParameter& rp,
     const size_t kmer_len = 12;
     EList<pair<size_t, size_t> > kmer_table;
     build_kmer_table(consensus_, kmer_table, kmer_len);
-    
     EList<int> offsets;
+    
+    bool self_repeat = isSelfRepeat(rp,
+                                    consensus_,
+                                    kmer_table,
+                                    offsets,
+                                    kmer_len,
+                                    debug);
+    if(self_repeat) {
+        consensus_ = prev_consensus;
+        return false;
+    }
+    
     string seq;
     for(size_t i = 0; i < merge_list.size(); i++) {
         size_t seed_id = (merge_list[i].first < seed_ranges_.size() ? seed_ranges_[merge_list[i].first].idx : merge_list[i].first);
@@ -2172,7 +2241,7 @@ void RB_Repeat::merge(const RepeatParameter& rp,
         seeds_.resize(seeds_.size() - remove_count);
     }
     
-    return;
+    return true;
 }
 
 
@@ -2672,9 +2741,14 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 
     cerr << "number of seed positions is " << repeat_manager->numCoords() << endl;
 
+    size_t merge_iter = 0;
     while(true) {
         set<size_t> to_remove;
-        for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
+        size_t repeat_count = 0;
+        for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, repeat_count++) {
+            if(repeat_count % 500 == 0) {
+                cerr << merge_iter << " iteration: " << repeat_count << " repeats of " << repeat_map_.size() << endl;
+            }
             if(to_remove.find(it->first) != to_remove.end())
                 continue;
             
@@ -2719,24 +2793,26 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                     }
                     
                     // DK - debugging purposes
-                    bool debug = (a->second->repeat_id() == 216 && b->second->repeat_id() == 2785711);
+                    bool debug = (a->second->repeat_id() == 39094 * 1000 /* && b->second->repeat_id() == 2785711 */);
                     
                     repeat_manager->removeRepeat(a->second);
                     
-                    a->second->merge(rp,
-                                     s_,
-                                     swaligner_,
-                                     *(b->second),
-                                     contain,
-                                     seed_a,
-                                     seed_b,
-                                     debug);
+                    bool merged = a->second->merge(rp,
+                                                   s_,
+                                                   swaligner_,
+                                                   *(b->second),
+                                                   contain,
+                                                   seed_a,
+                                                   seed_b,
+                                                   debug);
                     
                     repeat_manager->addRepeat(a->second);
                     
-                    to_remove.insert(b->first);
-                    if(it->first == b->first)
-                        break;
+                    if(merged) {
+                        to_remove.insert(b->first);
+                        if(it->first == b->first)
+                            break;
+                    }
                 }
             }
         }
@@ -2751,12 +2827,15 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             delete repeat_it->second;
             repeat_map_.erase(repeat_it);
         }
+        
+        merge_iter++;
     }
     
 #ifndef NDEBUG
     repeat_manager->showInfo(rp,
                              coordHelper_,
-                             repeat_map_);
+                             repeat_map_,
+                             0);
 #endif
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
@@ -2812,6 +2891,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                 delete repeat;
                 continue;
             }
+  
             repeat->repeat_id(i);
             temp_repeat_map[repeat->repeat_id()] = repeat;
             i++;
@@ -3258,11 +3338,11 @@ TIndexOffU RepeatBuilder<TStr>::getLCP(TIndexOffU a, TIndexOffU b)
 
 template<typename TStr>
 bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
-                                                   const string& read,
-                                                   EList<Edit>& edits,
-                                                   Coord& coord,
-                                                   TIndexOffU rpt_len,
-                                                   TIndexOffU max_edit)
+                                                 const string& read,
+                                                 EList<Edit>& edits,
+                                                 Coord& coord,
+                                                 TIndexOffU rpt_len,
+                                                 TIndexOffU max_edit)
 {
     size_t max_matchlen = 0;
     EList<Edit> ed;
@@ -3316,7 +3396,6 @@ bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
 template<typename TStr>
 void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
 {
-
     // Generate SNPs
     size_t i = 0;
     for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
@@ -3485,6 +3564,10 @@ void RepeatBuilder<TStr>::generateHaploType(Range range, const EList<SeedExt> &s
            snps[eb]->pos + (min_ht_len << 1) < snps[ee]->pos) {
             TIndexOffU left_pos = snps[eb]->pos;
             TIndexOffU right_pos = snps[ee-1]->pos;
+            
+            if(snps[ee-1]->type == EDIT_TYPE_READ_GAP) {
+                right_pos += snps[ee-1]->len;
+            }
             right_pos = min<TIndexOffU>(max_right_pos, right_pos);
             assert_leq(left_pos, right_pos);
 
