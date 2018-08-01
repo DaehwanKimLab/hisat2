@@ -638,7 +638,8 @@ public:
                  bool& contain,
                  bool& left,
                  size_t& seed_i,
-                 size_t& seed_j) const;
+                 size_t& seed_j,
+                 bool debug = false) const;
 
     float mergeable(const RB_Repeat& o) const;
     
