@@ -663,6 +663,7 @@ void RB_Repeat::extendConsensus(const RepeatParameter& rp,
         
         size_t allowed_seed_mm = 0;
         ext_consensus.clear();
+        // const size_t min_count = max<size_t>(seeds_.size() * 80 / 100, rp.repeat_count);
         for(int i = (int)seed_mm; i >= 0; i--) {
             size_t extlen = (ed_seed_nums[i] < rp.repeat_count ? 0 : consensuses[i].length());
             if(extlen <= 0 || extlen < max_ext_len * i / seed_mm)
@@ -678,7 +679,6 @@ void RB_Repeat::extendConsensus(const RepeatParameter& rp,
         }
         size_t num_passed_seeds = 0;
         if(ext_consensus.length() > 0) {
-            string prev_consensus = consensus_;
             if(left) consensus_ = reverse(ext_consensus) + consensus_;
             else consensus_ += ext_consensus;
             
@@ -690,85 +690,72 @@ void RB_Repeat::extendConsensus(const RepeatParameter& rp,
                            left ? empty_consensuses : consensuses,
                            allowed_seed_mm);
             
-            // count number of passing seeds
-            size_t num_pass_seeds = 1;
+            // update seeds
             for(size_t i = 0; i < seeds_.size(); i++) {
                 SeedExt& seed = seeds_[i];
+                
                 if(i < remain) {
                     if(seed.ed <= allowed_seed_mm) {
-                    }
-                }
-            }
-            if(num_pass_seeds <= 0) {
-                consensus_ = prev_consensus;
-            } else {
-                // update seeds
-                for(size_t i = 0; i < seeds_.size(); i++) {
-                    SeedExt& seed = seeds_[i];
-                    
-                    if(i < remain) {
-                        if(seed.ed <= allowed_seed_mm) {
-                            num_passed_seeds++;
-                            seed.done = true;
-                            seed.total_ed += seed.ed;
-                            if(left) {
-                                if(seed.left_gaps.size() > 0 &&
-                                   seed.left_gaps.back().first >= seed.orig_pos.first - seed.pos.first) {
-                                    int gap_len = seed.left_gaps.back().second;
-                                    seed.pos.first += gap_len;
-                                }
-                                seed.pos.first -= ext_consensus.length();
-                                seed.consensus_pos.first = 0;
-                                seed.consensus_pos.second = consensus_.length();
-                            } else {
-                                if(seed.right_gaps.size() > 0 &&
-                                   seed.right_gaps.back().first >= seed.pos.second - seed.orig_pos.second) {
-                                    int gap_len = seed.right_gaps.back().second;
-                                    seed.pos.second -= gap_len;
-                                }
-                                seed.pos.second += ext_consensus.length();
-                                seed.consensus_pos.second = consensus_.length();
+                        num_passed_seeds++;
+                        seed.done = true;
+                        seed.total_ed += seed.ed;
+                        if(left) {
+                            if(seed.left_gaps.size() > 0 &&
+                               seed.left_gaps.back().first >= seed.orig_pos.first - seed.pos.first) {
+                                int gap_len = seed.left_gaps.back().second;
+                                seed.pos.first += gap_len;
                             }
+                            seed.pos.first -= ext_consensus.length();
+                            seed.consensus_pos.first = 0;
+                            seed.consensus_pos.second = consensus_.length();
                         } else {
-                            if(left) {
-                                assert_leq(seed.curr_ext_len, ext_consensus.length());
-                                TIndexOffU adjust = ext_consensus.length() - seed.curr_ext_len;
-                                seed.consensus_pos.first += adjust;
-                                seed.consensus_pos.second += ext_consensus.length();
-                                assert_leq(seed.curr_ext_len, seed.pos.first);
-                                seed.pos.first -= seed.curr_ext_len;
-                            } else {
-                                assert_leq(seed.curr_ext_len, ext_consensus.length());
-                                seed.consensus_pos.second += seed.curr_ext_len;
-                                seed.pos.second += seed.curr_ext_len;
+                            if(seed.right_gaps.size() > 0 &&
+                               seed.right_gaps.back().first >= seed.pos.second - seed.orig_pos.second) {
+                                int gap_len = seed.right_gaps.back().second;
+                                seed.pos.second -= gap_len;
                             }
+                            seed.pos.second += ext_consensus.length();
+                            seed.consensus_pos.second = consensus_.length();
                         }
                     } else {
                         if(left) {
-                            seed.consensus_pos.first += ext_consensus.length();
+                            assert_leq(seed.curr_ext_len, ext_consensus.length());
+                            TIndexOffU adjust = ext_consensus.length() - seed.curr_ext_len;
+                            seed.consensus_pos.first += adjust;
                             seed.consensus_pos.second += ext_consensus.length();
+                            assert_leq(seed.curr_ext_len, seed.pos.first);
+                            seed.pos.first -= seed.curr_ext_len;
+                        } else {
+                            assert_leq(seed.curr_ext_len, ext_consensus.length());
+                            seed.consensus_pos.second += seed.curr_ext_len;
+                            seed.pos.second += seed.curr_ext_len;
                         }
+                    }
+                } else {
+                    if(left) {
+                        seed.consensus_pos.first += ext_consensus.length();
+                        seed.consensus_pos.second += ext_consensus.length();
                     }
                 }
-                
-                // move up "done" seeds
-                size_t j = 0;
-                for(size_t i = 0; i < remain; i++) {
-                    if(!seeds_[i].done) continue;
-                    assert_geq(i, j);
-                    if(i > j) {
-                        SeedExt temp = seeds_[j];
-                        seeds_[j] = seeds_[i];
-                        seeds_[i] = temp;
-                        // Find next "undone" seed
+            }
+            
+            // move up "done" seeds
+            size_t j = 0;
+            for(size_t i = 0; i < remain; i++) {
+                if(!seeds_[i].done) continue;
+                assert_geq(i, j);
+                if(i > j) {
+                    SeedExt temp = seeds_[j];
+                    seeds_[j] = seeds_[i];
+                    seeds_[i] = temp;
+                    // Find next "undone" seed
+                    j++;
+                    while(j < i && seeds_[j].done) {
                         j++;
-                        while(j < i && seeds_[j].done) {
-                            j++;
-                        }
-                        assert(j < remain && !seeds_[j].done);
-                    } else {
-                        j = i + 1;
                     }
+                    assert(j < remain && !seeds_[j].done);
+                } else {
+                    j = i + 1;
                 }
             }
         }
