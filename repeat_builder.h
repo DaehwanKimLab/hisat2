@@ -905,7 +905,116 @@ private:
 
 };
 
-int strcmpPos(const string&, const string&, TIndexOffU&);
+
+
+// SA Subset
+template<typename T>
+class RB_SubSA {
+public:
+
+    RB_SubSA()
+    {
+        init(33);
+    }
+
+    RB_SubSA(int log2size)
+    {
+        init(log2size);
+    }
+
+    ~RB_SubSA()
+    {
+        for(size_t i = 0; i < blocks.size(); i++) {
+            uint32_t *ptr = blocks[i];
+            delete ptr;
+        }
+    }
+
+    T get(size_t);
+    void put(size_t, T);
+    inline T operator[](size_t i) {
+        return get(i);
+    }
+
+    void push_back(T& t);
+
+    void init(size_t log2size)
+    {
+        item_bit_size_ = log2size;
+        block_bit_size_ = sizeof(uint32_t) * 8;
+
+        items_per_block_bit_ = 20;
+
+        items_per_block_ = 1 << (items_per_block_bit_);
+        items_per_block_bit_mask_ = items_per_block_ - 1;
+
+        block_size_ = (items_per_block_ * item_bit_size_ + block_bit_size_ - 1) / block_bit_size_ * sizeof(uint32_t);
+
+        cur_ = 0;
+        sz_ = 0;
+    }
+
+    inline uint32_t bit_to_mask(size_t bit)
+    {
+        return (uint32_t)((1L << bit) - 1);
+    }
+
+    void expand(size_t sz = 1);
+    // increase size
+    void allocSize(size_t sz);
+    void allocItems(size_t count);
+
+    /**
+     * Return true iff there are no elements
+     * @return
+     */
+    inline bool empty() const { return cur_ == 0; }
+    inline size_t size() const { return cur_; }
+
+    void dump()
+    {
+        cerr << "item_bit_size_: " << item_bit_size_ << endl;
+        cerr << "block_size_: " << block_size_ << endl;
+        cerr << "items_per_block_: " << items_per_block_ << endl;
+        cerr << "cur_: " << cur_ << endl;
+        cerr << "sz_: " << sz_ << endl;
+        cerr << "number of blocks: " << blocks.size() << endl;
+    }
+
+    size_t getMemUsage() {
+        size_t tot = blocks.size() * block_size_;
+        tot += blocks.totalCapacityBytes();
+        return tot;
+    }
+
+private:
+
+    T getItem(uint32_t *block, size_t idx, size_t offset);
+    void setItem(uint32_t *block, size_t idx, size_t offset, T val);
+
+    pair<size_t, size_t> index_to_addr(size_t index);
+    pair<size_t, size_t> col_to_pos(size_t col);
+
+    size_t item_bit_size_; // item bit size(e.g. 33bit)
+
+    size_t block_bit_size_; // 8bit
+    size_t items_per_block_bit_;
+    size_t items_per_block_bit_mask_;
+    size_t items_per_block_; // number of items in block
+
+    size_t cur_;        // current size (in count)
+    size_t sz_;         // maximum (in count)
+
+    size_t block_size_;       // block size in Byte
+
+    // list of packed array
+    EList<uint32_t *> blocks;
+};
+
+
+
+
+ int strcmpPos(const string&, const string&, TIndexOffU&);
 template<typename TStr> void dump_tstr(TStr& s);
 
 #endif /* __REPEAT_BUILDER_H__ */
