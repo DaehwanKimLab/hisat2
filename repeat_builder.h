@@ -113,105 +113,6 @@ private:
     int victim_ = 0;    /* round-robin */
 };
 
-struct RepeatGroup {
-	string seq;
-    
-    EList<RepeatCoord<TIndexOffU> > positions;
-
-    Coord coord; 
-	EList<Edit> edits; 
-    EList<string> snpIDs;
-    
-    EList<RepeatGroup> alt_seq;
-    size_t base_offset;
-
-	void merge(const RepeatGroup& rg)
-	{
-        alt_seq.push_back(rg);
-#if 0
-		alt_seq.push_back(rg.seq);
-		for (int i = 0; i < rg.alt_seq.size(); i++) {
-			alt_seq.push_back(rg.alt_seq[i]);
-		}
-
-		for (int i = 0; i < rg.positions.size(); i++) {
-			positions.push_back(rg.positions[i]);
-		}
-#endif
-	}
-
-    void merge(const RepeatGroup& rg, const EList<Edit>& ed, const Coord& coord)
-    {
-        merge(rg);
-        alt_seq.back().edits = ed;
-        alt_seq.back().coord = coord;
-    }
-
-	bool empty(void) 
-	{ 
-		return positions.size() == 0;
-	}
-
-	void set_empty(void) 
-	{ 
-		positions.clear();
-        assert(positions.size() == 0);
-	}
-
-    void writeSNPs(ostream& fp, const string& rep_chr_name)
-    {
-        size_t ref_base = base_offset + coord.off();
-        int rd_gaps = 0;    // Read Gaps
-        int rf_gaps = 0;    // Ref Gaps
-
-        for(size_t i = 0; i < edits.size(); i++) {
-            Edit& ed = edits[i];
-
-            assert_geq(edits[i].pos + rd_gaps - rf_gaps, 0);
-            if(ed.isMismatch()) {
-
-                fp << snpIDs[i];
-                fp << "\t" << "single";
-                fp << "\t" << rep_chr_name;
-                fp << "\t" << ref_base + edits[i].pos + rd_gaps - rf_gaps;
-                fp << "\t" << edits[i].qchr;
-                fp << endl;
-            } else if(ed.isReadGap()) {
-
-                fp << snpIDs[i];
-                fp << "\t" << "deletion";
-                fp << "\t" << rep_chr_name;
-                fp << "\t" << ref_base + edits[i].pos + rd_gaps - rf_gaps;
-                fp << "\t" << 1;    // TODO
-                fp << endl;
-
-                rd_gaps++;
-            } else if(ed.isRefGap()) {
-                fp << snpIDs[i];
-                fp << "\t" << "insertion";
-                fp << "\t" << rep_chr_name;
-                fp << "\t" << ref_base + edits[i].pos + rd_gaps - rf_gaps;
-                fp << "\t" << (char)edits[i].qchr;  // TODO
-                fp << endl;
-
-                rf_gaps++;
-            } else {
-                assert(false);
-            }
-        }
-    }
-
-    void buildSNPs(size_t& base_idx)
-    {
-        snpIDs.clear();
-        for(size_t i = 0; i < edits.size(); i++) {
-            snpIDs.push_back("rps" + to_string(base_idx++));
-        }
-    }
-
-
-};
-
 struct SeedHP {
     bool operator==(const SeedHP &rhs) const {
         return range == rhs.range &&
@@ -603,6 +504,9 @@ public:
     void repeat_id(size_t repeat_id) { repeat_id_ = repeat_id; }
     size_t repeat_id() const { return repeat_id_; }
     
+    void parent_id(size_t parent_id) { parent_id_ = parent_id; }
+    size_t parent_id() const { return parent_id_; }
+    
     string& consensus() { return consensus_; }
     const string& consensus() const { return consensus_; }
     
@@ -611,13 +515,19 @@ public:
     
     EList<RB_AlleleCoord>& seed_ranges() { return seed_ranges_; }
     const EList<RB_AlleleCoord>& seed_ranges() const { return seed_ranges_; }
-
+    
     EList<SeedSNP *>& snps() { return snps_; }
     const EList<SeedSNP *>& snps() const { return snps_; }
-
+    
     template<typename TStr>
     void extendConsensus(const RepeatParameter& rp,
                          const TStr& s);
+    
+    template<typename TStr>
+    void getNextRepeat(const RepeatParameter& rp,
+                       const TStr& s,
+                       RB_Repeat& o);
+    
     
     template<typename TStr>
     void saveSeedExtension(const RepeatParameter& rp,
@@ -627,7 +537,7 @@ public:
                            ostream& fp,
                            size_t& total_repeat_seq_len,
                            size_t& total_allele_seq_len) const;
-
+    
     void saveSNPs(ofstream& fp,
                   TIndexOffU grp_id,
                   TIndexOffU& snp_id_base);
@@ -640,18 +550,6 @@ public:
                  size_t& seed_i,
                  size_t& seed_j,
                  bool debug = false) const;
-
-    float mergeable(const RB_Repeat& o) const;
-    
-    template<typename TStr>
-    bool merge(const RepeatParameter& rp,
-               const TStr& s,
-               RB_SWAligner& swalginer,
-               const RB_Repeat& o,
-               bool contain,
-               size_t seed_i,
-               size_t seed_j,
-               bool debug = false);
     
     bool satisfy(const RepeatParameter& rp) const
     {
@@ -674,13 +572,70 @@ public:
     
     void showInfo(const RepeatParameter& rp,
                   CoordHelper& coordHelper) const;
-
+    
     template<typename TStr>
     void generateSNPs(const RepeatParameter&, const TStr& s, TIndexOffU grp_id);
     
     bool self_repeat() const { return self_repeat_; }
     
-private:
+protected:
+    template<typename TStr>
+    void get_consensus_seq(const TStr& s,
+                           EList<SeedExt>& seeds,
+                           size_t sb,
+                           size_t se,
+                           size_t min_left_ext,
+                           size_t min_right_ext,
+                           size_t max_ed,
+                           const RepeatParameter& rp,
+                           EList<size_t>& ed_seed_nums,
+                           EList<string>* left_consensuses,
+                           EList<string>* right_consensuses) const;
+    
+    void internal_update();
+    
+    
+protected:
+    size_t                repeat_id_;
+    size_t                parent_id_;
+    string                consensus_;
+    EList<SeedExt>        seeds_;
+    EList<RB_AlleleCoord> seed_ranges_;
+    EList<SeedSNP*>       snps_;
+    bool                  self_repeat_;
+    
+    static EList<size_t>  ca_ed_;
+    static EList<size_t>  ca_ed2_;
+    static string         ca_s_;
+    static string         ca_s2_;
+    
+public:
+    static size_t         seed_merge_tried;
+    static size_t         seed_merged;
+};
+
+class RB_RepeatExt : public RB_Repeat {
+public:
+    RB_RepeatExt() {}
+    ~RB_RepeatExt() {}
+
+    template<typename TStr>
+    void extendConsensus(const RepeatParameter& rp,
+                         const TStr& s);
+    
+    float mergeable(const RB_Repeat& o) const;
+    
+    template<typename TStr>
+    bool merge(const RepeatParameter& rp,
+               const TStr& s,
+               RB_SWAligner& swalginer,
+               const RB_RepeatExt& o,
+               bool contain,
+               size_t seed_i,
+               size_t seed_j,
+               bool debug = false);
+    
+protected:
     template<typename TStr>
     void get_consensus_seq(const TStr& s,
                            EList<SeedExt>& seeds,
@@ -707,7 +662,7 @@ private:
                int consensus_approx_right,
                size_t left,
                size_t right,
-               bool debug = false);
+               bool debug);
     
     bool isSelfRepeat(const RepeatParameter& rp,
                       const string& s,
@@ -716,24 +671,6 @@ private:
                       size_t k,
                       bool debug);
     
-    void internal_update();
-
-private:
-    size_t                repeat_id_;
-    string                consensus_;
-    EList<SeedExt>        seeds_;
-    EList<RB_AlleleCoord> seed_ranges_;
-    EList<SeedSNP*>       snps_;
-    bool                  self_repeat_;
-    
-    static EList<size_t>  ca_ed_;
-    static EList<size_t>  ca_ed2_;
-    static string         ca_s_;
-    static string         ca_s2_;
-    
-public:
-    static size_t         seed_merge_tried;
-    static size_t         seed_merged;
 };
 
 // check if a set of seeds are already processed
@@ -743,7 +680,7 @@ public:
     
     bool checkRedundant(const RepeatParameter& rp,
                         const map<size_t, RB_Repeat*>& repeat_map,
-                        const EList<RepeatCoord<TIndexOffU> >& positions,
+                        const EList<TIndexOffU>& positions,
                         EList<size_t>& to_remove) const;
     
     void addRepeat(const RB_Repeat* repeat);
@@ -799,40 +736,137 @@ private:
     RandomSource rnd_;
 };
 
+// SA Subset
+class RB_SubSA {
+public:
+    RB_SubSA() {}
+    ~RB_SubSA();
+    
+    void init(TIndexOffU sa_size,
+              TIndexOffU seed_len,
+              TIndexOffU seed_count);
+    
+    template<typename TStr>
+    void init_put(const TStr& s,
+                  CoordHelper& coordHelper,
+                  TIndexOffU saElt,
+                  bool lastInput = false);
+    
+    TIndexOffU get(size_t i);
+    inline TIndexOffU operator[](size_t i) { return get(i); }
+    
+    /**
+     * Return true iff there are no elements
+     * @return
+     */
+    inline bool empty() const { return cur_ == 0; }
+    inline size_t size() const { return cur_; }
+    
+    const EList<TIndexOffU>& getRepeatIndex() const { return repeat_index_; }
+    
+    template<typename TStr>
+    Range find(const TStr& s,
+               const string& seq);
+    
+    void setDone(TIndexOffU off, TIndexOffU len = 1);
+    bool isDone(TIndexOffU off, TIndexOffU len = 1) const;
+    
+    void dump()
+    {
+        cerr << "seed length: " << seed_len_ << endl;
+        cerr << "minimum seed count: " << seed_count_ << endl;
+        cerr << "number of seed groups: " << repeat_index_.size() << endl;
+        cerr << "item_bit_size_: " << item_bit_size_ << endl;
+        cerr << "block_size_: " << block_size_ << endl;
+        cerr << "items_per_block_: " << items_per_block_ << endl;
+        cerr << "cur_: " << cur_ << endl;
+        cerr << "sz_: " << sz_ << endl;
+        cerr << "number of blocks: " << blocks.size() << endl;
+    }
+    
+    size_t getMemUsage() {
+        size_t tot = blocks.size() * block_size_;
+        tot += blocks.totalCapacityBytes();
+        return tot;
+    }
+    
+private:
+    void put(size_t i, TIndexOffU);
+    void push_back(TIndexOffU& t);
+    
+    inline uint32_t bit_to_mask(size_t bit) const
+    {
+        return (uint32_t)((1L << bit) - 1);
+    }
+    
+    void expand(size_t sz = 1);
+    // increase size
+    void allocSize(size_t sz);
+    void allocItems(size_t count);
+    
+private:
+    TIndexOffU getItem(uint32_t *block, size_t idx, size_t offset);
+    void setItem(uint32_t *block, size_t idx, size_t offset, TIndexOffU val);
+    
+    pair<size_t, size_t> index_to_addr(size_t index);
+    pair<size_t, size_t> col_to_pos(size_t col);
+    
+private:
+    TIndexOffU sa_size_;
+    TIndexOffU seed_len_;
+    TIndexOffU seed_count_;
+    EList<TIndexOffU> temp_suffixes_;
+    
+    size_t item_bit_size_; // item bit size(e.g. 33bit)
+    
+    size_t block_bit_size_; // 8bit
+    size_t items_per_block_bit_;
+    size_t items_per_block_bit_mask_;
+    size_t items_per_block_; // number of items in block
+    
+    size_t cur_;        // current size (in count)
+    size_t sz_;         // maximum (in count)
+    
+    size_t block_size_;       // block size in Byte
+    
+    // list of packed array
+    EList<uint32_t *> blocks;
+    
+    // repeat index
+    EList<TIndexOffU> repeat_index_;
+    EList<uint32_t>   done_;
+};
+
 
 // find and write repeats
 template<typename TStr>
 class RepeatBuilder {
 
 public:
-	RepeatBuilder();
 	RepeatBuilder(TStr& s,
                   const EList<RefRecord>& szs,
                   const EList<string>& ref_names,
                   bool forward_only,
-                  BlockwiseSA<TStr>& sa,
                   const string& filename);
     ~RepeatBuilder();
 
 
 public:
-	void build(const RepeatParameter& rp);
+	void build(const RepeatParameter& rp,
+               BlockwiseSA<TStr>& sa);
 
 	void sortRepeatGroup();
 
     void saveRepeats(const RepeatParameter& rp);
     void saveConsensus(const RepeatParameter& rp);
-    void saveRepeatPositions(ofstream& fp, RepeatGroup& rg);
-	void saveFile(const RepeatParameter& rp);
+    void saveFile(const RepeatParameter& rp);
 
     void addRepeatGroup(const RepeatParameter& rp,
-                        size_t repeat_id,
+                        size_t& repeat_id,
                         RB_RepeatManager& repeat_manger,
                         const string& seed_str,
-                        const EList<RepeatCoord<TIndexOffU> >& positions,
+                        const EList<TIndexOffU>& positions,
                         ostream& fp);
-    
-	TIndexOffU getLCP(TIndexOffU a, TIndexOffU b);
 
     bool checkSequenceMergeable(const string& ref,
                                 const string& read,
@@ -886,10 +920,8 @@ private:
     bool forward_only_;
     string filename_;
     
-    BlockwiseSA<TStr>& bsa_;
-    
-    //
-    EList<RepeatGroup> rpt_grp_;
+    RB_SubSA subSA_;
+    RB_SubSA test_subSA_;
     
     TIndexOffU forward_length_;
     
@@ -903,119 +935,10 @@ private:
     EList<string> consensus_all_;
     ELList<SeedExt> seeds_;
     map<size_t, RB_Repeat*> repeat_map_;
-
 };
 
 
-
-// SA Subset
-template<typename T>
-class RB_SubSA {
-public:
-
-    RB_SubSA()
-    {
-        init(33);
-    }
-
-    RB_SubSA(int log2size)
-    {
-        init(log2size);
-    }
-
-    ~RB_SubSA()
-    {
-        for(size_t i = 0; i < blocks.size(); i++) {
-            uint32_t *ptr = blocks[i];
-            delete ptr;
-        }
-    }
-
-    T get(size_t);
-    void put(size_t, T);
-    inline T operator[](size_t i) {
-        return get(i);
-    }
-
-    void push_back(T& t);
-
-    void init(size_t log2size)
-    {
-        item_bit_size_ = log2size;
-        block_bit_size_ = sizeof(uint32_t) * 8;
-
-        items_per_block_bit_ = 20;
-
-        items_per_block_ = 1 << (items_per_block_bit_);
-        items_per_block_bit_mask_ = items_per_block_ - 1;
-
-        block_size_ = (items_per_block_ * item_bit_size_ + block_bit_size_ - 1) / block_bit_size_ * sizeof(uint32_t);
-
-        cur_ = 0;
-        sz_ = 0;
-    }
-
-    inline uint32_t bit_to_mask(size_t bit)
-    {
-        return (uint32_t)((1L << bit) - 1);
-    }
-
-    void expand(size_t sz = 1);
-    // increase size
-    void allocSize(size_t sz);
-    void allocItems(size_t count);
-
-    /**
-     * Return true iff there are no elements
-     * @return
-     */
-    inline bool empty() const { return cur_ == 0; }
-    inline size_t size() const { return cur_; }
-
-    void dump()
-    {
-        cerr << "item_bit_size_: " << item_bit_size_ << endl;
-        cerr << "block_size_: " << block_size_ << endl;
-        cerr << "items_per_block_: " << items_per_block_ << endl;
-        cerr << "cur_: " << cur_ << endl;
-        cerr << "sz_: " << sz_ << endl;
-        cerr << "number of blocks: " << blocks.size() << endl;
-    }
-
-    size_t getMemUsage() {
-        size_t tot = blocks.size() * block_size_;
-        tot += blocks.totalCapacityBytes();
-        return tot;
-    }
-
-private:
-
-    T getItem(uint32_t *block, size_t idx, size_t offset);
-    void setItem(uint32_t *block, size_t idx, size_t offset, T val);
-
-    pair<size_t, size_t> index_to_addr(size_t index);
-    pair<size_t, size_t> col_to_pos(size_t col);
-
-    size_t item_bit_size_; // item bit size(e.g. 33bit)
-
-    size_t block_bit_size_; // 8bit
-    size_t items_per_block_bit_;
-    size_t items_per_block_bit_mask_;
-    size_t items_per_block_; // number of items in block
-
-    size_t cur_;        // current size (in count)
-    size_t sz_;         // maximum (in count)
-
-    size_t block_size_;       // block size in Byte
-
-    // list of packed array
-    EList<uint32_t *> blocks;
-};
-
-
-
-
- int strcmpPos(const string&, const string&, TIndexOffU&);
+int strcmpPos(const string&, const string&, TIndexOffU&);
 template<typename TStr> void dump_tstr(TStr& s);
 
 #endif /* __REPEAT_BUILDER_H__ */

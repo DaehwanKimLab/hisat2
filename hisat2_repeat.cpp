@@ -591,7 +591,7 @@ static void driver(
             assert_eq(bsa.size(), s.length() + 1);
 
 			// NRG
-			RepeatBuilder<TStr> nrg(s, szs, ref_names, forward_only, bsa, outfile);
+			RepeatBuilder<TStr> nrg(s, szs, ref_names, forward_only, outfile);
             
             RepeatParameter rp;
             rp.seed_len = seed_length;
@@ -604,12 +604,12 @@ static void driver(
             rp.symmetric_extend = symmetric_extend;
             rp.extend_unit_len = max_seed_extlen;
 
-            if(repeat_str1.length() && repeat_str2.length()) {
+            if(repeat_str1.length() > 0 && repeat_str2.length() > 0) {
                 nrg.doTest(rp,
                            repeat_str1,
                            repeat_str2);
             } else {
-                nrg.build(rp);
+                nrg.build(rp, bsa);
                 nrg.saveFile(rp);
             }
 
