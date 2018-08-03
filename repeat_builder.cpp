@@ -2679,7 +2679,8 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 {
     string seed_filename = filename_ + ".rep.seed";
     ofstream fp(seed_filename.c_str());
-    
+    RB_SubSA<TIndexOffU> subSA(log2(s_.length()) + 1);
+
     seeds_.clear();
     
 	TIndexOffU count = 0;
@@ -2731,12 +2732,19 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 
                     assert_geq(min_lcp_len, rp.seed_len);
                     string seed_seq = getString(s_, prev_saElt, rp.seed_len);
+
+                    for(size_t pi = 0; pi < rpt_positions.size(); pi++) {
+                        subSA.push_back(rpt_positions[pi].joinedOff);
+                    }
+
+#if 0
                     addRepeatGroup(rp,
                                    repeat_id,
                                    *repeat_manager,
                                    seed_seq,
                                    rpt_positions,
                                    fp);
+#endif
                     repeat_id++;
 				}
 
@@ -2749,6 +2757,13 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 		}
 	}
 
+	cerr << "subSA size is " << subSA.size() << endl;
+	subSA.dump();
+	for(size_t i = 0; i < subSA.size(); i++) {
+	    TIndexOffU joinedOff = subSA[i];
+	    fp << setw(10) << joinedOff << " " << getString(s_, joinedOff, rp.seed_len) << endl;
+	}
+	cerr << "subSA mem Usage: " << subSA.getMemUsage() << endl;
     cerr << "number of seed positions is " << repeat_manager->numCoords() << endl;
 
     size_t merge_iter = 0;
@@ -3635,7 +3650,146 @@ void RepeatBuilder<TStr>::generateHaploType(Range range, const EList<SeedExt> &s
 }
 
 
+template<typename T>
+pair<size_t, size_t> RB_SubSA<T>::index_to_addr(size_t index)
+{
+    pair<size_t, size_t> addr;
+
+    addr.first = index >> items_per_block_bit_;
+    addr.second = index & items_per_block_bit_mask_;
+
+    return addr;
+}
+
+
+template<typename T>
+pair<size_t, size_t> RB_SubSA<T>::col_to_pos(size_t col) {
+    pair<size_t, size_t> pos;
+
+    pos.first = col * item_bit_size_ / block_bit_size_;
+    pos.second = col * item_bit_size_ % block_bit_size_;
+
+    return pos;
+}
+
+template<typename T>
+T RB_SubSA<T>::get(size_t index)
+{
+    T val = 0;
+
+    assert_lt(index, cur_);
+
+    pair<size_t, size_t> addr = index_to_addr(index);
+    uint32_t *block = blocks[addr.first];
+    pair<size_t, size_t> pos = col_to_pos(addr.second);
+
+    return getItem(block, pos.first, pos.second);
+}
+
+template<typename T>
+void RB_SubSA<T>::put(size_t index, T val)
+{
+    assert_lt(index, cur_);
+
+    pair<size_t, size_t> addr = index_to_addr(index);
+    uint32_t *block = blocks[addr.first];
+    pair<size_t, size_t> pos = col_to_pos(addr.second);
+
+    setItem(block, pos.first, pos.second, val);
+}
+
+template<typename T>
+T RB_SubSA<T>::getItem(uint32_t *block, size_t idx, size_t offset)
+{
+    size_t remains = item_bit_size_;
+
+    T val = 0;
+
+    while(remains > 0) {
+        size_t bits = min(block_bit_size_ - offset, remains);
+        uint32_t mask = bit_to_mask(bits);
+        uint32_t src_mask = mask << offset;
+
+        // get value from block
+        uint32_t t = (block[idx] >> offset) & mask;
+
+        val = val | (t << (item_bit_size_ - remains));
+
+        remains -= bits;
+        offset = 0;
+        idx++;
+    }
+
+    return val;
+}
+
+template<typename T>
+void RB_SubSA<T>::setItem(uint32_t *block, size_t idx, size_t offset, T val)
+{
+    size_t remains = item_bit_size_;
+
+    while(remains > 0) {
+        size_t bits = min(block_bit_size_ - offset, remains);
+        uint32_t mask = bit_to_mask(bits);
+        uint32_t dest_mask = mask << offset;
+
+        // get 'bits' lsb from val;
+        uint32_t t = val & mask;
+        val >>= bits;
+
+        // save 't' to block[idx]
+        t <<= offset;
+        block[idx] &= ~(dest_mask); // clear
+        block[idx] |= t;
+
+        idx++;
+        remains -= bits;
+        offset = 0;
+    }
+}
+
+template<typename T>
+void RB_SubSA<T>::allocSize(size_t sz)
+{
+    size_t num_block = (sz + block_size_ - 1) / block_size_;
+
+    for(size_t i = 0; i < num_block; i++) {
+        uint32_t *ptr = new uint32_t[block_size_];
+        blocks.push_back(ptr);
+        sz_ += items_per_block_;
+    }
+}
+template<typename T>
+void RB_SubSA<T>::allocItems(size_t count)
+{
+    size_t sz = (count * item_bit_size_ + block_bit_size_ - 1)  / block_bit_size_;
+    allocSize(sz);
+}
+
+template<typename T>
+void RB_SubSA<T>::expand(size_t count)
+{
+    if((cur_ + count) > sz_) {
+        allocItems(count);
+    }
+    cur_ += count;
+
+    assert_leq(cur_, sz_);
+}
+
+template<typename T>
+void RB_SubSA<T>::push_back(T& t)
+{
+    if(cur_ == sz_) {
+        allocItems(items_per_block_);
+    }
+    put(cur_++, t);
+
+    assert_leq(cur_, sz_);
+}
+
 /****************************/
 template class RepeatBuilder<SString<char> >;
 template void dump_tstr(const SString<char>& );
 template bool compareRepeatCoordByJoinedOff(const RepeatCoord<TIndexOffU>& , const RepeatCoord<TIndexOffU>&);
+template class RB_SubSA<TIndexOffU>;
