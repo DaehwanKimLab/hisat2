@@ -91,6 +91,7 @@ public:
     TIndexOffU getEnd(TIndexOffU e);
     TIndexOffU getStart(TIndexOffU e);
     TIndexOffU forward_length() const { return forward_length_; }
+    TIndexOffU length() const { return length_; }
     
 private:
     void buildNames();
