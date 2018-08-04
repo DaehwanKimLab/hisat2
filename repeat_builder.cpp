@@ -114,9 +114,6 @@ bool isSenseDominant(CoordHelper& coordHelper,
                      const EList<TIndexOffU>& positions,
                      size_t seed_len)
 {
-    // DK - debugging purposes
-    return true;
-    
     // count the number of seeds on the sense strand
     size_t sense_mer_count = 0;
     for(size_t i = 0; i < positions.size(); i++) {
@@ -3118,6 +3115,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
         TIndexOffU se = (i + 1 < repeat_index.size() ? repeat_index[i+1] : subSA_.size()); // seed end
         assert_lt(sb, se);
         assert_geq(se - sb, rp.seed_count);
+        
         if(subSA_.isDone(sb)) {
             assert(subSA_.isDone(sb, se - sb));
             continue;
@@ -3354,6 +3352,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
     
     const bool sanity_check = true;
     if(sanity_check) {
+        EList<pair<size_t, size_t> > kmer_table;
         string query;
         size_t total = 0, match = 0;
         EList<TIndexOffU> positions;
@@ -3379,15 +3378,33 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
                 assert_eq(start, start2);
 #endif
             }
-            if(!isSenseDominant(coordHelper_, positions, rp.min_repeat_len))
-                continue;
-            
-            total++;
             
             TIndexOffU saElt = test_subSA_[saElt_idx];
             size_t true_count = saElt_idx_end - saElt_idx;
             getString(s_, saElt, rp.min_repeat_len, query);
+            
+#if 0
+            if(!isSenseDominant(coordHelper_, positions, rp.min_repeat_len))
+                continue;
+#endif
 
+            // ignore self-repeat query
+            const size_t k = 16;
+            bool self_repeat = false;
+            build_kmer_table(query,
+                             kmer_table,
+                             k);
+            for(size_t j = 0; j + 1 < kmer_table.size(); j++) {
+                if(kmer_table[j].first == kmer_table[j+1].first) {
+                    self_repeat = true;
+                    break;
+                }
+            }
+            if(self_repeat) {
+                continue;
+            }
+            
+            total++;
             
             size_t count = 0;
             for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
@@ -3408,7 +3425,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
             string rc_query = reverse_complement(query);
             for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
                 RB_Repeat& repeat = *(it->second);
-                int pos = repeat.consensus().find(query);
+                int pos = repeat.consensus().find(rc_query);
                 if(pos != string::npos) {
                     for(size_t s = 0; s < repeat.seeds().size(); s++) {
                         SeedExt& seed = repeat.seeds()[s];
@@ -3420,7 +3437,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
                 }
             }
             
-            if(count == true_count) {
+            if(count == true_count || rc_count == true_count) {
                 match++;
             } else if(total - match <= 10) {
                 cerr << "query: " << query << endl;
@@ -3732,7 +3749,9 @@ void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
 #if 1
     {
         // string test_seq = "AATATCTTCCTATAAAATCTAGACAGAAGCATTCTCAGAAACTGCTCTGTGATGTCTGCATTCAAGTCACAGAGTTGAACATTGCCTTTCATAGAGCAGG";
-        string test_seq = "AATATGTATGATATATATTATACACAATATGTATGATATATATTATACACAATATGTATGATATATATTATACACAATATGTATGATATATATTATACAC";
+        string test_seq = "AATATATATCATACATATTGTGTATAATATATATCATACATATTGTGTATAATATATATCATACATATTGTGTATAATATATATCATACATATTGTGTAT";
+        assert_eq(test_seq.length(), 100);
+        string test_seed = test_seq.substr(25, 50);
         int pos = test_seq.find(seed_str);
         if(pos == 25) {
             cerr << "1: " << repeat_map_.size() << "\t" << positions.size() << "\t" << positions[0] << "\t" << test_seq.find(seed_str) << endl;
