@@ -490,6 +490,13 @@ public:
 
 class RB_RepeatManager;
 class RB_SWAligner;
+class RB_SubSA;
+
+class RB_RepeatBase {
+public:
+    string seq;
+    EList<TIndexOffU> nodes;
+};
 
 class RB_Repeat {
 public:
@@ -519,6 +526,13 @@ public:
     
     EList<SeedSNP *>& snps() { return snps_; }
     const EList<SeedSNP *>& snps() const { return snps_; }
+    
+    template<typename TStr>
+    void init(const RepeatParameter& rp,
+              const TStr& s,
+              CoordHelper& coordHelper,
+              const RB_SubSA& subSA,
+              const RB_RepeatBase& repeatBase);
     
     template<typename TStr>
     void extendConsensus(const RepeatParameter& rp,
@@ -578,6 +592,13 @@ public:
     void generateSNPs(const RepeatParameter&, const TStr& s, TIndexOffU grp_id);
     
     bool self_repeat() const { return self_repeat_; }
+    
+    void update() { internal_update(); }
+    void addSeed(const SeedExt& seed)
+    {
+        seeds_.expand();
+        seeds_.back() = seed;
+    }
     
 protected:
     template<typename TStr>
@@ -748,13 +769,13 @@ public:
               TIndexOffU seed_count);
     
     template<typename TStr>
-    void init_put(const TStr& s,
-                  CoordHelper& coordHelper,
-                  TIndexOffU saElt,
-                  bool lastInput = false);
+    void push_back(const TStr& s,
+                   CoordHelper& coordHelper,
+                   TIndexOffU saElt,
+                   bool lastInput = false);
     
-    TIndexOffU get(size_t i);
-    inline TIndexOffU operator[](size_t i) { return get(i); }
+    TIndexOffU get(size_t i) const;
+    inline TIndexOffU operator[](size_t i) const { return get(i); }
     
     /**
      * Return true iff there are no elements
@@ -767,12 +788,16 @@ public:
     
     template<typename TStr>
     Range find(const TStr& s,
-               const string& seq);
+               const string& seq) const;
+    
+    template<typename TStr>
+    TIndexOffU find_repeat_idx(const TStr& s,
+                               const string& seq) const;
     
     void setDone(TIndexOffU off, TIndexOffU len = 1);
     bool isDone(TIndexOffU off, TIndexOffU len = 1) const;
     
-    void dump()
+    void dump() const
     {
         cerr << "seed length: " << seed_len_ << endl;
         cerr << "minimum seed count: " << seed_count_ << endl;
@@ -785,15 +810,21 @@ public:
         cerr << "number of blocks: " << blocks.size() << endl;
     }
     
-    size_t getMemUsage() {
+    size_t getMemUsage() const {
         size_t tot = blocks.size() * block_size_;
         tot += blocks.totalCapacityBytes();
         return tot;
     }
     
+    template<typename TStr>
+    void buildRepeatBase(const TStr& s,
+                         CoordHelper& coordHelper,
+                         const size_t max_len,
+                         EList<RB_RepeatBase>& repeatBases);
+    
 private:
     void put(size_t i, TIndexOffU);
-    void push_back(TIndexOffU& t);
+    void push_back(TIndexOffU t);
     
     inline uint32_t bit_to_mask(size_t bit) const
     {
@@ -806,11 +837,11 @@ private:
     void allocItems(size_t count);
     
 private:
-    TIndexOffU getItem(uint32_t *block, size_t idx, size_t offset);
+    TIndexOffU getItem(uint32_t *block, size_t idx, size_t offset) const;
     void setItem(uint32_t *block, size_t idx, size_t offset, TIndexOffU val);
     
-    pair<size_t, size_t> index_to_addr(size_t index);
-    pair<size_t, size_t> col_to_pos(size_t col);
+    pair<size_t, size_t> index_to_addr(size_t index) const;
+    pair<size_t, size_t> col_to_pos(size_t col) const;
     
 private:
     TIndexOffU sa_size_;
@@ -861,13 +892,17 @@ public:
     void saveRepeats(const RepeatParameter& rp);
     void saveConsensus(const RepeatParameter& rp);
     void saveFile(const RepeatParameter& rp);
-
+    
     void addRepeatGroup(const RepeatParameter& rp,
                         size_t& repeat_id,
                         RB_RepeatManager& repeat_manger,
-                        const string& seed_str,
-                        const EList<TIndexOffU>& positions,
+                        const RB_RepeatBase& repeatBase,
                         ostream& fp);
+    
+    void reassignSeeds(const RepeatParameter& rp,
+                       size_t repeat_bid,
+                       size_t repeat_eid,
+                       EList<SeedExt>& seeds);
 
     bool checkSequenceMergeable(const string& ref,
                                 const string& read,
