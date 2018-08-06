@@ -4539,25 +4539,24 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         }
         
         assert_lt(saBegin, size());
-        TIndexOffU saElt = get(saBegin);
-        
-        repeatStack.push_back(repeatBases.size());
-        repeatBases.expand();
-        repeatBases.back().seq = getString(s, saElt, seed_len_);
-        repeatBases.back().nodes.clear();
-        repeatBases.back().nodes.push_back(idx);
+        repeatStack.push_back(idx);
         while(!repeatStack.empty()) {
-            size_t ri = repeatStack.back();
+            TIndexOffU idx = repeatStack.back();
             repeatStack.pop_back();
-            assert_lt(ri, repeatBases.size());
-            assert_eq(repeatBases[ri].nodes.size(), 1);
-            TIndexOffU idx = repeatBases[ri].nodes[0];
+            assert_lt(idx, repeat_index_.size());
             TIndexOffU saBegin = repeat_index_[idx];
             TIndexOffU saEnd = (idx + 1 < repeat_index_.size() ? repeat_index_[idx + 1] : size());
-            
-            if(isDone(saBegin))
+            if(isDone(saBegin)) {
+                assert(isDone(saBegin, saEnd - saBegin));
                 continue;
+            }
             
+            TIndexOffU saElt = get(saBegin);
+            size_t ri = repeatBases.size();
+            repeatBases.expand();
+            repeatBases.back().seq = getString(s, saElt, seed_len_);
+            repeatBases.back().nodes.clear();
+            repeatBases.back().nodes.push_back(idx); 
             setDone(saBegin, saEnd - saBegin);
             bool left = true;
             while(repeatBases[ri].seq.length() <= max_len) {
@@ -4607,12 +4606,8 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     size_t c = tmp_sort_ranges[cc].second;
                     if(left) tmp_str[0] = "ACGT"[c];
                     else     tmp_str.back() = "ACGT"[c];
-                    
-                    repeatStack.push_back(repeatBases.size());
-                    repeatBases.expand();
-                    repeatBases.back().seq = tmp_str;
-                    repeatBases.back().nodes.clear();
-                    repeatBases.back().nodes.push_back(tmp_ranges[c].first);
+
+                    repeatStack.push_back(tmp_ranges[c].first);
                 }
                 
                 if(tmp_sort_ranges[3].first < seed_count_) {
@@ -4633,12 +4628,8 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                         continue;
                     if(isDone(repeat_index_[idx]))
                         continue;
-                    
-                    repeatStack.push_back(repeatBases.size());
-                    repeatBases.expand();
-                    repeatBases.back().seq = tmp_str;
-                    repeatBases.back().nodes.clear();
-                    repeatBases.back().nodes.push_back(idx);
+
+                    repeatStack.push_back(idx);
                     break;
                 } else {
                     TIndexOffU idx = tmp_ranges[c].first;
@@ -4665,7 +4656,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         for(size_t i = 0; i < repeatBases.size(); i++) {
             const RB_RepeatBase& repeatBase = repeatBases[i];
             for(size_t j = 0; j < repeatBase.nodes.size(); j++) {
-                // assert(idx_set.find(repeatBase.nodes[j]) == idx_set.end());
+                assert(idx_set.find(repeatBase.nodes[j]) == idx_set.end());
                 idx_set.insert(repeatBase.nodes[j]);
             }
         }
