@@ -148,6 +148,30 @@ public:
         return kmers_.find(kmer) != kmers_.end();
     }
     
+    bool isRepeat(const string& query,
+                  const string& rc_query,
+                  EList<pair<uint64_t, size_t> >& minimizers)
+    {
+        RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
+        size_t est_count = 0;
+        for(size_t j = 0; j < minimizers.size(); j++) {
+            if(isIn(minimizers[j].first)) {
+                est_count++;
+            }
+        }
+        bool est_repeat = est_count * 2 >= minimizers.size();
+        
+        RB_Minimizer::get_minimizer(rc_query, w_, k_, minimizers);
+        est_count = 0;
+        for(size_t j = 0; j < minimizers.size(); j++) {
+            if(isIn(minimizers[j].first)) {
+                est_count++;
+            }
+        }
+        bool rc_est_repeat = est_count * 2 >= minimizers.size();
+        
+        return est_repeat || rc_est_repeat;
+    }
     
 
 public:
@@ -169,6 +193,22 @@ public:
             assert(repeat.satisfy(rp));
             
             const string& consensus = repeat.consensus();
+            RB_Minimizer::get_minimizer(consensus,
+                                        w_,
+                                        k_,
+                                        minimizers);
+            
+            for(size_t i = 0; i < minimizers.size(); i++) {
+                if(!kmer_table_.empty() &&
+                   kmer_table_.back().first == minimizers[i].first &&
+                   kmer_table_.back().second == repeat.repeat_id())
+                    continue;
+                kmer_table_.expand();
+                kmer_table_.back().first = minimizers[i].first;
+                kmer_table_.back().second = repeat.repeat_id();
+                kmers_.insert(minimizers[i].first);
+            }
+            
             RB_Minimizer::get_minimizer(consensus,
                                         w_,
                                         k_,

@@ -3208,8 +3208,10 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                        fp);
     }
     
+    // DK - debugging purposes
+#if 0
     {
-        const size_t window = 50;
+        const size_t window = 20;
         const size_t k = 31;
         RB_KmerTable kmer_table;
         kmer_table.build(rp,
@@ -3218,6 +3220,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                          window,
                          k);
         kmer_table.dump(cerr);
+        cerr << endl;
         
         RB_KmerTable kmer_table2;
         kmer_table2.build(rp,
@@ -3226,7 +3229,45 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                           1,
                           k);
         kmer_table2.dump(cerr);
+        cerr << endl;
+        
+        string query, rc_query;
+        EList<pair<uint64_t, size_t> > minimizers;
+        size_t total = 0, num_repeat = 0, correct = 0, false_positive = 0, false_negative = 0;
+        for(size_t i = 0; i + rp.min_repeat_len <= forward_length_; i += 1000) {
+            if(coordHelper_.getEnd(i) != coordHelper_.getEnd(i + rp.min_repeat_len))
+                continue;
+            query = getString(s_, i, rp.min_repeat_len);
+            rc_query = reverseComplement(query);
+            
+            TIndexOffU idx = test_subSA_.find_repeat_idx(s_, query);
+            bool repeat = (idx < test_subSA_.getRepeatIndex().size());
+
+            bool est_repeat = kmer_table.isRepeat(query,
+                                                  rc_query,
+                                                  minimizers);
+            
+            total++;
+            if(repeat) num_repeat++;
+            if(repeat == est_repeat) {
+                correct++;
+            } else {
+                if(est_repeat) {
+                    false_positive++;
+                } else {
+                    false_negative++;
+                    assert(false);
+                }
+            }
+        }
+        
+        cerr << "total: " << total << endl;
+        cerr << "repeat: " << num_repeat << endl;
+        cerr << "correct: " << correct << endl;
+        cerr << "false positive: " << false_positive << endl;
+        cerr << "false negative: " << false_negative << endl;
     }
+#endif
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
     
