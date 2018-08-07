@@ -27,6 +27,7 @@
 #include "sstring.h"
 
 #include "repeat_builder.h"
+#include "repeat_kmer.h"
 
 unsigned int levenshtein_distance(const std::string& s1, const std::string& s2)
 {
@@ -91,16 +92,17 @@ template<typename TStr>
 TIndexOffU getLCP(const TStr& s,
                   CoordHelper& coordHelper,
                   TIndexOffU a,
-                  TIndexOffU b)
+                  TIndexOffU b,
+                  TIndexOffU max_len = 1000)
 {
-    size_t a_end = coordHelper.getEnd(a);
-    size_t b_end = coordHelper.getEnd(b);
+    TIndexOffU a_end = coordHelper.getEnd(a);
+    TIndexOffU b_end = coordHelper.getEnd(b);
     
     assert_leq(a_end, s.length());
     assert_leq(b_end, s.length());
     
     TIndexOffU k = 0;
-    while((a + k) < a_end && (b + k) < b_end) {
+    while((a + k) < a_end && (b + k) < b_end && k < max_len) {
         if(s[a + k] != s[b + k]) {
             break;
         }
@@ -3142,29 +3144,20 @@ RepeatBuilder<TStr>::~RepeatBuilder()
 }
 
 template<typename TStr>
-void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
-                                BlockwiseSA<TStr>& sa)
+void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
+                                 BlockwiseSA<TStr>& sa)
 {
-    string seed_filename = filename_ + ".rep.seed";
-    ofstream fp(seed_filename.c_str());
-    
-	TIndexOffU count = 0;
-    min_repeat_len_ = rp.min_repeat_len;
-    
-    swaligner_.init_dyn(rp);
-
-    RB_RepeatManager* repeat_manager = new RB_RepeatManager;
-    
+    TIndexOffU count = 0;
     subSA_.init(s_.length() + 1, rp.seed_len, rp.seed_count);
     test_subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
-
-	while(count < s_.length() + 1) {
-		TIndexOffU saElt = sa.nextSuffix();
-		count++;
-		
-		if(count && (count % 10000000 == 0)) {
-			cerr << "SA count " << count << endl;
-		}
+    
+    while(count < s_.length() + 1) {
+        TIndexOffU saElt = sa.nextSuffix();
+        count++;
+        
+        if(count && (count % 10000000 == 0)) {
+            cerr << "SA count " << count << endl;
+        }
         
         if(saElt == s_.length()) {
             assert_eq(count, s_.length() + 1);
@@ -3173,21 +3166,32 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
         
         subSA_.push_back(s_, coordHelper_, saElt, count == s_.length());
         test_subSA_.push_back(s_, coordHelper_, saElt, count == s_.length());
-	}
-
-	cerr << "subSA size is " << subSA_.size() << endl;
-	subSA_.dump();
+    }
+    
+    cerr << "subSA size is " << subSA_.size() << endl;
+    subSA_.dump();
 #if 0
-	for(size_t i = 0; i < subSA_.size(); i++) {
-	    TIndexOffU joinedOff = subSA_[i];
-	    fp << setw(10) << joinedOff << " " << getString(s_, joinedOff, rp.seed_len) << endl;
-	}
+    for(size_t i = 0; i < subSA_.size(); i++) {
+        TIndexOffU joinedOff = subSA_[i];
+        fp << setw(10) << joinedOff << " " << getString(s_, joinedOff, rp.seed_len) << endl;
+    }
 #endif
     cerr << "subSA mem Usage: " << subSA_.getMemUsage() << endl << endl;
-   
+    
     cerr << "test_subSA size is " << test_subSA_.size() << endl;
     test_subSA_.dump();
     cerr << "test_subSA mem Usage: " << test_subSA_.getMemUsage() << endl << endl;
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
+{
+    string seed_filename = filename_ + ".rep.seed";
+    ofstream fp(seed_filename.c_str());
+
+    swaligner_.init_dyn(rp);
+
+    RB_RepeatManager* repeat_manager = new RB_RepeatManager;
     
     EList<RB_RepeatBase> repeatBases;
     test_subSA_.buildRepeatBase(s_,
@@ -3205,111 +3209,21 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
     }
 
     // cerr << "number of seed positions is " << repeat_manager->numCoords() << endl;
-
-#if 0
-    size_t merge_iter = 0;
-    while(true) {
-        set<size_t> to_remove;
-        size_t repeat_count = 0;
-        for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, repeat_count++) {
-            if(repeat_count % 500 == 0) {
-                cerr << merge_iter << " iteration: " << repeat_count << " repeats of " << repeat_map_.size() << endl;
-            }
-            if(to_remove.find(it->first) != to_remove.end())
-                continue;
+    {
+        const size_t window = 50;
+        const size_t k = 31;
+        EList<pair<uint64_t, size_t> > minimizers;
+        for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
+            RB_Repeat& repeat = *(it->second);
+            assert(repeat.satisfy(rp));
             
-            RB_Repeat& repeat_i = *(it->second);
-            if(!repeat_i.satisfy(rp))
-                continue;
-            
-            float max_portion = 0.0;
-            RB_Repeat* max_portion_i = NULL;
-            map<size_t, RB_Repeat*>::iterator jt = it; jt++;
-            for(; jt != repeat_map_.end(); jt++) {
-                if(to_remove.find(jt->first) != to_remove.end())
-                    continue;
-                
-                RB_Repeat& repeat_j = *(jt->second);
-                if(!repeat_j.satisfy(rp))
-                    continue;
-                
-                float portion = repeat_i.mergeable(repeat_j);
-                if(portion > max_portion) {
-                    max_portion = portion;
-                    max_portion_i = jt->second;
-                }
-                
-                bool contain, left;
-                size_t seed_i, seed_j;
-                
-                // DK - debugging purposes
-                bool debug = (it->first == 14267 && jt->first == 127971 && merge_iter == 2);
-                if(debug) {
-                    int dk = 0;
-                    dk += 1;
-                }
-                
-                bool overlap = it->second->overlap(*(jt->second),
-                                                   contain,
-                                                   left,
-                                                   seed_i,
-                                                   seed_j,
-                                                   debug);
-                if(overlap) {
-                    map<size_t, RB_Repeat*>::iterator a, b;
-                    size_t seed_a, seed_b;
-                    if(left) {
-                        a = it; b = jt;
-                        seed_a = seed_i; seed_b = seed_j;
-                    } else {
-                        a = jt; b = it;
-                        seed_a = seed_j; seed_b = seed_i;
-                    }
-                    
-                    repeat_manager->removeRepeat(a->second);
-                    
-                    bool merged = a->second->merge(rp,
-                                                   s_,
-                                                   swaligner_,
-                                                   *(b->second),
-                                                   contain,
-                                                   seed_a,
-                                                   seed_b,
-                                                   debug);
-                    
-                    repeat_manager->addRepeat(a->second);
-                    
-                    if(merged) {
-                        to_remove.insert(b->first);
-                        if(it->first == b->first)
-                            break;
-                    }
-                }
-            }
+            const string& consensus = repeat.consensus();
+            RB_Minimizer::get_minimizer(consensus,
+                                        window,
+                                        k,
+                                        minimizers);
         }
-        
-        if(to_remove.empty())
-            break;
-        
-        for(set<size_t>::iterator it = to_remove.begin(); it != to_remove.end(); it++) {
-            map<size_t, RB_Repeat*>::iterator repeat_it = repeat_map_.find(*it);
-            assert(repeat_it != repeat_map_.end());
-            repeat_manager->removeRepeat(repeat_it->second);
-            delete repeat_it->second;
-            repeat_map_.erase(repeat_it);
-        }
-        
-        merge_iter++;
     }
-    
-#endif
-    
-#if 0
-    repeat_manager->showInfo(rp,
-                             coordHelper_,
-                             repeat_map_,
-                             0);
-#endif
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
     
@@ -3391,8 +3305,9 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp,
                     TIndexOffU lcp_len = getLCP(s_,
                                                 coordHelper_,
                                                 positions[0],
-                                                positions.back());
-                    assert_geq(lcp_len, rp.min_repeat_len);
+                                                positions.back(),
+                                                rp.min_repeat_len);
+                    assert_eq(lcp_len, rp.min_repeat_len);
                 }
                 
                 TIndexOffU saElt = test_subSA_[j];
@@ -4263,7 +4178,11 @@ void RB_SubSA::push_back(const TStr& s,
         
         // calculate common prefix length between two text.
         //   text1 is started from prev_saElt and text2 is started from saElt
-        int lcp_len = getLCP(s, coordHelper, prev_saElt, saElt);
+        int lcp_len = getLCP(s,
+                             coordHelper,
+                             prev_saElt,
+                             saElt,
+                             seed_len_);
         
         if(lcp_len >= seed_len_) {
             temp_suffixes_.push_back(saElt);
@@ -4685,7 +4604,8 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     TIndexOffU lcp_len = getLCP(s,
                                                 coordHelper,
                                                 positions[0],
-                                                positions.back());
+                                                positions.back(),
+                                                seed_len_);
                     assert_geq(lcp_len, seed_len_);
                 }
                 

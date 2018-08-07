@@ -884,8 +884,10 @@ public:
 
 
 public:
-	void build(const RepeatParameter& rp,
-               BlockwiseSA<TStr>& sa);
+    void readSA(const RepeatParameter& rp,
+                BlockwiseSA<TStr>& sa);
+    
+	void build(const RepeatParameter& rp);
 
 	void sortRepeatGroup();
 
@@ -950,7 +952,6 @@ private:
 
 private:
     const int output_width = 60;
-    TIndexOffU min_repeat_len_;
     
     TStr& s_;
     bool forward_only_;
@@ -965,7 +966,6 @@ private:
     
     //
     RB_SWAligner swaligner_;
-
 
     // Seeds
     EList<string> consensus_all_;

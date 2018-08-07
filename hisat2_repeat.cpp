@@ -584,16 +584,8 @@ static void driver(
                 cerr << "  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv << endl;
                 cerr << "" << endl;
             }
-            cerr << "Constructing suffix-array element generator" << endl;
-            KarkkainenBlockwiseSA<TStr> bsa(s, bmax, nthreads, dcv, seed, sanity, passMemExc, false /* verbose */, outfile);
+            cerr << "Constructing suffix-array element generator" << endl;RepeatParameter rp;
             
-            assert(bsa.suffixItrIsReset());
-            assert_eq(bsa.size(), s.length() + 1);
-
-			// NRG
-			RepeatBuilder<TStr> nrg(s, szs, ref_names, forward_only, outfile);
-            
-            RepeatParameter rp;
             rp.seed_len = seed_length;
             rp.seed_count = seed_count;
             rp.seed_mm = max_seed_mm;
@@ -603,16 +595,36 @@ static void driver(
             rp.max_edit = max_repeat_edit;
             rp.symmetric_extend = symmetric_extend;
             rp.extend_unit_len = max_seed_extlen;
-
+            
+            RepeatBuilder<TStr> repeatBuilder(s,
+                                              szs,
+                                              ref_names,
+                                              forward_only,
+                                              outfile);
             if(repeat_str1.length() > 0 && repeat_str2.length() > 0) {
-                nrg.doTest(rp,
-                           repeat_str1,
-                           repeat_str2);
-            } else {
-                nrg.build(rp, bsa);
-                nrg.saveFile(rp);
+                repeatBuilder.doTest(rp,
+                                     repeat_str1,
+                                     repeat_str2);
+                break;
             }
+            
+            KarkkainenBlockwiseSA<TStr> *bsa =
+               new KarkkainenBlockwiseSA<TStr>(s,
+                                               bmax,
+                                               nthreads, dcv,
+                                               seed,
+                                               sanity,
+                                               passMemExc,
+                                               false /* verbose */,
+                                               outfile);
+            assert(bsa->suffixItrIsReset());
+            assert_eq(bsa->size(), s.length() + 1);
+            repeatBuilder.readSA(rp, *bsa);
+            delete bsa;
+            bsa = NULL;
 
+            repeatBuilder.build(rp);
+            repeatBuilder.saveFile(rp);
 			break;
 
         } catch(bad_alloc& e) {
