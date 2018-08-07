@@ -225,6 +225,18 @@ public:
                 kmers_.insert(minimizers[i].first);
             }
         }
+        
+        kmer_table_.sort();
+        EList<pair<uint64_t, size_t> > tmp_table;
+        tmp_table.reserveExact(kmer_table_.size());
+        for(size_t i = 0; i < kmer_table_.size(); i++) {
+            if(!tmp_table.empty() && tmp_table.back() == kmer_table_[i])
+                continue;
+            
+            tmp_table.expand();
+            tmp_table.back() = kmer_table_[i];
+        }
+        kmer_table_ = tmp_table;        
     }
     
     void dump(ostream& o)
