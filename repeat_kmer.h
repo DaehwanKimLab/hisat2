@@ -33,6 +33,7 @@
 #include "ds.h"
 #include "repeat.h"
 #include "blockwise_sa.h"
+#include "repeat_builder.h"
 
 
 class RB_Minimizer {
@@ -138,41 +139,67 @@ protected:
 
 class RB_KmerTable {
 public:
-    RB_KmerTable()
+    RB_KmerTable() { w_ = k_ = 0; }
+    ~RB_KmerTable() {}
+    
+public:
+    bool isIn(uint64_t kmer)
     {
-        
+        return kmers_.find(kmer) != kmers_.end();
     }
     
-    ~RB_KmerTable()
-    {
-        
-    }
-
+    
 
 public:
     template<typename TStr>
-    void build_kmer_table(const string& consensus, EList<pair<size_t, size_t> >& kmer_table, size_t k)
+    void build(const RepeatParameter& rp,
+               const TStr& s,
+               const map<size_t, RB_Repeat*>& repeat_map,
+               size_t w,
+               size_t k)
     {
-#if 0
-        kmer_table.clear();
-        if(consensus.length() < k)
-            return;
-        size_t kmer = 0;
-        for(size_t i = 0; i + k <= consensus.length(); i++) {
-            if(i == 0) {
-                kmer = extract_kmer(consensus, i, k);
-            } else {
-                kmer = next_kmer(kmer, consensus[i+k-1], k);
+        w_ = w;
+        k_ = k;
+        kmer_table_.clear();
+        kmers_.clear();
+        
+        EList<pair<uint64_t, size_t> > minimizers;
+        for(map<size_t, RB_Repeat*>::const_iterator it = repeat_map.begin(); it != repeat_map.end(); it++) {
+            const RB_Repeat& repeat = *(it->second);
+            assert(repeat.satisfy(rp));
+            
+            const string& consensus = repeat.consensus();
+            RB_Minimizer::get_minimizer(consensus,
+                                        w_,
+                                        k_,
+                                        minimizers);
+            
+            for(size_t i = 0; i < minimizers.size(); i++) {
+                if(!kmer_table_.empty() &&
+                   kmer_table_.back().first == minimizers[i].first &&
+                   kmer_table_.back().second == repeat.repeat_id())
+                    continue;
+                kmer_table_.expand();
+                kmer_table_.back().first = minimizers[i].first;
+                kmer_table_.back().second = repeat.repeat_id();
+                kmers_.insert(minimizers[i].first);
             }
-            kmer_table.expand();
-            kmer_table.back().first = kmer;
-            kmer_table.back().second = i;
         }
-        kmer_table.sort();
-#endif
+    }
+    
+    void dump(ostream& o)
+    {
+        o << "window         : " << w_ << endl;
+        o << "k length       : " << k_ << endl;
+        o << "kmer_table size: " << kmer_table_.size() << endl;
+        o << "kmer_set size  : " << kmers_.size() << endl;
     }
 
 private:
+    size_t w_;
+    size_t k_;
+    EList<pair<uint64_t, size_t> > kmer_table_;
+    std::set<uint64_t> kmers_;
 };
 
 

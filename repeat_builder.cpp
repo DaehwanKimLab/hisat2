@@ -3207,22 +3207,25 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                        repeatBases[i],
                        fp);
     }
-
-    // cerr << "number of seed positions is " << repeat_manager->numCoords() << endl;
+    
     {
         const size_t window = 50;
         const size_t k = 31;
-        EList<pair<uint64_t, size_t> > minimizers;
-        for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
-            RB_Repeat& repeat = *(it->second);
-            assert(repeat.satisfy(rp));
-            
-            const string& consensus = repeat.consensus();
-            RB_Minimizer::get_minimizer(consensus,
-                                        window,
-                                        k,
-                                        minimizers);
-        }
+        RB_KmerTable kmer_table;
+        kmer_table.build(rp,
+                         s_,
+                         repeat_map_,
+                         window,
+                         k);
+        kmer_table.dump(cerr);
+        
+        RB_KmerTable kmer_table2;
+        kmer_table2.build(rp,
+                          s_,
+                          repeat_map_,
+                          1,
+                          k);
+        kmer_table2.dump(cerr);
     }
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
