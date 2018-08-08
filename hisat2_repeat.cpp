@@ -92,6 +92,8 @@ static string repeat_str2;
 TIndexOffU max_seed_mm;
 TIndexOffU max_seed_repeat;
 TIndexOffU max_seed_extlen;
+static bool save_sa;
+static bool load_sa;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -130,6 +132,8 @@ static void resetOptions() {
     max_seed_mm = 5;
     max_seed_repeat = 5;
     max_seed_extlen = 25;
+    save_sa = false;
+    load_sa = false;
     wrapper.clear();
 }
 
@@ -163,6 +167,8 @@ enum {
     ARG_MAX_SEED_MM,
     ARG_MAX_SEED_REPEAT,
     ARG_MAX_SEED_EXTLEN,
+    ARG_SAVE_SA,
+    ARG_LOAD_SA,
 };
 
 /**
@@ -203,6 +209,8 @@ static void printUsage(ostream& out) {
         << "    --max-seed-mm <int>" << endl
         << "    --max-seed-repeat <int>" << endl
         << "    --max-seed-extlen <int>" << endl
+        << "    --save-sa" << endl
+        << "    --load-sa" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -248,6 +256,8 @@ static struct option long_options[] = {
 	{(char*)"max-seed-mm",    required_argument, 0,            ARG_MAX_SEED_MM},
 	{(char*)"max-seed-repeat",required_argument, 0,            ARG_MAX_SEED_REPEAT},
 	{(char*)"max-seed-extlen",required_argument, 0,            ARG_MAX_SEED_EXTLEN},
+	{(char*)"save-sa",        no_argument,       0,            ARG_SAVE_SA},
+    {(char*)"load-sa",        no_argument,       0,            ARG_LOAD_SA},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -385,6 +395,12 @@ static void parseOptions(int argc, const char **argv) {
 			case ARG_MAX_SEED_EXTLEN:
                 max_seed_extlen = parseNumber<TIndexOffU>(0, "--max_seed_extlen arg must be at least 0");
 				break;
+            case ARG_SAVE_SA:
+                save_sa = true;
+                break;
+            case ARG_LOAD_SA:
+                load_sa = true;
+                break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
 			case 's': sanityCheck = true; break;
@@ -498,7 +514,7 @@ static void driver(
         jlen += (TIndexOffU)szs[i].len;
     }
     // assert_geq(jlen, sztot);
-
+    cerr << "  Joined length: " << jlen << endl;
     TStr s;
     {
         bool both_strand = forward_only ? false : true;
@@ -608,20 +624,28 @@ static void driver(
                 break;
             }
             
-            KarkkainenBlockwiseSA<TStr> *bsa =
-               new KarkkainenBlockwiseSA<TStr>(s,
-                                               bmax,
-                                               nthreads, dcv,
-                                               seed,
-                                               sanity,
-                                               passMemExc,
-                                               false /* verbose */,
-                                               outfile);
-            assert(bsa->suffixItrIsReset());
-            assert_eq(bsa->size(), s.length() + 1);
-            repeatBuilder.readSA(rp, *bsa);
-            delete bsa;
-            bsa = NULL;
+            if(load_sa) {
+                repeatBuilder.readSA(rp, outfile + ".rep.sa");
+            } else {
+                KarkkainenBlockwiseSA<TStr> *bsa =
+                    new KarkkainenBlockwiseSA<TStr>(s,
+                            bmax,
+                            nthreads, dcv,
+                            seed,
+                            sanity,
+                            passMemExc,
+                            false /* verbose */,
+                            outfile);
+                assert(bsa->suffixItrIsReset());
+                assert_eq(bsa->size(), s.length() + 1);
+                repeatBuilder.readSA(rp, *bsa);
+                delete bsa;
+                bsa = NULL;
+            }
+
+            if(save_sa) {
+                repeatBuilder.writeSA(rp, outfile + ".rep.sa");
+            }
 
             repeatBuilder.build(rp);
             repeatBuilder.saveFile(rp);

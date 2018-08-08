@@ -3202,6 +3202,48 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
 }
 
 template<typename TStr>
+void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
+                                 const string& filename)
+{
+    ifstream fp(filename.c_str(), std::ifstream::binary);
+
+    subSA_.init(s_.length() + 1, rp.seed_len, rp.seed_count);
+    test_subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
+
+    test_subSA_.readFile(fp);
+    subSA_.readFile(fp);
+
+    fp.close();
+
+    cerr << "subSA size is " << subSA_.size() << endl;
+    subSA_.dump();
+#if 0
+    for(size_t i = 0; i < subSA_.size(); i++) {
+        TIndexOffU joinedOff = subSA_[i];
+        fp << setw(10) << joinedOff << " " << getString(s_, joinedOff, rp.seed_len) << endl;
+    }
+#endif
+    cerr << "subSA mem Usage: " << subSA_.getMemUsage() << endl << endl;
+    
+    cerr << "test_subSA size is " << test_subSA_.size() << endl;
+    test_subSA_.dump();
+    cerr << "test_subSA mem Usage: " << test_subSA_.getMemUsage() << endl << endl;
+}
+
+template<typename TStr>
+void RepeatBuilder<TStr>::writeSA(const RepeatParameter& rp,
+                                  const string& filename)
+{
+    ofstream fp(filename.c_str(), std::ofstream::binary);
+
+    test_subSA_.writeFile(fp);
+    subSA_.writeFile(fp);
+
+    fp.close();
+}
+
+
+template<typename TStr>
 void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 {
     string seed_filename = filename_ + ".rep.seed";
@@ -3227,7 +3269,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     }
     
     // DK - debugging purposes
-#if 0
+#if 0//{{{
     {
         // Build and test minimizer-based k-mer table
         const size_t window = 20;
@@ -3390,7 +3432,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             repeat.update();
         }
     }
-#endif
+#endif//}}}
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
     
@@ -4542,7 +4584,7 @@ void RB_SubSA::setItem(uint32_t *block, size_t idx, size_t offset, TIndexOffU va
 
 void RB_SubSA::allocSize(size_t sz)
 {
-    size_t num_block = (sz + block_size_ - 1) / block_size_;
+    size_t num_block = (sz * sizeof(uint32_t) + block_size_ - 1) / block_size_;
 
     for(size_t i = 0; i < num_block; i++) {
         uint32_t *ptr = new uint32_t[block_size_];
@@ -4840,6 +4882,138 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
     }
 #endif
 }
+
+
+#define write_fp(x) fp.write((const char *)&(x), sizeof((x)))
+
+void RB_SubSA::writeFile(ofstream& fp)
+{
+    write_fp(sa_size_);
+    write_fp(seed_len_);
+    write_fp(seed_count_);
+
+    size_t sz = temp_suffixes_.size();
+    write_fp(sz);
+    for(size_t i = 0; i < sz; i++) {
+        write_fp(temp_suffixes_[i]);
+    }
+   
+    write_fp(item_bit_size_);
+    write_fp(block_bit_size_);
+    write_fp(items_per_block_bit_);
+    write_fp(items_per_block_bit_mask_);
+    write_fp(items_per_block_);
+
+    write_fp(cur_);
+    write_fp(sz_);  // ?
+
+    write_fp(block_size_);
+
+
+    // number of blocks
+    sz = blocks.size();
+    write_fp(sz);
+    for(size_t i = 0; i < sz; i++) {
+        fp.write((const char *)blocks[i], block_size_);
+    }
+
+    sz = repeat_index_.size();
+    write_fp(sz);
+    for(size_t i = 0; i < sz; i++) {
+        write_fp(repeat_index_[i]);
+    }
+
+    sz = done_.size();
+    write_fp(sz);
+    for(size_t i = 0; i < sz; i++) {
+        write_fp(done_[i]);
+    }
+}
+
+#define read_fp(x) fp.read((char *)&(x), sizeof((x)))
+
+void RB_SubSA::readFile(ifstream& fp)
+{
+    TIndexOffU val;
+
+    read_fp(val);
+    assert_eq(val, sa_size_);
+
+    read_fp(val);
+    assert_eq(val, seed_len_);
+
+    read_fp(val);
+    assert_eq(val, seed_count_);
+
+    size_t sz;
+    read_fp(sz);
+    temp_suffixes_.resizeExact(sz);
+    for(size_t i = 0; i < sz; i++) {
+        read_fp(temp_suffixes_[i]);
+    }
+
+    size_t val_sz;
+
+    read_fp(val_sz);
+    assert_eq(val_sz, item_bit_size_);
+
+    read_fp(val_sz);
+    assert_eq(val_sz, block_bit_size_);
+
+    read_fp(val_sz);
+    assert_eq(val_sz, items_per_block_bit_);
+
+    read_fp(val_sz);
+    assert_eq(val_sz, items_per_block_bit_mask_);
+
+    read_fp(val_sz);
+    assert_eq(val_sz, items_per_block_);
+
+    // skip cur_
+    size_t prev_cnt = 0;
+    read_fp(prev_cnt);
+    cur_ = 0;
+    cerr << "prev_cnt " << prev_cnt << endl;
+
+
+    size_t prev_sz = 0;
+    read_fp(prev_sz);
+    sz_ = 0;
+
+    read_fp(val_sz);
+    assert_eq(val_sz, block_size_);
+
+    // alloc blocks
+    allocItems(prev_cnt);
+
+    assert_eq(prev_sz, sz_);
+
+
+    // number of blocks
+    read_fp(val_sz);
+    assert_eq(val_sz, blocks.size());
+    for(size_t i = 0; i < blocks.size(); i++) {
+        fp.read((char *)blocks[i], block_size_);
+    }
+    cur_ = prev_cnt;
+
+
+    // repeat_index_
+    read_fp(val_sz);
+    repeat_index_.resizeExact(val_sz);
+    for(size_t i = 0; i < val_sz; i++) {
+        read_fp(repeat_index_[i]);
+    }
+
+    // done
+    read_fp(val_sz);
+    done_.resizeExact(val_sz);
+    for(size_t i = 0; i < val_sz; i++) {
+        read_fp(done_[i]);
+    }
+
+}
+
 
 /****************************/
 template class RepeatBuilder<SString<char> >;

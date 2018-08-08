@@ -765,6 +765,9 @@ class RB_SubSA {
 public:
     RB_SubSA() {}
     ~RB_SubSA();
+
+    void writeFile(ofstream& fp);
+    void readFile(ifstream &fp);
     
     void init(TIndexOffU sa_size,
               TIndexOffU seed_len,
@@ -890,6 +893,12 @@ public:
 public:
     void readSA(const RepeatParameter& rp,
                 BlockwiseSA<TStr>& sa);
+
+    void readSA(const RepeatParameter& rp,
+                const string& filename);
+
+    void writeSA(const RepeatParameter& rp,
+                 const string& filename);
     
 	void build(const RepeatParameter& rp);
 
