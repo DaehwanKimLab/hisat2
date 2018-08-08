@@ -173,6 +173,40 @@ public:
         return est_repeat || rc_est_repeat;
     }
     
+    void findRepeats(const string& query,
+                     EList<pair<uint64_t, size_t> >& minimizers,
+                     EList<TIndexOffU>& repeats)
+    {
+        repeats.clear();
+        RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
+        for(size_t i = 0; i < minimizers.size(); i++) {
+            if(i > 0 && minimizers[i].first == minimizers[i-1].first)
+                continue;
+            pair<uint64_t, size_t> minimizer(minimizers[i].first, 0);
+            size_t j = kmer_table_.bsearchLoBound(minimizer);
+            for(; j < kmer_table_.size() && minimizer.first == kmer_table_[j].first; j++) {
+                repeats.push_back(kmer_table_[j].second);
+            }
+        }
+        if(repeats.empty())
+            return;
+        
+        size_t remove_count = 0;
+        repeats.sort();
+        for(size_t i = 0; i + 1 < repeats.size();) {
+            size_t j = i + 1;
+            for(; j < repeats.size(); j++) {
+                if(repeats[i] == repeats[j]) {
+                    repeats[j] = std::numeric_limits<TIndexOffU>::max();
+                    remove_count++;
+                } else break;
+            }
+            i = j;
+        }
+        repeats.sort();
+        assert_lt(remove_count, repeats.size());
+        repeats.resize(repeats.size() - remove_count);
+    }
 
 public:
     template<typename TStr>
@@ -197,23 +231,6 @@ public:
                                         w_,
                                         k_,
                                         minimizers);
-            
-            for(size_t i = 0; i < minimizers.size(); i++) {
-                if(!kmer_table_.empty() &&
-                   kmer_table_.back().first == minimizers[i].first &&
-                   kmer_table_.back().second == repeat.repeat_id())
-                    continue;
-                kmer_table_.expand();
-                kmer_table_.back().first = minimizers[i].first;
-                kmer_table_.back().second = repeat.repeat_id();
-                kmers_.insert(minimizers[i].first);
-            }
-            
-            RB_Minimizer::get_minimizer(consensus,
-                                        w_,
-                                        k_,
-                                        minimizers);
-            
             for(size_t i = 0; i < minimizers.size(); i++) {
                 if(!kmer_table_.empty() &&
                    kmer_table_.back().first == minimizers[i].first &&

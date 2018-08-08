@@ -600,6 +600,8 @@ public:
         seeds_.back() = seed;
     }
     
+    bool contain(TIndexOffU left, TIndexOffU right) const;
+    
 protected:
     template<typename TStr>
     void get_consensus_seq(const TStr& s,
@@ -783,6 +785,8 @@ public:
      */
     inline bool empty() const { return cur_ == 0; }
     inline size_t size() const { return cur_; }
+    inline TIndexOffU seed_len() const { return seed_len_; }
+    inline TIndexOffU seed_count() const { return seed_count_; }
     
     const EList<TIndexOffU>& getRepeatIndex() const { return repeat_index_; }
     

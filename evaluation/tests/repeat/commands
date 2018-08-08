@@ -14,7 +14,7 @@ hisat2-repeat -p 3 --repeat-length 100 --repeat-count 2 --repeat-edit 0 --forwar
 
 /usr/bin/time -l hisat2-repeat -p 3 --seed-length 200 --seed-count 2 --max-seed-mm 1 --repeat-count 2 --repeat-edit 0 --forward-only --CGtoTG genome.fa genome_rep
 
-hisat2-repeat -p 3 --seed-length 50 --seed-count 5 --max-seed-mm 1 --min-repeat-length 100 --max-repeat-length 150 --repeat-count 5 --repeat-edit 5 22.fa 22_rep
+/usr/bin/time -l hisat2-repeat -p 3 --seed-length 50 --seed-count 5 --max-seed-mm 1 --min-repeat-length 100 --max-repeat-length 200 --repeat-count 5 --repeat-edit 5 22.fa 22_rep
 
 hisat2_simulate_reads.py --dna --num-fragment 1000000 --repeat-info 22.rep.info 22.fa /dev/null /dev/null sim
 
