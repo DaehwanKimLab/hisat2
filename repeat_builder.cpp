@@ -713,12 +713,12 @@ void RB_Repeat::init(const RepeatParameter& rp,
         next_positions.clear();
         for(size_t sa = saBegin; sa < saEnd; sa++) {
             TIndexOffU left = subSA.get(sa);
-            TIndexOffU right = left + rp.min_repeat_len;
+            TIndexOffU right = left + subSA.seed_len();
             next_positions.push_back(left);
             
-            if(left > 0 && false) {
+            if(left > 0) {
                 size_t idx = positions.bsearchLoBound(left - 1);
-                if(idx < positions.size() && positions[idx - 1] == left - 1)
+                if(idx < positions.size() && positions[idx] == left - 1)
                     continue;
             }
             
@@ -746,9 +746,8 @@ void RB_Repeat::init(const RepeatParameter& rp,
                 seed.pos.second++;
                 seed.consensus_pos.second++;
             }
-            
-            positions = next_positions;
         }
+        positions = next_positions;
     }
     
     internal_update();
@@ -3451,24 +3450,24 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                                  total_allele_seq_len);
     }
     
-    size_t total_seeds = 0;
+    size_t total_qual_seeds = 0;
     for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
         RB_Repeat& repeat = *(it->second);
         EList<SeedExt>& seeds = repeat.seeds();
         for(size_t i = 0; i < seeds.size(); i++) {
             if(seeds[i].getLength() < rp.min_repeat_len)
                 continue;
-            total_seeds++;
+            total_qual_seeds++;
         }
     }
     
     cerr << "total repeat sequence length: " << total_rep_seq_len << endl;
     cerr << "total allele sequence length: " << total_allele_seq_len << endl;
-    cerr << "total number of seeds including those that are sequence-wise identical: " << total_seeds << endl;
+    cerr << "total number of seeds including those that are position-wise different, but sequence-wise identical: " << total_qual_seeds << endl;
     cerr << endl;
     fp << "total repeat sequence length: " << total_rep_seq_len << endl;
     fp << "total allele sequence length: " << total_allele_seq_len << endl;
-    fp << "total number of seeds including those that are sequence-wise identical: " << total_seeds << endl;
+    fp << "total number of seeds including those that are position-wise different, but sequence-wise identical: " << total_qual_seeds << endl;
     fp.close();
     
     delete repeat_manager;

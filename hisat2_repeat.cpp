@@ -545,7 +545,7 @@ static void driver(
         // VMSG_NL("bmax according to bmax setting: " << bmax);
     }
     else if(bmaxDivN != (uint32_t)OFF_MASK) {
-        bmax = max<uint32_t>(jlen / bmaxDivN, 1);
+        bmax = max<uint32_t>(jlen / (bmaxDivN * nthreads), 1);
         // VMSG_NL("bmax according to bmaxDivN setting: " << bmax);
     }
     else {
