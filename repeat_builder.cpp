@@ -4374,43 +4374,45 @@ void RB_SubSA::push_back(const TStr& s,
                          TIndexOffU saElt,
                          bool lastInput)
 {
-    if(seed_count_ == 1) {
-        push_back(saElt);
-    } else {
-        assert_gt(seed_count_, 1);
-        
-        if(temp_suffixes_.empty()) {
-            temp_suffixes_.push_back(saElt);
-            return;
-        }
-        
-        TIndexOffU prev_saElt = temp_suffixes_.back();
-        
-        // calculate common prefix length between two text.
-        //   text1 is started from prev_saElt and text2 is started from saElt
-        int lcp_len = getLCP(s,
-                             coordHelper,
-                             prev_saElt,
-                             saElt,
-                             seed_len_);
-        
-        if(lcp_len >= seed_len_) {
-            temp_suffixes_.push_back(saElt);
-        }
-        
-        if(lcp_len < seed_len_ || lastInput) {
-            if(temp_suffixes_.size() >= seed_count_) {
-                repeat_index_.push_back(cur_);
-                temp_suffixes_.sort();
-                for(size_t pi = 0; pi < temp_suffixes_.size(); pi++) {
-                    push_back(temp_suffixes_[pi]);
-                }
-            }
-            temp_suffixes_.clear();
-            if(!lastInput) {
+    if(saElt + seed_len() <= coordHelper.getEnd(saElt)) {
+        if(seed_count_ == 1) {
+            push_back(saElt);
+        } else {
+            assert_gt(seed_count_, 1);
+            
+            if(temp_suffixes_.empty()) {
                 temp_suffixes_.push_back(saElt);
-            } else {
-                temp_suffixes_.nullify();
+                return;
+            }
+            
+            TIndexOffU prev_saElt = temp_suffixes_.back();
+            
+            // calculate common prefix length between two text.
+            //   text1 is started from prev_saElt and text2 is started from saElt
+            int lcp_len = getLCP(s,
+                                 coordHelper,
+                                 prev_saElt,
+                                 saElt,
+                                 seed_len_);
+            
+            if(lcp_len >= seed_len_) {
+                temp_suffixes_.push_back(saElt);
+            }
+            
+            if(lcp_len < seed_len_ || lastInput) {
+                if(temp_suffixes_.size() >= seed_count_) {
+                    repeat_index_.push_back(cur_);
+                    temp_suffixes_.sort();
+                    for(size_t pi = 0; pi < temp_suffixes_.size(); pi++) {
+                        push_back(temp_suffixes_[pi]);
+                    }
+                }
+                temp_suffixes_.clear();
+                if(!lastInput) {
+                    temp_suffixes_.push_back(saElt);
+                } else {
+                    temp_suffixes_.nullify();
+                }
             }
         }
     }
