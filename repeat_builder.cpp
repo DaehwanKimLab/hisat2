@@ -3345,14 +3345,17 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                 TIndexOffU saElt = positions[j];
                 size_t max_r = 0;
                 size_t max_left_len = 0, max_right_len = 0;
+                bool found = false;
                 for(size_t r = 0; r < repeats.size(); r++) {
                     const RB_Repeat& repeat = *(repeat_map_[repeats[r]]);
                     const string& consensus = repeat.consensus();
                     int consensus_pos = consensus.find(seq);
                     if(consensus_pos == string::npos)
                         continue;
-                    if(repeat.contain(saElt, saElt + subSA_.seed_len()))
-                        continue;
+                    if(repeat.contain(saElt, saElt + subSA_.seed_len())) {
+                        found = true;
+                        break;
+                    }
                     
                     TIndexOffU left_bound = coordHelper_.getStart(saElt);
                     if(left_bound + (size_t)consensus_pos > saElt)
@@ -3400,11 +3403,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                     }
                 }
                 
-                if(subSA_.seed_len() + max_left_len + max_right_len >= rp.min_repeat_len) {
-                    
-                    // DK - debugging purposes
-                    // continue;
-                    
+                if(!found && subSA_.seed_len() + max_left_len + max_right_len >= rp.min_repeat_len) {
                     SeedExt seed;
                     assert_leq(max_left_len, saElt);
                     TIndexOffU left = saElt - max_left_len;
