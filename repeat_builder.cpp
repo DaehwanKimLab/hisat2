@@ -4564,8 +4564,7 @@ TIndexOffU RB_SubSA::getItem(uint32_t *block, size_t idx, size_t offset) const
         // uint32_t src_mask = mask << offset;
 
         // get value from block
-        uint32_t t = (block[idx] >> offset) & mask;
-
+        TIndexOffU t = (block[idx] >> offset) & mask;
         val = val | (t << (item_bit_size_ - remains));
 
         remains -= bits;
@@ -4579,7 +4578,7 @@ TIndexOffU RB_SubSA::getItem(uint32_t *block, size_t idx, size_t offset) const
 void RB_SubSA::setItem(uint32_t *block, size_t idx, size_t offset, TIndexOffU val)
 {
     size_t remains = item_bit_size_;
-
+    
     while(remains > 0) {
         size_t bits = min(block_bit_size_ - offset, remains);
         uint32_t mask = bit_to_mask(bits);
@@ -4656,19 +4655,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         EList<TIndexOffU> positions; positions.reserveExact(end - begin);
         for(size_t j = begin; j < end; j++) positions.push_back(get(j));
         
-        // DK - debugging purposes
-#if 0
-        {
-            string query = "CCGAGTTGAGCCTTCCTTTGGTAGTTCACGTTTGAAACACTCTTTTTGGAGGACCTGCAAGTGGATATTTGGAGCACTTTGTGGCCTTCGTTCGAAACGG";
-            string rc_query = reverseComplement(query);
-            string tmp_seq = getString(s, get(begin), seed_len());
-            if(tmp_seq == query || tmp_seq == rc_query) {
-                int dk = 0;
-                dk += 1;
-            }
-        }
-#endif
-        
         if(!isSenseDominant(coordHelper, positions, seed_len_))
             continue;
         
@@ -4693,14 +4679,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         }
 #endif
         
-        // DK - debugging purposes
-        {
-            if(idx == 174943) {
-                int dk = 0;
-                dk += 1;
-            }
-        }
-        
         TIndexOffU saBegin = repeat_index_[idx];
         if(isDone(saBegin)) {
             assert(isDone(saBegin, num));
@@ -4711,15 +4689,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         repeatStack.push_back(idx);
         while(!repeatStack.empty()) {
             TIndexOffU idx = repeatStack.back();
-            
-            // DK - debugging purposes
-            {
-                if(idx == 174943) {
-                    int dk = 0;
-                    dk += 1;
-                }
-            }
-            
             repeatStack.pop_back();
             assert_lt(idx, repeat_index_.size());
             TIndexOffU saBegin = repeat_index_[idx];
@@ -4812,15 +4781,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 } else {
                     TIndexOffU idx = tmp_ranges[c].first;
                     TIndexOffU num = tmp_ranges[c].second;
-                    
-                    // DK - debugging purposes
-                    {
-                        if(idx == 174943) {
-                            int dk = 0;
-                            dk += 1;
-                        }
-                    }
-                    
                     setDone(repeat_index_[idx], num);
                     if(left) {
                         repeatBases[ri].seq.insert(0, 1, "ACGT"[c]);
