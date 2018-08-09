@@ -4334,7 +4334,7 @@ RB_SubSA::~RB_SubSA()
 {
     for(size_t i = 0; i < blocks.size(); i++) {
         uint32_t *ptr = blocks[i];
-        delete ptr;
+        delete [] ptr;
     }
 }
 
@@ -4953,13 +4953,13 @@ void RB_SubSA::readFile(ifstream& fp)
     TIndexOffU val;
 
     read_fp(val);
-    assert_eq(val, sa_size_);
+    rt_assert_eq(val, sa_size_);
 
     read_fp(val);
-    assert_eq(val, seed_len_);
+    rt_assert_eq(val, seed_len_);
 
     read_fp(val);
-    assert_eq(val, seed_count_);
+    rt_assert_eq(val, seed_count_);
 
     size_t sz;
     read_fp(sz);
@@ -4971,19 +4971,19 @@ void RB_SubSA::readFile(ifstream& fp)
     size_t val_sz;
 
     read_fp(val_sz);
-    assert_eq(val_sz, item_bit_size_);
+    rt_assert_eq(val_sz, item_bit_size_);
 
     read_fp(val_sz);
-    assert_eq(val_sz, block_bit_size_);
+    rt_assert_eq(val_sz, block_bit_size_);
 
     read_fp(val_sz);
-    assert_eq(val_sz, items_per_block_bit_);
+    rt_assert_eq(val_sz, items_per_block_bit_);
 
     read_fp(val_sz);
-    assert_eq(val_sz, items_per_block_bit_mask_);
+    rt_assert_eq(val_sz, items_per_block_bit_mask_);
 
     read_fp(val_sz);
-    assert_eq(val_sz, items_per_block_);
+    rt_assert_eq(val_sz, items_per_block_);
 
     // skip cur_
     size_t prev_cnt = 0;
@@ -4997,17 +4997,17 @@ void RB_SubSA::readFile(ifstream& fp)
     sz_ = 0;
 
     read_fp(val_sz);
-    assert_eq(val_sz, block_size_);
+    rt_assert_eq(val_sz, block_size_);
 
     // alloc blocks
     allocItems(prev_cnt);
 
-    assert_eq(prev_sz, sz_);
+    rt_assert_eq(prev_sz, sz_);
 
 
     // number of blocks
     read_fp(val_sz);
-    assert_eq(val_sz, blocks.size());
+    rt_assert_eq(val_sz, blocks.size());
     for(size_t i = 0; i < blocks.size(); i++) {
         fp.read((char *)blocks[i], block_size_);
     }
