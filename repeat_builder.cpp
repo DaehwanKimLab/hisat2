@@ -4421,6 +4421,23 @@ void RB_SubSA::push_back(const TStr& s,
         size_t num = (cur_ + bit - 1) / bit;
         done_.resizeExact(num);
         done_.fillZero();
+        
+#ifndef NDEBUG
+        string prev_seq = "";
+        for(size_t i = 0; i < repeat_index_.size(); i++) {
+            TIndexOffU saBegin = repeat_index_[i];
+            TIndexOffU saEnd = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : size());
+            string seq = getString(s, get(saBegin), seed_len());
+            for(size_t j = saBegin + 1; j < saEnd; j++) {
+                string tmp_seq = getString(s, get(j), seed_len());
+                assert_eq(seq, tmp_seq);
+            }
+            if(prev_seq != "" ) {
+                assert_lt(prev_seq, seq);
+            }
+            prev_seq = seq;
+        }
+#endif
     }
 }
 
@@ -4638,6 +4655,20 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         assert_lt(begin, end);
         EList<TIndexOffU> positions; positions.reserveExact(end - begin);
         for(size_t j = begin; j < end; j++) positions.push_back(get(j));
+        
+        // DK - debugging purposes
+#if 0
+        {
+            string query = "CCGAGTTGAGCCTTCCTTTGGTAGTTCACGTTTGAAACACTCTTTTTGGAGGACCTGCAAGTGGATATTTGGAGCACTTTGTGGCCTTCGTTCGAAACGG";
+            string rc_query = reverseComplement(query);
+            string tmp_seq = getString(s, get(begin), seed_len());
+            if(tmp_seq == query || tmp_seq == rc_query) {
+                int dk = 0;
+                dk += 1;
+            }
+        }
+#endif
+        
         if(!isSenseDominant(coordHelper, positions, seed_len_))
             continue;
         
@@ -4662,6 +4693,14 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         }
 #endif
         
+        // DK - debugging purposes
+        {
+            if(idx == 174943) {
+                int dk = 0;
+                dk += 1;
+            }
+        }
+        
         TIndexOffU saBegin = repeat_index_[idx];
         if(isDone(saBegin)) {
             assert(isDone(saBegin, num));
@@ -4672,6 +4711,15 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         repeatStack.push_back(idx);
         while(!repeatStack.empty()) {
             TIndexOffU idx = repeatStack.back();
+            
+            // DK - debugging purposes
+            {
+                if(idx == 174943) {
+                    int dk = 0;
+                    dk += 1;
+                }
+            }
+            
             repeatStack.pop_back();
             assert_lt(idx, repeat_index_.size());
             TIndexOffU saBegin = repeat_index_[idx];
@@ -4764,6 +4812,15 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 } else {
                     TIndexOffU idx = tmp_ranges[c].first;
                     TIndexOffU num = tmp_ranges[c].second;
+                    
+                    // DK - debugging purposes
+                    {
+                        if(idx == 174943) {
+                            int dk = 0;
+                            dk += 1;
+                        }
+                    }
+                    
                     setDone(repeat_index_[idx], num);
                     if(left) {
                         repeatBases[ri].seq.insert(0, 1, "ACGT"[c]);
@@ -4790,7 +4847,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 idx_set.insert(repeatBase.nodes[j]);
             }
         }
-        // assert_eq(idx_set.size(), size_table.size());
     }
 #endif
     

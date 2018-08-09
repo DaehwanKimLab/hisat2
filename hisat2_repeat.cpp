@@ -624,8 +624,15 @@ static void driver(
                 break;
             }
             
+            bool sa_file_exist = false;
+            string sa_fname = outfile + ".rep.sa";
             if(load_sa) {
-                repeatBuilder.readSA(rp, outfile + ".rep.sa");
+                ifstream fp(sa_fname, std::ifstream::binary);
+                sa_file_exist = fp.is_open();
+            }
+            
+            if(load_sa && sa_file_exist) {
+                repeatBuilder.readSA(rp, sa_fname);
             } else {
                 KarkkainenBlockwiseSA<TStr> *bsa =
                     new KarkkainenBlockwiseSA<TStr>(s,
@@ -641,10 +648,10 @@ static void driver(
                 repeatBuilder.readSA(rp, *bsa);
                 delete bsa;
                 bsa = NULL;
-            }
-
-            if(save_sa) {
-                repeatBuilder.writeSA(rp, outfile + ".rep.sa");
+                
+                if(save_sa) {
+                    repeatBuilder.writeSA(rp, outfile + ".rep.sa");
+                }
             }
 
             repeatBuilder.build(rp);
