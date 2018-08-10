@@ -2073,7 +2073,8 @@ public:
 			}
 			iter++;
 			try {
-                if(_alts.empty() || repeat_index) {
+                // DK - debugging purposes
+                if(_alts.empty() /* || repeat_index */) {
                     VMSG("Using parameters --bmax " << bmax);
                     if(dcv == 0) {
                         VMSG_NL(" and *no difference cover*");

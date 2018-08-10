@@ -1973,7 +1973,11 @@ void PathGraph<index_t>::lateGeneration() {
     indiv = time(0);
 
     //Build from_index
-    for(index_t i = 0; i < from_table.size(); i++) {
+    index_t from_table_size = from_table.size();
+    for(index_t i = 0; i < from_table_size; i++) {
+        if(from_table[i].from + 1 >= from_table.size()) {
+            from_table.resize(from_table[i].from + 2);
+        }
         from_table[from_table[i].from + 1].key.second = i + 1;
     }
 
@@ -1984,6 +1988,11 @@ void PathGraph<index_t>::lateGeneration() {
     indiv = time(0);
 
     mergeUpdateRank();
+    
+    if(from_table_size != from_table.size()) {
+        assert_lt(from_table_size, from_table.size());
+        from_table.resize(from_table_size);
+    }
 
     if(verbose) cerr << "MERGEUPDATERANK: " << time(0) - indiv << endl;
     if(verbose) cerr << "TOTAL TIME: " << time(0) - overall << endl;

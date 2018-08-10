@@ -4299,6 +4299,9 @@ void RepeatBuilder<TStr>::generateHaploType(Range range, const EList<SeedExt> &s
             if(snps[ee-1]->type == EDIT_TYPE_READ_GAP) {
                 right_pos += snps[ee-1]->len;
             }
+            if(left_pos + min_ht_len >= right_pos) {
+                right_pos = left_pos + min_ht_len;
+            }
             right_pos = min<TIndexOffU>(max_right_pos, right_pos);
             assert_leq(left_pos, right_pos);
 
