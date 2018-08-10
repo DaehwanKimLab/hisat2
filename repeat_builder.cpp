@@ -3268,7 +3268,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     }
     
     // DK - debugging purposes
-#if 1//{{{
+#if 1
     {
         // Build and test minimizer-based k-mer table
         const size_t window = 20;
@@ -3438,7 +3438,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             repeat.update();
         }
     }
-#endif//}}}
+#endif
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
     
@@ -4673,6 +4673,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         size_table.back().second = i;
     }
     size_table.sort();
+    size_t bundle_count = 0;
     
     string tmp_str;
     EList<Range> tmp_ranges; tmp_ranges.resizeExact(4);
@@ -4694,6 +4695,8 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             assert(isDone(saBegin, num));
             continue;
         }
+
+        size_t rb_done = 0;
         
         assert_lt(saBegin, size());
         repeatStack.push_back(idx);
@@ -4714,6 +4717,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             repeatBases.back().seq = getString(s, saElt, seed_len_);
             repeatBases.back().nodes.clear();
             repeatBases.back().nodes.push_back(idx); 
+            rb_done++;
             setDone(saBegin, saEnd - saBegin);
             bool left = true;
             while(repeatBases[ri].seq.length() <= max_len) {
@@ -4775,38 +4779,34 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                         break;
                     }
                 }
-                
-                size_t c = tmp_sort_ranges[3].second;
-                if(repeatBases[ri].seq.length() >= max_len) {
-                    if(left) tmp_str[0] = "ACGT"[c];
-                    else     tmp_str.back() = "ACGT"[c];
-                    TIndexOffU idx = find_repeat_idx(s, tmp_str);
-                    if(idx == repeat_index_.size())
-                        continue;
-                    if(isDone(repeat_index_[idx]))
-                        continue;
 
-                    repeatStack.push_back(idx);
-                    break;
+                size_t c = tmp_sort_ranges[3].second;
+                TIndexOffU idx = tmp_ranges[c].first;
+                TIndexOffU num = tmp_ranges[c].second;
+                setDone(repeat_index_[idx], num);
+                if(left) {
+                    repeatBases[ri].seq.insert(0, 1, "ACGT"[c]);
                 } else {
-                    TIndexOffU idx = tmp_ranges[c].first;
-                    TIndexOffU num = tmp_ranges[c].second;
-                    setDone(repeat_index_[idx], num);
-                    if(left) {
-                        repeatBases[ri].seq.insert(0, 1, "ACGT"[c]);
-                    } else {
-                        repeatBases[ri].seq.push_back("ACGT"[c]);
-                    }
-                    if(left) {
-                        repeatBases[ri].nodes.insert(idx, 0);
-                    } else {
-                        repeatBases[ri].nodes.push_back(idx);
-                    }
+                    repeatBases[ri].seq.push_back("ACGT"[c]);
+                }
+                if(left) {
+                    repeatBases[ri].nodes.insert(idx, 0);
+                } else {
+                    repeatBases[ri].nodes.push_back(idx);
                 }
             }
         }
+
+        if(rb_done == 0) {
+            cerr << "No repeatBase processed" << endl;
+        } else {
+            bundle_count++;
+        }
+
     }
-    
+
+    cerr << "Bundle count: " << bundle_count << endl;
+
 #ifndef NDEBUG
     {
         set<TIndexOffU> idx_set;
