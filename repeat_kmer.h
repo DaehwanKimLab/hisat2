@@ -31,8 +31,9 @@
 
 class RB_Minimizer {
 public:
+    template<typename TStr>
     static pair<uint64_t, size_t>
-    get_minimizer(const string& seq,
+    get_minimizer(const TStr& seq,
                   size_t off,
                   size_t window,
                   size_t k)
@@ -52,8 +53,9 @@ public:
         return minimizer;
     }
     
+    template<typename TStr>
     static void
-    get_minimizer(const string& seq,
+    get_minimizer(const TStr& seq,
                   size_t window,
                   size_t k,
                   EList<pair<uint64_t, size_t> >& minimizers)
@@ -93,33 +95,37 @@ protected:
         return kmer <= kmer2;
     }
     
+    template<typename TStr>
     static uint64_t
-    get_kmer(const string& seq,
+    get_kmer(const TStr& seq,
              size_t offset,
              size_t k)
     {
         assert_leq(offset + k, seq.length());
         uint64_t kmer = 0;
         for(size_t i = 0; i < k; i++) {
-            kmer = (kmer << 2) | asc2dna[seq[offset + i]];
+            size_t c = seq[offset + i];
+            if(c > 3) c = asc2dna[c];
+            kmer = (kmer << 2 | c);
         }
         return kmer;
     }
     
     static uint64_t
     get_next_kmer(uint64_t kmer,
-                  char base,
+                  size_t base,
                   size_t k)
     {
-        assert(base == 'A' || base == 'C' || base == 'G' || base == 'T');
         kmer &= (((uint64_t)1 << ((k-1)*2))) - 1;
-        kmer = (kmer << 2) | asc2dna[base];
+        if(base > 3) base = asc2dna[base];
+        kmer = (kmer << 2) | base;
         return kmer;
     }
     
-    static string get_string(uint64_t kmer, size_t k)
+    template<typename TStr>
+    static TStr get_string(uint64_t kmer, size_t k)
     {
-        string seq = "";
+        TStr seq = "";
         for(size_t i = 0; i < k; i++) {
             size_t nt = kmer & 0x3;
             seq.push_back("ACGT"[nt]);
@@ -136,39 +142,47 @@ public:
     ~RB_KmerTable() {}
     
 public:
-    bool isIn(uint64_t kmer)
+    bool isIn(uint64_t kmer) const
     {
         return kmers_.find(kmer) != kmers_.end();
     }
     
-    bool isRepeat(const string& query,
-                  const string& rc_query,
-                  EList<pair<uint64_t, size_t> >& minimizers)
+    template<typename TStr>
+    bool isRepeat(const TStr& query,
+                  const TStr& rc_query,
+                  EList<pair<uint64_t, size_t> >& minimizers) const
+    {
+        return isRepeat(query, minimizers) || isRepeat(rc_query, minimizers);
+    }
+    
+    template<typename TStr>
+    bool isRepeat(const TStr& query,
+                  EList<pair<uint64_t, size_t> >& minimizers) const
     {
         RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
         size_t est_count = 0;
+        uint64_t prev_minimizer = 0;
+        bool prev_in = false;
         for(size_t j = 0; j < minimizers.size(); j++) {
-            if(isIn(minimizers[j].first)) {
+            bool curr_in = false;
+            if(minimizers[j].first == prev_minimizer) {
+                if(prev_in) est_count++;
+                curr_in = prev_in;
+            } else if(isIn(minimizers[j].first)) {
+                curr_in = true;
                 est_count++;
             }
+            prev_minimizer = minimizers[j].first;
+            prev_in = curr_in;
         }
         bool est_repeat = est_count * 2 >= minimizers.size();
-        
-        RB_Minimizer::get_minimizer(rc_query, w_, k_, minimizers);
-        est_count = 0;
-        for(size_t j = 0; j < minimizers.size(); j++) {
-            if(isIn(minimizers[j].first)) {
-                est_count++;
-            }
-        }
-        bool rc_est_repeat = est_count * 2 >= minimizers.size();
-        
-        return est_repeat || rc_est_repeat;
+        return est_repeat;
     }
     
-    void findRepeats(const string& query,
+    template<typename TStr>
+    void findRepeats(const TStr& query,
                      EList<pair<uint64_t, size_t> >& minimizers,
-                     EList<TIndexOffU>& repeats)
+                     EList<TIndexOffU>& repeats) const
     {
         repeats.clear();
         RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
@@ -235,7 +249,7 @@ public:
         
         EList<pair<uint64_t, size_t> > minimizers;
         for(size_t s = 0; s < seqs.size(); s++) {
-            const string& seq = seqs[s];
+            const TStr& seq = seqs[s];
             RB_Minimizer::get_minimizer(seq,
                                         w_,
                                         k_,
@@ -265,7 +279,7 @@ public:
         kmer_table_ = tmp_table;        
     }
     
-    void dump(ostream& o)
+    void dump(ostream& o) const
     {
         o << "window         : " << w_ << endl;
         o << "k length       : " << k_ << endl;

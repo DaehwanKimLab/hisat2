@@ -336,6 +336,10 @@ public:
         // Find a repeat corresponding to a given location (left, right)
         pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
         index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
+        
+        if(repeatIdx >= _repeats.size())
+            return false;
+        
         assert_lt(repeatIdx, _repeats.size());
         if(right > _repeatMap[repeatIdx].first)
             return false;

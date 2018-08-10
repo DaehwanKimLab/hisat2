@@ -4130,6 +4130,16 @@ public:
         const ReportingParams& rp = sink.reportingParams();
         bool repeat[2][2] = {{false, false}, {false, false}};
         bool perform_repeat_alignment = false;
+#if 1
+        for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+            Read& read = *_rds[rdi];
+            for(size_t fwi = 0; fwi < 2; fwi++) {
+                const BTDnaString& seq = (fwi == 0 ? read.patFw : read.patRc);
+                repeat[rdi][fwi] = repeat_kmertable.isRepeat(seq, _tmp_minimizers);
+                perform_repeat_alignment |= repeat[rdi][fwi];
+            }
+        }
+#else
         for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
             for(size_t fwi = 0; fwi < 2; fwi++) {
                 ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
@@ -4159,6 +4169,7 @@ public:
             perform_repeat_alignment |= repeat[rdi][0];
             perform_repeat_alignment |= repeat[rdi][1];
         }
+#endif
         
         // Handle alignment to repetitive regions
         if(rgfm != NULL &&
@@ -4176,6 +4187,9 @@ public:
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 for(size_t fwi = 0; fwi < 2; fwi++) {
                     if(!repeat[rdi][fwi]) continue;
+                    ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
+                    if(!hit.done()) continue;
+                    
                     // choose candidate partial alignments for further alignment
                     index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
                     
@@ -5094,6 +5108,8 @@ protected:
     
     EList<pair<local_index_t, local_index_t> > _local_node_iedge_count;
     EList<pair<local_index_t, local_index_t> > _tmp_local_node_iedge_count;
+    
+    EList<pair<uint64_t, size_t> > _tmp_minimizers;
 
     // For AlnRes::matchesRef
 	ASSERT_ONLY(EList<bool> raw_matches_);
@@ -5804,6 +5820,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
             edits[i].pos -= hit.trim5();
         }
     }
+    
+
     //rs.setRefNs(nrefn);
     assert(rs.matchesRef(
                          rd,
@@ -6114,20 +6132,6 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
         if(rangeTemp.first >= rangeTemp.second) {
             break;
         }
-        
-        // DK - debugging purposes
-#if 0
-        if(dep - offset >= _minK * 2) {
-            if((node_rangeTemp.second - node_rangeTemp.first) * 4 < node_range.second - node_range.first) {
-                if(gfm.repeat()) {
-                    break;
-                } else {
-                    hit._repeat = true;
-                }
-            }
-        }
-#endif
-
         if(pseudogeneStop_) {
             if(node_rangeTemp.second - node_rangeTemp.first < node_range.second - node_range.first && node_range.second - node_range.first <= min<index_t>(5, (index_t)rp.khits)) {
                 static const index_t minLenForPseudogene = (index_t)_minK + 6;
@@ -6170,8 +6174,6 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
         }
         dep++;
         
-        
-
         if(anchorStop_) {
             if(dep - offset >= _minK + 12 && range.second - range.first == 1) {
                 hit._numUniqueSearch++;

@@ -3393,7 +3393,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                         if(!saw_mm) right_ext[0]++;
                         right_ext[1]++;
                     }
-                    assert_lt(left_ext[0] + right_ext[0] + subSA_.seed_len(), rp.max_repeat_len);
+                    assert_leq(left_ext[0] + right_ext[0] + subSA_.seed_len(), rp.max_repeat_len);
                     size_t tmp_left_len = 0, tmp_right_len = 0;
                     if(left_ext[0] + right_ext[1] >= left_ext[1] + right_ext[0]) {
                         tmp_left_len = left_ext[0];
@@ -4781,28 +4781,42 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 }
 
                 size_t c = tmp_sort_ranges[3].second;
-                TIndexOffU idx = tmp_ranges[c].first;
-                TIndexOffU num = tmp_ranges[c].second;
-                setDone(repeat_index_[idx], num);
-                if(left) {
-                    repeatBases[ri].seq.insert(0, 1, "ACGT"[c]);
+                if(repeatBases[ri].seq.length() >= max_len) {
+                    if(left) tmp_str[0] = "ACGT"[c];
+                    else     tmp_str.back() = "ACGT"[c];
+                    TIndexOffU idx = find_repeat_idx(s, tmp_str);
+                    if(idx == repeat_index_.size())
+                        continue;
+                    if(isDone(repeat_index_[idx]))
+                        continue;
+                    
+                    repeatStack.push_back(idx);
+                    if(left) {
+                        left = false;
+                        continue;
+                    } else {
+                        break;
+                    }
                 } else {
-                    repeatBases[ri].seq.push_back("ACGT"[c]);
-                }
-                if(left) {
-                    repeatBases[ri].nodes.insert(idx, 0);
-                } else {
-                    repeatBases[ri].nodes.push_back(idx);
+                    TIndexOffU idx = tmp_ranges[c].first;
+                    TIndexOffU num = tmp_ranges[c].second;
+                    setDone(repeat_index_[idx], num);
+                    if(left) {
+                        repeatBases[ri].seq.insert(0, 1, "ACGT"[c]);
+                    } else {
+                        repeatBases[ri].seq.push_back("ACGT"[c]);
+                    }
+                    if(left) {
+                        repeatBases[ri].nodes.insert(idx, 0);
+                    } else {
+                        repeatBases[ri].nodes.push_back(idx);
+                    }
                 }
             }
         }
 
-        if(rb_done == 0) {
-            cerr << "No repeatBase processed" << endl;
-        } else {
-            bundle_count++;
-        }
-
+        assert_gt(rb_done, 0);
+        bundle_count++;
     }
 
     cerr << "Bundle count: " << bundle_count << endl;

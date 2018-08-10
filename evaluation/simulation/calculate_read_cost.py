@@ -148,23 +148,32 @@ def extract_splice_sites(gtf_fname):
 """
 """
 def read_repeat_info(repeat_filename):
-    repeat_info, repeat_dic = [], {}
+    repeat_info, repeat_dic = {}, {}
+    repeat_pos = {}
     if os.path.exists(repeat_filename):
         for line in open(repeat_filename):
             if line[0] == ">":
                 line = line.strip()[1:]
-                allele, _, pos, rep_len, _, _ = line.split()
+                allele, rep, pos, rep_len, _, _ = line.split()[:6]
+                pos, rep_len = int(pos), int(rep_len)
                 common_allele = allele.split('*')[0]
-                if len(repeat_info) > 0 and repeat_info[-1][0] == common_allele:
-                    repeat_info[-1][-1].append(allele)
-                else:
-                    repeat_info.append([common_allele, int(pos), int(rep_len), [allele]])
-                repeat_dic[allele] = []
+
+                if rep not in repeat_info:
+                    repeat_info[rep] = []
+
+                repeat_info[rep].append([allele, pos, rep_len])
+                if allele not in repeat_dic:
+                    repeat_dic[allele] = []
+                    repeat_pos[allele] = set()
             else:
                 coords = line.split()
                 for coord in coords:
                     chr, pos, strand = coord.split(':')
-                    repeat_dic[allele].append([chr, int(pos), strand])
+                    pos = int(pos)
+                    if pos in repeat_pos[allele]:
+                        continue
+                    repeat_dic[allele].append([chr, pos, strand])
+                    repeat_pos[allele].add(pos)
 
     return repeat_info, repeat_dic
 
@@ -392,15 +401,11 @@ def is_small_exon_junction_read(cigars, min_exon_len = 23):
 
 """
 """
-def repeat_to_genome_alignment(repeat_info, repeat_dic, pos, cigar_str = ""):
+def repeat_to_genome_alignment(repeat_info, repeat_dic, rep, pos, cigar_str = ""):
     left = pos - 1 # convert 1-based offset to zero-based
     
     alignments = []
-    rep_idx = find_repeat(repeat_info, left)
-    assert rep_idx >= 0 and rep_idx < len(repeat_info)
-
-    rpos, rlen, rep_alleles = repeat_info[rep_idx][1:]
-    for rep_allele in rep_alleles:
+    for rep_allele, rpos, rlen in repeat_info[rep]:
         assert rep_allele in repeat_dic
         coords = repeat_dic[rep_allele]
         assert len(coords) > 0
@@ -548,8 +553,8 @@ def extract_single(infilename,
                 alignments.append([alt_chr, alt_pos, alt_cigar_str])
 
         # Convert repeat alignments to genome alignments
-        if aligner == "hisat2" and chr == "rep" and len(repeat_info) > 0:
-            alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, pos, cigar_str)
+        if aligner == "hisat2" and chr.startswith("rep") and len(repeat_info) > 0:
+            alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, chr, pos, cigar_str)
             
         for i, alignment in enumerate(alignments):
             chr, pos, cigar_str = alignment
@@ -758,11 +763,11 @@ def extract_pair(infilename,
                 alignments.append([alt_chr, alt_pos, alt_cigar_str])
 
         # Convert repeat alignments to genome alignments
-        if aligner == "hisat2" and (chr1 == "rep" or chr2 == "rep") and len(repeat_info) > 0:
-            if chr1 == "rep":
-                alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, pos1, cigar1_str)
-            if chr2 == "rep" or (chr1 == "rep" and chr2 == "="):
-                alignments2 = repeat_to_genome_alignment(repeat_info, repeat_dic, int(pos2))
+        if aligner == "hisat2" and (chr1.startswith("rep") or chr2.startswith("rep")) and len(repeat_info) > 0:
+            if chr1.startswith("rep"):
+                alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, chr1, pos1, cigar1_str)
+            if chr2.startswith("rep") or (chr1.startswith("rep") and chr2 == "="):
+                alignments2 = repeat_to_genome_alignment(repeat_info, repeat_dic, chr2, int(pos2))
             else:
                 alignments2 = [[chr2, int(pos2)]]
 
@@ -1646,7 +1651,6 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "", "210", ""],
         ["hisat2", "", "", "", ""],
         ["hisat2", "", "rep", "", ""],
-        ["hisat2", "", "rep2", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
@@ -1665,12 +1669,12 @@ def calculate_read_cost(verbose):
         # ["star", "x2", "", "", ""],
         # ["star", "gtf", "", "", ""],
         # ["bowtie", "", "", "", ""],
-        # ["bowtie2", "", "", "", ""],
+        ["bowtie2", "", "", "", ""],
         # ["bowtie2", "", "", "", "-k 10"],
         # ["bowtie2", "", "", "", "-k 1000 --extends 2000"],
         # ["gsnap", "", "", "", ""],
         # ["bwa", "mem", "", "", ""],
-        # ["bwa", "mem", "", "", "-a"],
+        ["bwa", "mem", "", "", "-a"],
         # ["hisat2", "", "snp", "", ""],
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "", ""],
@@ -1699,10 +1703,10 @@ def calculate_read_cost(verbose):
 
     chr_dic = read_genome("../../data/%s.fa" % genome)
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
-    repeat_info, repeat_dic = read_repeat_info("../../data/%s.rep.info" % genome)
+    repeat_info, repeat_dic = read_repeat_info("../../data/%s_rep.rep.info" % genome)
     align_stat = []
-    for paired in [False, True]:
-    # for paired in [True]:
+    # for paired in [False, True]:
+    for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
