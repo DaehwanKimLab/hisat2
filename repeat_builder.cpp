@@ -3268,7 +3268,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     }
     
     // DK - debugging purposes
-#if 0//{{{
+#if 1//{{{
     {
         // Build and test minimizer-based k-mer table
         const size_t window = 20;

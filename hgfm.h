@@ -2188,7 +2188,7 @@ HGFM<index_t, local_index_t>::HGFM(
     if(localIndex) {
         assert_gt(this->_nthreads, 0);
         AutoArray<tthread::thread*> threads(this->_nthreads - 1);
-        EList<ThreadParam> tParams;
+        EList<ThreadParam> tParams; tParams.reserveExact((size_t)this->_nthreads);
         for(index_t t = 0; t < (index_t)this->_nthreads; t++) {
             tParams.expand();
             tParams.back().s.clear();
