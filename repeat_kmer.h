@@ -27,14 +27,7 @@
 #include "assert_helpers.h"
 #include "word_io.h"
 #include "mem_ids.h"
-#include "ref_coord.h"
-#include "ref_read.h"
-#include "edit.h"
 #include "ds.h"
-#include "repeat.h"
-#include "blockwise_sa.h"
-#include "repeat_builder.h"
-
 
 class RB_Minimizer {
 public:
@@ -207,12 +200,31 @@ public:
         assert_lt(remove_count, repeats.size());
         repeats.resize(repeats.size() - remove_count);
     }
+    
+    bool write(ofstream& f_out, bool bigEndian) const {
+        writeIndex<size_t>(f_out, kmers_.size(), bigEndian);
+        writeIndex<size_t>(f_out, w_, bigEndian);
+        writeIndex<size_t>(f_out, k_, bigEndian);
+        for(std::set<uint64_t>::iterator it = kmers_.begin(); it != kmers_.end(); it++) {
+            writeIndex<size_t>(f_out, *it, bigEndian);
+        }
+        return true;
+    }
+    
+    bool read(ifstream& f_in, bool bigEndian) {
+        size_t kmer_size = readIndex<size_t>(f_in, bigEndian);
+        w_ = readIndex<size_t>(f_in, bigEndian);
+        k_ = readIndex<size_t>(f_in, bigEndian);
+        while(kmers_.size() < kmer_size) {
+            size_t kmer = readIndex<size_t>(f_in, bigEndian);
+            kmers_.insert(kmer);
+        }
+        return true;
+    }
 
 public:
     template<typename TStr>
-    void build(const RepeatParameter& rp,
-               const TStr& s,
-               const map<size_t, RB_Repeat*>& repeat_map,
+    void build(const EList<TStr>& seqs,
                size_t w,
                size_t k)
     {
@@ -222,23 +234,20 @@ public:
         kmers_.clear();
         
         EList<pair<uint64_t, size_t> > minimizers;
-        for(map<size_t, RB_Repeat*>::const_iterator it = repeat_map.begin(); it != repeat_map.end(); it++) {
-            const RB_Repeat& repeat = *(it->second);
-            assert(repeat.satisfy(rp));
-            
-            const string& consensus = repeat.consensus();
-            RB_Minimizer::get_minimizer(consensus,
+        for(size_t s = 0; s < seqs.size(); s++) {
+            const string& seq = seqs[s];
+            RB_Minimizer::get_minimizer(seq,
                                         w_,
                                         k_,
                                         minimizers);
             for(size_t i = 0; i < minimizers.size(); i++) {
                 if(!kmer_table_.empty() &&
                    kmer_table_.back().first == minimizers[i].first &&
-                   kmer_table_.back().second == repeat.repeat_id())
+                   kmer_table_.back().second == s)
                     continue;
                 kmer_table_.expand();
                 kmer_table_.back().first = minimizers[i].first;
-                kmer_table_.back().second = repeat.repeat_id();
+                kmer_table_.back().second = s;
                 kmers_.insert(minimizers[i].first);
             }
         }

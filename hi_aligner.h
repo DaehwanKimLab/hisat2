@@ -4034,6 +4034,7 @@ public:
            const GFM<index_t>*        rgfm,
            const ALTDB<index_t>&      altdb,
            const RepeatDB<index_t>&   repeatdb,
+           const RB_KmerTable&        repeat_kmertable,
            const ALTDB<index_t>&      raltdb,
            const BitPairReference&    ref,
            const BitPairReference*    rref,
