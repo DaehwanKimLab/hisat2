@@ -11,7 +11,7 @@ def get_aligners():
     os.chdir("aligners")
     if not os.path.exists("bin"):
         os.mkdir("bin")
-    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks"]
+    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks", "minimap2"]
     for program in programs:
         if program == "HISAT":
             dir = "hisat-0.1.6-beta"
@@ -43,6 +43,16 @@ def get_aligners():
             installs = bins + " bowtie bowtie-build bowtie-inspect"
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
+        elif program == "minimap2":
+            dir = "minimap2-2.12"
+            if os.path.exists(dir):
+                continue
+            fname = dir + ".tar.bz2"
+            #https://github.com/lh3/minimap2/releases/download/v2.12/minimap2-2.12.tar.bz2
+            url = "https://github.com/lh3/minimap2/releases/download/v2.12"
+            bins = "minimap2"
+            cmd = "wget %s/%s; tar jxvf %s; cd %s; make ; cp %s ../bin; cd .." % \
+                (url, fname, fname, dir,bins)
         elif program == "TopHat2":
             if mac:
                 dir = "tophat-2.1.0.OSX_x86_64"
