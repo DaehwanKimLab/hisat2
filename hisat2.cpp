@@ -55,6 +55,7 @@
 #include "presets.h"
 #include "opts.h"
 #include "outq.h"
+#include "repeat_kmer.h"
 
 using namespace std;
 
@@ -1972,6 +1973,7 @@ static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
 static ALTDB<index_t>*                   altdb;
 static RepeatDB<index_t>*                repeatdb;
+static RB_KmerTable*                     repeat_kmertable;
 static ALTDB<index_t>*                   raltdb;
 static TranscriptomePolicy*              multiseed_tpol;
 static GraphPolicy*                      gpol;
@@ -3501,6 +3503,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                                 rgfm,
                                                 *altdb,
                                                 *repeatdb,
+                                                *repeat_kmertable,
                                                 *raltdb,
                                                 ref,
                                                 rref,
@@ -3729,12 +3732,14 @@ static void driver(
 	}
     altdb = new ALTDB<index_t>();
     repeatdb = new RepeatDB<index_t>();
+    repeat_kmertable = new RB_KmerTable();
     raltdb = new ALTDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
 	HGFM<index_t, local_index_t> gfm(
                                      adjIdxBase,
                                      altdb,
                                      repeatdb,
+                                     NULL,
                                      -1,       // fw index
                                      true,     // index is for the forward direction
                                      /* overriding: */ offRate,
@@ -3796,6 +3801,7 @@ static void driver(
                                                 rep_adjIdxBase,
                                                 raltdb,
                                                 repeatdb,
+                                                repeat_kmertable,
                                                 -1,       // fw index
                                                 true,     // index is for the forward direction
                                                 /* overriding: */ offRate,
@@ -4152,6 +4158,7 @@ static void driver(
 		delete mssink;
         delete altdb;
         delete repeatdb;
+        delete repeat_kmertable;
         delete raltdb;
         delete ssdb;
 		delete metricsOfb;

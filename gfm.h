@@ -57,6 +57,7 @@
 #include "btypes.h"
 #include "tokenize.h"
 #include "repeat.h"
+#include "repeat_kmer.h"
 
 #ifdef POPCNT_CAPABILITY
 #include "processor_support.h"
@@ -653,6 +654,7 @@ public:
 	GFM(const string& in,
         ALTDB<index_t>* altdb,
         RepeatDB<index_t>* repeatdb,
+        RB_KmerTable* repeat_kmertable,
         int needEntireReverse,
         bool fw,
         int32_t overrideOffRate, // = -1,
@@ -791,6 +793,10 @@ public:
         if(in7.peek() != std::ifstream::traits_type::eof()) {
             repeatdb->read(in7, this->toBe());
             _repeat = !repeatdb->empty();
+        }
+        
+        if(_repeat) {
+            repeat_kmertable->read(in7, this->toBe());
         }
         
         in7.close();
@@ -1229,6 +1235,7 @@ public:
 		VMSG_NL("Calculating joined length");
 		index_t jlen;
 		jlen = joinedLen(szs);
+        _repeat = (parent_szs != NULL);
 		assert_geq(jlen, sztot);
 		VMSG_NL("Writing header");
 		writeFromMemory(true, out1, out2);
@@ -1810,7 +1817,7 @@ public:
                 }
                 
                 EList<Repeat<index_t> >& repeats = _repeatdb.repeats();
-                if(repeatfile != "") {
+                if(_repeat) {
                     ifstream repeat_file(repeatfile.c_str(), ios::in);
                     if(!repeat_file.is_open()) {
                         cerr << "Error: could not open " << ssfile.c_str() << endl;
@@ -1985,6 +1992,33 @@ public:
                 
                 _repeatdb.write(fout7, this->toBe());
                 
+                if(_repeat) {
+                    EList<string> seqs;
+                    for(size_t i = 0; i < repeats.size(); i++) {
+                        const Repeat<index_t>& repeat = repeats[i];
+                        assert_lt(repeat.repID, chr_szs.size());
+                        index_t template_len = 0;
+                        if(repeat.repID + 1 < chr_szs.size()) {
+                            template_len = chr_szs[repeat.repID + 1].first - chr_szs[repeat.repID].first;
+                        } else {
+                            template_len = s.length() - chr_szs[repeat.repID].first;
+                        }
+                        assert_leq(repeat.repPos + repeat.repLen, template_len);
+                        index_t pos = chr_szs[repeat.repID].first + repeat.repPos;
+                        assert_leq(pos + repeat.repLen, s.length());
+                        seqs.expand();
+                        for(index_t j = 0; j < repeat.repLen; j++) {
+                            int c = s[pos + j];
+                            assert_range(0, 3, c);
+                            seqs.back().push_back("ACGT"[c]);
+                        }
+                    }
+                    const size_t w = 20, k = 31;
+                    RB_KmerTable kmer_table;
+                    kmer_table.build(seqs, w, k);
+                    kmer_table.write(fout7, this->toBe());
+                }
+                    
                 fout7.close();
                 fout8.close();
             }
@@ -2029,15 +2063,13 @@ public:
 			// VMSG_NL("bmax according to bmaxSqrtMult setting: " << bmax);
 		}
 		else if(bmaxDivN != (index_t)OFF_MASK) {
-			bmax = max<uint32_t>(jlen / bmaxDivN, 1);
+			bmax = max<uint32_t>(jlen / (bmaxDivN * _nthreads), 1);
 			// VMSG_NL("bmax according to bmaxDivN setting: " << bmax);
 		}
 		else {
 			bmax = (uint32_t)sqrt(s.length());
 			// VMSG_NL("bmax defaulted to: " << bmax);
 		}
-        
-        const bool repeat_index = (parent_szs != NULL);
         
 		int iter = 0;
 		bool first = true;
@@ -2074,7 +2106,7 @@ public:
 			iter++;
 			try {
                 // DK - debugging purposes
-                if(_alts.empty() /* || repeat_index */) {
+                if(_alts.empty() /* || _repeat */) {
                     VMSG("Using parameters --bmax " << bmax);
                     if(dcv == 0) {
                         VMSG_NL(" and *no difference cover*");
@@ -4086,6 +4118,7 @@ public:
     EList<string>              _altnames;
     EList<Haplotype<index_t> > _haplotypes;
     RepeatDB<index_t>          _repeatdb;
+    RB_KmerTable               _repeat_kmertable;
     
     bool _repeat;
 
