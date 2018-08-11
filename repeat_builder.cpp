@@ -4654,6 +4654,9 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
     if(repeat_index_.size() <= 0)
         return;
     
+    done_.fillZero();
+    
+    set<size_t> senseDominant;
     EList<size_t> repeatStack;
     EList<pair<TIndexOffU, TIndexOffU> > size_table;
     size_table.reserveExact(repeat_index_.size() / 2 + 1);
@@ -4667,13 +4670,14 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         if(!isSenseDominant(coordHelper, positions, seed_len_))
             continue;
         
+        senseDominant.insert(i);
         size_table.expand();
         size_table.back().first = end - begin;
         size_table.back().second = i;
     }
     size_table.sort();
+
     size_t bundle_count = 0;
-    
     string tmp_str;
     EList<Range> tmp_ranges; tmp_ranges.resizeExact(4);
     EList<pair<size_t, size_t> > tmp_sort_ranges; tmp_sort_ranges.resizeExact(4);
@@ -4688,19 +4692,18 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             assert_eq(repeat_index_[idx] + num, size());
         }
 #endif
-        
         TIndexOffU saBegin = repeat_index_[idx];
         if(isDone(saBegin)) {
             assert(isDone(saBegin, num));
             continue;
         }
 
-        size_t rb_done = 0;
-        
+        ASSERT_ONLY(size_t rb_done = 0);
         assert_lt(saBegin, size());
         repeatStack.push_back(idx);
         while(!repeatStack.empty()) {
             TIndexOffU idx = repeatStack.back();
+            assert(senseDominant.find(idx) != senseDominant.end());
             repeatStack.pop_back();
             assert_lt(idx, repeat_index_.size());
             TIndexOffU saBegin = repeat_index_[idx];
@@ -4716,7 +4719,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             repeatBases.back().seq = getString(s, saElt, seed_len_);
             repeatBases.back().nodes.clear();
             repeatBases.back().nodes.push_back(idx); 
-            rb_done++;
+            ASSERT_ONLY(rb_done++);
             setDone(saBegin, saEnd - saBegin);
             bool left = true;
             while(repeatBases[ri].seq.length() <= max_len) {
@@ -4747,10 +4750,13 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     assert(num == 0 || num >= seed_count_);
                     tmp_sort_ranges[c].first = num;
                     tmp_sort_ranges[c].second = c;
-                    if(idx == repeat_index_.size() || isDone(repeat_index_[idx])) {
+                    if(idx == repeat_index_.size() ||
+                       isDone(repeat_index_[idx]) ||
+                       senseDominant.find(idx) == senseDominant.end()) {
 #ifndef NDEBUG
                         if(idx < repeat_index_.size()) {
-                            assert(isDone(repeat_index_[idx], num));
+                            assert(isDone(repeat_index_[idx], num) ||
+                                   senseDominant.find(idx) == senseDominant.end());
                         }
 #endif
                         tmp_sort_ranges[c].first = 0;
@@ -4788,7 +4794,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                         continue;
                     if(isDone(repeat_index_[idx]))
                         continue;
-                    
+
                     repeatStack.push_back(idx);
                     if(left) {
                         left = false;
@@ -4802,12 +4808,9 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     setDone(repeat_index_[idx], num);
                     if(left) {
                         repeatBases[ri].seq.insert(0, 1, "ACGT"[c]);
-                    } else {
-                        repeatBases[ri].seq.push_back("ACGT"[c]);
-                    }
-                    if(left) {
                         repeatBases[ri].nodes.insert(idx, 0);
                     } else {
+                        repeatBases[ri].seq.push_back("ACGT"[c]);
                         repeatBases[ri].nodes.push_back(idx);
                     }
                 }
