@@ -1842,6 +1842,7 @@ public:
                     }
                     index_t parent_jlen = joinedLen(*parent_szs);
                     
+                    string prev_repName = "";
                     while(!repeat_file.eof()) {
                         // >rep1*0    rep    0    100    470    0
                         // 20_rep:26622650:+ 20_rep:26628088:+ 20_rep:26632508:+ 20_rep:26635636:+
@@ -1864,7 +1865,7 @@ public:
                             string strID = repAlleleName.substr(star_pos + 1);
                             istringstream(strID) >> alleleID;
                         }
-                        
+        
                         string refRepName;
                         index_t repPos, repLen;
                         repeat_file >> refRepName >> repPos >> repLen;
@@ -1879,6 +1880,9 @@ public:
                         }
                         
                         if(repeats.size() == 0 || repeats.back().repName != repName) {
+                            if(repeats.size() > 0) {
+                                repeats.back().positions.sort();
+                            }
                             repeats.expand();
                             repeats.back().init(repName, rep_idx, repPos, repLen);
                         }
@@ -1906,8 +1910,9 @@ public:
                             }
                         }
                         
-                        EList<RepeatCoord<index_t> > positions;
-                        while(positions.size() < numCoords) {
+                        EList<RepeatCoord<index_t> >& positions = repeats.back().positions;
+                        size_t sofar_numCoords = positions.size();
+                        while(positions.size() - sofar_numCoords < numCoords) {
                             string chr_pos;
                             repeat_file >> chr_pos;
                             size_t colon_pos = chr_pos.find(':');
@@ -1936,6 +1941,7 @@ public:
                             positions.back().tid = chr_idx;
                             positions.back().toff = pos;
                             positions.back().fw = repfw;
+                            positions.back().alleleID = alleleID;
                             
                             pair<index_t, index_t> tmp_pair = parent_chr_szs[chr_idx];
                             const index_t sofar_len = tmp_pair.first;
@@ -1983,9 +1989,11 @@ public:
                         repeats.back().alleles.back().init(alleleID,
                                                            repPos,
                                                            repLen,
-                                                           snpIDs,
-                                                           positions);
+                                                           snpIDs);
                         
+                    }
+                    if(repeats.size() > 0) {
+                        repeats.back().positions.sort();
                     }
                     repeat_file.close();
                 }

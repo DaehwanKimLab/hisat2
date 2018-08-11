@@ -3267,8 +3267,6 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                        fp);
     }
     
-    // DK - debugging purposes
-#if 1
     {
         // Build and test minimizer-based k-mer table
         const size_t window = 20;
@@ -3327,118 +3325,119 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
         cerr << "false negative: " << false_negative << endl;
         cerr << endl;
         
-        // Include repeat sequences that include one mismatch with respect to consensus sequence
-        EList<TIndexOffU> positions, repeats;
-        const EList<TIndexOffU>& repeat_index = subSA_.getRepeatIndex();
-        EList<size_t> left_ext, right_ext;
-        left_ext.resizeExact(2); right_ext.resizeExact(2);
-        for(size_t i = 0; i < repeat_index.size(); i++) {
-            TIndexOffU saBegin = repeat_index[i];
-            TIndexOffU saEnd = (i + 1 < repeat_index.size() ? repeat_index[i+1] : subSA_.size());
-            assert_lt(saBegin, saEnd);
-            positions.clear();
-            for(size_t j = saBegin; j < saEnd; j++) {
-                positions.push_back(subSA_[j]);
-            }
-            if(!isSenseDominant(coordHelper_, positions, subSA_.seed_len()))
-                continue;
-            
-            string seq = getString(s_, positions[0], subSA_.seed_len());
-            kmer_table.findRepeats(seq, minimizers, repeats);
-            if(repeats.empty())
-                continue;
-            
-            for(size_t j = 0; j < positions.size(); j++) {
-                TIndexOffU saElt = positions[j];
-                size_t max_r = 0;
-                size_t max_left_len = 0, max_right_len = 0;
-                bool found = false;
-                for(size_t r = 0; r < repeats.size(); r++) {
-                    const RB_Repeat& repeat = *(repeat_map_[repeats[r]]);
-                    const string& consensus = repeat.consensus();
-                    int consensus_pos = consensus.find(seq);
-                    if(consensus_pos == string::npos)
-                        continue;
-                    if(repeat.contain(saElt, saElt + subSA_.seed_len())) {
-                        found = true;
-                        break;
-                    }
-                    
-                    TIndexOffU left_bound = coordHelper_.getStart(saElt);
-                    if(left_bound + (size_t)consensus_pos > saElt)
-                        continue;
-                    
-                    TIndexOffU right_bound = coordHelper_.getEnd(saElt);
-                    if(saElt + consensus.length() - (size_t)consensus_pos >= right_bound)
-                        continue;
-
-                    left_ext.fillZero(); right_ext.fillZero();
-                    string ex_seq = getString(s_, saElt - (size_t)consensus_pos, consensus.length());
-                    assert_eq(ex_seq.length(), consensus.length());
-                    bool saw_mm = false;
-                    for(int k = consensus_pos - 1; k >= 0; k--) {
-                        if(consensus[k] != ex_seq[k]) {
-                            if(saw_mm) break;
-                            saw_mm = true;
-                        }
-                        if(!saw_mm) left_ext[0]++;
-                        left_ext[1]++;
-                    }
-                    saw_mm = false;
-                    for(size_t k = (size_t)consensus_pos + subSA_.seed_len(); k < consensus.length(); k++) {
-                        if(consensus[k] != ex_seq[k]) {
-                            if(saw_mm) break;
-                            saw_mm = true;
-                        }
-                        if(!saw_mm) right_ext[0]++;
-                        right_ext[1]++;
-                    }
-                    assert_leq(left_ext[0] + right_ext[0] + subSA_.seed_len(), rp.max_repeat_len);
-                    size_t tmp_left_len = 0, tmp_right_len = 0;
-                    if(left_ext[0] + right_ext[1] >= left_ext[1] + right_ext[0]) {
-                        tmp_left_len = left_ext[0];
-                        tmp_right_len = right_ext[1];
-                    } else {
-                        tmp_left_len = left_ext[1];
-                        tmp_right_len = right_ext[0];
-                    }
-                    
-                    if(max_left_len + max_right_len < tmp_left_len + tmp_right_len) {
-                        max_r = r;
-                        max_left_len = tmp_left_len;
-                        max_right_len = tmp_right_len;
-                    }
+        // Include repeat-competing sequences that include one mismatch with respect to consensus sequence
+        if(rp.max_edit > 0) {
+            EList<TIndexOffU> positions, repeats;
+            const EList<TIndexOffU>& repeat_index = subSA_.getRepeatIndex();
+            EList<size_t> left_ext, right_ext;
+            left_ext.resizeExact(2); right_ext.resizeExact(2);
+            for(size_t i = 0; i < repeat_index.size(); i++) {
+                TIndexOffU saBegin = repeat_index[i];
+                TIndexOffU saEnd = (i + 1 < repeat_index.size() ? repeat_index[i+1] : subSA_.size());
+                assert_lt(saBegin, saEnd);
+                positions.clear();
+                for(size_t j = saBegin; j < saEnd; j++) {
+                    positions.push_back(subSA_[j]);
                 }
+                if(!isSenseDominant(coordHelper_, positions, subSA_.seed_len()))
+                    continue;
                 
-                if(!found && subSA_.seed_len() + max_left_len + max_right_len >= rp.min_repeat_len) {
-                    SeedExt seed;
-                    assert_leq(max_left_len, saElt);
-                    TIndexOffU left = saElt - max_left_len;
-                    TIndexOffU right = saElt + subSA_.seed_len() + max_right_len;
-                    seed.orig_pos.first = seed.orig_pos.second = left;
-                    seed.pos.first = left;
-                    seed.pos.second = right;
-                    map<size_t, RB_Repeat*>::iterator it = repeat_map_.find(repeats[max_r]);
-                    assert(it != repeat_map_.end());
-                    RB_Repeat& repeat = *(it->second);
-                    const string& consensus = repeat.consensus();
-                    int consensus_pos = consensus.find(seq);
-                    assert_neq(consensus_pos, string::npos);
-                    seed.consensus_pos.first = (size_t)consensus_pos - max_left_len;
-                    seed.consensus_pos.second = seed.consensus_pos.first + (right - left);
-                    assert_leq(seed.consensus_pos.second - seed.consensus_pos.first, consensus.length());
-                    repeat.addSeed(seed);
+                string seq = getString(s_, positions[0], subSA_.seed_len());
+                kmer_table.findRepeats(seq, minimizers, repeats);
+                if(repeats.empty())
+                    continue;
+                
+                for(size_t j = 0; j < positions.size(); j++) {
+                    TIndexOffU saElt = positions[j];
+                    size_t max_r = 0;
+                    size_t max_left_len = 0, max_right_len = 0;
+                    bool found = false;
+                    for(size_t r = 0; r < repeats.size(); r++) {
+                        const RB_Repeat& repeat = *(repeat_map_[repeats[r]]);
+                        const string& consensus = repeat.consensus();
+                        int consensus_pos = consensus.find(seq);
+                        if(consensus_pos == string::npos)
+                            continue;
+                        if(repeat.contain(saElt, saElt + subSA_.seed_len())) {
+                            found = true;
+                            break;
+                        }
+                        
+                        TIndexOffU left_bound = coordHelper_.getStart(saElt);
+                        if(left_bound + (size_t)consensus_pos > saElt)
+                            continue;
+                        
+                        TIndexOffU right_bound = coordHelper_.getEnd(saElt);
+                        if(saElt + consensus.length() - (size_t)consensus_pos >= right_bound)
+                            continue;
+                        
+                        left_ext.fillZero(); right_ext.fillZero();
+                        string ex_seq = getString(s_, saElt - (size_t)consensus_pos, consensus.length());
+                        assert_eq(ex_seq.length(), consensus.length());
+                        bool saw_mm = false;
+                        for(int k = consensus_pos - 1; k >= 0; k--) {
+                            if(consensus[k] != ex_seq[k]) {
+                                if(saw_mm) break;
+                                saw_mm = true;
+                            }
+                            if(!saw_mm) left_ext[0]++;
+                            left_ext[1]++;
+                        }
+                        saw_mm = false;
+                        for(size_t k = (size_t)consensus_pos + subSA_.seed_len(); k < consensus.length(); k++) {
+                            if(consensus[k] != ex_seq[k]) {
+                                if(saw_mm) break;
+                                saw_mm = true;
+                            }
+                            if(!saw_mm) right_ext[0]++;
+                            right_ext[1]++;
+                        }
+                        assert_leq(left_ext[0] + right_ext[0] + subSA_.seed_len(), rp.max_repeat_len);
+                        size_t tmp_left_len = 0, tmp_right_len = 0;
+                        if(left_ext[0] + right_ext[1] >= left_ext[1] + right_ext[0]) {
+                            tmp_left_len = left_ext[0];
+                            tmp_right_len = right_ext[1];
+                        } else {
+                            tmp_left_len = left_ext[1];
+                            tmp_right_len = right_ext[0];
+                        }
+                        
+                        if(max_left_len + max_right_len < tmp_left_len + tmp_right_len) {
+                            max_r = r;
+                            max_left_len = tmp_left_len;
+                            max_right_len = tmp_right_len;
+                        }
+                    }
+                    
+                    if(!found && subSA_.seed_len() + max_left_len + max_right_len >= rp.min_repeat_len) {
+                        SeedExt seed;
+                        assert_leq(max_left_len, saElt);
+                        TIndexOffU left = saElt - max_left_len;
+                        TIndexOffU right = saElt + subSA_.seed_len() + max_right_len;
+                        seed.orig_pos.first = seed.orig_pos.second = left;
+                        seed.pos.first = left;
+                        seed.pos.second = right;
+                        map<size_t, RB_Repeat*>::iterator it = repeat_map_.find(repeats[max_r]);
+                        assert(it != repeat_map_.end());
+                        RB_Repeat& repeat = *(it->second);
+                        const string& consensus = repeat.consensus();
+                        int consensus_pos = consensus.find(seq);
+                        assert_neq(consensus_pos, string::npos);
+                        seed.consensus_pos.first = (size_t)consensus_pos - max_left_len;
+                        seed.consensus_pos.second = seed.consensus_pos.first + (right - left);
+                        assert_leq(seed.consensus_pos.second - seed.consensus_pos.first, consensus.length());
+                        repeat.addSeed(seed);
+                    }
                 }
             }
-        }
-        
-        // Update repeats to reflect the new seeds we've added above
-        for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
-            RB_Repeat& repeat = *(it->second);
-            repeat.update();
+            
+            // Update repeats to reflect the new seeds we've added above
+            for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
+                RB_Repeat& repeat = *(it->second);
+                repeat.update();
+            }
         }
     }
-#endif
     
     cerr << "number of repeats is " << repeat_map_.size() << endl;
     

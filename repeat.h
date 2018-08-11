@@ -40,17 +40,20 @@ public:
             return joinedOff < o.joinedOff;
         if(fw != o.fw)
             return fw;
+        if(alleleID != o.alleleID)
+            return alleleID < o.alleleID;
         return false;
     }
         
 public:
     RepeatCoord() {};
-    RepeatCoord(index_t l_tid, index_t l_toff, index_t l_joinedOff, bool l_fw) :
+    RepeatCoord(index_t l_tid, index_t l_toff, index_t l_joinedOff, bool l_fw, index_t l_alleleID) :
         tid(l_tid), toff(l_toff), joinedOff(l_joinedOff), fw(l_fw) {};
     index_t tid;
     index_t toff;
     index_t joinedOff;
     bool    fw;
+    index_t alleleID;
 };
 
 template <typename index_t>
@@ -63,13 +66,11 @@ public:
     void init(index_t                             alleleID_,
               index_t                             allelePos_,
               index_t                             alleleLen_,
-              const EList<index_t>&               snpIDs_,
-              const EList<RepeatCoord<index_t> >& positions_) {
+              const EList<index_t>&               snpIDs_) {
         alleleID = alleleID_;
         allelePos = allelePos_;
         alleleLen = alleleLen_;
         snpIDs = snpIDs_;
-        positions = positions_;
     }
     
     void reset() {
@@ -77,7 +78,6 @@ public:
         allelePos = 0;
         alleleLen = 0;
         snpIDs.clear();
-        positions.clear();
     }
     
     bool operator< (const RepeatAllele& o) const {
@@ -107,11 +107,6 @@ public:
         for(index_t i = 0; i < snpIDs.size(); i++) {
             writeIndex<index_t>(f_out, snpIDs[i], bigEndian);
         }
-        writeIndex<index_t>(f_out, positions.size(), bigEndian);
-        for(index_t i = 0; i < positions.size(); i++) {
-            writeIndex<index_t>(f_out, positions[i].joinedOff, bigEndian);
-            writeU8(f_out, positions[i].fw);
-        }
         return true;
     }
     
@@ -123,14 +118,6 @@ public:
         snpIDs.resizeExact(numSNPs);
         for(index_t i = 0; i < numSNPs; i++) {
             snpIDs[i] = readIndex<index_t>(f_in, bigEndian);
-        }
-        index_t numPositions = readIndex<index_t>(f_in, bigEndian);
-        positions.resizeExact(numPositions);
-        for(index_t i = 0; i < numPositions; i++) {
-            positions[i].tid = 0;
-            positions[i].toff = 0;
-            positions[i].joinedOff = readIndex<index_t>(f_in, bigEndian);
-            positions[i].fw = readU8(f_in);
         }
         return true;
     }
@@ -166,7 +153,6 @@ public:
     index_t                      allelePos;
     index_t                      alleleLen;
     EList<index_t>               snpIDs;
-    EList<RepeatCoord<index_t> > positions;
 };
 
 // sorting functions
@@ -205,6 +191,12 @@ public:
         for(index_t i = 0; i < alleles.size(); i++) {
             alleles[i].write(f_out, bigEndian);
         }
+        writeIndex<index_t>(f_out, positions.size(), bigEndian);
+        for(index_t i = 0; i < positions.size(); i++) {
+            writeIndex<index_t>(f_out, positions[i].joinedOff, bigEndian);
+            writeU8(f_out, positions[i].fw);
+            writeIndex<index_t>(f_out, positions[i].alleleID, bigEndian);
+        }
         return true;
     }
     
@@ -217,6 +209,15 @@ public:
         for(index_t i = 0; i < numAlleles; i++) {
             alleles[i].read(f_in, bigEndian);
         }
+        index_t numPositions = readIndex<index_t>(f_in, bigEndian);
+        positions.resizeExact(numPositions);
+        for(index_t i = 0; i < numPositions; i++) {
+            positions[i].tid = 0;
+            positions[i].toff = 0;
+            positions[i].joinedOff = readIndex<index_t>(f_in, bigEndian);
+            positions[i].fw = readU8(f_in);
+            positions[i].alleleID = readIndex<index_t>(f_in, bigEndian);
+        }
         return true;
     }
     
@@ -226,6 +227,7 @@ public:
     index_t                        repPos;
     index_t                        repLen;
     EList<RepeatAllele<index_t> >  alleles;
+    EList<RepeatCoord<index_t> >   positions;
 };
 
 template <typename index_t>
