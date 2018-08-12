@@ -1026,7 +1026,7 @@ def compare_single_sam(RNA,
         if len(can_junctions) <= 0:
             continue
 
-        # daehwan - for debugging purposes
+        # DK - for debugging purposes
         # 1. select the best candidate among spliced alignments if multiple
 
         def pickup_junction(can_junctions):
@@ -1068,7 +1068,7 @@ def compare_single_sam(RNA,
                 if junction_str not in temp_junctions:
                     None
                     # assert junction_str in junction_read_dic
-                    # daehwan - for debugging purposes
+                    # DK - for debugging purposes
                     """
                     if len(junction_read_dic[junction_str]) <= 2:
                         canonical = is_canonical_junction(chr_dic, to_junction(junction_str))
@@ -1190,7 +1190,7 @@ def compare_single_sam(RNA,
     mapped_file.close()
     first_mapped_file.close()
 
-    # daehwan - for debugging purposes
+    # DK - for debugging purposes
     false_can_junctions, false_noncan_junctions = 0, 0
     for junction_str in temp_junctions:
         if junction_str in temp_gtf_junctions:
@@ -1253,7 +1253,7 @@ def compare_paired_sam(RNA,
             for junction_str, is_gtf_junction in pair_junctions:
                 db_junction_dic[read_name].append([junction_str, is_gtf_junction])
 
-                # daehwan - for debugging purposes
+                # DK - for debugging purposes
                 if junction_str not in junction_pair_dic:
                     junction_pair_dic[junction_str] = []
                 junction_pair_dic[junction_str].append(line[:-1])
@@ -1265,7 +1265,7 @@ def compare_paired_sam(RNA,
         if len(can_junctions) <= 0:
             continue
 
-        # daehwan - for debugging purposes
+        # DK - for debugging purposes
         # 1. select the best candidate among spliced alignments if multiple
 
         def pickup_junction(can_junctions):
@@ -1290,7 +1290,7 @@ def compare_paired_sam(RNA,
             found_junction_str = None
             junction_str, is_gtf_junction = can_junction
 
-            # daehwan - for debugging purposes
+            # DK - for debugging purposes
             assert junction_str in junction_pair_dic
             if len(junction_pair_dic[junction_str]) <= 5:
                 continue
@@ -1319,7 +1319,7 @@ def compare_paired_sam(RNA,
 
                 temp_junctions.add(junction_str)
 
-    # daehwan - for debugging purposes
+    # DK - for debugging purposes
     filter_junction_db = {}
 
     temp2_junctions = []
@@ -1331,7 +1331,7 @@ def compare_paired_sam(RNA,
         if len(temp2_junctions) <= 0:
             temp2_junctions.append(can_junction)
 
-            # daehwan - for debugging purposes
+            # DK - for debugging purposes
             # assert to_junction_str(can_junction) in junction_pair_dic
             # filter_junction_db[to_junction_str(can_junction)] = len(junction_pair_dic[to_junction_str(can_junction)])
         else:
@@ -1342,7 +1342,7 @@ def compare_paired_sam(RNA,
                     abs(left - left2) <= 10 and \
                     not to_junction_str(can_junction) in temp_gtf_junctions:
                 
-                # daehwan - for debugging purposes
+                # DK - for debugging purposes
                 # assert to_junction_str(temp2_junctions[-1]) in junction_pair_dic
                 # assert to_junction_str(temp2_junctions[-1]) in filter_junction_dic
                 # filter_junction_db[to_junction_str(temp2_junctions[-1])] += len(junction_pair_dic[to_junction_str(temp2_junctions[-1])])
@@ -1351,13 +1351,13 @@ def compare_paired_sam(RNA,
 
             temp2_junctions.append(can_junction)
             
-            # daehwan - for debugging purposes
+            # DK - for debugging purposes
             # assert to_junction_str(can_junction) in junction_pair_dic
             # filter_junction_db[to_junction_str(can_junction)] = len(junction_pair_dic[to_junction_str(can_junction)])
             
     temp_junctions = set()
     for junction in temp2_junctions:
-        # daehwan - for debugging purposes
+        # DK - for debugging purposes
         # assert to_junction_str(junction) in filter_junction_dic
         # if filter_junction_dic[to_junction_str(junction)] <= 5:
         #    continue
@@ -1467,7 +1467,7 @@ def compare_paired_sam(RNA,
     uniq_mapped_file.close()
     first_mapped_file.close()
 
-    # daehwan - for debugging purposes
+    # DK - for debugging purposes
     false_can_junctions, false_noncan_junctions = 0, 0
     for junction_str in temp_junctions:
         if junction_str in temp_gtf_junctions:
@@ -1792,7 +1792,7 @@ def calculate_read_cost(verbose):
                     
                 return version
 
-            # daehwan - for debugging purposes
+            # DK - for debugging purposes
             index_base = "../../../indexes"
             # index_base = "../../../new_indexes"
             index_add = ""

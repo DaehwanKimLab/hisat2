@@ -126,7 +126,7 @@ public:
                     index_t right,
                     const EList<index_t>& cmp_snpIDs,
                     pair<index_t, index_t> alt_range) const {
-        if(left < allelePos || left + right > allelePos + alleleLen)
+        if(left < allelePos || right > allelePos + alleleLen)
             return false;
         
         if(snpIDs.size() < cmp_snpIDs.size())
@@ -432,15 +432,32 @@ public:
         
         const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx].positions;
         const EList<RepeatCoord<index_t> >& positions2 = _repeats[repeatIdx2].positions;
-        index_t i = 0, j = 0;
-        while(i < positions.size() && j < positions2.size()) {
+        index_t jsave = 0;
+        for(index_t i = 0; i < positions.size(); i++) {
             const RepeatAllele<index_t>& allele = alleles[positions[i].alleleID];
-            const RepeatAllele<index_t>& allele2 = alleles2[positions2[j].alleleID];
-            index_t i_pos = positions[i].joinedOff, j_pos = positions2[j].joinedOff;
-            if(i_pos + dist >= j_pos &&
-               j_pos + dist >= i_pos &&
-               allele.compatible(adjLeft, adjRight, snpIDs, alt_range) &&
-               allele2.compatible(adjLeft2, adjRight2, snpIDs2, alt_range2)) {
+            if(!allele.compatible(adjLeft, adjRight, snpIDs, alt_range))
+                continue;
+            index_t i_pos = positions[i].joinedOff;
+            for(index_t j = jsave; j < positions2.size(); j++) {
+                index_t j_pos = positions2[j].joinedOff;
+                if(j_pos + dist < i_pos) {
+                    jsave = j + 1;
+                    continue;
+                }
+                if(i_pos + dist < j_pos)
+                    break;
+                
+                const RepeatAllele<index_t>& allele2 = alleles2[positions2[j].alleleID];
+                if(!allele2.compatible(adjLeft2, adjRight2, snpIDs2, alt_range2))
+                    continue;
+            
+                // DK - debugging purposes
+                if(positions[i].toff >= 14074044 - 500 && positions[i].toff <= 14074044 + 500 &&
+                   positions2[j].toff >= 14073894 - 500 && positions2[j].toff <= 14073894 + 500) {
+                    int dk = 0;
+                    dk += 1;
+                }
+            
                 common_positions.expand();
                 common_positions.back().first = positions[i];
                 if(positions[i].fw) {
@@ -465,8 +482,6 @@ public:
                     common_positions.back().second.toff += rc_adjLeft2;
                 }
             }
-            if(i_pos <= j_pos) i++;
-            else               j++;
         }
         
         return common_positions.size() > 0;
