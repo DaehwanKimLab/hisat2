@@ -767,7 +767,8 @@ def extract_pair(infilename,
             if chr1.startswith("rep"):
                 alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, chr1, pos1, cigar1_str)
             if chr2.startswith("rep") or (chr1.startswith("rep") and chr2 == "="):
-                alignments2 = repeat_to_genome_alignment(repeat_info, repeat_dic, chr2, int(pos2))
+                chr_tmp = chr1 if chr2 == "=" else chr2
+                alignments2 = repeat_to_genome_alignment(repeat_info, repeat_dic, chr_tmp, int(pos2))
             else:
                 alignments2 = [[chr2, int(pos2)]]
 
@@ -783,7 +784,7 @@ def extract_pair(infilename,
                     selected_alignments.append(alignment)
 
             alignments = selected_alignments
-                
+
         for i, alignment in enumerate(alignments):
             chr1, pos1, cigar1_str = alignment
             pos1, cigar_str, NM_real = adjust_alignment(chr1, pos1, cigar1_str)
@@ -810,6 +811,10 @@ def extract_pair(infilename,
                                 continue
                             else:
                                 prev_NM = NM1 + NM2
+
+                        # DK - debugging purposes
+                        if chr1 != chr2 or abs(pos1 - pos2) > 1000:
+                            continue
 
                         if int(pos2) > int(pos1):
                             p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s\tNM:i:%d\tNM:i:%d" % \
@@ -1651,6 +1656,7 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "", "210", ""],
         ["hisat2", "", "", "", ""],
         ["hisat2", "", "rep", "", ""],
+        ["hisat2", "", "rep_mm", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
@@ -1705,8 +1711,8 @@ def calculate_read_cost(verbose):
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     repeat_info, repeat_dic = read_repeat_info("../../data/%s_rep.rep.info" % genome)
     align_stat = []
-    # for paired in [False, True]:
-    for paired in [False]:
+    for paired in [False, True]:
+    # for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"

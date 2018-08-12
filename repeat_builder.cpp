@@ -4656,7 +4656,10 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
     
     done_.fillZero();
     
-    set<size_t> senseDominant;
+    EList<uint8_t> senseDominant;
+    senseDominant.resizeExact(repeat_index_.size());
+    senseDominant.fillZero();
+    
     EList<size_t> repeatStack;
     EList<pair<TIndexOffU, TIndexOffU> > size_table;
     size_table.reserveExact(repeat_index_.size() / 2 + 1);
@@ -4670,7 +4673,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         if(!isSenseDominant(coordHelper, positions, seed_len_))
             continue;
         
-        senseDominant.insert(i);
+        senseDominant[i] = 1;
         size_table.expand();
         size_table.back().first = end - begin;
         size_table.back().second = i;
@@ -4703,7 +4706,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         repeatStack.push_back(idx);
         while(!repeatStack.empty()) {
             TIndexOffU idx = repeatStack.back();
-            assert(senseDominant.find(idx) != senseDominant.end());
+            assert(senseDominant[idx]);
             repeatStack.pop_back();
             assert_lt(idx, repeat_index_.size());
             TIndexOffU saBegin = repeat_index_[idx];
@@ -4752,11 +4755,11 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     tmp_sort_ranges[c].second = c;
                     if(idx == repeat_index_.size() ||
                        isDone(repeat_index_[idx]) ||
-                       senseDominant.find(idx) == senseDominant.end()) {
+                       !senseDominant[idx]) {
 #ifndef NDEBUG
                         if(idx < repeat_index_.size()) {
                             assert(isDone(repeat_index_[idx], num) ||
-                                   senseDominant.find(idx) == senseDominant.end());
+                                   !senseDominant[idx]);
                         }
 #endif
                         tmp_sort_ranges[c].first = 0;

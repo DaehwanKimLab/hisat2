@@ -875,6 +875,22 @@ struct GenomeHit {
                        ref);
     }
     
+    // for repeat alignments
+    //  reverse fw
+    void reverse(const Read& rd)
+    {
+        _fw = !_fw;
+        index_t end = _trim5 + _rdoff + _len;
+        assert_leq(end, rd.length());
+        _rdoff = rd.length() - end;
+        index_t tmp_trim = _trim5;
+        _trim5 = _trim3;
+        _trim3 = tmp_trim;
+        
+        // reverse edits
+        assert(_edits->empty());
+    }
+    
     index_t ref()    const { return _tidx; }
     index_t refoff() const { return _toff; }
     index_t fw()     const { return _fw; }
@@ -1918,6 +1934,8 @@ bool GenomeHit<index_t>::combineWith(
             }
             if(i == maxscorei) {
                 index_t left = this_toff + i + 1;
+                if(other_toff + other_len < len - i - 1)
+                    return false;
                 index_t right = other_toff + other_len - (len - i - 1);
                 index_t skipLen = 0;
                 if(del) {
@@ -4224,11 +4242,11 @@ public:
                             if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
                             
                             positions.clear();
-                            repeatdb.findCommonCoords(_genomeHits_rep[0][i].refoff(),
-                                                      _genomeHits_rep[0][i].refoff() + _genomeHits_rep[0][i].len(),
+                            repeatdb.findCommonCoords(_genomeHits_rep[0][i]._joinedOff,
+                                                      _genomeHits_rep[0][i]._joinedOff + _genomeHits_rep[0][i].len(),
                                                       _snpIDs,
-                                                      _genomeHits_rep[1][j].refoff(),
-                                                      _genomeHits_rep[1][j].refoff() + _genomeHits_rep[1][j].len(),
+                                                      _genomeHits_rep[1][j]._joinedOff,
+                                                      _genomeHits_rep[1][j]._joinedOff + _genomeHits_rep[1][j].len(),
                                                       _snpIDs2,
                                                       raltdb,
                                                       positions);
@@ -4241,10 +4259,8 @@ public:
                                 _genomeHits.back()._tidx = positions[p].first.tid;
                                 _genomeHits.back()._toff = positions[p].first.toff;
                                 _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
-                                if(positions[p].first.fw) {
-                                    _genomeHits.back()._fw = _genomeHits_rep[0][i].fw();
-                                } else {
-                                    _genomeHits.back()._fw = !_genomeHits_rep[0][i].fw();
+                                if(!positions[p].first.fw) {
+                                    _genomeHits.back().reverse(*_rds[0]);
                                 }
                                 
                                 // extend the partial alignments bidirectionally using
@@ -4274,10 +4290,8 @@ public:
                                 _genomeHits.back()._tidx = positions[p].second.tid;
                                 _genomeHits.back()._toff = positions[p].second.toff;
                                 _genomeHits.back()._joinedOff = positions[p].second.joinedOff;
-                                if(positions[p].second.fw) {
-                                    _genomeHits.back()._fw = _genomeHits_rep[1][j].fw();
-                                } else {
-                                    _genomeHits.back()._fw = !_genomeHits_rep[1][j].fw();
+                                if(!positions[p].second.fw) {
+                                    _genomeHits.back().reverse(*_rds[1]);
                                 }
                                 
                                 // extend the partial alignments bidirectionally using
@@ -4322,8 +4336,8 @@ public:
                     } // if(rdi == 0)
                     
                     positions.clear();
-                    repeatdb.findCoords(_genomeHits_rep[rdi][i].refoff(),
-                                        _genomeHits_rep[rdi][i].refoff() + _genomeHits_rep[rdi][i].len(),
+                    repeatdb.findCoords(_genomeHits_rep[rdi][i]._joinedOff,
+                                        _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
                                         _snpIDs,
                                         raltdb,
                                         positions);
@@ -4354,7 +4368,7 @@ public:
                             _genomeHits.back()._toff = positions[p].first.toff;
                             _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
                             if(!positions[p].first.fw) {
-                                _genomeHits.back()._fw = !_genomeHits.back()._fw;
+                                _genomeHits.back().reverse(*_rds[rdi]);
                             }
                             
                             // extend the partial alignments bidirectionally using

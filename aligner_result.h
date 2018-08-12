@@ -2068,10 +2068,11 @@ public:
 		bool exhausted1,
 		bool exhausted2,
 		TRefId orefid,
-		TRefOff orefoff)
+		TRefOff orefoff,
+        bool repeat)
 	{
 		init(rd1, rd2, rs1, rs2, rs1u, rs2u, exhausted1, exhausted2, 
-		     orefid, orefoff);
+		     orefid, orefoff, repeat);
 	}
 
 	explicit AlnSetSumm(
@@ -2088,6 +2089,7 @@ public:
 		bool     exhausted2,
 		TRefId   orefid,
 		TRefOff  orefoff,
+        bool repeat,
         TNumAlns numAlns1,
         TNumAlns numAlns2,
         TNumAlns numAlnsPaired)
@@ -2106,6 +2108,7 @@ public:
              exhausted2,
              orefid,
              orefoff,
+             repeat,
              numAlns1,
              numAlns2,
              numAlnsPaired);
@@ -2126,6 +2129,7 @@ public:
 		exhausted1_ = exhausted2_ = false;
 		orefid_ = -1;
 		orefoff_ = -1;
+        repeat_ = false;
         numAlns1_ = numAlns2_= numAlnsPaired_ = 0;
 	}
 	
@@ -2139,7 +2143,8 @@ public:
 		bool exhausted1,
 		bool exhausted2,
 		TRefId orefid,
-		TRefOff orefoff);
+		TRefOff orefoff,
+        bool repeat);
 	
 	/**
 	 * Initialize given fields.  See constructor for how fields are set.
@@ -2158,6 +2163,7 @@ public:
 		bool     exhausted2,
 		TRefId   orefid,
 		TRefOff  orefoff,
+        bool repeat,
         TNumAlns numAlns1,
         TNumAlns numAlns2,
         TNumAlns numAlnsPaired)
@@ -2175,6 +2181,7 @@ public:
 		exhausted2_    = exhausted2;
 		orefid_        = orefid;
 		orefoff_       = orefoff;
+        repeat_        = repeat;
         numAlns1_      = numAlns1;
         numAlns2_      = numAlns2;
         numAlnsPaired_ = numAlnsPaired;
@@ -2215,6 +2222,7 @@ public:
 	bool     exhausted2()    const { return exhausted2_;    }
 	TRefId   orefid()        const { return orefid_;        }
 	TRefOff  orefoff()       const { return orefoff_;       }
+    bool     repeat()        const { return repeat_;        }
     
     TNumAlns numAlns1()      const { return numAlns1_;      }
     TNumAlns numAlns2()      const { return numAlns2_;      }
@@ -2283,6 +2291,7 @@ protected:
 	bool     exhausted2_;    // searched exhaustively for mate 2 alignments?
 	TRefId   orefid_;
 	TRefOff  orefoff_;
+    bool     repeat_;
     
     TNumAlns numAlns1_;      // number of alignments for mate 1 as singleton or discordantly mapped
     TNumAlns numAlns2_;      // number of alignments for mate 2 as singleton or discordantly mapped

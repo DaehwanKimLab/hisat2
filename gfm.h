@@ -1887,6 +1887,15 @@ public:
                             repeats.back().init(repName, rep_idx, repPos, repLen);
                         }
                         
+                        // update repPos and repLen
+                        if(repPos < repeats.back().repPos) {
+                            repeats.back().repLen += (repeats.back().repPos - repPos);
+                            repeats.back().repPos = repPos;
+                        }
+                        if(repPos + repLen > repeats.back().repPos + repeats.back().repLen) {
+                            repeats.back().repLen = repPos + repLen - repeats.back().repPos;
+                        }
+                        
                         index_t numCoords, numAlts;
                         repeat_file >> numCoords >> numAlts;
                         EList<index_t> snpIDs;
@@ -2011,6 +2020,13 @@ public:
                         } else {
                             template_len = s.length() - chr_szs[repeat.repID].first;
                         }
+                        
+                        if(template_len != repeat.repLen) {
+                            cerr << "Error: rep" << i << "'s length is inconsistent " << template_len << " vs. " << repeat.repLen << endl;
+                            assert(false);
+                            throw 1;
+                        }
+                        
                         assert_leq(repeat.repPos + repeat.repLen, template_len);
                         index_t pos = chr_szs[repeat.repID].first + repeat.repPos;
                         assert_leq(pos + repeat.repLen, s.length());

@@ -122,7 +122,13 @@ public:
         return true;
     }
     
-    bool compatible(const EList<index_t>& cmp_snpIDs, pair<index_t, index_t> alt_range) const {
+    bool compatible(index_t left,
+                    index_t right,
+                    const EList<index_t>& cmp_snpIDs,
+                    pair<index_t, index_t> alt_range) const {
+        if(left < allelePos || left + right > allelePos + alleleLen)
+            return false;
+        
         if(snpIDs.size() < cmp_snpIDs.size())
             return false;
         
@@ -217,6 +223,7 @@ public:
             positions[i].joinedOff = readIndex<index_t>(f_in, bigEndian);
             positions[i].fw = readU8(f_in);
             positions[i].alleleID = readIndex<index_t>(f_in, bigEndian);
+            assert_lt(positions[i].alleleID, alleles.size());
         }
         return true;
     }
@@ -261,33 +268,43 @@ public:
         }
     }
     
-    // Build an internal table to allows rapid search of repeats
+    // Build an internal table to enable rapid search of repeats
     //  and converts joined offsets to chromosome IDs (tid) and loci (toff)
     void construct(const index_t* rstarts, index_t rlen) {
         _repeatMap.clear();
         for(index_t r = 0; r < _repeats.size(); r++) {
             _repeatMap.expand();
-            _repeatMap.back().first = _repeats[r].repPos + _repeats[r].repLen;
+            if(_repeatMap.size() == 1) {
+                _repeatMap.back().first = _repeats[r].repLen;
+            } else {
+                _repeatMap.back().first = _repeatMap[_repeatMap.size() - 2].first + _repeats[r].repLen;
+            }
             _repeatMap.back().second = r;
         }
         
         EList<pair<RepeatCoord<index_t>, index_t> > joinedOffList;
-         for(index_t r = 0; r < _repeats.size(); r++) {
-             const EList<RepeatAllele<index_t> >& repeatAlleles = _repeats[r].alleles;
-             for(index_t a = 0; a < repeatAlleles.size(); a++) {
-                 const EList<RepeatCoord<index_t> >& positions = repeatAlleles[a].positions;
-                 for(index_t p = 0; p < positions.size(); p++) {
-                     joinedOffList.expand();
-                     joinedOffList.back().first.joinedOff = positions[p].joinedOff;
-                     joinedOffList.back().first.tid = 0;
-                     joinedOffList.back().first.toff = 0;
-                     joinedOffList.back().first.fw = positions[p].fw;
-                     joinedOffList.back().second = joinedOffList.size() - 1;
-                 }
-             }
+        for(index_t r = 0; r < _repeats.size(); r++) {
+            Repeat<index_t>& repeat = _repeats[r];
+            EList<RepeatCoord<index_t> >& positions = repeat.positions;
+            for(index_t p = 0; p < positions.size(); p++) {
+                RepeatAllele<index_t>& allele = repeat.alleles[positions[p].alleleID];
+                if(positions[p].fw) {
+                    positions[p].joinedOff -= allele.allelePos;
+                } else {
+                    assert_leq(allele.allelePos + allele.alleleLen, repeat.repLen);
+                    positions[p].joinedOff -= (repeat.repLen - allele.allelePos - allele.alleleLen);
+                }
+                joinedOffList.expand();
+                joinedOffList.back().first.joinedOff = positions[p].joinedOff;
+                joinedOffList.back().first.tid = 0;
+                joinedOffList.back().first.toff = 0;
+                joinedOffList.back().first.fw = positions[p].fw;
+                joinedOffList.back().first.alleleID = positions[p].alleleID;
+                joinedOffList.back().second = joinedOffList.size() - 1;
+            }
         }
         
-        sort(&joinedOffList[0], &joinedOffList[0] + joinedOffList.size(), sort_pair_loci<index_t>());
+        sort(joinedOffList.begin(), joinedOffList.end(), sort_pair_loci<index_t>());
         
         index_t j = 0, r = 0;
         while(j < joinedOffList.size() && r < rlen) {
@@ -310,19 +327,16 @@ public:
             j++;
         }
         
-        sort(&joinedOffList[0], &joinedOffList[0] + joinedOffList.size(), sort_pair_loci_by_index<index_t>());
+        sort(joinedOffList.begin(), joinedOffList.end(), sort_pair_loci_by_index<index_t>());
         
         index_t count = 0;
         for(index_t r = 0; r < _repeats.size(); r++) {
-            EList<RepeatAllele<index_t> >& repeatAlleles = _repeats[r].alleles;
-            for(index_t a = 0; a < repeatAlleles.size(); a++) {
-                EList<RepeatCoord<index_t> >& positions = repeatAlleles[a].positions;
-                for(index_t p = 0; p < positions.size(); p++) {
-                    assert_lt(count, joinedOffList.size());
-                    assert_eq(positions[p].joinedOff, joinedOffList[count].first.joinedOff);
-                    positions[p] = joinedOffList[count].first;
-                    count++;
-                }
+            EList<RepeatCoord<index_t> >& positions = _repeats[r].positions;
+            for(index_t p = 0; p < positions.size(); p++) {
+                assert_lt(count, joinedOffList.size());
+                assert_eq(positions[p].joinedOff, joinedOffList[count].first.joinedOff);
+                positions[p] = joinedOffList[count].first;
+                count++;
             }
         }
     }
@@ -338,10 +352,6 @@ public:
         // Find a repeat corresponding to a given location (left, right)
         pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
         index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
-        
-        if(repeatIdx >= _repeats.size())
-            return false;
-        
         assert_lt(repeatIdx, _repeats.size());
         if(right > _repeatMap[repeatIdx].first)
             return false;
@@ -354,25 +364,25 @@ public:
         }
         pair<index_t, index_t> alt_range = get_alt_range(altdb, left, right);
         
-        for(index_t a = 0; a < alleles.size(); a++) {
-            const RepeatAllele<index_t>& allele = alleles[a];
-            if(!allele.compatible(snpIDs, alt_range))
+        const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx].positions;
+        for(index_t p = 0; p < positions.size(); p++) {
+            const RepeatCoord<index_t>& position = positions[p];
+            assert_lt(position.alleleID, alleles.size());
+            const RepeatAllele<index_t>& allele = alleles[position.alleleID];
+            if(!allele.compatible(adjLeft, adjRight, snpIDs, alt_range))
                 continue;
             
-            const EList<RepeatCoord<index_t> >& positions = allele.positions;
-            for(index_t p = 0; p < positions.size(); p++) {
-                near_positions.expand();
-                near_positions.back().first = positions[p];
-                if(positions[p].fw) {
-                    near_positions.back().first.joinedOff += adjLeft;
-                    near_positions.back().first.toff += adjLeft;
-                } else {
-                    const index_t len = right - left;
-                    assert_leq(adjLeft + len, _repeats[repeatIdx].repLen);
-                    index_t rc_adjLeft = _repeats[repeatIdx].repLen - adjLeft - len;
-                    near_positions.back().first.joinedOff += rc_adjLeft;
-                    near_positions.back().first.toff += rc_adjLeft;
-                }
+            near_positions.expand();
+            near_positions.back().first = position;
+            if(positions[p].fw) {
+                near_positions.back().first.joinedOff += adjLeft;
+                near_positions.back().first.toff += adjLeft;
+            } else {
+                const index_t len = right - left;
+                assert_leq(adjLeft + len, _repeats[repeatIdx].repLen);
+                index_t rc_adjLeft = _repeats[repeatIdx].repLen - adjLeft - len;
+                near_positions.back().first.joinedOff += rc_adjLeft;
+                near_positions.back().first.toff += rc_adjLeft;
             }
         }
         
@@ -389,12 +399,6 @@ public:
                           EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& common_positions,
                           index_t dist = 1000) const {
         common_positions.clear();
-        
-        // DK - debugging purposes
-        if(left == 850250 && left2 == 836045) {
-            int kk = 20;
-            kk += 20;
-        }
         
         // Find a repeat corresponding to a given location (left, right)
         assert_lt(left, right);
@@ -426,54 +430,45 @@ public:
         }
         pair<index_t, index_t> alt_range2 = get_alt_range(altdb, left2, right2);
         
-        for(index_t a = 0; a < alleles.size(); a++) {
-            const RepeatAllele<index_t>& allele = alleles[a];
-            if(!allele.compatible(snpIDs, alt_range))
-                continue;
-            
-            const EList<RepeatCoord<index_t> >& positions = allele.positions;
-            
-            for(index_t a2 = 0; a2 < alleles2.size(); a2++) {
-                const RepeatAllele<index_t>& allele2 = alleles2[a];
-                if(!allele2.compatible(snpIDs2, alt_range2))
-                    continue;
-                
-                const EList<RepeatCoord<index_t> >& positions2 = allele2.positions;
-                
-                index_t i = 0, j = 0;
-                while(i < positions.size() && j < positions2.size()) {
-                    index_t i_pos = positions[i].joinedOff, j_pos = positions2[j].joinedOff;
-                    if(i_pos + dist >= j_pos && j_pos + dist >= i_pos) {
-                        common_positions.expand();
-                        common_positions.back().first = positions[i];
-                        if(positions[i].fw) {
-                            common_positions.back().first.joinedOff += adjLeft;
-                            common_positions.back().first.toff += adjLeft;
-                        } else {
-                            const index_t len = right - left;
-                            assert_leq(adjLeft + len, _repeats[repeatIdx].repLen);
-                            index_t rc_adjLeft = _repeats[repeatIdx].repLen - adjLeft - len;
-                            common_positions.back().first.joinedOff += rc_adjLeft;
-                            common_positions.back().first.toff += rc_adjLeft;
-                        }
-                        common_positions.back().second = positions2[j];
-                        if(positions2[j].fw) {
-                            common_positions.back().second.toff += adjLeft2;
-                            common_positions.back().second.joinedOff += adjLeft2;
-                        } else {
-                            const index_t len = right2 - left2;
-                            assert_leq(adjLeft2 + len, _repeats[repeatIdx2].repLen);
-                            index_t rc_adjLeft2 = _repeats[repeatIdx2].repLen - adjLeft2 - len;
-                            common_positions.back().second.joinedOff += rc_adjLeft2;
-                            common_positions.back().second.toff += rc_adjLeft2;
-                        }
-                    }
-                    if(i_pos <= j_pos) i++;
-                    else               j++;
+        const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx].positions;
+        const EList<RepeatCoord<index_t> >& positions2 = _repeats[repeatIdx2].positions;
+        index_t i = 0, j = 0;
+        while(i < positions.size() && j < positions2.size()) {
+            const RepeatAllele<index_t>& allele = alleles[positions[i].alleleID];
+            const RepeatAllele<index_t>& allele2 = alleles2[positions2[j].alleleID];
+            index_t i_pos = positions[i].joinedOff, j_pos = positions2[j].joinedOff;
+            if(i_pos + dist >= j_pos &&
+               j_pos + dist >= i_pos &&
+               allele.compatible(adjLeft, adjRight, snpIDs, alt_range) &&
+               allele2.compatible(adjLeft2, adjRight2, snpIDs2, alt_range2)) {
+                common_positions.expand();
+                common_positions.back().first = positions[i];
+                if(positions[i].fw) {
+                    common_positions.back().first.joinedOff += adjLeft;
+                    common_positions.back().first.toff += adjLeft;
+                } else {
+                    const index_t len = right - left;
+                    assert_leq(adjLeft + len, _repeats[repeatIdx].repLen);
+                    index_t rc_adjLeft = _repeats[repeatIdx].repLen - adjLeft - len;
+                    common_positions.back().first.joinedOff += rc_adjLeft;
+                    common_positions.back().first.toff += rc_adjLeft;
+                }
+                common_positions.back().second = positions2[j];
+                if(positions2[j].fw) {
+                    common_positions.back().second.toff += adjLeft2;
+                    common_positions.back().second.joinedOff += adjLeft2;
+                } else {
+                    const index_t len = right2 - left2;
+                    assert_leq(adjLeft2 + len, _repeats[repeatIdx2].repLen);
+                    index_t rc_adjLeft2 = _repeats[repeatIdx2].repLen - adjLeft2 - len;
+                    common_positions.back().second.joinedOff += rc_adjLeft2;
+                    common_positions.back().second.toff += rc_adjLeft2;
                 }
             }
+            if(i_pos <= j_pos) i++;
+            else               j++;
         }
-
+        
         return common_positions.size() > 0;
     }
     

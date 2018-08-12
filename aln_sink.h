@@ -1949,7 +1949,7 @@ void AlnSinkWrap<index_t>::finishRead(
 		if(nconcord > 0) {
             AlnSetSumm concordSumm(
                                    rd1_, rd2_, &rs1_, &rs2_, &rs1u_, &rs2u_,
-                                   exhaust1, exhaust2, -1, -1);
+                                   exhaust1, exhaust2, -1, -1, false);
             
 			// Possibly select a random subset
 			size_t off;
@@ -2059,7 +2059,7 @@ void AlnSinkWrap<index_t>::finishRead(
 			assert_eq(1, rs2_.size());
 			AlnSetSumm discordSumm(
 								   rd1_, rd2_, &rs1_, &rs2_, &rs1u_, &rs2u_,
-								   exhaust1, exhaust2, -1, -1);
+								   exhaust1, exhaust2, -1, -1, false);
 			const AlnRes *rs1 = &rs1_[0];
 			const AlnRes *rs2 = &rs2_[0];
 			AlnFlags flags1(
@@ -2143,7 +2143,7 @@ void AlnSinkWrap<index_t>::finishRead(
 		const AlnRes *repRs1 = NULL, *repRs2 = NULL;
 		AlnSetSumm summ1, summ2;
 		AlnFlags flags1, flags2;
-		TRefId refid = -1; TRefOff refoff = -1;
+        TRefId refid = -1; TRefOff refoff = -1; bool repeat = false;
 		bool rep1 = rd1_ != NULL && nunpair1 > 0;
 		bool rep2 = rd2_ != NULL && nunpair2 > 0;
 		
@@ -2155,11 +2155,11 @@ void AlnSinkWrap<index_t>::finishRead(
             if(rep2) {
                 summ1.init(
 					   rd1_, rd2_, NULL, NULL, &rs1u_, &rs2u_,
-					   exhaust1, exhaust2, -1, -1);
+					   exhaust1, exhaust2, -1, -1, false);
             } else {
                 summ1.init(
                            rd1_, NULL, NULL, NULL, &rs1u_, NULL,
-                           exhaust1, exhaust2, -1, -1);
+                           exhaust1, exhaust2, -1, -1, false);
             }
 			size_t off;
 			if(sortByScore) {
@@ -2183,11 +2183,11 @@ void AlnSinkWrap<index_t>::finishRead(
             if(rep1) {
                 summ2.init(
                            rd1_, rd2_, NULL, NULL, &rs1u_, &rs2u_,
-                           exhaust1, exhaust2, -1, -1);
+                           exhaust1, exhaust2, -1, -1, false);
             } else {
                 summ2.init(
                            NULL, rd2_, NULL, NULL, NULL, &rs2u_,
-                           exhaust1, exhaust2, -1, -1);
+                           exhaust1, exhaust2, -1, -1, false);
             }
 			size_t off;
 			if(sortByScore) {
@@ -2359,6 +2359,7 @@ void AlnSinkWrap<index_t>::finishRead(
 			assert_lt(select1_[0], rs1u_.size());
 			refid = rs1u_[select1_[0]].refid();
 			refoff = rs1u_[select1_[0]].refoff();
+            repeat = rs1u_[select1_[0]].repeat();
 		}
 		
 		// Now report mate 2
@@ -2390,6 +2391,7 @@ void AlnSinkWrap<index_t>::finishRead(
 			assert_lt(select2_[0], rs2u_.size());
 			refid = rs2u_[select2_[0]].refid();
 			refoff = rs2u_[select2_[0]].refoff();
+            repeat = rs2u_[select2_[0]].repeat();
 		}
 		
 		if(rd1_ != NULL && nunpair1 == 0) {
@@ -2397,11 +2399,11 @@ void AlnSinkWrap<index_t>::finishRead(
 				assert_neq(-1, refid);
 				summ1.init(
 						   rd1_, NULL, NULL, NULL, NULL, NULL,
-						   exhaust1, exhaust2, refid, refoff);
+						   exhaust1, exhaust2, refid, refoff, repeat);
 			} else {
 				summ1.init(
 						   rd1_, NULL, NULL, NULL, NULL, NULL,
-						   exhaust1, exhaust2, -1, -1);
+						   exhaust1, exhaust2, -1, -1, false);
 			}
 			SeedAlSumm ssm1, ssm2;
 			if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
@@ -2443,11 +2445,11 @@ void AlnSinkWrap<index_t>::finishRead(
 				assert_neq(-1, refid);
 				summ2.init(
 						   NULL, rd2_, NULL, NULL, NULL, NULL,
-						   exhaust1, exhaust2, refid, refoff);
+						   exhaust1, exhaust2, refid, refoff, repeat);
 			} else {
 				summ2.init(
 						   NULL, rd2_, NULL, NULL, NULL, NULL,
-						   exhaust1, exhaust2, -1, -1);
+						   exhaust1, exhaust2, -1, -1, false);
 			}
 			SeedAlSumm ssm1, ssm2;
 			if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
@@ -3013,7 +3015,7 @@ void AlnSinkSam<index_t>::appendMate(
 			// Opposite mate aligned but this one didn't - print the opposite
 			// mate's RNAME and POS as is customary
 			assert(flags.partOfPair());
-			samc_.printRefNameFromIndex(o, (size_t)summ.orefid());
+			samc_.printRefNameFromIndex(o, (size_t)summ.orefid(), summ.repeat());
 		} else {		
 			// No alignment
 			o.append('*');

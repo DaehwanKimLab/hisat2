@@ -2,25 +2,52 @@ date; time bowtie2 -X 800 --extends 1000 --score-min C,0 -p 3 -x 20 -f -1 1.fa -
 
 date; time hisat2 --no-spliced-alignment --score-min C,0 -X 800 -p 3 -x 20 -f -1 1.fa -2 2.fa > hisat2.sam
 
-bowtie2-build -t 3 20_mask.fa,20_rep.fa 20_mask
-
-hisat2-build -p 3 20_mask.fa,20_rep.fa 20_mask
-
-hisat2-build -p 3 20.fa --repeat-ref 20_rep.fa --repeat-info 20_rep.info 20_mask
 
 
+# Chromosome 22
 
-hisat2-repeat -p 3 --repeat-length 100 --repeat-count 2 --repeat-edit 0 --forward-only --CGtoTG 22.fa 22_rep
+/usr/bin/time -l hisat2-repeat -p 3 --seed-length 50 --seed-count 5 --repeat-edit 0 --min-repeat-length 100 --max-repeat-length 300 --repeat-count 5 22.fa 22_rep
 
-/usr/bin/time -l hisat2-repeat -p 3 --seed-length 200 --seed-count 2 --repeat-count 2 --repeat-edit 0 --forward-only --CGtoTG genome.fa genome_rep
+/usr/bin/time -l hisat2-build -p 3 22.fa --repeat-ref 22_rep.rep.fa --repeat-info 22_rep.rep.info --repeat-snp 22_rep.rep.snp --repeat-haplotype 22_rep.rep.haplotype 22_rep
 
-/usr/bin/time -l hisat2-repeat -p 3 --seed-length 50 --seed-count 5 --repeat-edit 1 --min-repeat-length 100 --max-repeat-length 300 --repeat-count 5 --repeat-edit 5 22.fa 22_rep
+/usr/bin/time -l hisat2-repeat -p 3 --seed-length 50 --seed-count 5 --repeat-edit 1 --min-repeat-length 100 --max-repeat-length 300 --repeat-count 5 22.fa 22_rep_mm
 
-/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --seed-length 50 --seed-count 5 --repeat-edit 0 --min-repeat-length 100 --max-repeat-length 300 --repeat-count 5 --repeat-edit 5 genome.fa genome_rep
+/usr/bin/time -l hisat2-build -p 3 22.fa --repeat-ref 22_rep_mm.rep.fa --repeat-info 22_rep_mm.rep.info --repeat-snp 22_rep_mm.rep.snp --repeat-haplotype 22_rep_mm.rep.haplotype 22_rep_mm
 
 hisat2_simulate_reads.py --dna --num-fragment 1000000 --repeat-info 22.rep.info 22.fa /dev/null /dev/null sim
 
-hisat2_simulate_reads.py --dna --num-fragment 1000000 --error-rate 0.2 --repeat-info 22.rep.info 22.fa /dev/null /dev/null sim
+hisat2_simulate_reads.py --dna --num-fragment 1000000 --error-rate 0.2 --repeat-info 22_rep.rep.info 22.fa /dev/null /dev/null sim
 
-hisat2-build -p 3 22.fa --repeat-ref 22_rep.rep.fa --repeat-info 22_rep.rep.info --repeat-snp 22_rep.rep.snp --repeat-haplotype 22_rep.rep.haplotype 22_rep
+cp 22_rep.rep.info ../../data/
+cp 22_rep*ht2 ../../indexes/HISAT2_22
+
+
+
+
+# Human genome
+
+/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --seed-length 50 --seed-count 5 --repeat-edit 0 --min-repeat-length 100 --max-repeat-length 300 --repeat-count 5 genome.fa genome_rep
+
+/usr/bin/time -l hisat2-build -p 3 genome.fa --repeat-ref genome_rep.rep.fa --repeat-info genome_rep.rep.info --repeat-snp genome_rep.rep.snp --repeat-haplotype genome_rep.rep.haplotype genome_rep
+
+hisat2_simulate_reads.py --dna --num-fragment 10000 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 10000 --error-rate 0.2 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 10000000 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 10000000 --error-rate 0.2 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+cp genome_rep.rep.info ../../data/
+cp genome_rep.*ht2 ../../indexes/HISAT2
+
+
+
+
+# Bisulfite-treated sequencing
+
+/usr/bin/time -l hisat2-repeat -p 3 --repeat-length 100 --repeat-count 2 --repeat-edit 0 --forward-only --CGtoTG 22.fa 22_rep
+
+/usr/bin/time -l hisat2-repeat -p 3 --seed-length 200 --seed-count 2 --repeat-count 2 --repeat-edit 0 --forward-only --CGtoTG genome.fa genome_rep
+
 

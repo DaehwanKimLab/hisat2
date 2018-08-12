@@ -1174,7 +1174,8 @@ void AlnSetSumm::init(
 	bool exhausted1,
 	bool exhausted2,
 	TRefId orefid,
-	TRefOff orefoff)
+	TRefOff orefoff,
+    bool repeat)
 {
 	assert(rd1 != NULL || rd2 != NULL);
 	assert((rs1 == NULL) == (rs2 == NULL));
@@ -1246,6 +1247,7 @@ void AlnSetSumm::init(
              exhausted2,
              orefid,
              orefoff,
+             repeat,
              numAlns1,
              numAlns2,
              numAlnsPaired);
@@ -1253,6 +1255,7 @@ void AlnSetSumm::init(
 		reset();
 		orefid_ = orefid;
 		orefoff_ = orefoff;
+        repeat_ = repeat;
 	}
 }
 
