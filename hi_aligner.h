@@ -4954,6 +4954,8 @@ public:
             }
             for(index_t k = 0; k < coords.size(); k++) {
                 const Coord& coord = coords[k];
+                if(coord.ref() == numeric_limits<index_t>::max())
+                    continue;
                 index_t len = partialHit._len;
                 index_t rdoff = hit._len - partialHit._bwoff - len;
                 bool overlapped = false;
@@ -4974,7 +4976,7 @@ public:
                 if(!overlapped) {
                     GenomeHit<index_t>::adjustWithALT(
                                                       rdoff,
-                                                      straddled ? 1 : len,
+                                                      len,
                                                       coord,
                                                       _sharedVars,
                                                       genomeHits,
@@ -5536,7 +5538,11 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
         
         // Coordinate of the seed hit w/r/t the pasted reference string
         coords.expand();
-        coords.back().init(global_tidx, (int64_t)global_toff, fw, wr.toff);
+        if(!straddled2) {
+            coords.back().init(global_tidx, (int64_t)global_toff, fw, wr.toff);
+        } else {
+            coords.back().init(numeric_limits<index_t>::max(), (int64_t)global_toff, fw, wr.toff);
+        }
     }
     
     return true;

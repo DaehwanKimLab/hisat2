@@ -287,13 +287,6 @@ public:
             Repeat<index_t>& repeat = _repeats[r];
             EList<RepeatCoord<index_t> >& positions = repeat.positions;
             for(index_t p = 0; p < positions.size(); p++) {
-                RepeatAllele<index_t>& allele = repeat.alleles[positions[p].alleleID];
-                if(positions[p].fw) {
-                    positions[p].joinedOff -= allele.allelePos;
-                } else {
-                    assert_leq(allele.allelePos + allele.alleleLen, repeat.repLen);
-                    positions[p].joinedOff -= (repeat.repLen - allele.allelePos - allele.alleleLen);
-                }
                 joinedOffList.expand();
                 joinedOffList.back().first.joinedOff = positions[p].joinedOff;
                 joinedOffList.back().first.tid = 0;
@@ -331,11 +324,24 @@ public:
         
         index_t count = 0;
         for(index_t r = 0; r < _repeats.size(); r++) {
+            Repeat<index_t>& repeat = _repeats[r];
             EList<RepeatCoord<index_t> >& positions = _repeats[r].positions;
             for(index_t p = 0; p < positions.size(); p++) {
                 assert_lt(count, joinedOffList.size());
                 assert_eq(positions[p].joinedOff, joinedOffList[count].first.joinedOff);
                 positions[p] = joinedOffList[count].first;
+                
+                RepeatAllele<index_t>& allele = repeat.alleles[positions[p].alleleID];
+                if(positions[p].fw) {
+                    positions[p].joinedOff -= allele.allelePos;
+                    positions[p].toff -= allele.allelePos;
+                } else {
+                    assert_leq(allele.allelePos + allele.alleleLen, repeat.repLen);
+                    index_t subLen = repeat.repLen - allele.allelePos - allele.alleleLen;
+                    positions[p].joinedOff -= subLen;
+                    positions[p].toff -= subLen;
+                }
+                
                 count++;
             }
         }
@@ -363,7 +369,6 @@ public:
             adjRight -= _repeatMap[repeatIdx-1].first;
         }
         pair<index_t, index_t> alt_range = get_alt_range(altdb, left, right);
-        
         const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx].positions;
         for(index_t p = 0; p < positions.size(); p++) {
             const RepeatCoord<index_t>& position = positions[p];
@@ -437,9 +442,9 @@ public:
             const RepeatAllele<index_t>& allele = alleles[positions[i].alleleID];
             if(!allele.compatible(adjLeft, adjRight, snpIDs, alt_range))
                 continue;
-            index_t i_pos = positions[i].joinedOff;
+            index_t i_pos = positions[i].joinedOff + adjLeft;
             for(index_t j = jsave; j < positions2.size(); j++) {
-                index_t j_pos = positions2[j].joinedOff;
+                index_t j_pos = positions2[j].joinedOff + adjLeft2;
                 if(j_pos + dist < i_pos) {
                     jsave = j + 1;
                     continue;
@@ -450,13 +455,6 @@ public:
                 const RepeatAllele<index_t>& allele2 = alleles2[positions2[j].alleleID];
                 if(!allele2.compatible(adjLeft2, adjRight2, snpIDs2, alt_range2))
                     continue;
-            
-                // DK - debugging purposes
-                if(positions[i].toff >= 14074044 - 500 && positions[i].toff <= 14074044 + 500 &&
-                   positions2[j].toff >= 14073894 - 500 && positions2[j].toff <= 14073894 + 500) {
-                    int dk = 0;
-                    dk += 1;
-                }
             
                 common_positions.expand();
                 common_positions.back().first = positions[i];
