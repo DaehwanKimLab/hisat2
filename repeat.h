@@ -352,6 +352,7 @@ public:
                     const EList<index_t>& snpIDs, // SNP IDs
                     const ALTDB<index_t>& altdb,
                     EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& near_positions,
+                    index_t max_positions = numeric_limits<index_t>::max(),
                     index_t dist = 1000) const {
         near_positions.clear();
         
@@ -389,6 +390,9 @@ public:
                 near_positions.back().first.joinedOff += rc_adjLeft;
                 near_positions.back().first.toff += rc_adjLeft;
             }
+            
+            if(near_positions.size() >= max_positions)
+                break;
         }
         
         return near_positions.size() > 0;
@@ -402,6 +406,7 @@ public:
                           const EList<index_t>& snpIDs2, // SNP IDs
                           const ALTDB<index_t>& altdb,
                           EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& common_positions,
+                          index_t max_positions = numeric_limits<index_t>::max(),
                           index_t dist = 1000) const {
         common_positions.clear();
         
@@ -479,7 +484,13 @@ public:
                     common_positions.back().second.joinedOff += rc_adjLeft2;
                     common_positions.back().second.toff += rc_adjLeft2;
                 }
+                
+                if(common_positions.size() >= max_positions)
+                    break;
             }
+            
+            if(common_positions.size() >= max_positions)
+                break;
         }
         
         return common_positions.size() > 0;

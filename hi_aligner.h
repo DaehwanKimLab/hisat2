@@ -4251,7 +4251,6 @@ public:
                                                       raltdb,
                                                       positions);
                             if(positions.size() <= 0) continue;
-                            
                             for(size_t p = 0; p < positions.size(); p++) {
                                 _genomeHits.clear();
                                 _genomeHits.expand();
@@ -4352,8 +4351,6 @@ public:
                     bool candidate_found = false;
                     for(size_t j = 0; j < rs->size(); j++) {
                         const AlnRes& res = (*rs)[j];
-                        // bool fw = (res.orient() == 1);
-                        
                         for(size_t p = 0; p < positions.size(); p++) {
                             if(positions[p].first.tid != res.refid()) continue;
                             if(positions[p].first.toff + 1000 < res.refoff() ||
