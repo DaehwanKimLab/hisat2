@@ -4475,7 +4475,7 @@ public:
             ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
             assert(!hit.done());
             bool pseudogeneStop = gfm.gh().linearFM() && !tpol.no_spliced_alignment();
-            bool anchorStop = _anchorStop;
+            bool anchorStop = _anchorStop && !gfm.repeat();
             if(!rp.secondary) {
                 index_t numSearched = hit.numActualPartialSearch();
                 int64_t bestScore = 0;
