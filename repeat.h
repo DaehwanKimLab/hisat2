@@ -347,7 +347,9 @@ public:
         }
     }
     
-    bool findCoords(index_t               left,  // left offset in the repeat sequence
+    bool findCoords(index_t               anchor_left,
+                    index_t               anchor_right,
+                    index_t               left,  // left offset in the repeat sequence
                     index_t               right, // right offset
                     const EList<index_t>& snpIDs, // SNP IDs
                     const ALTDB<index_t>& altdb,
@@ -371,8 +373,18 @@ public:
         }
         pair<index_t, index_t> alt_range = get_alt_range(altdb, left, right);
         const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx].positions;
-        for(index_t p = 0; p < positions.size(); p++) {
+        
+        RepeatCoord<index_t> cmp;
+        cmp.joinedOff = (anchor_left >= dist ? anchor_left - dist : 0);
+        index_t p = positions.bsearchLoBound(cmp);
+        for(; p < positions.size(); p++) {
             const RepeatCoord<index_t>& position = positions[p];
+            index_t pos = positions[p].joinedOff + adjLeft;
+            if(pos + dist < anchor_left)
+                continue;
+            if(anchor_right + dist < pos)
+                break;
+            
             assert_lt(position.alleleID, alleles.size());
             const RepeatAllele<index_t>& allele = alleles[position.alleleID];
             if(!allele.compatible(adjLeft, adjRight, snpIDs, alt_range))

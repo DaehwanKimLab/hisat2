@@ -1656,7 +1656,7 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "", "210", ""],
         ["hisat2", "", "", "", ""],
         ["hisat2", "", "rep", "", ""],
-        ["hisat2", "", "rep_mm", "", ""],
+        # ["hisat2", "", "rep_mm", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
@@ -1830,6 +1830,9 @@ def calculate_read_cost(verbose):
                        (version != "" and int(version) >= 210):
                         cmd += ["--new-summary",
                                 "--summary-file", out_fname + ".summary"]
+
+                    if version == "" or int(version) >= 220:
+                        cmd += ["--repeat"]
                         
                     # cmd += ["--dta"]
                     # cmd += ["--dta-cufflinks"]

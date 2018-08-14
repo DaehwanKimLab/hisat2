@@ -4211,9 +4211,6 @@ public:
                     // choose candidate partial alignments for further alignment
                     index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
                     
-                    // DK - debugging purposes
-                    maxsize = numeric_limits<index_t>::max();
-                    
                     getAnchorHits(*rgfm,
                                   pepol,
                                   tpol,
@@ -4225,7 +4222,7 @@ public:
                                   rdi,
                                   fwi == 0, // fw
                                   _genomeHits_rep[rdi],
-                                  maxsize,
+                                  _genomeHits_rep[rdi].size() + maxsize,
                                   _sharedVars,
                                   wlm,
                                   prm,
@@ -4240,7 +4237,9 @@ public:
                     if(rdi == 0) {
                         for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
                             if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
-                            
+                            if(sink.numPair() > rp.khits)
+                                break;
+
                             positions.clear();
                             repeatdb.findCommonCoords(_genomeHits_rep[0][i]._joinedOff,
                                                       _genomeHits_rep[0][i]._joinedOff + _genomeHits_rep[0][i].len(),
@@ -4249,9 +4248,13 @@ public:
                                                       _genomeHits_rep[1][j]._joinedOff + _genomeHits_rep[1][j].len(),
                                                       _snpIDs2,
                                                       raltdb,
-                                                      positions);
+                                                      positions,
+                                                      rp.khits * 10);
                             if(positions.size() <= 0) continue;
                             for(size_t p = 0; p < positions.size(); p++) {
+                                if(sink.numPair() > rp.khits)
+                                    break;
+                                
                                 _genomeHits.clear();
                                 _genomeHits.expand();
                                 _genomeHits.back() = _genomeHits_rep[0][i];
@@ -4334,15 +4337,6 @@ public:
                         }
                     } // if(rdi == 0)
                     
-                    positions.clear();
-                    repeatdb.findCoords(_genomeHits_rep[rdi][i]._joinedOff,
-                                        _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
-                                        _snpIDs,
-                                        raltdb,
-                                        positions);
-                    if(positions.size() <= 0)
-                        continue;
-                    
                     const EList<AlnRes> *rs = NULL;
                     if(rdi == 0) sink.getUnp2(rs);
                     else         sink.getUnp1(rs);
@@ -4350,11 +4344,33 @@ public:
                     
                     bool candidate_found = false;
                     for(size_t j = 0; j < rs->size(); j++) {
+                        if(sink.numPair() > rp.khits)
+                            break;
+                        
                         const AlnRes& res = (*rs)[j];
+                        if(res.repeat())
+                            continue;
+                        
+                        positions.clear();
+                        index_t joinedOff = 0;
+                        gfm.textOffToJoined(res.refid(), res.refoff(), joinedOff);
+                        repeatdb.findCoords(joinedOff,
+                                            joinedOff + res.reflen(),
+                                            _genomeHits_rep[rdi][i]._joinedOff,
+                                            _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
+                                            _snpIDs,
+                                            raltdb,
+                                            positions,
+                                            rp.khits * 10);
+                        if(positions.size() <= 0)
+                            continue;
+                        
                         for(size_t p = 0; p < positions.size(); p++) {
                             if(positions[p].first.tid != res.refid()) continue;
                             if(positions[p].first.toff + 1000 < res.refoff() ||
                                res.refoff() + 1000 < positions[p].first.toff) continue;
+                            if(sink.numPair() > rp.khits)
+                                break;
                             
                             candidate_found = true;
                             
@@ -4409,7 +4425,7 @@ public:
                     }
                 } // for(size_t i = 0; i < _genomeHits_rep[rdi].size()
                 
-                if(sink.numPair() <= 0) {
+                if(sink.numPair() == 0 || sink.numPair() > rp.khits) {
                     for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
                         _genomeHits.clear();
                         _genomeHits.expand();
@@ -4870,8 +4886,10 @@ public:
             // Retrieve genomic coordinates
             //  If there are too many genomic coordinates to get,
             //  then we randomly choose and retrieve a small set of them
-            assert_lt(genomeHits.size(), maxGenomeHitSize);
+            assert_leq(genomeHits.size(), maxGenomeHitSize);
             index_t remainedGenomeHitSize = maxGenomeHitSize - genomeHits.size();
+            if(remainedGenomeHitSize <= 0)
+                break;
             index_t expectedNumCoords = partialHit._node_bot - partialHit._node_top;
             
             bool straddled = false;
@@ -5749,6 +5767,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     index_t rdlen = (index_t)rd.length();
     if(hit.rdoff() - hit.trim5() > 0 || hit.len() + hit.trim5() + hit.trim3() < rdlen) return false;
     if(hit.score() < _minsc[rdi]) return false;
+    if(!sink.reportingParams().repeat && hit.repeat()) return false;
     
     // Edits are represented from 5' end of read to 3' end, not an alignment of read
     EList<Edit>& edits = const_cast<EList<Edit>&>(hit.edits());

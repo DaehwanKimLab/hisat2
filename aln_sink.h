@@ -409,6 +409,8 @@ public:
 		ndiscord_ = 0;
 		nunpair1_ = 0;
 		nunpair2_ = 0;
+        nunpairRepeat1_ = 0;
+        nunpairRepeat2_ = 0;
 		doneConcord_ = false;
 		doneDiscord_ = false;
 		doneUnpair_  = false;
@@ -418,6 +420,7 @@ public:
 		exitDiscord_ = ReportingState::EXIT_DID_NOT_ENTER;
 		exitUnpair1_ = ReportingState::EXIT_DID_NOT_ENTER;
 		exitUnpair2_ = ReportingState::EXIT_DID_NOT_ENTER;
+        concordBest_ = numeric_limits<TAlScore>::min();
 		done_ = false;
 	}
 	
@@ -437,13 +440,13 @@ public:
 	 * Caller uses this member function to indicate that one additional
 	 * concordant alignment has been found.
 	 */
-	bool foundConcordant();
+	bool foundConcordant(TAlScore score);
 
 	/**
 	 * Caller uses this member function to indicate that one additional
 	 * discordant alignment has been found.
 	 */
-	bool foundUnpaired(bool mate1);
+    bool foundUnpaired(bool mate1, bool repeat = false);
 	
 	/**
 	 * Called to indicate that the aligner has finished searching for
@@ -476,6 +479,8 @@ public:
 		uint64_t& ndiscordAln, // # discordant alignments to report
 		uint64_t& nunpair1Aln, // # unpaired alignments for mate #1 to report
 		uint64_t& nunpair2Aln, // # unpaired alignments for mate #2 to report
+        uint64_t& nunpairRepeat1Aln, // # unpaired alignments for mate #1 to report
+        uint64_t& nunpairRepeat2Aln, // # unpaired alignments for mate #2 to report
 		bool& pairMax,         // repetitive concordant alignments
 		bool& unpair1Max,      // repetitive alignments for mate #1
 		bool& unpair2Max)      // repetitive alignments for mate #2
@@ -538,11 +543,15 @@ public:
 	inline uint64_t numDiscordant() const { return ndiscord_; }
 	inline uint64_t numUnpaired1()  const { return nunpair1_; }
 	inline uint64_t numUnpaired2()  const { return nunpair2_; }
+    inline uint64_t numUnpairedRepeat1()  const { return nunpairRepeat1_; }
+    inline uint64_t numUnpairedRepeat2()  const { return nunpairRepeat2_; }
 
 	inline int exitConcordant() const { return exitConcord_; }
 	inline int exitDiscordant() const { return exitDiscord_; }
 	inline int exitUnpaired1()  const { return exitUnpair1_; }
 	inline int exitUnpaired2()  const { return exitUnpair2_; }
+    
+    inline int64_t concordBest() const { return concordBest_; }
 
 #ifndef NDEBUG
 	/**
@@ -583,6 +592,7 @@ protected:
 		assert_eq(0, numDiscordant());
 		exitUnpair1_ = exitUnpair2_ = ReportingState::EXIT_CONVERTED_TO_DISCORDANT;
 		nunpair1_ = nunpair2_ = 0;
+        nunpairRepeat1_ = nunpairRepeat2_ = 0;
 		ndiscord_ = 1;
 		assert_eq(1, numDiscordant());
 	}
@@ -612,6 +622,8 @@ protected:
 	uint64_t ndiscord_;  // # discordants found so far
 	uint64_t nunpair1_;  // # unpaired alignments found so far for mate 1
 	uint64_t nunpair2_;  // # unpaired alignments found so far for mate 2
+    uint64_t nunpairRepeat1_; // # unpaired repeat alignments found so far for mate 1
+    uint64_t nunpairRepeat2_; // # unpaired repeat alignments found so far for mate 2
 	bool doneConcord_;   // true iff we're no longner interested in concordants
 	bool doneDiscord_;   // true iff we're no longner interested in discordants
 	bool doneUnpair_;    // no longner interested in unpaired alns
@@ -621,6 +633,7 @@ protected:
 	int exitDiscord_;    // flag indicating how we exited discordant state
 	int exitUnpair1_;    // flag indicating how we exited unpaired 1 state
 	int exitUnpair2_;    // flag indicating how we exited unpaired 2 state
+    TAlScore concordBest_; //
 	bool done_;          // done with all alignments
 };
 
@@ -1050,6 +1063,10 @@ public:
 		best2Unp1_(std::numeric_limits<TAlScore>::min()),
 		bestUnp2_(std::numeric_limits<TAlScore>::min()),
 		best2Unp2_(std::numeric_limits<TAlScore>::min()),
+        bestUnpRepeat1_(std::numeric_limits<TAlScore>::min()),
+        best2UnpRepeat1_(std::numeric_limits<TAlScore>::min()),
+        bestUnpRepeat2_(std::numeric_limits<TAlScore>::min()),
+        best2UnpRepeat2_(std::numeric_limits<TAlScore>::min()),
         bestSplicedPair_(0),
         best2SplicedPair_(0),
         bestSplicedUnp1_(0),
@@ -1145,7 +1162,7 @@ public:
 			assert(rd1_ != NULL);
 			assert_neq(std::numeric_limits<TReadId>::max(), rdid_);
 		}
-		assert_eq(st_.numConcordant() + st_.numDiscordant(), rs1_.size());
+		//assert_eq(st_.numConcordant() + st_.numDiscordant(), rs1_.size());
 		//assert_eq(st_.numUnpaired1(), rs1u_.size());
 		//assert_eq(st_.numUnpaired2(), rs2u_.size());
 		assert(st_.repOk());
@@ -1256,6 +1273,34 @@ public:
 	TAlScore secondBestUnp2() const {
 		return best2Unp2_;
 	}
+    
+    /**
+     * Get best score observed so far for an unpaired read or mate 1.
+     */
+    TAlScore bestUnpRepeat1() const {
+        return bestUnpRepeat1_;
+    }
+    
+    /**
+     * Get second-best score observed so far for an unpaired read or mate 1.
+     */
+    TAlScore secondBestUnpRepeat1() const {
+        return best2UnpRepeat1_;
+    }
+    
+    /**
+     * Get best score observed so far for mate 2.
+     */
+    TAlScore bestUnpRepeat2() const {
+        return bestUnpRepeat2_;
+    }
+    
+    /**
+     * Get second-best score observed so far for mate 2.
+     */
+    TAlScore secondBestUnpRepeat2() const {
+        return best2UnpRepeat2_;
+    }
 
 	/**
 	 * Get best score observed so far for paired-end read.
@@ -1421,6 +1466,10 @@ protected:
 	TAlScore          best2Unp1_;    // second-greatest score so far for unpaired/mate1
 	TAlScore          bestUnp2_;     // greatest score so far for mate 2
 	TAlScore          best2Unp2_;    // second-greatest score so far for mate 2
+    TAlScore          bestUnpRepeat1_;     // greatest score so far for repeat unpaired/mate1
+    TAlScore          best2UnpRepeat1_;    // second-greatest score so far for repeat unpaired/mate1
+    TAlScore          bestUnpRepeat2_;     // greatest score so far for repeat mate 2
+    TAlScore          best2UnpRepeat2_;    // second-greatest score so far for repeat mate 2
     index_t           bestSplicedPair_;
     index_t           best2SplicedPair_;
     index_t           bestSplicedUnp1_;
@@ -1836,6 +1885,8 @@ int AlnSinkWrap<index_t>::nextRead(
 	bestPair_ = best2Pair_ =
 	bestUnp1_ = best2Unp1_ =
 	bestUnp2_ = best2Unp2_ = std::numeric_limits<THitInt>::min();
+    bestUnpRepeat1_ = best2UnpRepeat1_ =
+    bestUnpRepeat2_ = best2UnpRepeat2_ = std::numeric_limits<THitInt>::min();
     bestSplicedPair_ = best2SplicedPair_ =
     bestSplicedUnp1_ = best2SplicedUnp1_ =
     bestSplicedUnp2_ = best2SplicedUnp2_ = 0;
@@ -1921,12 +1972,15 @@ void AlnSinkWrap<index_t>::finishRead(
 		// Ask the ReportingState what to report
 		st_.finish();
 		uint64_t nconcord = 0, ndiscord = 0, nunpair1 = 0, nunpair2 = 0;
+        uint64_t nunpairRepeat1 = 0, nunpairRepeat2 = 0;
 		bool pairMax = false, unpair1Max = false, unpair2Max = false;
 		st_.getReport(
 					  nconcord,
 					  ndiscord,
 					  nunpair1,
 					  nunpair2,
+                      nunpairRepeat1,
+                      nunpairRepeat2,
 					  pairMax,
 					  unpair1Max,
 					  unpair2Max);
@@ -1954,10 +2008,6 @@ void AlnSinkWrap<index_t>::finishRead(
 			// Possibly select a random subset
 			size_t off;
 			if(sortByScore) {
-                
-                // DK CONCORDANT - debugging purposes
-                nconcord = rs1_.size();
-                
 				// Sort by score then pick from low to high
                 off = selectByScore(&rs1_, &rs2_, nconcord, select1_, rnd);
 			} else {
@@ -2526,11 +2576,11 @@ bool AlnSinkWrap<index_t>::report(
     
 	if(paired) {
 		assert(readIsPair());
-		st_.foundConcordant();
+		st_.foundConcordant(score);
 		rs1_.push_back(*rs1);
 		rs2_.push_back(*rs2);
 	} else {
-        st_.foundUnpaired(one);
+        st_.foundUnpaired(one, rsa->repeat());
 		if(one) {
 			rs1u_.push_back(*rs1);
   		} else {
@@ -2560,6 +2610,14 @@ bool AlnSinkWrap<index_t>::report(
 				best2Unp1_ = score;
                 best2SplicedUnp1_ = num_spliced;
 			}
+            if(rs1->repeat()) {
+                if(score > bestUnpRepeat1_) {
+                    best2UnpRepeat1_ = bestUnpRepeat1_;
+                    bestUnpRepeat1_ = score;
+                } else if(score > best2UnpRepeat1_) {
+                    best2UnpRepeat1_ = score;
+                }
+            }
 		} else {
 			if(score > bestUnp2_) {
 				best2Unp2_ = bestUnp2_;
@@ -2570,6 +2628,14 @@ bool AlnSinkWrap<index_t>::report(
 				best2Unp2_ = score;
                 best2SplicedUnp1_ = num_spliced;
 			}
+            if(rs2->repeat()) {
+                if(score > bestUnpRepeat2_) {
+                    best2UnpRepeat2_ = bestUnpRepeat2_;
+                    bestUnpRepeat2_ = score;
+                } else if(score > best2UnpRepeat2_) {
+                    best2UnpRepeat2_ = score;
+                }
+            }
 		}
 	}
 	return st_.done();
