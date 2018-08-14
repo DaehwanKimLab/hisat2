@@ -4234,6 +4234,101 @@ public:
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
                     if(_genomeHits_rep[rdi][i].len() < (_minK << 1)) continue;
+                    
+                    const EList<AlnRes> *rs = NULL;
+                    if(rdi == 0) sink.getUnp2(rs);
+                    else         sink.getUnp1(rs);
+                    assert(rs != NULL);
+                    
+                    bool candidate_found = false;
+                    for(size_t j = 0; j < rs->size(); j++) {
+                        if(sink.numPair() > rp.khits)
+                            break;
+                        
+                        const AlnRes& res = (*rs)[j];
+                        if(res.repeat())
+                            continue;
+                        
+                        positions.clear();
+                        index_t joinedOff = 0;
+                        gfm.textOffToJoined(res.refid(), res.refoff(), joinedOff);
+                        
+                        // DK - debugging purposes
+                        if(res.refoff() == 14782013) {
+                            int dk = 0;
+                            dk += 1;
+                        }
+                        
+                        repeatdb.findCoords(joinedOff,
+                                            joinedOff + res.refExtent(),
+                                            _genomeHits_rep[rdi][i]._joinedOff,
+                                            _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
+                                            _snpIDs,
+                                            raltdb,
+                                            positions,
+                                            rp.khits * 10);
+                        if(positions.size() <= 0)
+                            continue;
+                        
+                        for(size_t p = 0; p < positions.size(); p++) {
+                            if(positions[p].first.tid != res.refid()) continue;
+                            if(positions[p].first.toff + 1000 < res.refoff() ||
+                               res.refoff() + 1000 < positions[p].first.toff) continue;
+                            if(sink.numPair() > rp.khits)
+                                break;
+                            
+                            candidate_found = true;
+                            
+                            _genomeHits.clear();
+                            _genomeHits.expand();
+                            _genomeHits.back() = _genomeHits_rep[rdi][i];
+                            _genomeHits.back()._tidx = positions[p].first.tid;
+                            _genomeHits.back()._toff = positions[p].first.toff;
+                            _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
+                            if(!positions[p].first.fw) {
+                                _genomeHits.back().reverse(*_rds[rdi]);
+                            }
+                            
+                            // extend the partial alignments bidirectionally using
+                            // local search, extension, and (less often) global search
+                            hybridSearch(sc,
+                                         pepol,
+                                         tpol,
+                                         gpol,
+                                         gfm,
+                                         altdb,
+                                         repeatdb,
+                                         ref,
+                                         swa,
+                                         ssdb,
+                                         rdi,
+                                         _genomeHits.back()._fw,
+                                         wlm,
+                                         prm,
+                                         swm,
+                                         him,
+                                         rnd,
+                                         sink);
+                        }
+                        
+                        if(candidate_found) {
+                            pairReads(
+                                      sc,
+                                      pepol,
+                                      tpol,
+                                      gpol,
+                                      gfm,
+                                      altdb,
+                                      repeatdb,
+                                      ref,
+                                      wlm,
+                                      prm,
+                                      him,
+                                      rnd,
+                                      sink);
+                        }
+                    }
+                    
                     if(rdi == 0) {
                         for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
                             if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
@@ -4336,93 +4431,6 @@ public:
                             }
                         }
                     } // if(rdi == 0)
-                    
-                    const EList<AlnRes> *rs = NULL;
-                    if(rdi == 0) sink.getUnp2(rs);
-                    else         sink.getUnp1(rs);
-                    assert(rs != NULL);
-                    
-                    bool candidate_found = false;
-                    for(size_t j = 0; j < rs->size(); j++) {
-                        if(sink.numPair() > rp.khits)
-                            break;
-                        
-                        const AlnRes& res = (*rs)[j];
-                        if(res.repeat())
-                            continue;
-                        
-                        positions.clear();
-                        index_t joinedOff = 0;
-                        gfm.textOffToJoined(res.refid(), res.refoff(), joinedOff);
-                        repeatdb.findCoords(joinedOff,
-                                            joinedOff + res.reflen(),
-                                            _genomeHits_rep[rdi][i]._joinedOff,
-                                            _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
-                                            _snpIDs,
-                                            raltdb,
-                                            positions,
-                                            rp.khits * 10);
-                        if(positions.size() <= 0)
-                            continue;
-                        
-                        for(size_t p = 0; p < positions.size(); p++) {
-                            if(positions[p].first.tid != res.refid()) continue;
-                            if(positions[p].first.toff + 1000 < res.refoff() ||
-                               res.refoff() + 1000 < positions[p].first.toff) continue;
-                            if(sink.numPair() > rp.khits)
-                                break;
-                            
-                            candidate_found = true;
-                            
-                            _genomeHits.clear();
-                            _genomeHits.expand();
-                            _genomeHits.back() = _genomeHits_rep[rdi][i];
-                            _genomeHits.back()._tidx = positions[p].first.tid;
-                            _genomeHits.back()._toff = positions[p].first.toff;
-                            _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
-                            if(!positions[p].first.fw) {
-                                _genomeHits.back().reverse(*_rds[rdi]);
-                            }
-                            
-                            // extend the partial alignments bidirectionally using
-                            // local search, extension, and (less often) global search
-                            hybridSearch(sc,
-                                         pepol,
-                                         tpol,
-                                         gpol,
-                                         gfm,
-                                         altdb,
-                                         repeatdb,
-                                         ref,
-                                         swa,
-                                         ssdb,
-                                         rdi,
-                                         _genomeHits.back()._fw,
-                                         wlm,
-                                         prm,
-                                         swm,
-                                         him,
-                                         rnd,
-                                         sink);
-                        }
-                        
-                        if(candidate_found) {
-                            pairReads(
-                                      sc,
-                                      pepol,
-                                      tpol,
-                                      gpol,
-                                      gfm,
-                                      altdb,
-                                      repeatdb,
-                                      ref,
-                                      wlm,
-                                      prm,
-                                      him,
-                                      rnd,
-                                      sink);
-                        }
-                    }
                 } // for(size_t i = 0; i < _genomeHits_rep[rdi].size()
                 
                 if(sink.numPair() == 0 || sink.numPair() > rp.khits) {
