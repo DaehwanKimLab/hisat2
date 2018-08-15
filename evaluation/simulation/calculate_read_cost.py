@@ -1660,6 +1660,7 @@ def calculate_read_cost(single_end,
         # ["hisat2", "", "", "210", ""],
         ["hisat2", "", "", "", ""],
         ["hisat2", "", "rep", "", ""],
+        ["hisat2", "", "rep-100-300", "", ""],
         # ["hisat2", "", "rep_mm", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "rep", "", "--sensitive"],
@@ -1700,7 +1701,7 @@ def calculate_read_cost(single_end,
 
     cwd = os.getcwd()
     if len(cwd.split("reads_")) > 1:
-        genome = cwd.split("reads_")[1]
+        genome = cwd.split("reads_")[1].split("_")[0]
     else:
         genome = "genome"
     RNA = (cwd.find("RNA") != -1)

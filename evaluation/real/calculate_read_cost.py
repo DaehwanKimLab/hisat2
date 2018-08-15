@@ -1032,6 +1032,9 @@ def calculate_read_cost(single_end,
         # ["hisat2", "", "snp_tran", "", ""],
         # ["hisat", "", "", "", ""]
         ["hisat2", "", "rep", "", ""],
+        ["hisat2", "", "rep-100-300", "", ""],
+        ["hisat2", "", "rep-101-300", "", ""],
+        ["hisat2", "", "rep-150-300", "", ""],
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
         ["bowtie2", "", "", "", ""],
@@ -1044,6 +1047,7 @@ def calculate_read_cost(single_end,
         # ["vg", "", "", "", ""],
         # ["vg", "", "snp", "", ""],
         # ["vg", "", "snp", "", "-M 10"],
+        ["minimap2", "", "", "", ""],
         ]
 
     # sql_write = False
@@ -1118,6 +1122,11 @@ def calculate_read_cost(single_end,
                 cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                 version = cmd_process.communicate()[1][:-1].split("\n")[0]
                 version = version.split()[5]
+            elif aligner == "minimap2":
+                cmd = ["%s/minimap2" % (aligner_bin_base)]
+                cmd += ["--version"]
+                cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                version = cmd_process.communicate()[0][:-1].split("\n")[0]
                 
             return version
 
@@ -1342,6 +1351,19 @@ def calculate_read_cost(single_end,
                 if paired:
                     cmd += ["-f", read2_fname]
 
+            elif aligner == "minimap2":
+                # minimap2 -a -x sr 22.mmi sim_1.fa sim_2.fa > result.sam 
+                cmd += ["%s/minimap2" % (aligner_bin_base)]
+                cmd += ["-a"]
+                cmd += ["-x", "sr"]
+                index_cmd = "%s/minimap2%s/" % (index_base, index_add) + genome
+                if index_type:
+                    index_cmd += ("_" + index_type)
+                index_cmd += ".mmi"
+                cmd += [index_cmd]
+                cmd += [read1_fname]
+                if paired:
+                    cmd += [read2_fname]
             else:
                 assert False
 
@@ -1426,7 +1448,7 @@ def calculate_read_cost(single_end,
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, start_time, "\t", " ".join(aligner_cmd)
-                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "vg"]:
+                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "vg", "minimap2"]:
                         proc = subprocess.Popen(aligner_cmd, stdout=open(out_fname, "w"), stderr=subprocess.PIPE)
                     else:
                         proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
