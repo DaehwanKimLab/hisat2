@@ -176,6 +176,11 @@ public:
             prev_in = curr_in;
         }
         bool est_repeat = est_count * 2 >= minimizers.size();
+        
+        // DK - debugging purposes
+        if(est_count > 0) return true;
+        else              return false;
+        
         return est_repeat;
     }
     

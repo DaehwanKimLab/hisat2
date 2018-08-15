@@ -3535,23 +3535,6 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             TIndexOffU saElt = test_subSA_[saElt_idx];
             size_t true_count = saElt_idx_end - saElt_idx;
             getString(s_, saElt, rp.min_repeat_len, query);
-            
-            // ignore self-repeat query
-            const size_t k = 16;
-            bool self_repeat = false;
-            build_kmer_table(query,
-                             kmer_table,
-                             k);
-            for(size_t j = 0; j + 1 < kmer_table.size(); j++) {
-                if(kmer_table[j].first == kmer_table[j+1].first) {
-                    self_repeat = true;
-                    break;
-                }
-            }
-            if(self_repeat) {
-                continue;
-            }
-            
             total++;
             
             size_t count = 0, rc_count = 0;
@@ -4793,11 +4776,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     if(left) tmp_str[0] = "ACGT"[c];
                     else     tmp_str.back() = "ACGT"[c];
                     TIndexOffU idx = find_repeat_idx(s, tmp_str);
-                    if(idx == repeat_index_.size())
-                        continue;
-                    if(isDone(repeat_index_[idx]))
-                        continue;
-
+                    assert(!isDone(repeat_index_[idx]));
                     repeatStack.push_back(idx);
                     if(left) {
                         left = false;
@@ -4876,22 +4855,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             size_t true_count = saElt_idx_end - saElt_idx;
             getString(s, saElt, seed_len_, query);
             
-            // ignore self-repeat query
-            const size_t k = 16;
-            bool self_repeat = false;
-            build_kmer_table(query,
-                             kmer_table,
-                             k);
-            for(size_t j = 0; j + 1 < kmer_table.size(); j++) {
-                if(kmer_table[j].first == kmer_table[j+1].first) {
-                    self_repeat = true;
-                    break;
-                }
-            }
-            if(self_repeat) {
-                continue;
-            }
-            
             total++;
             
             size_t count = 0;
@@ -4899,7 +4862,16 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 const RB_RepeatBase& repeat = repeatBases[r];
                 int pos = repeat.seq.find(query);
                 if(pos != string::npos) {
-                    count++;
+                    for(size_t j = 0; j < repeat.nodes.size(); j++) {
+                        TIndexOffU _node = repeat.nodes[j];
+                        TIndexOffU _saElt_idx = repeat_index_[_node];
+                        TIndexOffU _saElt_idx_end = (_node + 1 < repeat_index_.size() ? repeat_index_[_node+1] : size());
+                        TIndexOffU _saElt = get(_saElt_idx);
+                        string seq = getString(s, _saElt, seed_len());
+                        if(query == seq) {
+                            count += (_saElt_idx_end - _saElt_idx);
+                        }
+                    }
                 }
             }
             
@@ -4909,11 +4881,20 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 const RB_RepeatBase& repeat = repeatBases[r];
                 int pos = repeat.seq.find(rc_query);
                 if(pos != string::npos) {
-                    rc_count++;
+                    for(size_t j = 0; j < repeat.nodes.size(); j++) {
+                        TIndexOffU _node = repeat.nodes[j];
+                        TIndexOffU _saElt_idx = repeat_index_[_node];
+                        TIndexOffU _saElt_idx_end = (_node + 1 < repeat_index_.size() ? repeat_index_[_node+1] : size());
+                        TIndexOffU _saElt = get(_saElt_idx);
+                        string seq = getString(s, _saElt, seed_len());
+                        if(rc_query == seq) {
+                            rc_count += (_saElt_idx_end - _saElt_idx);
+                        }
+                    }
                 }
             }
             
-            if(count == 1 || rc_count == 1) {
+            if(count == true_count || rc_count == true_count) {
                 match++;
             } else if(total - match <= 10) {
                 cerr << "query: " << query << endl;

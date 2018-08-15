@@ -1656,7 +1656,7 @@ def calculate_read_cost(verbose):
         # ["hisat2", "", "", "210", ""],
         ["hisat2", "", "", "", ""],
         ["hisat2", "", "rep", "", ""],
-        ["hisat2", "", "rep_mm", "", ""],
+        # ["hisat2", "", "rep_mm", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
@@ -1711,8 +1711,8 @@ def calculate_read_cost(verbose):
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
     repeat_info, repeat_dic = read_repeat_info("../../data/%s_rep.rep.info" % genome)
     align_stat = []
-    # for paired in [False, True]:
-    for paired in [False]:
+    for paired in [False, True]:
+    # for paired in [False]:
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
