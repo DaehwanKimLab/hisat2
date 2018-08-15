@@ -310,7 +310,7 @@ public:
                 upper = rstarts[(r+1)*3];
             }
             assert_gt(upper, lower);
-            if(off > upper) {
+            if(off >= upper) {
                 r++;
                 continue;
             }

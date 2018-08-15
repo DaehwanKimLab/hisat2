@@ -3935,12 +3935,14 @@ static void driver(
                 }
             }
         }
-        
+
+        EList<size_t> empty_replens;
+        EList<string> empty_repnames;
 		SamConfig<index_t> samc(
 			refnames,               // reference sequence names
 			reflens,                // reference sequence lengths
-            repnames,               // repeat sequence names
-            replens,                // repeat sequence lengths
+            repeat ? repnames : empty_repnames, // repeat sequence names
+            repeat ? replens : empty_replens,   // repeat sequence lengths
 			samTruncQname,          // whether to truncate QNAME to 255 chars
 			samOmitSecSeqQual,      // omit SEQ/QUAL for 2ndary alignments?
 			samNoUnal,              // omit unaligned-read records?

@@ -3325,6 +3325,60 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
         cerr << "false negative: " << false_negative << endl;
         cerr << endl;
         
+#if 0
+        // Build and test minimizer-based k-mer table
+        RB_KmerTable kmer_table2;
+        {
+            EList<string> seqs;
+            const EList<TIndexOffU>& repeat_index = subSA_.getRepeatIndex();
+            for(size_t i = 0; i < repeat_index.size(); i++) {
+                TIndexOffU saElt_idx = repeat_index[i];
+                TIndexOffU saElt = subSA_[saElt_idx];
+                seqs.expand();
+                seqs.back() = getString(s_, saElt, subSA_.seed_len());
+                total++;
+            }
+            kmer_table2.build(seqs,
+                              window,
+                              k);
+        }
+        
+        total = 0; num_repeat = 0; correct = 0; false_positive = 0; false_negative = 0;
+        for(size_t i = 0; i + rp.min_repeat_len <= forward_length_; i += 1000) {
+            if(coordHelper_.getEnd(i) != coordHelper_.getEnd(i + rp.min_repeat_len))
+                continue;
+            query = getString(s_, i, rp.min_repeat_len);
+            rc_query = reverseComplement(query);
+            
+            TIndexOffU idx = test_subSA_.find_repeat_idx(s_, query);
+            bool repeat = (idx < test_subSA_.getRepeatIndex().size());
+            
+            bool est_repeat = kmer_table2.isRepeat(query,
+                                                   rc_query,
+                                                   minimizers);
+            
+            total++;
+            if(repeat) num_repeat++;
+            if(repeat == est_repeat) {
+                correct++;
+            } else {
+                if(est_repeat) {
+                    false_positive++;
+                } else {
+                    false_negative++;
+                    assert(false);
+                }
+            }
+        }
+        
+        cerr << "50 total: " << total << endl;
+        cerr << "50 repeat: " << num_repeat << endl;
+        cerr << "50 correct: " << correct << endl;
+        cerr << "50 false positive: " << false_positive << endl;
+        cerr << "50 false negative: " << false_negative << endl;
+        cerr << endl;
+#endif
+        
         // Include repeat-competing sequences that include one mismatch with respect to consensus sequence
         if(rp.max_edit > 0) {
             EList<TIndexOffU> positions, repeats;

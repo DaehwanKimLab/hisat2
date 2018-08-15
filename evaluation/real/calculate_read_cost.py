@@ -7,6 +7,7 @@ import string
 import re
 from datetime import datetime, date, time
 from collections import defaultdict
+from argparse import ArgumentParser, FileType
 
 osx_mode = False
 if sys.platform == 'darwin':
@@ -972,7 +973,12 @@ def write_analysis_data(sql_db, database_name, paired):
     database_file.close()
 
 
-def calculate_read_cost():
+def calculate_read_cost(single_end,
+                        paired_end,
+                        test_aligners,
+                        fresh,
+                        runtime_only,
+                        verbose):
     sql_db_name = "analysis.db"
     if not os.path.exists(sql_db_name):
         create_sql_db(sql_db_name)
@@ -989,7 +995,6 @@ def calculate_read_cost():
         desktop = True
 
     verbose = False
-    just_runtime = False
     sql_write = True
     is_large_file = False
     gz_file = False
@@ -1009,7 +1014,7 @@ def calculate_read_cost():
 
     aligners = [
         ["hisat2", "", "", "", ""],
-        ["hisat2", "", "", "", "--sensitive"],
+        # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
         # ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
         # ["hisat2", "", "snp", "", ""],
@@ -1025,12 +1030,13 @@ def calculate_read_cost():
         # ["hisat2", "", "tran", "", ""],
         # ["hisat2", "", "snp_tran", "204", ""],
         # ["hisat2", "", "snp_tran", "", ""],
-        # ["hisat", "", "", "", ""],
+        # ["hisat", "", "", "", ""]
+        ["hisat2", "", "rep", "", ""],
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
         ["bowtie2", "", "", "", ""],
         # ["bowtie2", "", "", "", "-k 10"],
-        # ["bwa", "mem", "", "", ""],
+        ["bwa", "mem", "", "", ""],
         # ["bwa", "mem", "", "", "-a"],
         # ["bwa", "sw", "", "", ""],
         # ["star", "", "", "", ""],
@@ -1060,8 +1066,12 @@ def calculate_read_cost():
 
     print >> sys.stderr, "aligner\tuse_annotation\tend_type\tedit_distance\tmapped_reads\tjunction_reads\tgtf_junction_reads\tjunctions\tgtf_junctions\truntime"
     
-    # for paired in [False, True]:
-    for paired in [True]:
+    for paired in [False, True]:
+        if not paired and not single_end:
+            continue
+        if paired and not paired_end:
+            continue
+        
         type_read1_fname = "1.fq"
         if gz_file:
             type_read1_fname += ".gz"
@@ -1154,6 +1164,8 @@ def calculate_read_cost():
                     cmd += ["--no-anchorstop"]
                     cmd += ["-k", "100"]
                 """
+
+                cmd += ["-X", "1000"]
 
                 if options != "":
                     cmd += options.split(' ')
@@ -1273,6 +1285,7 @@ def calculate_read_cost():
                     cmd += ["-p", str(num_threads)]
                 #cmd += ["-k", "10"]
                 #cmd += ["--score-min", "C,-18"]
+                cmd += ["-X", "1000"]
 
                 if options:
                     cmd += options.split(' ')
@@ -1335,6 +1348,15 @@ def calculate_read_cost():
             return cmd
 
         for aligner, type, index_type, version, options in aligners:
+            skip = False
+            if len(test_aligners) > 0:
+                skip = True
+                for test_aligner in test_aligners:
+                    if aligner == test_aligner:
+                        skip = False
+            if skip:
+                continue
+                
             aligner_name = aligner + type + version
             if (aligner == "hisat2" or aligner == "vg") and index_type != "":
                 aligner_name += ("_" + index_type)
@@ -1346,6 +1368,9 @@ def calculate_read_cost():
                 aligner_dir = aligner_name + "_paired"
             else:
                 aligner_dir = aligner_name + "_single"
+
+            if fresh and os.path.exists(aligner_dir):
+                os.system("rm -rf %s" % aligner_dir)
 
             if not os.path.exists(aligner_dir):
                 os.mkdir(aligner_dir)
@@ -1481,7 +1506,7 @@ def calculate_read_cost():
                 if aligner in ["star", "tophat2", "gsnap"]:
                     os.system("tar cvzf %s.tar.gz %s &> /dev/null" % (out_fname, out_fname))
 
-            if just_runtime:
+            if runtime_only:
                 os.chdir("..")
                 continue
 
@@ -1558,4 +1583,46 @@ def calculate_read_cost():
 
 
 if __name__ == "__main__":
-    calculate_read_cost()
+    parser = ArgumentParser(
+        description='test HISAT2, and compare HISAT2 with other popular aligners such as TopHat2, STAR, Bowtie1/2, GSNAP, BWA-mem, etc.')
+    parser.add_argument('--single-end',
+                        dest='paired_end',
+                        action='store_false',
+                        help='run single-end only')
+    parser.add_argument('--paired-end',
+                        dest='single_end',
+                        action='store_false',
+                        help='run paired_end only')
+    parser.add_argument('--aligner-list',
+                        dest='aligner_list',
+                        type=str,
+                        default="",
+                        help='comma-separated list of aligners (e.g. hisat2,bowtie2,bwa')
+    parser.add_argument('--fresh',
+                        dest='fresh',
+                        action='store_true',
+                        help='delete existing alignment related directories (e.g. hisat2_single)')
+    parser.add_argument('--runtime-only',
+                        dest='runtime_only',
+                        action='store_true',
+                        help='run programs without evaluation')
+    parser.add_argument('-v', '--verbose',
+                        dest='verbose',
+                        action='store_true',
+                        help='also print some statistics to stderr')
+
+    args = parser.parse_args()
+
+    aligners = []
+    for aligner in args.aligner_list.split(','):
+        if aligner == "":
+            continue
+        aligners.append(aligner)
+    
+    calculate_read_cost(args.single_end,
+                        args.paired_end,
+                        aligners,
+                        args.fresh,
+                        args.runtime_only,
+                        args.verbose)
+

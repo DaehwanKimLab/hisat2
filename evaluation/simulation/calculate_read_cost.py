@@ -1624,7 +1624,12 @@ def write_analysis_data(sql_db, genome_name, database_name):
 
 """
 """
-def calculate_read_cost(verbose):
+def calculate_read_cost(single_end,
+                        paired_end,
+                        test_aligners,
+                        fresh,
+                        runtime_only,
+                        verbose):
     sql_db_name = "analysis.db"
     if not os.path.exists(sql_db_name):
         create_sql_db(sql_db_name)
@@ -1640,7 +1645,6 @@ def calculate_read_cost(verbose):
     data_base = "sim"
     test_large_index = False
     verbose = False
-    just_runtime = False
     sql_write = True
     readtypes = ["all", "M", "2M_gt_15", "2M_8_15", "2M_1_7", "gt_2M"]
      
@@ -1693,7 +1697,6 @@ def calculate_read_cost(verbose):
     verbose = True
     debug = False
     # sql_write = False
-    # just_runtime = True
 
     cwd = os.getcwd()
     if len(cwd.split("reads_")) > 1:
@@ -1704,7 +1707,7 @@ def calculate_read_cost(verbose):
 
     test_small = (genome != "genome")
 
-    if just_runtime:
+    if runtime_only:
         verbose = True
 
     chr_dic = read_genome("../../data/%s.fa" % genome)
@@ -1712,7 +1715,10 @@ def calculate_read_cost(verbose):
     repeat_info, repeat_dic = read_repeat_info("../../data/%s_rep.rep.info" % genome)
     align_stat = []
     for paired in [False, True]:
-    # for paired in [False]:
+        if not paired and not single_end:
+            continue
+        if paired and not paired_end:
+            continue
         for readtype in readtypes:
             if paired:
                 base_fname = data_base + "_paired"
@@ -2040,6 +2046,15 @@ def calculate_read_cost(verbose):
                 return cmd
 
             for aligner, type, index_type, version, options in aligners:
+                skip = False
+                if len(test_aligners) > 0:
+                    skip = True
+                    for test_aligner in test_aligners:
+                        if aligner == test_aligner:
+                            skip = False
+                if skip:
+                    continue
+                
                 aligner_name = aligner + type
                 if version != "":
                     aligner_name += ("_%s" % version)
@@ -2066,8 +2081,13 @@ def calculate_read_cost(verbose):
                     aligner_dir = aligner_name + "_paired"
                 else:
                     aligner_dir = aligner_name + "_single"
+
+                if fresh and os.path.exists(aligner_dir):
+                    os.system("rm -rf %s" % aligner_dir)
+                    
                 if not os.path.exists(aligner_dir):
                     os.mkdir(aligner_dir)
+                    
                 os.chdir(aligner_dir)
 
                 out_fname = base_fname + "_" + readtype + ".sam"
@@ -2079,7 +2099,7 @@ def calculate_read_cost(verbose):
                         os.system("head -400 ../%s_1.fa > ../one.fa" % (data_base))
                         os.system("head -400 ../%s_2.fa > ../two.fa" % (data_base))
 
-                    if just_runtime:
+                    if runtime_only:
                         out_fname = "/dev/null"
                         out_fname2 = "/dev/null"
 
@@ -2186,7 +2206,7 @@ def calculate_read_cost(verbose):
                     if aligner in ["gsnap", "tophat2"]:
                         os.system("tar cvzf %s.tar.gz %s &> /dev/null" % (out_fname, out_fname))
 
-                if just_runtime:
+                if runtime_only:
                     os.chdir("..")
                     continue
 
@@ -2286,12 +2306,43 @@ def calculate_read_cost(verbose):
 if __name__ == "__main__":
     parser = ArgumentParser(
         description='test HISAT2, and compare HISAT2 with other popular aligners such as TopHat2, STAR, Bowtie1/2, GSNAP, BWA-mem, etc.')
+    parser.add_argument('--single-end',
+                        dest='paired_end',
+                        action='store_false',
+                        help='run single-end only')
+    parser.add_argument('--paired-end',
+                        dest='single_end',
+                        action='store_false',
+                        help='run paired_end only')
+    parser.add_argument('--aligner-list',
+                        dest='aligner_list',
+                        type=str,
+                        default="",
+                        help='comma-separated list of aligners (e.g. hisat2,bowtie2,bwa')
+    parser.add_argument('--fresh',
+                        dest='fresh',
+                        action='store_true',
+                        help='delete existing alignment related directories (e.g. hisat2_single)')
+    parser.add_argument('--runtime-only',
+                        dest='runtime_only',
+                        action='store_true',
+                        help='run programs without evaluation')
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
                         help='also print some statistics to stderr')
 
     args = parser.parse_args()
-    calculate_read_cost(args.verbose)
 
+    aligners = []
+    for aligner in args.aligner_list.split(','):
+        if aligner == "":
+            continue
+        aligners.append(aligner)
     
+    calculate_read_cost(args.single_end,
+                        args.paired_end,
+                        aligners,
+                        args.fresh,
+                        args.runtime_only,
+                        args.verbose)

@@ -92,7 +92,23 @@ protected:
     static bool
     minimizer_leq(uint64_t kmer, uint64_t kmer2)
     {
+#if 0
+        kmer = convert_minimizer(kmer);
+        kmer2 = convert_minimizer(kmer2);
+#endif
         return kmer <= kmer2;
+    }
+    
+    // Heng Li's Minimap and minaisam paper, 2016
+    static uint64_t convert_minimizer(uint64_t x) {
+        x = (~x) + (x << 21);
+        x = x ^ (x >> 24);
+        x = x + (x << 3) + (x << 8);
+        x = x ^ (x >> 14);
+        x = x + (x << 2) + (x << 4);
+        x = x ^ (x >> 28);
+        x = x + (x << 31);
+        return x;
     }
     
     template<typename TStr>
@@ -171,17 +187,19 @@ public:
             } else if(isIn(minimizers[j].first)) {
                 curr_in = true;
                 est_count++;
+                
+                return true;
             }
             prev_minimizer = minimizers[j].first;
             prev_in = curr_in;
         }
+        
+#if 1
+        return false;
+#else
         bool est_repeat = est_count * 2 >= minimizers.size();
-        
-        // DK - debugging purposes
-        // if(est_count > 0) return true;
-        // else              return false;
-        
         return est_repeat;
+#endif
     }
     
     template<typename TStr>
