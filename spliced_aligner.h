@@ -274,7 +274,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                                        coord.off(),
                                        joinedOff,
                                        this->_sharedVars,
-                                       false, // repeat?
+                                       genomeHit.repeat(), // repeat?
                                        &res.alres.ned(),
                                        NULL,
                                        res.alres.score().score());
