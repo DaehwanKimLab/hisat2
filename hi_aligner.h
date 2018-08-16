@@ -4322,7 +4322,7 @@ public:
                         }
                     }
                     
-                    if(rdi == 0 /* && _paired */) {
+                    if(rdi == 0 && _paired) {
                         for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
                             if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
                             if(sink.numPair() > rp.khits)
