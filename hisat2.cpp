@@ -338,7 +338,7 @@ static void resetOptions() {
 	useMm					= false; // use memory-mapped files to hold the index
 	mmSweep					= false; // sweep through memory-mapped files immediately after mapping
 	gMinInsert				= 0;     // minimum insert size
-	gMaxInsert				= 500;   // maximum insert size
+	gMaxInsert				= 1000;   // maximum insert size
 	gMate1fw				= true;  // -1 mate aligns in fw orientation on fw strand
 	gMate2fw				= false; // -2 mate aligns in rc orientation on fw strand
 	gFlippedMatesOK         = false; // allow mates to be in wrong order

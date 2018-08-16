@@ -4242,7 +4242,7 @@ public:
                     
                     bool candidate_found = false;
                     for(size_t j = 0; j < rs->size(); j++) {
-                        if(sink.numPair() > rp.khits)
+                        if(sink.bestPair() >= 0 && sink.numPair() > rp.khits)
                             break;
                         
                         const AlnRes& res = (*rs)[j];
@@ -4252,6 +4252,13 @@ public:
                         positions.clear();
                         index_t joinedOff = 0;
                         gfm.textOffToJoined(res.refid(), res.refoff(), joinedOff);
+                        
+                        // DK - debugging purposes
+                        if(res.refoff() == 40934878) {
+                            int dk = 0;
+                            dk += 1;
+                        }
+                        
                         repeatdb.findCoords(joinedOff,
                                             joinedOff + res.refExtent(),
                                             _genomeHits_rep[rdi][i]._joinedOff,
@@ -4267,7 +4274,7 @@ public:
                             if(positions[p].first.tid != res.refid()) continue;
                             if(positions[p].first.toff + 1000 < res.refoff() ||
                                res.refoff() + 1000 < positions[p].first.toff) continue;
-                            if(sink.numPair() > rp.khits)
+                            if(sink.bestPair() >= 0 && sink.numPair() > rp.khits)
                                 break;
                             
                             candidate_found = true;
@@ -4325,7 +4332,7 @@ public:
                     if(rdi == 0 && _paired) {
                         for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
                             if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
-                            if(sink.numPair() > rp.khits)
+                            if(sink.bestPair() >= 0 && sink.numPair() > rp.khits)
                                 break;
 
                             positions.clear();
@@ -5680,7 +5687,9 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
     _concordantIdxInspected.second = rs2->size();
     for(index_t i = 0; i < rs1->size(); i++) {
         for(index_t j = (i >= start_i ? 0 : start_j); j < rs2->size(); j++) {
-            if(sink.state().doneConcordant()) return true;
+            if(sink.state().doneConcordant()) {
+                return true;
+            }
             const AlnRes& r1 = (*rs1)[i];
             Coord left = r1.refcoord(), right = r1.refcoord_right();
             assert_eq(left.ref(), right.ref());
