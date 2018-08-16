@@ -4252,13 +4252,6 @@ public:
                         positions.clear();
                         index_t joinedOff = 0;
                         gfm.textOffToJoined(res.refid(), res.refoff(), joinedOff);
-                        
-                        // DK - debugging purposes
-                        if(res.refoff() == 40934878) {
-                            int dk = 0;
-                            dk += 1;
-                        }
-                        
                         repeatdb.findCoords(joinedOff,
                                             joinedOff + res.refExtent(),
                                             _genomeHits_rep[rdi][i]._joinedOff,
@@ -4347,7 +4340,7 @@ public:
                                                       rp.khits * 10);
                             if(positions.size() <= 0) continue;
                             for(size_t p = 0; p < positions.size(); p++) {
-                                if(sink.numPair() > rp.khits)
+                                if(sink.bestPair() >= 0 && sink.numPair() > rp.khits)
                                     break;
                                 
                                 _genomeHits.clear();
