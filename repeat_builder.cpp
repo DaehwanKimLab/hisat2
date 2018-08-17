@@ -3269,8 +3269,13 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     
     {
         // Build and test minimizer-based k-mer table
+#if 1
+        const size_t window = 10;
+        const size_t k = 15;
+#else
         const size_t window = 20;
         const size_t k = 31;
+#endif
         RB_KmerTable kmer_table;
         {
             EList<string> seqs;
@@ -3670,6 +3675,7 @@ void RepeatBuilder<TStr>::writeAllele(TIndexOffU grp_id,
                                       TIndexOffU allele_id,
                                       Range range,
                                       const string& seq_name,
+                                      TIndexOffU baseoff,
                                       const EList<SeedExt>& seeds,
                                       ostream &fp)
 {
@@ -3684,7 +3690,7 @@ void RepeatBuilder<TStr>::writeAllele(TIndexOffU grp_id,
     fp << ">";
     fp << "rpt_" << grp_id << "*" << allele_id;
     fp << "\t" << seq_name;
-    fp << "\t" << seeds[range.first].consensus_pos.first;
+    fp << "\t" << baseoff + seeds[range.first].consensus_pos.first;
     fp << "\t" << seeds[range.first].consensus_pos.second - seeds[range.first].consensus_pos.first;
     fp << "\t" << pos_size;
     fp << "\t" << snp_size;
@@ -4191,6 +4197,8 @@ void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
     ofstream info_fp(info_fname.c_str());
     ofstream hapl_fp(hapl_fname.c_str());
 
+    const string repName = "rep" + to_string(rp.min_repeat_len) + "-" + to_string(rp.max_repeat_len);
+    
     i = 0;
     TIndexOffU consensus_baseoff = 0;
     TIndexOffU snp_id_base = 0;
@@ -4202,7 +4210,14 @@ void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
 
         // for each repeats
         repeat.saveSNPs(snp_fp, i, snp_id_base);
-        saveAlleles(rp, repeat, info_fp, hapl_fp, i, hapl_id_base);
+        saveAlleles(rp,
+                    repName,
+                    repeat,
+                    info_fp,
+                    hapl_fp,
+                    i,
+                    hapl_id_base,
+                    consensus_baseoff);
 
         consensus_baseoff += repeat.consensus().length();
     }
@@ -4212,14 +4227,18 @@ void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
     hapl_fp.close();
 
     // save all consensus sequence
-    saveConsensus(rp);
+    saveConsensus(rp, repName);
 }
 
 template<typename TStr>
-void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp) {
+void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp,
+                                        const string& repName) {
     string fa_fname = filename_ + ".rep.fa";
     ofstream fa_fp(fa_fname.c_str());
 
+    fa_fp << ">" << repName << endl;
+
+    size_t oskip = 0;
     for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
         RB_Repeat& repeat = *(it->second);
         if(!repeat.satisfy(rp))
@@ -4227,19 +4246,10 @@ void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp) {
         
         // for each repeats
         const string& constr = repeat.consensus();
-        size_t constr_len = constr.length();
-        
-        fa_fp << ">" << "rep" << repeat.repeat_id() << " ";
-        fa_fp << "len:" << constr_len << " ";
-        fa_fp << "seeds:" << repeat.seeds().size() << " ";
-        fa_fp << "snps:to_be_filled" << endl;
-
-        size_t oskip = 0;
         size_t si = 0;
-
+        size_t constr_len = constr.length();
         while(si < constr_len) {
             size_t out_len = std::min((size_t)(output_width - oskip), (size_t)(constr_len - si));
-
             fa_fp << constr.substr(si, out_len);
 
             if((oskip + out_len) == output_width) {
@@ -4252,10 +4262,9 @@ void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp) {
 
             si += out_len;
         }
-        
-        if(oskip) {
-            fa_fp << endl;
-        }
+    }
+    if(oskip) {
+        fa_fp << endl;
     }
 
     fa_fp.close();
@@ -4264,15 +4273,14 @@ void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp) {
 template<typename TStr>
 void RepeatBuilder<TStr>::saveAlleles(
         const RepeatParameter& rp,
+        const string& repName,
         RB_Repeat& repeat,
         ofstream& fp,
         ofstream& hapl_fp,
         TIndexOffU grp_id,
-        TIndexOffU& hapl_id_base
-        )
+        TIndexOffU& hapl_id_base,
+        TIndexOffU baseoff)
 {
-
-    const string seq_name = "rep" + to_string(repeat.repeat_id());
     const EList<SeedExt>& seeds = repeat.seeds();
     EList<SeedHP> haplo_lists;
     Range range(0, seeds.size());
@@ -4301,8 +4309,7 @@ void RepeatBuilder<TStr>::saveAlleles(
 
         // [sb, se) are same alleles
         writeAllele(grp_id, allele_id, Range(sb, se),
-                    seq_name, seeds,
-                    fp);
+                    repName, baseoff, seeds, fp);
         generateHaploType(Range(sb, se), seeds, haplo_lists);
 
         allele_id++;
@@ -4311,7 +4318,7 @@ void RepeatBuilder<TStr>::saveAlleles(
 
     // sort HaploType List by pos
     haplo_lists.sort();
-    writeHaploType(haplo_lists, seeds, hapl_id_base, seq_name, hapl_fp);
+    writeHaploType(haplo_lists, seeds, hapl_id_base, repName, hapl_fp);
 }
 
 template<typename TStr>

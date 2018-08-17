@@ -239,22 +239,38 @@ public:
     }
     
     bool write(ofstream& f_out, bool bigEndian) const {
-        writeIndex<size_t>(f_out, kmers_.size(), bigEndian);
         writeIndex<size_t>(f_out, w_, bigEndian);
         writeIndex<size_t>(f_out, k_, bigEndian);
-        for(std::set<uint64_t>::iterator it = kmers_.begin(); it != kmers_.end(); it++) {
-            writeIndex<size_t>(f_out, *it, bigEndian);
+        writeIndex<size_t>(f_out, kmer_table_.size(), bigEndian);
+        for(size_t i = 0; i < kmer_table_.size(); i++) {
+            writeIndex<size_t>(f_out, kmer_table_[i].first, bigEndian);
+            if(sizeof(TIndexOffU) == 4) {
+                writeU32(f_out, kmer_table_[i].second, bigEndian);
+            } else {
+                assert_eq(sizeof(TIndexOffU), 8);
+                writeIndex<uint64_t>(f_out, kmer_table_[i].second, bigEndian);
+            }
         }
         return true;
     }
     
     bool read(ifstream& f_in, bool bigEndian) {
-        size_t kmer_size = readIndex<size_t>(f_in, bigEndian);
         w_ = readIndex<size_t>(f_in, bigEndian);
         k_ = readIndex<size_t>(f_in, bigEndian);
-        while(kmers_.size() < kmer_size) {
-            size_t kmer = readIndex<size_t>(f_in, bigEndian);
-            kmers_.insert(kmer);
+        size_t kmer_size = readIndex<size_t>(f_in, bigEndian);
+        kmer_table_.reserveExact(kmer_size);
+        while(kmer_table_.size() < kmer_size) {
+            kmer_table_.expand();
+            kmer_table_.back().first = readIndex<size_t>(f_in, bigEndian);
+            if(sizeof(TIndexOffU) == 4) {
+                kmer_table_.back().second = readU32(f_in, bigEndian);
+            } else {
+                assert_eq(sizeof(TIndexOffU), 8);
+                kmer_table_.back().second = readIndex<uint64_t>(f_in, bigEndian);
+            }
+        }
+        for(size_t i = 0; i < kmer_table_.size(); i++) {
+            kmers_.insert(kmer_table_[i].first);
         }
         return true;
     }
@@ -270,6 +286,7 @@ public:
         kmer_table_.clear();
         kmers_.clear();
         
+        TIndexOffU baseoff = 0;
         EList<pair<uint64_t, size_t> > minimizers;
         for(size_t s = 0; s < seqs.size(); s++) {
             const TStr& seq = seqs[s];
@@ -284,9 +301,10 @@ public:
                     continue;
                 kmer_table_.expand();
                 kmer_table_.back().first = minimizers[i].first;
-                kmer_table_.back().second = s;
+                kmer_table_.back().second = baseoff + minimizers[i].second;
                 kmers_.insert(minimizers[i].first);
             }
+            baseoff += seq.length();
         }
         
         kmer_table_.sort();

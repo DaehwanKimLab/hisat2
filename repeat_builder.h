@@ -905,7 +905,8 @@ public:
 	void sortRepeatGroup();
 
     void saveRepeats(const RepeatParameter& rp);
-    void saveConsensus(const RepeatParameter& rp);
+    void saveConsensus(const RepeatParameter& rp,
+                       const string& repName);
     void saveFile(const RepeatParameter& rp);
     
     void addRepeatGroup(const RepeatParameter& rp,
@@ -935,16 +936,19 @@ public:
     
 private:
     void saveAlleles(const RepeatParameter& rp,
+                     const string& repName,
                      RB_Repeat& repeat,
                      ofstream&,
                      ofstream&,
                      TIndexOffU grp_id,
-                     TIndexOffU&);
+                     TIndexOffU&,
+                     TIndexOffU baseoff);
 
     void writeAllele(TIndexOffU grp_id, 
                      TIndexOffU allele_id,
                      Range range,
                      const string& seq_name,
+                     TIndexOffU baseoff,
                      const EList<SeedExt>& seeds,
                      ostream &fp);
 

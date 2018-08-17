@@ -1991,7 +1991,7 @@ HGFM<index_t, local_index_t>::HGFM(
     _in5Str = outfile + ".5." + gfm_ext;
     _in6Str = outfile + ".6." + gfm_ext;
     
-    const bool repeat_index = (parent_szs != NULL);
+    // const bool repeat_index = (parent_szs != NULL);
     
     int32_t local_lineRate;
     if(snpfile == "" && ssfile == "" && exonfile == "") {
@@ -2172,7 +2172,8 @@ HGFM<index_t, local_index_t>::HGFM(
     assert(fout5.good());
     assert(fout6.good());
     
-    const local_index_t new_localFtabChars = (repeat_index ? 4 : localFtabChars);
+    // const local_index_t new_localFtabChars = (repeat_index ? 4 : localFtabChars);
+    const local_index_t new_localFtabChars = localFtabChars;
     
     // When building an Ebwt, these header parameters are known
     // "up-front", i.e., they can be written to disk immediately,

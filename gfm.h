@@ -1896,6 +1896,11 @@ public:
                             repeats.back().repLen = repPos + repLen - repeats.back().repPos;
                         }
                         
+                        size_t baseOff = 0;
+                        if(repeats.size() > 1) {
+                            baseOff = repeats[repeats.size() - 2].repPos + repeats[repeats.size() - 2].repLen;
+                        }
+                        
                         index_t numCoords, numAlts;
                         repeat_file >> numCoords >> numAlts;
                         EList<index_t> snpIDs;
@@ -1995,16 +2000,19 @@ public:
                             positions.back().joinedOff = pos;
                         }
                         repeats.back().alleles.expand();
-                        repeats.back().alleles.back().init(alleleID,
-                                                           repPos,
-                                                           repLen,
-                                                           snpIDs);
+                        assert_geq(repPos, baseOff);
+                        repeats.back().alleles.back().init(repPos - baseOff, repLen);
                         
                     }
                     if(repeats.size() > 0) {
                         repeats.back().positions.sort();
                     }
                     repeat_file.close();
+                    
+                    if(repeats.back().repPos + repeats.back().repLen != s.length()) {
+                        cerr << "Error: repeat length (" << repeats.back().repPos + repeats.back().repLen;
+                        cerr << ") does not match sequence length (" << s.length() << ")" << endl;
+                    }
                 }
                 
                 _repeatdb.write(fout7, this->toBe());
@@ -2020,13 +2028,6 @@ public:
                         } else {
                             template_len = s.length() - chr_szs[repeat.repID].first;
                         }
-                        
-                        if(template_len != repeat.repLen) {
-                            cerr << "Error: rep" << i << "'s length is inconsistent " << template_len << " vs. " << repeat.repLen << endl;
-                            assert(false);
-                            throw 1;
-                        }
-                        
                         assert_leq(repeat.repPos + repeat.repLen, template_len);
                         index_t pos = chr_szs[repeat.repID].first + repeat.repPos;
                         assert_leq(pos + repeat.repLen, s.length());
@@ -2037,7 +2038,11 @@ public:
                             seqs.back().push_back("ACGT"[c]);
                         }
                     }
+#if 1
+                    const size_t w = 10, k = 15;
+#else
                     const size_t w = 20, k = 31;
+#endif
                     RB_KmerTable kmer_table;
                     kmer_table.build(seqs, w, k);
                     kmer_table.write(fout7, this->toBe());

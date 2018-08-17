@@ -1013,7 +1013,7 @@ def calculate_read_cost(single_end,
 
 
     aligners = [
-        ["hisat2", "", "", "", ""],
+        # ["hisat2", "", "", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
         # ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
@@ -1031,10 +1031,12 @@ def calculate_read_cost(single_end,
         # ["hisat2", "", "snp_tran", "204", ""],
         # ["hisat2", "", "snp_tran", "", ""],
         # ["hisat", "", "", "", ""]
-        ["hisat2", "", "rep", "", ""],
-        ["hisat2", "", "rep-100-300", "", ""],
-        ["hisat2", "", "rep-101-300", "", ""],
-        ["hisat2", "", "rep-150-300", "", ""],
+        # ["hisat2", "", "rep", "", ""],
+        # ["hisat2", "", "rep", "", "--sensitive"],
+        # ["hisat2", "", "rep-100-300", "", ""],
+        # ["hisat2", "", "rep-101-300", "", ""],
+        ["hisat2", "", "rep-101-300", "", "-k 10 --score-min C,-50,0"],
+        # ["hisat2", "", "rep-150-300", "", ""],
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
         ["bowtie2", "", "", "", ""],
@@ -1565,7 +1567,8 @@ def calculate_read_cost(single_end,
 
                         dis_sum += dis_stat[i]
                         mapped_reads, junction_reads, gtf_junction_reads, concord_mapped_read, num_junctions, num_gtf_junctions = sum
-                        output += "%s\t%s\tpaired\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\t%d\t%d\t%.2f%%\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, (numreads / max(1.0, duration)), concord_mapped_read, float(concord_mapped_read) * 100.0 / numreads)
+                        output += "%s\t%s\tpaired\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\t%d\t%d\t%.2f%%\n" % \
+                                  (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, (numreads / max(1.0, duration)), concord_mapped_read, float(concord_mapped_read) * 100.0 / numreads)
 
                         if sql_write and os.path.exists("../" + sql_db_name):
                             sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \
@@ -1584,7 +1587,8 @@ def calculate_read_cost(single_end,
                             sum[j] += stat[i][j]
 
                         mapped_reads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions = sum
-                        output += "%s\t%s\tsingle\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\t%d\n" % (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, (numreads / max(1.0, duration)))
+                        output += "%s\t%s\tsingle\t%d\t%d\t%.2f%%\t%d\t%d\t%d\t%d\t%f\t%d\n" % \
+                                  (aligner_name, gene, i, mapped_reads, float(mapped_reads) * 100.0 / numreads, junction_reads, gtf_junction_reads, num_junctions, num_gtf_junctions, duration, (numreads / max(1.0, duration)))
 
                         if sql_write and os.path.exists("../" + sql_db_name):
                             sql_insert = "INSERT INTO \"Mappings\" VALUES(NULL, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %f, '%s', datetime('now', 'localtime'), '%s');" % \
