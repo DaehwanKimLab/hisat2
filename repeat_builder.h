@@ -36,6 +36,7 @@
 #include "simple_func.h"
 #include "scoring.h"
 #include "aligner_sw.h"
+#include "bit_packed_array.h"
 
 //#define DEBUGLOG
 
@@ -761,10 +762,10 @@ private:
 };
 
 // SA Subset
-class RB_SubSA {
+class RB_SubSA : public BitPackedArray {
 public:
     RB_SubSA() {}
-    ~RB_SubSA();
+    ~RB_SubSA() {}
 
     void writeFile(ofstream& fp);
     void readFile(ifstream &fp);
@@ -778,16 +779,7 @@ public:
                    CoordHelper& coordHelper,
                    TIndexOffU saElt,
                    bool lastInput = false);
-    
-    TIndexOffU get(size_t i) const;
-    inline TIndexOffU operator[](size_t i) const { return get(i); }
-    
-    /**
-     * Return true iff there are no elements
-     * @return
-     */
-    inline bool empty() const { return cur_ == 0; }
-    inline size_t size() const { return cur_; }
+
     inline TIndexOffU seed_len() const { return seed_len_; }
     inline TIndexOffU seed_count() const { return seed_count_; }
     
@@ -806,20 +798,17 @@ public:
     
     void dump() const
     {
+        BitPackedArray::dump();
+
         cerr << "seed length: " << seed_len_ << endl;
         cerr << "minimum seed count: " << seed_count_ << endl;
         cerr << "number of seed groups: " << repeat_index_.size() << endl;
-        cerr << "item_bit_size_: " << item_bit_size_ << endl;
-        cerr << "block_size_: " << block_size_ << endl;
-        cerr << "items_per_block_: " << items_per_block_ << endl;
-        cerr << "cur_: " << cur_ << endl;
-        cerr << "sz_: " << sz_ << endl;
-        cerr << "number of blocks: " << blocks.size() << endl;
     }
     
-    size_t getMemUsage() const {
-        size_t tot = blocks.size() * block_size_;
-        tot += blocks.totalCapacityBytes();
+    size_t getMemUsage() const
+    {
+        size_t tot = BitPackedArray::getMemUsage();
+
         return tot;
     }
     
@@ -828,49 +817,13 @@ public:
                          CoordHelper& coordHelper,
                          const size_t max_len,
                          EList<RB_RepeatBase>& repeatBases);
-    
-private:
-    void put(size_t i, TIndexOffU);
-    void push_back(TIndexOffU t);
-    
-    inline uint32_t bit_to_mask(size_t bit) const
-    {
-        return (uint32_t)((1L << bit) - 1);
-    }
-    
-    void expand(size_t sz = 1);
-    // increase size
-    void allocSize(size_t sz);
-    void allocItems(size_t count);
-    
-private:
-    TIndexOffU getItem(uint32_t *block, size_t idx, size_t offset) const;
-    void setItem(uint32_t *block, size_t idx, size_t offset, TIndexOffU val);
-    
-    pair<size_t, size_t> index_to_addr(size_t index) const;
-    pair<size_t, size_t> col_to_pos(size_t col) const;
-    
+
 private:
     TIndexOffU sa_size_;
     TIndexOffU seed_len_;
     TIndexOffU seed_count_;
     EList<TIndexOffU> temp_suffixes_;
-    
-    size_t item_bit_size_; // item bit size(e.g. 33bit)
-    
-    size_t block_bit_size_; // 8bit
-    size_t items_per_block_bit_;
-    size_t items_per_block_bit_mask_;
-    size_t items_per_block_; // number of items in block
-    
-    size_t cur_;        // current size (in count)
-    size_t sz_;         // maximum (in count)
-    
-    size_t block_size_;       // block size in Byte
-    
-    // list of packed array
-    EList<uint32_t *> blocks;
-    
+
     // repeat index
     EList<TIndexOffU> repeat_index_;
     EList<uint32_t>   done_;

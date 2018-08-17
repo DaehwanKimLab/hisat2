@@ -28,6 +28,7 @@
 
 #include "repeat_builder.h"
 #include "repeat_kmer.h"
+#include "bit_packed_array.h"
 
 unsigned int levenshtein_distance(const std::string& s1, const std::string& s2)
 {
@@ -4377,13 +4378,6 @@ void RepeatBuilder<TStr>::generateHaploType(Range range, const EList<SeedExt> &s
     }
 }
 
-RB_SubSA::~RB_SubSA()
-{
-    for(size_t i = 0; i < blocks.size(); i++) {
-        uint32_t *ptr = blocks[i];
-        delete [] ptr;
-    }
-}
 
 void RB_SubSA::init(TIndexOffU sa_size,
                     TIndexOffU seed_len,
@@ -4396,20 +4390,9 @@ void RB_SubSA::init(TIndexOffU sa_size,
     assert_gt(seed_count, 1);
     seed_count_ = seed_count;
     temp_suffixes_.clear();
-    
-    item_bit_size_ = ceil(log2(sa_size));
-    block_bit_size_ = sizeof(uint32_t) * 8;
-    
-    items_per_block_bit_ = 20;
-    
-    items_per_block_ = 1 << (items_per_block_bit_);
-    items_per_block_bit_mask_ = items_per_block_ - 1;
-    
-    block_size_ = (items_per_block_ * item_bit_size_ + block_bit_size_ - 1) / block_bit_size_ * sizeof(uint32_t);
-    
-    cur_ = 0;
-    sz_ = 0;
-    
+
+    BitPackedArray::init(sa_size);
+
     repeat_index_.clear();
 }
 
@@ -4421,7 +4404,7 @@ void RB_SubSA::push_back(const TStr& s,
 {
     if(saElt + seed_len() <= coordHelper.getEnd(saElt)) {
         if(seed_count_ == 1) {
-            push_back(saElt);
+            pushBack(saElt);
         } else {
             assert_gt(seed_count_, 1);
             
@@ -4446,10 +4429,10 @@ void RB_SubSA::push_back(const TStr& s,
             
             if(lcp_len < seed_len_ || lastInput) {
                 if(temp_suffixes_.size() >= seed_count_) {
-                    repeat_index_.push_back(cur_);
+                    repeat_index_.push_back(size());
                     temp_suffixes_.sort();
                     for(size_t pi = 0; pi < temp_suffixes_.size(); pi++) {
-                        push_back(temp_suffixes_[pi]);
+                        pushBack(temp_suffixes_[pi]);
                     }
                 }
                 temp_suffixes_.clear();
@@ -4464,7 +4447,7 @@ void RB_SubSA::push_back(const TStr& s,
     
     if(lastInput) {
         size_t bit = sizeof(uint32_t) * 8;
-        size_t num = (cur_ + bit - 1) / bit;
+        size_t num = (size() + bit - 1) / bit;
         done_.resizeExact(num);
         done_.fillZero();
         
@@ -4526,7 +4509,7 @@ TIndexOffU RB_SubSA::find_repeat_idx(const TStr& s,
 
 void RB_SubSA::setDone(TIndexOffU off, TIndexOffU len)
 {
-    assert_leq(off + len, cur_);
+    assert_leq(off + len, BitPackedArray::size());
     const TIndexOffU bit = sizeof(uint32_t) * 8;
     for(TIndexOffU i = off; i < off + len; i++) {
         TIndexOffU quotient = i / bit;
@@ -4540,7 +4523,7 @@ void RB_SubSA::setDone(TIndexOffU off, TIndexOffU len)
 
 bool RB_SubSA::isDone(TIndexOffU off, TIndexOffU len) const
 {
-    assert_leq(off + len, cur_);
+    assert_leq(off + len, BitPackedArray::size());
     const TIndexOffU bit = sizeof(uint32_t) * 8;
     for(TIndexOffU i = off; i < off + len; i++) {
         TIndexOffU quotient = i / bit;
@@ -4553,133 +4536,6 @@ bool RB_SubSA::isDone(TIndexOffU off, TIndexOffU len) const
     }
     
     return true;
-}
-
-pair<size_t, size_t> RB_SubSA::index_to_addr(size_t index) const
-{
-    pair<size_t, size_t> addr;
-
-    addr.first = index >> items_per_block_bit_;
-    addr.second = index & items_per_block_bit_mask_;
-
-    return addr;
-}
-
-
-pair<size_t, size_t> RB_SubSA::col_to_pos(size_t col) const {
-    pair<size_t, size_t> pos;
-
-    pos.first = col * item_bit_size_ / block_bit_size_;
-    pos.second = col * item_bit_size_ % block_bit_size_;
-
-    return pos;
-}
-
-TIndexOffU RB_SubSA::get(size_t index) const
-{
-    assert_lt(index, cur_);
-
-    pair<size_t, size_t> addr = index_to_addr(index);
-    uint32_t *block = blocks[addr.first];
-    pair<size_t, size_t> pos = col_to_pos(addr.second);
-    TIndexOffU val = getItem(block, pos.first, pos.second);
-
-    return val;
-}
-
-void RB_SubSA::put(size_t index, TIndexOffU val)
-{
-    assert_lt(index, cur_);
-
-    pair<size_t, size_t> addr = index_to_addr(index);
-    uint32_t *block = blocks[addr.first];
-    pair<size_t, size_t> pos = col_to_pos(addr.second);
-
-    setItem(block, pos.first, pos.second, val);
-}
-
-TIndexOffU RB_SubSA::getItem(uint32_t *block, size_t idx, size_t offset) const
-{
-    size_t remains = item_bit_size_;
-
-    TIndexOffU val = 0;
-
-    while(remains > 0) {
-        size_t bits = min(block_bit_size_ - offset, remains);
-        uint32_t mask = bit_to_mask(bits);
-        // uint32_t src_mask = mask << offset;
-
-        // get value from block
-        TIndexOffU t = (block[idx] >> offset) & mask;
-        val = val | (t << (item_bit_size_ - remains));
-
-        remains -= bits;
-        offset = 0;
-        idx++;
-    }
-
-    return val;
-}
-
-void RB_SubSA::setItem(uint32_t *block, size_t idx, size_t offset, TIndexOffU val)
-{
-    size_t remains = item_bit_size_;
-    
-    while(remains > 0) {
-        size_t bits = min(block_bit_size_ - offset, remains);
-        uint32_t mask = bit_to_mask(bits);
-        uint32_t dest_mask = mask << offset;
-
-        // get 'bits' lsb from val;
-        uint32_t t = val & mask;
-        val >>= bits;
-
-        // save 't' to block[idx]
-        t <<= offset;
-        block[idx] &= ~(dest_mask); // clear
-        block[idx] |= t;
-
-        idx++;
-        remains -= bits;
-        offset = 0;
-    }
-}
-
-void RB_SubSA::allocSize(size_t sz)
-{
-    size_t num_block = (sz * sizeof(uint32_t) + block_size_ - 1) / block_size_;
-
-    for(size_t i = 0; i < num_block; i++) {
-        uint32_t *ptr = new uint32_t[block_size_];
-        blocks.push_back(ptr);
-        sz_ += items_per_block_;
-    }
-}
-
-void RB_SubSA::allocItems(size_t count)
-{
-    size_t sz = (count * item_bit_size_ + block_bit_size_ - 1)  / block_bit_size_;
-    allocSize(sz);
-}
-
-void RB_SubSA::expand(size_t count)
-{
-    if((cur_ + count) > sz_) {
-        allocItems(count);
-    }
-    cur_ += count;
-
-    assert_leq(cur_, sz_);
-}
-
-void RB_SubSA::push_back(TIndexOffU t)
-{
-    if(cur_ == sz_) {
-        allocItems(items_per_block_);
-    }
-    put(cur_++, t);
-
-    assert_leq(cur_, sz_);
 }
 
 template<typename TStr>
@@ -4702,7 +4558,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
     size_table.reserveExact(repeat_index_.size() / 2 + 1);
     for(size_t i = 0; i < repeat_index_.size(); i++) {
         TIndexOffU begin = repeat_index_[i];
-        TIndexOffU end = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : cur_);
+        TIndexOffU end = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : BitPackedArray::size());
         assert_lt(begin, end);
         EList<TIndexOffU> positions; positions.reserveExact(end - begin);
         for(size_t j = begin; j < end; j++) positions.push_back(get(j));
@@ -4969,6 +4825,8 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
 
 void RB_SubSA::writeFile(ofstream& fp)
 {
+    BitPackedArray::writeFile(fp);
+
     write_fp(sa_size_);
     write_fp(seed_len_);
     write_fp(seed_count_);
@@ -4977,25 +4835,6 @@ void RB_SubSA::writeFile(ofstream& fp)
     write_fp(sz);
     for(size_t i = 0; i < sz; i++) {
         write_fp(temp_suffixes_[i]);
-    }
-   
-    write_fp(item_bit_size_);
-    write_fp(block_bit_size_);
-    write_fp(items_per_block_bit_);
-    write_fp(items_per_block_bit_mask_);
-    write_fp(items_per_block_);
-
-    write_fp(cur_);
-    write_fp(sz_);  // ?
-
-    write_fp(block_size_);
-
-
-    // number of blocks
-    sz = blocks.size();
-    write_fp(sz);
-    for(size_t i = 0; i < sz; i++) {
-        fp.write((const char *)blocks[i], block_size_);
     }
 
     sz = repeat_index_.size();
@@ -5015,6 +4854,8 @@ void RB_SubSA::writeFile(ofstream& fp)
 
 void RB_SubSA::readFile(ifstream& fp)
 {
+    BitPackedArray::readFile(fp);
+
     TIndexOffU val;
 
     read_fp(val);
@@ -5034,50 +4875,6 @@ void RB_SubSA::readFile(ifstream& fp)
     }
 
     size_t val_sz;
-
-    read_fp(val_sz);
-    rt_assert_eq(val_sz, item_bit_size_);
-
-    read_fp(val_sz);
-    rt_assert_eq(val_sz, block_bit_size_);
-
-    read_fp(val_sz);
-    rt_assert_eq(val_sz, items_per_block_bit_);
-
-    read_fp(val_sz);
-    rt_assert_eq(val_sz, items_per_block_bit_mask_);
-
-    read_fp(val_sz);
-    rt_assert_eq(val_sz, items_per_block_);
-
-    // skip cur_
-    size_t prev_cnt = 0;
-    read_fp(prev_cnt);
-    cur_ = 0;
-    cerr << "prev_cnt " << prev_cnt << endl;
-
-
-    size_t prev_sz = 0;
-    read_fp(prev_sz);
-    sz_ = 0;
-
-    read_fp(val_sz);
-    rt_assert_eq(val_sz, block_size_);
-
-    // alloc blocks
-    allocItems(prev_cnt);
-
-    rt_assert_eq(prev_sz, sz_);
-
-
-    // number of blocks
-    read_fp(val_sz);
-    rt_assert_eq(val_sz, blocks.size());
-    for(size_t i = 0; i < blocks.size(); i++) {
-        fp.read((char *)blocks[i], block_size_);
-    }
-    cur_ = prev_cnt;
-
 
     // repeat_index_
     read_fp(val_sz);
