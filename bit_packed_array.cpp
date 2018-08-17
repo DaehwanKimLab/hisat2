@@ -17,6 +17,15 @@
 * along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include "timer.h"
+#include "aligner_sw.h"
+#include "aligner_result.h"
+#include "scoring.h"
+#include "sstring.h"
+
 #include "bit_packed_array.h"
 
 TIndexOffU BitPackedArray::get(size_t index) const
@@ -61,7 +70,6 @@ void BitPackedArray::writeFile(ofstream &fp)
 
 void BitPackedArray::readFile(ifstream &fp)
 {
-    TIndexOffU val = 0;
     size_t val_sz = 0;
 
     read_fp(val_sz);
