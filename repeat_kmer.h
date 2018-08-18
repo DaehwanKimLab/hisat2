@@ -160,7 +160,9 @@ public:
 public:
     bool isIn(uint64_t kmer) const
     {
-        return kmers_.find(kmer) != kmers_.end();
+        pair<uint64_t, TIndexOffU> key(kmer, 0);
+        size_t idx = kmer_table_.bsearchLoBound(key);
+        return idx < kmer_table_.size() && kmer_table_[idx].first == kmer;
     }
     
     template<typename TStr>
@@ -251,6 +253,15 @@ public:
                 writeIndex<uint64_t>(f_out, kmer_table_[i].second, bigEndian);
             }
         }
+        writeIndex<size_t>(f_out, pos_list_.size(), bigEndian);
+        for(size_t i = 0; i < pos_list_.size(); i++) {
+            if(sizeof(TIndexOffU) == 4) {
+                writeU32(f_out, pos_list_[i], bigEndian);
+            } else {
+                assert_eq(sizeof(TIndexOffU), 8);
+                writeIndex<uint64_t>(f_out, pos_list_[i], bigEndian);
+            }
+        }
         return true;
     }
     
@@ -269,8 +280,16 @@ public:
                 kmer_table_.back().second = readIndex<uint64_t>(f_in, bigEndian);
             }
         }
-        for(size_t i = 0; i < kmer_table_.size(); i++) {
-            kmers_.insert(kmer_table_[i].first);
+        size_t pos_size = readIndex<size_t>(f_in, bigEndian);
+        pos_list_.reserveExact(pos_size);
+        while(pos_list_.size() < pos_size) {
+            pos_list_.expand();
+            if(sizeof(TIndexOffU) == 4) {
+                pos_list_.back() = readU32(f_in, bigEndian);
+            } else {
+                assert_eq(sizeof(TIndexOffU), 8);
+                pos_list_.back() = readIndex<uint64_t>(f_in, bigEndian);
+            }
         }
         return true;
     }
@@ -284,7 +303,10 @@ public:
         w_ = w;
         k_ = k;
         kmer_table_.clear();
-        kmers_.clear();
+        pos_list_.clear();
+
+        EList<pair<uint64_t, TIndexOffU> > tmp_table;
+        set<uint64_t> tmp_kmers;
         
         TIndexOffU baseoff = 0;
         EList<pair<uint64_t, size_t> > minimizers;
@@ -295,44 +317,51 @@ public:
                                         k_,
                                         minimizers);
             for(size_t i = 0; i < minimizers.size(); i++) {
-                if(!kmer_table_.empty() &&
-                   kmer_table_.back().first == minimizers[i].first &&
-                   kmer_table_.back().second == s)
+                if(!tmp_table.empty() &&
+                   tmp_table.back().first == minimizers[i].first &&
+                   tmp_table.back().second == baseoff + minimizers[i].second)
                     continue;
-                kmer_table_.expand();
-                kmer_table_.back().first = minimizers[i].first;
-                kmer_table_.back().second = baseoff + minimizers[i].second;
-                kmers_.insert(minimizers[i].first);
+                tmp_table.expand();
+                tmp_table.back().first = minimizers[i].first;
+                tmp_table.back().second = baseoff + minimizers[i].second;
+                tmp_kmers.insert(minimizers[i].first);
             }
             baseoff += seq.length();
         }
-        
-        kmer_table_.sort();
-        EList<pair<uint64_t, size_t> > tmp_table;
-        tmp_table.reserveExact(kmer_table_.size());
-        for(size_t i = 0; i < kmer_table_.size(); i++) {
-            if(!tmp_table.empty() && tmp_table.back() == kmer_table_[i])
-                continue;
-            
-            tmp_table.expand();
-            tmp_table.back() = kmer_table_[i];
+        tmp_table.sort();
+
+        kmer_table_.reserveExact(tmp_kmers.size());
+        pos_list_.reserveExact(tmp_table.size());
+        for(size_t i = 0; i < tmp_table.size(); i++) {
+#ifndef NDEBUG
+            if(!pos_list_.empty()) {
+                assert_neq(pos_list_.back(), tmp_table[i].second);
+            }
+#endif
+            if(kmer_table_.empty() || kmer_table_.back().first != tmp_table[i].first) {
+                kmer_table_.expand();
+                kmer_table_.back().first = tmp_table[i].first;
+                kmer_table_.back().second = pos_list_.size();
+            }
+            pos_list_.push_back(tmp_table[i].second);
         }
-        kmer_table_ = tmp_table;        
+        assert_eq(kmer_table_.size(), tmp_kmers.size());
+        assert_eq(pos_list_.size(), tmp_table.size());
     }
     
     void dump(ostream& o) const
     {
         o << "window         : " << w_ << endl;
         o << "k length       : " << k_ << endl;
-        o << "kmer_table size: " << kmer_table_.size() << endl;
-        o << "kmer_set size  : " << kmers_.size() << endl;
+        o << "number of kmer : " << kmer_table_.size() << endl;
+        o << "number of pos  : " << pos_list_.size() << endl;
     }
 
 private:
     size_t w_;
     size_t k_;
-    EList<pair<uint64_t, size_t> > kmer_table_;
-    std::set<uint64_t> kmers_;
+    EList<pair<uint64_t, TIndexOffU> > kmer_table_;
+    EList<TIndexOffU> pos_list_;
 };
 
 

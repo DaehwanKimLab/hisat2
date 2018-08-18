@@ -175,6 +175,16 @@ def read_repeat_info(repeat_filename):
                     repeat_dic[allele].append([chr, pos, strand])
                     repeat_pos[allele].add(pos)
 
+    for rep, repeats in repeat_info.items():
+        def my_cmp(a, b):
+            if a[1] < b[1]:
+                return -1
+            elif a[1] == b[1]:
+                return a[2] - b[2]
+            else:
+                return 1
+        repeat_info[rep] = sorted(repeat_info[rep], cmp=my_cmp)
+
     return repeat_info, repeat_dic
 
 
@@ -402,10 +412,36 @@ def is_small_exon_junction_read(cigars, min_exon_len = 23):
 """
 """
 def repeat_to_genome_alignment(repeat_info, repeat_dic, rep, pos, cigar_str = ""):
+    assert rep in repeat_info
     left = pos - 1 # convert 1-based offset to zero-based
-    
+
+    repeats = repeat_info[rep]
+    l, r = 0, len(repeats)
+    while l < r:
+        m = (l + r) / 2
+        rep_allele, rpos, rlen = repeats[m]
+        if left >= rpos and left < rpos + rlen:
+            while m > 0:
+                rep_allele, rpos, rlen = repeats[m-1]
+                if left < rpos:
+                    break
+                m -= 1
+            break
+        if left < rpos:
+            r = m
+        else:
+            l = m + 1
+
     alignments = []
-    for rep_allele, rpos, rlen in repeat_info[rep]:
+    while m < len(repeats):
+        rep_allele, rpos, rlen = repeats[m]
+        if left >= rpos + rlen:
+            m += 1
+            continue
+        
+        if left < rpos:
+            break
+        
         assert rep_allele in repeat_dic
         coords = repeat_dic[rep_allele]
         assert len(coords) > 0
@@ -424,6 +460,13 @@ def repeat_to_genome_alignment(repeat_info, repeat_dic, rep, pos, cigar_str = ""
                 rep_left = cpos + rc_adj_left
 
             alignments.append([cchr, rep_left + 1, rep_cigar_str])
+        m += 1
+
+    # DK - debugging purposes
+    if pos == 19287:
+        # print rep, pos, alignments
+        # sys.exit(1)
+        None
 
     return alignments
 
@@ -1799,9 +1842,7 @@ def calculate_read_cost(single_end,
                     
                 return version
 
-            # DK - for debugging purposes
             index_base = "../../../indexes"
-            # index_base = "../../../new_indexes"
             index_add = ""
             if genome != "genome":
                 index_add = "_" + genome

@@ -4426,7 +4426,19 @@ public:
                     } // if(rdi == 0)
                 } // for(size_t i = 0; i < _genomeHits_rep[rdi].size()
                 
-                if(sink.numPair() == 0 || sink.numPair() > rp.khits) {
+                bool align2repeat = false;
+                if(_paired) {
+                    align2repeat = (sink.numPair() == 0 || sink.numPair() > rp.khits);
+                } else {
+                    const EList<AlnRes> *rs = NULL;
+                    if(rdi == 0) sink.getUnp1(rs);
+                    else         sink.getUnp2(rs);
+                    assert(rs != NULL);
+                    align2repeat = (rs->size() == 0 || rs->size() > rp.khits);
+                    align2repeat = true;
+                }
+                
+                if(align2repeat) {
                     for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
                         _genomeHits.clear();
                         _genomeHits.expand();
