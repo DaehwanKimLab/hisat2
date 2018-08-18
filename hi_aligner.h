@@ -4226,7 +4226,8 @@ public:
                                   _sharedVars,
                                   wlm,
                                   prm,
-                                  him);
+                                  him,
+                                  true); // repeat?
                 }
             }
             
@@ -4853,7 +4854,8 @@ public:
                           SharedTempVars<index_t>&          sharedVars,
                           WalkMetrics&                      wlm,
                           PerReadMetrics&                   prm,
-                          HIMetrics&                        him)
+                          HIMetrics&                        him,
+                          bool                              repeat = false)
     {
         index_t fwi = (fw ? 0 : 1);
         assert_lt(rdi, 2);
@@ -4999,6 +5001,11 @@ public:
                         overlapped = true;
                         genomeHit._hitcount++;
                         break;
+                    }
+                }
+                if(repeat) {
+                    if(!repeatdb.repeatExist(coord.off(), coord.off() + len)) {
+                        continue;
                     }
                 }
                 if(!overlapped) {
@@ -5249,7 +5256,8 @@ bool HI_Aligner<index_t, local_index_t>::align(
                                     _sharedVars,
                                     wlm,
                                     prm,
-                                    him);
+                                    him,
+                                    gfm.repeat());
     if(numHits <= 0) return false;
    
     // limit the number of local index searches used for alignment of the read

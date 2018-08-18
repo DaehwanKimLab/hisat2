@@ -296,6 +296,16 @@ public:
         }
     }
     
+    bool repeatExist(index_t left, index_t right) const {
+        // Find a repeat corresponding to a given location (left, right)
+        pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
+        index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
+        assert_lt(repeatIdx, _repeats.size());
+        if(right > _repeatMap[repeatIdx].first)
+            return false;
+        return true;
+    }
+    
     bool findCoords(index_t               anchor_left,
                     index_t               anchor_right,
                     index_t               left,  // left offset in the repeat sequence
