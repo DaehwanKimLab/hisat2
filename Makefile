@@ -142,6 +142,7 @@ REPEAT_CPPS = \
 	aligner_swsse_loc_i16.cpp \
 	aligner_swsse_loc_u8.cpp \
 	aligner_swsse.cpp \
+	bit_packed_array.cpp \
 	repeat_builder.cpp
 
 HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
