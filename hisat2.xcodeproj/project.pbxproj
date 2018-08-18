@@ -450,8 +450,6 @@
 		E8C30C641C20A60F00C03464 /* Source */ = {
 			isa = PBXGroup;
 			children = (
-				60A82E9C21274F1B0040293D /* bit_packed_array.cpp */,
-				60A82E9D21274F1B0040293D /* bit_packed_array.h */,
 				E8C30C7C1C20B2B600C03464 /* aligner_bt.h */,
 				E8C30C7D1C20B2B600C03464 /* aligner_cache.h */,
 				E8C30C7E1C20B2B600C03464 /* aligner_driver.h */,
@@ -472,6 +470,7 @@
 				E8C30C8D1C20B2B600C03464 /* assert_helpers.h */,
 				E8C30C8E1C20B2B600C03464 /* banded.h */,
 				E8C30C8F1C20B2B600C03464 /* binary_sa_search.h */,
+				60A82E9D21274F1B0040293D /* bit_packed_array.h */,
 				E8C30C901C20B2B600C03464 /* bitpack.h */,
 				E8C30C911C20B2B600C03464 /* blockwise_sa.h */,
 				E8C30C921C20B2B600C03464 /* bp_aligner.h */,
@@ -553,6 +552,7 @@
 				E8C30CDB1C20B2B600C03464 /* aln_sink.cpp */,
 				E8C30CDC1C20B2B600C03464 /* alphabet.cpp */,
 				E8C30CDD1C20B2B600C03464 /* banded.cpp */,
+				60A82E9C21274F1B0040293D /* bit_packed_array.cpp */,
 				E8C30CDE1C20B2B600C03464 /* ccnt_lut.cpp */,
 				E8C30CDF1C20B2B600C03464 /* diff_sample.cpp */,
 				E8C30CE01C20B2B600C03464 /* dp_framer.cpp */,

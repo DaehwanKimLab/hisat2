@@ -92,14 +92,14 @@ protected:
     static bool
     minimizer_leq(uint64_t kmer, uint64_t kmer2)
     {
-#if 0
+#if 1
         kmer = convert_minimizer(kmer);
         kmer2 = convert_minimizer(kmer2);
 #endif
         return kmer <= kmer2;
     }
     
-    // Heng Li's Minimap and minaisam paper, 2016
+    // Heng Li's minimap and minaisam paper, 2016
     static uint64_t convert_minimizer(uint64_t x) {
         x = (~x) + (x << 21);
         x = x ^ (x >> 24);
@@ -149,6 +149,28 @@ protected:
         }
         reverse(seq.begin(), seq.end());
         return seq;
+    }
+};
+
+struct RB_Alignment {
+    TIndexOffU pos;
+    TIndexOffU off;
+    TIndexOffU len;
+    
+    bool operator<(const RB_Alignment& o) const
+    {
+        if(pos != o.pos)
+            return pos < o.pos;
+        return len > o.len;
+    }
+};
+
+struct RB_Alignment_CMPbyLen {
+    bool operator()(const RB_Alignment& a, const RB_Alignment& b)
+    {
+        if(a.len != b.len)
+            return a.len > b.len;
+        return a.pos < b.pos;
     }
 };
 
@@ -238,6 +260,115 @@ public:
         repeats.sort();
         assert_lt(remove_count, repeats.size());
         repeats.resize(repeats.size() - remove_count);
+    }
+    
+    template<typename TStr>
+    void findAlignments(const TStr& query,
+                        EList<pair<uint64_t, size_t> >& minimizers,
+                        ELList<RB_Alignment>& position2D,
+                        EList<RB_Alignment>& alignments) const
+    {
+        minimizers.clear();
+        RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
+        
+        position2D.clear();
+        for(size_t i = 0; i < minimizers.size(); i++) {
+            if(i > 0 && minimizers[i].first == minimizers[i-1].first)
+                continue;
+            pair<uint64_t, TIndexOffU> minimizer(minimizers[i].first, 0);
+            size_t idx = kmer_table_.bsearchLoBound(minimizer);
+            if(idx < kmer_table_.size() && kmer_table_[idx].first == minimizer.first) {
+                TIndexOffU begin = kmer_table_[idx].second;
+                TIndexOffU end = (idx + 1 < kmer_table_.size() ? kmer_table_[idx+1].second : pos_list_.size());
+                if(end - begin <= 100) {
+                    position2D.expand();
+                    EList<RB_Alignment>& positions = position2D.back();
+                    positions.clear();
+                
+                    for(TIndexOffU j = begin; j < end; j++) {
+                        positions.expand();
+                        positions.back().pos = pos_list_[j];
+                        positions.back().off = minimizers[i].second;
+                        positions.back().len = k_;
+                    }
+                }
+            }
+        }
+
+        alignments.clear();
+        if(position2D.empty())
+            return;
+        
+        {
+            EList<RB_Alignment>& positions = position2D.front();
+            for(size_t i = 0; i < positions.size(); i++) {
+                alignments.expand();
+                alignments.back() = positions[i];
+            }
+        }
+        
+        assert(!alignments.empty());
+        for(size_t i = 1; i < position2D.size(); i++) {
+            EList<RB_Alignment>& positions = position2D[i];
+            size_t a = 0, p = 0;
+            size_t num_alignment = alignments.size();
+            while(a < num_alignment && p < positions.size()) {
+                RB_Alignment& alignment = alignments[a];
+                RB_Alignment& position = positions[p];
+                assert_lt(alignment.off, position.off);
+                TIndexOffU offDiff = position.off - alignment.off;
+                if(alignment.pos < position.pos) {
+                    if(position.pos - alignment.pos == offDiff) {
+                        alignment.len = min(offDiff, alignment.len) + position.len;
+                        a++; p++;
+                    } else {
+                        a++;
+                    }
+                } else if(alignment.pos > position.pos) {
+                    alignments.expand();
+                    alignments.back() = position;
+                    p++;
+                } else {
+                    assert_eq(alignment.pos, position.pos);
+                    a++; p++;
+                }
+            }
+            
+            if(i + 1 < position2D.size()) {
+                alignments.sort();
+            }
+        }
+        
+        for(size_t i = 0; i < alignments.size(); i++) {
+            alignments[i].pos -= alignments[i].off;
+        }
+        alignments.sort();
+
+        // remove duplicates
+        size_t remove_count = 0;
+        for(size_t i = 0; i + 1 + remove_count < alignments.size(); i++) {
+            size_t j = i + 1 + remove_count;
+            for(; j < alignments.size(); j++) {
+                if(alignments[i].pos != alignments[j].pos) {
+                    assert_geq(j, i + 1);
+                    if(j > i + 1) {
+                        alignments[i+1] = alignments[j];
+                    }
+                    break;
+                } else {
+                    remove_count++;
+                }
+            }
+        }
+        
+        assert_lt(remove_count, alignments.size());
+        if(remove_count > 0) {
+            alignments.resize(alignments.size() - remove_count);
+        }
+
+        if(alignments.size() > 1) {
+            sort(alignments.begin(), alignments.end(), RB_Alignment_CMPbyLen());
+        }
     }
     
     bool write(ofstream& f_out, bool bigEndian) const {
@@ -355,6 +486,41 @@ public:
         o << "k length       : " << k_ << endl;
         o << "number of kmer : " << kmer_table_.size() << endl;
         o << "number of pos  : " << pos_list_.size() << endl;
+        
+        EList<size_t> counts, counts_10;
+        counts.resizeExact(10); counts_10.resizeExact(10);
+        counts.fillZero(); counts_10.fillZero();
+        for(size_t i = 0; i < kmer_table_.size(); i++) {
+            size_t count = 0;
+            if(i + 1 < kmer_table_.size()) {
+                count = kmer_table_[i+1].second - kmer_table_[i].second;
+            } else {
+                count = pos_list_.size() - kmer_table_[i].second;
+            }
+            assert_gt(count, 0);
+            count -= 1;
+            if(count < counts.size()) {
+                counts[count]++;
+            }
+            size_t count_10 = count / 10;
+            if(count_10 < counts_10.size()) {
+                counts_10[count_10]++;
+            } else {
+                counts_10.back()++;
+            }
+        }
+        for(size_t i = 0; i < counts.size(); i++) {
+            o << "\t" << i + 1 << ": " << counts[i] << endl;
+        }
+        for(size_t i = 1; i < counts_10.size(); i++) {
+            o << "\t" << i * 10 + 1;
+            if(i + 1 < counts_10.size()) {
+                o << " to " << (i+1) * 10 << ": ";
+            } else {
+                o << " or more: ";
+            }
+            o << counts_10[i] << endl;
+        }
     }
 
 private:
