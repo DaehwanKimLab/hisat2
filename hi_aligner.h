@@ -886,9 +886,7 @@ struct GenomeHit {
         index_t tmp_trim = _trim5;
         _trim5 = _trim3;
         _trim3 = tmp_trim;
-        
-        // reverse edits
-        assert(_edits->empty());
+        Edit::invertPoss(*_edits, rd.length());
     }
     
     index_t ref()    const { return _tidx; }
@@ -2105,7 +2103,7 @@ bool GenomeHit<index_t>::extend(
                                          mm,
                                          &numNs);
         // Do not allow for any edits including known snps and splice sites when extending zero-length hit
-        if(_len == 0 && _edits->size() > 0) {
+        if(_len == 0 && mm == 0 && _edits->size() > 0) {
             _edits->clear();
             return false;
         }
@@ -2185,7 +2183,7 @@ bool GenomeHit<index_t>::extend(
                                              NULL,
                                              mm);
             // Do not allow for any edits including known snps and splice sites when extending zero-length hit
-            if(_len == 0 && _edits->size() > 0) {
+            if(_len == 0 && mm == 0 && _edits->size() > 0) {
                 _edits->clear();
                 return false;
             }
@@ -4231,7 +4229,7 @@ public:
                                   prm,
                                   him,
                                   true); // repeat?
-#endif
+#else
                     
                     getRepeatHits(*rgfm,
                                   pepol,
@@ -4254,6 +4252,7 @@ public:
                                   wlm,
                                   prm,
                                   him);
+#endif
                 }
             }
             

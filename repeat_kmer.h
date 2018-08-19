@@ -452,6 +452,7 @@ public:
                    tmp_table.back().first == minimizers[i].first &&
                    tmp_table.back().second == baseoff + minimizers[i].second)
                     continue;
+                
                 tmp_table.expand();
                 tmp_table.back().first = minimizers[i].first;
                 tmp_table.back().second = baseoff + minimizers[i].second;
@@ -474,6 +475,7 @@ public:
                 kmer_table_.back().first = tmp_table[i].first;
                 kmer_table_.back().second = pos_list_.size();
             }
+            
             pos_list_.push_back(tmp_table[i].second);
         }
         assert_eq(kmer_table_.size(), tmp_kmers.size());
