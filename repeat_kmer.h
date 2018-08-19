@@ -334,6 +334,13 @@ public:
                 }
             }
             
+            while(p < positions.size()) {
+                RB_Alignment& position = positions[p];
+                alignments.expand();
+                alignments.back() = position;
+                p++;
+            }
+            
             if(i + 1 < position2D.size()) {
                 alignments.sort();
             }

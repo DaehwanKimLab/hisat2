@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2018, Chanhee Park <parkchanhee@gmail.com> and Daehwan Kim <infphilo@gmail.com>
  *
@@ -3346,7 +3347,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             query = getString(s_, saElt, rp.min_repeat_len);
             query2 = query;
             
-            // introduce three mismatches into the middle
+            // introduce three mismatches into a query
 #if 1
             const size_t mid_pos1 = (size_t)(rp.min_repeat_len * 0.1);
             if(query2[mid_pos1] == 'A') {
@@ -3368,8 +3369,8 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             }
 #endif
             
-            // DK - debugging purposes
-            if(i == 14985) {
+            // DK & CP - debugging purposes - 167 alignments
+            if(i == 132300) {
                 int dk = 0;
                 dk += 1;
             }
@@ -3383,18 +3384,19 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             size_t cur_alignments = alignments.size();
             
             size_t found = 0;
-            for(size_t a = 0; a < alignments.size(); a++) {
-                TIndexOffU baseoff = 0;
-                for(size_t s = 0; s < seqs.size(); s++) {
-                    int spos = seqs[s].find(query);
-                    if(spos != string::npos) {
+            TIndexOffU baseoff = 0;
+            for(size_t s = 0; s < seqs.size(); s++) {
+                int spos = seqs[s].find(query);
+                if(spos != string::npos) {
+                    for(size_t a = 0; a < alignments.size(); a++) {
                         if(alignments[a].pos == baseoff + spos) {
                             found++;
                         }
                     }
-                    baseoff += seqs[s].length();
                 }
+                baseoff += seqs[s].length();
             }
+            
             assert_leq(found, 1);
             
             rc_query = reverseComplement(query);
@@ -3410,21 +3412,22 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             }
             
             size_t rc_found = 0;
-            for(size_t a = 0; a < alignments.size(); a++) {
-                TIndexOffU baseoff = 0;
-                for(size_t s = 0; s < seqs.size(); s++) {
-                    int spos = seqs[s].find(rc_query);
-                    if(spos != string::npos) {
+            baseoff = 0;
+            for(size_t s = 0; s < seqs.size(); s++) {
+                int spos = seqs[s].find(rc_query);
+                if(spos != string::npos) {
+                    for(size_t a = 0; a < alignments.size(); a++) {
                         if(alignments[a].pos == baseoff + spos) {
                             rc_found++;
                         }
                     }
-                    baseoff += seqs[s].length();
                 }
+                baseoff += seqs[s].length();
             }
+            
             assert_leq(rc_found, 1);
             
-            if(found > 0 || rc_found > 0) {
+            if(found + rc_found == 1) {
                 repeat_aligned += saElt_size;
             }
         }
