@@ -266,7 +266,8 @@ public:
     void findAlignments(const TStr& query,
                         EList<pair<uint64_t, size_t> >& minimizers,
                         ELList<RB_Alignment>& position2D,
-                        EList<RB_Alignment>& alignments) const
+                        EList<RB_Alignment>& alignments,
+                        TIndexOffU max_num_alignment = 100) const
     {
         minimizers.clear();
         RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
@@ -280,18 +281,15 @@ public:
             if(idx < kmer_table_.size() && kmer_table_[idx].first == minimizer.first) {
                 TIndexOffU begin = kmer_table_[idx].second;
                 TIndexOffU end = (idx + 1 < kmer_table_.size() ? kmer_table_[idx+1].second : pos_list_.size());
-                if(end - begin <= 100) {
-                    position2D.expand();
-                    EList<RB_Alignment>& positions = position2D.back();
-                    positions.clear();
-                
-                    for(TIndexOffU j = begin; j < end; j++) {
-                        positions.expand();
-                        positions.back().pos = pos_list_[j];
-                        positions.back().off = minimizers[i].second;
-                        positions.back().len = k_;
-                    }
-                }
+                position2D.expand();
+                EList<RB_Alignment>& positions = position2D.back();
+                positions.clear();
+                positions.expand();
+                positions.back().pos = begin; // suffix begin
+                positions.back().off = i;     // minimizer index
+                positions.expand();
+                positions.back().pos = end;   // suffix end
+                positions.back().off = i;     // minimizer index
             }
         }
 
@@ -299,50 +297,97 @@ public:
         if(position2D.empty())
             return;
         
-        {
-            EList<RB_Alignment>& positions = position2D.front();
-            for(size_t i = 0; i < positions.size(); i++) {
-                alignments.expand();
-                alignments.back() = positions[i];
-            }
-        }
-        
-        assert(!alignments.empty());
-        for(size_t i = 1; i < position2D.size(); i++) {
-            EList<RB_Alignment>& positions = position2D[i];
-            size_t a = 0, p = 0;
-            size_t num_alignment = alignments.size();
-            while(a < num_alignment && p < positions.size()) {
-                RB_Alignment& alignment = alignments[a];
-                RB_Alignment& position = positions[p];
-                assert_lt(alignment.off, position.off);
-                TIndexOffU offDiff = position.off - alignment.off;
-                if(alignment.pos < position.pos) {
-                    if(position.pos - alignment.pos == offDiff) {
-                        alignment.len = min(offDiff, alignment.len) + position.len;
-                        a++; p++;
-                    } else {
-                        a++;
-                    }
-                } else if(alignment.pos > position.pos) {
-                    alignments.expand();
-                    alignments.back() = position;
-                    p++;
-                } else {
-                    assert_eq(alignment.pos, position.pos);
-                    a++; p++;
+        for(size_t i = 0; i < position2D.size(); i++) {
+            size_t num_i = 0, num_pos = numeric_limits<size_t>::max();
+            for(size_t j = 0; j < position2D.size(); j++) {
+                EList<RB_Alignment>& positions = position2D[j];
+                if(positions.empty())
+                    continue;
+                assert_eq(positions.size(), 2);
+                TIndexOffU cur_num_pos = positions[1].pos - positions[0].pos;
+                if(cur_num_pos == 0)
+                    continue;
+                if(cur_num_pos < num_pos) {
+                    num_i = j;
+                    num_pos = cur_num_pos;
                 }
             }
             
-            while(p < positions.size()) {
-                RB_Alignment& position = positions[p];
-                alignments.expand();
-                alignments.back() = position;
-                p++;
+            if(num_pos > max_num_alignment && alignments.size() > 0)
+                break;
+
+            if(num_pos > 100)
+                break;
+            
+            EList<RB_Alignment>& positions = position2D[num_i];
+            TIndexOffU begin = positions[0].pos;
+            TIndexOffU end = positions[1].pos;
+            TIndexOffU min_i = positions[0].off;
+            assert_eq(num_pos, end - begin);
+            positions.clear();
+            for(TIndexOffU j = begin; j < end; j++) {
+                if(pos_list_[j] < minimizers[min_i].second)
+                    continue;
+                positions.expand();
+                positions.back().pos = pos_list_[j];
+                positions.back().off = minimizers[min_i].second;
+                positions.back().len = k_;
             }
             
-            if(i + 1 < position2D.size()) {
-                alignments.sort();
+            if(i == 0) {
+                for(size_t j = 0; j < positions.size(); j++) {
+                    alignments.expand();
+                    alignments.back() = positions[j];
+                }
+            } else {
+                size_t a = 0, p = 0;
+                size_t num_alignment = alignments.size();
+                while(a < num_alignment && p < positions.size()) {
+                    RB_Alignment& alignment = alignments[a];
+                    RB_Alignment& position = positions[p];
+                    if(alignment.pos < position.pos) {
+                        TIndexOffU offDiff = position.off - alignment.off;
+                        if(position.pos - alignment.pos == offDiff) {
+                            alignment.len = min(offDiff, alignment.len) + position.len;
+                            a++; p++;
+                        } else {
+                            a++;
+                        }
+                    } else if(alignment.pos > position.pos) {
+                        TIndexOffU offDiff = alignment.off - position.off;
+                        if(alignment.pos - position.pos == offDiff) {
+                            alignment.pos = position.pos;
+                            alignment.off = position.off;
+                            alignment.len = min(offDiff, position.len) + alignment.len;
+                            assert_geq(alignment.pos, alignment.off);
+                            a++; p++;
+                        } else {
+                            alignments.expand();
+                            alignments.back() = position;
+                            p++;
+                        }
+                    } else {
+                        assert_eq(alignment.pos, position.pos);
+                        a++; p++;
+                    }
+                }
+                
+                while(p < positions.size()) {
+                    RB_Alignment& position = positions[p];
+                    alignments.expand();
+                    alignments.back() = position;
+                    p++;
+                }
+                
+                if(i + 1 < position2D.size()) {
+                    alignments.sort();
+                }
+            }
+            
+            positions.clear();
+            
+            if(alignments.size() >= max_num_alignment) {
+                break;
             }
         }
         
@@ -372,7 +417,6 @@ public:
         if(remove_count > 0) {
             alignments.resize(alignments.size() - remove_count);
         }
-
         if(alignments.size() > 1) {
             sort(alignments.begin(), alignments.end(), RB_Alignment_CMPbyLen());
         }

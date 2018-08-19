@@ -2365,7 +2365,7 @@ if __name__ == "__main__":
                         dest='fresh',
                         action='store_true',
                         help='delete existing alignment related directories (e.g. hisat2_single)')
-    parser.add_argument('--runtime-only',
+    parser.add_argument('--runtime-only', '--runtime',
                         dest='runtime_only',
                         action='store_true',
                         help='run programs without evaluation')

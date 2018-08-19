@@ -4190,7 +4190,13 @@ public:
         // Handle alignment to repetitive regions
         if(rgfm != NULL &&
            perform_repeat_alignment) {
+            index_t prev_align_size[2] = {0, 0};
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                const EList<AlnRes> *rs = NULL;
+                if(rdi == 0) sink.getUnp1(rs);
+                else         sink.getUnp2(rs);
+                prev_align_size[rdi] = rs->size();
+                
                 for(size_t fwi = 0; fwi < 2; fwi++) {
                     if(!repeat[rdi][fwi]) continue;
                     bool fw = (fwi == 0);
@@ -4251,7 +4257,8 @@ public:
                                   swm,
                                   wlm,
                                   prm,
-                                  him);
+                                  him,
+                                  sink);
 #endif
                 }
             }
@@ -4267,13 +4274,14 @@ public:
                     assert(rs != NULL);
                     
                     bool candidate_found = false;
-                    for(size_t j = 0; j < rs->size(); j++) {
-                        if(sink.bestPair() >= 0 && sink.numPair() > rp.khits)
-                            break;
-                        
+                    for(size_t j = 0; j < prev_align_size[1-rdi]; j++) {
                         const AlnRes& res = (*rs)[j];
                         if(res.repeat())
                             continue;
+                        
+                        TAlScore estScore = res.score().score() + _genomeHits_rep[rdi][i].score();
+                        if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
+                            break;
                         
                         positions.clear();
                         index_t joinedOff = 0;
@@ -4293,7 +4301,7 @@ public:
                             if(positions[p].first.tid != res.refid()) continue;
                             if(positions[p].first.toff + 1000 < res.refoff() ||
                                res.refoff() + 1000 < positions[p].first.toff) continue;
-                            if(sink.bestPair() >= 0 && sink.numPair() > rp.khits)
+                            if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
                                 break;
                             
                             candidate_found = true;
@@ -4351,7 +4359,9 @@ public:
                     if(rdi == 0 && _paired) {
                         for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
                             if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
-                            if(sink.bestPair() >= 0 && sink.numPair() > rp.khits)
+                            
+                            TAlScore estScore = _genomeHits_rep[0][i].score() + _genomeHits_rep[1][j].score();
+                            if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
                                 break;
 
                             positions.clear();
@@ -4366,7 +4376,7 @@ public:
                                                       rp.khits * 10);
                             if(positions.size() <= 0) continue;
                             for(size_t p = 0; p < positions.size(); p++) {
-                                if(sink.bestPair() >= 0 && sink.numPair() > rp.khits)
+                                if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
                                     break;
                                 
                                 _genomeHits.clear();
@@ -4454,13 +4464,13 @@ public:
                 
                 bool align2repeat = false;
                 if(_paired) {
-                    align2repeat = (sink.numPair() == 0 || sink.numPair() > rp.khits);
+                    align2repeat = (sink.numPair() == 0 || sink.numBestPair().first > rp.khits);
                 } else {
                     const EList<AlnRes> *rs = NULL;
                     if(rdi == 0) sink.getUnp1(rs);
                     else         sink.getUnp2(rs);
                     assert(rs != NULL);
-                    align2repeat = (rs->size() == 0 || rs->size() > rp.khits);
+                    align2repeat = (rs->size() == 0 || sink.numBestUnp(rdi).first > rp.khits);
                     align2repeat = true;
                 }
                 
@@ -5078,10 +5088,9 @@ public:
                           SwMetrics&                        swm,
                           WalkMetrics&                      wlm,
                           PerReadMetrics&                   prm,
-                          HIMetrics&                        him)
+                          HIMetrics&                        him,
+                          AlnSinkWrap<index_t>&             sink)
     {
-        const index_t maxmm = (index_t)(-_minsc[rdi] / sc.mmpMax);
-        
         assert_lt(rdi, 2);
         assert(_rds[rdi] != NULL);
         Read& rd = *_rds[rdi];
@@ -5090,7 +5099,9 @@ public:
                                         _tmp_minimizers,
                                         _tmp_position2D,
                                         _tmp_alignments);
-        
+     
+        TAlScore bestScore = _minsc[rdi];
+        size_t prev_numHits = genomeHits.size();
         for(index_t k = 0; k < _tmp_alignments.size(); k++) {
             const RB_Alignment& coord = _tmp_alignments[k];
             index_t len = seq.length();
@@ -5098,59 +5109,53 @@ public:
             if(!repeatdb.repeatExist(coord.pos, coord.pos + len)) {
                 continue;
             }
-            bool overlapped = false;
-#if 0
-            for(index_t l = 0; l < genomeHits.size(); l++) {
-                GenomeHit<index_t>& genomeHit = genomeHits[l];
-                if(genomeHit.fw() != fw) continue;
-                assert_lt(genomeHit.rdoff(), hit._len);
-                assert_lt(rdoff, hit._len);
-                index_t hitoff = genomeHit.refoff() + hit._len - genomeHit.rdoff();
-                index_t hitoff2 = (index_t)coord.off() + hit._len - rdoff;
-                int64_t hitoff_diff = (tpol.no_spliced_alignment() ? 0 : tpol.maxIntronLen());
-                if(abs((int64_t)hitoff - (int64_t)hitoff2) <= hitoff_diff) {
-                    overlapped = true;
-                    genomeHit._hitcount++;
-                    break;
-                }
-            }
-#endif
             
-            if(!overlapped) {
-                genomeHits.expand();
-                GenomeHit<index_t>& genomeHit = genomeHits.back();
-                genomeHit.init(fw,
-                               rdoff,
-                               0,
-                               0, // trim5
-                               0, // trim3
-                               0, // ref,
-                               coord.pos,
-                               coord.pos,
-                               this->_sharedVars);
-                index_t leftext = 0, rightext = len;
-                genomeHit.extend(rd,
-                                 gfm,
-                                 ref,
-                                 altdb,
-                                 repeatdb,
-                                 ssdb,
-                                 swa,
-                                 swm,
-                                 prm,
-                                 sc,
-                                 this->_minsc[rdi],
-                                 rnd,
-                                 (index_t)this->_minK_local,
-                                 tpol,
-                                 gpol,
-                                 leftext,
-                                 rightext,
-                                 maxmm);
-                if(genomeHit.len() < len) {
-                    genomeHits.pop_back();
-                    continue;
+            genomeHits.expand();
+            GenomeHit<index_t>& genomeHit = genomeHits.back();
+            genomeHit.init(fw,
+                           rdoff,
+                           0,
+                           0, // trim5
+                           0, // trim3
+                           0, // ref,
+                           coord.pos,
+                           coord.pos,
+                           this->_sharedVars);
+            
+            index_t maxmm = (index_t)(-bestScore / sc.mmpMax);
+            index_t leftext = 0, rightext = len;
+            genomeHit.extend(rd,
+                             gfm,
+                             ref,
+                             altdb,
+                             repeatdb,
+                             ssdb,
+                             swa,
+                             swm,
+                             prm,
+                             sc,
+                             this->_minsc[rdi],
+                             rnd,
+                             (index_t)this->_minK_local,
+                             tpol,
+                             gpol,
+                             leftext,
+                             rightext,
+                             maxmm);
+            
+            if(genomeHit.len() < len) {
+                genomeHits.pop_back();
+                continue;
+            }
+            
+            if(genomeHit.score() > bestScore) {
+                bestScore = genomeHit.score();
+                if(genomeHits.size() > prev_numHits + 1) {
+                    genomeHits[prev_numHits] = genomeHits.back();
+                    genomeHits.resize(prev_numHits + 1);
                 }
+            } else if(genomeHit.score() < bestScore) {
+                genomeHits.pop_back();
             }
         }
         
