@@ -2039,7 +2039,7 @@ public:
                         }
                     }
 #if 1
-                    const size_t w = 10, k = 15;
+                    const size_t w = 12, k = 23;
 #else
                     const size_t w = 20, k = 31;
 #endif

@@ -4200,17 +4200,20 @@ public:
                 }
             }
             
+#if 0
             while(nextBWT(sc, pepol, tpol, gpol, *rgfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink));
+#endif
             
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 for(size_t fwi = 0; fwi < 2; fwi++) {
                     if(!repeat[rdi][fwi]) continue;
-                    ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
-                    if(!hit.done()) continue;
                     
                     // choose candidate partial alignments for further alignment
                     index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
-                    
+      
+#if 0
+                    ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
+                    if(!hit.done()) continue;
                     getAnchorHits(*rgfm,
                                   pepol,
                                   tpol,
@@ -4228,6 +4231,29 @@ public:
                                   prm,
                                   him,
                                   true); // repeat?
+#endif
+                    
+                    getRepeatHits(*rgfm,
+                                  pepol,
+                                  tpol,
+                                  gpol,
+                                  altdb,
+                                  repeatdb,
+                                  repeat_kmertable,
+                                  *rref,
+                                  rnd,
+                                  rdi,
+                                  fwi == 0, // fw
+                                  _genomeHits_rep[rdi],
+                                  _genomeHits_rep[rdi].size() + maxsize,
+                                  _sharedVars,
+                                  sc,
+                                  swa,
+                                  ssdb,
+                                  swm,
+                                  wlm,
+                                  prm,
+                                  him);
                 }
             }
             
@@ -5029,6 +5055,109 @@ public:
         return (index_t)genomeHits.size();
     }
     
+    /**
+     *
+     */
+    index_t getRepeatHits(
+                          const GFM<index_t>&               gfm,
+                          const PairedEndPolicy&            pepol, // paired-end policy
+                          const TranscriptomePolicy&        tpol,
+                          const GraphPolicy&                gpol,
+                          const ALTDB<index_t>&             altdb,
+                          const RepeatDB<index_t>&          repeatdb,
+                          const RB_KmerTable&               repeat_kmertable,
+                          const BitPairReference&           ref,
+                          RandomSource&                     rnd,
+                          index_t                           rdi,
+                          bool                              fw,
+                          EList<GenomeHit<index_t> >&       genomeHits,
+                          index_t                           maxGenomeHitSize,
+                          SharedTempVars<index_t>&          sharedVars,
+                          const Scoring&                    sc,
+                          SwAligner&                        swa,
+                          SpliceSiteDB&                     ssdb,
+                          SwMetrics&                        swm,
+                          WalkMetrics&                      wlm,
+                          PerReadMetrics&                   prm,
+                          HIMetrics&                        him)
+    {
+        const index_t maxmm = (index_t)(-_minsc[rdi] / sc.mmpMax);
+        
+        assert_lt(rdi, 2);
+        assert(_rds[rdi] != NULL);
+        Read& rd = *_rds[rdi];
+        const BTDnaString& seq = fw ? rd.patFw : rd.patRc;
+        repeat_kmertable.findAlignments(seq,
+                                        _tmp_minimizers,
+                                        _tmp_position2D,
+                                        _tmp_alignments);
+        
+        for(index_t k = 0; k < _tmp_alignments.size(); k++) {
+            const RB_Alignment& coord = _tmp_alignments[k];
+            index_t len = seq.length();
+            index_t rdoff = 0;
+            if(!repeatdb.repeatExist(coord.pos, coord.pos + len)) {
+                continue;
+            }
+            bool overlapped = false;
+#if 0
+            for(index_t l = 0; l < genomeHits.size(); l++) {
+                GenomeHit<index_t>& genomeHit = genomeHits[l];
+                if(genomeHit.fw() != fw) continue;
+                assert_lt(genomeHit.rdoff(), hit._len);
+                assert_lt(rdoff, hit._len);
+                index_t hitoff = genomeHit.refoff() + hit._len - genomeHit.rdoff();
+                index_t hitoff2 = (index_t)coord.off() + hit._len - rdoff;
+                int64_t hitoff_diff = (tpol.no_spliced_alignment() ? 0 : tpol.maxIntronLen());
+                if(abs((int64_t)hitoff - (int64_t)hitoff2) <= hitoff_diff) {
+                    overlapped = true;
+                    genomeHit._hitcount++;
+                    break;
+                }
+            }
+#endif
+            
+            if(!overlapped) {
+                genomeHits.expand();
+                GenomeHit<index_t>& genomeHit = genomeHits.back();
+                genomeHit.init(fw,
+                               rdoff,
+                               0,
+                               0, // trim5
+                               0, // trim3
+                               0, // ref,
+                               coord.pos,
+                               coord.pos,
+                               this->_sharedVars);
+                index_t leftext = 0, rightext = len;
+                genomeHit.extend(rd,
+                                 gfm,
+                                 ref,
+                                 altdb,
+                                 repeatdb,
+                                 ssdb,
+                                 swa,
+                                 swm,
+                                 prm,
+                                 sc,
+                                 this->_minsc[rdi],
+                                 rnd,
+                                 (index_t)this->_minK_local,
+                                 tpol,
+                                 gpol,
+                                 leftext,
+                                 rightext,
+                                 maxmm);
+                if(genomeHit.len() < len) {
+                    genomeHits.pop_back();
+                    continue;
+                }
+            }
+        }
+        
+        return (index_t)genomeHits.size();
+    }
+    
     bool pairReads(
                    const Scoring&             sc,
                    const PairedEndPolicy&     pepol, // paired-end policy
@@ -5161,6 +5290,8 @@ protected:
     EList<pair<local_index_t, local_index_t> > _tmp_local_node_iedge_count;
     
     EList<pair<uint64_t, size_t> > _tmp_minimizers;
+    ELList<RB_Alignment>           _tmp_position2D;
+    EList<RB_Alignment>            _tmp_alignments;
 
     // For AlnRes::matchesRef
 	ASSERT_ONLY(EList<bool> raw_matches_);
