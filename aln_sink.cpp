@@ -261,15 +261,7 @@ void ReportingState::getReport(
 		} else if(exitConcord_ == ReportingState::EXIT_WITH_ALIGNMENTS) {
 			assert_gt(nconcord_, 0);
 			// <= k at random
-            if(nconcord_ <= p_.khits) {
-                nconcordAln = nconcord_;
-                return;
-            } else {
-                if(!p_.repeat || (nunpairRepeat1_ <= 0 && nunpairRepeat2_ <= 0)) {
-                        nconcordAln = p_.khits;
-                        return;
-                }
-            }
+            nconcordAln = min<uint64_t>(p_.khits, nconcord_);
 		}
 		assert(!p_.mhitsSet() || nconcord_ <= (uint64_t)p_.mhits+1);
 		

@@ -4190,6 +4190,8 @@ public:
         // Handle alignment to repetitive regions
         if(rgfm != NULL &&
            perform_repeat_alignment) {
+            _repeatConcordant.clear();
+            
             index_t prev_align_size[2] = {0, 0};
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 const EList<AlnRes> *rs = NULL;
@@ -4361,8 +4363,8 @@ public:
                             if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
                             
                             TAlScore estScore = _genomeHits_rep[0][i].score() + _genomeHits_rep[1][j].score();
-                            if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
-                                break;
+                            // if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
+                            //    break;
 
                             positions.clear();
                             repeatdb.findCommonCoords(_genomeHits_rep[0][i]._joinedOff,
@@ -4375,6 +4377,11 @@ public:
                                                       positions,
                                                       rp.khits * 10);
                             if(positions.size() <= 0) continue;
+                            
+                            _repeatConcordant.expand();
+                            _repeatConcordant.back().first = _genomeHits_rep[0][i]._joinedOff;
+                            _repeatConcordant.back().second = _genomeHits_rep[1][j]._joinedOff;
+                            
                             for(size_t p = 0; p < positions.size(); p++) {
                                 if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
                                     break;
@@ -4464,7 +4471,8 @@ public:
                 
                 bool align2repeat = false;
                 if(_paired) {
-                    align2repeat = (sink.numPair() == 0 || sink.numBestPair().first > rp.khits);
+                    index_t numBestPair = sink.numBestPair().first;
+                    align2repeat = (numBestPair == 0 || numBestPair > rp.khits);
                 } else {
                     const EList<AlnRes> *rs = NULL;
                     if(rdi == 0) sink.getUnp1(rs);
@@ -4498,6 +4506,25 @@ public:
                                      him,
                                      rnd,
                                      sink);
+                    }
+                    
+                    if(_paired && rdi == 1) {
+                        if(sink.numBestUnp(rdi).first > rp.khits) {
+                            pairReads(
+                                      sc,
+                                      pepol,
+                                      tpol,
+                                      gpol,
+                                      gfm,
+                                      altdb,
+                                      repeatdb,
+                                      ref,
+                                      wlm,
+                                      prm,
+                                      him,
+                                      rnd,
+                                      sink);
+                        }
                     }
                 }
                 
@@ -5270,6 +5297,7 @@ protected:
     ELList<SpliceSite>             _spliceSites;
     
     pair<index_t, index_t>         _concordantIdxInspected;
+    EList<pair<index_t, index_t> > _repeatConcordant;
     
     size_t _minK; // log4 of the size of a genome
     size_t _minK_local; // log4 of the size of a local index (8)
@@ -5844,23 +5872,37 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
             const AlnRes& r2 = (*rs2)[j];
             Coord left2 = r2.refcoord(), right2 = r2.refcoord_right();
             assert_eq(left2.ref(), right2.ref());
-            if(left.ref() != left2.ref()) continue;
-            assert_eq(left.orient(), right.orient());
-            assert_eq(left2.orient(), right2.orient());
-            if(left.orient() == gMate1fw) {
-                if(left2.orient() != gMate2fw) continue;
-            } else {
-                if(left2.orient() == gMate2fw) continue;
-                Coord temp = left; left = left2; left2 = temp;
-                temp = right; right = right2; right2 = temp;
-            }
-            if(left.off() > left2.off()) continue;
-            if(right.off() > right2.off()) continue;
-            if(right.off() + (int)tpol.maxIntronLen() < left2.off()) continue;
-            assert_geq(r1.score().score(), _minsc[0]);
-            assert_geq(r2.score().score(), _minsc[1]);
+            
             bool dna_frag_pass = true;
-            if(tpol.no_spliced_alignment()) {
+            if(r1.repeat() && r2.repeat()) {
+                bool found = false;
+                for(size_t r = 0; r < _repeatConcordant.size(); r++) {
+                    if(_repeatConcordant[r].first == left.off() &&
+                       _repeatConcordant[r].second == left2.off()) {
+                        found = true;
+                        break;
+                    }
+                }
+                if(!found) {
+                    dna_frag_pass = false;
+                }
+            } else if(tpol.no_spliced_alignment()) {
+                if(left.ref() != left2.ref()) continue;
+                assert_eq(left.orient(), right.orient());
+                assert_eq(left2.orient(), right2.orient());
+                if(left.orient() == gMate1fw) {
+                    if(left2.orient() != gMate2fw) continue;
+                } else {
+                    if(left2.orient() == gMate2fw) continue;
+                    Coord temp = left; left = left2; left2 = temp;
+                    temp = right; right = right2; right2 = temp;
+                }
+                if(left.off() > left2.off()) continue;
+                if(right.off() > right2.off()) continue;
+                if(right.off() + (int)tpol.maxIntronLen() < left2.off()) continue;
+                assert_geq(r1.score().score(), _minsc[0]);
+                assert_geq(r2.score().score(), _minsc[1]);
+                
                 int pairCl = PE_ALS_DISCORD;
                 assert_eq(r1.refid(), r2.refid());
                 index_t off1, off2, len1, len2;
