@@ -66,6 +66,19 @@ void BitPackedArray::writeFile(ofstream &fp)
     }
 }
 
+void BitPackedArray::writeFile(const char *filename)
+{
+    ofstream fp(filename, std::ofstream::binary);
+    writeFile(fp);
+    fp.close();
+}
+
+void BitPackedArray::writeFile(const string &filename)
+{
+    writeFile(filename.c_str());
+}
+
+
 #define read_fp(x) fp.read((char *)&(x), sizeof((x)))
 
 void BitPackedArray::readFile(ifstream &fp)
@@ -112,6 +125,18 @@ void BitPackedArray::readFile(ifstream &fp)
         fp.read((char *)blocks_[i], block_size_);
     }
     cur_ = prev_cnt;
+}
+
+void BitPackedArray::readFile(const char *filename)
+{
+    ifstream fp(filename, std::ifstream::binary);
+    readFile(fp);
+    fp.close();
+}
+
+void BitPackedArray::readFile(const string &filename)
+{
+    readFile(filename.c_str());
 }
 
 void BitPackedArray::put(size_t index, TIndexOffU val)

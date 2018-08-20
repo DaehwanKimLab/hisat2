@@ -50,7 +50,12 @@ public:
 
     void init(size_t max_value);
 
+    void writeFile(const char *filename);
+    void writeFile(const string& filename);
     void writeFile(ofstream &fp);
+
+    void readFile(const char *filename);
+    void readFile(const string& filename);
     void readFile(ifstream &fp);
 
     void dump() const;
