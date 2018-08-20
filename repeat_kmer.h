@@ -267,7 +267,7 @@ public:
                         EList<pair<uint64_t, size_t> >& minimizers,
                         ELList<RB_Alignment>& position2D,
                         EList<RB_Alignment>& alignments,
-                        TIndexOffU max_num_alignment = 100) const
+                        TIndexOffU max_num_alignment = 1000) const
     {
         minimizers.clear();
         RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
@@ -316,7 +316,7 @@ public:
             if(num_pos > max_num_alignment && alignments.size() > 0)
                 break;
 
-            if(num_pos > 100)
+            if(num_pos > max_num_alignment)
                 break;
             
             EList<RB_Alignment>& positions = position2D[num_i];
