@@ -4063,6 +4063,8 @@ public:
            RandomSource&              rnd,
            AlnSinkWrap<index_t>&      sink)
     {
+        const ReportingParams& rp = sink.reportingParams();
+        
         index_t rdi;
         bool fw;
         bool found[2][2] = {{true, true}, {this->_paired, this->_paired}};
@@ -4142,35 +4144,20 @@ public:
             }
         }
         
+        
         // Determine whether reads map to repetitive sequences
-        const ReportingParams& rp = sink.reportingParams();
         bool repeat[2][2] = {{false, false}, {false, false}};
         bool perform_repeat_alignment = false;
-#if 1
-        for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
-            Read& read = *_rds[rdi];
-            for(size_t fwi = 0; fwi < 2; fwi++) {
-                const BTDnaString& seq = (fwi == 0 ? read.patFw : read.patRc);
-                repeat[rdi][fwi] = repeat_kmertable.isRepeat(seq, _tmp_minimizers);
-                perform_repeat_alignment |= repeat[rdi][fwi];
-            }
-        }
-#else
+#if 0
         for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
             for(size_t fwi = 0; fwi < 2; fwi++) {
                 ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
-                if(hit.repeat()) {
-                    repeat[rdi][fwi] = true;
-                    continue;
-                }
                 index_t offsetSize = hit.offsetSize();
                 assert_gt(offsetSize, 0);
-                index_t maxlen = 0;
                 for(size_t hi = 0; hi < offsetSize; hi++) {
                     BWTHit<index_t>& partialHit = hit.getPartialHit(hi);
-                    if(partialHit.len() >= (_minK << 1) && partialHit.len() > maxlen) {
-                        maxlen = partialHit.len();
-                        repeat[rdi][fwi] = partialHit.size() > rp.kseeds;
+                    if(partialHit.len() >= (_minK << 1)) {
+                        repeat[rdi][fwi] |= (partialHit.size() > rp.kseeds);
                     }
                 }
             }
@@ -4185,30 +4172,97 @@ public:
             perform_repeat_alignment |= repeat[rdi][0];
             perform_repeat_alignment |= repeat[rdi][1];
         }
+        
+        
+        if(!perform_repeat_alignment)
+            return EXTEND_POLICY_FULFILLED;
+#endif
+        
+        
+#if 0
+        perform_repeat_alignment = false;
+        for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+            Read& read = *_rds[rdi];
+            for(size_t fwi = 0; fwi < 2; fwi++) {
+                const BTDnaString& seq = (fwi == 0 ? read.patFw : read.patRc);
+                repeat[rdi][fwi] = repeat_kmertable.isRepeat(seq, _tmp_minimizers);
+                perform_repeat_alignment |= repeat[rdi][fwi];
+            }
+        }
+#else
+        if(rgfm != NULL) {
+#if 0
+            for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                const EList<AlnRes> *rs = NULL;
+                if(rdi == 0) sink.getUnp1(rs);
+                else sink.getUnp2(rs);
+                
+                TAlScore bestScore[2] = {_minsc[rdi], _minsc[rdi]};
+                for(size_t r = 0; r < rs->size(); r++) {
+                    TAlScore score = (*rs)[r].score().score();
+                    if((*rs)[r].fw()) {
+                        if(score > bestScore[0]) {
+                            bestScore[0] = score;
+                        }
+                    } else {
+                        if(score > bestScore[1]) {
+                            bestScore[1] = score;
+                        }
+                    }
+                }
+                for(size_t fwi = 0; fwi < 2; fwi++) {
+                    if(bestScore[fwi] == 0) {
+                        bool skip = false;
+                        ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
+                        index_t offsetSize = hit.offsetSize();
+                        for(size_t hi = 0; hi < offsetSize; hi++) {
+                            BWTHit<index_t>& partialHit = hit.getPartialHit(hi);
+                            if(partialHit.len() >= _minK + 8 && partialHit.size() == 1) {
+                                skip = true;
+                                break;
+                            }
+                        }
+                        if(skip) continue;
+                    }
+                    bool fw = (fwi == 0);
+                    _hits[rdi][fwi].init(fw, (index_t)_rds[rdi]->length());
+                    repeat[rdi][fwi] = true;
+                }
+            }
+#endif
+            
+            while(nextBWT(sc, pepol, tpol, gpol, *rgfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink));
+            for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                for(size_t fwi = 0; fwi < 2; fwi++) {
+                    // if(!repeat[rdi][fwi]) continue;
+                    // repeat[rdi][fwi] = false;
+                    ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
+                    index_t offsetSize = hit.offsetSize();
+                    assert_gt(offsetSize, 0);
+                    for(size_t hi = 0; hi < offsetSize; hi++) {
+                        BWTHit<index_t>& partialHit = hit.getPartialHit(hi);
+                        if(partialHit.len() >= _minK + 8) {
+                            repeat[rdi][fwi] = true;
+                            perform_repeat_alignment = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 #endif
         
         // Handle alignment to repetitive regions
         if(rgfm != NULL &&
            perform_repeat_alignment) {
             _repeatConcordant.clear();
-            
             index_t prev_align_size[2] = {0, 0};
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 const EList<AlnRes> *rs = NULL;
                 if(rdi == 0) sink.getUnp1(rs);
                 else         sink.getUnp2(rs);
                 prev_align_size[rdi] = rs->size();
-                
-                for(size_t fwi = 0; fwi < 2; fwi++) {
-                    if(!repeat[rdi][fwi]) continue;
-                    bool fw = (fwi == 0);
-                    _hits[rdi][fwi].init(fw, (index_t)_rds[rdi]->length());
-                }
             }
-            
-#if 0
-            while(nextBWT(sc, pepol, tpol, gpol, *rgfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink));
-#endif
             
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 for(size_t fwi = 0; fwi < 2; fwi++) {

@@ -462,12 +462,6 @@ def repeat_to_genome_alignment(repeat_info, repeat_dic, rep, pos, cigar_str = ""
             alignments.append([cchr, rep_left + 1, rep_cigar_str])
         m += 1
 
-    # DK - debugging purposes
-    if pos == 19287:
-        # print rep, pos, alignments
-        # sys.exit(1)
-        None
-
     return alignments
 
 
@@ -1701,7 +1695,7 @@ def calculate_read_cost(single_end,
         # ["hisat2", "", "tran", "210", ""],
         # ["hisat2", "", "snp_tran", "210", ""],
         # ["hisat2", "", "", "210", ""],
-        ["hisat2", "", "", "", ""],
+        # ["hisat2", "", "", "", ""],
         ["hisat2", "", "rep", "", ""],
         # ["hisat2", "", "rep-100-300", "", ""],
         # ["hisat2", "", "rep_mm", "", ""],

@@ -2038,11 +2038,7 @@ public:
                             seqs.back().push_back("ACGT"[c]);
                         }
                     }
-#if 1
-                    const size_t w = 12, k = 23;
-#else
-                    const size_t w = 20, k = 31;
-#endif
+                    const size_t w = RB_Minimizer<string>::default_w, k = RB_Minimizer<string>::default_k;
                     RB_KmerTable kmer_table;
                     kmer_table.build(seqs, w, k);
                     kmer_table.write(fout7, this->toBe());
