@@ -3287,14 +3287,11 @@ void RepeatBuilder<TStr>::writeSA(const RepeatParameter& rp,
 template<typename TStr>
 void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 {
-    ios_base::openmode mode = ios_base::out;
-    if(rp.append_result) {
-        mode |= ios_base::app;
-    } else {
-        mode |= ios_base::trunc;
-    }
-    string seed_filename = filename_ + ".rep.seed";
-    ofstream fp(seed_filename.c_str(), mode);
+    string rpt_len_str;
+    rpt_len_str = to_string(rp.min_repeat_len) + "-" + to_string(rp.max_repeat_len);
+
+    string seed_filename = filename_ + ".rep." + rpt_len_str + ".seed";
+    ofstream fp(seed_filename.c_str());
 
     swaligner_.init_dyn(rp);
 
