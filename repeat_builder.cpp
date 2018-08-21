@@ -3318,9 +3318,11 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     {
         // Build and test minimizer-based k-mer table
 #if 1
-        const size_t window = 12;
-        const size_t k = 23;
+        const size_t window = RB_Minimizer<TStr>::default_w;
+        const size_t k = RB_Minimizer<TStr>::default_k;
 #else
+        // const size_t window = 12;
+        // const size_t k = 23;
         const size_t window = 20;
         const size_t k = 31;
 #endif
@@ -3415,64 +3417,62 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             }
 #endif
             
-            // DK & CP - debugging purposes - 167 alignments
-            if(i == 132300) {
-                int dk = 0;
-                dk += 1;
-            }
-            
             repeat_total += saElt_size;
-            kmer_table.findAlignments(query2,
-                                      minimizers,
-                                      position2D,
-                                      alignments);
-            total_alignments += (alignments.size() * saElt_size);
-            size_t cur_alignments = alignments.size();
             
             size_t found = 0;
-            TIndexOffU baseoff = 0;
-            for(size_t s = 0; s < seqs.size(); s++) {
-                int spos = seqs[s].find(query);
-                if(spos != string::npos) {
-                    for(size_t a = 0; a < alignments.size(); a++) {
-                        if(alignments[a].pos == baseoff + spos) {
-                            found++;
+            size_t cur_alignments = 0;
+            if(kmer_table.isRepeat(query2, minimizers)) {
+                kmer_table.findAlignments(query2,
+                                          minimizers,
+                                          position2D,
+                                          alignments);
+                total_alignments += (alignments.size() * saElt_size);
+                cur_alignments = alignments.size();
+                TIndexOffU baseoff = 0;
+                for(size_t s = 0; s < seqs.size(); s++) {
+                    int spos = seqs[s].find(query);
+                    if(spos != string::npos) {
+                        for(size_t a = 0; a < alignments.size(); a++) {
+                            if(alignments[a].pos == baseoff + spos) {
+                                found++;
+                            }
                         }
                     }
+                    baseoff += seqs[s].length();
                 }
-                baseoff += seqs[s].length();
+                
+                assert_leq(found, 1);
             }
-            
-            assert_leq(found, 1);
-            
+        
             rc_query = reverseComplement(query);
             rc_query2 = reverseComplement(query2);
-            kmer_table.findAlignments(rc_query2,
-                                      minimizers,
-                                      position2D,
-                                      alignments);
-            total_alignments += (alignments.size() * saElt_size);
-            cur_alignments += alignments.size();
-            if(cur_alignments > max_alignments) {
-                max_alignments = cur_alignments;
-            }
-            
             size_t rc_found = 0;
-            baseoff = 0;
-            for(size_t s = 0; s < seqs.size(); s++) {
-                int spos = seqs[s].find(rc_query);
-                if(spos != string::npos) {
-                    for(size_t a = 0; a < alignments.size(); a++) {
-                        if(alignments[a].pos == baseoff + spos) {
-                            rc_found++;
+            if(kmer_table.isRepeat(rc_query2, minimizers)) {
+                kmer_table.findAlignments(rc_query2,
+                                          minimizers,
+                                          position2D,
+                                          alignments);
+                total_alignments += (alignments.size() * saElt_size);
+                cur_alignments += alignments.size();
+                if(cur_alignments > max_alignments) {
+                    max_alignments = cur_alignments;
+                }
+                
+                TIndexOffU baseoff = 0;
+                for(size_t s = 0; s < seqs.size(); s++) {
+                    int spos = seqs[s].find(rc_query);
+                    if(spos != string::npos) {
+                        for(size_t a = 0; a < alignments.size(); a++) {
+                            if(alignments[a].pos == baseoff + spos) {
+                                rc_found++;
+                            }
                         }
                     }
+                    baseoff += seqs[s].length();
                 }
-                baseoff += seqs[s].length();
+                assert_leq(rc_found, 1);
             }
-            
-            assert_leq(rc_found, 1);
-            
+
             if(found + rc_found == 1) {
                 repeat_aligned += saElt_size;
             }
@@ -4733,7 +4733,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
     }
 #endif
     
-#ifndef NDEBUG
+#if 0
     {
         EList<pair<size_t, size_t> > kmer_table;
         string query;

@@ -1031,17 +1031,17 @@ def calculate_read_cost(single_end,
         # ["hisat2", "", "snp_tran", "204", ""],
         # ["hisat2", "", "snp_tran", "", ""],
         # ["hisat", "", "", "", ""]
-        # ["hisat2", "", "rep", "", ""],
+        ["hisat2", "", "rep", "", ""],
         # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "rep-100-300", "", ""],
         # ["hisat2", "", "rep-101-300", "", ""],
-        ["hisat2", "", "rep-101-300", "", "-k 10 --score-min C,-50,0"],
+        # ["hisat2", "", "rep-101-300", "", "-k 10 --score-min C,-50,0"],
         # ["hisat2", "", "rep-150-300", "", ""],
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
         ["bowtie2", "", "", "", ""],
         # ["bowtie2", "", "", "", "-k 10"],
-        ["bwa", "mem", "", "", ""],
+        # ["bwa", "mem", "", "", ""],
         # ["bwa", "mem", "", "", "-a"],
         # ["bwa", "sw", "", "", ""],
         # ["star", "", "", "", ""],
@@ -1049,7 +1049,7 @@ def calculate_read_cost(single_end,
         # ["vg", "", "", "", ""],
         # ["vg", "", "snp", "", ""],
         # ["vg", "", "snp", "", "-M 10"],
-        ["minimap2", "", "", "", ""],
+        # ["minimap2", "", "", "", ""],
         ]
 
     # sql_write = False
@@ -1168,15 +1168,13 @@ def calculate_read_cost(single_end,
                 if type in ["x1", "x2"]:
                     cmd += ["--no-temp-splicesite"]
 
-                # daehwan - for debugging purposes
+                # DK - for debugging purposes
                 # cmd += ["--dta"]
                 """
                 if index_type == "tran":
                     cmd += ["--no-anchorstop"]
                     cmd += ["-k", "100"]
                 """
-
-                cmd += ["-X", "1000"]
 
                 if options != "":
                     cmd += options.split(' ')

@@ -24,14 +24,18 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <unordered_set>
 #include "assert_helpers.h"
 #include "word_io.h"
 #include "mem_ids.h"
 #include "ds.h"
 
+template<typename TStr>
 class RB_Minimizer {
 public:
-    template<typename TStr>
+    static const size_t default_w = 5;
+    static const size_t default_k = 31;
+public:
     static pair<uint64_t, size_t>
     get_minimizer(const TStr& seq,
                   size_t off,
@@ -53,7 +57,6 @@ public:
         return minimizer;
     }
     
-    template<typename TStr>
     static void
     get_minimizer(const TStr& seq,
                   size_t window,
@@ -111,7 +114,6 @@ protected:
         return x;
     }
     
-    template<typename TStr>
     static uint64_t
     get_kmer(const TStr& seq,
              size_t offset,
@@ -138,7 +140,6 @@ protected:
         return kmer;
     }
     
-    template<typename TStr>
     static TStr get_string(uint64_t kmer, size_t k)
     {
         TStr seq = "";
@@ -182,9 +183,13 @@ public:
 public:
     bool isIn(uint64_t kmer) const
     {
+#if 0
         pair<uint64_t, TIndexOffU> key(kmer, 0);
         size_t idx = kmer_table_.bsearchLoBound(key);
         return idx < kmer_table_.size() && kmer_table_[idx].first == kmer;
+#else
+        return kmers_.find(kmer) != kmers_.end();
+#endif
     }
     
     template<typename TStr>
@@ -199,7 +204,16 @@ public:
     bool isRepeat(const TStr& query,
                   EList<pair<uint64_t, size_t> >& minimizers) const
     {
-        RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
+#if 1
+        RB_Minimizer<TStr>::get_minimizer(query, w_, k_, minimizers);
+#else
+        minimizers.clear();
+        for(size_t i = 0; i + 35 < query.length(); i += 32) {
+            minimizers.expand();
+            minimizers.back() = RB_Minimizer<TStr>::get_minimizer(query, i, w_, k_);
+        }
+#endif
+
         size_t est_count = 0;
         uint64_t prev_minimizer = 0;
         bool prev_in = false;
@@ -212,7 +226,9 @@ public:
                 curr_in = true;
                 est_count++;
                 
+#if 1
                 return true;
+#endif
             }
             prev_minimizer = minimizers[j].first;
             prev_in = curr_in;
@@ -221,7 +237,7 @@ public:
 #if 1
         return false;
 #else
-        bool est_repeat = est_count * 2 >= minimizers.size();
+        bool est_repeat = est_count * 10 >= minimizers.size();
         return est_repeat;
 #endif
     }
@@ -232,7 +248,7 @@ public:
                      EList<TIndexOffU>& repeats) const
     {
         repeats.clear();
-        RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
+        RB_Minimizer<TStr>::get_minimizer(query, w_, k_, minimizers);
         for(size_t i = 0; i < minimizers.size(); i++) {
             if(i > 0 && minimizers[i].first == minimizers[i-1].first)
                 continue;
@@ -270,7 +286,7 @@ public:
                         TIndexOffU max_num_alignment = 1000) const
     {
         minimizers.clear();
-        RB_Minimizer::get_minimizer(query, w_, k_, minimizers);
+        RB_Minimizer<TStr>::get_minimizer(query, w_, k_, minimizers);
         
         position2D.clear();
         for(size_t i = 0; i < minimizers.size(); i++) {
@@ -427,7 +443,7 @@ public:
         writeIndex<size_t>(f_out, k_, bigEndian);
         writeIndex<size_t>(f_out, kmer_table_.size(), bigEndian);
         for(size_t i = 0; i < kmer_table_.size(); i++) {
-            writeIndex<size_t>(f_out, kmer_table_[i].first, bigEndian);
+            writeIndex<uint64_t>(f_out, kmer_table_[i].first, bigEndian);
             if(sizeof(TIndexOffU) == 4) {
                 writeU32(f_out, kmer_table_[i].second, bigEndian);
             } else {
@@ -454,13 +470,15 @@ public:
         kmer_table_.reserveExact(kmer_size);
         while(kmer_table_.size() < kmer_size) {
             kmer_table_.expand();
-            kmer_table_.back().first = readIndex<size_t>(f_in, bigEndian);
+            kmer_table_.back().first = readIndex<uint64_t>(f_in, bigEndian);
             if(sizeof(TIndexOffU) == 4) {
                 kmer_table_.back().second = readU32(f_in, bigEndian);
             } else {
                 assert_eq(sizeof(TIndexOffU), 8);
                 kmer_table_.back().second = readIndex<uint64_t>(f_in, bigEndian);
             }
+            
+            kmers_.insert(kmer_table_.back().first);
         }
         size_t pos_size = readIndex<size_t>(f_in, bigEndian);
         pos_list_.reserveExact(pos_size);
@@ -494,10 +512,10 @@ public:
         EList<pair<uint64_t, size_t> > minimizers;
         for(size_t s = 0; s < seqs.size(); s++) {
             const TStr& seq = seqs[s];
-            RB_Minimizer::get_minimizer(seq,
-                                        w_,
-                                        k_,
-                                        minimizers);
+            RB_Minimizer<TStr>::get_minimizer(seq,
+                                              w_,
+                                              k_,
+                                              minimizers);
             for(size_t i = 0; i < minimizers.size(); i++) {
                 if(!tmp_table.empty() &&
                    tmp_table.back().first == minimizers[i].first &&
@@ -581,6 +599,8 @@ private:
     size_t k_;
     EList<pair<uint64_t, TIndexOffU> > kmer_table_;
     EList<TIndexOffU> pos_list_;
+    
+    unordered_set<uint64_t> kmers_;
 };
 
 
