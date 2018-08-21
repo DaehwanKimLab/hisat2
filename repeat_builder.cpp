@@ -3272,8 +3272,8 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     {
         // Build and test minimizer-based k-mer table
 #if 1
-        const size_t window = RB_Minimizer::default_w;
-        const size_t k = RB_Minimizer::default_k;
+        const size_t window = RB_Minimizer<TStr>::default_w;
+        const size_t k = RB_Minimizer<TStr>::default_k;
 #else
         // const size_t window = 12;
         // const size_t k = 23;
