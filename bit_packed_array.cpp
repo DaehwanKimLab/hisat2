@@ -86,7 +86,8 @@ void BitPackedArray::readFile(ifstream &fp)
     size_t val_sz = 0;
 
     read_fp(val_sz);
-    rt_assert_eq(val_sz, item_bit_size_);
+    init_by_log2(val_sz);
+    //rt_assert_eq(val_sz, item_bit_size_);
 
     read_fp(val_sz);
     rt_assert_eq(val_sz, elm_bit_size_);
@@ -253,9 +254,10 @@ void BitPackedArray::allocItems(size_t count)
     allocSize(sz);
 }
 
-void BitPackedArray::init(size_t max_value)
+void BitPackedArray::init_by_log2(size_t ceil_log2)
 {
-    item_bit_size_ = ceil(log2(max_value));
+    item_bit_size_ = ceil_log2;
+
     elm_bit_size_ = sizeof(uint64_t) * 8;
 
     items_per_block_bit_ = 20;  // 1M
@@ -266,6 +268,11 @@ void BitPackedArray::init(size_t max_value)
 
     cur_ = 0;
     sz_ = 0;
+}
+
+void BitPackedArray::init(size_t max_value)
+{
+    init_by_log2((size_t)ceil(log2(max_value)));
 }
 
 void BitPackedArray::dump() const
@@ -291,5 +298,18 @@ BitPackedArray::~BitPackedArray()
         uint64_t *ptr = blocks_[i];
         delete [] ptr;
     }
+}
+
+void BitPackedArray::reset()
+{
+    cur_ = 0;
+    sz_ = 0;
+
+    for(size_t i = 0; i < blocks_.size(); i++) {
+        uint64_t *ptr = blocks_[i];
+        delete [] ptr;
+    }
+
+    blocks_.clear();
 }
 

@@ -56,6 +56,7 @@ public:
     TIndexOffU max_edit;         // maximum edit distance allowed
     bool       symmetric_extend; // extend symmetrically
     TIndexOffU extend_unit_len;  // extend seeds no longer than this length at a time
+    bool       append_result;
 };
 
 typedef pair<TIndexOffU, TIndexOffU> Range;
@@ -762,7 +763,7 @@ private:
 };
 
 // SA Subset
-class RB_SubSA : public BitPackedArray {
+class RB_SubSA {
 public:
     RB_SubSA() {}
     ~RB_SubSA() {}
@@ -782,7 +783,11 @@ public:
 
     inline TIndexOffU seed_len() const { return seed_len_; }
     inline TIndexOffU seed_count() const { return seed_count_; }
-    
+
+    inline size_t size() const { return repeat_list_.size(); }
+    TIndexOffU get(size_t idx) const { return repeat_list_[idx]; }
+    inline TIndexOffU operator[](size_t i) const { return get(i); }
+
     const EList<TIndexOffU>& getRepeatIndex() const { return repeat_index_; }
     
     template<typename TStr>
@@ -798,16 +803,20 @@ public:
     
     void dump() const
     {
-        BitPackedArray::dump();
-
         cerr << "seed length: " << seed_len_ << endl;
         cerr << "minimum seed count: " << seed_count_ << endl;
         cerr << "number of seed groups: " << repeat_index_.size() << endl;
+        cerr << "number of seeds: " << repeat_list_.size() << endl;
     }
     
     size_t getMemUsage() const
     {
-        size_t tot = BitPackedArray::getMemUsage();
+        size_t tot = 0;
+
+        tot += repeat_list_.totalCapacityBytes();
+        tot += repeat_index_.totalCapacityBytes();
+        tot += done_.totalCapacityBytes();
+        tot += temp_suffixes_.totalCapacityBytes();
 
         return tot;
     }
@@ -825,6 +834,7 @@ private:
     EList<TIndexOffU> temp_suffixes_;
 
     // repeat index
+    EList<TIndexOffU> repeat_list_;
     EList<TIndexOffU> repeat_index_;
     EList<uint32_t>   done_;
 };
@@ -849,6 +859,9 @@ public:
 
     void readSA(const RepeatParameter& rp,
                 const string& filename);
+
+    void readSA(const RepeatParameter& rp,
+                const BitPackedArray& sa);
 
     void writeSA(const RepeatParameter& rp,
                  const string& filename);

@@ -49,6 +49,7 @@ public:
     void pushBack(TIndexOffU val);
 
     void init(size_t max_value);
+    void reset();
 
     void writeFile(const char *filename);
     void writeFile(const string& filename);
@@ -63,6 +64,8 @@ public:
     size_t getMemUsage() const;
 
 private:
+    void init_by_log2(size_t ceil_log2);
+
     void put(size_t index, TIndexOffU val);
     inline uint64_t bitToMask(size_t bit) const
     {

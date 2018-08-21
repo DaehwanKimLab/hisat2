@@ -3201,6 +3201,46 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
     test_subSA_.dump();
     cerr << "test_subSA mem Usage: " << test_subSA_.getMemUsage() << endl << endl;
 }
+template<typename TStr>
+void RepeatBuilder<TStr>::readSA(const RepeatParameter &rp,
+                                 const BitPackedArray &sa)
+{
+    TIndexOffU count = 0;
+
+    subSA_.init(s_.length() + 1, rp.seed_len, rp.seed_count);
+    test_subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
+
+    for(size_t i = 0; i < sa.size(); i++) {
+        TIndexOffU saElt = sa[i];
+        count++;
+
+        if(count && (count % 10000000 == 0)) {
+            cerr << "RB count " << count << endl;
+        }
+
+        if(saElt == s_.length()) {
+            assert_eq(count, s_.length() + 1);
+            break;
+        }
+
+        subSA_.push_back(s_, coordHelper_, saElt, count == s_.length());
+        test_subSA_.push_back(s_, coordHelper_, saElt, count == s_.length());
+    }
+
+    cerr << "subSA size: " << endl;
+    subSA_.dump();
+#if 0
+    for(size_t i = 0; i < subSA_.size(); i++) {
+        TIndexOffU joinedOff = subSA_[i];
+        fp << setw(10) << joinedOff << " " << getString(s_, joinedOff, rp.seed_len) << endl;
+    }
+#endif
+    cerr << "subSA mem Usage: " << subSA_.getMemUsage() << endl << endl;
+
+    cerr << "test_subSA size: " << endl;
+    test_subSA_.dump();
+    cerr << "test_subSA mem Usage: " << test_subSA_.getMemUsage() << endl << endl;
+}
 
 template<typename TStr>
 void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
@@ -3247,8 +3287,14 @@ void RepeatBuilder<TStr>::writeSA(const RepeatParameter& rp,
 template<typename TStr>
 void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 {
+    ios_base::openmode mode = ios_base::out;
+    if(rp.append_result) {
+        mode |= ios_base::app;
+    } else {
+        mode |= ios_base::trunc;
+    }
     string seed_filename = filename_ + ".rep.seed";
-    ofstream fp(seed_filename.c_str());
+    ofstream fp(seed_filename.c_str(), mode);
 
     swaligner_.init_dyn(rp);
 
@@ -4118,6 +4164,12 @@ bool RepeatBuilder<TStr>::checkSequenceMergeable(const string& ref,
 template<typename TStr>
 void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
 {
+    ios_base::openmode mode = ios_base::out;
+    if(rp.append_result) {
+        mode |= ios_base::app;
+    } else {
+        mode |= ios_base::trunc;
+    }
     // Generate SNPs
     size_t i = 0;
     for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++, i++) {
@@ -4134,9 +4186,9 @@ void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
     string info_fname = filename_ + ".rep.info";
     string hapl_fname = filename_ + ".rep.haplotype";
 
-    ofstream snp_fp(snp_fname.c_str());
-    ofstream info_fp(info_fname.c_str());
-    ofstream hapl_fp(hapl_fname.c_str());
+    ofstream snp_fp(snp_fname.c_str(), mode);
+    ofstream info_fp(info_fname.c_str(), mode);
+    ofstream hapl_fp(hapl_fname.c_str(), mode);
 
     const string repName = "rep" + to_string(rp.min_repeat_len) + "-" + to_string(rp.max_repeat_len);
     
@@ -4174,8 +4226,15 @@ void RepeatBuilder<TStr>::saveRepeats(const RepeatParameter &rp)
 template<typename TStr>
 void RepeatBuilder<TStr>::saveConsensus(const RepeatParameter &rp,
                                         const string& repName) {
+    ios_base::openmode mode = ios_base::out;
+    if(rp.append_result) {
+        mode |= ios_base::app;
+    } else {
+        mode |= ios_base::trunc;
+    }
+
     string fa_fname = filename_ + ".rep.fa";
-    ofstream fa_fp(fa_fname.c_str());
+    ofstream fa_fp(fa_fname.c_str(), mode);
 
     fa_fp << ">" << repName << endl;
 
@@ -4338,8 +4397,7 @@ void RB_SubSA::init(TIndexOffU sa_size,
     seed_count_ = seed_count;
     temp_suffixes_.clear();
 
-    BitPackedArray::init(sa_size);
-
+    repeat_list_.clear();
     repeat_index_.clear();
 }
 
@@ -4351,7 +4409,7 @@ void RB_SubSA::push_back(const TStr& s,
 {
     if(saElt + seed_len() <= coordHelper.getEnd(saElt)) {
         if(seed_count_ == 1) {
-            pushBack(saElt);
+            repeat_list_.push_back(saElt);
         } else {
             assert_gt(seed_count_, 1);
             
@@ -4376,10 +4434,10 @@ void RB_SubSA::push_back(const TStr& s,
             
             if(lcp_len < seed_len_ || lastInput) {
                 if(temp_suffixes_.size() >= seed_count_) {
-                    repeat_index_.push_back(size());
+                    repeat_index_.push_back(repeat_list_.size());
                     temp_suffixes_.sort();
                     for(size_t pi = 0; pi < temp_suffixes_.size(); pi++) {
-                        pushBack(temp_suffixes_[pi]);
+                        repeat_list_.push_back(temp_suffixes_[pi]);
                     }
                 }
                 temp_suffixes_.clear();
@@ -4394,7 +4452,7 @@ void RB_SubSA::push_back(const TStr& s,
     
     if(lastInput) {
         size_t bit = sizeof(uint32_t) * 8;
-        size_t num = (size() + bit - 1) / bit;
+        size_t num = (repeat_list_.size() + bit - 1) / bit;
         done_.resizeExact(num);
         done_.fillZero();
         
@@ -4402,10 +4460,10 @@ void RB_SubSA::push_back(const TStr& s,
         string prev_seq = "";
         for(size_t i = 0; i < repeat_index_.size(); i++) {
             TIndexOffU saBegin = repeat_index_[i];
-            TIndexOffU saEnd = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : size());
-            string seq = getString(s, get(saBegin), seed_len());
+            TIndexOffU saEnd = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : repeat_list_.size());
+            string seq = getString(s, repeat_list_[saBegin], seed_len());
             for(size_t j = saBegin + 1; j < saEnd; j++) {
-                string tmp_seq = getString(s, get(j), seed_len());
+                string tmp_seq = getString(s, repeat_list_[j], seed_len());
                 assert_eq(seq, tmp_seq);
             }
             if(prev_seq != "" ) {
@@ -4426,7 +4484,7 @@ Range RB_SubSA::find(const TStr& s,
         return Range(0, 0);
     
     Range range(repeat_index_[i],
-                i + 1 < repeat_index_.size() ? repeat_index_[i+1] : size());
+                i + 1 < repeat_index_.size() ? repeat_index_[i+1] : repeat_list_.size());
     return range;
 }
 
@@ -4440,7 +4498,7 @@ TIndexOffU RB_SubSA::find_repeat_idx(const TStr& s,
     size_t l = 0, r = repeat_index_.size();
     while(l < r) {
         size_t m = (r + l) >> 1;
-        TIndexOffU saElt = get(repeat_index_[m]);
+        TIndexOffU saElt = repeat_list_[repeat_index_[m]];
         getString(s, saElt, seed_len_, temp);
         if(seq == temp) {
             return m;
@@ -4456,7 +4514,7 @@ TIndexOffU RB_SubSA::find_repeat_idx(const TStr& s,
 
 void RB_SubSA::setDone(TIndexOffU off, TIndexOffU len)
 {
-    assert_leq(off + len, BitPackedArray::size());
+    assert_leq(off + len, repeat_list_.size());
     const TIndexOffU bit = sizeof(uint32_t) * 8;
     for(TIndexOffU i = off; i < off + len; i++) {
         TIndexOffU quotient = i / bit;
@@ -4470,7 +4528,7 @@ void RB_SubSA::setDone(TIndexOffU off, TIndexOffU len)
 
 bool RB_SubSA::isDone(TIndexOffU off, TIndexOffU len) const
 {
-    assert_leq(off + len, BitPackedArray::size());
+    assert_leq(off + len, repeat_list_.size());
     const TIndexOffU bit = sizeof(uint32_t) * 8;
     for(TIndexOffU i = off; i < off + len; i++) {
         TIndexOffU quotient = i / bit;
@@ -4491,7 +4549,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                                const size_t max_len,
                                EList<RB_RepeatBase>& repeatBases)
 {
-    if(repeat_index_.size() <= 0)
+    if(repeat_index_.empty())
         return;
     
     done_.fillZero();
@@ -4505,10 +4563,10 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
     size_table.reserveExact(repeat_index_.size() / 2 + 1);
     for(size_t i = 0; i < repeat_index_.size(); i++) {
         TIndexOffU begin = repeat_index_[i];
-        TIndexOffU end = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : BitPackedArray::size());
+        TIndexOffU end = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : repeat_list_.size());
         assert_lt(begin, end);
         EList<TIndexOffU> positions; positions.reserveExact(end - begin);
-        for(size_t j = begin; j < end; j++) positions.push_back(get(j));
+        for(size_t j = begin; j < end; j++) positions.push_back(repeat_list_[j]);
         
         if(!isSenseDominant(coordHelper, positions, seed_len_))
             continue;
@@ -4532,7 +4590,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         if(idx + 1 < repeat_index_.size()) {
             assert_eq(repeat_index_[idx] + num, repeat_index_[idx+1]);
         } else {
-            assert_eq(repeat_index_[idx] + num, size());
+            assert_eq(repeat_index_[idx] + num, repeat_list_.size());
         }
 #endif
         TIndexOffU saBegin = repeat_index_[idx];
@@ -4542,7 +4600,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         }
 
         ASSERT_ONLY(size_t rb_done = 0);
-        assert_lt(saBegin, size());
+        assert_lt(saBegin, repeat_list_.size());
         repeatStack.push_back(idx);
         while(!repeatStack.empty()) {
             TIndexOffU idx = repeatStack.back();
@@ -4550,13 +4608,13 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             repeatStack.pop_back();
             assert_lt(idx, repeat_index_.size());
             TIndexOffU saBegin = repeat_index_[idx];
-            TIndexOffU saEnd = (idx + 1 < repeat_index_.size() ? repeat_index_[idx + 1] : size());
+            TIndexOffU saEnd = (idx + 1 < repeat_index_.size() ? repeat_index_[idx + 1] : repeat_list_.size());
             if(isDone(saBegin)) {
                 assert(isDone(saBegin, saEnd - saBegin));
                 continue;
             }
             
-            TIndexOffU saElt = get(saBegin);
+            TIndexOffU saElt = repeat_list_[saBegin];
             size_t ri = repeatBases.size();
             repeatBases.expand();
             repeatBases.back().seq = getString(s, saElt, seed_len_);
@@ -4585,7 +4643,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                         if(idx + 1 < repeat_index_.size()) {
                             num = repeat_index_[idx+1] - repeat_index_[idx];
                         } else {
-                            num = size() - repeat_index_[idx];
+                            num = repeat_list_.size() - repeat_index_[idx];
                         }
                     }
                     tmp_ranges[c].first = idx;
@@ -4687,10 +4745,10 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         EList<TIndexOffU> positions;
         for(size_t i = 0; i < repeat_index_.size(); i += interval) {
             TIndexOffU saElt_idx = repeat_index_[i];
-            TIndexOffU saElt_idx_end = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : size());
+            TIndexOffU saElt_idx_end = (i + 1 < repeat_index_.size() ? repeat_index_[i+1] : repeat_list_.size());
             positions.clear();
             for(size_t j = saElt_idx; j < saElt_idx_end; j++) {
-                positions.push_back(get(j));
+                positions.push_back(repeat_list_[j]);
 #ifndef NDEBUG
                 if(j > saElt_idx) {
                     TIndexOffU lcp_len = getLCP(s,
@@ -4701,14 +4759,14 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     assert_geq(lcp_len, seed_len_);
                 }
                 
-                TIndexOffU saElt = get(j);
+                TIndexOffU saElt = repeat_list_[j];
                 TIndexOffU start = coordHelper.getStart(saElt);
                 TIndexOffU start2 = coordHelper.getStart(saElt + seed_len_ - 1);
                 assert_eq(start, start2);
 #endif
             }
             
-            TIndexOffU saElt = get(saElt_idx);
+            TIndexOffU saElt = repeat_list_[saElt_idx];
             size_t true_count = saElt_idx_end - saElt_idx;
             getString(s, saElt, seed_len_, query);
             
@@ -4722,8 +4780,8 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     for(size_t j = 0; j < repeat.nodes.size(); j++) {
                         TIndexOffU _node = repeat.nodes[j];
                         TIndexOffU _saElt_idx = repeat_index_[_node];
-                        TIndexOffU _saElt_idx_end = (_node + 1 < repeat_index_.size() ? repeat_index_[_node+1] : size());
-                        TIndexOffU _saElt = get(_saElt_idx);
+                        TIndexOffU _saElt_idx_end = (_node + 1 < repeat_index_.size() ? repeat_index_[_node+1] : repeat_list_.size());
+                        TIndexOffU _saElt = repeat_list_[_saElt_idx];
                         string seq = getString(s, _saElt, seed_len());
                         if(query == seq) {
                             count += (_saElt_idx_end - _saElt_idx);
@@ -4741,8 +4799,8 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     for(size_t j = 0; j < repeat.nodes.size(); j++) {
                         TIndexOffU _node = repeat.nodes[j];
                         TIndexOffU _saElt_idx = repeat_index_[_node];
-                        TIndexOffU _saElt_idx_end = (_node + 1 < repeat_index_.size() ? repeat_index_[_node+1] : size());
-                        TIndexOffU _saElt = get(_saElt_idx);
+                        TIndexOffU _saElt_idx_end = (_node + 1 < repeat_index_.size() ? repeat_index_[_node+1] : repeat_list_.size());
+                        TIndexOffU _saElt = repeat_list_[_saElt_idx];
                         string seq = getString(s, _saElt, seed_len());
                         if(rc_query == seq) {
                             rc_count += (_saElt_idx_end - _saElt_idx);
@@ -4772,8 +4830,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
 
 void RB_SubSA::writeFile(ofstream& fp)
 {
-    BitPackedArray::writeFile(fp);
-
     write_fp(sa_size_);
     write_fp(seed_len_);
     write_fp(seed_count_);
@@ -4801,8 +4857,6 @@ void RB_SubSA::writeFile(ofstream& fp)
 
 void RB_SubSA::readFile(ifstream& fp)
 {
-    BitPackedArray::readFile(fp);
-
     TIndexOffU val;
 
     read_fp(val);

@@ -81,9 +81,10 @@ static TIndexOffU seed_count;
 static TIndexOffU repeat_count;
 static TIndexOffU min_repeat_length;
 static TIndexOffU max_repeat_length;
+static EList<pair<TIndexOffU, TIndexOffU> > repeat_length_pair;
 static TIndexOffU max_repeat_edit;
 static TIndexOffU max_repeat_matchlen;
-static bool       symmetric_extend;
+static bool symmetric_extend;
 static bool repeat_indel;
 static bool forward_only;
 static bool CGtoTG;
@@ -122,6 +123,7 @@ static void resetOptions() {
     seed_count     = 5;
 	min_repeat_length = 100;
     max_repeat_length = numeric_limits<uint16_t>::max();
+    repeat_length_pair.clear();
 	repeat_count   = 5;
     max_repeat_edit = 10;
     max_repeat_matchlen = min_repeat_length / 2; // half of repeat_length
@@ -154,6 +156,7 @@ enum {
     ARG_SEED_COUNT,
     ARG_MIN_REPEAT_LENGTH,
     ARG_MAX_REPEAT_LENGTH,
+    ARG_REPEAT_LENGTH,
 	ARG_REPEAT_COUNT,
     ARG_REPEAT_EDIT,
 	ARG_REPEAT_MATCHLEN,
@@ -197,6 +200,7 @@ static void printUsage(ostream& out) {
         << "    --seed-count <int>      seed count (default: 5)" << endl
         << "    --min-repeat-length <int>   minimum repeat length (default: 100)" << endl
         << "    --max-repeat-length <int>   maximum repeat length (default: 65535)" << endl
+        << "    --repeat-length <int>-<int>[,<int>-<int>]    minimum-maximum repeat length pairs" << endl
         << "    --repeat-count <int>    minimum repeat count (default: 5)" << endl
         << "    --repeat-edit <int>     maximum repeat edit distance (default: 10)" << endl
         << "    --repeat-matchlen <int>" << endl
@@ -243,6 +247,7 @@ static struct option long_options[] = {
     {(char*)"seed-count",     required_argument, 0,            ARG_SEED_COUNT},
 	{(char*)"min-repeat-length",  required_argument, 0,        ARG_MIN_REPEAT_LENGTH},
     {(char*)"max-repeat-length",  required_argument, 0,        ARG_MAX_REPEAT_LENGTH},
+    {(char*)"repeat-length",  required_argument, 0,            ARG_REPEAT_LENGTH},
 	{(char*)"repeat-count",   required_argument, 0,            ARG_REPEAT_COUNT},
     {(char*)"repeat-edit",    required_argument, 0,            ARG_REPEAT_EDIT},
     {(char*)"repeat-matchlen",required_argument, 0,            ARG_REPEAT_MATCHLEN},
@@ -267,21 +272,71 @@ static struct option long_options[] = {
  * exit with an error and a usage message.
  */
 template<typename T>
+static T parseNumber(const char *str, T lower, const char *errmsg)
+{
+    char *endPtr= NULL;
+    T t = (T)strtoll(str, &endPtr, 10);
+    if(endPtr != NULL) {
+        if(t < lower) {
+            cerr << errmsg << endl;
+            printUsage(cerr);
+            throw 1;
+        }
+        return t;
+    }
+    cerr << errmsg << endl;
+    printUsage(cerr);
+    throw 1;
+    return -1;
+}
+
+template<typename T>
 static T parseNumber(T lower, const char *errmsg) {
-	char *endPtr= NULL;
-	T t = (T)strtoll(optarg, &endPtr, 10);
-	if (endPtr != NULL) {
-		if (t < lower) {
-			cerr << errmsg << endl;
-			printUsage(cerr);
-			throw 1;
-		}
-		return t;
-	}
-	cerr << errmsg << endl;
-	printUsage(cerr);
-	throw 1;
-	return -1;
+    return parseNumber(optarg, lower, errmsg);
+}
+
+static void parsePair(EList<pair<TIndexOffU, TIndexOffU> >& repeat_pair)
+{
+    string tok;
+    istringstream ss(optarg);
+
+    while(getline(ss, tok, ',')) {
+        if(tok.empty()) {
+            continue;
+        }
+
+        TIndexOffU min_len, max_len;
+
+        size_t pos = tok.find('-');
+        if(pos == string::npos) {
+            // min
+            min_len = parseNumber<TIndexOffU>(tok.c_str(), 1, "min-repeat-length must be at least 1");
+            max_len = numeric_limits<uint16_t>::max();
+        } else if(pos == tok.length() - 1) {
+            // min-
+            min_len = parseNumber<TIndexOffU>(tok.substr(0, pos).c_str(), 1, "min-repeat-length must be at least 1");
+            max_len = numeric_limits<uint16_t>::max();
+        } else if(pos == 0) {
+            // -max
+            // not support?
+            min_len = 100;
+            max_len = parseNumber<TIndexOffU>(tok.substr(pos + 1).c_str(), 1, "max-repeat-length must be at least 1");
+        } else {
+            min_len = parseNumber<TIndexOffU>(tok.substr(0, pos).c_str(), 1, "min-repeat-length must be at least 1");
+            max_len = parseNumber<TIndexOffU>(tok.substr(pos + 1).c_str(), 1, "max-repeat-length must be at least 1");
+        }
+
+        if(min_len > max_len) {
+            printUsage(cerr);
+            throw 1;
+        }
+        if(max_len > numeric_limits<uint16_t>::max()) {
+            printUsage(cerr);
+            throw 1;
+        }
+
+        repeat_pair.push_back(pair<TIndexOffU, TIndexOffU>(min_len, max_len));
+    }
 }
 
 /**
@@ -358,6 +413,9 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_MAX_REPEAT_LENGTH:
                 max_repeat_length = parseNumber<TIndexOffU>(1, "--max-repeat-length arg must be at least 1");
                 break;
+		    case ARG_REPEAT_LENGTH:
+		        parsePair(repeat_length_pair);
+		        break;
 			case ARG_REPEAT_COUNT:
 				repeat_count = parseNumber<TIndexOffU>(2, "--repeat-count arg must be at least 2");
 				break;
@@ -522,14 +580,14 @@ static void driver(
         cerr << "Joining reference sequences" << endl;
         Timer timer(cerr, "  Time to join reference sequences: ", verbose);
         GFM<TIndexOffU>::join<TStr>(
-                                    is,
-                                    szs,
-                                    (TIndexOffU)sztot.first,
-                                    refparams,
-                                    seed,
-                                    s,
-                                    both_strand, // include reverse complemented sequence
-									CGtoTG); //Change CG to TG
+                is,
+                szs,
+                (TIndexOffU) sztot.first,
+                refparams,
+                seed,
+                s,
+                both_strand, // include reverse complemented sequence
+                CGtoTG); //Change CG to TG
     }
 
     // Successfully obtained joined reference string
@@ -541,134 +599,174 @@ static void driver(
     }
 #endif
 
-    if(bmax != (TIndexOffU)OFF_MASK) {
-        // VMSG_NL("bmax according to bmax setting: " << bmax);
+
+    BitPackedArray suffix_array;
+
+    bool sa_file_exist = false;
+    string sa_fname = outfile + ".rep.sa";
+    if(load_sa) {
+        ifstream fp(sa_fname, std::ifstream::binary);
+        sa_file_exist = fp.is_open();
     }
-    else if(bmaxDivN != (uint32_t)OFF_MASK) {
-        bmax = max<uint32_t>(jlen / (bmaxDivN * nthreads), 1);
-        // VMSG_NL("bmax according to bmaxDivN setting: " << bmax);
-    }
-    else {
-        bmax = (uint32_t)sqrt(s.length());
-        // VMSG_NL("bmax defaulted to: " << bmax);
-    }
-    int iter = 0;
-    bool first = true;
-    bool passMemExc = false, sanity = false;
-    // Look for bmax/dcv parameters that work.
-    while(true) {
-        if(!first && bmax < 40 && passMemExc) {
-            cerr << "Could not find appropriate bmax/dcv settings for building this index." << endl;
-            cerr << "Please try indexing this reference on a computer with more memory." << endl;
-            if(sizeof(void*) == 4) {
-                cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
-                << "this executable is 32-bit." << endl;
-            }
-            throw 1;
-        }
-        if(dcv > 4096) dcv = 4096;
-        if((iter % 6) == 5 && dcv < 4096 && dcv != 0) {
-            dcv <<= 1; // double difference-cover period
+
+    if(load_sa && sa_file_exist) {
+        cerr << "Load SA from " << sa_fname << endl;
+        suffix_array.readFile(sa_fname);
+    } else {
+        suffix_array.init(s.length() + 1);
+
+        if(bmax != (TIndexOffU) OFF_MASK) {
+            // VMSG_NL("bmax according to bmax setting: " << bmax);
+        } else if(bmaxDivN != (uint32_t) OFF_MASK) {
+            bmax = max<uint32_t>(jlen / (bmaxDivN * nthreads), 1);
+            // VMSG_NL("bmax according to bmaxDivN setting: " << bmax);
         } else {
-            bmax -= (bmax >> 2); // reduce by 25%
+            bmax = (uint32_t) sqrt(s.length());
+            // VMSG_NL("bmax defaulted to: " << bmax);
         }
-        iter++;
-        try {
-            cerr << "Using parameters --bmax " << bmax << endl;
-            if(dcv == 0) {
-                cerr << " and *no difference cover*" << endl;
+        int iter = 0;
+        bool first = true;
+        bool passMemExc = false, sanity = false;
+        // Look for bmax/dcv parameters that work.
+        while(true) {
+            if(!first && bmax < 40 && passMemExc) {
+                cerr << "Could not find appropriate bmax/dcv settings for building this index." << endl;
+                cerr << "Please try indexing this reference on a computer with more memory." << endl;
+                if (sizeof(void *) == 4) {
+                    cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
+                         << "this executable is 32-bit." << endl;
+                }
+                throw 1;
+            }
+            if(dcv > 4096) dcv = 4096;
+            if((iter % 6) == 5 && dcv < 4096 && dcv != 0) {
+                dcv <<= 1; // double difference-cover period
             } else {
-                cerr << " --dcv " << dcv << endl;
+                bmax -= (bmax >> 2); // reduce by 25%
             }
-            {
-                cerr << "  Doing ahead-of-time memory usage test" << endl;
-                // Make a quick-and-dirty attempt to force a bad_alloc iff
-                // we would have thrown one eventually as part of
-                // constructing the DifferenceCoverSample
-                dcv <<= 1;
-                TIndexOffU sz = (TIndexOffU)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
-                if(nthreads > 1) sz *= (nthreads + 1);
-                AutoArray<uint8_t> tmp(sz, EBWT_CAT);
-                dcv >>= 1;
-                // Likewise with the KarkkainenBlockwiseSA
-                sz = (TIndexOffU)KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
-                AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
-                // Grab another 20 MB out of caution
-                AutoArray<uint32_t> extra(20*1024*1024, EBWT_CAT);
-                // If we made it here without throwing bad_alloc, then we
-                // passed the memory-usage stress test
-                cerr << "  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv << endl;
-                cerr << "" << endl;
+            iter++;
+
+            suffix_array.reset();
+
+            try {
+                cerr << "Using parameters --bmax " << bmax << endl;
+                if(dcv == 0) {
+                    cerr << " and *no difference cover*" << endl;
+                } else {
+                    cerr << " --dcv " << dcv << endl;
+                }
+                {
+                    cerr << "  Doing ahead-of-time memory usage test" << endl;
+                    // Make a quick-and-dirty attempt to force a bad_alloc iff
+                    // we would have thrown one eventually as part of
+                    // constructing the DifferenceCoverSample
+                    dcv <<= 1;
+                    TIndexOffU sz = (TIndexOffU) DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
+                    if(nthreads > 1) sz *= (nthreads + 1);
+                    AutoArray<uint8_t> tmp(sz, EBWT_CAT);
+                    dcv >>= 1;
+                    // Likewise with the KarkkainenBlockwiseSA
+                    sz = (TIndexOffU) KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
+                    AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
+                    // Grab another 20 MB out of caution
+                    AutoArray<uint32_t> extra(20 * 1024 * 1024, EBWT_CAT);
+                    // If we made it here without throwing bad_alloc, then we
+                    // passed the memory-usage stress test
+                    cerr << "  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv
+                         << endl;
+                    cerr << "" << endl;
+                }
+                cerr << "Constructing suffix-array element generator" << endl;
+
+                KarkkainenBlockwiseSA<TStr> bsa(s,
+                                                bmax,
+                                                nthreads,
+                                                dcv,
+                                                seed,
+                                                sanity,
+                                                passMemExc,
+                                                false /* verbose */,
+                                                outfile);
+
+                assert(bsa.suffixItrIsReset());
+                assert_eq(bsa.size(), s.length() + 1);
+
+                TIndexOffU count = 0;
+
+                while(count < s.length() + 1) {
+                    TIndexOffU saElt = bsa.nextSuffix();
+                    count++;
+
+                    if(count && (count % 10000000 == 0)) {
+                        cerr << "SA count " << count << endl;
+                    }
+
+                    if(saElt == s.length()) {
+                        assert_eq(count, s.length() + 1);
+                        break;
+                    }
+
+                    suffix_array.pushBack(saElt);
+                }
+
+                break;
+
+            } catch (bad_alloc &e) {
+                if(passMemExc) {
+                    cerr << "  Ran out of memory; automatically trying more memory-economical parameters." << endl;
+                } else {
+                    cerr << "Out of memory while constructing suffix array.  Please try using a smaller" << endl
+                         << "number of blocks by specifying a smaller --bmax or a larger --bmaxdivn" << endl;
+                    throw 1;
+                }
             }
-            cerr << "Constructing suffix-array element generator" << endl;RepeatParameter rp;
-            
+            first = false;
+        }
+
+        if(save_sa) {
+            suffix_array.writeFile(sa_fname);
+        }
+    }
+
+    cerr << "suffix_array: " << endl;
+    suffix_array.dump();
+
+
+    // Build Repeats
+    {
+        if(repeat_length_pair.empty()) {
+            repeat_length_pair.push_back(pair<TIndexOffU, TIndexOffU>(min_repeat_length, max_repeat_length));
+        }
+
+        for(size_t i = 0; i < repeat_length_pair.size(); i++) {
+            RepeatParameter rp;
+
             rp.seed_len = seed_length;
             rp.seed_count = seed_count;
             rp.seed_mm = max_seed_mm;
-            rp.min_repeat_len = min_repeat_length;
-            rp.max_repeat_len = max_repeat_length;
+            rp.min_repeat_len = repeat_length_pair[i].first;
+            rp.max_repeat_len = repeat_length_pair[i].second;
             rp.repeat_count = repeat_count;
             rp.max_edit = max_repeat_edit;
             rp.symmetric_extend = symmetric_extend;
             rp.extend_unit_len = max_seed_extlen;
-            
+            rp.append_result = (i != 0);
+
+
             RepeatBuilder<TStr> repeatBuilder(s,
                                               szs,
                                               ref_names,
                                               forward_only,
                                               outfile);
-            if(repeat_str1.length() > 0 && repeat_str2.length() > 0) {
-                repeatBuilder.doTest(rp,
-                                     repeat_str1,
-                                     repeat_str2);
-                break;
-            }
-            
-            bool sa_file_exist = false;
-            string sa_fname = outfile + ".rep.sa";
-            if(load_sa) {
-                ifstream fp(sa_fname, std::ifstream::binary);
-                sa_file_exist = fp.is_open();
-            }
-            
-            if(load_sa && sa_file_exist) {
-                repeatBuilder.readSA(rp, sa_fname);
-            } else {
-                KarkkainenBlockwiseSA<TStr> *bsa =
-                    new KarkkainenBlockwiseSA<TStr>(s,
-                            bmax,
-                            nthreads, dcv,
-                            seed,
-                            sanity,
-                            passMemExc,
-                            false /* verbose */,
-                            outfile);
-                assert(bsa->suffixItrIsReset());
-                assert_eq(bsa->size(), s.length() + 1);
-                repeatBuilder.readSA(rp, *bsa);
-                delete bsa;
-                bsa = NULL;
-                
-                if(save_sa) {
-                    repeatBuilder.writeSA(rp, outfile + ".rep.sa");
-                }
-            }
+            cerr << "RepeatBuilder: " << outfile << " " << rp.min_repeat_len << "-" << rp.max_repeat_len << endl;
+
+            repeatBuilder.readSA(rp, suffix_array);
 
             repeatBuilder.build(rp);
             repeatBuilder.saveFile(rp);
-			break;
-
-        } catch(bad_alloc& e) {
-            if(passMemExc) {
-                cerr << "  Ran out of memory; automatically trying more memory-economical parameters." << endl;
-            } else {
-                cerr << "Out of memory while constructing suffix array.  Please try using a smaller" << endl
-                << "number of blocks by specifying a smaller --bmax or a larger --bmaxdivn" << endl;
-                throw 1;
-            }
         }
-        first = false;
     }
+
     // assert(repOk());
 }
 
@@ -718,7 +816,7 @@ int hisat2_repeat(int argc, const char **argv) {
 			return 1;
 		}
 		infile = argv[optind++];
-        
+
 		if(optind >= argc) {
 			cerr << "No output file specified!" << endl;
 			printUsage(cerr);
@@ -732,7 +830,7 @@ int hisat2_repeat(int argc, const char **argv) {
 			printUsage(cerr);
 			return 1;
 		}
-        
+
    		// Optionally summarize
 		if(verbose) {
             cerr << "Settings:" << endl;
@@ -767,20 +865,20 @@ int hisat2_repeat(int argc, const char **argv) {
             }
         }
         return 0;
-        } catch(std::exception& e) {
-            cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
+    } catch(std::exception& e) {
+        cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
+        cerr << "Command: ";
+        for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+        cerr << endl;
+        return 1;
+    } catch(int e) {
+        if(e != 0) {
+            cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
             cerr << "Command: ";
             for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
             cerr << endl;
-            return 1;
-        } catch(int e) {
-            if(e != 0) {
-                cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
-                cerr << "Command: ";
-                for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
-                cerr << endl;
-            }
-            return e;
         }
+        return e;
+    }
 }
 }
