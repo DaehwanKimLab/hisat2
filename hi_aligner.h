@@ -4229,6 +4229,13 @@ public:
                     repeat[rdi][fwi] = true;
                 }
             }
+#else
+            for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                for(size_t fwi = 0; fwi < 2; fwi++) {
+                    bool fw = (fwi == 0);
+                    _hits[rdi][fwi].init(fw, (index_t)_rds[rdi]->length());
+                }
+            }
 #endif
             
             while(nextBWT(sc, pepol, tpol, gpol, *rgfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink));
@@ -4241,7 +4248,7 @@ public:
                     assert_gt(offsetSize, 0);
                     for(size_t hi = 0; hi < offsetSize; hi++) {
                         BWTHit<index_t>& partialHit = hit.getPartialHit(hi);
-                        if(partialHit.len() >= _minK + 8) {
+                        if(partialHit.len() >= (_minK << 1)) {
                             repeat[rdi][fwi] = true;
                             perform_repeat_alignment = true;
                             break;
