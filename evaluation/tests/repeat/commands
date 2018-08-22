@@ -30,6 +30,10 @@ cp 22_rep*ht2 ../../indexes/HISAT2_22
 
 /usr/bin/time -l hisat2-build -p 3 genome.fa --repeat-ref genome_rep.rep.fa --repeat-info genome_rep.rep.info --repeat-snp genome_rep.rep.snp --repeat-haplotype genome_rep.rep.haplotype genome_rep
 
+/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --seed-length 50 --seed-count 5 --repeat-edit 0 --min-repeat-length 101 --max-repeat-length 300 --repeat-count 5 genome.fa genome_rep-101-300
+
+/usr/bin/time -l hisat2-build -p 3 genome.fa --repeat-ref genome_rep-101-300.rep.fa --repeat-info genome_rep-101-300.rep.info  genome_rep-101-300
+
 hisat2_simulate_reads.py --dna --num-fragment 1000 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
 
 hisat2_simulate_reads.py --dna --num-fragment 1000 --error-rate 0.2 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim

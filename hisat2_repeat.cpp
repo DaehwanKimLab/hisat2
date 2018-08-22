@@ -760,7 +760,10 @@ static void driver(
                                               outfile);
             cerr << "RepeatBuilder: " << outfile << " " << rp.min_repeat_len << "-" << rp.max_repeat_len << endl;
 
-            repeatBuilder.readSA(rp, suffix_array);
+            {
+                Timer _t(cerr, "  Time reading suffix array: ", verbose);
+                repeatBuilder.readSA(rp, suffix_array);
+            }
 
             repeatBuilder.build(rp);
             repeatBuilder.saveFile(rp);

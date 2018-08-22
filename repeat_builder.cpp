@@ -239,7 +239,7 @@ static bool compareRepeatCoordByJoinedOff(const RepeatCoord<index_t>& a, const R
 template<typename TStr>
 string getString(const TStr& ref, TIndexOffU start, size_t len)
 {
-    const size_t ref_len = ref.length();
+    ASSERT_ONLY(const size_t ref_len = ref.length());
     assert_leq(start + len, ref_len);
 
     string s;
@@ -255,7 +255,7 @@ template<typename TStr>
 void getString(const TStr& ref, TIndexOffU start, size_t len, string& s)
 {
     s.clear();
-    const size_t ref_len = ref.length();
+    ASSERT_ONLY(const size_t ref_len = ref.length());
     assert_leq(start + len, ref_len);
     for(size_t i = 0; i < len; i++) {
         char nt = "ACGT"[ref[start + i]];
@@ -4584,7 +4584,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
     EList<pair<size_t, size_t> > tmp_sort_ranges; tmp_sort_ranges.resizeExact(4);
     for(int64_t i = (int64_t)size_table.size() - 1; i >= 0; i--) {
         TIndexOffU idx = size_table[i].second;
-        TIndexOffU num = size_table[i].first;
+        ASSERT_ONLY(TIndexOffU num = size_table[i].first);
         assert_lt(idx, repeat_index_.size());
 #ifndef NDEBUG
         if(idx + 1 < repeat_index_.size()) {
