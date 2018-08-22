@@ -3256,41 +3256,6 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter &rp,
 }
 
 template<typename TStr>
-void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
-                                 const string& filename)
-{
-    ifstream fp(filename.c_str(), std::ifstream::binary);
-
-    subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
-    subSA_.readFile(fp);
-
-    fp.close();
-
-    cerr << "subSA size is " << subSA_.size() << endl;
-    subSA_.dump();
-#if 0
-    for(size_t i = 0; i < subSA_.size(); i++) {
-        TIndexOffU joinedOff = subSA_[i];
-        fp << setw(10) << joinedOff << " " << getString(s_, joinedOff, rp.seed_len) << endl;
-    }
-#endif
-    cerr << "subSA mem Usage: " << subSA_.getMemUsage() << endl << endl;
-}
-
-
-template<typename TStr>
-void RepeatBuilder<TStr>::writeSA(const RepeatParameter& rp,
-                                  const string& filename)
-{
-    ofstream fp(filename.c_str(), std::ofstream::binary);
-
-    subSA_.writeFile(fp);
-
-    fp.close();
-}
-
-
-template<typename TStr>
 void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
 {
     string rpt_len_str;
@@ -4565,18 +4530,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     }
                 }
                 tmp_sort_ranges.sort();
-                for(size_t cc = 0; cc < 3; cc++) {
-                    assert_leq(tmp_sort_ranges[cc].first, tmp_sort_ranges[cc+1].first);
-                    if(tmp_sort_ranges[cc].first < seed_count_)
-                        continue;
-                    
-                    size_t c = tmp_sort_ranges[cc].second;
-                    if(left) tmp_str[0] = "ACGT"[c];
-                    else     tmp_str.back() = "ACGT"[c];
-
-                    repeatStack.push_back(tmp_ranges[c].first);
-                }
-                
                 if(tmp_sort_ranges[3].first < seed_count_) {
                     if(left) {
                         left = false;
@@ -4585,12 +4538,20 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                         break;
                     }
                 }
+                
+                for(size_t cc = 0; cc < 3; cc++) {
+                    assert_leq(tmp_sort_ranges[cc].first, tmp_sort_ranges[cc+1].first);
+                    if(tmp_sort_ranges[cc].first < seed_count_)
+                        continue;
+                    
+                    size_t c = tmp_sort_ranges[cc].second;
+                    repeatStack.push_back(tmp_ranges[c].first);
+                }
 
                 size_t c = tmp_sort_ranges[3].second;
                 if(repeatBases[ri].seq.length() >= max_len) {
-                    if(left) tmp_str[0] = "ACGT"[c];
-                    else     tmp_str.back() = "ACGT"[c];
-                    TIndexOffU idx = find_repeat_idx(s, tmp_str);
+                    assert_eq(repeatBases[ri].seq.length(), max_len);
+                    TIndexOffU idx = tmp_ranges[c].first;
                     assert(!isDone(repeat_index_[idx]));
                     repeatStack.push_back(idx);
                     if(left) {
