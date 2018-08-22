@@ -941,7 +941,6 @@ private:
     string filename_;
     
     RB_SubSA subSA_;
-    RB_SubSA test_subSA_;
     
     TIndexOffU forward_length_;
     

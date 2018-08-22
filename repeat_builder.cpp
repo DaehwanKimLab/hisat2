@@ -3191,8 +3191,7 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
                                  BlockwiseSA<TStr>& sa)
 {
     TIndexOffU count = 0;
-    subSA_.init(s_.length() + 1, rp.seed_len, rp.seed_count);
-    test_subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
+    subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
     
     while(count < s_.length() + 1) {
         TIndexOffU saElt = sa.nextSuffix();
@@ -3208,7 +3207,6 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
         }
         
         subSA_.push_back(s_, coordHelper_, saElt, count == s_.length());
-        test_subSA_.push_back(s_, coordHelper_, saElt, count == s_.length());
     }
     
     cerr << "subSA size is " << subSA_.size() << endl;
@@ -3220,19 +3218,15 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
     }
 #endif
     cerr << "subSA mem Usage: " << subSA_.getMemUsage() << endl << endl;
-    
-    cerr << "test_subSA size is " << test_subSA_.size() << endl;
-    test_subSA_.dump();
-    cerr << "test_subSA mem Usage: " << test_subSA_.getMemUsage() << endl << endl;
 }
+
 template<typename TStr>
 void RepeatBuilder<TStr>::readSA(const RepeatParameter &rp,
                                  const BitPackedArray &sa)
 {
     TIndexOffU count = 0;
 
-    subSA_.init(s_.length() + 1, rp.seed_len, rp.seed_count);
-    test_subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
+    subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
 
     for(size_t i = 0; i < sa.size(); i++) {
         TIndexOffU saElt = sa[i];
@@ -3248,7 +3242,6 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter &rp,
         }
 
         subSA_.push_back(s_, coordHelper_, saElt, count == s_.length());
-        test_subSA_.push_back(s_, coordHelper_, saElt, count == s_.length());
     }
 
     cerr << "subSA size: " << endl;
@@ -3260,10 +3253,6 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter &rp,
     }
 #endif
     cerr << "subSA mem Usage: " << subSA_.getMemUsage() << endl << endl;
-
-    cerr << "test_subSA size: " << endl;
-    test_subSA_.dump();
-    cerr << "test_subSA mem Usage: " << test_subSA_.getMemUsage() << endl << endl;
 }
 
 template<typename TStr>
@@ -3272,10 +3261,7 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
 {
     ifstream fp(filename.c_str(), std::ifstream::binary);
 
-    subSA_.init(s_.length() + 1, rp.seed_len, rp.seed_count);
-    test_subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
-
-    test_subSA_.readFile(fp);
+    subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
     subSA_.readFile(fp);
 
     fp.close();
@@ -3289,11 +3275,8 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
     }
 #endif
     cerr << "subSA mem Usage: " << subSA_.getMemUsage() << endl << endl;
-    
-    cerr << "test_subSA size is " << test_subSA_.size() << endl;
-    test_subSA_.dump();
-    cerr << "test_subSA mem Usage: " << test_subSA_.getMemUsage() << endl << endl;
 }
+
 
 template<typename TStr>
 void RepeatBuilder<TStr>::writeSA(const RepeatParameter& rp,
@@ -3301,7 +3284,6 @@ void RepeatBuilder<TStr>::writeSA(const RepeatParameter& rp,
 {
     ofstream fp(filename.c_str(), std::ofstream::binary);
 
-    test_subSA_.writeFile(fp);
     subSA_.writeFile(fp);
 
     fp.close();
@@ -3325,10 +3307,10 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     RB_RepeatManager* repeat_manager = new RB_RepeatManager;
     
     EList<RB_RepeatBase> repeatBases;
-    test_subSA_.buildRepeatBase(s_,
-                                coordHelper_,
-                                rp.max_repeat_len,
-                                repeatBases);
+    subSA_.buildRepeatBase(s_,
+                           coordHelper_,
+                           rp.max_repeat_len,
+                           repeatBases);
     
     size_t repeat_id = 0;
     for(size_t i = 0; i < repeatBases.size(); i++) {
@@ -3374,8 +3356,8 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             query = getString(s_, i, rp.min_repeat_len);
             rc_query = reverseComplement(query);
             
-            TIndexOffU idx = test_subSA_.find_repeat_idx(s_, query);
-            const EList<TIndexOffU>& test_repeat_index = test_subSA_.getRepeatIndex();
+            TIndexOffU idx = subSA_.find_repeat_idx(s_, query);
+            const EList<TIndexOffU>& test_repeat_index = subSA_.getRepeatIndex();
             bool repeat = (idx < test_repeat_index.size());
             bool est_repeat = kmer_table.isRepeat(query,
                                                   rc_query,
@@ -3404,7 +3386,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
         
         ELList<RB_Alignment> position2D; EList<RB_Alignment> alignments;
         size_t repeat_total = 0, repeat_aligned = 0;
-        const EList<TIndexOffU>& test_repeat_index = test_subSA_.getRepeatIndex();
+        const EList<TIndexOffU>& test_repeat_index = subSA_.getRepeatIndex();
         size_t interval = 1;
         if(test_repeat_index.size() >= 1000) {
             interval = test_repeat_index.size() / 1000;
@@ -3413,9 +3395,9 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
         string query2, rc_query2;
         for(size_t i = 0; i < test_repeat_index.size(); i += interval) {
             TIndexOffU saElt_idx = test_repeat_index[i];
-            TIndexOffU saElt_idx_end = (i + 1 < test_repeat_index.size() ? test_repeat_index[i+1] : test_subSA_.size());
+            TIndexOffU saElt_idx_end = (i + 1 < test_repeat_index.size() ? test_repeat_index[i+1] : subSA_.size());
             TIndexOffU saElt_size = saElt_idx_end - saElt_idx;
-            TIndexOffU saElt = test_subSA_[saElt_idx];
+            TIndexOffU saElt = subSA_[saElt_idx];
             query = getString(s_, saElt, rp.min_repeat_len);
             query2 = query;
             
@@ -3574,17 +3556,17 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
         string query;
         size_t total = 0, match = 0;
         EList<TIndexOffU> positions;
-        const EList<TIndexOffU>& test_repeat_index = test_subSA_.getRepeatIndex();
+        const EList<TIndexOffU>& test_repeat_index = subSA_.getRepeatIndex();
         size_t interval = 1;
         if(test_repeat_index.size() >= 10000) {
             interval = test_repeat_index.size() / 10000;
         }
         for(size_t i = 0; i < test_repeat_index.size(); i += interval) {
             TIndexOffU saElt_idx = test_repeat_index[i];
-            TIndexOffU saElt_idx_end = (i + 1 < test_repeat_index.size() ? test_repeat_index[i+1] : test_subSA_.size());
+            TIndexOffU saElt_idx_end = (i + 1 < test_repeat_index.size() ? test_repeat_index[i+1] : subSA_.size());
             positions.clear();
             for(size_t j = saElt_idx; j < saElt_idx_end; j++) {
-                positions.push_back(test_subSA_[j]);
+                positions.push_back(subSA_[j]);
 #ifndef NDEBUG
                 if(j > saElt_idx) {
                     TIndexOffU lcp_len = getLCP(s_,
@@ -3595,14 +3577,14 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                     assert_eq(lcp_len, rp.min_repeat_len);
                 }
                 
-                TIndexOffU saElt = test_subSA_[j];
+                TIndexOffU saElt = subSA_[j];
                 TIndexOffU start = coordHelper_.getStart(saElt);
                 TIndexOffU start2 = coordHelper_.getStart(saElt + rp.min_repeat_len - 1);
                 assert_eq(start, start2);
 #endif
             }
             
-            TIndexOffU saElt = test_subSA_[saElt_idx];
+            TIndexOffU saElt = subSA_[saElt_idx];
             size_t true_count = saElt_idx_end - saElt_idx;
             getString(s_, saElt, rp.min_repeat_len, query);
             total++;
@@ -4012,120 +3994,17 @@ void RepeatBuilder<TStr>::addRepeatGroup(const RepeatParameter& rp,
                                          const RB_RepeatBase& repeatBase,
                                          ostream& fp)
 {
-    
-    
-#if 1
     RB_Repeat* repeat = new RB_Repeat;
     repeat->repeat_id(repeat_id);
     repeat->init(rp,
                  s_,
                  coordHelper_,
-                 test_subSA_,
+                 subSA_,
                  repeatBase);
     
     assert(repeat_map_.find(repeat->repeat_id()) == repeat_map_.end());
     repeat_map_[repeat->repeat_id()] = repeat;
     repeat_id++;
-#else
-    EList<size_t> to_remove;
-    
-    // skip if a given set of seeds corresponds to an existing set of seeds
-    bool redundant = repeat_manager.checkRedundant(rp,
-                                                   repeat_map_,
-                                                   positions,
-                                                   to_remove);
-    if(redundant)
-        return;
-    
-    // find an empty spot
-    size_t parent_id = repeat_id;
-    RB_Repeat* repeat = new RB_Repeat;
-    repeat->repeat_id(repeat_id);
-    repeat->parent_id(repeat_id);
-    repeat->consensus() = seed_str;
-    EList<SeedExt>& seeds = repeat->seeds();
-    seeds.reserveExact(positions.size());
-    
-    for(size_t pi = 0; pi < positions.size(); pi++) {
-        TIndexOffU left = positions[pi];
-        TIndexOffU right = positions[pi] + rp.seed_len;
-        
-        seeds.expand();
-        seeds.back().reset();
-        seeds.back().orig_pos = pair<TIndexOffU, TIndexOffU>(left, right);
-        seeds.back().pos = seeds.back().orig_pos;
-        seeds.back().consensus_pos.first = 0;
-        seeds.back().consensus_pos.second = rp.seed_len;
-        seeds.back().bound = pair<TIndexOffU, TIndexOffU>(coordHelper_.getStart(left), coordHelper_.getEnd(left));
-    }
-    
-    while(true) {
-        if(repeat->seeds().size() >= rp.repeat_count) {
-            repeat->extendConsensus(rp, s_);
-        }
-        
-        if(!repeat->satisfy(rp) || repeat->self_repeat()) {
-            // reassign left over seeds to the repeat groups constructed here
-            if(parent_id < repeat_id) {
-                reassignSeeds(rp,
-                              parent_id,
-                              repeat_id,
-                              repeat->seeds());
-            }
-            delete repeat;
-            repeat = NULL;
-            break;
-        }
-        repeat_id++;
-        
-        RB_Repeat* repeat2 = new RB_Repeat;
-        repeat2->repeat_id(repeat_id);
-        repeat2->parent_id(parent_id);
-        repeat->getNextRepeat(rp, s_, *repeat2);
-
-        assert(repeat_map_.find(repeat->repeat_id()) == repeat_map_.end());
-        repeat_map_[repeat->repeat_id()] = repeat;
-      
-        repeat = repeat2;
-    }
-    
-    if(repeat_id == parent_id)
-        return;
-    
-    for(size_t i = parent_id; i < repeat_id; i++) {
-        map<size_t, RB_Repeat*>::iterator it = repeat_map_.find(i);
-        RB_Repeat& repeat = *(it->second);
-        assert(repeat.satisfy(rp));
-        repeat_manager.addRepeat(&repeat);
-        const string& consensus = repeat.consensus();
-        
-        const size_t ext_len = (rp.min_repeat_len - rp.seed_len) / 2;
-        for(size_t j = ext_len; j < consensus.length(); j++) {
-            if(j + rp.seed_len + ext_len > consensus.length())
-                break;
-            
-            string sub = consensus.substr(j, rp.seed_len);
-            Range range = subSA_.find(s_, sub);
-            assert_geq(range.second - range.first, rp.seed_count);
-            subSA_.setDone(range.first, range.second - range.first);
-            
-            size_t j2 = consensus.length() - j - 1;
-            j2 -= rp.seed_len;
-            sub = consensus.substr(j2, rp.seed_len);
-            range = subSA_.find(s_, sub);
-            assert_geq(range.second - range.first, rp.seed_count);
-            subSA_.setDone(range.first, range.second - range.first);
-        }
-    }
-    
-    for(size_t i = 0; i < to_remove.size(); i++) {
-        map<size_t, RB_Repeat*>::iterator it = repeat_map_.find(to_remove[i]);
-        assert(it != repeat_map_.end());
-        repeat_manager.removeRepeat(it->second);
-        delete it->second;
-        repeat_map_.erase(it);
-    }
-#endif
 }
 
 template<typename TStr>
