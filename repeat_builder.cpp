@@ -114,6 +114,30 @@ TIndexOffU getLCP(const TStr& s,
     return k;
 }
 
+template<typename TStr>
+bool isSameSequenceUpto(const TStr& s,
+                              CoordHelper& coordHelper,
+                              TIndexOffU a,
+                              TIndexOffU b,
+                              TIndexOffU upto)
+{
+    TIndexOffU a_end = coordHelper.getEnd(a);
+    TIndexOffU b_end = coordHelper.getEnd(b);
+    assert_leq(a_end, s.length());
+    assert_leq(b_end, s.length());
+    
+    if(a + upto > a_end || b + upto > b_end)
+        return false;
+
+    for(int k = upto - 1; k >= 0; k--) {
+        if(s[a + k] != s[b + k]) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 bool isSenseDominant(CoordHelper& coordHelper,
                      const EList<TIndexOffU>& positions,
                      size_t seed_len)
@@ -4422,17 +4446,17 @@ void RB_SubSA::push_back(const TStr& s,
             
             // calculate common prefix length between two text.
             //   text1 is started from prev_saElt and text2 is started from saElt
-            int lcp_len = getLCP(s,
-                                 coordHelper,
-                                 prev_saElt,
-                                 saElt,
-                                 seed_len_);
+            bool same = isSameSequenceUpto(s,
+                                           coordHelper,
+                                           prev_saElt,
+                                           saElt,
+                                           seed_len_);
             
-            if(lcp_len >= seed_len_) {
+            if(same) {
                 temp_suffixes_.push_back(saElt);
             }
             
-            if(lcp_len < seed_len_ || lastInput) {
+            if(!same || lastInput) {
                 if(temp_suffixes_.size() >= seed_count_) {
                     repeat_index_.push_back(repeat_list_.size());
                     temp_suffixes_.sort();
