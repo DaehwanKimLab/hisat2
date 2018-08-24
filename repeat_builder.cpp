@@ -3285,15 +3285,8 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     
     {
         // Build and test minimizer-based k-mer table
-#if 1
         const size_t window = RB_Minimizer<TStr>::default_w;
         const size_t k = RB_Minimizer<TStr>::default_k;
-#else
-        // const size_t window = 12;
-        // const size_t k = 23;
-        const size_t window = 20;
-        const size_t k = 31;
-#endif
         RB_KmerTable kmer_table;
         EList<string> seqs;
         seqs.reserveExact(repeat_map_.size());
@@ -3363,27 +3356,27 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             query = getString(s_, saElt, rp.min_repeat_len);
             query2 = query;
             
-            // introduce three mismatches into a query
-#if 1
-            const size_t mid_pos1 = (size_t)(rp.min_repeat_len * 0.1);
-            if(query2[mid_pos1] == 'A') {
-                query2[mid_pos1] = 'C';
-            } else {
-                query2[mid_pos1] = 'A';
+            // introduce three mismatches into a query when the query is at lest 100-bp
+            if(rp.min_repeat_len >= 100) {
+                const size_t mid_pos1 = (size_t)(rp.min_repeat_len * 0.1);
+                if(query2[mid_pos1] == 'A') {
+                    query2[mid_pos1] = 'C';
+                } else {
+                    query2[mid_pos1] = 'A';
+                }
+                const size_t mid_pos2 = (size_t)(rp.min_repeat_len * 0.5);
+                if(query2[mid_pos2] == 'C') {
+                    query2[mid_pos2] = 'G';
+                } else {
+                    query2[mid_pos2] = 'C';
+                }
+                const size_t mid_pos3 = (size_t)(rp.min_repeat_len * 0.9);
+                if(query2[mid_pos3] == 'G') {
+                    query2[mid_pos3] = 'T';
+                } else {
+                    query2[mid_pos3] = 'G';
+                }
             }
-            const size_t mid_pos2 = (size_t)(rp.min_repeat_len * 0.5);
-            if(query2[mid_pos2] == 'C') {
-                query2[mid_pos2] = 'G';
-            } else {
-                query2[mid_pos2] = 'C';
-            }
-            const size_t mid_pos3 = (size_t)(rp.min_repeat_len * 0.9);
-            if(query2[mid_pos3] == 'G') {
-                query2[mid_pos3] = 'T';
-            } else {
-                query2[mid_pos3] = 'G';
-            }
-#endif
             
             repeat_total += saElt_size;
             

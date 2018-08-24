@@ -738,20 +738,18 @@ static void driver(
             repeat_length_pair.push_back(pair<TIndexOffU, TIndexOffU>(min_repeat_length, max_repeat_length));
         }
 
+        RepeatParameter rp;
+        rp.seed_len = seed_length;
+        rp.seed_count = seed_count;
+        rp.seed_mm = max_seed_mm;
+        rp.max_edit = max_repeat_edit;
+        rp.symmetric_extend = symmetric_extend;
+        rp.extend_unit_len = max_seed_extlen;
         for(size_t i = 0; i < repeat_length_pair.size(); i++) {
-            RepeatParameter rp;
-
-            rp.seed_len = seed_length;
-            rp.seed_count = seed_count;
-            rp.seed_mm = max_seed_mm;
             rp.min_repeat_len = repeat_length_pair[i].first;
             rp.max_repeat_len = repeat_length_pair[i].second;
             rp.repeat_count = repeat_count;
-            rp.max_edit = max_repeat_edit;
-            rp.symmetric_extend = symmetric_extend;
-            rp.extend_unit_len = max_seed_extlen;
             rp.append_result = (i != 0);
-
 
             RepeatBuilder<TStr> repeatBuilder(s,
                                               szs,
@@ -769,8 +767,6 @@ static void driver(
             repeatBuilder.saveFile(rp);
         }
     }
-
-    // assert(repOk());
 }
 
 static const char *argv0 = NULL;
