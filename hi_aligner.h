@@ -5968,6 +5968,9 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
             Coord left2 = r2.refcoord(), right2 = r2.refcoord_right();
             assert_eq(left2.ref(), right2.ref());
             
+            if(r1.repeat() != r2.repeat())
+                continue;
+            
             bool dna_frag_pass = true;
             if(r1.repeat() && r2.repeat()) {
                 bool found = false;

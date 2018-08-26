@@ -650,6 +650,7 @@ def extract_single(infilename,
 def extract_pair(infilename,
                  outfilename,
                  chr_dic,
+                 RNA,
                  aligner,
                  version,
                  repeat_info,
@@ -849,9 +850,16 @@ def extract_pair(infilename,
                             else:
                                 prev_NM = NM1 + NM2
 
-                        # DK - debugging purposes
-                        if chr1 != chr2 or abs(pos1 - pos2) > 1000:
+                        if chr1 != chr2:
                             continue
+
+                        # DK - debugging purposes
+                        if RNA:
+                            if aligner in ["bowtie2", "bwa"] and abs(pos1 - pos2) > 1000:
+                                continue
+                        else:
+                            if abs(pos1 - pos2) > 1000:
+                                continue
 
                         if int(pos2) > int(pos1):
                             p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s\tNM:i:%d\tNM:i:%d" % \
@@ -1714,7 +1722,7 @@ def calculate_read_cost(single_end,
         # ["tophat2", "gtfonly", "", "", ""],
         # ["tophat2", "gtf", "", "", ""],
         ["star", "", "", "", ""],
-        ["star", "x2", "", "", ""],
+        # ["star", "x2", "", "", ""],
         # ["star", "gtf", "", "", ""],
         # ["bowtie", "", "", "", ""],
         ["bowtie2", "", "", "", ""],
@@ -2249,7 +2257,7 @@ def calculate_read_cost(single_end,
                 if not os.path.exists(out_fname2):
                     debug_dic = {}
                     if paired:
-                        extract_pair(out_fname, out_fname2, chr_dic, aligner, version, repeat_info, repeat_dic, debug_dic)
+                        extract_pair(out_fname, out_fname2, chr_dic, RNA, aligner, version, repeat_info, repeat_dic, debug_dic)
                     else:
                         extract_single(out_fname, out_fname2, chr_dic, aligner, version, repeat_info, repeat_dic, debug_dic)
 

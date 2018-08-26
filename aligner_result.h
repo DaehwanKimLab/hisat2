@@ -1652,7 +1652,9 @@ public:
         }
 		assert_geq(dn, up);
         TRefOff intron_len = 0;
-        if(ssdb != NULL && up_right + 100 < dn_left) {
+        if(ssdb != NULL &&
+           !repeat() &&
+           up_right + 100 < dn_left) {
             assert(spliceSites != NULL);
             if(spliceSites->size() == 0) {
                 ssdb->getRightSpliceSites(refid(), up_right, dn_left - up_right, *spliceSites);

@@ -425,6 +425,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                 if(fraglen >= minMatchLen &&
                    left >= minMatchLen &&
                    hit.trim5() == 0 &&
+                   !hit.repeat() &&
                    !tpol.no_spliced_alignment()) {
                     spliceSites.clear();
                     ssdb.getLeftSpliceSites(hit.ref(), left + minMatchLen, minMatchLen, spliceSites);
@@ -544,6 +545,7 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
                     // make use of a list of known or novel splice sites to further align the read
                     if(fraglen >= minMatchLen &&
                        this->_local_genomeHits[dep][i].trim3() == 0 &&
+                       !hit.repeat() &&
                        !tpol.no_spliced_alignment()) {
                         spliceSites.clear();
                         assert_gt(fraglen, 0);
@@ -688,7 +690,10 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             hit.getLeft(fragoff, fraglen, left);
             const index_t minMatchLen = (index_t)this->_minK_local;
             // make use of a list of known or novel splice sites to further align the read
-            if(fraglen >= minMatchLen && left >= minMatchLen && !tpol.no_spliced_alignment()) {
+            if(fraglen >= minMatchLen &&
+               left >= minMatchLen &&
+               !hit.repeat() &&
+               !tpol.no_spliced_alignment()) {
                 spliceSites.clear();
                 ssdb.getLeftSpliceSites(hit.ref(), left + minMatchLen, minMatchLen + min<index_t>(minMatchLen, fragoff), spliceSites);
                 for(size_t si = 0; si < spliceSites.size(); si++) {
@@ -1364,7 +1369,9 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
             hit.getRight(fragoff, fraglen, right);
             const index_t minMatchLen = (index_t)this->_minK_local;
             // make use of a list of known or novel splice sites to further align the read
-            if(fraglen >= minMatchLen && !tpol.no_spliced_alignment()) {
+            if(fraglen >= minMatchLen &&
+               !hit.repeat() &&
+               !tpol.no_spliced_alignment()) {
                 spliceSites.clear();
                 assert_gt(fraglen, 0);
                 assert_leq(fragoff + fraglen, rdlen);
