@@ -199,20 +199,74 @@ public:
     const EList<Repeat<index_t> >& repeats() const { return _repeats; }
     
     void write(ofstream& f_out, bool bigEndian) const {
-        writeIndex<index_t>(f_out, (index_t)_repeats.size(), bigEndian);
-        if(_repeats.size() > 0) {
-            for(index_t i = 0; i < _repeats.size(); i++) {
-                _repeats[i].write(f_out, bigEndian);
+        if(_repeats.size() <= 0) {
+            writeIndex<index_t>(f_out, 0, bigEndian);
+            return;
+        }
+        EList<index_t> repeatGroup;
+        for(index_t i = 0; i < _repeats.size(); i++) {
+#ifndef NDEBUG
+            if(i + 1 < _repeats.size()) {
+                assert_leq(_repeats[i].repID, _repeats[i+1].repID);
+            }
+#endif
+            if(_repeats[i].repID > repeatGroup.size()) {
+                repeatGroup.push_back(i);
+                assert_eq(_repeats[i].repID, repeatGroup.size());
             }
         }
+        repeatGroup.push_back(_repeats.size());
+        assert_eq(_repeats.back().repID + 1, repeatGroup.size());
+        writeIndex<index_t>(f_out, repeatGroup.size(), bigEndian);
+        streampos filepos = f_out.tellp();
+        EList<streampos> repeatFilePos;
+        for(index_t i = 0; i < repeatGroup.size(); i++) {
+            writeIndex<uint64_t>(f_out, 0, bigEndian);
+        }
+        
+        for(index_t i = 0; i < repeatGroup.size(); i++) {
+            index_t begin = (i == 0 ? 0 : repeatGroup[i-1]);
+            index_t end = repeatGroup[i];
+            writeIndex<index_t>(f_out, end - begin, bigEndian);
+            for(index_t j = begin; j < end; j++) {
+                _repeats[j].write(f_out, bigEndian);
+            }
+            repeatFilePos.push_back(f_out.tellp());
+        }
+        assert_eq(repeatFilePos.size(), repeatGroup.size());
+        
+        streampos origpos = f_out.tellp();
+        f_out.seekp(filepos);
+        for(index_t i = 0; i < repeatFilePos.size(); i++) {
+            writeIndex<uint64_t>(f_out, repeatFilePos[i], bigEndian);
+        }
+        f_out.seekp(origpos);
     }
     
     void read(ifstream& f_in, bool bigEndian) {
-        index_t numRepeats = readIndex<index_t>(f_in, bigEndian);
-        if(numRepeats > 0) {
-            _repeats.resizeExact(numRepeats);
-            for(index_t i = 0; i < _repeats.size(); i++) {
-                _repeats[i].read(f_in, bigEndian);
+        index_t numRepeatGroup = readIndex<index_t>(f_in, bigEndian);
+        for(index_t i = 0; i < numRepeatGroup; i++) {
+            readIndex<uint64_t>(f_in, bigEndian);
+        }
+        for(index_t i = 0; i < numRepeatGroup; i++) {
+            index_t numRepeats = readIndex<index_t>(f_in, bigEndian);
+            index_t repeat_size = _repeats.size();
+            _repeats.resizeExact(repeat_size + numRepeats);
+            for(index_t j = 0; j < numRepeats; j++) {
+                _repeats[repeat_size+j].read(f_in, bigEndian);
+                
+                // DK - debugging purposes
+                const Repeat<index_t>& repeat = _repeats[repeat_size+j];
+                for(size_t a = 0; a < repeat.alleles.size(); a++) {
+                    if(i == 2) {
+                        assert_geq(repeat.alleles[a].alleleLen, 100);
+                    } else if(i == 1) {
+                        assert_geq(repeat.alleles[a].alleleLen, 76);
+                    } else {
+                        assert_geq(repeat.alleles[a].alleleLen, 51);
+                    }
+                }
+
             }
         }
     }
@@ -222,13 +276,18 @@ public:
     void construct(const index_t* rstarts, index_t rlen) {
         _repeatMap.clear();
         for(index_t r = 0; r < _repeats.size(); r++) {
-            _repeatMap.expand();
-            if(_repeatMap.size() == 1) {
-                _repeatMap.back().first = _repeats[r].repLen;
-            } else {
-                _repeatMap.back().first = _repeatMap[_repeatMap.size() - 2].first + _repeats[r].repLen;
+            if(_repeats[r].repID >= _repeatMap.size()) {
+                _repeatMap.expand();
+                _repeatMap.back().clear();
             }
-            _repeatMap.back().second = r;
+            EList<pair<index_t, index_t> >& repeatMap = _repeatMap.back();
+            repeatMap.expand();
+            if(repeatMap.size() == 1) {
+                repeatMap.back().first = _repeats[r].repLen;
+            } else {
+                repeatMap.back().first = repeatMap[repeatMap.size() - 2].first + _repeats[r].repLen;
+            }
+            repeatMap.back().second = r;
         }
         
         EList<pair<RepeatCoord<index_t>, index_t> > joinedOffList;
@@ -296,18 +355,23 @@ public:
         }
     }
     
-    bool repeatExist(index_t left, index_t right) const {
+    bool repeatExist(index_t repID, index_t left, index_t right) const {
+        if(repID >= _repeatMap.size())
+            return false;
+        
         // Find a repeat corresponding to a given location (left, right)
+        const EList<pair<index_t, index_t> >& repeatMap = _repeatMap[repID];
         pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
-        index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
-        assert_lt(repeatIdx, _repeats.size());
-        if(right > _repeatMap[repeatIdx].first)
+        index_t repeatIdx = repeatMap.bsearchLoBound(repeat);
+        assert_lt(repeatIdx, repeatMap.size());
+        if(right > repeatMap[repeatIdx].first)
             return false;
         return true;
     }
     
     bool findCoords(index_t               anchor_left,
                     index_t               anchor_right,
+                    index_t               repID,
                     index_t               left,  // left offset in the repeat sequence
                     index_t               right, // right offset
                     const EList<index_t>& snpIDs, // SNP IDs
@@ -317,20 +381,27 @@ public:
                     index_t dist = 1000) const {
         near_positions.clear();
         
+        if(repID >= _repeatMap.size())
+            return false;
+
         // Find a repeat corresponding to a given location (left, right)
+        const EList<pair<index_t, index_t> >& repeatMap = _repeatMap[repID];
         pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
-        index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
-        assert_lt(repeatIdx, _repeats.size());
-        if(right > _repeatMap[repeatIdx].first)
+        index_t repeatIdx = repeatMap.bsearchLoBound(repeat);
+        assert_lt(repeatIdx, repeatMap.size());
+        if(right > repeatMap[repeatIdx].first)
             return false;
         
-        const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx].alleles;
+        index_t repeatIdx_ = repeatMap[repeatIdx].second;
+        assert_lt(repeatIdx_, _repeats.size());
+        
+        const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx_].alleles;
         index_t adjLeft = left, adjRight = right;
         if(repeatIdx > 0) {
-            adjLeft -= _repeatMap[repeatIdx-1].first;
-            adjRight -= _repeatMap[repeatIdx-1].first;
+            adjLeft -= repeatMap[repeatIdx-1].first;
+            adjRight -= repeatMap[repeatIdx-1].first;
         }
-        const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx].positions;
+        const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx_].positions;
         
         RepeatCoord<index_t> cmp;
         cmp.joinedOff = (anchor_left >= dist ? anchor_left - dist : 0);
@@ -355,8 +426,8 @@ public:
                 near_positions.back().first.toff += adjLeft;
             } else {
                 const index_t len = right - left;
-                assert_leq(adjLeft + len, _repeats[repeatIdx].repLen);
-                index_t rc_adjLeft = _repeats[repeatIdx].repLen - adjLeft - len;
+                assert_leq(adjLeft + len, _repeats[repeatIdx_].repLen);
+                index_t rc_adjLeft = _repeats[repeatIdx_].repLen - adjLeft - len;
                 near_positions.back().first.joinedOff += rc_adjLeft;
                 near_positions.back().first.toff += rc_adjLeft;
             }
@@ -368,9 +439,11 @@ public:
         return near_positions.size() > 0;
     }
     
-    bool findCommonCoords(index_t               left,    // left offset in the repeat sequence
+    bool findCommonCoords(index_t               repID,
+                          index_t               left,    // left offset in the repeat sequence
                           index_t               right,   // right offset
                           const EList<index_t>& snpIDs,  // SNP IDs
+                          index_t               repID2,
                           index_t               left2,   // left offset 2 in the repeat sequence
                           index_t               right2,  // right offset 2
                           const EList<index_t>& snpIDs2, // SNP IDs
@@ -380,36 +453,45 @@ public:
                           index_t dist = 1000) const {
         common_positions.clear();
         
+        if(repID >= _repeatMap.size() || repID2 >= _repeatMap.size())
+            return false;
+        
         // Find a repeat corresponding to a given location (left, right)
+        const EList<pair<index_t, index_t> >& repeatMap = _repeatMap[repID];
         assert_lt(left, right);
         pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
-        index_t repeatIdx = _repeatMap.bsearchLoBound(repeat);
-        assert_lt(repeatIdx, _repeats.size());
-        if(right > _repeatMap[repeatIdx].first)
+        index_t repeatIdx = repeatMap.bsearchLoBound(repeat);
+        assert_lt(repeatIdx, repeatMap.size());
+        if(right > repeatMap[repeatIdx].first)
             return false;
-        const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx].alleles;
+        index_t repeatIdx_ = repeatMap[repeatIdx].second;
+        assert_lt(repeatIdx_, _repeats.size());
+        const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx_].alleles;
         index_t adjLeft = left, adjRight = right;
         if(repeatIdx > 0) {
-            adjLeft -= _repeatMap[repeatIdx-1].first;
-            adjRight -= _repeatMap[repeatIdx-1].first;
+            adjLeft -= repeatMap[repeatIdx-1].first;
+            adjRight -= repeatMap[repeatIdx-1].first;
         }
         
         // Find a repeat cooresponding to a given location (left2, right2)
+        const EList<pair<index_t, index_t> >& repeatMap2 = _repeatMap[repID2];
         assert_lt(left2, right2);
         pair<index_t, index_t> repeat2(left2, numeric_limits<index_t>::max());
-        index_t repeatIdx2 = _repeatMap.bsearchLoBound(repeat2);
-        assert_lt(repeatIdx2, _repeats.size());
-        if(right2 > _repeatMap[repeatIdx2].first)
+        index_t repeatIdx2 = repeatMap2.bsearchLoBound(repeat2);
+        assert_lt(repeatIdx2, repeatMap2.size());
+        if(right2 > repeatMap2[repeatIdx2].first)
             return false;
-        const EList<RepeatAllele<index_t> >& alleles2 = _repeats[repeatIdx2].alleles;
+        index_t repeatIdx2_ = repeatMap2[repeatIdx2].second;
+        assert_lt(repeatIdx2_, _repeats.size());
+        const EList<RepeatAllele<index_t> >& alleles2 = _repeats[repeatIdx2_].alleles;
         index_t adjLeft2 = left2, adjRight2 = right2;
         if(repeatIdx2 > 0) {
-            adjLeft2 -= _repeatMap[repeatIdx2-1].first;
-            adjRight2 -= _repeatMap[repeatIdx2-1].first;
+            adjLeft2 -= repeatMap2[repeatIdx2-1].first;
+            adjRight2 -= repeatMap2[repeatIdx2-1].first;
         }
         
-        const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx].positions;
-        const EList<RepeatCoord<index_t> >& positions2 = _repeats[repeatIdx2].positions;
+        const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx_].positions;
+        const EList<RepeatCoord<index_t> >& positions2 = _repeats[repeatIdx2_].positions;
         index_t jsave = 0;
         for(index_t i = 0; i < positions.size(); i++) {
             const RepeatAllele<index_t>& allele = alleles[positions[i].alleleID];
@@ -436,8 +518,8 @@ public:
                     common_positions.back().first.toff += adjLeft;
                 } else {
                     const index_t len = right - left;
-                    assert_leq(adjLeft + len, _repeats[repeatIdx].repLen);
-                    index_t rc_adjLeft = _repeats[repeatIdx].repLen - adjLeft - len;
+                    assert_leq(adjLeft + len, _repeats[repeatIdx_].repLen);
+                    index_t rc_adjLeft = _repeats[repeatIdx_].repLen - adjLeft - len;
                     common_positions.back().first.joinedOff += rc_adjLeft;
                     common_positions.back().first.toff += rc_adjLeft;
                 }
@@ -447,8 +529,8 @@ public:
                     common_positions.back().second.joinedOff += adjLeft2;
                 } else {
                     const index_t len = right2 - left2;
-                    assert_leq(adjLeft2 + len, _repeats[repeatIdx2].repLen);
-                    index_t rc_adjLeft2 = _repeats[repeatIdx2].repLen - adjLeft2 - len;
+                    assert_leq(adjLeft2 + len, _repeats[repeatIdx2_].repLen);
+                    index_t rc_adjLeft2 = _repeats[repeatIdx2_].repLen - adjLeft2 - len;
                     common_positions.back().second.joinedOff += rc_adjLeft2;
                     common_positions.back().second.toff += rc_adjLeft2;
                 }
@@ -480,8 +562,8 @@ private:
     }
     
 private:
-    EList<Repeat<index_t> >        _repeats;
-    EList<pair<index_t, index_t> > _repeatMap; // pos to repeat id
+    EList<Repeat<index_t> >         _repeats;
+    ELList<pair<index_t, index_t> > _repeatMap; // pos to repeat id
 };
 
 #endif /*ifndef REPEAT_H_*/

@@ -183,7 +183,7 @@ public:
 public:
     bool isIn(uint64_t kmer) const
     {
-#if 0
+#if 1
         pair<uint64_t, TIndexOffU> key(kmer, 0);
         size_t idx = kmer_table_.bsearchLoBound(key);
         return idx < kmer_table_.size() && kmer_table_[idx].first == kmer;
@@ -204,15 +204,7 @@ public:
     bool isRepeat(const TStr& query,
                   EList<pair<uint64_t, size_t> >& minimizers) const
     {
-#if 1
         RB_Minimizer<TStr>::get_minimizer(query, w_, k_, minimizers);
-#else
-        minimizers.clear();
-        for(size_t i = 0; i + 35 < query.length(); i += 32) {
-            minimizers.expand();
-            minimizers.back() = RB_Minimizer<TStr>::get_minimizer(query, i, w_, k_);
-        }
-#endif
 
         size_t est_count = 0;
         uint64_t prev_minimizer = 0;
@@ -478,7 +470,9 @@ public:
                 kmer_table_.back().second = readIndex<uint64_t>(f_in, bigEndian);
             }
             
+#if 0
             kmers_.insert(kmer_table_.back().first);
+#endif
         }
         size_t pos_size = readIndex<size_t>(f_in, bigEndian);
         pos_list_.reserveExact(pos_size);
@@ -526,7 +520,9 @@ public:
                 tmp_table.back().first = minimizers[i].first;
                 tmp_table.back().second = baseoff + minimizers[i].second;
                 tmp_kmers.insert(minimizers[i].first);
+#if 0
                 kmers_.insert(minimizers[i].first);
+#endif
             }
             baseoff += seq.length();
         }

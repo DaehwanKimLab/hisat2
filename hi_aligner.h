@@ -2206,7 +2206,9 @@ bool GenomeHit<index_t>::extend(
                             tmp_tlen,
                             true,        // reject straddlers?
                             straddled);  // straddled?
-        assert_eq(tmp_tidx, _tidx);
+        if(!gfm.repeat()) {
+            assert_eq(tmp_tidx, _tidx);
+        }
         assert_eq(tmp_toff, _toff);
     }
 #endif
@@ -4050,7 +4052,6 @@ public:
            const GFM<index_t>*        rgfm,
            const ALTDB<index_t>&      altdb,
            const RepeatDB<index_t>&   repeatdb,
-           const RB_KmerTable&        repeat_kmertable,
            const ALTDB<index_t>&      raltdb,
            const BitPairReference&    ref,
            const BitPairReference*    rref,
@@ -4149,9 +4150,18 @@ public:
         bool repeat[2][2] = {{false, false}, {false, false}};
         bool perform_repeat_alignment = false;
         
+        index_t indexIdx[2] = {0, 0};
+        if(rgfm != NULL) {
+            indexIdx[0] = ((RFM<index_t>*)rgfm)->getLocalRFM_idx((*_rds)[0].length());
+            if(_paired) {
+                indexIdx[1] = ((RFM<index_t>*)rgfm)->getLocalRFM_idx((*_rds)[1].length());
+            }
+        }
+
 #if 1
         if(rgfm != NULL) {
             // use repeat index to decide whether a read or a pair is from repetitive sequences
+            LocalRFM<index_t>& rfm = ((RFM<index_t>*)rgfm)->getLocalRFM(indexIdx[0]);
             bool skip_repeat[2][2] = {{false, false}, {false, false}};
             if(_paired) {
                 const EList<AlnRes> *rs[2] = {NULL, NULL};
@@ -4242,7 +4252,7 @@ public:
                 }
             }
             
-            while(nextBWT(sc, pepol, tpol, gpol, *rgfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink));
+            while(nextBWT(sc, pepol, tpol, gpol, rfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink));
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
                 for(size_t fwi = 0; fwi < 2; fwi++) {
                     if(skip_repeat[rdi][fwi]) continue;
@@ -4276,6 +4286,9 @@ public:
         // Handle alignment to repetitive regions
         if(rgfm != NULL &&
            perform_repeat_alignment) {
+            LocalRFM<index_t>& rfm = ((RFM<index_t>*)rgfm)->getLocalRFM(indexIdx[0]);
+            RB_KmerTable& repeatKmertable = ((RFM<index_t>*)rgfm)->getKmertable(indexIdx[0]);
+            
             _repeatConcordant.clear();
             index_t prev_align_size[2] = {0, 0};
             for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
@@ -4295,7 +4308,7 @@ public:
 #if 0
                     ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
                     if(!hit.done()) continue;
-                    getAnchorHits(*rgfm,
+                    getAnchorHits(rfm,
                                   pepol,
                                   tpol,
                                   gpol,
@@ -4314,17 +4327,18 @@ public:
                                   true); // repeat?
 #else
                     
-                    getRepeatHits(*rgfm,
+                    getRepeatHits(rfm,
                                   pepol,
                                   tpol,
                                   gpol,
                                   altdb,
                                   repeatdb,
-                                  repeat_kmertable,
+                                  repeatKmertable,
                                   *rref,
                                   rnd,
                                   rdi,
                                   fwi == 0, // fw
+                                  indexIdx[0],
                                   _genomeHits_rep[rdi],
                                   _genomeHits_rep[rdi].size() + maxsize,
                                   _sharedVars,
@@ -4365,6 +4379,7 @@ public:
                         gfm.textOffToJoined(res.refid(), res.refoff(), joinedOff);
                         repeatdb.findCoords(joinedOff,
                                             joinedOff + res.refExtent(),
+                                            _genomeHits_rep[rdi][i]._tidx,
                                             _genomeHits_rep[rdi][i]._joinedOff,
                                             _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
                                             _snpIDs,
@@ -4442,9 +4457,11 @@ public:
                             //    break;
 
                             positions.clear();
-                            repeatdb.findCommonCoords(_genomeHits_rep[0][i]._joinedOff,
+                            repeatdb.findCommonCoords(_genomeHits_rep[0][i]._tidx,
+                                                      _genomeHits_rep[0][i]._joinedOff,
                                                       _genomeHits_rep[0][i]._joinedOff + _genomeHits_rep[0][i].len(),
                                                       _snpIDs,
+                                                      _genomeHits_rep[1][j]._tidx,
                                                       _genomeHits_rep[1][j]._joinedOff,
                                                       _genomeHits_rep[1][j]._joinedOff + _genomeHits_rep[1][j].len(),
                                                       _snpIDs2,
@@ -4554,7 +4571,6 @@ public:
                     else         sink.getUnp2(rs);
                     assert(rs != NULL);
                     align2repeat = (rs->size() == 0 || sink.numBestUnp(rdi).first > rp.khits);
-                    align2repeat = true;
                 }
                 
                 if(align2repeat) {
@@ -4567,7 +4583,7 @@ public:
                                      pepol,
                                      tpol,
                                      gpol,
-                                     *rgfm,
+                                     rfm,
                                      altdb,
                                      repeatdb,
                                      *rref,
@@ -5144,7 +5160,7 @@ public:
                     }
                 }
                 if(repeat) {
-                    if(!repeatdb.repeatExist(coord.off(), coord.off() + len)) {
+                    if(!repeatdb.repeatExist(coord.ref(), coord.off(), coord.off() + len)) {
                         continue;
                     }
                 }
@@ -5184,6 +5200,7 @@ public:
                           RandomSource&                     rnd,
                           index_t                           rdi,
                           bool                              fw,
+                          index_t                           repID,
                           EList<GenomeHit<index_t> >&       genomeHits,
                           index_t                           maxGenomeHitSize,
                           SharedTempVars<index_t>&          sharedVars,
@@ -5211,7 +5228,7 @@ public:
             const RB_Alignment& coord = _tmp_alignments[k];
             index_t len = seq.length();
             index_t rdoff = 0;
-            if(!repeatdb.repeatExist(coord.pos, coord.pos + len)) {
+            if(!repeatdb.repeatExist(repID, coord.pos, coord.pos + len)) {
                 continue;
             }
             
@@ -5222,7 +5239,7 @@ public:
                            0,
                            0, // trim5
                            0, // trim3
-                           0, // ref,
+                           repID, // ref,
                            coord.pos,
                            coord.pos,
                            this->_sharedVars);
@@ -6111,7 +6128,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
             0,                          // ambig base first pos
             0,                          // ambig base last pos
             hit.coord(),                // coord of leftmost aligned char in ref
-            gfm.plen()[hit.ref()],      // length of reference aligned to
+            hit.repeat() ? gfm.plen()[0] : gfm.plen()[hit.ref()], // length of reference aligned to
             &_rawEdits,
             -1,                         // # seed mms allowed
             -1,                         // seed length

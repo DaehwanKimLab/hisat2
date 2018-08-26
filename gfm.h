@@ -654,7 +654,6 @@ public:
 	GFM(const string& in,
         ALTDB<index_t>* altdb,
         RepeatDB<index_t>* repeatdb,
-        RB_KmerTable* repeat_kmertable,
         int needEntireReverse,
         bool fw,
         int32_t overrideOffRate, // = -1,
@@ -689,24 +688,26 @@ public:
 		_in2Str = in + ".2." + gfm_ext;
         if(skipLoading) return;
 		
-        readIntoMemory(
-                       fw ? -1 : needEntireReverse, // need REF_READ_REVERSE
-                       loadSASamp,  // load the SA sample portion?
-                       loadFtab,    // load the ftab & eftab?
-                       loadRstarts, // load the rstarts array?
-                       true,        // stop after loading the header portion?
-                       &_gh,        // params
-                       mmSweep,     // mmSweep
-                       loadNames,   // loadNames
-                       startVerbose); // startVerbose
-        // If the offRate has been overridden, reflect that in the
-        // _eh._offRate field
-        if(offRatePlus > 0 && _overrideOffRate == -1) {
-            _overrideOffRate = _gh._offRate + offRatePlus;
-        }
-        if(_overrideOffRate > _gh._offRate) {
-            _gh.setOffRate(_overrideOffRate);
-            assert_eq(_overrideOffRate, _gh._offRate);
+        if(repeatdb == NULL) {
+            readIntoMemory(
+                           fw ? -1 : needEntireReverse, // need REF_READ_REVERSE
+                           loadSASamp,  // load the SA sample portion?
+                           loadFtab,    // load the ftab & eftab?
+                           loadRstarts, // load the rstarts array?
+                           true,        // stop after loading the header portion?
+                           &_gh,        // params
+                           mmSweep,     // mmSweep
+                           loadNames,   // loadNames
+                           startVerbose); // startVerbose
+            // If the offRate has been overridden, reflect that in the
+            // _eh._offRate field
+            if(offRatePlus > 0 && _overrideOffRate == -1) {
+                _overrideOffRate = _gh._offRate + offRatePlus;
+            }
+            if(_overrideOffRate > _gh._offRate) {
+                _gh.setOffRate(_overrideOffRate);
+                assert_eq(_overrideOffRate, _gh._offRate);
+            }
         }
 
         // Read ALTs
@@ -790,13 +791,22 @@ public:
         // Read repeats
         // Check if it hits the end of file, and this routine is needed for backward compatibility
         _repeat = false;
-        if(in7.peek() != std::ifstream::traits_type::eof()) {
-            repeatdb->read(in7, this->toBe());
-            _repeat = !repeatdb->empty();
-        }
-        
-        if(_repeat) {
-            repeat_kmertable->read(in7, this->toBe());
+        if(repeatdb != NULL) {
+            if(in7.peek() != std::ifstream::traits_type::eof()) {
+                repeatdb->read(in7, this->toBe());
+                _repeat = !repeatdb->empty();
+            }
+            
+            if(_repeat) {
+                index_t numKmertables = readIndex<index_t>(in7, this->toBe());
+                _repeat_kmertables.resizeExact(numKmertables);
+                for(size_t k = 0; k < numKmertables; k++) {
+                    readIndex<uint64_t>(in7, this->toBe());
+                }
+                for(size_t k = 0; k < numKmertables; k++) {
+                    _repeat_kmertables[k].read(in7, this->toBe());
+                }
+            }
         }
         
         in7.close();
@@ -856,7 +866,7 @@ public:
             }
         }
         
-        assert(repOk());
+        assert(repeatdb != NULL || repOk());
 	}
 	
 	/// Construct an Ebwt from the given header parameters and string
@@ -1879,7 +1889,9 @@ public:
                             throw 1;
                         }
                         
-                        if(repeats.size() == 0 || repeats.back().repName != repName) {
+                        if(repeats.size() == 0 ||
+                           repeats.back().repID != rep_idx ||
+                           repeats.back().repName != repName) {
                             if(repeats.size() > 0) {
                                 repeats.back().positions.sort();
                             }
@@ -1897,7 +1909,7 @@ public:
                         }
                         
                         size_t baseOff = 0;
-                        if(repeats.size() > 1) {
+                        if(repeats.size() > 1 && repeats[repeats.size() - 2].repID == rep_idx) {
                             baseOff = repeats[repeats.size() - 2].repPos + repeats[repeats.size() - 2].repLen;
                         }
                         
@@ -2009,16 +2021,32 @@ public:
                     }
                     repeat_file.close();
                     
-                    if(repeats.back().repPos + repeats.back().repLen != s.length()) {
+                    index_t total_repeat_len = 0;
+                    for(size_t r = 0; r + 1 < repeats.size(); r++) {
+                        if(repeats[r].repID != repeats[r+1].repID) {
+                            index_t repeat_len = repeats[r].repPos + repeats[r].repLen;
+                            total_repeat_len += repeat_len;
+                        }
+                    }
+                    index_t repeat_len = repeats.back().repPos + repeats.back().repLen;
+                    total_repeat_len += repeat_len;
+                    if(total_repeat_len != s.length()) {
                         cerr << "Error: repeat length (" << repeats.back().repPos + repeats.back().repLen;
                         cerr << ") does not match sequence length (" << s.length() << ")" << endl;
+                        throw 1;
                     }
                 }
                 
                 _repeatdb.write(fout7, this->toBe());
                 
                 if(_repeat) {
+                    writeIndex<index_t>(fout7, chr_szs.size(), this->toBe()); // number of repeat indexes
                     EList<string> seqs;
+                    EList<streampos> tableFilePos;
+                    streampos filepos = fout7.tellp();
+                    for(size_t i = 0; i < chr_szs.size(); i++) {
+                        writeIndex<uint64_t>(fout7, 0, this->toBe());
+                    }
                     for(size_t i = 0; i < repeats.size(); i++) {
                         const Repeat<index_t>& repeat = repeats[i];
                         assert_lt(repeat.repID, chr_szs.size());
@@ -2032,16 +2060,29 @@ public:
                         index_t pos = chr_szs[repeat.repID].first + repeat.repPos;
                         assert_leq(pos + repeat.repLen, s.length());
                         seqs.expand();
+                        seqs.back().clear();
                         for(index_t j = 0; j < repeat.repLen; j++) {
                             int c = s[pos + j];
                             assert_range(0, 3, c);
                             seqs.back().push_back("ACGT"[c]);
                         }
+                        
+                        if(i + 1 == repeats.size() || repeats[i].repID != repeats[i+1].repID) {
+                            const size_t w = RB_Minimizer<string>::default_w, k = RB_Minimizer<string>::default_k;
+                            RB_KmerTable kmer_table;
+                            kmer_table.build(seqs, w, k);
+                            kmer_table.write(fout7, this->toBe());
+                            seqs.clear();
+                            tableFilePos.push_back(fout7.tellp());
+                        }
                     }
-                    const size_t w = RB_Minimizer<string>::default_w, k = RB_Minimizer<string>::default_k;
-                    RB_KmerTable kmer_table;
-                    kmer_table.build(seqs, w, k);
-                    kmer_table.write(fout7, this->toBe());
+                    assert_eq(tableFilePos.size(), chr_szs.size());
+                    streampos origpos = fout7.tellp();
+                    fout7.seekp(filepos);
+                    for(size_t i = 0; i < tableFilePos.size(); i++) {
+                        writeIndex<uint64_t>(fout7, tableFilePos[i], this->toBe());
+                    }
+                    fout7.seekp(origpos);
                 }
                     
                 fout7.close();
@@ -2100,138 +2141,141 @@ public:
 		bool first = true;
 		streampos out1pos = out1.tellp();
 		streampos out2pos = out2.tellp();
-		// Look for bmax/dcv parameters that work.
-		while(true) {
-			if(!first && bmax < 40 && _passMemExc) {
-				cerr << "Could not find approrpiate bmax/dcv settings for building this index." << endl;
-				if(!isPacked()) {
-					// Throw an exception exception so that we can
-					// retry using a packed string representation
-					throw bad_alloc();
-				} else {
-					cerr << "Already tried a packed string representation." << endl;
-				}
-				cerr << "Please try indexing this reference on a computer with more memory." << endl;
-				if(sizeof(void*) == 4) {
-					cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
-						 << "this executable is 32-bit." << endl;
-				}
-				throw 1;
-			}
-			if(!first) {
-				out1.seekp(out1pos);
-				out2.seekp(out2pos);
-			}
-			if(dcv > 4096) dcv = 4096;
-			if((iter % 6) == 5 && dcv < 4096 && dcv != 0) {
-				dcv <<= 1; // double difference-cover period
-			} else {
-				bmax -= (bmax >> 2); // reduce by 25%
-			}
-			iter++;
-			try {
-                // DK - debugging purposes
-                if(_alts.empty() /* || _repeat */) {
-                    VMSG("Using parameters --bmax " << bmax);
-                    if(dcv == 0) {
-                        VMSG_NL(" and *no difference cover*");
+        
+        if(!_repeat) {
+            // Look for bmax/dcv parameters that work.
+            while(true) {
+                if(!first && bmax < 40 && _passMemExc) {
+                    cerr << "Could not find approrpiate bmax/dcv settings for building this index." << endl;
+                    if(!isPacked()) {
+                        // Throw an exception exception so that we can
+                        // retry using a packed string representation
+                        throw bad_alloc();
                     } else {
-                        VMSG_NL(" --dcv " << dcv);
+                        cerr << "Already tried a packed string representation." << endl;
                     }
-                    {
-                        VMSG_NL("  Doing ahead-of-time memory usage test");
-                        // Make a quick-and-dirty attempt to force a bad_alloc iff
-                        // we would have thrown one eventually as part of
-                        // constructing the DifferenceCoverSample
-                        dcv <<= 1;
-                        index_t sz = (index_t)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
-                        if(_nthreads > 1) sz *= (_nthreads + 1);
-                        AutoArray<uint8_t> tmp(sz, EBWT_CAT);
-                        dcv >>= 1;
-                        // Likewise with the KarkkainenBlockwiseSA
-                        sz = (index_t)KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
-                        AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
-                        // Now throw in the 'ftab' and 'isaSample' structures
-                        // that we'll eventually allocate in buildToDisk
-                        AutoArray<index_t> ftab(_gh._ftabLen * 2, EBWT_CAT);
-                        AutoArray<uint8_t> side(_gh._sideSz, EBWT_CAT);
-                        // Grab another 20 MB out of caution
-                        AutoArray<uint32_t> extra(20*1024*1024, EBWT_CAT);
-                        // If we made it here without throwing bad_alloc, then we
-                        // passed the memory-usage stress test
-                        VMSG("  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv);
-                        if(isPacked()) {
-                            VMSG(" --packed");
-                        }
-                        VMSG_NL("");
+                    cerr << "Please try indexing this reference on a computer with more memory." << endl;
+                    if(sizeof(void*) == 4) {
+                        cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
+                        << "this executable is 32-bit." << endl;
                     }
-                    VMSG_NL("Constructing suffix-array element generator");
-                    KarkkainenBlockwiseSA<TStr> bsa(s, bmax, _nthreads, dcv, seed, _sanity, _passMemExc, _verbose, outfile);
-                    assert(bsa.suffixItrIsReset());
-                    assert_eq(bsa.size(), s.length()+1);
-                    VMSG_NL("Converting suffix-array elements to index image");
-                    buildToDisk(bsa, s, out1, out2);
-                } else {
-                    RefGraph<index_t>* graph = new RefGraph<index_t>(
-                                                                     s,
-                                                                     szs,
-                                                                     _alts,
-                                                                     _haplotypes,
-                                                                     outfile,
-                                                                     _nthreads,
-                                                                     verbose);
-                    PathGraph<index_t>* pg = new PathGraph<index_t>(
-                                                                    *graph,
-                                                                    outfile,
-                                                                    std::numeric_limits<index_t>::max(),
-                                                                    _nthreads,
-                                                                    verbose);
-
-                    if(verbose) { cerr << "Generating edges... " << endl; }
-                    if(!pg->generateEdges(*graph)) { return; }
-                    // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
-                    _gh.init(
-                             _gh.len(),
-                             pg->getNumEdges(),
-                             pg->getNumNodes(),
-                             _gh.lineRate(),
-                             _gh.offRate(),
-                             _gh.ftabChars(),
-                             0,
-                             _gh.entireReverse());
-                    buildToDisk(*pg, s, out1, out2);
-                    delete pg; pg = NULL;
-                    delete graph; graph = NULL;
+                    throw 1;
                 }
-                out1.flush(); out2.flush();
-				if(out1.fail() || out2.fail()) {
-					cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
-					throw 1;
-				}
-				break;
-			} catch(bad_alloc& e) {
-				if(_passMemExc) {
-					VMSG_NL("  Ran out of memory; automatically trying more memory-economical parameters.");
-				} else {
-					cerr << "Out of memory while constructing suffix array.  Please try using a smaller" << endl
-						 << "number of blocks by specifying a smaller --bmax or a larger --bmaxdivn" << endl;
-					throw 1;
-				}
-			}
-			first = false;
-		}
-		assert(repOk());
-		// Now write reference sequence names on the end
-		assert_eq(this->_refnames.size(), this->_nPat);
-		for(index_t i = 0; i < this->_refnames.size(); i++) {
-			out1 << this->_refnames[i].c_str() << endl;
-		}
-		out1 << '\0';
-		out1.flush(); out2.flush();
-		if(out1.fail() || out2.fail()) {
-			cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
-			throw 1;
-		}
+                if(!first) {
+                    out1.seekp(out1pos);
+                    out2.seekp(out2pos);
+                }
+                if(dcv > 4096) dcv = 4096;
+                if((iter % 6) == 5 && dcv < 4096 && dcv != 0) {
+                    dcv <<= 1; // double difference-cover period
+                } else {
+                    bmax -= (bmax >> 2); // reduce by 25%
+                }
+                iter++;
+                try {
+                    if(_alts.empty()) {
+                        VMSG("Using parameters --bmax " << bmax);
+                        if(dcv == 0) {
+                            VMSG_NL(" and *no difference cover*");
+                        } else {
+                            VMSG_NL(" --dcv " << dcv);
+                        }
+                        {
+                            VMSG_NL("  Doing ahead-of-time memory usage test");
+                            // Make a quick-and-dirty attempt to force a bad_alloc iff
+                            // we would have thrown one eventually as part of
+                            // constructing the DifferenceCoverSample
+                            dcv <<= 1;
+                            index_t sz = (index_t)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
+                            if(_nthreads > 1) sz *= (_nthreads + 1);
+                            AutoArray<uint8_t> tmp(sz, EBWT_CAT);
+                            dcv >>= 1;
+                            // Likewise with the KarkkainenBlockwiseSA
+                            sz = (index_t)KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
+                            AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
+                            // Now throw in the 'ftab' and 'isaSample' structures
+                            // that we'll eventually allocate in buildToDisk
+                            AutoArray<index_t> ftab(_gh._ftabLen * 2, EBWT_CAT);
+                            AutoArray<uint8_t> side(_gh._sideSz, EBWT_CAT);
+                            // Grab another 20 MB out of caution
+                            AutoArray<uint32_t> extra(20*1024*1024, EBWT_CAT);
+                            // If we made it here without throwing bad_alloc, then we
+                            // passed the memory-usage stress test
+                            VMSG("  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv);
+                            if(isPacked()) {
+                                VMSG(" --packed");
+                            }
+                            VMSG_NL("");
+                        }
+                        VMSG_NL("Constructing suffix-array element generator");
+                        KarkkainenBlockwiseSA<TStr> bsa(s, bmax, _nthreads, dcv, seed, _sanity, _passMemExc, _verbose, outfile);
+                        assert(bsa.suffixItrIsReset());
+                        assert_eq(bsa.size(), s.length()+1);
+                        VMSG_NL("Converting suffix-array elements to index image");
+                        buildToDisk(bsa, s, out1, out2);
+                    } else {
+                        RefGraph<index_t>* graph = new RefGraph<index_t>(
+                                                                         s,
+                                                                         szs,
+                                                                         _alts,
+                                                                         _haplotypes,
+                                                                         outfile,
+                                                                         _nthreads,
+                                                                         verbose);
+                        PathGraph<index_t>* pg = new PathGraph<index_t>(
+                                                                        *graph,
+                                                                        outfile,
+                                                                        std::numeric_limits<index_t>::max(),
+                                                                        _nthreads,
+                                                                        verbose);
+                        
+                        if(verbose) { cerr << "Generating edges... " << endl; }
+                        if(!pg->generateEdges(*graph)) { return; }
+                        // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
+                        _gh.init(
+                                 _gh.len(),
+                                 pg->getNumEdges(),
+                                 pg->getNumNodes(),
+                                 _gh.lineRate(),
+                                 _gh.offRate(),
+                                 _gh.ftabChars(),
+                                 0,
+                                 _gh.entireReverse());
+                        buildToDisk(*pg, s, out1, out2);
+                        delete pg; pg = NULL;
+                        delete graph; graph = NULL;
+                    }
+                    out1.flush(); out2.flush();
+                    if(out1.fail() || out2.fail()) {
+                        cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
+                        throw 1;
+                    }
+                    break;
+                } catch(bad_alloc& e) {
+                    if(_passMemExc) {
+                        VMSG_NL("  Ran out of memory; automatically trying more memory-economical parameters.");
+                    } else {
+                        cerr << "Out of memory while constructing suffix array.  Please try using a smaller" << endl
+                        << "number of blocks by specifying a smaller --bmax or a larger --bmaxdivn" << endl;
+                        throw 1;
+                    }
+                }
+                first = false;
+            }
+            assert(repOk());
+    
+            // Now write reference sequence names on the end
+            assert_eq(this->_refnames.size(), this->_nPat);
+            for(index_t i = 0; i < this->_refnames.size(); i++) {
+                out1 << this->_refnames[i].c_str() << endl;
+            }
+            out1 << '\0';
+            out1.flush(); out2.flush();
+            if(out1.fail() || out2.fail()) {
+                cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
+                throw 1;
+            }
+        }
 		VMSG_NL("Returning from initFromVector");
 	}
 	
@@ -2664,6 +2708,22 @@ public:
             extra_version = "";
         }
     }
+    
+    static int getIndexVersion() {
+        int major_version = 0, minor_version = 0;
+        string extra_version;
+        readProgramVersion(major_version, minor_version, extra_version);
+        int version = 2; // HISAT2
+        version = (version << 8) | (major_version & 0xff);
+        version = (version << 8) | (minor_version & 0xff);
+        version = version << 8;
+        if(extra_version == "alpha") {
+            version |= 0x1;
+        } else if(extra_version == "beta") {
+            version |= 0x2;
+        }
+        return version;
+    }
 
 	/**
 	 * Pretty-print the Ebwt to the given output stream.
@@ -2734,11 +2794,11 @@ public:
 	template <typename TStr> static TStr join(EList<TStr>& l, uint32_t seed);
 	template <typename TStr> static void join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed, TStr& s, bool include_rc = false, bool CGtoTG = false);
 	template <typename TStr> void joinToDisk(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, TStr& ret, ostream& out1, ostream& out2);
-	template <typename TStr> void buildToDisk(PathGraph<index_t>& gbwt, const TStr& s, ostream& out1, ostream& out2);
-    template <typename TStr> void buildToDisk(InorderBlockwiseSA<TStr>& sa, const TStr& s, ostream& out1, ostream& out2);
+	template <typename TStr> void buildToDisk(PathGraph<index_t>& gbwt, const TStr& s, ostream& out1, ostream& out2, streampos headerPos = -1);
+    template <typename TStr> void buildToDisk(InorderBlockwiseSA<TStr>& sa, const TStr& s, ostream& out1, ostream& out2, streampos headerPos = -1);
 
 	// I/O
-	void readIntoMemory(int needEntireRev, bool loadSASamp, bool loadFtab, bool loadRstarts, bool justHeader, GFMParams<index_t> *params, bool mmSweep, bool loadNames, bool startVerbose);
+	void readIntoMemory(int needEntireRev, bool loadSASamp, bool loadFtab, bool loadRstarts, bool justHeader, GFMParams<index_t> *params, bool mmSweep, bool loadNames, bool startVerbose, bool subIndex = false);
 	void writeFromMemory(bool justHeader, ostream& out1, ostream& out2) const;
 	void writeFromMemory(bool justHeader, const string& out1, const string& out2) const;
 
@@ -4143,7 +4203,7 @@ public:
     EList<string>              _altnames;
     EList<Haplotype<index_t> > _haplotypes;
     RepeatDB<index_t>          _repeatdb;
-    RB_KmerTable               _repeat_kmertable;
+    EList<RB_KmerTable>        _repeat_kmertables;
     
     bool _repeat;
 
@@ -4533,7 +4593,8 @@ void GFM<index_t>::buildToDisk(
                                PathGraph<index_t>& gbwt,
                                const TStr& s,
                                ostream& out1,
-                               ostream& out2)
+                               ostream& out2,
+                               streampos headerPos)
 {
     const GFMParams<index_t>& gh = this->_gh;
 	assert(gh.repOk());
@@ -4543,7 +4604,11 @@ void GFM<index_t>::buildToDisk(
 	
 	index_t  gbwtLen = gh._gbwtLen;
     streampos out1pos = out1.tellp();
-    out1.seekp(8 + sizeof(index_t));
+    if(headerPos < 0) {
+        out1.seekp(8 + sizeof(index_t));
+    } else {
+        out1.seekp(headerPos);
+    }
     writeIndex<index_t>(out1, gbwtLen, this->toBe());
     writeIndex<index_t>(out1, gh._numNodes, this->toBe());
     out1.seekp(out1pos);
@@ -4923,7 +4988,11 @@ void GFM<index_t>::buildToDisk(
 	}
     // Write eftab to primary file
     out1pos = out1.tellp();
-    out1.seekp(24 + sizeof(index_t) * 3);
+    if(headerPos < 0) {
+        out1.seekp(24 + sizeof(index_t) * 3);
+    } else {
+        out1.seekp((int)headerPos + 16 + sizeof(index_t) * 2);
+    }
     writeIndex<index_t>(out1, eftabLen, this->toBe());
     out1.seekp(out1pos);
     for(index_t i = 0; i < eftabLen; i++) {
@@ -4963,7 +5032,8 @@ void GFM<index_t>::buildToDisk(
                                InorderBlockwiseSA<TStr>& sa,
                                const TStr& s,
                                ostream& out1,
-                               ostream& out2)
+                               ostream& out2,
+                               streampos headerPos)
 {
     const GFMParams<index_t>& gh = this->_gh;
     assert(gh.repOk());
@@ -4976,7 +5046,11 @@ void GFM<index_t>::buildToDisk(
     index_t  gbwtLen = gh._gbwtLen;
     assert_eq(len + 1, gbwtLen);
     streampos out1pos = out1.tellp();
-    out1.seekp(8 + sizeof(index_t));
+    if(headerPos < 0) {
+        out1.seekp(8 + sizeof(index_t));
+    } else {
+        out1.seekp(headerPos);
+    }
     writeIndex<index_t>(out1, gbwtLen, this->toBe());
     writeIndex<index_t>(out1, gh._numNodes, this->toBe());
     out1.seekp(out1pos);
@@ -5279,7 +5353,11 @@ void GFM<index_t>::buildToDisk(
     }
     // Write eftab to primary file
     out1pos = out1.tellp();
-    out1.seekp(24 + sizeof(index_t) * 3);
+    if(headerPos < 0) {
+        out1.seekp(24 + sizeof(index_t) * 3);
+    } else {
+        out1.seekp((int)headerPos + 16 + sizeof(index_t) * 2);
+    }
     writeIndex<index_t>(out1, eftabLen, this->toBe());
     out1.seekp(out1pos);
     for(index_t i = 0; i < eftabLen; i++) {
@@ -5634,13 +5712,14 @@ void GFM<index_t>::readIntoMemory(
                                   GFMParams<index_t> *params,
                                   bool mmSweep,
                                   bool loadNames,
-                                  bool startVerbose)
+                                  bool startVerbose,
+                                  bool subIndex)
 {
     bool switchEndian; // dummy; caller doesn't care
 #ifdef BOWTIE_MM
     char *mmFile[] = { NULL, NULL };
 #endif
-    if(_in1Str.length() > 0) {
+    if(_in1Str.length() > 0 & !subIndex) {
         if(_verbose || startVerbose) {
             cerr << "  About to open input files: ";
             logTime(cerr);
@@ -5719,50 +5798,56 @@ void GFM<index_t>::readIntoMemory(
     
     // Read endianness hints from both streams
     size_t bytesRead = 0;
-    switchEndian = false;
-    uint32_t one = readU32(_in1, switchEndian); // 1st word of primary stream
-    bytesRead += 4;
-    if(loadSASamp) {
+    if(!subIndex) {
+        switchEndian = false;
+        uint32_t one = readU32(_in1, switchEndian); // 1st word of primary stream
+        bytesRead += 4;
+        if(loadSASamp) {
 #ifndef NDEBUG
-        assert_eq(one, readU32(_in2, switchEndian)); // should match!
+            assert_eq(one, readU32(_in2, switchEndian)); // should match!
 #else
-        readU32(_in2, switchEndian);
+            readU32(_in2, switchEndian);
 #endif
-    }
-    if(one != 1) {
-        assert_eq((1u<<24), one);
-        assert_eq(1, endianSwapU32(one));
-        switchEndian = true;
-    }
-    
-    // Can't switch endianness and use memory-mapped files; in order to
-    // support this, someone has to modify the file to switch
-    // endiannesses appropriately, and we can't do this inside Bowtie
-    // or we might be setting up a race condition with other processes.
-    if(switchEndian && _useMm) {
-        cerr << "Error: Can't use memory-mapped files when the index is the opposite endianness" << endl;
-        throw 1;
-    }
-    
-    // Reads header entries one by one from primary stream
-    int index_version = (int)readU32(_in1, switchEndian); bytesRead += 4;
-    int major_index_version, minor_index_version;
-    string index_version_extra;
-    readIndexVersion(index_version, major_index_version, minor_index_version, index_version_extra);
-    int major_program_version, minor_program_version;
-    string program_version_extra;
-    readProgramVersion(major_program_version, minor_program_version, program_version_extra);
-    if(major_program_version < major_index_version ||
-       (major_program_version == major_index_version && minor_program_version < minor_index_version)) {
-        cerr << "Warning: the current version of HISAT2 (" << HISAT2_VERSION << ") is older than the version (2."
-        << major_index_version << "." << minor_index_version;
-        if(index_version_extra.length() > 0) {
-            cerr << "-" << index_version_extra;
         }
-        cerr << ") used to build the index." << endl;
-        cerr << "         Users are strongly recommended to update HISAT2 to the latest version." << endl;
+        if(one != 1) {
+            assert_eq((1u<<24), one);
+            assert_eq(1, endianSwapU32(one));
+            switchEndian = true;
+        }
+        
+        _toBigEndian = switchEndian;
+        
+        // Can't switch endianness and use memory-mapped files; in order to
+        // support this, someone has to modify the file to switch
+        // endiannesses appropriately, and we can't do this inside Bowtie
+        // or we might be setting up a race condition with other processes.
+        if(switchEndian && _useMm) {
+            cerr << "Error: Can't use memory-mapped files when the index is the opposite endianness" << endl;
+            throw 1;
+        }
+        
+        // Reads header entries one by one from primary stream
+        int index_version = (int)readU32(_in1, switchEndian); bytesRead += 4;
+        int major_index_version, minor_index_version;
+        string index_version_extra;
+        readIndexVersion(index_version, major_index_version, minor_index_version, index_version_extra);
+        int major_program_version, minor_program_version;
+        string program_version_extra;
+        readProgramVersion(major_program_version, minor_program_version, program_version_extra);
+        if(major_program_version < major_index_version ||
+           (major_program_version == major_index_version && minor_program_version < minor_index_version)) {
+            cerr << "Warning: the current version of HISAT2 (" << HISAT2_VERSION << ") is older than the version (2."
+            << major_index_version << "." << minor_index_version;
+            if(index_version_extra.length() > 0) {
+                cerr << "-" << index_version_extra;
+            }
+            cerr << ") used to build the index." << endl;
+            cerr << "         Users are strongly recommended to update HISAT2 to the latest version." << endl;
+        }
+    } else {
+        switchEndian = _toBigEndian;
     }
-    
+
     index_t len       = readIndex<index_t>(_in1, switchEndian);
     bytesRead += sizeof(index_t);
     index_t gbwtLen       = readIndex<index_t>(_in1, switchEndian);
@@ -6238,13 +6323,16 @@ void GFM<index_t>::readIntoMemory(
     
     // Be kind
     if(deleteGh) delete gh;
+    
+    if(!subIndex) {
 #ifdef BOWTIE_MM
-    fseek(_in1, 0, SEEK_SET);
-    if(loadSASamp) fseek(_in2, 0, SEEK_SET);
+        fseek(_in1, 0, SEEK_SET);
+        if(loadSASamp) fseek(_in2, 0, SEEK_SET);
 #else
-    rewind(_in1);
-    if(loadSASamp) rewind(_in2);
+        rewind(_in1);
+        if(loadSASamp) rewind(_in2);
 #endif
+    }
 }
 
 /**
@@ -6406,24 +6494,12 @@ void GFM<index_t>::writeFromMemory(bool justHeader,
     assert(out1.good());
     assert(out2.good());
     
-    int major_version = 0, minor_version = 0;
-    string extra_version;
-    readProgramVersion(major_version, minor_version, extra_version);
-    int version = 2; // HISAT2
-    version = (version << 8) | (major_version & 0xff);
-    version = (version << 8) | (minor_version & 0xff);
-    version = version << 8;
-    if(extra_version == "alpha") {
-        version |= 0x1;
-    } else if(extra_version == "beta") {
-        version |= 0x2;
-    }
-    
     // When building an Ebwt, these header parameters are known
     // "up-front", i.e., they can be written to disk immediately,
     // before we join() or buildToDisk()
     writeI32(out1, 1, be); // endian hint for priamry stream
     writeI32(out2, 1, be); // endian hint for secondary stream
+    int version = getIndexVersion();
     writeI32(out1, version, be); // version
     writeIndex<index_t>(out1, gh._len, be); // length of string (and bwt and suffix array)
     writeIndex<index_t>(out1, 0,       be); // dummy for gbwt len

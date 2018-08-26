@@ -31,6 +31,7 @@
 #include "assert_helpers.h"
 #include "endian_swap.h"
 #include "hgfm.h"
+#include "rfm.h"
 #include "formats.h"
 #include "sequence_io.h"
 #include "tokenize.h"
@@ -1964,7 +1965,7 @@ typedef TIndexOffU index_t;
 typedef uint16_t local_index_t;
 static PairedPatternSource*              multiseed_patsrc;
 static HGFM<index_t>*                    multiseed_gfm;
-static HGFM<index_t>*                    multiseed_rgfm;
+static RFM<index_t>*                     multiseed_rgfm;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
 static BitPairReference*                 multiseed_rrefs;
@@ -1973,7 +1974,6 @@ static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
 static ALTDB<index_t>*                   altdb;
 static RepeatDB<index_t>*                repeatdb;
-static RB_KmerTable*                     repeat_kmertable;
 static ALTDB<index_t>*                   raltdb;
 static TranscriptomePolicy*              multiseed_tpol;
 static GraphPolicy*                      gpol;
@@ -3112,7 +3112,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	assert(multiseedMms == 0);
 	PairedPatternSource&             patsrc   = *multiseed_patsrc;
 	const HGFM<index_t>&             gfm      = *multiseed_gfm;
-    const HGFM<index_t>*             rgfm     = multiseed_rgfm;
+    const RFM<index_t>*              rgfm     = multiseed_rgfm;
 	const Scoring&                   sc       = *multiseed_sc;
     const BitPairReference&          ref      = *multiseed_refs;
     const BitPairReference*          rref     = multiseed_rrefs;
@@ -3503,7 +3503,6 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                                 rgfm,
                                                 *altdb,
                                                 *repeatdb,
-                                                *repeat_kmertable,
                                                 *raltdb,
                                                 ref,
                                                 rref,
@@ -3619,7 +3618,7 @@ static void multiseedSearch(
                             PairedPatternSource& patsrc,  // pattern source
                             AlnSink<index_t>& msink,      // hit sink
                             HGFM<index_t>& gfm,           // index of original text
-                            HGFM<index_t>* rgfm,          // index of repeat sequences
+                            RFM<index_t>* rgfm,           // index of repeat sequences
                             BitPairReference* refs,       // base reference
                             BitPairReference* rrefs,      // repeat reference
                             OutFileBuf *metricsOfb)
@@ -3732,13 +3731,12 @@ static void driver(
 	}
     altdb = new ALTDB<index_t>();
     repeatdb = new RepeatDB<index_t>();
-    repeat_kmertable = new RB_KmerTable();
     raltdb = new ALTDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
 	HGFM<index_t, local_index_t> gfm(
                                      adjIdxBase,
                                      altdb,
-                                     repeatdb,
+                                     NULL,
                                      NULL,
                                      -1,       // fw index
                                      true,     // index is for the forward direction
@@ -3789,7 +3787,7 @@ static void driver(
                            !noRefNames,  // load names?
                            startVerbose);
     }
-    HGFM<index_t, local_index_t>* rgfm = NULL;
+    RFM<index_t>* rgfm = NULL;
     string rep_adjIdxBase = adjIdxBase + ".rep";
     bool rep_index_exists = false;
     {
@@ -3797,28 +3795,27 @@ static void driver(
         rep_index_exists = infile.good();
     }
     if(rep_index_exists) {
-        rgfm = new HGFM<index_t, local_index_t>(
-                                                rep_adjIdxBase,
-                                                raltdb,
-                                                repeatdb,
-                                                repeat_kmertable,
-                                                -1,       // fw index
-                                                true,     // index is for the forward direction
-                                                /* overriding: */ offRate,
-                                                0, // amount to add to index offrate or <= 0 to do nothing
-                                                useMm,    // whether to use memory-mapped files
-                                                useShmem, // whether to use shared memory
-                                                mmSweep,  // sweep memory-mapped files
-                                                !noRefNames, // load names?
-                                                true,        // load SA sample?
-                                                true,        // load ftab?
-                                                true,        // load rstarts?
-                                                !no_spliced_alignment, // load splice sites?
-                                                gVerbose, // whether to be talkative
-                                                startVerbose, // talkative during initialization
-                                                false /*passMemExc*/,
-                                                sanityCheck,
-                                                false); //use haplotypes?
+        rgfm = new RFM<index_t>(
+                                rep_adjIdxBase,
+                                raltdb,
+                                repeatdb,
+                                -1,       // fw index
+                                true,     // index is for the forward direction
+                                /* overriding: */ offRate,
+                                0, // amount to add to index offrate or <= 0 to do nothing
+                                useMm,    // whether to use memory-mapped files
+                                useShmem, // whether to use shared memory
+                                mmSweep,  // sweep memory-mapped files
+                                !noRefNames, // load names?
+                                true,        // load SA sample?
+                                true,        // load ftab?
+                                true,        // load rstarts?
+                                !no_spliced_alignment, // load splice sites?
+                                gVerbose, // whether to be talkative
+                                startVerbose, // talkative during initialization
+                                false /*passMemExc*/,
+                                sanityCheck,
+                                false); //use haplotypes?
 
         // CP to do
 #if 0
@@ -3911,10 +3908,8 @@ static void driver(
         EList<size_t> replens;
         EList<string> repnames;
         if(rep_index_exists) {
-            for(size_t i = 0; i < rgfm->nPat(); i++) {
-                replens.push_back(rgfm->plen()[i]);
-            }
-            readEbwtRefnames<index_t>(rep_adjIdxBase, repnames);
+            rgfm->getReferenceNames(repnames);
+            rgfm->getReferenceLens(replens);
         }
         if(rmChrName && addChrName) {
             cerr << "Error: --remove-chrname and --add-chrname cannot be used at the same time" << endl;
@@ -4160,7 +4155,6 @@ static void driver(
 		delete mssink;
         delete altdb;
         delete repeatdb;
-        delete repeat_kmertable;
         delete raltdb;
         delete ssdb;
 		delete metricsOfb;

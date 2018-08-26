@@ -34,6 +34,7 @@
 #include "ds.h"
 #include "gfm.h"
 #include "hgfm.h"
+#include "rfm.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -527,60 +528,99 @@ static void driver(
     filesWritten.push_back(outfile + ".7." + gfm_ext);
     filesWritten.push_back(outfile + ".8." + gfm_ext);
 	TStr s;
-	HGFM<TIndexOffU> hGFM(
-                          s,
-                          packed,
-                          1,  // TODO: maybe not?
-                          lineRate,
-                          offRate,      // suffix-array sampling rate
-                          ftabChars,    // number of chars in initial arrow-pair calc
-                          localOffRate,
-                          localFtabChars,
-                          nthreads,
-                          snpfile,
-                          htfile,
-                          ssfile,
-                          exonfile,
-                          svfile,
-                          repeatfile,
-                          outfile,      // basename for .?.ht2 files
-                          reverse == 0, // fw
-                          !entireSA,    // useBlockwise
-                          bmax,         // block size for blockwise SA builder
-                          bmaxMultSqrt, // block size as multiplier of sqrt(len)
-                          bmaxDivN,     // block size as divisor of len
-                          noDc? 0 : dcv,// difference-cover period
-                          is,           // list of input streams
-                          szs,          // list of reference sizes
-                          (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
-                          refparams,    // reference read-in parameters
-                          localindex,   // create local indexes?
-                          parent_szs,   // parent szs
-                          parent_refnames, // parent refence names
-                          seed,         // pseudo-random number generator seed
-                          -1,           // override offRate
-                          verbose,      // be talkative
-                          autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                          sanityCheck); // verify results and internal consistency
+    GFM<TIndexOffU>* gfm = NULL;
+    if(parent_szs == NULL) { // base index
+        gfm = new HGFM<TIndexOffU>(
+                                   s,
+                                   packed,
+                                   1,  // TODO: maybe not?
+                                   lineRate,
+                                   offRate,      // suffix-array sampling rate
+                                   ftabChars,    // number of chars in initial arrow-pair calc
+                                   localOffRate,
+                                   localFtabChars,
+                                   nthreads,
+                                   snpfile,
+                                   htfile,
+                                   ssfile,
+                                   exonfile,
+                                   svfile,
+                                   repeatfile,
+                                   outfile,      // basename for .?.ht2 files
+                                   reverse == 0, // fw
+                                   !entireSA,    // useBlockwise
+                                   bmax,         // block size for blockwise SA builder
+                                   bmaxMultSqrt, // block size as multiplier of sqrt(len)
+                                   bmaxDivN,     // block size as divisor of len
+                                   noDc? 0 : dcv,// difference-cover period
+                                   is,           // list of input streams
+                                   szs,          // list of reference sizes
+                                   (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
+                                   refparams,    // reference read-in parameters
+                                   localindex,   // create local indexes?
+                                   parent_szs,   // parent szs
+                                   parent_refnames, // parent refence names
+                                   seed,         // pseudo-random number generator seed
+                                   -1,           // override offRate
+                                   verbose,      // be talkative
+                                   autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                                   sanityCheck); // verify results and internal consistency
+    } else { // repeat index
+        gfm = new RFM<TIndexOffU>(
+                                  s,
+                                  packed,
+                                  1,  // TODO: maybe not?
+                                  lineRate,
+                                  offRate,      // suffix-array sampling rate
+                                  ftabChars,    // number of chars in initial arrow-pair calc
+                                  localOffRate,
+                                  localFtabChars,
+                                  nthreads,
+                                  snpfile,
+                                  htfile,
+                                  ssfile,
+                                  exonfile,
+                                  svfile,
+                                  repeatfile,
+                                  outfile,      // basename for .?.ht2 files
+                                  reverse == 0, // fw
+                                  !entireSA,    // useBlockwise
+                                  bmax,         // block size for blockwise SA builder
+                                  bmaxMultSqrt, // block size as multiplier of sqrt(len)
+                                  bmaxDivN,     // block size as divisor of len
+                                  noDc? 0 : dcv,// difference-cover period
+                                  is,           // list of input streams
+                                  szs,          // list of reference sizes
+                                  (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
+                                  refparams,    // reference read-in parameters
+                                  localindex,   // create local indexes?
+                                  parent_szs,   // parent szs
+                                  parent_refnames, // parent refence names
+                                  seed,         // pseudo-random number generator seed
+                                  -1,           // override offRate
+                                  verbose,      // be talkative
+                                  autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                                  sanityCheck); // verify results and internal consistency
+    }
     
     if(output_szs != NULL) {
         *output_szs = szs;
     }
     if(output_refnames != NULL) {
-        *output_refnames = hGFM._refnames_nospace;
+        *output_refnames = gfm->_refnames_nospace;
     }
     
     // Note that the Ebwt is *not* resident in memory at this time.  To
     // load it into memory, call ebwt.loadIntoMemory()
 	if(verbose) {
 		// Print Ebwt's vital stats
-		hGFM.gh().print(cerr);
+		gfm->gh().print(cerr);
 	}
 	if(sanityCheck) {
 		// Try restoring the original string (if there were
 		// multiple texts, what we'll get back is the joined,
 		// padded string, not a list)
-		hGFM.loadIntoMemory(
+		gfm->loadIntoMemory(
                             reverse ? (refparams.reverse == REF_READ_REVERSE) : 0,
                             true,  // load SA sample?
                             true,  // load ftab?
@@ -588,8 +628,8 @@ static void driver(
                             false,
                             false);
 		SString<char> s2;
-		hGFM.restore(s2);
-		hGFM.evictFromMemory();
+		gfm->restore(s2);
+		gfm->evictFromMemory();
 		{
             SString<char> joinedss;
             GFM<>::join<SString<char> >(
@@ -613,6 +653,8 @@ static void driver(
 			}
 		}
 	}
+    
+    delete gfm;
 }
 
 static const char *argv0 = NULL;

@@ -70,7 +70,6 @@ public:
 	GFM<index_t>(in,
                  altdb,
                  NULL,
-                 NULL,
                  needEntireReverse,
                  fw,
                  overrideOffRate,
@@ -273,14 +272,14 @@ public:
 											  const TStr& s,
 											  ostream& out1, 
 											  ostream& out2,
-                                              streampos& headerPos);
+                                              streampos headerPos);
     
     template <typename TStr> void buildToDisk(
                                               const EList<full_index_t>& sa,
                                               const TStr& s,
                                               ostream& out1,
                                               ostream& out2,
-                                              streampos& headerPos);
+                                              streampos headerPos);
 	
 	// I/O
 	void readIntoMemory(
@@ -352,7 +351,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
                                                   const TStr& s,
                                                   ostream& out5,
                                                   ostream& out6,
-                                                  streampos& headerPos)
+                                                  streampos headerPos)
 {
 	assert_leq(s.length(), std::numeric_limits<index_t>::max());
 	const GFMParams<index_t>& gh = this->_gh;
@@ -774,7 +773,7 @@ void LocalGFM<index_t, full_index_t>::buildToDisk(
                                                   const TStr& s,
                                                   ostream& out5,
                                                   ostream& out6,
-                                                  streampos& headerPos)
+                                                  streampos headerPos)
 {
     assert_leq(s.length(), std::numeric_limits<index_t>::max());
     const GFMParams<index_t>& gh = this->_gh;
@@ -1559,7 +1558,6 @@ public:
 	HGFM(const string& in,
          ALTDB<index_t>* altdb,
          RepeatDB<index_t>* repeatdb,
-         RB_KmerTable* repeat_kmertable,
          int needEntireReverse,
          bool fw,
          int32_t overrideOffRate, // = -1,
@@ -1581,7 +1579,6 @@ public:
     GFM<index_t>(in,
                  altdb,
                  repeatdb,
-                 repeat_kmertable,
                  needEntireReverse,
                  fw,
                  overrideOffRate,

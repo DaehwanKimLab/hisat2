@@ -375,6 +375,7 @@
 		E8D9219620C85FE900378C5B /* hisat2-repeatx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-repeatx"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8D921A720CC37B300378C5B /* repeat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = repeat.h; sourceTree = "<group>"; };
 		E8E2A13C2118D082008F4EA4 /* repeat_kmer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = repeat_kmer.h; sourceTree = "<group>"; };
+		E8E2A13D2130695C008F4EA4 /* rfm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = rfm.h; sourceTree = "<group>"; };
 		E8EAEDE71C24675500E62E69 /* hisat2-buildlx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "hisat2-buildlx"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8FD97E41C81CCED00861B09 /* hisat2lx */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = hisat2lx; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -514,6 +515,7 @@
 				E8D921A720CC37B300378C5B /* repeat.h */,
 				E84A236120D2AF0600C12106 /* repeat_builder.h */,
 				E8E2A13C2118D082008F4EA4 /* repeat_kmer.h */,
+				E8E2A13D2130695C008F4EA4 /* rfm.h */,
 				E8C30CB81C20B2B600C03464 /* sam.h */,
 				E8C30CB91C20B2B600C03464 /* scoring.h */,
 				E8C30CBA1C20B2B600C03464 /* search_globals.h */,

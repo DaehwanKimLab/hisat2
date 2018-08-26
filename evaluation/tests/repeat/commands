@@ -6,7 +6,7 @@ date; time hisat2 --no-spliced-alignment --score-min C,0 -X 800 -p 3 -x 20 -f -1
 
 # Chromosome 22
 
-/usr/bin/time -l hisat2-repeat -p 3 --seed-length 50 --seed-count 5 --repeat-edit 0 --min-repeat-length 100 --max-repeat-length 300 --repeat-count 5 22.fa 22_rep
+/usr/bin/time -l hisat2-repeat -p 3 --repeat-edit 0 --repeat-length 100-300 --repeat-count 5 22.fa 22_rep
 
 /usr/bin/time -l hisat2-build -p 3 22.fa --repeat-ref 22_rep.rep.fa --repeat-info 22_rep.rep.info --repeat-snp 22_rep.rep.snp --repeat-haplotype 22_rep.rep.haplotype 22_rep
 
