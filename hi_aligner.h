@@ -5597,6 +5597,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(tidx, toff);
     bool first = true;
     index_t count = 0;
+    index_t max_hitlen = 0;
     while(count++ < 2) {
         if(first) {
             first = false;
@@ -5610,15 +5611,16 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             if(lGFM == NULL || lGFM->empty()) break;
         }
         index_t hitoff = rdlen - 1;
+#if 1
+        while(hitoff >= _minK_local - 1) {
+#else
         while(hitoff >= minHitLen - 1) {
+#endif
             index_t hitlen = 0;
             local_index_t top = (local_index_t)INDEX_MAX, bot = (local_index_t)INDEX_MAX;
             local_index_t node_top = (local_index_t)INDEX_MAX, node_bot = (local_index_t)INDEX_MAX;
             _local_node_iedge_count.clear();
             bool uniqueStop = false;
-            // DK - check this out
-            // const local_index_t maxHits = tpol.no_spliced_alignment() ? 64 : 0;
-            const local_index_t maxHits = numeric_limits<local_index_t>::max();
             index_t nelt = localGFMSearch(
                                           *lGFM,   // GFM index
                                           ord,     // read to align
@@ -5634,13 +5636,11 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                           _local_node_iedge_count,
                                           rnd,
                                           uniqueStop,
-                                          minHitLen,
-                                          1000, // maxHitLen
-                                          maxHits);
+                                          _minK_local);
             assert_leq(top, bot);
             assert_eq(nelt, (index_t)(node_bot - node_top));
             assert_leq(hitlen, hitoff + 1);
-            if(nelt > 0 && nelt <= rp.kseeds && hitlen >= minHitLen) {
+            if(nelt > 0 && nelt <= rp.kseeds && hitlen > max_hitlen) {
                 coords.clear();
                 bool straddled = false;
                 getGenomeCoords_local(
@@ -5663,6 +5663,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                       true, // reject straddled?
                                       straddled);
                 assert_leq(coords.size(), nelt);
+                _genomeHits.clear();
                 for(index_t ri = 0; ri < coords.size(); ri++) {
                     const Coord& coord = coords[ri];
                     if(tpol.no_spliced_alignment()) {
@@ -5682,18 +5683,18 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                       ref,
                                                       gpol);
                 }
+                 max_hitlen = hitlen;
             }
-            // DK - debugging purposes
-#if 0
-            if(nelt >= rp.kseeds && hitlen > (_minK_local << 2)) {
-                _hits[rdi][fw ? 0 : 1]._repeat = true;
-            }
-#endif
             assert_leq(hitlen, hitoff + 1);
+#if 1
+            if(hitlen > 0) hitoff -= (hitlen - 1);
+            if(hitoff > 0) hitoff -= 1;
+#else
             if(hitlen == hitoff + 1) break;
             if(hitoff < minHitLen) break;
             hitoff -= minHitLen;
             if(hitoff > 0) hitoff -= 1;
+#endif
         } // while(hitoff >= minHitLen - 1)
     } // while(count++ < 2)
     
@@ -5984,7 +5985,7 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
                 if(!found) {
                     dna_frag_pass = false;
                 }
-            } else if(tpol.no_spliced_alignment()) {
+            } else{
                 if(left.ref() != left2.ref()) continue;
                 assert_eq(left.orient(), right.orient());
                 assert_eq(left2.orient(), right2.orient());
@@ -6000,35 +6001,41 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
                 if(right.off() + (int)tpol.maxIntronLen() < left2.off()) continue;
                 assert_geq(r1.score().score(), _minsc[0]);
                 assert_geq(r2.score().score(), _minsc[1]);
-                
-                int pairCl = PE_ALS_DISCORD;
-                assert_eq(r1.refid(), r2.refid());
-                index_t off1, off2, len1, len2;
-                bool fw1, fw2;
-                if(r1.refoff() < r2.refoff()) {
-                    off1 = r1.refoff(); off2 = r2.refoff();
-                    len1 = r1.refExtent(); len2 = r2.refExtent();
-                    fw1 = r1.fw(); fw2 = r2.fw();
-                } else {
-                    off1 = r2.refoff(); off2 = r1.refoff();
-                    len1 = r2.refExtent(); len2 = r1.refExtent();
-                    fw1 = r2.fw(); fw2 = r1.fw();
+                if(tpol.no_spliced_alignment()){
+                    int pairCl = PE_ALS_DISCORD;
+                    assert_eq(r1.refid(), r2.refid());
+                    index_t off1, off2, len1, len2;
+                    bool fw1, fw2;
+                    if(r1.refoff() < r2.refoff()) {
+                        off1 = r1.refoff(); off2 = r2.refoff();
+                        len1 = r1.refExtent(); len2 = r2.refExtent();
+                        fw1 = r1.fw(); fw2 = r2.fw();
+                    } else {
+                        off1 = r2.refoff(); off2 = r1.refoff();
+                        len1 = r2.refExtent(); len2 = r1.refExtent();
+                        fw1 = r2.fw(); fw2 = r1.fw();
+                    }
+                    // Check that final mate alignments are consistent with
+                    // paired-end fragment constraints
+                    pairCl = pepol.peClassifyPair(
+                                                  off1,
+                                                  len1,
+                                                  fw1,
+                                                  off2,
+                                                  len2,
+                                                  fw2);
+                    dna_frag_pass = (pairCl != PE_ALS_DISCORD);
                 }
-                // Check that final mate alignments are consistent with
-                // paired-end fragment constraints
-                pairCl = pepol.peClassifyPair(
-                                              off1,
-                                              len1,
-                                              fw1,
-                                              off2,
-                                              len2,
-                                              fw2);
-                dna_frag_pass = (pairCl != PE_ALS_DISCORD);
             }
         
             if(!tpol.no_spliced_alignment() || dna_frag_pass) {
-                TAlScore threshold = std::max<TAlScore>(sink.bestPair(),
-                                                        sink.bestUnp1() + sink.bestUnp2() - (r1.readLength() + r2.readLength()) * 0.03 * sc.mm(255));
+                TAlScore threshold = sink.bestPair();
+                if(sink.bestUnp1() >= _minsc[0] && sink.bestUnp2() >= _minsc[1]) {
+                    TAlScore tmp = sink.bestUnp1() + sink.bestUnp2() - (r1.readLength() + r2.readLength()) * 0.03 * sc.mm(255);
+                    if(tmp > threshold) {
+                        threshold = tmp;
+                    }
+                }
                 if(r1.score().score() + r2.score().score() >= threshold || rp.secondary) {
                     sink.report(0, &r1, &r2);
                 }
