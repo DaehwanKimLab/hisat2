@@ -776,12 +776,16 @@ RFM<index_t>::RFM(
         tParams.back().last = false;
         tParams.back().dcv = 1024;
         tParams.back().seed = seed;
+        tParams.back().mainThread = true;
+        
+#if 0
         if(t + 1 < (index_t)this->_nthreads) {
-            tParams.back().mainThread = false;
+            
             threads[t] = new tthread::thread(gbwt_worker, (void*)&tParams.back());
         } else {
             tParams.back().mainThread = true;
         }
+#endif
     }
     
     // build local FM indexes
