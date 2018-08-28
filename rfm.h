@@ -484,7 +484,7 @@ public:
 	char                        *mmFile2_;
     
 private:
-    struct ThreadParam {
+    struct WorkerParam {
         // input
         SString<char>                s;
         EList<ALT<index_t> >         alts;
@@ -500,128 +500,102 @@ private:
         index_t                      dcv;
         index_t                      seed;
         EList<string>                refnames;
-        
+
         // output
         RefGraph<index_t>*           rg;
         PathGraph<index_t>*          pg;
         
-        // communication
-        bool                         done;
-        bool                         last;
-        bool                         mainThread;
+        int                          threads;
     };
-    static void gbwt_worker(void* vp);
+    static void build_worker(void* vp);
 };
 
     
 template <typename index_t>
-void RFM<index_t>::gbwt_worker(void* vp)
+void RFM<index_t>::build_worker(void* vp)
 {
-    ThreadParam& tParam = *(ThreadParam*)vp;
-    while(!tParam.last) {
-        if(tParam.mainThread) {
-            assert(!tParam.done);
-            if(tParam.s.length() <= 0) {
-                tParam.done = true;
-                return;
+    WorkerParam& tParam = *(WorkerParam*)vp;
+    if(tParam.alts.empty()) {
+        tParam.sa = NULL;
+        tParam.sa = new KarkkainenBlockwiseSA<SString<char> >(
+                                                              tParam.s,
+                                                              (index_t)(tParam.s.length()+1),
+                                                              tParam.threads,
+                                                              tParam.dcv,
+                                                              tParam.seed,
+                                                              false,  /* this->_sanity */
+                                                              false,  /* this->_passMemExc */
+                                                              false); /* this->_verbose */
+        assert(tParam.sa->suffixItrIsReset());
+        assert_eq(tParam.sa->size(), tParam.s.length()+1);
+    } else {
+        while(true) {
+            tParam.rg = NULL, tParam.pg = NULL;
+            bool exploded = false;
+            try {
+                tParam.rg = new RefGraph<index_t>(
+                                                  tParam.s,
+                                                  tParam.conv_local_szs,
+                                                  tParam.alts,
+                                                  tParam.haplotypes,
+                                                  tParam.file,
+                                                  tParam.threads,        /* num threads */
+                                                  false);   /* verbose? */
+                tParam.pg = new PathGraph<index_t>(
+                                                   *tParam.rg,
+                                                   tParam.file,
+                                                   local_max_gbwt,
+                                                   1,         /* num threads */
+                                                   false);    /* verbose? */
+            } catch (const NongraphException& err) {
+                cerr << "Warning: no variants or splice sites in this graph (" << tParam.curr_sztot << ")" << endl;
+                delete tParam.rg;
+                delete tParam.pg;
+                tParam.alts.clear();
+                continue;
+            } catch (const ExplosionException& err) {
+                exploded = true;
             }
-        } else {
-            while(tParam.done) {
-                if(tParam.last) return;
-#if defined(_TTHREAD_WIN32_)
-                Sleep(1);
-#elif defined(_TTHREAD_POSIX_)
-                const static timespec ts = {0, 1000000};  // 1 millisecond
-                nanosleep(&ts, NULL);
-#endif
+            
+            if(!exploded) {
+                if(!tParam.pg->generateEdges(*tParam.rg)) {
+                    cerr << "An error occurred - generateEdges" << endl;
+                    throw 1;
+                }
+                exploded = tParam.pg->getNumEdges() > local_max_gbwt;
             }
-            if(tParam.s.length() <= 0) {
-                tParam.done = true;
+            if(exploded) {
+                cerr << "Warning: a local graph exploded (offset: " << tParam.curr_sztot << ", length: " << tParam.local_sztot << ")" << endl;
+                
+                delete tParam.pg; tParam.pg = NULL;
+                delete tParam.rg; tParam.rg = NULL;
+                if(tParam.alts.size() <= 1) {
+                    tParam.alts.clear();
+                } else {
+                    for(index_t s = 2; s < tParam.alts.size(); s += 2) {
+                        tParam.alts[s >> 1] = tParam.alts[s];
+                    }
+                    tParam.alts.resize(tParam.alts.size() >> 1);
+                    tParam.haplotypes.clear();
+                    for(index_t a = 0; a < tParam.alts.size(); a++) {
+                        const ALT<index_t>& alt = tParam.alts[a];
+                        if(!alt.snp()) continue;
+                        tParam.haplotypes.expand();
+                        tParam.haplotypes.back().left = alt.pos;
+                        if(alt.deletion()) {
+                            tParam.haplotypes.back().right = alt.pos + alt.len - 1;
+                        } else {
+                            tParam.haplotypes.back().right = alt.pos;
+                        }
+                        tParam.haplotypes.back().alts.clear();
+                        tParam.haplotypes.back().alts.push_back(a);
+                    }
+                }
                 continue;
             }
-        }
-        while(true) {
-            if(tParam.alts.empty()) {
-                tParam.sa = NULL;
-                tParam.sa = new KarkkainenBlockwiseSA<SString<char> >(
-                                tParam.s,
-                                (index_t)(tParam.s.length()+1),
-                                1,
-                                tParam.dcv,
-                                tParam.seed,
-                                false,  /* this->_sanity */
-                                false,  /* this->_passMemExc */
-                                false); /* this->_verbose */
-                assert(tParam.sa->suffixItrIsReset());
-                assert_eq(tParam.sa->size(), tParam.s.length()+1);
-            } else {
-                tParam.rg = NULL, tParam.pg = NULL;
-                bool exploded = false;
-                try {
-                    tParam.rg = new RefGraph<index_t>(
-                                                      tParam.s,
-                                                      tParam.conv_local_szs,
-                                                      tParam.alts,
-                                                      tParam.haplotypes,
-                                                      tParam.file,
-                                                      1,        /* num threads */
-                                                      false);   /* verbose? */
-                    tParam.pg = new PathGraph<index_t>(
-                                                       *tParam.rg,
-                                                       tParam.file,
-                                                       local_max_gbwt,
-                                                       1,         /* num threads */
-                                                       false);    /* verbose? */
-                } catch (const NongraphException& err) {
-                    cerr << "Warning: no variants or splice sites in this graph (" << tParam.curr_sztot << ")" << endl;
-                    delete tParam.rg;
-                    delete tParam.pg;
-                    tParam.alts.clear();
-                    continue;
-                } catch (const ExplosionException& err) {
-                    exploded = true;
-                }
-                if(!exploded) {
-                    if(!tParam.pg->generateEdges(*tParam.rg)) {
-                        cerr << "An error occurred - generateEdges" << endl;
-                        throw 1;
-                    }
-                    exploded = tParam.pg->getNumEdges() > local_max_gbwt;
-                }
-                if(exploded) {
-                    cerr << "Warning: a local graph exploded (offset: " << tParam.curr_sztot << ", length: " << tParam.local_sztot << ")" << endl;
-                    
-                    delete tParam.pg; tParam.pg = NULL;
-                    delete tParam.rg; tParam.rg = NULL;
-                    if(tParam.alts.size() <= 1) {
-                        tParam.alts.clear();
-                    } else {
-                        for(index_t s = 2; s < tParam.alts.size(); s += 2) {
-                            tParam.alts[s >> 1] = tParam.alts[s];
-                        }
-                        tParam.alts.resize(tParam.alts.size() >> 1);
-                        tParam.haplotypes.clear();
-                        for(index_t a = 0; a < tParam.alts.size(); a++) {
-                            const ALT<index_t>& alt = tParam.alts[a];
-                            if(!alt.snp()) continue;
-                            tParam.haplotypes.expand();
-                            tParam.haplotypes.back().left = alt.pos;
-                            if(alt.deletion()) {
-                                tParam.haplotypes.back().right = alt.pos + alt.len - 1;
-                            } else {
-                                tParam.haplotypes.back().right = alt.pos;
-                            }
-                            tParam.haplotypes.back().alts.clear();
-                            tParam.haplotypes.back().alts.push_back(a);
-                        }
-                    }
-                    continue;
-                }
-            }
+            
             break;
         }
-        tParam.done = true;
-        if(tParam.mainThread) break;
     }
 }
     
@@ -763,30 +737,14 @@ RFM<index_t>::RFM(
     }
     
     assert_gt(this->_nthreads, 0);
-    AutoArray<tthread::thread*> threads(this->_nthreads - 1);
-    EList<ThreadParam> tParams; tParams.reserveExact((size_t)this->_nthreads);
-    for(index_t t = 0; t < (index_t)this->_nthreads; t++) {
-        tParams.expand();
-        tParams.back().s.clear();
-        tParams.back().rg = NULL;
-        tParams.back().pg = NULL;
-        tParams.back().sa = NULL;
-        tParams.back().file = outfile;
-        tParams.back().done = true;
-        tParams.back().last = false;
-        tParams.back().dcv = 1024;
-        tParams.back().seed = seed;
-        tParams.back().mainThread = true;
-        
-#if 0
-        if(t + 1 < (index_t)this->_nthreads) {
-            
-            threads[t] = new tthread::thread(gbwt_worker, (void*)&tParams.back());
-        } else {
-            tParams.back().mainThread = true;
-        }
-#endif
-    }
+    WorkerParam tParam;
+    tParam.rg = NULL;
+    tParam.pg = NULL;
+    tParam.sa = NULL;
+    tParam.file = outfile;
+    tParam.dcv = 1024;
+    tParam.seed = seed;
+    tParam.threads = this->_nthreads;
     
     // build local FM indexes
     assert_eq(szs.size(), this->_refnames.size());
@@ -797,7 +755,6 @@ RFM<index_t>::RFM(
         index_t refLen = szs[tidx].len;
         _localRFMs.expand();
         assert_lt(tidx, _localRFMs.size());
-        ThreadParam& tParam = tParams[0];
         
         tParam.index_size = refLen;
         tParam.conv_local_szs.clear();
@@ -881,11 +838,9 @@ RFM<index_t>::RFM(
         assert(tParam.rg == NULL);
         assert(tParam.pg == NULL);
         assert(tParam.sa == NULL);
-        tParam.done = false;
         curr_sztot += refLen;
         
-        gbwt_worker(&tParam);
-        assert(tParam.done);
+        build_worker(&tParam);
         
         _localRFMFilePos[tidx].first = fout1.tellp();
         _localRFMFilePos[tidx].second = fout2.tellp();
@@ -915,7 +870,6 @@ RFM<index_t>::RFM(
                           false,                 // be silent
                           passMemExc,            // pass exceptions up to the toplevel so that we can adjust memory settings automatically
                           sanityCheck);          // verify results and internal consistency
-        tParam.s.clear();
         if(tParam.rg != NULL) {
             assert(tParam.pg != NULL);
             delete tParam.rg; tParam.rg = NULL;
