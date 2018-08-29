@@ -399,6 +399,9 @@ public:
             }
         }
         
+        if(alignments.empty())
+            return;
+        
         for(size_t i = 0; i < alignments.size(); i++) {
             alignments[i].pos -= alignments[i].off;
         }

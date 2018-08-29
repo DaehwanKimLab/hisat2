@@ -1013,7 +1013,7 @@ def calculate_read_cost(single_end,
 
 
     aligners = [
-        # ["hisat2", "", "", "", ""],
+        ["hisat2", "", "", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
         # ["hisat2", "", "", "", "--very-sensitive"],
         # ["hisat2", "", "", "", "-k 50 --score-min C,-50,0"],
@@ -1034,7 +1034,7 @@ def calculate_read_cost(single_end,
         # ["hisat2", "", "rep", "", ""],
         # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "rep-100-300", "", ""],
-        ["hisat2", "", "rep-101-300", "", ""],
+        ["hisat2", "", "rep-101-300-2", "", ""],
         # ["hisat2", "", "rep-101-300", "", "--sensitive"],
         # ["hisat2", "", "rep-101-300", "", "-k 10 --score-min C,-50,0"],
         # ["hisat2", "", "rep-150-300", "", ""],

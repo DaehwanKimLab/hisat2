@@ -4359,6 +4359,18 @@ public:
                 for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
                     if(_genomeHits_rep[rdi][i].len() < (_minK << 1)) continue;
                     
+                    // DK - debugging purposes
+#if 0
+                    positions.clear();
+                    repeatdb.getCoords(_genomeHits_rep[rdi][i]._tidx,
+                                       _genomeHits_rep[rdi][i]._joinedOff,
+                                       _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
+                                       _snpIDs,
+                                       raltdb,
+                                       positions,
+                                       rp.khits * 1000);
+#endif
+                    
                     const EList<AlnRes> *rs = NULL;
                     if(rdi == 0) sink.getUnp2(rs);
                     else         sink.getUnp1(rs);

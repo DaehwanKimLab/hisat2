@@ -369,6 +369,63 @@ public:
         return true;
     }
     
+    bool getCoords(index_t               repID,
+                   index_t               left,  // left offset in the repeat sequence
+                   index_t               right, // right offset
+                   const EList<index_t>& snpIDs, // SNP IDs
+                   const ALTDB<index_t>& altdb,
+                   EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& near_positions,
+                   index_t max_positions = numeric_limits<index_t>::max()) const {
+        near_positions.clear();
+        
+        if(repID >= _repeatMap.size())
+            return false;
+        
+        // Find a repeat corresponding to a given location (left, right)
+        const EList<pair<index_t, index_t> >& repeatMap = _repeatMap[repID];
+        pair<index_t, index_t> repeat(left, numeric_limits<index_t>::max());
+        index_t repeatIdx = repeatMap.bsearchLoBound(repeat);
+        assert_lt(repeatIdx, repeatMap.size());
+        if(right > repeatMap[repeatIdx].first)
+            return false;
+        
+        index_t repeatIdx_ = repeatMap[repeatIdx].second;
+        assert_lt(repeatIdx_, _repeats.size());
+        
+        const EList<RepeatAllele<index_t> >& alleles = _repeats[repeatIdx_].alleles;
+        index_t adjLeft = left, adjRight = right;
+        if(repeatIdx > 0) {
+            adjLeft -= repeatMap[repeatIdx-1].first;
+            adjRight -= repeatMap[repeatIdx-1].first;
+        }
+        const EList<RepeatCoord<index_t> >& positions = _repeats[repeatIdx_].positions;
+        for(index_t p = 0; p < positions.size(); p++) {
+            const RepeatCoord<index_t>& position = positions[p];
+            assert_lt(position.alleleID, alleles.size());
+            const RepeatAllele<index_t>& allele = alleles[position.alleleID];
+            if(!allele.compatible(adjLeft, adjRight))
+                continue;
+            
+            near_positions.expand();
+            near_positions.back().first = position;
+            if(positions[p].fw) {
+                near_positions.back().first.joinedOff += adjLeft;
+                near_positions.back().first.toff += adjLeft;
+            } else {
+                const index_t len = right - left;
+                assert_leq(adjLeft + len, _repeats[repeatIdx_].repLen);
+                index_t rc_adjLeft = _repeats[repeatIdx_].repLen - adjLeft - len;
+                near_positions.back().first.joinedOff += rc_adjLeft;
+                near_positions.back().first.toff += rc_adjLeft;
+            }
+            
+            if(near_positions.size() >= max_positions)
+                break;
+        }
+        
+        return near_positions.size() > 0;
+    }
+    
     bool findCoords(index_t               anchor_left,
                     index_t               anchor_right,
                     index_t               repID,
