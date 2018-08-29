@@ -4656,12 +4656,6 @@ public:
             assert(!hit.done());
             bool pseudogeneStop = gfm.gh().linearFM() && !tpol.no_spliced_alignment();
             bool anchorStop = _anchorStop && !gfm.repeat();
-            
-            // DK - debugging purposes - runtime related
-#if 0
-            anchorStop = false;
-#endif
-            
             if(!rp.secondary) {
                 index_t numSearched = hit.numActualPartialSearch();
                 int64_t bestScore = 0;
@@ -5062,7 +5056,6 @@ public:
             if(remainedGenomeHitSize <= 0)
                 break;
             index_t expectedNumCoords = partialHit._node_bot - partialHit._node_top;
-            
             bool straddled = false;
             if(expectedNumCoords <= remainedGenomeHitSize) {
                 getGenomeCoords(
@@ -5592,7 +5585,6 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     EList<Coord>& coords = _coords.front();
     
     // local search to find anchors
-    const index_t minHitLen = _minK_local << 1;
     const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
     const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(tidx, toff);
     bool first = true;
@@ -5611,11 +5603,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             if(lGFM == NULL || lGFM->empty()) break;
         }
         index_t hitoff = rdlen - 1;
-#if 1
         while(hitoff >= _minK_local - 1) {
-#else
-        while(hitoff >= minHitLen - 1) {
-#endif
             index_t hitlen = 0;
             local_index_t top = (local_index_t)INDEX_MAX, bot = (local_index_t)INDEX_MAX;
             local_index_t node_top = (local_index_t)INDEX_MAX, node_bot = (local_index_t)INDEX_MAX;
@@ -5686,15 +5674,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                  max_hitlen = hitlen;
             }
             assert_leq(hitlen, hitoff + 1);
-#if 1
             if(hitlen > 0) hitoff -= (hitlen - 1);
             if(hitoff > 0) hitoff -= 1;
-#else
-            if(hitlen == hitoff + 1) break;
-            if(hitoff < minHitLen) break;
-            hitoff -= minHitLen;
-            if(hitoff > 0) hitoff -= 1;
-#endif
         } // while(hitoff >= minHitLen - 1)
     } // while(count++ < 2)
     

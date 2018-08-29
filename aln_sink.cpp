@@ -64,7 +64,7 @@ void ReportingState::nextRead(bool paired) {
 	done_ = false;
 	nconcord_ = ndiscord_ = nunpair1_ = nunpair2_ = 0;
     nunpairRepeat1_ = nunpairRepeat2_ = 0;
-    concordBest_ = numeric_limits<TAlScore>::min();
+    concordBest_ = getMinScore();
 }
 
 /**

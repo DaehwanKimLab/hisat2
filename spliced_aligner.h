@@ -359,16 +359,14 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
     assert(this->_rds[rdi] != NULL);
     const Read& rd = *(this->_rds[rdi]);
     index_t rdlen = (index_t)rd.length();
-    if(hit.score() < this->_minsc[rdi]) return maxsc;
-    if(dep >= 128) return maxsc;
     
-    // DK - debugging purposes
-#if 1
-    const TAlScore cushion = alignMate ? rdlen * 0.03 * sc.mm(255) : 0;
-#else
     TAlScore cushion = 0;
-    alignMate = false;
-#endif
+    if(tpol.no_spliced_alignment()) {
+        cushion = alignMate ? rdlen * 0.03 * sc.mm(255) : 0;
+    }
+
+    if(hit.score() + cushion < this->_minsc[rdi]) return maxsc;
+    if(dep >= 128) return maxsc;
     
     // if it's already examined, just return
     if(hitoff == hit.rdoff() - hit.trim5() && hitlen == hit.len() + hit.trim5() + hit.trim3()) {

@@ -31,6 +31,10 @@
 #include "alt.h"
 #include "splice_site.h"
 
+static const TAlScore getMinScore() {
+    return std::numeric_limits<TAlScore>::min() / 2;
+}
+
 // Forward decl
 template <typename index_t>
 class SeedResults;
@@ -420,7 +424,7 @@ public:
 		exitDiscord_ = ReportingState::EXIT_DID_NOT_ENTER;
 		exitUnpair1_ = ReportingState::EXIT_DID_NOT_ENTER;
 		exitUnpair2_ = ReportingState::EXIT_DID_NOT_ENTER;
-        concordBest_ = numeric_limits<TAlScore>::min();
+        concordBest_ = getMinScore();
 		done_ = false;
 	}
 	
@@ -1057,16 +1061,16 @@ public:
 		maxed1_(false),       // read is pair and we maxed out mate 1 unp alns
 		maxed2_(false),       // read is pair and we maxed out mate 2 unp alns
 		maxedOverall_(false), // alignments found so far exceed -m/-M ceiling
-		bestPair_(std::numeric_limits<TAlScore>::min()),
-		best2Pair_(std::numeric_limits<TAlScore>::min()),
-		bestUnp1_(std::numeric_limits<TAlScore>::min()),
-		best2Unp1_(std::numeric_limits<TAlScore>::min()),
-		bestUnp2_(std::numeric_limits<TAlScore>::min()),
-		best2Unp2_(std::numeric_limits<TAlScore>::min()),
-        bestUnpRepeat1_(std::numeric_limits<TAlScore>::min()),
-        best2UnpRepeat1_(std::numeric_limits<TAlScore>::min()),
-        bestUnpRepeat2_(std::numeric_limits<TAlScore>::min()),
-        best2UnpRepeat2_(std::numeric_limits<TAlScore>::min()),
+		bestPair_(getMinScore()),
+		best2Pair_(getMinScore()),
+		bestUnp1_(getMinScore()),
+		best2Unp1_(getMinScore()),
+		bestUnp2_(getMinScore()),
+		best2Unp2_(getMinScore()),
+        bestUnpRepeat1_(getMinScore()),
+        best2UnpRepeat1_(getMinScore()),
+        bestUnpRepeat2_(getMinScore()),
+        best2UnpRepeat2_(getMinScore()),
         bestSplicedPair_(0),
         best2SplicedPair_(0),
         bestSplicedUnp1_(0),
@@ -1227,7 +1231,7 @@ public:
 	 * unpaired read or mate 1.
 	 */
 	bool hasSecondBestUnp1() const {
-		return best2Unp1_ != std::numeric_limits<TAlScore>::min();
+		return best2Unp1_ != getMinScore();
 	}
 
 	/**
@@ -1235,7 +1239,7 @@ public:
 	 * mate 2.
 	 */
 	bool hasSecondBestUnp2() const {
-		return best2Unp2_ != std::numeric_limits<TAlScore>::min();
+		return best2Unp2_ != getMinScore();
 	}
 
 	/**
@@ -1243,7 +1247,7 @@ public:
 	 * far.
 	 */
 	bool hasSecondBestPair() const {
-		return best2Pair_ != std::numeric_limits<TAlScore>::min();
+		return best2Pair_ != getMinScore();
 	}
 	
 	/**
@@ -1357,7 +1361,7 @@ public:
     
     pair<index_t, index_t> numBestUnp(index_t rdi) const {
         index_t numGenome = 0, numRepeat = 0;
-        TAlScore maxScore = numeric_limits<TAlScore>::min();
+        TAlScore maxScore = getMinScore();
         const EList<AlnRes>& rs = (rdi == 0 ? rs1u_ : rs2u_);
         for(size_t i = 0; i < rs.size(); i++) {
             TAlScore curScore = rs[i].score().score();
@@ -1380,7 +1384,7 @@ public:
     
     pair<index_t, index_t> numBestPair() const {
         index_t numGenome = 0, numRepeat = 0;
-        TAlScore maxScore = numeric_limits<TAlScore>::min();
+        TAlScore maxScore = getMinScore();
         assert_eq(rs1_.size(), rs2_.size());
         for(size_t i = 0; i < rs1_.size(); i++) {
             TAlScore curScore = rs1_[i].score().score() + rs2_[i].score().score();
