@@ -5229,8 +5229,8 @@ public:
      
         TAlScore bestScore = _minsc[rdi];
         size_t prev_numHits = genomeHits.size();
-        for(index_t k = 0; k < _tmp_alignments.size(); k++) {
-            const RB_Alignment& coord = _tmp_alignments[k];
+        for(index_t i = 0; i < _tmp_alignments.size(); i++) {
+            const RB_Alignment& coord = _tmp_alignments[i];
             index_t len = seq.length();
             index_t rdoff = 0;
             if(!repeatdb.repeatExist(repID, coord.pos, coord.pos + len)) {
@@ -5274,7 +5274,33 @@ public:
                 genomeHits.pop_back();
                 continue;
             }
-            
+
+            // DK  - debugging purposes
+#if 0
+            if(genomeHit.score() > bestScore) {
+                bestScore = genomeHit.score();
+                size_t remove_count = 0;
+                size_t k = prev_numHits;
+                for(size_t j = prev_numHits; j < genomeHits.size(); j++) {
+                    if(genomeHits[j].score() >= max(_minsc[rdi], bestScore - sc.mm(255))) {
+                        assert_leq(k, j);
+                        if(k < j) {
+                            genomeHits[k] = genomeHits[j];
+                            k++;
+                        }
+                    } else {
+                        remove_count++;
+                    }
+                }
+                assert_eq(k + remove_count, genomeHits.size());
+                assert_leq(prev_numHits + remove_count, genomeHits.size());
+                if(remove_count > 0) {
+                    genomeHits.resize(genomeHits.size() - remove_count);
+                }
+            } else if(genomeHit.score() < max(_minsc[rdi], bestScore - sc.mm(255))) {
+                genomeHits.pop_back();
+            }
+#else
             if(genomeHit.score() > bestScore) {
                 bestScore = genomeHit.score();
                 if(genomeHits.size() > prev_numHits + 1) {
@@ -5284,6 +5310,7 @@ public:
             } else if(genomeHit.score() < bestScore) {
                 genomeHits.pop_back();
             }
+#endif
         }
         
         return (index_t)genomeHits.size();
