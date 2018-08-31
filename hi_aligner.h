@@ -5226,6 +5226,8 @@ public:
                                         _tmp_minimizers,
                                         _tmp_position2D,
                                         _tmp_alignments);
+        
+        const TAlScore cushion = sc.mmpMax;
      
         TAlScore bestScore = _minsc[rdi];
         size_t prev_numHits = genomeHits.size();
@@ -5275,19 +5277,17 @@ public:
                 continue;
             }
 
-            // DK  - debugging purposes
-#if 0
             if(genomeHit.score() > bestScore) {
                 bestScore = genomeHit.score();
                 size_t remove_count = 0;
                 size_t k = prev_numHits;
                 for(size_t j = prev_numHits; j < genomeHits.size(); j++) {
-                    if(genomeHits[j].score() >= max(_minsc[rdi], bestScore - sc.mm(255))) {
+                    if(genomeHits[j].score() >= max(_minsc[rdi], bestScore - cushion)) {
                         assert_leq(k, j);
                         if(k < j) {
                             genomeHits[k] = genomeHits[j];
-                            k++;
                         }
+                        k++;
                     } else {
                         remove_count++;
                     }
@@ -5297,20 +5297,9 @@ public:
                 if(remove_count > 0) {
                     genomeHits.resize(genomeHits.size() - remove_count);
                 }
-            } else if(genomeHit.score() < max(_minsc[rdi], bestScore - sc.mm(255))) {
+            } else if(genomeHit.score() < max(_minsc[rdi], bestScore - cushion)) {
                 genomeHits.pop_back();
             }
-#else
-            if(genomeHit.score() > bestScore) {
-                bestScore = genomeHit.score();
-                if(genomeHits.size() > prev_numHits + 1) {
-                    genomeHits[prev_numHits] = genomeHits.back();
-                    genomeHits.resize(prev_numHits + 1);
-                }
-            } else if(genomeHit.score() < bestScore) {
-                genomeHits.pop_back();
-            }
-#endif
         }
         
         return (index_t)genomeHits.size();
