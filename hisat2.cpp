@@ -291,10 +291,12 @@ static string alignSumFile; // write alignment summary stat. to this file
 static bool newAlignSummary;
 
 static int bowtie2_dp; // Bowtie2's dynamic programming alignment (0: no dynamic programming, 1: conditional dynamic programming, and 2: uncoditional dynamic programming)
+static bool fast;           // --fast
 static bool sensitive;      // --sensitive
 static bool very_sensitive; // --very-sensitive
 
 static bool repeat;
+static bool use_repeat_index;
 static EList<size_t> readLens;
 
 
@@ -525,10 +527,12 @@ static void resetOptions() {
     newAlignSummary = false;
     
     bowtie2_dp = 0; // disable Bowtie2's dynamic programming alignment
+    fast = false;
     sensitive = false;
     very_sensitive = false;
     
     repeat = false; // true iff alignments to repeat sequences are directly reported.
+    use_repeat_index = true;
     readLens.clear();
 }
 
@@ -754,6 +758,7 @@ static struct option long_options[] = {
     {(char*)"enable-dp",       no_argument,        0,        ARG_DP},
     {(char*)"bowtie2-dp",      required_argument,  0,        ARG_DP},
     {(char*)"repeat",          no_argument,        0,        ARG_REPEAT},
+    {(char*)"no-repeat-index", no_argument,        0,        ARG_NO_REPEAT_INDEX},
     {(char*)"read-lengths",    required_argument,  0,        ARG_READ_LENGTHS},
 	{(char*)0, 0, 0, 0} // terminator
 };
@@ -859,29 +864,22 @@ static void printUsage(ostream& out) {
 		// << "   --fast                 -D 10 -R 2 -N 0 -L 22 -i S,0,2.50" << endl
 		// << "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
 		// << "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
+        << "   --fast                 --no-repeat-index" << endl
         << "   --sensitive            --bowtie2-dp 1 -k 30 --score-min L,0,-0.5" << endl
         << "   --very-sensitive       --bowtie2-dp 2 -k 50 --score-min L,0,-1" << endl
 		<< endl
-#if 0
-		<< "  For --local:" << endl
-		<< "   --very-fast-local      -D 5 -R 1 -N 0 -L 25 -i S,1,2.00" << endl
-		<< "   --fast-local           -D 10 -R 2 -N 0 -L 22 -i S,1,1.75" << endl
-		<< "   --sensitive-local      -D 15 -R 2 -N 0 -L 20 -i S,1,0.75 (default)" << endl
-		<< "   --very-sensitive-local -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
-		<< endl
-#endif
 	    << " Alignment:" << endl
 		//<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		//<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
 		//<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
-        << "  --repeat                           report alignments to repeat sequences directly"
-        << "  --bowtie2-dp <int>                 use Bowtie2's dynamic programming alignment algorithm (0) - 0: no dynamic programming, 1: conditional dynamic programming, and 2: unconditional dynamic programming (slowest)"
+        << "  --bowtie2-dp <int> use Bowtie2's dynamic programming alignment algorithm (0) - 0: no dynamic programming, 1: conditional dynamic programming, and 2: unconditional dynamic programming (slowest)"
 		<< "  --n-ceil <func>    func for max # non-A/C/G/Ts permitted in aln (L,0,0.15)" << endl
 		//<< "  --dpad <int>       include <int> extra ref chars on sides of DP table (15)" << endl
 		//<< "  --gbar <int>       disallow gaps within <int> nucs of read extremes (4)" << endl
 		<< "  --ignore-quals     treat all quality values as 30 on Phred scale (off)" << endl
 	    << "  --nofw             do not align forward (original) version of read (off)" << endl
 	    << "  --norc             do not align reverse-complement version of read (off)" << endl
+        << "  --no-repeat-index  do not use repeat index" << endl
 		<< endl
         << " Spliced Alignment:" << endl
         << "  --pen-cansplice <int>              penalty for a canonical splice site (0)" << endl
@@ -915,7 +913,8 @@ static void printUsage(ostream& out) {
 		<< "                     (L,0.0,-0.2)" << endl
 		<< endl
 	    << " Reporting:" << endl
-	    << "  -k <int> (default: 5) report up to <int> alns per read" << endl
+	    << "  -k <int> report up to <int> alns per read (default: 5)" << endl
+        << "  --repeat report alignments to repeat sequences directly"
 		<< endl
 	    //<< " Effort:" << endl
 	    //<< "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
@@ -1425,6 +1424,7 @@ static void parseOption(int next_option, const char *arg) {
 		}
 		case ARG_PRESET_FAST_LOCAL: localAlign = true;
 		case ARG_PRESET_FAST: {
+            fast = true;
 			presetList.push_back("fast%LOCAL%"); break;
 		}
 		case ARG_PRESET_SENSITIVE_LOCAL: localAlign = true;
@@ -1751,6 +1751,10 @@ static void parseOption(int next_option, const char *arg) {
             repeat = true;
             break;
         }
+        case ARG_NO_REPEAT_INDEX: {
+            use_repeat_index = false;
+            break;
+        }
         case ARG_READ_LENGTHS: {
             EList<string> str_readLens;
             tokenize(arg, ",", str_readLens);
@@ -1860,7 +1864,9 @@ static void parseOptions(int argc, const char **argv) {
 		msample = true;
 	}
     
-    if(very_sensitive) {
+    if(fast) {
+        use_repeat_index = false;
+    } else if(very_sensitive) {
         bowtie2_dp = 2;
         if(khits < 50) {
             khits = 50;
@@ -3807,7 +3813,7 @@ static void driver(
         std::ifstream infile((rep_adjIdxBase + ".1.ht2").c_str());
         rep_index_exists = infile.good();
     }
-    if(rep_index_exists) {
+    if(rep_index_exists && use_repeat_index) {
         rgfm = new RFM<index_t>(
                                 rep_adjIdxBase,
                                 raltdb,
@@ -3921,7 +3927,7 @@ static void driver(
 		readEbwtRefnames<index_t>(adjIdxBase, refnames);
         EList<size_t> replens;
         EList<string> repnames;
-        if(rep_index_exists) {
+        if(rep_index_exists && use_repeat_index) {
             rgfm->getReferenceNames(repnames);
             rgfm->getReferenceLens(replens);
         }
@@ -4024,7 +4030,7 @@ static void driver(
         if(!refs->loaded()) throw 1;
         
         BitPairReference* rrefs = NULL;
-        if(rep_index_exists) {
+        if(rep_index_exists && use_repeat_index) {
             const EList<uint8_t>& included = rgfm->getReadIncluded();
             rrefs = new BitPairReference(
                                          rep_adjIdxBase,

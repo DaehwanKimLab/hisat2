@@ -186,6 +186,7 @@ enum {
     ARG_NEW_SUMMARY,
     ARG_DP,
     ARG_REPEAT,
+    ARG_NO_REPEAT_INDEX,
     ARG_READ_LENGTHS
 };
 
