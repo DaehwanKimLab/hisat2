@@ -64,6 +64,7 @@ public:
 	 */
 	BitPairReference(
 		const string& in,
+        const EList<uint8_t>* included,
 		bool color,
 		bool sanity = false,
 		EList<string>* infiles = NULL,

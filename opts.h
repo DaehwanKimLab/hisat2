@@ -185,7 +185,8 @@ enum {
     ARG_SUMMARY_FILE,
     ARG_NEW_SUMMARY,
     ARG_DP,
-    ARG_REPEAT
+    ARG_REPEAT,
+    ARG_READ_LENGTHS
 };
 
 #endif

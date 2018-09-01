@@ -459,6 +459,7 @@ static void driver(
     initializeCntBit();
 	EList<FileBuf*> is(MISC_CAT);
 	bool bisulfite = false;
+    bool repeat = parent_szs != NULL;
 	RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
 	assert_gt(infiles.size(), 0);
 	if(format == CMDLINE) {
@@ -512,8 +513,9 @@ static void driver(
 		if(!reverse && (writeRef || justRef)) {
 			filesWritten.push_back(outfile + ".3." + gfm_ext);
 			filesWritten.push_back(outfile + ".4." + gfm_ext);
-			sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck);
+            sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck);
 		} else {
+            assert(false);
 			sztot = BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
 		}
 	}
@@ -529,7 +531,7 @@ static void driver(
     filesWritten.push_back(outfile + ".8." + gfm_ext);
 	TStr s;
     GFM<TIndexOffU>* gfm = NULL;
-    if(parent_szs == NULL) { // base index
+    if(!repeat) { // base index
         gfm = new HGFM<TIndexOffU>(
                                    s,
                                    packed,

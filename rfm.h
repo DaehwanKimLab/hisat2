@@ -63,6 +63,7 @@ public:
 	GFM<index_t>(in,
                  altdb,
                  NULL,
+                 NULL,
                  needEntireReverse,
                  fw,
                  overrideOffRate,
@@ -278,29 +279,31 @@ class RFM : public GFM<index_t> {
 public:
 	/// Construct a GFM from the given input file
 	RFM(const string& in,
-         ALTDB<index_t>* altdb,
-         RepeatDB<index_t>* repeatdb,
-         int needEntireReverse,
-         bool fw,
-         int32_t overrideOffRate, // = -1,
-         int32_t offRatePlus, // = -1,
-         bool useMm, // = false,
-         bool useShmem, // = false,
-         bool mmSweep, // = false,
-         bool loadNames, // = false,
-         bool loadSASamp, // = true,
-         bool loadFtab, // = true,
-         bool loadRstarts, // = true,
-         bool loadSpliceSites, // = true,
-         bool verbose, // = false,
-         bool startVerbose, // = false,
-         bool passMemExc, // = false,
-         bool sanityCheck, // = false
-         bool useHaplotype, // = false
-         bool skipLoading = false) :
+        ALTDB<index_t>* altdb,
+        RepeatDB<index_t>* repeatdb,
+        EList<size_t>* readLens,
+        int needEntireReverse,
+        bool fw,
+        int32_t overrideOffRate, // = -1,
+        int32_t offRatePlus, // = -1,
+        bool useMm, // = false,
+        bool useShmem, // = false,
+        bool mmSweep, // = false,
+        bool loadNames, // = false,
+        bool loadSASamp, // = true,
+        bool loadFtab, // = true,
+        bool loadRstarts, // = true,
+        bool loadSpliceSites, // = true,
+        bool verbose, // = false,
+        bool startVerbose, // = false,
+        bool passMemExc, // = false,
+        bool sanityCheck, // = false
+        bool useHaplotype, // = false
+        bool skipLoading = false) :
     GFM<index_t>(in,
                  altdb,
                  repeatdb,
+                 readLens,
                  needEntireReverse,
                  fw,
                  overrideOffRate,
@@ -441,16 +444,18 @@ public:
     }
     
     index_t getLocalRFM_idx(index_t readLen) {
-        for(size_t i = 0; i < _localRFMLens.size(); i++) {
-            if(_localRFMLens[i].first >= readLen) {
+        for(size_t i = 0; i < this->_readLens.size(); i++) {
+            if(this->_readLens[i].first >= readLen) {
                 return i;
             }
         }
-        return _localRFMLens.size() - 1;
+        return this->_readLens.size() - 1;
     }
     
+    bool empty() const { return _localRFMs.empty(); }
+    
     LocalRFM<index_t>& getLocalRFM(index_t idx) {
-        assert_lt(idx, _localRFMLens.size());
+        assert_lt(idx, this->_readLens.size());
         return *_localRFMs[idx];
     }
     
@@ -472,7 +477,6 @@ public:
 	EList<index_t>              _refLens;    /// approx lens of ref seqs (excludes trailing ambig chars)
 	EList<LocalRFM<index_t>*>   _localRFMs;
     
-    EList<pair<index_t, index_t> >      _localRFMLens;
     EList<pair<streampos, streampos> >  _localRFMFilePos;
 	
 	FILE                        *_in1;    // input fd for primary index file
@@ -693,24 +697,6 @@ RFM<index_t>::RFM(
         throw 1;
     }
     
-    _localRFMLens.resizeExact(szs.size());
-    for(size_t i = 0; i < _localRFMLens.size(); i++) {
-        _localRFMLens[i].first = numeric_limits<index_t>::max();
-        _localRFMLens[i].second = 0;
-    }
-    const EList<Repeat<index_t> >& repeats = this->_repeatdb.repeats();
-    for(size_t i = 0; i < repeats.size(); i++) {
-        index_t id = repeats[i].repID;
-        index_t len = repeats[i].repLen;
-        assert_lt(id, _localRFMLens.size());
-        if(_localRFMLens[id].first > len) {
-            _localRFMLens[id].first = len;
-        }
-        if(_localRFMLens[id].second < len) {
-            _localRFMLens[id].second = len;
-        }
-    }
-    
     // Split the whole genome into a set of local indexes
     uint32_t be = this->toBe();
     assert(fout1.good());
@@ -723,11 +709,11 @@ RFM<index_t>::RFM(
     writeI32(fout2, 1, be); // endian hint for secondary stream
     int version = GFM<index_t>::getIndexVersion();
     writeI32(fout1, version, be); // version
-    index_t nLocalRFMs = szs.size();
+    index_t nLocalRFMs = this->_readLens.size();
     writeIndex<index_t>(fout1, nLocalRFMs, be); // number of local Ebwts
-    for(size_t i = 0; i < _localRFMLens.size(); i++) {
-        writeIndex<index_t>(fout1, _localRFMLens[i].first, be);
-        writeIndex<index_t>(fout1, _localRFMLens[i].second, be);
+    for(size_t i = 0; i < this->_readLens.size(); i++) {
+        writeIndex<index_t>(fout1, this->_readLens[i].first, be);
+        writeIndex<index_t>(fout1, this->_readLens[i].second, be);
     }
     streampos filepos = fout1.tellp();
     _localRFMFilePos.resizeExact(szs.size());
@@ -842,9 +828,6 @@ RFM<index_t>::RFM(
         
         build_worker(&tParam);
         
-        _localRFMFilePos[tidx].first = fout1.tellp();
-        _localRFMFilePos[tidx].second = fout2.tellp();
-        
         LocalRFM<index_t>(
                           tParam.s,
                           tParam.sa,
@@ -878,6 +861,9 @@ RFM<index_t>::RFM(
         if(tParam.sa != NULL) {
             delete tParam.sa; tParam.sa = NULL;
         }
+        
+        _localRFMFilePos[tidx].first = fout1.tellp();
+        _localRFMFilePos[tidx].second = fout2.tellp();
     }
     assert_eq(curr_sztot, sztot);
     
@@ -1070,10 +1056,11 @@ void RFM<index_t>::readIntoMemory(
     readI32(_in1, switchEndian); bytesRead += 4;
 	index_t nlocalRFMs = readIndex<index_t>(_in1, switchEndian); bytesRead += sizeof(index_t);
     
-    _localRFMLens.resizeExact(nlocalRFMs);
-    for(size_t i = 0; i < _localRFMLens.size(); i++) {
-        _localRFMLens[i].first = readIndex<index_t>(_in1, switchEndian);
-        _localRFMLens[i].second = readIndex<index_t>(_in1, switchEndian);
+    EList<pair<index_t, index_t> > localRFMLens;
+    localRFMLens.resizeExact(nlocalRFMs);
+    for(size_t i = 0; i < localRFMLens.size(); i++) {
+        localRFMLens[i].first = readIndex<index_t>(_in1, switchEndian);
+        localRFMLens[i].second = readIndex<index_t>(_in1, switchEndian);
     }
     
     _localRFMFilePos.resizeExact(nlocalRFMs);
@@ -1084,8 +1071,15 @@ void RFM<index_t>::readIntoMemory(
 	
 	clearLocalRFMs();
 	
+    assert_eq(this->_readIncluded.size(), nlocalRFMs);
     string base = "";
 	for(size_t i = 0; i < nlocalRFMs; i++) {
+        if(!this->_readIncluded[i])
+            continue;
+        if(i > 0) {
+            fseek(_in1, _localRFMFilePos[i-1].first, SEEK_SET);
+            fseek(_in2, _localRFMFilePos[i-1].second, SEEK_SET);
+        }
 		LocalRFM<index_t> *localRFM = new LocalRFM<index_t>(base,
                                                             NULL,
                                                             _in1,
@@ -1113,7 +1107,10 @@ void RFM<index_t>::readIntoMemory(
                                                             false); // use haplotypes?
         
 		_localRFMs.push_back(localRFM);
-	}	
+	}
+    
+    fseek(_in1, _localRFMFilePos.back().first, SEEK_SET);
+    fseek(_in2, _localRFMFilePos.back().second, SEEK_SET);
 		
 #ifdef BOWTIE_MM
     fseek(_in1, 0, SEEK_SET);

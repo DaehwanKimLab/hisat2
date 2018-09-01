@@ -243,38 +243,36 @@ public:
         f_out.seekp(origpos);
     }
     
-    void read(ifstream& f_in, bool bigEndian) {
+    void read(ifstream& f_in, bool bigEndian, const EList<uint8_t>& includeRepeat) {
         index_t numRepeatGroup = readIndex<index_t>(f_in, bigEndian);
+        EList<streampos> filePos; filePos.resizeExact(numRepeatGroup);
         for(index_t i = 0; i < numRepeatGroup; i++) {
-            readIndex<uint64_t>(f_in, bigEndian);
+            filePos[i] = readIndex<uint64_t>(f_in, bigEndian);
         }
-        for(index_t i = 0; i < numRepeatGroup; i++) {
+        for(index_t i = 0, repID = 0; i < numRepeatGroup; i++) {
+            if(!includeRepeat[i])
+                continue;
+            if(i > 0) {
+                f_in.seekg(filePos[i-1]);
+            }
             index_t numRepeats = readIndex<index_t>(f_in, bigEndian);
             index_t repeat_size = _repeats.size();
             _repeats.resizeExact(repeat_size + numRepeats);
             for(index_t j = 0; j < numRepeats; j++) {
                 _repeats[repeat_size+j].read(f_in, bigEndian);
-                
-                // DK - debugging purposes
-                const Repeat<index_t>& repeat = _repeats[repeat_size+j];
-                for(size_t a = 0; a < repeat.alleles.size(); a++) {
-                    if(i == 2) {
-                        assert_geq(repeat.alleles[a].alleleLen, 100);
-                    } else if(i == 1) {
-                        assert_geq(repeat.alleles[a].alleleLen, 76);
-                    } else {
-                        assert_geq(repeat.alleles[a].alleleLen, 51);
-                    }
-                }
-
+                _repeats[repeat_size+j].repID = repID;
             }
+            repID++;
         }
+        f_in.seekg(filePos.back());
     }
     
     // Build an internal table to enable rapid search of repeats
     //  and converts joined offsets to chromosome IDs (tid) and loci (toff)
     void construct(const index_t* rstarts, index_t rlen) {
         _repeatMap.clear();
+        if(_repeats.empty())
+            return;
         for(index_t r = 0; r < _repeats.size(); r++) {
             if(_repeats[r].repID >= _repeatMap.size()) {
                 _repeatMap.expand();

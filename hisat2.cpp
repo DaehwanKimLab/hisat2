@@ -295,6 +295,7 @@ static bool sensitive;      // --sensitive
 static bool very_sensitive; // --very-sensitive
 
 static bool repeat;
+static EList<size_t> readLens;
 
 
 #define DMAX std::numeric_limits<double>::max()
@@ -528,6 +529,7 @@ static void resetOptions() {
     very_sensitive = false;
     
     repeat = false; // true iff alignments to repeat sequences are directly reported.
+    readLens.clear();
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -752,6 +754,7 @@ static struct option long_options[] = {
     {(char*)"enable-dp",       no_argument,        0,        ARG_DP},
     {(char*)"bowtie2-dp",      required_argument,  0,        ARG_DP},
     {(char*)"repeat",          no_argument,        0,        ARG_REPEAT},
+    {(char*)"read-lengths",    required_argument,  0,        ARG_READ_LENGTHS},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -1746,6 +1749,16 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_REPEAT: {
             repeat = true;
+            break;
+        }
+        case ARG_READ_LENGTHS: {
+            EList<string> str_readLens;
+            tokenize(arg, ",", str_readLens);
+            for(size_t i = 0; i < str_readLens.size(); i++) {
+                int readLen = parseInt(20, "--read-lengths arg must be at least 20", str_readLens[i].c_str());
+                readLens.push_back(readLen);
+            }
+            readLens.sort();
             break;
         }
 		default:
@@ -3799,6 +3812,7 @@ static void driver(
                                 rep_adjIdxBase,
                                 raltdb,
                                 repeatdb,
+                                &readLens,
                                 -1,       // fw index
                                 true,     // index is for the forward direction
                                 /* overriding: */ offRate,
@@ -3994,6 +4008,7 @@ static void driver(
         auto_ptr<BitPairReference> refs(
                                         new BitPairReference(
                                                              adjIdxBase,
+                                                             NULL,
                                                              false,
                                                              sanityCheck,
                                                              NULL,
@@ -4010,8 +4025,10 @@ static void driver(
         
         BitPairReference* rrefs = NULL;
         if(rep_index_exists) {
+            const EList<uint8_t>& included = rgfm->getReadIncluded();
             rrefs = new BitPairReference(
                                          rep_adjIdxBase,
+                                         &included,
                                          false,
                                          sanityCheck,
                                          NULL,

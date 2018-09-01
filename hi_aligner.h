@@ -4151,16 +4151,13 @@ public:
         bool perform_repeat_alignment = false;
         
         index_t indexIdx[2] = {0, 0};
-        if(rgfm != NULL) {
+#if 1
+        if(rgfm != NULL && !((RFM<index_t>*)rgfm)->empty()) {
+            // use repeat index to decide whether a read or a pair is from repetitive sequences
             indexIdx[0] = ((RFM<index_t>*)rgfm)->getLocalRFM_idx((*_rds)[0].length());
             if(_paired) {
                 indexIdx[1] = ((RFM<index_t>*)rgfm)->getLocalRFM_idx((*_rds)[1].length());
             }
-        }
-
-#if 1
-        if(rgfm != NULL) {
-            // use repeat index to decide whether a read or a pair is from repetitive sequences
             LocalRFM<index_t>& rfm = ((RFM<index_t>*)rgfm)->getLocalRFM(indexIdx[0]);
             bool skip_repeat[2][2] = {{false, false}, {false, false}};
             if(_paired) {

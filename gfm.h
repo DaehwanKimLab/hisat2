@@ -654,6 +654,7 @@ public:
 	GFM(const string& in,
         ALTDB<index_t>* altdb,
         RepeatDB<index_t>* repeatdb,
+        EList<size_t>* readLens,
         int needEntireReverse,
         bool fw,
         int32_t overrideOffRate, // = -1,
@@ -686,6 +687,12 @@ public:
 		useShmem_ = useShmem;
 		_in1Str = in + ".1." + gfm_ext;
 		_in2Str = in + ".2." + gfm_ext;
+        if(readLens != NULL) {
+            _readLens.resizeExact(readLens->size());
+            for(size_t i = 0; i < readLens->size(); i++) {
+                _readLens[i].first = _readLens[i].second = (*readLens)[i];
+            }
+        }
         if(skipLoading) return;
 		
         if(repeatdb == NULL) {
@@ -789,24 +796,48 @@ public:
         }
         
         // Read repeats
-        // Check if it hits the end of file, and this routine is needed for backward compatibility
         _repeat = false;
         if(repeatdb != NULL) {
-            if(in7.peek() != std::ifstream::traits_type::eof()) {
-                repeatdb->read(in7, this->toBe());
-                _repeat = !repeatdb->empty();
+            _repeat = true;
+            index_t numRepeatIndex = readIndex<index_t>(in7, this->toBe());
+            assert_gt(numRepeatIndex, 0);
+            EList<pair<index_t, index_t> > repeatLens; repeatLens.resizeExact(numRepeatIndex);
+            for(size_t k = 0; k < numRepeatIndex; k++) {
+                repeatLens[k].first = readIndex<index_t>(in7, this->toBe());
+                repeatLens[k].second = readIndex<index_t>(in7, this->toBe());
             }
-            
-            if(_repeat) {
-                index_t numKmertables = readIndex<index_t>(in7, this->toBe());
-                _repeat_kmertables.resizeExact(numKmertables);
-                for(size_t k = 0; k < numKmertables; k++) {
-                    readIndex<uint64_t>(in7, this->toBe());
-                }
-                for(size_t k = 0; k < numKmertables; k++) {
-                    _repeat_kmertables[k].read(in7, this->toBe());
+            if(_readLens.empty()) {
+                _readLens = repeatLens;
+            }
+            _readIncluded.resizeExact(numRepeatIndex);
+            _readIncluded.fillZero();
+            size_t k = 0, k2 = 0;
+            while(k < numRepeatIndex && k2 < _readLens.size()) {
+                if(repeatLens[k].first >= _readLens[k2].first) {
+                    _readIncluded[k] = true;
+                    _readLens[k2] = repeatLens[k];
+                    k2++;
+                } else {
+                    k++;
                 }
             }
+            _readLens.resize(k2);
+            repeatdb->read(in7, this->toBe(), _readIncluded);
+            index_t numKmertables = readIndex<index_t>(in7, this->toBe());
+            EList<streampos> filePos; filePos.resizeExact(numKmertables);
+            for(size_t k = 0; k < numKmertables; k++) {
+                filePos[k] = readIndex<uint64_t>(in7, this->toBe());
+            }
+            for(size_t k = 0; k < numKmertables; k++) {
+                if(!_readIncluded[k])
+                    continue;
+                if(k > 0) {
+                    in7.seekg(filePos[k-1]);
+                }
+                _repeat_kmertables.expand();
+                _repeat_kmertables.back().read(in7, this->toBe());
+            }
+            in7.seekg(filePos.back());
         }
         
         in7.close();
@@ -1143,7 +1174,12 @@ public:
 		// characters in one of the input sequences.
 		EList<RefRecord> szs(EBWT_CAT);
 		std::pair<index_t, index_t> sztot;
-		sztot = BitPairReference::szsFromFasta(is, file, bigEndian, refparams, szs, sanity);
+		sztot = BitPairReference::szsFromFasta(is,
+                                               file,
+                                               bigEndian,
+                                               refparams,
+                                               szs,
+                                               sanity);
 		// Construct Ebwt from input strings and parameters
 		GFM<index_t> *gfmFw = new GFM<index_t>(
                                                TStr(),
@@ -1170,7 +1206,12 @@ public:
                                                sanity);      // verify results and internal consistency
 		refparams.reverse = reverse;
 		szs.clear();
-		sztot = BitPairReference::szsFromFasta(is, file, bigEndian, refparams, szs, sanity);
+		sztot = BitPairReference::szsFromFasta(is,
+                                               file,
+                                               bigEndian,
+                                               refparams,
+                                               szs,
+                                               sanity);
 		// Construct Ebwt from input strings and parameters
 		GFM<index_t> *gfmBw = new GFM<index_t>(
                                                TStr(),
@@ -2035,11 +2076,30 @@ public:
                         cerr << ") does not match sequence length (" << s.length() << ")" << endl;
                         throw 1;
                     }
-                }
-                
-                _repeatdb.write(fout7, this->toBe());
-                
-                if(_repeat) {
+
+                    _readLens.resizeExact(szs.size());
+                    for(size_t i = 0; i < _readLens.size(); i++) {
+                        _readLens[i].first = numeric_limits<index_t>::max();
+                        _readLens[i].second = 0;
+                    }
+                    for(size_t i = 0; i < repeats.size(); i++) {
+                        index_t id = repeats[i].repID;
+                        index_t len = repeats[i].repLen;
+                        assert_lt(id, _readLens.size());
+                        if(_readLens[id].first > len) {
+                            _readLens[id].first = len;
+                        }
+                        if(_readLens[id].second < len) {
+                            _readLens[id].second = len;
+                        }
+                    }
+
+                    writeIndex<index_t>(fout7, _readLens.size(), this->toBe());
+                    for(size_t i = 0; i < _readLens.size(); i++) {
+                        writeIndex<index_t>(fout7, _readLens[i].first, this->toBe());
+                        writeIndex<index_t>(fout7, _readLens[i].second, this->toBe());
+                    }
+                    _repeatdb.write(fout7, this->toBe());
                     writeIndex<index_t>(fout7, chr_szs.size(), this->toBe()); // number of repeat indexes
                     EList<string> seqs;
                     EList<streampos> tableFilePos;
@@ -2342,6 +2402,7 @@ public:
 	EList<string>& refnames()        { return _refnames; }
     bool        fw() const           { return fw_; }
     bool        repeat() const       { return _repeat; }
+    const EList<uint8_t>& getReadIncluded() const { return _readIncluded; }
     
 #ifdef POPCNT_CAPABILITY
     bool _usePOPCNTinstruction;
@@ -4206,6 +4267,8 @@ public:
     EList<RB_KmerTable>        _repeat_kmertables;
     
     bool _repeat;
+    EList<pair<index_t, index_t> > _readLens;
+    EList<uint8_t>                 _readIncluded;
 
 protected:
 

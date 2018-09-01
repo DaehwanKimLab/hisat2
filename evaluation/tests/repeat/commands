@@ -6,7 +6,7 @@ date; time hisat2 --no-spliced-alignment --score-min C,0 -X 800 -p 3 -x 20 -f -1
 
 # Chromosome 22
 
-/usr/bin/time -l hisat2-repeat -p 3 --repeat-edit 0 --repeat-length 100-300 --repeat-count 5 22.fa 22_rep
+/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --repeat-length 51-300,76-300,100-300,101-300,151-300 --repeat-count 5 22.fa 22_rep
 
 /usr/bin/time -l hisat2-build -p 3 22.fa --repeat-ref 22_rep.rep.fa --repeat-info 22_rep.rep.info 22_rep
 
@@ -22,7 +22,7 @@ cp 22_rep*ht2 ../../indexes/HISAT2_22
 
 # Human genome
 
-/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --repeat-edit 0 --repeat-length 100-300 --repeat-count 5 genome.fa genome_rep
+/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --repeat-length 100-300,101-300 --repeat-count 5 genome.fa genome_rep
 
 /usr/bin/time -l hisat2-build -p 3 genome.fa --repeat-ref genome_rep.rep.fa --repeat-info genome_rep.rep.info genome_rep
 
