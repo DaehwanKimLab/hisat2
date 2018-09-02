@@ -4656,6 +4656,7 @@ public:
                  AlnSinkWrap<index_t>&      sink)
     {
         const ReportingParams& rp = sink.reportingParams();
+        
         // Pick up a candidate from a read or its reverse complement
         // (for pair, also consider mate and its reverse complement)
         while(pickNextReadToSearch(rdi, fw)) {
@@ -4905,7 +4906,8 @@ public:
                           ReadBWTHit<index_t>&    hit,     // holds all the seed hits (and exact hit)
                           RandomSource&           rnd,
                           bool&                   pseudogeneStop,  // stop if mapped to multiple locations due to processed pseudogenes
-                          bool&                   anchorStop);
+                          bool&                   anchorStop,
+                          index_t                 maxHitLen = (index_t)INDEX_MAX);
     
     /**
      * Global FM index search
@@ -6365,7 +6367,8 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
                                                           ReadBWTHit<index_t>&      hit,     // holds all the seed hits (and exact hit)
                                                           RandomSource&             rnd,     // pseudo-random source
                                                           bool&                     pseudogeneStop,
-                                                          bool&                     anchorStop)
+                                                          bool&                     anchorStop,
+                                                          index_t                   maxHitLen)
 {
     bool pseudogeneStop_ = pseudogeneStop, anchorStop_ = anchorStop;
     pseudogeneStop = anchorStop = false;
@@ -6450,7 +6453,7 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
     index_t same_range = 0, similar_range = 0;
     HIER_INIT_LOCS(range.first, range.second, tloc, bloc, gfm);
     // Keep going
-    while(dep < len) {
+    while(dep < len && dep - offset < maxHitLen) {
         int c = seq[len-dep-1];
         if(c > 3) {
             rangeTemp.first = rangeTemp.second = 0;

@@ -1866,23 +1866,23 @@ static void parseOptions(int argc, const char **argv) {
     
     if(fast) {
         use_repeat_index = false;
-    } else if(very_sensitive) {
-        bowtie2_dp = 2;
-        if(khits < 50) {
-            khits = 50;
-            saw_k = true;
-        }
-        scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -1.0f);
-        
     } else if(sensitive) {
         if(bowtie2_dp == 0) {
             bowtie2_dp = 1;
         }
+        
+        if(khits < 10) {
+            khits = 10;
+            saw_k = true;
+        }
+        scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -0.5f);
+    } else if(very_sensitive) {
+        bowtie2_dp = 2;
         if(khits < 30) {
             khits = 30;
             saw_k = true;
         }
-        scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -0.5f);
+        scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -1.0f);
     }
     
 	if(mates1.size() != mates2.size()) {
