@@ -241,6 +241,7 @@ static void print_ref_sequences(
 {
 	BitPairReference ref(
 		adjustedGFMFileBase, // input basename
+        NULL,
 		false,                // true -> expect colorspace reference
 		false,                // sanity-check reference
 		NULL,                 // infiles
@@ -354,6 +355,7 @@ static void print_snps(
                      fname,
                      &altdb,
 					 &repeatdb,
+                     NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -438,6 +440,7 @@ static void print_splicesites(
                      fname,
                      &altdb,
 					 &repeatdb,
+                     NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -512,6 +515,7 @@ static void print_exons(
                      fname,
                      &altdb,
 					 &repeatdb,
+                     NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -588,6 +592,7 @@ static void print_index_summary(
                      fname,
                      &altdb,
 					 &repeatdb,
+                     NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -673,6 +678,7 @@ static void driver(
                                        adjustedEbwtFileBase,
                                        &altdb,
 									   &repeatdb,
+                                       NULL,
                                        -1,                   // don't care about entire-reverse
                                        true,                 // index is for the forward direction
                                        -1,                   // offrate (-1 = index default)

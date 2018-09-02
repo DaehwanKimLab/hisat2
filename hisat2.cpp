@@ -3162,6 +3162,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                        secondary,
                        localAlign,
                        bowtie2_dp,
+                       sensitive | very_sensitive,
                        repeat);
     
 	// Instantiate a mapping quality calculator

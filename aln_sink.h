@@ -231,6 +231,7 @@ struct ReportingParams {
                              bool secondary_,
                              bool localAlign_,
                              int bowtie2_dp_,
+                             bool sensitive_,
                              bool repeat_)
                              
 	{
@@ -245,6 +246,7 @@ struct ReportingParams {
              secondary_,
              localAlign_,
              bowtie2_dp_,
+             sensitive_,
              repeat_);
 	}
 
@@ -259,6 +261,7 @@ struct ReportingParams {
               bool secondary_,
               bool localAlign_,
               int bowtie2_dp_,
+              bool sensitive_,
               bool repeat_)
 	{
 		khits   = khits_;     // -k (or high if -a)
@@ -271,6 +274,7 @@ struct ReportingParams {
         secondary = secondary_;
         localAlign = localAlign_;
         bowtie2_dp = bowtie2_dp_;
+        sensitive = sensitive_;
         repeat = repeat_;
 	}
 	
@@ -357,6 +361,9 @@ struct ReportingParams {
     
     // true iff we allow dynamic alignment
     int bowtie2_dp;
+    
+    // true iff we allow sensitive alignment
+    bool sensitive;
                              
     // true iff we output alignments to repeat sequences
     bool repeat;
