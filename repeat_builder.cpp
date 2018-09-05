@@ -4405,6 +4405,14 @@ bool RB_SubSA::isDone(TIndexOffU off, TIndexOffU len) const
     return true;
 }
 
+bool sortRbySF(const pair<TIndexOffU, TIndexOffU> &a,
+               const pair<TIndexOffU, TIndexOffU> &b)
+{
+    if (a.second > b.second) return true;
+    else if ((a.second == b.second) && (a.first < b.first)) return true;
+    else return false;
+}
+
 template<typename TStr>
 void RB_SubSA::buildRepeatBase(const TStr& s,
                                CoordHelper& coordHelper,
@@ -4453,20 +4461,23 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             for (TIndexOffU i = 0; i < end; i++) {
                 TIndexOffU cur_suf = tmp_sufs[i].suffix;
                 size_t prev_base = prev_bases[i];
+                TIndexOffU prev_lcp = seed_len_;
                 for (TIndexOffU j = end - 1; j > i; j--) {
                     size_t next_prev_base = prev_bases[j];
                     if (prev_base == next_prev_base) continue;
                     TIndexOffU next_suf = tmp_sufs[j].suffix;
-                    TIndexOffU lcp = suffixLcp(s, cur_suf, next_suf);
+                    TIndexOffU lcp = prev_lcp + suffixLcp(s, cur_suf + prev_lcp, next_suf + prev_lcp);
                     tmp_sufs[i].related_suffixes.expand();
                     tmp_sufs[i].related_suffixes.back().first = next_suf;
                     tmp_sufs[i].related_suffixes.back().second = lcp;
                     tmp_sufs[j].related_suffixes.expand();
                     tmp_sufs[j].related_suffixes.back().first = cur_suf;
                     tmp_sufs[j].related_suffixes.back().second = lcp;
+                    prev_lcp = lcp;
                 }
-            }
 
+                sort(tmp_sufs[i].related_suffixes.begin(), tmp_sufs[i].related_suffixes.end(), sortRbySF);
+            }
             for (TIndexOffU i = 0; i < tmp_sufs.size(); i++) {
                 sufs.expand();
                 sufs.back() = tmp_sufs[i];

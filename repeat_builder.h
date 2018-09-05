@@ -849,7 +849,6 @@ struct RB_suffix {
     }
  };
 
-
 // find and write repeats
 template<typename TStr>
 class RepeatBuilder {
