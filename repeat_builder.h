@@ -779,7 +779,8 @@ public:
     void push_back(const TStr& s,
                    CoordHelper& coordHelper,
                    TIndexOffU saElt,
-                   bool lastInput = false);
+                   bool lastInput = false,
+                   bool repeat_cpg = false);
 
     inline TIndexOffU seed_len() const { return seed_len_; }
     inline TIndexOffU seed_count() const { return seed_count_; }
@@ -838,6 +839,15 @@ private:
     EList<TIndexOffU> repeat_index_;
     EList<uint32_t>   done_;
 };
+
+struct RB_suffix {
+    TIndexOffU suffix;
+    EList<pair<TIndexOffU, TIndexOffU> > related_suffixes; //<suffix, lcp> pair
+
+    bool operator<( const RB_suffix& val ) const {
+        return suffix < val.suffix;
+    }
+ };
 
 
 // find and write repeats
