@@ -19,8 +19,16 @@
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os, sys, math, gzip
+import os, sys, math, gzip, bz2
 from argparse import ArgumentParser, FileType
+"""
+"""
+COMPRESSION_NON   = 0
+COMPRESSION_GZIP  = 1
+COMPRESSION_BZIP2 = 2
+
+SEQUENCE_FASTA    = 0
+SEQUENCE_FASTQ    = 1
 
 """
 """
@@ -90,20 +98,23 @@ def parser_FA(fp):
 """
 """
 def parse_type(fname):
-    is_gzip = False
-    is_fa = True
+    compression_type = COMPRESSION_NON
+    sequence_type = SEQUENCE_FASTA
 
     ff = fname.split('.')
 
     ext = ff[-1]
     if ext.lower() == "gz":
-        is_gzip = True
+        compression_type = COMPRESSION_GZIP
+        ext = ff[-2]
+    elif ext.lower() == "bz2":
+        compression_type = COMPRESSION_BZIP2
         ext = ff[-2]
 
     if ext.lower() == "fq":
-        is_fa = False
+        sequence_type = SEQUENCE_FASTQ
 
-    return is_fa, is_gzip
+    return sequence_type, compression_type
 
 """
 """
@@ -135,16 +146,20 @@ def generate_stats(length_map):
 """
 """
 def reads_stat(read_file, read_count):
-    is_fa, is_gzip = parse_type(read_file)
+    sequence_type, compression_type = parse_type(read_file)
 
-    if is_gzip:
+    if compression_type == COMPRESSION_GZIP:
         fp = gzip.open(read_file, 'r')
+    elif compression_type == COMPRESSION_BZIP2:
+        fp = bz2.BZ2File(read_file, 'r')
     else:
+        assert (compression_type == COMPRESSION_NON)
         fp = open(read_file, 'r')
 
-    if is_fa:
+    if sequence_type == SEQUENCE_FASTA:
         fstream = parser_FA(fp)
     else:
+        assert (sequence_type == SEQUENCE_FASTQ)
         fstream = parser_FQ(fp)
 
     length_map = {}
@@ -164,7 +179,8 @@ def reads_stat(read_file, read_count):
     fp.close()
 
     cnt, mn, mx, avg =  generate_stats(length_map)
-    print cnt, mn, mx, avg
+    length_map = sorted(length_map.iteritems(), key=lambda (k,v):(v,k), reverse=True)
+    print cnt, mn, mx, avg, ",".join([str(k) for (k,v) in length_map])
 
 if __name__ == '__main__':
 

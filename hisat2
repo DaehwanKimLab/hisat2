@@ -52,6 +52,7 @@ my $align_bin_l = $os_is_nix ? 'hisat2-align-l' : 'hisat2-align-l.exe';
 my $align_prog_s= File::Spec->catpath($vol,$script_path,$align_bin_s);
 my $align_prog_l= File::Spec->catpath($vol,$script_path,$align_bin_l);
 my $align_prog  = $align_prog_s;
+my $read_stat_prog = File::Spec->catpath($vol,$script_path,"hisat2_read_statistics.py");
 my $idx_ext_l     = 'ht2l'; 
 my $idx_ext_s     = 'ht2'; 
 my $idx_ext       = $idx_ext_s; 
@@ -267,6 +268,29 @@ if ($log_fName) {
 Info("Before arg handling:\n");
 Info("  Wrapper args:\n[ @ht2w_args ]\n");
 Info("  Binary args:\n[ @ht2_args ]\n");
+
+# check read lengths
+# if read_files have more than 1 files, use first one,
+my @read_files = (scalar(@unps) > 0) ? @unps : @mate1s;
+if (scalar(@read_files) > 0) {
+	Info("Check read length: $read_files[0]\n");
+	my $cmd = "'$read_stat_prog' $read_files[0]";
+	my $read_len_str = "";
+
+	open(my $fh, "$cmd |") || Fail("Failed to run command '$cmd'\n");
+	while(readline $fh) {
+		chomp;
+		next if /^\s*$/;
+		my @ts = split(/ /);
+		$read_len_str = $ts[4];
+	}
+	close($fh);
+
+	if ($read_len_str ne "") {
+		Info("Read Length String: $read_len_str\n");
+		push @ht2_args, ("--read-lengths", $read_len_str);
+	}
+}
 
 sub cat_file($$) {
 	my ($ifn, $ofh) = @_;
