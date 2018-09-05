@@ -4461,19 +4461,19 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             for (TIndexOffU i = 0; i < end; i++) {
                 TIndexOffU cur_suf = tmp_sufs[i].suffix;
                 size_t prev_base = prev_bases[i];
-                TIndexOffU prev_lcp = seed_len_;
+
+                TIndexOffU min_lcp = ((i > 0) && (prev_bases[i-1] != prev_bases.back()) ? tmp_sufs[i-1].related_suffixes.back().second : seed_len_) ;//seed_len_;
                 for (TIndexOffU j = end - 1; j > i; j--) {
                     size_t next_prev_base = prev_bases[j];
                     if (prev_base == next_prev_base) continue;
                     TIndexOffU next_suf = tmp_sufs[j].suffix;
-                    TIndexOffU lcp = prev_lcp + suffixLcp(s, cur_suf + prev_lcp, next_suf + prev_lcp);
+                    min_lcp = min_lcp + suffixLcp(s, cur_suf + min_lcp, next_suf + min_lcp);
                     tmp_sufs[i].related_suffixes.expand();
                     tmp_sufs[i].related_suffixes.back().first = next_suf;
-                    tmp_sufs[i].related_suffixes.back().second = lcp;
+                    tmp_sufs[i].related_suffixes.back().second = min_lcp;
                     tmp_sufs[j].related_suffixes.expand();
                     tmp_sufs[j].related_suffixes.back().first = cur_suf;
-                    tmp_sufs[j].related_suffixes.back().second = lcp;
-                    prev_lcp = lcp;
+                    tmp_sufs[j].related_suffixes.back().second = min_lcp;
                 }
 
                 sort(tmp_sufs[i].related_suffixes.begin(), tmp_sufs[i].related_suffixes.end(), sortRbySF);
