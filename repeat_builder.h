@@ -844,8 +844,17 @@ struct RB_suffix {
     TIndexOffU suffix;
     EList<pair<TIndexOffU, TIndexOffU> > related_suffixes; //<suffix, lcp> pair
 
-    bool operator<( const RB_suffix& val ) const {
+    bool operator<(const RB_suffix& val) const
+    {
         return suffix < val.suffix;
+    }
+
+    static bool sortRbySF(const pair<TIndexOffU, TIndexOffU> &a,
+                   const pair<TIndexOffU, TIndexOffU> &b)
+    {
+        if(a.second > b.second) return true;
+        else if((a.second == b.second) && (a.first < b.first)) return true;
+        else return false;
     }
  };
 

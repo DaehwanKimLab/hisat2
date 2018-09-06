@@ -3189,7 +3189,8 @@ RepeatBuilder<TStr>::~RepeatBuilder()
 
 template<typename TStr>
 void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
-                                 BlockwiseSA<TStr>& sa) {
+                                 BlockwiseSA<TStr>& sa)
+{
     TIndexOffU count = 0;
     subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
 
@@ -4267,13 +4268,13 @@ void RB_SubSA::push_back(const TStr& s,
                          bool lastInput,
                          bool repeat_cpg)
 {
-    if (saElt + seed_len() <= coordHelper.getEnd(saElt)) {
-        if (seed_count_ == 1) {
+    if(saElt + seed_len() <= coordHelper.getEnd(saElt)) {
+        if(seed_count_ == 1) {
             repeat_list_.push_back(saElt);
         } else {
             assert_gt(seed_count_, 1);
 
-            if (temp_suffixes_.empty()) {
+            if(temp_suffixes_.empty()) {
                 temp_suffixes_.push_back(saElt);
                 return;
             }
@@ -4288,22 +4289,22 @@ void RB_SubSA::push_back(const TStr& s,
                                            saElt,
                                            seed_len_);
 
-            if (same) {
+            if(same) {
                 temp_suffixes_.push_back(saElt);
             }
 
-            if (!same || lastInput) {
-                if (temp_suffixes_.size() >= seed_count_) {
+            if(!same || lastInput) {
+                if(temp_suffixes_.size() >= seed_count_) {
                     repeat_index_.push_back(repeat_list_.size());
-                    if (!repeat_cpg) {
+                    if(!repeat_cpg) {
                         temp_suffixes_.sort();
                     }
-                    for (size_t pi = 0; pi < temp_suffixes_.size(); pi++) {
+                    for(size_t pi = 0; pi < temp_suffixes_.size(); pi++) {
                         repeat_list_.push_back(temp_suffixes_[pi]);
                     }
                 }
                 temp_suffixes_.clear();
-                if (!lastInput) {
+                if(!lastInput) {
                     temp_suffixes_.push_back(saElt);
                 } else {
                     temp_suffixes_.nullify();
@@ -4312,7 +4313,7 @@ void RB_SubSA::push_back(const TStr& s,
         }
     }
 
-    if (lastInput) {
+    if(lastInput) {
         size_t bit = sizeof(uint32_t) * 8;
         size_t num = (repeat_list_.size() + bit - 1) / bit;
         done_.resizeExact(num);
@@ -4320,15 +4321,15 @@ void RB_SubSA::push_back(const TStr& s,
 
 #ifndef NDEBUG
         string prev_seq = "";
-        for (size_t i = 0; i < repeat_index_.size(); i++) {
+        for(size_t i = 0; i < repeat_index_.size(); i++) {
             TIndexOffU saBegin = repeat_index_[i];
             TIndexOffU saEnd = (i + 1 < repeat_index_.size() ? repeat_index_[i + 1] : repeat_list_.size());
             string seq = getString(s, repeat_list_[saBegin], seed_len());
-            for (size_t j = saBegin + 1; j < saEnd; j++) {
+            for(size_t j = saBegin + 1; j < saEnd; j++) {
                 string tmp_seq = getString(s, repeat_list_[j], seed_len());
                 assert_eq(seq, tmp_seq);
             }
-            if (prev_seq != "") {
+            if(prev_seq != "") {
                 assert_lt(prev_seq, seq);
             }
             prev_seq = seq;
@@ -4405,13 +4406,7 @@ bool RB_SubSA::isDone(TIndexOffU off, TIndexOffU len) const
     return true;
 }
 
-bool sortRbySF(const pair<TIndexOffU, TIndexOffU> &a,
-               const pair<TIndexOffU, TIndexOffU> &b)
-{
-    if (a.second > b.second) return true;
-    else if ((a.second == b.second) && (a.first < b.first)) return true;
-    else return false;
-}
+
 
 template<typename TStr>
 void RB_SubSA::buildRepeatBase(const TStr& s,
@@ -4420,7 +4415,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                                EList<RB_RepeatBase>& repeatBases) {
 
     bool repeat_cpg = true;
-    if (repeat_cpg) {
+    if(repeat_cpg) {
 
         if(repeat_index_.empty())
             return;
@@ -4429,7 +4424,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         sufs.reserveExact(repeat_list_.size()); //need less than this
 
         //blockwise lcp computation
-        for (TIndexOffU idx = 0; idx < repeat_index_.size(); idx++) {
+        for(TIndexOffU idx = 0; idx < repeat_index_.size(); idx++) {
 
             TIndexOffU begin = repeat_index_[idx];
             TIndexOffU end = (idx + 1 < repeat_index_.size() ? repeat_index_[idx + 1] : repeat_list_.size());
@@ -4439,7 +4434,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             EList<size_t> prev_bases; //previous bases
 
             //initialize
-            for (TIndexOffU i = begin; i < end; i++) {
+            for(TIndexOffU i = begin; i < end; i++) {
                 tmp_sufs.expand();
                 TIndexOffU suffix = repeat_list_[i];
                 tmp_sufs.back().suffix = suffix;
@@ -4451,29 +4446,29 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
 
             //if previous bases are all the same, don't save
             bool prev_same = true;
-            for (TIndexOffU i = 1; i < prev_bases.size(); i++) {
-                if (prev_bases[i] != prev_bases[0]) {
+            for(TIndexOffU i = 1; i < prev_bases.size(); i++) {
+                if(prev_bases[i] != prev_bases[0]) {
                     prev_same = false;
                     break;
                 }
             }
-            if (prev_same) continue;
+            if(prev_same) continue;
 
             //compute lcps
             end = end - begin; //reindex
 
-            for (TIndexOffU i = 0; i < end; i++) {
+            for(TIndexOffU i = 0; i < end; i++) {
                 TIndexOffU cur_suf = tmp_sufs[i].suffix;
                 size_t prev_base = prev_bases[i];
 
                 TIndexOffU lcp = tmp_lcps[end - 1];
-                for (TIndexOffU j = end - 1; j > i; j--) {
+                for(TIndexOffU j = end - 1; j > i; j--) {
                     size_t next_prev_base = prev_bases[j];
 
-                    if (lcp > tmp_lcps[j])  tmp_lcps[j] = lcp;
+                    if(lcp > tmp_lcps[j])  tmp_lcps[j] = lcp;
                     else lcp = tmp_lcps[j];
 
-                    if (prev_base == next_prev_base) continue;
+                    if(prev_base == next_prev_base) continue;
 
 
                     TIndexOffU next_suf = tmp_sufs[j].suffix;
@@ -4489,9 +4484,9 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     tmp_sufs[j].related_suffixes.back().second = lcp;
                 }
 
-                sort(tmp_sufs[i].related_suffixes.begin(), tmp_sufs[i].related_suffixes.end(), sortRbySF);
+                sort(tmp_sufs[i].related_suffixes.begin(), tmp_sufs[i].related_suffixes.end(), RB_suffix::sortRbySF);
             }
-            for (TIndexOffU i = 0; i < tmp_sufs.size(); i++) {
+            for(TIndexOffU i = 0; i < tmp_sufs.size(); i++) {
                 sufs.expand();
                 sufs.back() = tmp_sufs[i];
             }
@@ -4503,16 +4498,16 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         ios_base::openmode mode = ios_base::out;
         string out_fname = "out.rep";
         ofstream out_fp(out_fname.c_str(), mode);
-        for (TIndexOffU i = 0; i < sufs.size(); i++) {
+        for(TIndexOffU i = 0; i < sufs.size(); i++) {
             out_fp << "suffix" << "\t" << sufs[i].suffix  << endl;
-            for (TIndexOffU j = 0; j < sufs[i].related_suffixes.size(); j++) {
+            for(TIndexOffU j = 0; j < sufs[i].related_suffixes.size(); j++) {
                 out_fp << "repeats" << "\t" << sufs[i].related_suffixes[j].first << "\t" << sufs[i].related_suffixes[j].second << endl;
             }
         }
 
         cout << "sufs.size()" << " " << sufs.size() << endl;
         cout << "done" << endl;
-        cout << "done2" << endl;
+        exit(1);
 
     } else {
         if(repeat_index_.empty())
