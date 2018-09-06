@@ -4426,7 +4426,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             return;
 
         EList<RB_suffix> sufs; //suffixes with repeat
-        sufs.reserveExact(repeat_list_.size());
+        sufs.reserveExact(repeat_list_.size()); //need less than this
 
         //blockwise lcp computation
         for (TIndexOffU idx = 0; idx < repeat_index_.size(); idx++) {
@@ -4435,13 +4435,16 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             TIndexOffU end = (idx + 1 < repeat_index_.size() ? repeat_index_[idx + 1] : repeat_list_.size());
 
             EList<RB_suffix> tmp_sufs; //block of suffixes for each repeat count at least seed_len_
+            EList<TIndexOffU> tmp_lcps; //temporary space for saving computed lcps
             EList<size_t> prev_bases; //previous bases
 
-            //initialize tmp_sufs and prev_bases
+            //initialize
             for (TIndexOffU i = begin; i < end; i++) {
                 tmp_sufs.expand();
                 TIndexOffU suffix = repeat_list_[i];
                 tmp_sufs.back().suffix = suffix;
+                tmp_lcps.expand();
+                tmp_lcps.back() = seed_len_;
                 prev_bases.expand();
                 prev_bases.back() = (suffix == 0 ? 5 : s[suffix - 1]);
             }
@@ -4458,22 +4461,32 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
 
             //compute lcps
             end = end - begin; //reindex
+
             for (TIndexOffU i = 0; i < end; i++) {
                 TIndexOffU cur_suf = tmp_sufs[i].suffix;
                 size_t prev_base = prev_bases[i];
 
-                TIndexOffU min_lcp = ((i > 0) && (prev_bases[i-1] != prev_bases.back()) ? tmp_sufs[i-1].related_suffixes.back().second : seed_len_) ;//seed_len_;
+                TIndexOffU lcp = tmp_lcps[end - 1];
                 for (TIndexOffU j = end - 1; j > i; j--) {
                     size_t next_prev_base = prev_bases[j];
+
+                    if (lcp > tmp_lcps[j])  tmp_lcps[j] = lcp;
+                    else lcp = tmp_lcps[j];
+
                     if (prev_base == next_prev_base) continue;
+
+
                     TIndexOffU next_suf = tmp_sufs[j].suffix;
-                    min_lcp = min_lcp + suffixLcp(s, cur_suf + min_lcp, next_suf + min_lcp);
+
+                    lcp = lcp + suffixLcp(s, cur_suf + lcp, next_suf + lcp);
+                    tmp_lcps[j] = lcp;
+
                     tmp_sufs[i].related_suffixes.expand();
                     tmp_sufs[i].related_suffixes.back().first = next_suf;
-                    tmp_sufs[i].related_suffixes.back().second = min_lcp;
+                    tmp_sufs[i].related_suffixes.back().second = lcp;
                     tmp_sufs[j].related_suffixes.expand();
                     tmp_sufs[j].related_suffixes.back().first = cur_suf;
-                    tmp_sufs[j].related_suffixes.back().second = min_lcp;
+                    tmp_sufs[j].related_suffixes.back().second = lcp;
                 }
 
                 sort(tmp_sufs[i].related_suffixes.begin(), tmp_sufs[i].related_suffixes.end(), sortRbySF);
