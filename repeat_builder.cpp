@@ -3194,15 +3194,15 @@ void RepeatBuilder<TStr>::readSA(const RepeatParameter& rp,
     TIndexOffU count = 0;
     subSA_.init(s_.length() + 1, rp.min_repeat_len, rp.repeat_count);
 
-    while (count < s_.length() + 1) {
+    while(count < s_.length() + 1) {
         TIndexOffU saElt = sa.nextSuffix();
         count++;
 
-        if (count && (count % 10000000 == 0)) {
+        if(count && (count % 10000000 == 0)) {
             cerr << "SA count " << count << endl;
         }
 
-        if (saElt == s_.length()) {
+        if(saElt == s_.length()) {
             assert_eq(count, s_.length() + 1);
             break;
         }
@@ -4547,13 +4547,13 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             TIndexOffU idx = size_table[i].second;
             ASSERT_ONLY(TIndexOffU num = size_table[i].first);
             assert_lt(idx, repeat_index_.size());
-    #ifndef NDEBUG
+#ifndef NDEBUG
             if(idx + 1 < repeat_index_.size()) {
                 assert_eq(repeat_index_[idx] + num, repeat_index_[idx+1]);
             } else {
                 assert_eq(repeat_index_[idx] + num, repeat_list_.size());
             }
-    #endif
+#endif
             TIndexOffU saBegin = repeat_index_[idx];
             if(isDone(saBegin)) {
                 assert(isDone(saBegin, num));
@@ -4615,12 +4615,12 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                         if(idx == repeat_index_.size() ||
                            isDone(repeat_index_[idx]) ||
                            !senseDominant[idx]) {
-    #ifndef NDEBUG
+#ifndef NDEBUG
                             if(idx < repeat_index_.size()) {
                                 assert(isDone(repeat_index_[idx], num) ||
                                        !senseDominant[idx]);
                             }
-    #endif
+#endif
                             tmp_sort_ranges[c].first = 0;
                             tmp_ranges[c].second = 0;
                         }
@@ -4677,7 +4677,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
 
         cerr << "Bundle count: " << bundle_count << endl;
 
-    #ifndef NDEBUG
+#ifndef NDEBUG
         {
             set<TIndexOffU> idx_set;
             for(size_t i = 0; i < repeatBases.size(); i++) {
@@ -4688,9 +4688,9 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 }
             }
         }
-    #endif
+#endif
 
-    #if 0
+#if 0
         {
             EList<pair<size_t, size_t> > kmer_table;
             string query;
@@ -4706,7 +4706,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 positions.clear();
                 for(size_t j = saElt_idx; j < saElt_idx_end; j++) {
                     positions.push_back(repeat_list_[j]);
-    #ifndef NDEBUG
+#ifndef NDEBUG
                     if(j > saElt_idx) {
                         TIndexOffU lcp_len = getLCP(s,
                                                     coordHelper,
@@ -4720,7 +4720,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     TIndexOffU start = coordHelper.getStart(saElt);
                     TIndexOffU start2 = coordHelper.getStart(saElt + seed_len_ - 1);
                     assert_eq(start, start2);
-    #endif
+#endif
                 }
 
                 TIndexOffU saElt = repeat_list_[saElt_idx];
@@ -4779,7 +4779,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
 
             cerr << "RB_SubSA: sanity check: " << match << " passed (out of " << total << ")" << endl << endl;
         }
-    #endif
+#endif
     }
 }
 
