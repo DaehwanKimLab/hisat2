@@ -4446,12 +4446,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 tmp_sufs.expand();
                 TIndexOffU suffix = repeat_list_[i];
                 tmp_sufs.back().suffix = suffix;
-                if (suffix == 2026643673) {
-                    cout << "suffix is 2026643673" << endl;
-                    cout << "block count is " << idx << endl;
-                    cout << "within block index is " << i - begin << endl;
-                    cout << "block size is " << end - begin << endl;
-                }
                 tmp_lcps.expand();
                 tmp_lcps.back() = seed_len_;
                 prev_bases.expand();
@@ -4474,11 +4468,8 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
             for(TIndexOffU i = 0; i < end; i++) {
                 TIndexOffU cur_suf = tmp_sufs[i].suffix;
                 size_t prev_base = prev_bases[i];
-
-                if (cur_suf == 2026643673)
-                    cout << "cur_suf is 2026643673" << endl;
-
                 TIndexOffU lcp = tmp_lcps[end - 1];
+
                 for(TIndexOffU j = end - 1; j > i; j--) {
                     size_t next_prev_base = prev_bases[j];
 
@@ -4488,9 +4479,6 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     if(prev_base == next_prev_base) continue;
 
                     TIndexOffU next_suf = tmp_sufs[j].suffix;
-
-                    if (next_suf == 2026643673)
-                        cout << "next_suf is 2026643673" << endl;
 
                     lcp = lcp + suffixLcp(s, cur_suf + lcp, next_suf + lcp);
                     tmp_lcps[j] = lcp;
@@ -4515,7 +4503,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
 
         //print result
         ios_base::openmode mode = ios_base::out;
-        string out_fname = "out.rep";
+        string out_fname = "out_cpg.rep";
         ofstream out_fp(out_fname.c_str(), mode);
         for(TIndexOffU i = 0; i < sufs.size(); i++) {
             out_fp << "suffix" << "\t" << sufs[i].suffix  << "\t" << sufs[i].related_suffixes[0].second << endl;
