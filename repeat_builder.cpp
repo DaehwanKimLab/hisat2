@@ -4271,18 +4271,23 @@ void RB_SubSA::push_back(const TStr& s,
                          bool lastInput,
                          bool repeat_cpg)
 {
-       if(saElt + seed_len() <= s.length()) {
-    //   if(saElt + seed_len() <= coordHelper.getEnd(saElt)) {
+    bool condition;
+    if(repeat_cpg) {
+       condition = saElt + seed_len() <= s.length();
+    } else {
+       condition = saElt + seed_len() <= coordHelper.getEnd(saElt);
+    }
+    if(condition) {
         if(seed_count_ == 1) {
             repeat_list_.push_back(saElt);
         } else {
             assert_gt(seed_count_, 1);
-
+        
             if(temp_suffixes_.empty()) {
                 temp_suffixes_.push_back(saElt);
                 return;
             }
-
+        
             TIndexOffU prev_saElt = temp_suffixes_.back();
             // calculate common prefix length between two text.
             //   text1 is started from prev_saElt and text2 is started from saElt
@@ -4291,18 +4296,12 @@ void RB_SubSA::push_back(const TStr& s,
                                            prev_saElt,
                                            saElt,
                                            seed_len_);
-
+        
             if(same) {
                 temp_suffixes_.push_back(saElt);
-                if(temp_suffixes_[0] == 2026643673) {
-                    cout << "temp_suffixes_[0] == 2026643673" << endl;
-                }
             }
-
+        
             if(!same || lastInput) {
-                if(temp_suffixes_[0] == 2026643673) {
-                    cout << "temp_suffixes_[0] == 2026643673" << endl;
-                }
                 if(temp_suffixes_.size() >= seed_count_) {
                     repeat_index_.push_back(repeat_list_.size());
                     if(!repeat_cpg) {
