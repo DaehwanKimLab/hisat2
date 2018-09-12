@@ -122,20 +122,23 @@ bool isSameSequenceUpto(const TStr& s,
                               TIndexOffU b,
                               TIndexOffU upto)
 {
-    TIndexOffU a_end = coordHelper.getEnd(a);
-    TIndexOffU b_end = coordHelper.getEnd(b);
-    assert_leq(a_end, s.length());
-    assert_leq(b_end, s.length());
-    
-    if(a + upto > a_end || b + upto > b_end)
-        return false;
+    bool repeat_cpg = true;
+    if(!repeat_cpg) {
+        TIndexOffU a_end = coordHelper.getEnd(a);
+        TIndexOffU b_end = coordHelper.getEnd(b);
+        assert_leq(a_end, s.length());
+        assert_leq(b_end, s.length());
+
+        if(a + upto > a_end || b + upto > b_end)
+            return false;
+    }
 
     for(int k = upto - 1; k >= 0; k--) {
         if(s[a + k] != s[b + k]) {
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -4268,7 +4271,8 @@ void RB_SubSA::push_back(const TStr& s,
                          bool lastInput,
                          bool repeat_cpg)
 {
-    if(saElt + seed_len() <= coordHelper.getEnd(saElt)) {
+       if(saElt + seed_len() <= s.length()) {
+    //   if(saElt + seed_len() <= coordHelper.getEnd(saElt)) {
         if(seed_count_ == 1) {
             repeat_list_.push_back(saElt);
         } else {
@@ -4280,7 +4284,6 @@ void RB_SubSA::push_back(const TStr& s,
             }
 
             TIndexOffU prev_saElt = temp_suffixes_.back();
-
             // calculate common prefix length between two text.
             //   text1 is started from prev_saElt and text2 is started from saElt
             bool same = isSameSequenceUpto(s,
@@ -4291,9 +4294,15 @@ void RB_SubSA::push_back(const TStr& s,
 
             if(same) {
                 temp_suffixes_.push_back(saElt);
+                if(temp_suffixes_[0] == 2026643673) {
+                    cout << "temp_suffixes_[0] == 2026643673" << endl;
+                }
             }
 
             if(!same || lastInput) {
+                if(temp_suffixes_[0] == 2026643673) {
+                    cout << "temp_suffixes_[0] == 2026643673" << endl;
+                }
                 if(temp_suffixes_.size() >= seed_count_) {
                     repeat_index_.push_back(repeat_list_.size());
                     if(!repeat_cpg) {
@@ -4438,6 +4447,12 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 tmp_sufs.expand();
                 TIndexOffU suffix = repeat_list_[i];
                 tmp_sufs.back().suffix = suffix;
+                if (suffix == 2026643673) {
+                    cout << "suffix is 2026643673" << endl;
+                    cout << "block count is " << idx << endl;
+                    cout << "within block index is " << i - begin << endl;
+                    cout << "block size is " << end - begin << endl;
+                }
                 tmp_lcps.expand();
                 tmp_lcps.back() = seed_len_;
                 prev_bases.expand();
@@ -4461,6 +4476,9 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                 TIndexOffU cur_suf = tmp_sufs[i].suffix;
                 size_t prev_base = prev_bases[i];
 
+                if (cur_suf == 2026643673)
+                    cout << "cur_suf is 2026643673" << endl;
+
                 TIndexOffU lcp = tmp_lcps[end - 1];
                 for(TIndexOffU j = end - 1; j > i; j--) {
                     size_t next_prev_base = prev_bases[j];
@@ -4470,8 +4488,10 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
 
                     if(prev_base == next_prev_base) continue;
 
-
                     TIndexOffU next_suf = tmp_sufs[j].suffix;
+
+                    if (next_suf == 2026643673)
+                        cout << "next_suf is 2026643673" << endl;
 
                     lcp = lcp + suffixLcp(s, cur_suf + lcp, next_suf + lcp);
                     tmp_lcps[j] = lcp;
@@ -4499,7 +4519,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         string out_fname = "out.rep";
         ofstream out_fp(out_fname.c_str(), mode);
         for(TIndexOffU i = 0; i < sufs.size(); i++) {
-            out_fp << "suffix" << "\t" << sufs[i].suffix  << endl;
+            out_fp << "suffix" << "\t" << sufs[i].suffix  << "\t" << sufs[i].related_suffixes[0].second << endl;
             for(TIndexOffU j = 0; j < sufs[i].related_suffixes.size(); j++) {
                 out_fp << "repeats" << "\t" << sufs[i].related_suffixes[j].first << "\t" << sufs[i].related_suffixes[j].second << endl;
             }
