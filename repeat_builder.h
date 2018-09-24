@@ -840,20 +840,25 @@ private:
     EList<uint32_t>   done_;
 };
 
-struct RB_suffix {
-    TIndexOffU suffix;
-    EList<pair<TIndexOffU, TIndexOffU> > related_suffixes; //<suffix, lcp> pair
+struct RB_data {
+ TIndexOffU suffix;
+ unsigned lcp;
+ unsigned CGcount;
+};
+struct RB_suffix : RB_data {
+
+    EList<RB_data> related_suffixes;
 
     bool operator<(const RB_suffix& val) const
     {
         return suffix < val.suffix;
     }
 
-    static bool sortRbySF(const pair<TIndexOffU, TIndexOffU> &a,
-                   const pair<TIndexOffU, TIndexOffU> &b)
+    static bool sortRbySF(const RB_data &a,
+                   const RB_data &b)
     {
-        if(a.second > b.second) return true;
-        else if((a.second == b.second) && (a.first < b.first)) return true;
+        if(a.lcp > b.lcp) return true;
+        else if((a.lcp == b.lcp) && (a.suffix < b.suffix)) return true;
         else return false;
     }
  };

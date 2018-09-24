@@ -4484,18 +4484,36 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
                     tmp_lcps[j] = lcp;
 
                     tmp_sufs[i].related_suffixes.expand();
-                    tmp_sufs[i].related_suffixes.back().first = next_suf;
-                    tmp_sufs[i].related_suffixes.back().second = lcp;
+                    tmp_sufs[i].related_suffixes.back().suffix = next_suf;
+                    tmp_sufs[i].related_suffixes.back().lcp = lcp;
                     tmp_sufs[j].related_suffixes.expand();
-                    tmp_sufs[j].related_suffixes.back().first = cur_suf;
-                    tmp_sufs[j].related_suffixes.back().second = lcp;
+                    tmp_sufs[j].related_suffixes.back().suffix = cur_suf;
+                    tmp_sufs[j].related_suffixes.back().lcp = lcp;
                 }
 
                 sort(tmp_sufs[i].related_suffixes.begin(), tmp_sufs[i].related_suffixes.end(), RB_suffix::sortRbySF);
+
+                bool computeCG = true;
+                if(computeCG) { //need to optimize to reduce redundancy
+                    for(TIndexOffU j = tmp_sufs[i].related_suffixes.size() - 1; j >= 0; j--) {
+                        TIndexOffU CGcount = 0;
+                        for(TIndexOffU k = tmp_sufs[i].suffix; k + 1 < tmp_sufs[i].suffix + tmp_sufs[i].related_suffixes[j].lcp; k++) {
+                            int nt1 = s[k], nt2 = s[k+1];
+                            if(nt1 == 1 && nt2 == 2) {
+                                CGcount++;
+                            }
+                        }
+                        tmp_sufs[i].related_suffixes[j].CGcount = CGcount;
+                        if (j == 0) break;
+                    }
+                }
+
+
             }
             for(TIndexOffU i = 0; i < tmp_sufs.size(); i++) {
                 sufs.expand();
                 sufs.back() = tmp_sufs[i];
+                if (sufs.size() % 2000000 == 0) cout << "sufs.size() " << sufs.size() << endl;
             }
         }
 
@@ -4505,10 +4523,35 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         ios_base::openmode mode = ios_base::out;
         string out_fname = "out_cpg.rep";
         ofstream out_fp(out_fname.c_str(), mode);
+
+        out_fp.width(20);
+        out_fp << left << "suffix/repeat";
+        out_fp.width(20);
+        out_fp << left << "suffix";
+        out_fp.width(20);
+        out_fp << left << "lcp_with_suffix";
+        out_fp.width(20);
+        out_fp << left << "CpG_count" << endl;
+
         for(TIndexOffU i = 0; i < sufs.size(); i++) {
-            out_fp << "suffix" << "\t" << sufs[i].suffix  << "\t" << sufs[i].related_suffixes[0].second << endl;
+            out_fp.width(20);
+            out_fp << left << "suffix";
+            out_fp.width(20);
+            out_fp << left << sufs[i].suffix;
+            out_fp.width(20);
+            out_fp << left << sufs[i].related_suffixes[0].lcp;
+            out_fp.width(20);
+            out_fp << left << sufs[i].related_suffixes[0].CGcount << endl;
+
             for(TIndexOffU j = 0; j < sufs[i].related_suffixes.size(); j++) {
-                out_fp << "repeats" << "\t" << sufs[i].related_suffixes[j].first << "\t" << sufs[i].related_suffixes[j].second << endl;
+                out_fp.width(20);
+                out_fp << left << "repeats";
+                out_fp.width(20);
+                out_fp << left << sufs[i].related_suffixes[j].suffix ;
+                out_fp.width(20);
+                out_fp << left << sufs[i].related_suffixes[j].lcp;
+                out_fp.width(20);
+                out_fp << left << sufs[i].related_suffixes[j].CGcount << endl;
             }
         }
 
