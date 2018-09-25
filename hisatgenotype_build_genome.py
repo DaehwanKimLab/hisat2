@@ -481,7 +481,7 @@ if __name__ == '__main__':
         sys.exit(1)
         
     if args.database_list == "":
-        database_list = []
+        database_list = ['hla', 'codis', 'cyp']
     else:
         database_list = args.database_list.split(',')
 

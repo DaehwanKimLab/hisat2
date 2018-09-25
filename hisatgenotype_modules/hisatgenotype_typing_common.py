@@ -26,7 +26,6 @@ import errno
 from copy import deepcopy
 from datetime import datetime
 
-
 ##################################################
 #   Sequence processing routines
 ##################################################

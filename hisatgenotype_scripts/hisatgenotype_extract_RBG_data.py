@@ -7,9 +7,9 @@ import glob
 import urllib2
 import string
 import xml.etree.ElementTree as etree
-from multiprocessing import Pool
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
+from Bio.Align.Applications import ClustalwCommandline
 from argparse import ArgumentParser, FileType
 
 """
@@ -62,18 +62,13 @@ def get_geneRefSeq(locus = {}):
       
     return refseq
 
-def get_seqbyRef(access, gene_name = '', getall = False, bymRNA = True):
+def get_seqbyRef(access, gene_name = '', getall = False):
     webaddress = 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.fcgi?db=nuccore&dopt=gb&sendto=on&id=' + access
     try:
         website = get_website(webaddress)
     except ValueError:
         print >> sys.stderr, 'No data available for accession: %s' % access
         raise ValueError()
-
-    if bymRNA:
-        region = 'mRNA'
-    else:
-        region = 'CDS'
 
     seqline = ''
     exon_ranges = {}
@@ -103,7 +98,7 @@ def get_seqbyRef(access, gene_name = '', getall = False, bymRNA = True):
                 if gene_name in line.replace('"', '').split('='):
                     left, right = int(gene_range[0]) - 1, int(gene_range[1])
                     gene_found = True
-            elif line.startswith(region) and gene_found:
+            elif line.startswith('mRNA') and gene_found:
                 raw_exons = re.findall('\(([^)]+)', line)
                 if raw_exons[0][-1] == ',':
                     mRNAline += 1
@@ -228,213 +223,39 @@ def write_fasta(gene, alleles = {}, loc = 'gen'):
     ofile.close()
     return filename
 
-def run_clustal(in_file):
-    out_file = in_file.replace('.fasta', '.msf')
-    cmd = 'clustalo --in=%s --full --out=%s --outfmt=msf --threads=1 --force' % (in_file, out_file)
-    os.system(cmd)
-
-def write_msf(genfilename, nucfilename, gene, alleles = {}, fullGene = [], exon_seg = []):
-    filepath = 'RBG/msf/'
-    file_path = os.path.dirname(filepath)
+def write_msf(filename, gene, alleles = {}):
+    file_path = os.path.dirname('RBG/msf/')
     if not os.path.exists(file_path):
         os.makedirs(file_path)
 
-    numsegs = 0
-    files = []
-    msf_aligned_gen = {}
-    msf_aligned_nuc = {}
-    for allele, segs in alleles.items():
-        msf_aligned_nuc.update({ allele : '' })
-        if fullGene[allele]:
-            msf_aligned_gen.update({ allele : '' })
-
-        if numsegs == 0:
-            numsegs = len(segs)
+    # Sanity checking
+    seq_len = 0
+    for allele, msf_seq in alleles.items():
+        if seq_len == 0:
+            seq_len = len(msf_seq)
         else:
-            assert numsegs == len(segs)
+            assert seq_len == len(msf_seq), '%s gene lengths are %d and %d' % (gene, seq_len, len(msf_seq))
+    assert seq_len > 0
 
-        for itr in range(len(segs)):
-            seq = segs[itr]
-            parts = len([s for s in seq.split(emptySeq) if s])
-            if parts > 1:
-                seq = seq.replace(emptySeq, 'N')
-                while seq.startswith('N'):
-                    seq = seq[1:]
-                while seq.endswith('N'):
-                    seq = seq[:-1]
-                
-            seq = seq.replace(emptySeq, '').replace('.', '')
+    file_out = file_path + '/' + filename.split('/')[-1].replace('.fasta', '.msf')
+    ofile = open(file_out, 'w')
 
-            if not seq:
-                continue
-            
-            file_name = filepath + 'tmp_%s_gen_%d.fasta' % (gene, itr)
-            if file_name not in files and itr == (len(files)):
-                files.append(file_name)
+    # Follow MSF style of IMGT/HLA database
+    for i in range(0, seq_len, 50):
+        for allele, msf_seq in alleles.items():
+            output = "%12s" % allele
+            for j in range(i, i+50, 10):
+                if j >= seq_len:
+                    break
+                if j == i:
+                    output += "\t"
+                else:
+                    output += " "
+                output += msf_seq[j:j+10]
+            ofile.write(output + '\n')
+        ofile.write('\n')
 
-            if os.path.exists(file_name):
-                append_write = 'a'
-            else:
-                append_write = 'w'
-
-            f = open(file_name, append_write)
-            f.write('> %s\n' % allele)
-            f.write('%s\n' % seq)
-            f.close()
- 
-    pool = Pool(8)
-    for in_file in files:
-        #run_clustal(in_file)
-        pool.apply_async(run_clustal, args=(in_file,))
-    pool.close()
-    pool.join()
- 
-    alleleswith_ = {}
-    for allele in msf_aligned_gen:
-        if '_' in allele:
-            alleleswith_.update({ allele.replace('_', '.') : allele})
-    for allele in msf_aligned_nuc:
-        if '_' in allele:
-            alleleswith_.update({ allele.replace('_', '.') : allele})
-
-    msf_to_name = {}
-    for itr in range(len(files)):
-        file_ = files[itr]
-        filealleles = []
-        header = True
-        for line in open(file_.replace('.fasta', '.msf'), 'r'):
-            line = line.strip()
-            if line.startswith('//'): 
-                header = False            
-            if not line or not line[0].isalpha():
-                continue
-
-            if header:
-                if line.startswith('Name'):
-                    _, msfname, _, length = line.split()[:4]
-                    if msfname in msf_to_name:
-                        continue
-
-                    assert gene == msfname.split('_')[0]
-                    allele = '.'.join(msfname.split('_')[1:])
-                    name = gene + "*" + allele
-                    if name in alleleswith_:
-                        msf_to_name.update({ msfname : alleleswith_[name] })
-                    else:
-                        msf_to_name.update({ msfname : name })
-                continue
-
-            msfallele = line.split()[0]
-            seq = ''.join(line.split()[1:])
-            seq = seq.replace('~', 'E').replace('N', 'E')
-            
-            assert msf_to_name[msfallele] in msf_aligned_nuc, '%s not in %s' % (msfallele, file_)
-            if fullGene[msf_to_name[msfallele]]:
-                assert msf_to_name[msfallele] in msf_aligned_gen
-            filealleles.append(msf_to_name[msfallele])
-            
-            if fullGene[msf_to_name[msfallele]]:
-                msf_aligned_gen[msf_to_name[msfallele]] += seq
-            
-            if itr in exon_seg:
-                msf_aligned_nuc[msf_to_name[msfallele]] += seq
-
-        for allele in msf_aligned_gen:
-            if allele in filealleles:
-                continue
-            msf_aligned_gen[allele] += ('E'*int(length))
-
-        if itr in exon_seg:
-            for allele in msf_aligned_nuc:
-                if allele in filealleles:
-                    continue
-                msf_aligned_nuc[allele] += ('E'*int(length))
-
-    for file_ in files:
-        try:
-            os.remove(file_)
-            os.remove(file_.replace('.fasta', '.msf'))
-        except OSError:
-            pass
-
-    def write_MSF_file(filename, msf_aligned):
-        # Sanity checking
-        seq_len = 0
-        for allele, msf_seq in msf_aligned.items():
-            if seq_len == 0:
-                seq_len = len(msf_seq)
-            else:
-                assert seq_len == len(msf_seq), '%s gene lengths are %d and %d' % (gene, seq_len, len(msf_seq))
-        assert seq_len > 0
-
-        file_out = file_path + '/' + filename.split('/')[-1].replace('.fasta', '.msf')
-        ofile = open(file_out, 'w')
-
-        # Follow MSF style of IMGT/HLA database
-        for i in range(0, seq_len, 50):
-            for allele, msf_seq in msf_aligned.items():
-                output = "%12s" % allele
-                for j in range(i, i+50, 10):
-                    if j >= seq_len:
-                       break
-                    if j == i:
-                        output += "\t"
-                    else:
-                        output += " "
-                    output += msf_seq[j:j+10]
-                ofile.write(output + '\n')
-            ofile.write('\n')
-        ofile.close()
-
-    write_MSF_file(genfilename, msf_aligned_gen)
-    write_MSF_file(nucfilename, msf_aligned_nuc)
-
-def simple_aligner(seq, reference):
-    expandseq = []
-
-    len_L = 20
-    seedL = seq[:len_L]
-    while True:
-        # if perfect
-        if len_L == len(seq):
-            left_index = reference.find(seedL)
-            expandseq = [
-                (emptySeq * left_index),
-                seedL, 
-                (emptySeq * (len(reference[left_index:]) - len(seedL)))
-            ]
-            return ''.join(expandseq).replace('-', '.')
-
-        if seq[:(len_L+1)] not in reference:
-            break
-        seedL = seq[:len_L]
-        len_L += 1
-    
-    len_R = 20
-    seedR = seq[-len_R:]
-    while True:
-        if seq[-(len_R+1):] not in reference:
-            break
-        seedR = seq[-len_R:]
-        len_R += 1
-
-    left_index = reference.find(seedL)
-    right_index = reference.find(seedR)
-    ref = reference[ left_index+len(seedL) : right_index ]
-    seq = seq[len_L:-len_R]
-
-    alignments = pairwise2.align.globalms(seq, ref, 2, -1, -0.75, -0.1)
-    aln, aln2, score, _, _ = alignments[0]
-
-    expandseq = [
-        (emptySeq * (left_index-1)),
-        seedL, 
-        aln,
-        seedR, 
-        (emptySeq * (len(reference[right_index:]) - len(seedR)))
-    ]
-
-    return ''.join(expandseq).replace('-', '.')
+    ofile.close()
 
 def extract_RBC():
     # RBC Database URL
@@ -480,9 +301,6 @@ def extract_RBC():
             alleleNam = allele[2].text.split('*')[1]
             alleleGene = 'FUT2'
 
-        if alleleGene != 'ABO': ## TODO: REMOVE!
-            continue
-
         alleleNam = alleleGene + '*' + alleleNam.replace('?', '').replace('*','_')
         
         if alleleGene not in locus:
@@ -493,8 +311,6 @@ def extract_RBC():
             fullGene.update({ alleleNam : True })
             
             geneSegment.update({ alleleNam : [] })
-            genSeq.update({ alleleNam : '' })
-            genExon.update({ alleleNam : [] })
 
             accession.update({ alleleNam : [] })
             
@@ -511,30 +327,22 @@ def extract_RBC():
             intron_count, empty_intron, exon_count, empty_exon = 0, 0, 0, 0
             # Get Nucleotide sequence
             for seqnode in allele.find('blocks').iter('block'):
-                seq = seqnode.find('sequence').text.replace('*', emptySeq)
+                seq = seqnode.find('sequence').text
                 region = seqnode.find('type').text
-
-                alt_nuc = 'RYKMSWBDHV' # Make Translation Table 
-                seqReg = seq.translate(string.maketrans(alt_nuc, 'N' * len(alt_nuc)))                
-                raw_seq = seqReg.replace(emptySeq, '').replace('.', '')
-
-                genSeq[alleleNam] += raw_seq                
 
                 if region.startswith(('Intron')):
                     intron_count += 1
-                    if seq.count(emptySeq) == len(seq):
+                    if (seq.count('*')/len(seq)) > 0.5:
                         empty_intron +=1
 
                 if region.startswith(('Exon')):
-                    if len(raw_seq) > 2:
-                        left, right = len(genSeq[alleleNam])+1, len(genSeq[alleleNam])+len(raw_seq)
-                        assert left < right
-                        genExon[alleleNam].append([left, right])
-                    
                     exon_count += 1
-                    if seq.count(emptySeq) == len(seq):
+                    if (seq.count('*')/len(seq)) > 0.5:
                         empty_exon +=1
 
+                seq = seq.replace(emptySeq, '').replace('.', '')
+                alt_nuc = 'RYKMSWBDHV*' # Make Translation Table 
+                seqReg = seq.translate(string.maketrans(alt_nuc, emptySeq * len(alt_nuc)))
                 geneSegment[alleleNam].append([region , seqReg])
 
             if (empty_intron == intron_count) and (intron_count != 0):
@@ -559,7 +367,7 @@ def extract_RBC():
         if not value:
             continue
         try:
-            seq_ofRef, exons_ofRef = get_seqbyRef(value[0].split('.')[0], key, getall = True, bymRNA=False)
+            seq_ofRef, exons_ofRef = get_seqbyRef(value[0].split('.')[0], key, getall = True)
         except ValueError:
             print >> sys.stderr, 'Key error %s not found' % key
             del refseq[key]
@@ -571,8 +379,8 @@ def extract_RBC():
     refGeneKey = {}
     for gene, seq in refGeneSeq.items():
         for allele in locus[gene]:
-            gen_seq = genSeq[allele]
-            if seq in gen_seq:
+            gen_seq = ''.join([reg[1] for reg in geneSegment[allele]])
+            if (seq in gen_seq) and ('01' in allele):
                 refGeneKey.update({ gene : allele })
                 refgene_indata = True
                 break
@@ -582,7 +390,8 @@ def extract_RBC():
             continue
         else:
             newgene = gene + '*refSeq.01'
-
+            refGeneKey.update({ gene : newgene })
+            
             print >> sys.stdout, '\tAdding %s to data' % newgene
             genSeq.update({ newgene : refGeneSeq[gene] })
             genExon.update({ newgene : refGeneExon[gene] })
@@ -610,55 +419,60 @@ def extract_RBC():
         exons = []
 
         print '\tExtracting %s from Genome' % gene
-        cmd_aligner = ['hisat2', '-x', 'grch38/genome', '-f', '-c']
+        strand_reverse = False     
         for pos in refGeneExon[gene]:
+            cmd_aligner = ['hisat2', '-x', 'grch38/genome', '-f', '-c']
             exleft, exright = pos
             exon = ref[exleft - 1 : exright]
-            exons.append(exon)
             
-        cmd_aligner += ['%s' % ','.join(exons)]
+            cmd_aligner += ['%s' % exon]
+            align_proc = subprocess.Popen(cmd_aligner,
+                                          stdout=subprocess.PIPE,
+                                          stderr=open("/dev/null", 'w'))
 
-        align_proc = subprocess.Popen(cmd_aligner,
-                                      stdout=subprocess.PIPE,
-                                      stderr=open("/dev/null", 'w'))
+            best_chr, best_left, best_right, best_AS, best_strand = "", -1, -1, -sys.maxint, ''
+            for line in align_proc.stdout:
+                if line.startswith('@'):
+                    continue
+                line = line.strip()
+                cols = line.split()
+                allele_id, flag, chr, left, mapQ, cigar_str = cols[:6]
+                flag = int(flag)
+                if flag & 0x10 != 0:
+                    strand_reverse = True
+                left = int(left) - 1
+                right = left
 
-        strand_reverse = False
-        exons = []
-        for line in align_proc.stdout:
-            if line.startswith('@'):
-                continue
-            line = line.strip()
-            cols = line.split()
-            allele_id, flag, chr, left, mapQ, cigar_str = cols[:6]
-            flag = int(flag)
-            if flag & 0x10 != 0:
-                strand_reverse = True
-            if flag & 0x100 != 0:
-                print 'Warning!: Gene %s with flag %d' % (gene, flag)
-                continue
-            left = int(left) - 1
-            right = left
+                cigars = cigar_re.findall(cigar_str)
+                cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+                if len(cigars) > 1 or cigars[0][0] != 'M':
+                    continue
+                for i in range(len(cigars)):
+                    cigar_op, length = cigars[i]
+                    if cigar_op in "MND":
+                        right += length
+                AS = ""
+                for i in range(11, len(cols)):
+                    col = cols[i]
+                    if col.startswith("AS"):
+                        AS = col[5:]
+                assert AS != ""
+                AS = int(AS)
+                if AS > best_AS and (not genechr or chr == genechr):
+                    best_chr, best_left, best_right, best_AS = chr, left, right, AS
+ 
+                if best_left < genestart:
+                    genestart = best_left
+                if best_right > geneend:
+                    geneend = best_right
 
-            cigars = cigar_re.findall(cigar_str)
-            cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
-            for i in range(len(cigars)):
-                cigar_op, length = cigars[i]
-                if cigar_op in "MND":
-                    right += length
-            
-            if left < genestart:
-                genestart = left
-            if right > geneend:
-                geneend = right
+                if not genechr:
+                    genechr = best_chr
+                assert genechr == best_chr, "Error: exons in Gene %s aligning to chr %s and %s" % (gene, genechr, chr)
 
-            if not genechr:
-                genechr = chr
-            assert genechr == chr, "Error: exons in Gene %s aligning to chr %s and %s" % (gene, genechr, chr)
-            
-            exons.append([left, right])
-
-        align_proc.communicate()
-
+                exons.append([best_left, best_right])
+            align_proc.communicate()
+ 
         cmd_extractGene = ['samtools', 'faidx', 'genome.fa', '%s:%d-%d' % (genechr, genestart, geneend)]
         extract_proc = subprocess.Popen(cmd_extractGene,
                                         stdout=subprocess.PIPE,
@@ -672,21 +486,60 @@ def extract_RBC():
 
         exon_pos = range(len(genSeq[hg_allele])+1)[::-1]
         for exon in exons:
-            left = (exon[0] - genestart)
-            right = (exon[1] - genestart)
+            left = (exon[0] - genestart) + 1
+            right = (exon[1] - genestart) + 1
             if strand_reverse:
-                nleft = exon_pos[right]
-                nright = exon_pos[left]
+                nleft = exon_pos[right-1]
+                nright = exon_pos[left-1]
             else:
-                nleft = left + 1
-                nright = right + 1
+                nleft = left
+                nright = right
             genExon[hg_allele].append([nleft, nright])
         
         genExon[hg_allele] = sorted(genExon[hg_allele], key = lambda x: x[0])
+        print genExon[hg_allele]
         
         if strand_reverse:            
             genSeq[hg_allele] = rev_comp(genSeq[hg_allele])
 
+    refgeneSegments = {}
+    for gene, exons in genExon.items():
+        if 'HG38' not in gene:
+            continue
+        refgeneSegments.update({ gene : [] })
+        boundries = [bound for exon in exons for bound in exon]
+        prev = 0
+        for bound in boundries:
+            refgeneSegments[gene].append(genSeq[gene][prev:bound-1])
+            prev = bound-1
+        print '%s\t:\t%d' % (gene, len(refgeneSegments[gene])) 
+
+    for allele, regions in geneSegment.items():
+        if not fullGene[allele]:
+            continue
+        seq_started = False
+        seg_count = 0
+        gene, _ = allele.split('*')
+        if gene in ['CR1', 'C4B', 'C4A']:
+            continue
+
+        print '%s\t:\t%d' % (gene, len(regions))
+        '''
+        gene += '*HG38.ref.01'
+        # assert len(regions) == len(refgeneSegments[gene])+1, 'Allele %s and Gene %s have different lengths' % (allele, gene)
+        for region in regions:
+            if region[1]:
+                seq_started = True
+            if seq_started and not region[1]:
+                if seg_count > len(refgeneSegments[gene]):
+                    break
+                print 'Filling in %s from %s' % (allele, gene)
+                geneSegment[allele][seg_count][1] = refgeneSegments[gene][seg_count]
+
+            seg_count += 1
+        '''
+
+    exit(1)
     # Check and correct sequences in loaded data
     print >> sys.stdout, 'Validating Alleles'    
     for key, seq in genSeq.items():
@@ -720,26 +573,9 @@ def extract_RBC():
                     genSeq[key] = reffasta
                     genExon[key] = refexon[gene_name]
 
-                    ref = ''
-                    boundries = []
-                    for subseq in geneSegment[refGeneKey[gene_name]]:
-                        ref += subseq[1]
-                        boundries.append(len(ref))
-
-                    aln_reffasta = simple_aligner(reffasta, ref)
-                    segments = len(geneSegment[key])
-                    geneSegment.update({ key : [] })
-                    
-                    prev = 0
-                    for bound in boundries:
-                        geneSegment[key].append(['', aln_reffasta[prev:bound-1]])
-                        prev = bound-1
-                    
-                    assert segments == len(geneSegment[key])
-
                     sum_seqlen = 0
                     for i in genExon[key]:
-                        sum_seqlen += (int(i[1])-int(i[0])-1)
+                        sum_seqlen += (int(i[2])-int(i[1])-1)
                     if sum_seqlen < len(reffasta):
                         fullGene[key] = True
                     else:
@@ -749,60 +585,35 @@ def extract_RBC():
     for gene, allelelist in locus.items():
         print >> sys.stdout, 'Processing %s:' % gene
         alleleseq = {}
-        msf_alleleseq = {}
-        exon_seg = []
 
         for allele in allelelist:
-            alleleseq.update({ allele : genSeq[allele] })
-            ofile = open('', 'w')
+            alleleseq.update({ allele : genSeq[allele].replace(emptySeq, '').replace('.', '') })
              
         print >> sys.stdout, '\t Checking %s for redundancy' % gene
         alleleseq = collapse_alleles(alleleseq)
-
+        
         full_allele = {}
         partial_allele = {}
         for allele, seq in alleleseq.items():
             partial_allele.update({ allele : '' })
-            
+
+            if gene == 'ABO':
+                print genExon[allele]
+
             for exon in genExon[allele]:
                 left, right = exon
                 partial_allele[allele] += seq[left-1 : right]
 
-            msf_alleleseq.update({ allele : [] })
-
-            if allele in geneSegment:
-                for itr in range(len(geneSegment[allele])):
-                    sequ = geneSegment[allele][itr]
-                    msf_alleleseq[allele].append(sequ[1])
-                    if 'Exon' in sequ[0] and itr not in exon_seg:
-                        exon_seg.append(itr)
-
-            else:
-                msf_alleleseq[allele].append('')
-                boundries = [bound for exon in genExon[allele] for bound in exon]
-                prev = 0
-                for bound in boundries:
-                    if bound == 1:
-                        continue
-                    msf_alleleseq[allele].append(genSeq[allele][prev:bound-1])
-                    prev = bound-1
-                msf_alleleseq[allele].append('') 
-
             if fullGene[allele]:
-                full_allele.update({ allele : seq })
-     
+                full_allele.update({ allele : seq })         
                 
-        print >> sys.stdout, '\t Writing %s Fasta' % gene
-        fastaname_gen = write_fasta(gene, full_allele)
-        fastaname_nuc = write_fasta(gene, partial_allele, loc = 'nuc')
+ 
+        #print >> sys.stdout, '\t Writing %s Fasta' % gene
+        #fastaname_gen = write_fasta(gene, full_allele)
+        #fastaname_nuc = write_fasta(gene, partial_allele, loc = 'nuc')
 
-        print >> sys.stdout, '\t Writing %s MSF' % gene
-        write_msf(fastaname_gen, 
-                  fastaname_nuc, 
-                  gene, 
-                  msf_alleleseq, 
-                  fullGene, 
-                  exon_seg)   
+        # print >> sys.stdout, '\t Writing %s MSF' % gene
+        # write_msf(fastaname, gene, alleleseq)   
 
 if __name__ == '__main__':
 

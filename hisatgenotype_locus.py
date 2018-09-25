@@ -27,7 +27,6 @@ from argparse import ArgumentParser, FileType
 from copy import deepcopy
 import hisatgenotype_typing_common as typing_common, hisatgenotype_assembly_graph as assembly_graph
 
-
 """
    var: ['single', 3300, 'G']
    exons: [[301, 373], [504, 822], [1084, 1417], [2019, 2301], [2404, 2520], [2965, 2997], [3140, 3187], [3357, 3361]]

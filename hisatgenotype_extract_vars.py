@@ -56,7 +56,7 @@ def create_consensus_seq(seqs,
             continue                    
         for j in range(seq_len):
             nt = seq[j]
-            assert nt in "ACGT.E"
+            assert nt in "ACGT.EN", "Nucleotide %s not supported" % nt
             if nt == 'A':
                 consensus_freq[j][0] += 1
             elif nt == 'C':
@@ -66,7 +66,7 @@ def create_consensus_seq(seqs,
             elif nt == 'T':
                 consensus_freq[j][3] += 1
             else:
-                assert nt in ".E"
+                assert nt in ".EN"
                 consensus_freq[j][4] += 1
 
     for j in range(len(consensus_freq)):
@@ -229,7 +229,7 @@ def extract_vars(base_fname,
     if base_fname == "hla":
         fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
     else:
-        assert base_fname in ["codis", "cyp", "rRNA"]
+        assert base_fname in ["codis", "cyp", "rRNA", "rbg"]
         fasta_fnames = glob.glob("%s/*.fasta" % fasta_dname)
     for gen_fname in fasta_fnames:
         gene_name = gen_fname.split('/')[-1].split('_')[0]
@@ -618,7 +618,7 @@ def extract_vars(base_fname,
                 seq_len = find_seq_len(seqs)
                 
         if min_var_freq <= 0.0:
-            assert '.' not in backbone_seq and 'E' not in backbone_seq
+            assert '.' not in backbone_seq and 'E' not in backbone_seq, 'E or . in backbone of %s which is not allowed with no minimum variation set' % gene
         
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
@@ -647,7 +647,7 @@ def extract_vars(base_fname,
             backbone_seq, backbone_freq = create_consensus_seq(seqs, seq_len, min_var_freq, True)
             seq_len = find_seq_len(seqs)
 
-        print >> sys.stderr, "%s: number of HLA alleles is %d." % (gene, len(names))
+        print >> sys.stderr, "%s: number of alleles is %d." % (gene, len(names))
 
         Vars = {}
         for cmp_name, id in names.items():
@@ -681,7 +681,7 @@ def extract_vars(base_fname,
                 if varKey not in Vars:
                     if type == 'M':
                         assert backbone_pos < backbone_freq
-                        assert data in backbone_freq[backbone_pos]
+                        assert data in backbone_freq[backbone_pos], "Data %s not in backbone %s of type %s" % (data, backbone_freq[backbone_pos], type)
                         freq = backbone_freq[backbone_pos][data]
                     elif type == 'D':
                         del_len = int(data)
@@ -882,7 +882,7 @@ def extract_vars(base_fname,
             cols = line.split()
             allele_id, flag, chr, left, mapQ, cigar_str = cols[:6]
             flag = int(flag)
-            assert flag & 0x10 == 0
+            assert flag & 0x10 == 0, 'Allele %s with flag %d' % (line, flag)
             left = int(left) - 1
             right = left
             AS = ""
