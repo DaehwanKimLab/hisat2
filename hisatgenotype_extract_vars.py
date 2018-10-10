@@ -986,7 +986,7 @@ def extract_vars(base_fname,
                     if line.startswith(">"):
                         if allele_name_ == ref_gene:
                             break
-                        allele_name_ = line.strip().split()[1]
+                        allele_name_ = line.strip().split()[1] if base_fname == 'hla' else line.strip().split()[0].replace('>','')
                         cmp_exon_seq_ = ""
                     else:
                         cmp_exon_seq_ += line.strip()
