@@ -210,9 +210,9 @@ def collapse_alleles(alleles = {}):
                         elif 'exon' in allele_i:
                             print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
                             remove.append(allele_i)                            
-                        else:
-                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
-                            remove.append(allele_i)
+                        #else:
+                        #    print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
+                        #    remove.append(allele_i)
                     break
     
     for dup in remove:
@@ -804,6 +804,13 @@ def extract_RBC():
 
         for allele in allelelist:
             alleleseq.update({ allele : genSeq[allele] })
+
+        print >> sys.stdout, '\t Checking %s for redundancy' % gene
+        alleleseq = collapse_alleles(alleleseq)
+
+        full_allele = {}
+        partial_allele = {}
+        for allele, seq in alleleseq.items():
             ofile = open('RBG/rbg.dat', 'a')
             ofile.write('DE\t%s\n' % allele)
             for exon in genExon[allele]:
@@ -811,13 +818,7 @@ def extract_RBC():
                 ofile.write('FT\t\t/number=%s\n' % exon[0])
             ofile.write('\\\\\n')
             ofile.close()
-             
-        print >> sys.stdout, '\t Checking %s for redundancy' % gene
-        alleleseq = collapse_alleles(alleleseq)
 
-        full_allele = {}
-        partial_allele = {}
-        for allele, seq in alleleseq.items():
             partial_allele.update({ allele : '' })
             
             for exon in genExon[allele]:

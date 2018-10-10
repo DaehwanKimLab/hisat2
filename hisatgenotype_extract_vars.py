@@ -943,7 +943,7 @@ def extract_vars(base_fname,
             # Sanity check for exonic sequence
             sanity_check = True
             if sanity_check and \
-               os.path.exists("hisatgenotype_db/%s/fasta/%s_nuc.fasta" % (base_fname.upper(), gene)):
+                os.path.exists("hisatgenotype_db/%s/fasta/%s_nuc.fasta" % (base_fname.upper(), gene)):
                 exons_ = []
                 for exon in exon_str.split(','):
                     if exon.endswith('p'):
