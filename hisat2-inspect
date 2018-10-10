@@ -57,6 +57,8 @@ def main():
         if large_idx_exists and not small_idx_exists:
             inspect_bin_spec = os.path.join(ex_path,inspect_bin_l)
     
+    if not inspect_bin_spec.is_file():
+        print '%s not found and is required' % inspect_bin_spec   
     arguments[0] = inspect_bin_name
     arguments.insert(1, 'basic-0')
     arguments.insert(1, '--wrapper')

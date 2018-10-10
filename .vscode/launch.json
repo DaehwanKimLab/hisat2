@@ -11,7 +11,7 @@
             "cwd": "/home/christopher/Documents/hisatgenotype-working", //tmp-RBG",
             "program": "${file}",
             "args": [
-                //"--base", "rbg", "--locus-list", "ABO"
+                "--base", "rbg"//, "--locus-list", "A"
                 //"--assembly", "-f",
                 //"--locus-list", "ABO",
                 //"--debug", "pair, full"

@@ -35,9 +35,9 @@ def create_map(seq):
     count = 0
     for i in range(len(seq)):
         bp = seq[i]
-        if bp == '.':
+        if bp in '.E':
             continue
-        assert bp in "ACGT"
+        assert bp in "ACGT", '%s not a valid basepair' % bp
         seq_map[count] = i
         count += 1
     return seq_map
@@ -212,6 +212,10 @@ def extract_vars(base_fname,
 
     if not typing_common.check_files(HISAT2_fnames):
         typing_common.download_genome_and_index()
+
+    # CB TODO: Make this read from a file or read the gen in the file name
+    spliced_gene = ['hla', 'rbg']
+    unspliced_gene = ['codis', 'cyp' ,'rRNA']
     
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f hisatgenotype_db/HLA/fasta/A_gen.fasta
@@ -226,10 +230,10 @@ def extract_vars(base_fname,
 
     # Check HLA genes
     gene_names = []
-    if base_fname == "hla":
+    if base_fname in spliced_gene:
         fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
     else:
-        assert base_fname in ["codis", "cyp", "rRNA", "rbg"]
+        assert base_fname in unspliced_gene
         fasta_fnames = glob.glob("%s/*.fasta" % fasta_dname)
     for gen_fname in fasta_fnames:
         gene_name = gen_fname.split('/')[-1].split('_')[0]
@@ -244,7 +248,7 @@ def extract_vars(base_fname,
     remove_locus_list = []
     for gene in locus_list:
         aligner_cmd = ["hisat2"]
-        if base_fname in ["hla", "codis"]:
+        if base_fname not in ["cyp"]: # only include genes with no exact match to reference genome
             aligner_cmd += ["--score-min", "C,0"]
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",
@@ -289,13 +293,16 @@ def extract_vars(base_fname,
         if allele_id == "":
             remove_locus_list.append(gene)
             continue
-        if base_fname == "hla":
+        if base_fname in spliced_gene:
             allele_name = ""
             for line in open("%s/%s_gen.fasta" % (fasta_dname, gene)):
                 line = line.strip()
                 if not line.startswith('>'):
                     continue
-                tmp_allele_id, tmp_allele_name = line[1:].split()[:2]
+                if base_fname == 'hla':
+                    tmp_allele_id, tmp_allele_name = line[1:].split()[:2]
+                else:
+                    tmp_allele_id, tmp_allele_name = line[1:].split()[0], line[1:].split()[0]
                 if allele_id == tmp_allele_id:
                     allele_name = tmp_allele_name
                     break
@@ -338,13 +345,13 @@ def extract_vars(base_fname,
 
     # Extract exon information from hla.data
     gene_exons, gene_exon_counts = {}, {}
-    if base_fname == "hla":        
+    if base_fname in spliced_gene:        
         skip, look_exon_num = False, False
-        for line in open("hisatgenotype_db/%s/hla.dat" % base_fname.upper()):
+        for line in open("hisatgenotype_db/%s/%s.dat" % (base_fname.upper(), base_fname)):
             if line.startswith("DE"):
-                allele_name = line.split()[1][:-1]
-                if allele_name.startswith("HLA-"):
-                    allele_name = allele_name[4:]
+                allele_name = line.split()[1][:-1] if not line.split()[1][-1].isdigit() else line.split()[1]
+                if allele_name.startswith("%s-" % base_fname.upper()):
+                    allele_name = allele_name[len("%s-" % base_fname.upper()):]
                 gene = allele_name.split('*')[0]
                 if not gene in genes:
                     skip = True
@@ -372,8 +379,9 @@ def extract_vars(base_fname,
             elif look_exon_num:
                 assert line.find("number")
                 look_exon_num = False
-                num = line.strip().split("number=")[1]
-                num = int(num[1:-1]) - 1
+                # num = line.strip().split("number=")[1]
+                # num = int(num[1:-1]) - 1
+                num = int(filter(str.isdigit, line))-1
                 if gene not in gene_exon_counts:
                     gene_exon_counts[gene] = {}
                 if num not in gene_exon_counts[gene]:
@@ -388,7 +396,7 @@ def extract_vars(base_fname,
     for gene in locus_list:
         if gene in remove_locus_list:
             continue
-        if base_fname == "hla" and gene not in gene_exons:
+        if base_fname in spliced_gene and gene not in gene_exons:
             continue
         tmp_locus_list.append(gene)
     locus_list = tmp_locus_list
@@ -489,10 +497,10 @@ def extract_vars(base_fname,
 
             return names, seqs
 
-        if base_fname == "hla":
+        if base_fname in spliced_gene:
             MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), gene)
         else:
-            MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), gene)
+            MSA_fname = "hisatgenotype_db/%s/msf/%s.msf" % (base_fname.upper(), gene)
             
         if not os.path.exists(MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % MSA_fname
@@ -531,8 +539,8 @@ def extract_vars(base_fname,
         if not partial:
             seq_len = find_seq_len(seqs)
 
-        if partial and base_fname == "hla":
-            partial_MSA_fname = "hisatgenotype_db/HLA/msf/%s_nuc.msf" % gene
+        if partial and base_fname in spliced_gene:
+            partial_MSA_fname = "hisatgenotype_db/%s/msf/%s_nuc.msf" % (base_fname.upper(), gene)
             if not os.path.exists(partial_MSA_fname):
                 print >> sys.stderr, "Warning: %s does not exist" % partial_MSA_fname
                 continue
@@ -626,7 +634,7 @@ def extract_vars(base_fname,
             ref_seq = seqs[names[ref_gene]]
             ref_seq = ref_seq.replace('.', '')
             ref_seq_len = len(ref_seq)
-            if base_fname == "hla":
+            if base_fname in spliced_gene:
                 exons = []
                 for left, right in reversed(gene_exons[gene]):
                     left, right = ref_seq_len - right - 1, ref_seq_len - left - 1
@@ -865,7 +873,7 @@ def extract_vars(base_fname,
         ref_backbone_id = names[ref_gene]
         ref_backbone_seq = seqs[ref_backbone_id]
         aligner_cmd = ["hisat2"]
-        if base_fname == "hla":
+        if base_fname in spliced_gene:
             aligner_cmd += ["--score-min", "C,0"]
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",
@@ -920,7 +928,7 @@ def extract_vars(base_fname,
             else:
                 del_count.append(del_count[-1] + add)
         
-        if base_fname == "hla":
+        if base_fname in spliced_gene:
             exon_str = ""
             for exon_i in range(len(gene_exons[gene])):
                 exon_left, exon_right = gene_exons[gene][exon_i]
@@ -935,7 +943,7 @@ def extract_vars(base_fname,
             # Sanity check for exonic sequence
             sanity_check = True
             if sanity_check and \
-               os.path.exists("hisatgenotype_db/HLA/fasta/%s_nuc.fasta" % gene):
+               os.path.exists("hisatgenotype_db/%s/fasta/%s_nuc.fasta" % (base_fname.upper(), gene)):
                 exons_ = []
                 for exon in exon_str.split(','):
                     if exon.endswith('p'):
@@ -974,7 +982,7 @@ def extract_vars(base_fname,
                     exon_seq_ = typing_common.reverse_complement(exon_seq_)
 
                 cmp_exon_seq_, allele_name_ = "", ""
-                for line in open("hisatgenotype_db/HLA/fasta/%s_nuc.fasta" % gene):
+                for line in open("hisatgenotype_db/%s/fasta/%s_nuc.fasta" % (base_fname.upper(), gene)):
                     if line.startswith(">"):
                         if allele_name_ == ref_gene:
                             break
@@ -992,7 +1000,7 @@ def extract_vars(base_fname,
                     print cmp_exon_seq_[p:p+60]
                 """
                 if exon_seq_ != cmp_exon_seq_:
-                    print >> sys.stderr, "Waring: exonic sequences do not match (%s)" % gene
+                    print >> sys.stderr, "Warning: exonic sequences do not match (%s)" % gene
         else:
             exon_str = "%d-%d" % (left - left + 1, right - left + 1)
 
