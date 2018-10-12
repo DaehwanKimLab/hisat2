@@ -11,13 +11,16 @@
             "cwd": "/home/christopher/Documents/hisatgenotype-working", //tmp-RBG",
             "program": "${file}",
             "args": [
-                "--base", "rbg"//, "--locus-list", "A"
+                "--base", "rbg",//, "--locus-list", "A"
                 //"--assembly", "-f",
                 //"--locus-list", "ABO",
-                //"--debug", "pair, full"
+                "--debug", "pair, full"
                 //"-1", "cor-hla_input_1.fa",
                 //"-2", "cor-hla_input_2.fa"
-            ]
+            ],
+            "env" : {
+                "PYTHONPATH": "~/Documents/hisatgenotype-working/hisat2-edit/hisatgenotype_modules:$PYTHONPATH"
+            }
         },
         {
             "name": "Python: Attach",

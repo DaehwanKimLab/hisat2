@@ -210,9 +210,9 @@ def collapse_alleles(alleles = {}):
                         elif 'exon' in allele_i:
                             print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
                             remove.append(allele_i)                            
-                        #else:
-                        #    print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
-                        #    remove.append(allele_i)
+                        else:
+                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
+                            remove.append(allele_i)
                     break
     
     for dup in remove:
@@ -559,7 +559,7 @@ def extract_RBC():
 
                 if region.startswith(('Intron')):
                     intron_count += 1
-                    if seq.count(emptySeq) == len(seq):
+                    if seq.count(emptySeq) != 0:
                         empty_intron +=1
 
                 if region.startswith(('Exon')):
@@ -573,7 +573,7 @@ def extract_RBC():
                     
                 geneSegment[alleleNam].append([region , seqReg])
 
-            if (empty_intron == intron_count) and (intron_count != 0):
+            if (empty_intron > 0) and (intron_count != 0):
                 fullGene[alleleNam] = False
             elif empty_exon > 0 and empty_intron > 0:
                 mixed_partials.append(alleleNam)
