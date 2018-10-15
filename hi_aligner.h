@@ -887,6 +887,8 @@ struct GenomeHit {
         _trim5 = _trim3;
         _trim3 = tmp_trim;
         Edit::invertPoss(*_edits, rd.length());
+        // complements
+        Edit::complement(*_edits);
     }
     
     index_t ref()    const { return _tidx; }
@@ -4328,7 +4330,7 @@ public:
                                   pepol,
                                   tpol,
                                   gpol,
-                                  altdb,
+                                  raltdb,
                                   repeatdb,
                                   repeatKmertable,
                                   *rref,
