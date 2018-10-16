@@ -5782,7 +5782,7 @@ void GFM<index_t>::readIntoMemory(
 #ifdef BOWTIE_MM
     char *mmFile[] = { NULL, NULL };
 #endif
-    if(_in1Str.length() > 0 & !subIndex) {
+    if(_in1Str.length() > 0 && !subIndex) {
         if(_verbose || startVerbose) {
             cerr << "  About to open input files: ";
             logTime(cerr);

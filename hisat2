@@ -56,6 +56,7 @@ my $read_stat_prog = File::Spec->catpath($vol,$script_path,"hisat2_read_statisti
 my $idx_ext_l     = 'ht2l'; 
 my $idx_ext_s     = 'ht2'; 
 my $idx_ext       = $idx_ext_s; 
+my $seq_in_args = 0;
 my %signo       = ();
 my @signame     = ();
 
@@ -182,6 +183,9 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 		$large_idx = 1;
 		$ht2_args[$i] = undef;
 	}
+	if($arg eq "-c") {
+		$seq_in_args = 1;
+	}
 	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
 		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
 			$ht2_args[$i] = undef;
@@ -272,7 +276,7 @@ Info("  Binary args:\n[ @ht2_args ]\n");
 # check read lengths
 # if read_files have more than 1 files, use first one,
 my @read_files = (scalar(@unps) > 0) ? @unps : @mate1s;
-if (scalar(@read_files) > 0) {
+if ((scalar(@read_files) > 0) && ($seq_in_args == 0)) {
 	Info("Check read length: $read_files[0]\n");
 	my $cmd = "'$read_stat_prog' $read_files[0]";
 	my $read_len_str = "";
