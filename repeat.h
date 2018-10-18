@@ -197,6 +197,8 @@ public:
     
     EList<Repeat<index_t> >&       repeats()       { return _repeats; }
     const EList<Repeat<index_t> >& repeats() const { return _repeats; }
+
+    const ELList<pair<index_t, index_t> >& repeatMap() const { return _repeatMap; }
     
     void write(ofstream& f_out, bool bigEndian) const {
         if(_repeats.size() <= 0) {

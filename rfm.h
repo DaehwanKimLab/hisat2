@@ -451,6 +451,18 @@ public:
         }
         return this->_readLens.size() - 1;
     }
+
+    index_t getLocalRFM_idx(const char *refname) {
+        for(size_t i = 0; i < this->_readLens.size(); i++) {
+            assert_eq(_localRFMs[i]->refnames().size(), 1);
+
+            string& ref = _localRFMs[i]->refnames()[0];
+            if(ref.compare(refname) == 0) {
+                return i;
+            }
+        }
+        return this->_readLens.size() - 1;
+    }
     
     bool empty() const { return _localRFMs.empty(); }
     
