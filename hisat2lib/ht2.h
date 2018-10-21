@@ -42,16 +42,16 @@ typedef void* ht2_handle_t;
 struct ht2_options {
     int offRate;
 
-    bool useMm;
-    bool useShmem;
-    bool mmSweep;
-    bool noRefNames;
-    bool noSplicedAlignment;
+    int useMm;
+    int useShmem;
+    int mmSweep;
+    int noRefNames;
+    int noSplicedAlignment;
     int gVerbose;
-    bool startVerbose;
+    int startVerbose;
     int sanityCheck;
     
-    bool useHaplotype;
+    int useHaplotype;
 };
 
 typedef struct ht2_options ht2_option_t;
@@ -102,8 +102,8 @@ ht2_error_t ht2_index_getrefnames(ht2_handle_t handle, struct ht2_index_getrefna
 
 struct ht2_position {
     uint32_t chr_id;
-    int direction; /* 0 - forward, 1 - reverse */
-    uint64_t pos;
+    int direction;  /* 0 - forward, 1 - reverse */
+    uint64_t pos;   /* 0-based */
 };
 
 struct ht2_repeat_expand_result {
@@ -117,7 +117,7 @@ struct ht2_repeat_expand_result {
  *
  * @param handle
  * @param repeat_name
- * @param repeat_pos        repeat position on repeat sequence(1-based)
+ * @param repeat_pos        repeat position on repeat sequence(0-based)
  * @param repeat_len
  * @param result_ptr        pointer to result. caller must release memory by free(). 
  *                          ex) free(result_ptr);

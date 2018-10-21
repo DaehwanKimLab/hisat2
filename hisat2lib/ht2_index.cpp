@@ -27,6 +27,7 @@
 #include "ht2_handle.h"
 
 
+EXPORT
 const char* ht2_index_getrefnamebyid(ht2_handle_t handle, uint32_t chr_id)
 {
     struct ht2_handle *hp = (struct ht2_handle *)handle;
@@ -42,6 +43,7 @@ const char* ht2_index_getrefnamebyid(ht2_handle_t handle, uint32_t chr_id)
 
 
 
+EXPORT
 ht2_error_t ht2_index_getrefnames(ht2_handle_t handle, struct ht2_index_getrefnames_result **result_ptr)
 {
     struct ht2_handle *hp = (struct ht2_handle *)handle;

@@ -20,6 +20,12 @@
 #ifndef __HT2_HANDLE_H__
 #define __HT2_HANDLE_H__
 
+#if 1
+#define EXPORT __attribute__((visibility("default")))
+#else
+#define EXPORT 
+#endif
+
 typedef TIndexOffU index_t;
 typedef uint16_t local_index_t;
 

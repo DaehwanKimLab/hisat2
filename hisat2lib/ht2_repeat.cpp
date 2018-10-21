@@ -26,14 +26,14 @@
 #include "ht2.h"
 #include "ht2_handle.h"
 
-
+EXPORT
 void ht2_repeat_dump_repeatmap(ht2_handle_t handle)
 {
     struct ht2_handle *hp = (struct ht2_handle *)handle;
 
     size_t localRFMSize = hp->rgfm->_localRFMs.size();
-    cerr << "ht2lib: " << "LocalRFM size: " << localRFMSize << endl;
 
+    cerr << "ht2lib: " << "LocalRFM size: " << localRFMSize << endl;
     cerr << "ht2lib: " << "Dump repeatMap" << endl;
 
     // repID -> 0
@@ -47,6 +47,8 @@ void ht2_repeat_dump_repeatmap(ht2_handle_t handle)
 
 }
 
+
+EXPORT
 ht2_error_t ht2_repeat_expand(ht2_handle_t handle,
         const char *repeat_name,
         uint64_t repeat_pos,
@@ -57,7 +59,7 @@ ht2_error_t ht2_repeat_expand(ht2_handle_t handle,
 
     index_t rep_id = hp->rgfm->getLocalRFM_idx(repeat_name);
 
-    TIndexOffU left = repeat_pos - 1;
+    TIndexOffU left = repeat_pos;
     TIndexOffU right = left + repeat_len;
 
     bool ret = hp->repeatdb->repeatExist(rep_id, left, right);
@@ -81,7 +83,6 @@ ht2_error_t ht2_repeat_expand(ht2_handle_t handle,
             );
 
     /* build result */
-
     size_t result_size = sizeof(struct ht2_repeat_expand_result) + positions.size() * sizeof(struct ht2_position);
 
     struct ht2_repeat_expand_result *result = (struct ht2_repeat_expand_result *)malloc(result_size);

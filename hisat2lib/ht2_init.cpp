@@ -28,6 +28,9 @@
 
 using namespace std;
 
+
+MemoryTally gMemTally;
+
 static const struct ht2_options ht2_default_options = {
     .offRate = -1,
 
@@ -149,7 +152,7 @@ static void init_handle(struct ht2_handle *hp)
     hp->repeatdb->construct(hp->gfm->rstarts(), hp->gfm->nFrag());
 }
 
-
+EXPORT
 ht2_handle_t ht2_init(const char *name, ht2_option_t *options)
 {
     cerr << "ht2_init" << endl;
@@ -171,7 +174,7 @@ ht2_handle_t ht2_init(const char *name, ht2_option_t *options)
     return (ht2_handle_t)handle;
 }
 
-
+EXPORT
 void ht2_close(ht2_handle_t handle)
 {
     struct ht2_handle *hp = (struct ht2_handle *)handle;
@@ -189,7 +192,7 @@ void ht2_close(ht2_handle_t handle)
 }
 
 
-
+EXPORT
 ht2_error_t ht2_init_options(ht2_option_t *options)
 {
     if(options == NULL) {
@@ -201,7 +204,7 @@ ht2_error_t ht2_init_options(ht2_option_t *options)
     return HT2_OK;
 }
 
-
+EXPORT
 void ht2_test_1(ht2_handle_t handle)
 {
     struct ht2_handle *hp = (struct ht2_handle *)handle;
