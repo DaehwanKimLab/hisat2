@@ -1191,7 +1191,10 @@ def calculate_read_cost(single_end,
                 # "../splicesites.txt",
                 # "--rna-strandness",
                 # "FR",
-                index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
+                if version:
+                    index_cmd = "%s/HISAT2_%s%s/" % (index_base, version, index_add) + genome
+                else:
+                    index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
                 if index_type:
                     index_cmd += ("_" + index_type)
                 cmd += [index_cmd]

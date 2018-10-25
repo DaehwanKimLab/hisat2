@@ -7,6 +7,13 @@ import platform
 from datetime import datetime, date, time
 import copy
 from argparse import ArgumentParser, FileType
+from multiprocessing import Process
+import bisect
+
+mp_mode = False
+mp_num = 1
+
+cigar_re = re.compile('\d+\w')
 
 osx_mode = False
 if sys.platform == 'darwin':
@@ -57,6 +64,203 @@ def reverse_complement(seq):
 
     return result
 
+
+"""
+RepeatDB
+"""
+
+class RepeatAllele:
+    def __init__(self):
+        self.repeat_name = ''
+        self.allele_idx = 0
+        self.repeat_pos = 0
+        self.repeat_length = 0
+        self.positions = []
+        return
+
+    def __repr__(self):
+        return '[' + ','.join([str(self.repeat_name), str(self.allele_idx), str(self.repeat_pos), str(self.repeat_length), str(len(self.positions))]) + ']'
+
+    def add_position(self, chr, pos, strand):
+        self.positions.append([chr, pos, strand])
+
+
+    def __lt__(self, other):
+        if self.repeat_pos < other.repeat_pos:
+            return True
+        elif self.repeat_pos == other.repeat_pos:
+            return self.repeat_length < other.repeat_length
+        else:
+            return False
+
+class Repeat:
+    def __init__(self):
+        self.repeat_name = ''
+        self.repeat_length = 0
+        self.repeat_pos = 0
+        self.allele = []
+        return
+
+    def add_allele(self, allele_idx, repeatAllele):
+        #self.allele[allele_idx] = repeatAllele
+        self.allele.append(repeatAllele)
+
+    def allele_sort(self):
+        self.allele = sorted(self.allele)
+
+def cmp_repeatmap(a, b):
+    if a[0] < b[0]:
+        return -1
+    elif a[0] == b[0]:
+        return 0
+    else:
+        return 1
+
+def read_len_cigar(cigar_str):
+    cigars = cigar_re.findall(cigar_str)
+    cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+
+    read_len = 0
+    for cigar in cigars:
+        cigar_op, length = cigar
+        if cigar_op in "MISH":
+            read_len += int(length)
+
+    return read_len
+
+def read_repeatdb(repeat_filename):
+    repeat_db = {}
+
+    if os.path.exists(repeat_filename):
+
+        for line in open(repeat_filename, 'r'):
+
+            if line[0] == '>':
+                line = line.strip()[1:]
+                name, rptRefName, pos, rep_len, _, _ = line.split()[:6]
+                pos = int(pos)
+                rep_len = int(rep_len)
+                rptName, allele_idx = name.split('*')[0:2]
+                allele_idx = int(allele_idx)
+
+                repeatAllele = RepeatAllele()
+                repeatAllele.repeat_name = rptName 
+                repeatAllele.allele_idx = allele_idx
+                repeatAllele.repeat_pos = pos
+                repeatAllele.repeat_length = rep_len
+
+                if rptRefName not in repeat_db:
+                    # new rptRefName
+                    repeat_db[rptRefName] = {} 
+
+                if rptName not in repeat_db[rptRefName]:
+                    # new rptName
+                    assert allele_idx == 0
+                    repeat_db[rptRefName][rptName] = Repeat()
+                    repeat_db[rptRefName][rptName].repeat_name = rptName
+
+                repeat_db[rptRefName][rptName].add_allele(allele_idx, repeatAllele)
+
+            else:
+                coords = line.split()
+                for coord in coords:
+                    chr, pos, strand = coord.split(':')
+                    pos = int(pos)
+
+                    repeat_db[rptRefName][rptName].allele[allele_idx].add_position(chr, pos, strand)
+
+    else:
+        print >> sys.stderr, 'Cannot open file', repeat_filename
+
+
+    print >> sys.stderr, 'Build repeatMap'
+    repeat_map = {}
+    for rptRefName, repeats in repeat_db.items():
+        #print 'Processing', rptRefName
+        repeat_pos_list = []
+
+        for repeatName, repeat in repeats.items():
+            #print 'Common Allele:', repeatName, repeat.repeat_name
+            repeat_left = sys.maxint
+            repeat_right = 0
+
+            #for allele_id, repeatAllele in repeat.allele.items():
+            for repeatAllele in repeat.allele:
+                left = repeatAllele.repeat_pos
+                right = left + repeatAllele.repeat_length
+                if left < repeat_left:
+                    repeat_left = left
+                if right > repeat_right:
+                    repeat_right = right
+
+            repeat.repeat_pos = repeat_left
+            repeat.repeat_length = repeat_right - repeat_left
+
+            #print repeat.allele
+            #repeat.allele_sort()
+            #print repeat.allele
+
+            #print repeat_left, repeat_right
+
+            repeat_pos_list.append((repeat_right, repeatName))
+
+        repeat_map[rptRefName] = sorted(repeat_pos_list, cmp=cmp_repeatmap)
+        #print repeat_map[rptRefName]
+
+    return repeat_db, repeat_map
+
+
+def find_leftmost_pos(rmap, left):
+    pos = bisect.bisect_left(rmap, (left, None))
+    #print pos
+
+    if pos == len(rmap):
+        return pos
+
+    if rmap[pos][0] == left:
+        while pos < len(rmap):
+            if rmap[pos][0] != left:
+                break
+            pos += 1
+
+    return pos
+
+def repeat_to_genome_pos(repeat_db, repeat_map, rptRefName, pos, cigar_str = ''):
+    assert rptRefName in repeat_db
+    readlen = read_len_cigar(cigar_str)
+    #readlen = 101  
+
+    # pos in sam-result. pos is 1-based
+    left = pos - 1
+    right = left + readlen
+
+    repeats = repeat_db[rptRefName]
+    rmap = repeat_map[rptRefName]
+
+    #print len(rmap)
+    #print rmap
+
+    i = find_leftmost_pos(rmap, left)
+    if i >= len(rmap):
+        print >> sys.stderr, 'Value Error'
+        return
+
+    if right > rmap[i][0]:
+        print >> sys.stderr, 'Not repeat'
+        return
+
+    repeat = repeats[rmap[i][1]]
+    
+    #print 'Allele Size:', len(repeat.allele)
+    #print repeat.allele
+    for allele in repeat.allele:
+        rpos = allele.repeat_pos
+        rlen = allele.repeat_length
+
+        if (left >= rpos) and (right <= rpos + rlen):
+            offset = left - rpos
+            for genome_pos in allele.positions:
+                print genome_pos[0], genome_pos[1] + offset + 1, genome_pos[2], genome_pos[1]
 
 """
 """
@@ -160,20 +364,22 @@ def read_repeat_info(repeat_filename):
 
                 if rep not in repeat_info:
                     repeat_info[rep] = []
+                    repeat_dic[rep] = {}
+                    repeat_pos[rep] = {}
 
                 repeat_info[rep].append([allele, pos, rep_len])
-                if allele not in repeat_dic:
-                    repeat_dic[allele] = []
-                    repeat_pos[allele] = set()
+                if allele not in repeat_dic[rep]:
+                    repeat_dic[rep][allele] = []
+                    repeat_pos[rep][allele] = set()
             else:
                 coords = line.split()
                 for coord in coords:
                     chr, pos, strand = coord.split(':')
                     pos = int(pos)
-                    if pos in repeat_pos[allele]:
+                    if pos in repeat_pos[rep][allele]:
                         continue
-                    repeat_dic[allele].append([chr, pos, strand])
-                    repeat_pos[allele].add(pos)
+                    repeat_dic[rep][allele].append([chr, pos, strand])
+                    repeat_pos[rep][allele].add(pos)
 
     for rep, repeats in repeat_info.items():
         def my_cmp(a, b):
@@ -206,9 +412,6 @@ def find_repeat(repeat_info, pos):
             l = m + 1
             
     return -1
-
-
-cigar_re = re.compile('\d+\w')
 
 def reverse_cigar(cigar_str):
     cigars = cigar_re.findall(cigar_str)
@@ -411,6 +614,7 @@ def is_small_exon_junction_read(cigars, min_exon_len = 23):
 
 """
 """
+"""
 def repeat_to_genome_alignment(repeat_info, repeat_dic, rep, pos, cigar_str = ""):
     assert rep in repeat_info
     left = pos - 1 # convert 1-based offset to zero-based
@@ -442,8 +646,8 @@ def repeat_to_genome_alignment(repeat_info, repeat_dic, rep, pos, cigar_str = ""
         if left < rpos:
             break
         
-        assert rep_allele in repeat_dic
-        coords = repeat_dic[rep_allele]
+        assert rep_allele in repeat_dic[rep]
+        coords = repeat_dic[rep][rep_allele]
         assert len(coords) > 0
         for coord in coords:
             cchr, cpos, cstrand = coord
@@ -463,6 +667,61 @@ def repeat_to_genome_alignment(repeat_info, repeat_dic, rep, pos, cigar_str = ""
         m += 1
 
     return alignments
+"""
+def repeat_to_genome_alignment(repeat_db, repeat_map, rptRefName, pos, cigar_str = ''):
+    assert rptRefName in repeat_db
+    readlen = read_len_cigar(cigar_str)
+    #readlen = 101  
+
+    # pos in sam-result. pos is 1-based
+    left = pos - 1
+    right = left + readlen
+
+    repeats = repeat_db[rptRefName]
+    rmap = repeat_map[rptRefName]
+
+    #print len(rmap)
+    #print rmap
+
+    alignments = []
+
+    i = find_leftmost_pos(rmap, left)
+    if i >= len(rmap):
+        print >> sys.stderr, 'Value Error'
+        return alignments
+
+    if right > rmap[i][0]:
+        print >> sys.stderr, 'Not repeat'
+        return alignments
+
+    repeat = repeats[rmap[i][1]]
+    
+    #print 'Allele Size:', len(repeat.allele)
+    #print repeat.allele
+    for allele in repeat.allele:
+        rpos = allele.repeat_pos
+        rlen = allele.repeat_length
+
+        if (left >= rpos) and (right <= rpos + rlen):
+            offset = left - rpos
+            for coord in allele.positions:
+                cchr, cpos, cstrand = coord
+                if cstrand == '+':
+                    rep_left = cpos + offset
+                    rep_cigar_str = cigar_str
+                else:
+                    if cigar_str:
+                        rep_read_len, rep_cigar_str = reverse_cigar(cigar_str)
+                    else:
+                        rep_read_len, rep_cigar_str = 0, ""
+
+                    rc_offset = rlen - offset - rep_read_len
+                    rep_left = cpos + rc_offset
+                
+                alignments.append([cchr, rep_left + 1, rep_cigar_str])
+                #print genome_pos[0], genome_pos[1] + offset + 1, genome_pos[2], genome_pos[1]
+
+    return alignments
 
 
 """
@@ -472,14 +731,20 @@ def extract_single(infilename,
                    chr_dic,
                    aligner,
                    version,
-                   repeat_info,
-                   repeat_dic,
-                   debug_dic):
+                   repeat_db,
+                   repeat_map,
+                   debug_dic,
+                   hash_idx):
     infile = open(infilename)
-    outfile = open(outfilename, "w")
+    if hash_idx == -1:
+        outfile = open(outfilename, "w")
+    else:
+        outfile = open(outfilename + "." + str(hash_idx), "w")
+
     prev_read_id = ""
     num_reads, num_aligned_reads, num_ualigned_reads = 0, 0, 0
     prev_NM, prev_NH, NH_real = 0, 0, 0
+
     for line in infile:
         if line[0] == '@':
             continue
@@ -495,6 +760,11 @@ def extract_single(infilename,
 
         if aligner == "gsnap":
             chr = chr.replace("_", ":")
+
+        if hash_idx != -1:
+            hashval = hash(read_id)
+            if hashval % mp_num != hash_idx:
+                continue
 
         if read_id != prev_read_id:
             num_reads += 1
@@ -590,8 +860,8 @@ def extract_single(infilename,
                 alignments.append([alt_chr, alt_pos, alt_cigar_str])
 
         # Convert repeat alignments to genome alignments
-        if aligner == "hisat2" and chr.startswith("rep") and len(repeat_info) > 0:
-            alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, chr, pos, cigar_str)
+        if aligner == "hisat2" and chr.startswith("rep") and len(repeat_map) > 0:
+            alignments = repeat_to_genome_alignment(repeat_db, repeat_map, chr, pos, cigar_str)
             
         for i, alignment in enumerate(alignments):
             chr, pos, cigar_str = alignment
@@ -618,7 +888,7 @@ def extract_single(infilename,
     infile.close()
 
     # Sanity check for HISAT2's alignment summary
-    if aligner == "hisat2" and os.path.exists(infilename + ".summary"):
+    if aligner == "hisat2" and os.path.exists(infilename + ".summary") and (not mp_mode):
         hisat2_reads, hisat2_0aligned_reads, hisat2_ualigned_reads, hisat2_maligned_reads = 0, 0, 0, 0
         for line in open(infilename + ".summary"):
             line = line.strip()
@@ -653,14 +923,19 @@ def extract_pair(infilename,
                  RNA,
                  aligner,
                  version,
-                 repeat_info,
-                 repeat_dic,
-                 debug_dic):
+                 repeat_db,
+                 repeat_map,
+                 debug_dic,
+                 hash_idx):
     read_dic = {}
     pair_reported = set()
 
     infile = open(infilename)
-    outfile = open(outfilename, "w")
+    if hash_idx == -1:
+        outfile = open(outfilename, "w")
+    else:
+        outfile = open(outfilename + "." + str(hash_idx), "w")
+
     num_pairs, num_conc_aligned_pairs, num_conc_ualigned_pairs, num_disc_aligned_pairs = 0, 0, 0, 0
     num_aligned_reads, num_ualigned_reads = 0, 0
     
@@ -681,6 +956,11 @@ def extract_pair(infilename,
 
         if read_id.find("seq.") == 0:
             read_id = read_id[4:]
+
+        if hash_idx != -1:
+            hashval = hash(read_id)
+            if hashval % mp_num != hash_idx:
+                continue
 
         if aligner == "gsnap":
             chr1 = chr1.replace("_", ":")
@@ -801,12 +1081,12 @@ def extract_pair(infilename,
                 alignments.append([alt_chr, alt_pos, alt_cigar_str])
 
         # Convert repeat alignments to genome alignments
-        if aligner == "hisat2" and (chr1.startswith("rep") or chr2.startswith("rep")) and len(repeat_info) > 0:
+        if aligner == "hisat2" and (chr1.startswith("rep") or chr2.startswith("rep")) and len(repeat_map) > 0:
             if chr1.startswith("rep"):
-                alignments = repeat_to_genome_alignment(repeat_info, repeat_dic, chr1, pos1, cigar1_str)
+                alignments = repeat_to_genome_alignment(repeat_db, repeat_map, chr1, pos1, cigar1_str)
             if chr2.startswith("rep") or (chr1.startswith("rep") and chr2 == "="):
                 chr_tmp = chr1 if chr2 == "=" else chr2
-                alignments2 = repeat_to_genome_alignment(repeat_info, repeat_dic, chr_tmp, int(pos2))
+                alignments2 = repeat_to_genome_alignment(repeat_db, repeat_map, chr_tmp, int(pos2))
             else:
                 alignments2 = [[chr2, int(pos2)]]
 
@@ -818,6 +1098,7 @@ def extract_pair(infilename,
                     _chr2, _pos2 = alignment2[:2]
                     if _chr1 == _chr2 and abs(_pos1 - _pos2) <= 1000:
                         add = True
+                        break
                 if add:
                     selected_alignments.append(alignment)
 
@@ -907,7 +1188,7 @@ def extract_pair(infilename,
     infile.close()
 
     # Sanity check for HISAT2's alignment summary
-    if aligner == "hisat2" and os.path.exists(infilename + ".summary"):
+    if aligner == "hisat2" and os.path.exists(infilename + ".summary") and (not mp_mode):
         hisat2_pairs, hisat2_0aligned_pairs, hisat2_conc_ualigned_pairs, hisat2_conc_maligned_pairs, hisat2_disc_aligned_pairs = 0, 0, 0, 0, 0
         hisat2_reads, hisat2_0aligned_reads, hisat2_ualigned_reads, hisat2_maligned_reads = 0, 0, 0, 0
 
@@ -1758,7 +2039,7 @@ def calculate_read_cost(single_end,
 
     chr_dic = read_genome("../../data/%s.fa" % genome)
     gtf_junctions = extract_splice_sites("../../data/%s.gtf" % genome)
-    repeat_info, repeat_dic = read_repeat_info("../../data/%s_rep.rep.info" % genome)
+    repeat_db, repeat_map = read_repeatdb("../../data/%s_rep.rep.info" % genome)
     align_stat = []
     for paired in [False, True]:
         if not paired and not single_end:
@@ -1901,7 +2182,10 @@ def calculate_read_cost(single_end,
                     # "../splicesites.txt",
                     # "--rna-strandness",
                     # "FR",
-                    index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
+                    if version:
+                        index_cmd = "%s/HISAT2_%s%s/" % (index_base, version, index_add) + genome
+                    else:
+                        index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
                     if index_type:
                         index_cmd += ("_" + index_type)
                     cmd += [index_cmd]
@@ -2137,7 +2421,7 @@ def calculate_read_cost(single_end,
                 out_fname = base_fname + "_" + readtype + ".sam"
                 out_fname2 = out_fname + "2"
                 duration = -1.0
-                mem_usage = ''
+                mem_usage = '0'
                 if not os.path.exists(out_fname):
                     if not os.path.exists("../one.fa") or not os.path.exists("../two.fa"):
                         os.system("head -400 ../%s_1.fa > ../one.fa" % (data_base))
@@ -2216,7 +2500,7 @@ def calculate_read_cost(single_end,
                             if file in ["SJ.out.tab.Pass1.sjdb", "genome.fa"]:
                                 continue
                             os.remove(file)
-                        star_index_cmd = "STAR --genomeDir ./ --runMode genomeGenerate --genomeFastaFiles ../../../data/%s.fa --sjdbFileChrStartEnd SJ.out.tab.Pass1.sjdb --sjdbOverhang 99 --runThreadN %d" % (genome, num_threads)
+                        star_index_cmd = "%s/STAR --genomeDir ./ --runMode genomeGenerate --genomeFastaFiles ../../../data/%s.fa --sjdbFileChrStartEnd SJ.out.tab.Pass1.sjdb --sjdbOverhang 99 --runThreadN %d" % (aligner_bin_base, genome, num_threads)
                         if verbose:
                             print >> sys.stderr, "\t", datetime.now(), star_index_cmd
                         os.system(star_index_cmd)
@@ -2251,15 +2535,53 @@ def calculate_read_cost(single_end,
                         os.system("tar cvzf %s.tar.gz %s &> /dev/null" % (out_fname, out_fname))
 
                 if runtime_only:
+                    print >> sys.stderr, "\t\t\tMemory Usage: %dMB" % (int(mem_usage) / 1024)
                     os.chdir("..")
                     continue
 
                 if not os.path.exists(out_fname2):
                     debug_dic = {}
+                    pid_list = []
                     if paired:
-                        extract_pair(out_fname, out_fname2, chr_dic, RNA, aligner, version, repeat_info, repeat_dic, debug_dic)
+                        if mp_mode:
+                            for i in xrange(mp_num):
+                                p = Process(target=extract_pair, args=(out_fname, out_fname2, chr_dic, RNA, aligner, version, repeat_db, repeat_map, debug_dic, i))
+                                pid_list.append(p)
+                                p.start()
+
+                            for p in pid_list:
+                                p.join()
+
+                            # merge 
+                            os.system("mv %s %s" % (out_fname2 + ".0", out_fname2))
+                            for i in xrange(1, mp_num):
+                                os.system("cat %s >> %s" % (out_fname2 + "." + str(i), out_fname2))
+                                os.system("rm %s" % (out_fname2 + "." + str(i)))
+
+                        else:
+                            extract_pair(out_fname, out_fname2, chr_dic, RNA, aligner, version, repeat_db, repeat_map, debug_dic, -1)
+
+
                     else:
-                        extract_single(out_fname, out_fname2, chr_dic, aligner, version, repeat_info, repeat_dic, debug_dic)
+                        if mp_mode:
+                            # Prepare queues
+                            for i in xrange(mp_num): 
+                                p = Process(target=extract_single, args=(out_fname, out_fname2, chr_dic, aligner, version, repeat_db, repeat_map, debug_dic, i))
+                                pid_list.append(p)
+                                p.start()
+
+                            # wait 
+                            for p in pid_list:
+                                p.join()
+
+                            # merge 
+                            os.system("mv %s %s" % (out_fname2 + ".0", out_fname2))
+                            for i in xrange(1, mp_num):
+                                os.system("cat %s >> %s" % (out_fname2 + "." + str(i), out_fname2))
+                                os.system("rm %s" % (out_fname2 + "." + str(i)))
+                            
+                        else:
+                            extract_single(out_fname, out_fname2, chr_dic, aligner, version, repeat_db, repeat_map, debug_dic, -1)
 
                 for readtype2 in readtypes:
                     if not two_step and readtype != readtype2:
@@ -2371,6 +2693,12 @@ if __name__ == "__main__":
                         dest='runtime_only',
                         action='store_true',
                         help='run programs without evaluation')
+    parser.add_argument('-p', '--multi-process',
+                        dest='mp_num',
+                        action='store',
+                        type=int,
+                        default=1,
+                        help='Use multiple process mode')
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
@@ -2384,6 +2712,9 @@ if __name__ == "__main__":
             continue
         aligners.append(aligner)
     
+    mp_num = args.mp_num
+    mp_mode = (mp_num > 1)
+
     calculate_read_cost(args.single_end,
                         args.paired_end,
                         aligners,

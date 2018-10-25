@@ -279,6 +279,8 @@ struct Edit {
 	static void invertPoss(EList<Edit>& edits, size_t sz, bool sort = false) {
 		invertPoss(edits, sz, 0, edits.size(), sort);
 	}
+
+	static void complement(EList<Edit>& edits);
 	
 	/**
 	 * Clip off some of the low-numbered positions.

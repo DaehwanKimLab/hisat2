@@ -887,6 +887,8 @@ struct GenomeHit {
         _trim5 = _trim3;
         _trim3 = tmp_trim;
         Edit::invertPoss(*_edits, rd.length());
+        // complements
+        Edit::complement(*_edits);
     }
     
     index_t ref()    const { return _tidx; }
@@ -4328,7 +4330,7 @@ public:
                                   pepol,
                                   tpol,
                                   gpol,
-                                  altdb,
+                                  raltdb,
                                   repeatdb,
                                   repeatKmertable,
                                   *rref,
@@ -5101,7 +5103,8 @@ public:
                         if(node - partialHit._node_top == partialHit._node_iedge_count[edgeIdx].first) {
                             bot += partialHit._node_iedge_count[edgeIdx].second;
                             _tmp_node_iedge_count.expand();
-                            _tmp_node_iedge_count.back() = partialHit._node_iedge_count[edgeIdx];
+                            _tmp_node_iedge_count.back().first = 0;
+                            _tmp_node_iedge_count.back().second = partialHit._node_iedge_count[edgeIdx].second;
                             edgeIdx++;
                         }
                     }
