@@ -677,7 +677,7 @@ static void driver(
 		HGFM<TIndexOffU, uint16_t> gfm(
                                        adjustedEbwtFileBase,
                                        &altdb,
-									   &repeatdb,
+									   NULL,
                                        NULL,
                                        -1,                   // don't care about entire-reverse
                                        true,                 // index is for the forward direction
