@@ -87,7 +87,7 @@ Download real reads, simulated reads, and HISAT2 indexes, then move them into ap
 
 ### 10 million simulated read pairs without SNPs and without sequencing errors
     hisat-genotype-top/evaluation$ cd simulation/10M_DNA_genome
-    hisat-genotype-top/evaluation/simulation/10M_DNA_snp_$ ./calculate_read_cost.py --aligner-list hisat2 --paired-end --fresh
+    hisat-genotype-top/evaluation/simulation/10M_DNA_genome$ ./calculate_read_cost.py --aligner-list hisat2 --paired-end --fresh
 
 ### 10 million real read pairs
     hisat-genotype-top/evaluation$ cd real/DNA
