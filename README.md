@@ -90,8 +90,8 @@ Download real reads, simulated reads, and HISAT2 indexes, then move them into ap
     hisat-genotype-top/evaluation/simulation/10M_DNA_reads_genome$ ./calculate_read_cost.py --aligner-list hisat2 --paired-end --fresh
 
 ### 10 million real read pairs
-    hisat-genotype-top/evaluation$ cd real/DNA
-    hisat-genotype-top/evaluation/real/DNA ./calculate_read_cost.py --aligner-list hisat2 --paired-end --fresh
+    hisat-genotype-top/evaluation$ cd real/DNA/10M
+    hisat-genotype-top/evaluation/real/DNA/10M$ ./calculate_read_cost.py --aligner-list hisat2 --paired-end --fresh
 
 ### Interpreting output
     Example alignment output for simulated reads
