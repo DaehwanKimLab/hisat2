@@ -1,9 +1,5 @@
 # Graph-Based Genome Alignment and Genotyping with HISAT2 and HISAT-genotype
 
-For more information, see the following websites:
-* [HISAT2 website](http://ccb.jhu.edu/software/hisat2)
-* [HISAT-genotype website](http://ccb.jhu.edu/software/hisat-genotype)
-
 ## Contact
 
 [Daehwan Kim](https://kim-lab.org) (infphilo@gmail.com) and [Chanhee Park](https://www.linkedin.com/in/chanhee-park-97677297/) (parkchanhee@gmail.com)
@@ -13,6 +9,10 @@ For more information, see the following websites:
 Rapid advances in next-generation sequencing technologies have dramatically changed our ability to perform genome-scale analyses. The human reference genome used for most genomic analyses represents only a small number of individuals, limiting its usefulness for genotyping. We designed a novel method, HISAT2, for representing and searching an expanded model of the human reference genome, in which a large catalogue of known genomic variants and haplotypes is incorporated into the data structure used for searching and alignment. This strategy for representing a population of genomes, along with a fast and memory-efficient search algorithm, enables more detailed and accurate variant analyses than previous methods. We demonstrate two initial applications of HISAT2: HLA typing, a critical need in human organ transplantation, and DNA fingerprinting, widely used in forensics. These applications are part of HISAT-genotype, with performance not only surpassing earlier computational methods, but matching or exceeding the accuracy of laboratory-based assays.
 
 ![](HISAT2-genotype.png)
+
+For more information, see the following websites:
+* [HISAT2 website](http://ccb.jhu.edu/software/hisat2)
+* [HISAT-genotype website](http://ccb.jhu.edu/software/hisat-genotype)
 
 ## HISAT2
 HISAT2 is a fast and sensitive alignment program for mapping next-generation sequencing reads (whole-genome, transcriptome, and exome sequencing data) to a population of human genomes (as well as to a single reference genome). Based on an extension of BWT for a graph [1], we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that represents general population, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover human population). These small indexes (called local indexes) combined with several alignment strategies enable effective alignment of sequencing reads. This new indexing scheme is called Hierarchical Graph FM index (HGFM). We have developed HISAT2 based on the HISAT [2] and Bowtie 2 [3] implementations.  See the [HISAT2 website](http://ccb.jhu.edu/software/hisat2/index.shtml) for
@@ -38,7 +38,7 @@ A few notes:
 
 ## Code
 
-The Code directory (`/code`) contains a specific version of [HISAT2 and HISAT-genotype](http://github.com/infphilo/hisat2) at GitHub (a branch named hisat2_v2.2.0_beta).
+A specific version of [HISAT2 and HISAT-genotype](http://github.com/infphilo/hisat2) at GitHub is used with a branch name as hisat2_v2.2.0_beta.
 
 ## Initial setup
 
@@ -117,12 +117,12 @@ The current directory can be changed to hla-analysis as follows:
 
 Additional program requirements: SAMtools (version 1.3 or later)
 
-Downloading a Graph Reference and Index
+### Downloading a Graph Reference and Index
 The graph reference we are going to build incorporates variants of numerous HLA alleles into the linear reference using a graph. The graph reference also includes some known variants of other regions of the genome (e.g. common small variants). To copy the graph reference, type:
 
     hisat-genotype-top/evaluation/hla-analysis$ mv ../hisat-genotype/* .
 
-Read Extraction
+### Read Extraction
 Since whole genome sequencing (WGS) data includes reads that are from the whole genome, the first step is to extract the reads that belong to the HLA genes by aligning them to the graph reference with HISAT2. The graph reference enables substantially more sensitive alignment compared to the linear reference (e.g. based on our experiment, for read extraction, we got twice as many reads than from using the reference only.)
 
     hisat-genotype-top/evaluation/hla-analysis$ hisatgenotype_extract_reads.py --base genotype_genome --read-dir ILMN_20181025 --out-dir ILMN
