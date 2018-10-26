@@ -122,19 +122,9 @@ The graph reference we are going to build incorporates variants of numerous HLA 
 
     hisat-genotype-top/evaluation/hla-analysis$ mv ../hisat2-genotype/* .
 
-### Read Extraction
-Since whole genome sequencing (WGS) data includes reads that are from the whole genome, the first step is to extract the reads that belong to the HLA genes by aligning them to the graph reference with HISAT2. The graph reference enables substantially more sensitive alignment compared to the linear reference (e.g. based on our experiment, for read extraction, we got twice as many reads than from using the reference only.)
-
-    hisat-genotype-top/evaluation/hla-analysis$ hisatgenotype_extract_reads.py --base genotype_genome --read-dir ILMN --out-dir ILMN_20181025
-, where ILMN_20181025 contains read files as follows. Please make sure that your files end with 1.fq.gz or 2.fq.gz.
- NA12892.hla.extracted.1.fq.gz
- NA12892.hla.extracted.2.fq.gz
- NA12878.hla.extracted.1.fq.gz
- NA12878.hla.extracted.2.fq.gz
-
-Alternatively, we provide these extracted reads in hisat-genotype-top/evaluation/hla-analysis/ILMN_20181025.
-
 ### Typing and Assembly
+Since whole genome sequencing (WGS) data includes reads that are from the whole genome, the first step is to extract the reads that belong to the HLA genes by aligning them to the graph reference with HISAT2. We provide these extracted reads in hisat-genotype-top/evaluation/hla-analysis/ILMN_20181025.
+
 HISAT-genotype performs both HLA typing and assembly as follows.
 You can perform HLA typing and assembly for HLA-A gene on sequencing reads from the genome NA12892 (Illumina's HiSeq 2000 platform).
 
