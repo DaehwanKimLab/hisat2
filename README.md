@@ -138,7 +138,7 @@ Alternatively, we provide these extracted reads in hisat-genotype-top/evaluation
 HISAT-genotype performs both HLA typing and assembly as follows.
 You can perform HLA typing and assembly for HLA-A gene on sequencing reads from the genome NA12892 (Illumina's HiSeq 2000 platform).
 
-    hisat-genotype-top/evaluation/hla-analysis$ hisatgenotype_locus.py --base hla --locus-list A --assembly -1 ILMN/NA12892.hla.extracted.1.fq.gz -2 ILMN/NA12892.hla.extracted.2.fq.gz
+    hisat-genotype-top/evaluation/hla-analysis$ hisatgenotype_locus.py --base hla --locus-list A --assembly -1 ILMN_20181025/NA12892.hla.extracted.1.fq.gz -2 ILMN_20181025/NA12892.hla.extracted.2.fq.gz
 
 ### DNA Fingerprinting
 This function can be performed with the same commands used for “Typing and Assembly” and just replacing --base hla with --base codis.
