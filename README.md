@@ -38,7 +38,7 @@ A few notes:
 
 ## Code
 
-A specific version of [HISAT2 and HISAT-genotype](http://github.com/infphilo/hisat2) at GitHub is used with a branch name as hisat2_v2.2.0_beta.
+A specific version of [HISAT2 and HISAT-genotype](http://github.com/infphilo/hisat2) at GitHub is used (a branch name: hisat2_v2.2.0_beta).
 
 ## Initial setup
 
@@ -90,8 +90,8 @@ Download real reads, simulated reads, and HISAT2 indexes, then move them into ap
     hisat-genotype-top/evaluation/simulation/10M_DNA_snp_$ ./calculate_read_cost.py --aligner-list hisat2 --paired-end --fresh
 
 ### 10 million real read pairs
-    hisat-genotype-top/evaluation$ cd real/10M
-    hisat-genotype-top/evaluation/real/10M$ ./calculate_read_cost.py --aligner-list hisat2 --paired-end --fresh
+    hisat-genotype-top/evaluation$ cd real/DNA
+    hisat-genotype-top/evaluation/real/DNA ./calculate_read_cost.py --aligner-list hisat2 --paired-end --fresh
 
 ### Interpreting output
     Example alignment output for simulated reads
