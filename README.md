@@ -120,7 +120,7 @@ Additional program requirements: SAMtools (version 1.3 or later)
 ### Downloading a Graph Reference and Index
 The graph reference we are going to build incorporates variants of numerous HLA alleles into the linear reference using a graph. The graph reference also includes some known variants of other regions of the genome (e.g. common small variants). To copy the graph reference, type:
 
-    hisat-genotype-top/evaluation/hla-analysis$ mv ../hisat-genotype/* .
+    hisat-genotype-top/evaluation/hla-analysis$ mv ../hisat2-genotype/* .
 
 ### Read Extraction
 Since whole genome sequencing (WGS) data includes reads that are from the whole genome, the first step is to extract the reads that belong to the HLA genes by aligning them to the graph reference with HISAT2. The graph reference enables substantially more sensitive alignment compared to the linear reference (e.g. based on our experiment, for read extraction, we got twice as many reads than from using the reference only.)
