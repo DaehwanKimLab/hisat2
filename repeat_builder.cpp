@@ -21,6 +21,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 #include "timer.h"
 #include "aligner_sw.h"
 #include "aligner_result.h"
