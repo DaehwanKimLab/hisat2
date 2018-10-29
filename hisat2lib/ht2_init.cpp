@@ -61,10 +61,16 @@ static void free_handle(struct ht2_handle *hp)
     }
 
     if(hp->gfm) {
+        if(hp->gfm->isInMemory()) {
+            hp->gfm->evictFromMemory();
+        }
         delete hp->gfm;
     }
 
     if(hp->rgfm) {
+        if(hp->rgfm->isInMemory()) {
+            hp->rgfm->evictFromMemory();
+        }
         delete hp->rgfm;
     }
 
@@ -155,8 +161,6 @@ static void init_handle(struct ht2_handle *hp)
 EXPORT
 ht2_handle_t ht2_init(const char *name, ht2_option_t *options)
 {
-    cerr << "ht2_init" << endl;
-
     struct ht2_handle *handle = new ht2_handle;
 
     handle->ht2_idx_name = name;
@@ -181,12 +185,6 @@ void ht2_close(ht2_handle_t handle)
     if(hp == NULL) {
         return;
     }
-
-    cerr << __func__ << ": " << hp->tmp_str << endl;
-
-    //delete str;
-
-    // free memory
 
     free_handle(hp);
 }

@@ -20,12 +20,12 @@
 #ifndef __HT2_H__
 #define __HT2_H__
 
-
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
+#include <stdlib.h>
+#include <stdint.h>
 
 typedef int ht2_error_t;
 
