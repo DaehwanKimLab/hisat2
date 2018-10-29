@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 #
 # Copyright 2018, Chanhee Park <parkchanhee@gmail.com> and Daehwan Kim <infphilo@gmail.com>
 #
@@ -17,17 +15,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
+#
 
+all: lib
 
-from distutils.core import setup, Extension
+lib:
+	python ./setup.py build
 
-module1 = Extension('ht2py',
-#                    define_macros = [('DEBUG', '1')],
-                    include_dirs=['../'],
-                    libraries=['stdc++'],
-                    extra_objects = ['../../libhisat2lib.a'],
-                    sources = ['ht2module.c'])
+install:
+	python ./setup.py install
 
-setup(name = 'ht2py',
-        version = '1.0',
-        ext_modules = [module1])
+clean:
+	python ./setup.py clean
+	rm -rf build test
+
+test: lib
+	python ./ht2example.py
