@@ -453,11 +453,11 @@ libhisat2lib.a: $(HT2LIB_RELEASE_OBJS)
 
 libhisat2lib-debug.so: $(HT2LIB_SHARED_DEBUG_OBJS)
 	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) -DBOWTIE2 -Wall $(INC) $(SEARCH_INC) \
-	-shared -Wl,-soname,$@ -o $@  $(HT2LIB_SHARED_DEBUG_OBJS) $(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
+	-shared -o $@  $(HT2LIB_SHARED_DEBUG_OBJS) $(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
 
 libhisat2lib.so: $(HT2LIB_SHARED_RELEASE_OBJS)
 	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall  $(INC) $(SEARCH_INC)\
-	-shared -Wl,-soname,$@ -o $@ $(HT2LIB_SHARED_RELEASE_OBJS) $(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
+	-shared -o $@ $(HT2LIB_SHARED_RELEASE_OBJS) $(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
 	
 .ht2lib-obj-debug/%.o: %.cpp
 	@mkdir -p $(dir $@)/$(dir $<)

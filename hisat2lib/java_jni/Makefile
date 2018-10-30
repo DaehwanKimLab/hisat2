@@ -23,9 +23,25 @@ HISAT2_DIR = ../..
 
 CC = gcc
 
-INCLUDES = -I $(JAVA_HOME)/include \
-		   -I $(JAVA_HOME)/include/linux \
-		   -I $(HISAT2_DIR)/hisat2lib
+
+MACOS = 0
+ifneq (,$(findstring Darwin,$(shell uname)))
+MACOS = 1
+endif
+
+INCLUDES = -I $(JAVA_HOME)/include
+INCLUDES += -I $(JAVA_HOME)/include/linux
+
+TARGET_LIB = libht2jni.so
+SHARED_FLAG = -shared
+
+ifeq (1,$(MACOS))
+INCLUDES += -I $(JAVA_HOME)/include/darwin
+TARGET_LIB = libht2jni.jnilib
+SHARED_FLAG = -dynamiclib
+endif
+
+INCLUDES += -I $(HISAT2_DIR)/hisat2lib
 
 CFLAGS = -fPIC $(INCLUDES)
 #CFLAGS += -DDEBUG
@@ -36,16 +52,13 @@ OBJS = $(SRCS:.c=.o)
 
 all: lib 
 
-lib: libht2jni.so
+lib: $(TARGET_LIB)
 
-libht2jni.so: HT2Module.h $(OBJS)
-	$(CC) -shared -o $@ $(OBJS) $(HISAT2_DIR)/libhisat2lib.a -lstdc++
+$(TARGET_LIB): HT2Module.h $(OBJS)
+	$(CC) $(SHARED_FLAG) -o $@ $(OBJS) $(HISAT2_DIR)/libhisat2lib.a -lstdc++
 
-HT2Module.h: HT2Module.class
-	javah HT2Module
-
-HT2Module.class: HT2Module.java
-	javac HT2Module.java
+HT2Module.h HT2Module.class: HT2Module.java
+	javac -h . HT2Module.java
 
 example: HT2ModuleExample.class
 
@@ -53,7 +66,7 @@ HT2ModuleExample.class: HT2ModuleExample.java
 	javac HT2ModuleExample.java
 
 clean:
-	rm -f *.class HT2Module.h HT2Module_HT2Position.h *.so *.o
+	rm -f *.class HT2Module.h HT2Module_HT2Position.h *.so *.o $(TARGET_LIB)
 
 test: all example
 	java -Djava.library.path=. HT2ModuleExample
