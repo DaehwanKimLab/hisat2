@@ -20,7 +20,7 @@
 all: lib
 
 lib:
-	python ./setup.py build
+	ARCHFLAGS="-arch x86_64" python ./setup.py build
 
 install:
 	python ./setup.py install
