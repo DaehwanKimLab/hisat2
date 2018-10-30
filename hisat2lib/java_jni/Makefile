@@ -39,7 +39,7 @@ all: lib
 lib: libht2jni.so
 
 libht2jni.so: HT2Module.h $(OBJS)
-	$(CC) -shared -o $@ $(OBJS) $(HISAT2_DIR)/libhisat2lib.a
+	$(CC) -shared -o $@ $(OBJS) $(HISAT2_DIR)/libhisat2lib.a -lstdc++
 
 HT2Module.h: HT2Module.class
 	javah HT2Module
