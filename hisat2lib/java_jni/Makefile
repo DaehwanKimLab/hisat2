@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 #
 # Copyright 2018, Chanhee Park <parkchanhee@gmail.com> and Daehwan Kim <infphilo@gmail.com>
 #
@@ -17,17 +15,45 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
+#
 
+JAVA_HOME := $(JAVA_HOME)
 
-from distutils.core import setup, Extension
+HISAT2_DIR = ../..
 
-module1 = Extension('ht2py',
-#                    define_macros = [('DEBUG', '1')],
-                    include_dirs=['../'],
-                    libraries=['stdc++'],
-                    extra_objects = ['../../libhisat2lib.a'],
-                    sources = ['ht2module.c'])
+CC = gcc
 
-setup(name = 'ht2py',
-        version = '1.0',
-        ext_modules = [module1])
+INCLUDES = -I $(JAVA_HOME)/include \
+		   -I $(JAVA_HOME)/include/linux \
+		   -I $(HISAT2_DIR)/hisat2lib
+
+CFLAGS = -fPIC $(INCLUDES)
+#CFLAGS += -DDEBUG
+
+SRCS = ht2module.c
+
+OBJS = $(SRCS:.c=.o)
+
+all: lib 
+
+lib: libht2jni.so
+
+libht2jni.so: HT2Module.h $(OBJS)
+	$(CC) -shared -o $@ $(OBJS) $(HISAT2_DIR)/libhisat2lib.a
+
+HT2Module.h: HT2Module.class
+	javah HT2Module
+
+HT2Module.class: HT2Module.java
+	javac HT2Module.java
+
+example: HT2ModuleExample.class
+
+HT2ModuleExample.class: HT2ModuleExample.java
+	javac HT2ModuleExample.java
+
+clean:
+	rm -f *.class HT2Module.h HT2Module_HT2Position.h *.so *.o
+
+test: all example
+	java -Djava.library.path=. HT2ModuleExample
