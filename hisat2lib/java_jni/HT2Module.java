@@ -62,23 +62,23 @@ public class HT2Module {
         handle = 0;
     }
 
-    public void InitLibrary(String indexName) {
-        InitLibrary(indexName, null);
+    public void initLibrary(String indexName) {
+        initLibrary(indexName, null);
     }
 
-    public void InitLibrary(String indexName, Map<String, Integer> options)
+    public void initLibrary(String indexName, Map<String, Integer> options)
     {
         if(handle == 0) {
             handle = init(indexName, options);
         }
     }
 
-    public Map<String, Integer> InitOption()
+    public Map<String, Integer> initOption()
     {
         return get_options();
     }
 
-    public String GetRefNameById(int chr_id)
+    public String getRefNameById(int chr_id)
     {
         if(handle == 0) {
             // TODO: Exception
@@ -89,7 +89,7 @@ public class HT2Module {
         return index_getrefnamebyid(handle, chr_id);
     }
 
-    public List<String> GetRefNames()
+    public List<String> getRefNames()
     {
         if(handle == 0) {
             // TODO: Exception
@@ -98,7 +98,7 @@ public class HT2Module {
         return index_getrefnames(handle);
     }
 
-    public List<HT2Position> RepeatExpand(String name, long position, long length)
+    public List<HT2Position> repeatExpand(String name, long position, long length)
     {
         if(handle == 0) {
             // TODO: Exception
@@ -107,7 +107,7 @@ public class HT2Module {
         return repeat_expand(handle, name, position, length);
     }
 
-    public void Cleanup()
+    public void cleanup()
     {
         if(handle != 0) {
             close(handle);
@@ -116,7 +116,7 @@ public class HT2Module {
     }
 
     public void finalize() {
-        Cleanup();
+        cleanup();
     }
 
 }
