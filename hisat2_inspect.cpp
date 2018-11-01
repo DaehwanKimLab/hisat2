@@ -350,11 +350,10 @@ static void print_snps(
                        ostream& fout)
 {
     ALTDB<index_t> altdb;
-	RepeatDB<index_t> repeatdb;
     GFM<index_t> gfm(
                      fname,
                      &altdb,
-					 &repeatdb,
+                     NULL,
                      NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
@@ -435,11 +434,10 @@ static void print_splicesites(
                        ostream& fout)
 {
     ALTDB<index_t> altdb;
-	RepeatDB<index_t> repeatdb;
     GFM<index_t> gfm(
                      fname,
                      &altdb,
-					 &repeatdb,
+					 NULL,
                      NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
@@ -510,11 +508,10 @@ static void print_exons(
                         ostream& fout)
 {
     ALTDB<index_t> altdb;
-	RepeatDB<index_t> repeatdb;
     GFM<index_t> gfm(
                      fname,
                      &altdb,
-					 &repeatdb,
+                     NULL,
                      NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
@@ -587,11 +584,10 @@ static void print_index_summary(
 	int32_t flags = GFM<index_t>::readVersionFlags(fname, major, minor, extra_version);
 	bool entireReverse = false;    
     ALTDB<index_t> altdb;
-	RepeatDB<index_t> repeatdb;
 	GFM<index_t> gfm(
                      fname,
                      &altdb,
-					 &repeatdb,
+                     NULL,
                      NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
@@ -673,7 +669,6 @@ static void driver(
     } else {
         // Initialize Ebwt object
         ALTDB<TIndexOffU> altdb;
-		RepeatDB<TIndexOffU> repeatdb;
 		HGFM<TIndexOffU, uint16_t> gfm(
                                        adjustedEbwtFileBase,
                                        &altdb,
