@@ -54,6 +54,11 @@ def main():
         idx_basename = arguments[-1]
         large_idx_exists = os.path.exists(idx_basename + idx_ext_l)
         small_idx_exists = os.path.exists(idx_basename + idx_ext_s)
+        if not large_idx_exists and not small_idx_exists:
+            env_path = os.getenv('HISAT2_INDEXES', '')
+            large_idx_exists = os.path.exists(env_path + '/' + idx_basename + idx_ext_l)
+            small_idx_exists = os.path.exists(env_path + '/' + idx_basename + idx_ext_s)
+
         if large_idx_exists and not small_idx_exists:
             inspect_bin_spec = os.path.join(ex_path,inspect_bin_l)
     
