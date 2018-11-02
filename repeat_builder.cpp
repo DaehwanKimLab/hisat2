@@ -802,7 +802,7 @@ void RB_Repeat::extendConsensus(const RepeatParameter& rp,
         }
         
         // extend seeds in left or right direction
-        TIndexOffU max_ext_len = min(default_max_ext_len, rp.max_repeat_len - consensus_.length());
+        TIndexOffU max_ext_len = min(default_max_ext_len, (TIndexOffU)(rp.max_repeat_len - consensus_.length()));
         get_consensus_seq(s,
                           seeds_,
                           0,      // seed begin
@@ -1879,7 +1879,7 @@ void RB_RepeatExt::extendConsensus(const RepeatParameter& rp,
         }
         
         // extend seeds in left or right direction
-        TIndexOffU max_ext_len = min(default_max_ext_len, rp.max_repeat_len - consensus_.length());
+        TIndexOffU max_ext_len = min(default_max_ext_len, (TIndexOffU)(rp.max_repeat_len - consensus_.length()));
         get_consensus_seq(s,
                           seeds_,
                           0,      // seed begin
