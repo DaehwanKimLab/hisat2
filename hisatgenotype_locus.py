@@ -2479,7 +2479,7 @@ if __name__ == '__main__':
                         dest="debug",
                         type=str,
                         default="",
-                        help="e.g., test_id:10,read_id:10000,basic_test")
+                        help="Test database or code changes (options: basic_test, pair, full, single-end, test_list, test_id)(e.g., test_id:10,basic)")
     parser.add_argument("--output-base", "--assembly-base",
                         dest="output_base",
                         type=str,
@@ -2565,6 +2565,7 @@ if __name__ == '__main__':
         args.verbose_level = 1
         
     debug = {}
+    debug_opts = ["basic", "full", "pair", "test_list", "test_id", "single-end"]
     if args.debug != "":
         for item in args.debug.split(','):
             if ':' in item:
@@ -2574,6 +2575,12 @@ if __name__ == '__main__':
                 debug[key] = value
             else:
                 debug[item] = 1
+        for item in debug:
+            if item not in debug_opts:
+                print >> sys.stderr, "Warning: %s not valid option for debug" % item
+                exit(1)
+            else:
+                continue
 
     if not args.partial:
         print >> sys.stderr, "Warning: --no-partial should be used for debugging purpose only."

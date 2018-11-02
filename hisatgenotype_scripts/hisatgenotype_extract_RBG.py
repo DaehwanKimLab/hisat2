@@ -1,15 +1,12 @@
 #!/usr/bin/env python
 
 import sys, os, subprocess, re 
-import inspect, random 
-import math 
-import glob
+import inspect
+import math
 import urllib2
 import string
 import xml.etree.ElementTree as etree
 from multiprocessing import Pool
-from Bio import pairwise2
-from Bio.pairwise2 import format_alignment
 from argparse import ArgumentParser, FileType
 
 """
@@ -240,12 +237,12 @@ def write_fasta(gene, alleles = {}, loc = 'gen'):
 
 def run_clustalo(in_file):
     out_file = in_file.replace('.fasta', '.msf')
-    cmd = 'clustalo --in=%s --full --out=%s --threads=1 --force' % (in_file, out_file)
+    cmd = 'clustalo --in=%s --full --outfmt=msf --out=%s --threads=1 --force' % (in_file, out_file)
     os.system(cmd)
 
 def run_clustalo_pile(in_file):
     out_file = in_file.replace('.fasta', '.msf')
-    cmd = 'clustalo --in=%s --pileup --out=%s --threads=1 --force' % (in_file, out_file)
+    cmd = 'clustalo --in=%s --pileup --outfmt=msf --out=%s --threads=1 --force' % (in_file, out_file)
     # cmd = 'clustalw2 -infile=%s -output=GDE -outfile=%s -quiet -case=upper > /dev/null' % (in_file, out_file)
     os.system(cmd)
 
@@ -299,7 +296,7 @@ def write_msf(genfilename, nucfilename, gene, alleles = {}, fullGene = [], exon_
                 f.write('> %s\n' % allele)
                 f.write('%s\n' % parts[0])
             f.close()
- 
+
     def mute():
         sys.stdout = open(os.devnull, 'w')
 
@@ -313,56 +310,68 @@ def write_msf(genfilename, nucfilename, gene, alleles = {}, fullGene = [], exon_
     pool.close()
     pool.join()
 
+    msf2name = {}
     for itr in range(len(files)):
         file_ = files[itr]
         parts, fulls, filealleles = {}, {}, []
         seq = ''
+        header = True
         for line in open(file_.replace('.fasta', '.msf'), 'r'):
             line = line.strip()
-            if line.startswith('>') or line.startswith('#'):
-                if seq:
-                    if allele in parts:
-                        parts[allele].append(seq)
-                    else:
-                        assert allele in fulls
-                        if fullGene[allele]:
-                            fulls[allele] = seq
-                        if itr in exon_seg:
-                            fulls[allele] = seq
-
-                seq = ''
-                allele = line.replace('>', '').replace('#', '')
-                if 'pt' in allele:
-                    allele = allele.split('_pt')[0]
-                    parts.update({ allele : [] })
-                else:
-                    fulls.update({ allele : '' })
-
-                filealleles.append(allele)
+            if line.startswith('//'):
+                header = False
+                continue
+            if not line or not line[0].isalpha():
                 continue
 
-            seq += line.replace('-', '.')
+            if header:
+                if line.startswith('Name'):
+                    _, msfname, _, length = line.split()[:4]
+    
+                    gene = msfname.split('_')[0]
+                    if len(msfname.split('_')[1]) >= 8:
+                        allele = msfname[4:]
+                    else:
+                        allele = '.'.join(msfname.split('_')[1:])
 
-        if seq: # add last allele sequence
-            if allele in parts:
-                parts[allele].append(seq)
+                    if 'pt' in allele:
+                        name = gene + '*' + allele.split('.pt')[0]
+                        parts.update({ msfname : '' })
+                    else:
+                        name = gene + '*' + allele
+                        fulls.update({ name : '' })
+
+                    if msfname not in msf2name:
+                        msf2name.update({ msfname : name })
+                    filealleles.append(name)
+                continue
+
+            msfallele = line.split()[0]
+            seq = ''.join(line.split()[1:])
+
+            assert msfallele in msf2name, "%s not in msf2name" % msfallele
+
+            if 'pt' in msfallele:
+                parts[msfallele] += seq
             else:
-                assert allele in fulls
-                if fullGene[allele]:
-                    fulls[allele] = seq
-                if itr in exon_seg:
-                   fulls[allele] = seq
+                fulls[msf2name[msfallele]] += seq
 
+        parts_ = {}
+        for allele, seq in parts.items():
+            if msf2name[allele] not in parts_:
+                parts_.update({ msf2name[allele] : [] })
+            
+            parts_[msf2name[allele]].append(seq)
 
-        for allele, seqs in parts.items():
-            merg = ['.'] * len(seqs[0])
+        for allele, seqs in parts_.items():
+            merg = ['~'] * len(seqs[0])
             for seq in seqs:
                 assert len(seq) == len(merg)
                 for jtr in range(len(seq)):
-                    if merg[jtr] == '.':
+                    if merg[jtr] == '~':
                         merg[jtr] = seq[jtr]
-                    else:
-                        assert seq[jtr] == '.'
+                    elif merg[jtr] != seq[jtr]:
+                        assert seq[jtr] == '~'
             fulls.update({ allele : ''.join(merg) })
         
         # QC Check
@@ -385,13 +394,13 @@ def write_msf(genfilename, nucfilename, gene, alleles = {}, fullGene = [], exon_
         for allele in msf_aligned_gen_list:
             if allele in filealleles:
                 continue
-            msf_aligned_gen_list[allele].append('.'*int(length))
+            msf_aligned_gen_list[allele].append('~'*int(length))
 
         if itr in exon_seg:
             for allele in msf_aligned_nuc:
                 if allele in filealleles:
                     continue
-                msf_aligned_nuc[allele] += ('.'*int(length))
+                msf_aligned_nuc[allele] += ('~'*int(length))
 
         # Correct Boundries
         if itr != 0:
@@ -400,28 +409,28 @@ def write_msf(genfilename, nucfilename, gene, alleles = {}, fullGene = [], exon_
                         'len': 0 }
             for allele, seqs in msf_aligned_gen_list.items():
                 left, right = seqs[itr-1][-1], seqs[itr][0]
-                if left == '.' and right == '.':
+                if left == '~' and right == '~':
                     continue
 
                 boundries['len'] += 1
                 if left in ['A', 'C', 'G', 'T', 'N']:
                     boundries['nts'] += 1
                 else:
-                    assert left == '.'
+                    assert left == '~'
                     boundries['~'] += 1 
             
                 if right in ['A', 'C', 'G', 'T', 'N']:
                     boundries['nts'] += 1
                 else:
-                    assert right == '.'
+                    assert right == '~'
                     boundries['~'] += 1 
         
             if boundries['nts'] == boundries['~'] == boundries['len']:
                 for allele, seqs in msf_aligned_gen_list.items():
                     left, right = seqs[itr-1][-1], seqs[itr][0]
-                    if left == '.':
+                    if left == '~':
                         seqs[itr-1] = seqs[itr-1][:-1]
-                    elif right == '.':
+                    elif right == '~':
                         seqs[itr] = seqs[itr][1:]
                     else:
                         print 'Error in boundry correction'
@@ -573,7 +582,8 @@ def extract_RBC():
                     
                 geneSegment[alleleNam].append([region , seqReg])
 
-            if (empty_intron > 0) and (intron_count != 0):
+            assert intron_count !=0
+            if empty_intron == intron_count:
                 fullGene[alleleNam] = False
             elif empty_exon > 0 and empty_intron > 0:
                 mixed_partials.append(alleleNam)
@@ -665,7 +675,7 @@ def extract_RBC():
                 continue
             line = line.strip()
             cols = line.split()
-            allele_id, flag, chr, left, mapQ, cigar_str = cols[:6]
+            _, flag, chr, left, _, cigar_str = cols[:6]
             flag = int(flag)
             if flag & 0x10 != 0:
                 strand_reverse = True
