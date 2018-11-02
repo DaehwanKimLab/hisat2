@@ -316,7 +316,7 @@ JNIEXPORT jobject JNICALL Java_HT2Module_index_1getrefnames(JNIEnv *env,
 	if(ret == HT2_OK) {
 		DEBUGLOG("refnames size: %d\n", result->count);
 		conv_refnames_result(env, result, refnames);
-
+		free(result);
 	} else {
 		DEBUGLOG("Can't get refnames\n");
 	}
@@ -352,7 +352,7 @@ JNIEXPORT jobject JNICALL Java_HT2Module_repeat_1expand(JNIEnv *env,
 	if(ret == HT2_OK) {
 		DEBUGLOG("expand position size: %d\n", result->count);
 		conv_repeat_expand_result(env, result, positions);
-
+		free(result);
 	} else {
 		DEBUGLOG("Can't expand repeat\n");
 	}

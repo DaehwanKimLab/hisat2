@@ -3811,7 +3811,7 @@ static void driver(
     string rep_adjIdxBase = adjIdxBase + ".rep";
     bool rep_index_exists = false;
     {
-        std::ifstream infile((rep_adjIdxBase + ".1.ht2").c_str());
+        std::ifstream infile((rep_adjIdxBase + ".1." + gfm_ext.c_str()).c_str());
         rep_index_exists = infile.good();
     }
     if(rep_index_exists && use_repeat_index) {

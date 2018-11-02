@@ -44,15 +44,15 @@ public class HT2ModuleExample {
 
             System.out.println(ht2Options);
 
-            module.InitLibrary(indexPath, ht2Options);
-            //module.InitLibrary(indexPath);
+            module.initLibrary(indexPath, ht2Options);
+            //module.initLibrary(indexPath);
 
-            System.out.println("CHR_ID 0: " + module.GetRefNameById(0));
+            System.out.println("CHR_ID 0: " + module.getRefNameById(0));
 
             // in 22_rep, OutOfIndex
-            System.out.println("CHR_ID 1: " + module.GetRefNameById(1));
+            System.out.println("CHR_ID 1: " + module.getRefNameById(1));
 
-            List<String> refnames = module.GetRefNames();
+            List<String> refnames = module.getRefNames();
 
             System.out.println("Refnames size:" + refnames.size());
             for(String name: refnames) {
@@ -60,10 +60,10 @@ public class HT2ModuleExample {
             }
            
             // repeat for 22_rep
-            List<HT2Module.HT2Position> positions = module.RepeatExpand("rep100-300", 8308, 100);
+            List<HT2Module.HT2Position> positions = module.repeatExpand("rep100-300", 8308, 100);
             
             // repeat for genome_rep
-            //List<HT2Module.HT2Position> positions = module.RepeatExpand("rep100-300", 2446692, 100);
+            //List<HT2Module.HT2Position> positions = module.repeatExpand("rep100-300", 2446692, 100);
 
             System.out.println("Repeat expand size: " + positions.size());
             for(HT2Module.HT2Position pos: positions) {
@@ -75,7 +75,7 @@ public class HT2ModuleExample {
 
         } finally {
             if(module != null) {
-                module.Cleanup();
+                module.cleanup();
             }
         }
 	}
