@@ -872,7 +872,7 @@ static void printUsage(ostream& out) {
 		//<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		//<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
 		//<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
-        << "  --bowtie2-dp <int> use Bowtie2's dynamic programming alignment algorithm (0) - 0: no dynamic programming, 1: conditional dynamic programming, and 2: unconditional dynamic programming (slowest)"
+        << "  --bowtie2-dp <int> use Bowtie2's dynamic programming alignment algorithm (0) - 0: no dynamic programming, 1: conditional dynamic programming, and 2: unconditional dynamic programming (slowest)" << endl
 		<< "  --n-ceil <func>    func for max # non-A/C/G/Ts permitted in aln (L,0,0.15)" << endl
 		//<< "  --dpad <int>       include <int> extra ref chars on sides of DP table (15)" << endl
 		//<< "  --gbar <int>       disallow gaps within <int> nucs of read extremes (4)" << endl
@@ -898,7 +898,7 @@ static void printUsage(ostream& out) {
         << "  --tmo                              reports only those alignments within known transcriptome" << endl
         << "  --dta                              reports alignments tailored for transcript assemblers" << endl
         << "  --dta-cufflinks                    reports alignments tailored specifically for cufflinks" << endl
-        << "  --avoid-pseudogene                 tries to avoid aligning reads to pseudogenes (experimental option)" << endl
+        << "  --avoid-pseudogene                 tries to avoid aligning reads to pseudogenes (experimental option)" << endl
         << "  --no-templatelen-adjustment        disables template length adjustment for RNA-seq reads" << endl
         << endl
 		<< " Scoring:" << endl
@@ -914,7 +914,7 @@ static void printUsage(ostream& out) {
 		<< endl
 	    << " Reporting:" << endl
 	    << "  -k <int> report up to <int> alns per read (default: 5)" << endl
-        << "  --repeat report alignments to repeat sequences directly"
+        << "  --repeat report alignments to repeat sequences directly" << endl
 		<< endl
 	    //<< " Effort:" << endl
 	    //<< "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
