@@ -59,7 +59,7 @@ def get_geneRefSeq(locus = {}):
       
     return refseq
 
-def get_seqbyRef(access, gene_name = '', getall = False, bymRNA = True):
+def get_seqbyRef(access, gene_name = '', getall = False):
     webaddress = 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.fcgi?db=nuccore&dopt=gb&sendto=on&id=' + access
     try:
         website = get_website(webaddress)
@@ -67,61 +67,65 @@ def get_seqbyRef(access, gene_name = '', getall = False, bymRNA = True):
         print >> sys.stderr, 'No data available for accession: %s' % access
         raise ValueError()
 
-    if bymRNA:
-        region = 'mRNA'
-    else:
-        region = 'CDS'
-
+    region = 'CDS'
     seqline = ''
     exon_ranges, exon_numbers, exon_hit = {}, [], False
     gene_hit, gene_found, gene_end = False, False, False
     start_seq = False
     mRNAline = 1
 
-    for line in website:
-        if line.startswith('//'): # end of fine
-            break
+    while not gene_end:
+        for line in website:
+            if line.startswith('//'): # end of fine
+                break
         
-        # get sequence
-        line = line.strip()
-        if start_seq:
-            line = line.replace(' ','')
-            seqline += re.sub(r'\d+', '', line.upper())
-        if line.startswith('ORIGIN'):
-            start_seq = True
+            # get sequence
+            line = line.strip()
+            if start_seq:
+                line = line.replace(' ','')
+                seqline += re.sub(r'\d+', '', line.upper())
+            if line.startswith('ORIGIN'):
+                start_seq = True
 
-        # Get exons
-        if getall and not gene_end:
-            assert gene_name != ''
-            if line.startswith('gene'):
-                if gene_found:
-                    gene_end = True
+            # Get exons
+            if getall and not gene_end:
+                assert gene_name != ''
+                
+                if line.startswith('gene'):
+                    if gene_found:
+                        gene_end = True
+                        continue
+                    gene_range = line.split(' ')[-1].replace('>','').replace('<','').split('..')
+                    gene_hit = True
+                elif line.startswith('/gene') and gene_hit:
+                    if gene_name in line.replace('"', '').split('='):
+                        left, right = int(gene_range[0]) - 1, int(gene_range[1])
+                        gene_found = True
+                elif line.startswith(region) and gene_found:
+                    raw_exons = re.findall('\(([^)]+)', line)
+                    if raw_exons[0][-1] == ',':
+                        mRNAline += 1
+                    if mRNAline == 1:
+                        exon_ranges.update({ gene_name : ''.join(raw_exons).split(',') })
                     continue
-                gene_range = line.split(' ')[-1].replace('>','').replace('<','').split('..')
-                gene_hit = True
-            elif line.startswith('/gene') and gene_hit:
-                if gene_name in line.replace('"', '').split('='):
-                    left, right = int(gene_range[0]) - 1, int(gene_range[1])
-                    gene_found = True
-            elif line.startswith(region) and gene_found:
-                raw_exons = re.findall('\(([^)]+)', line)
-                if raw_exons[0][-1] == ',':
-                    mRNAline += 1
-                if mRNAline == 1:
-                    exon_ranges.update({ gene_name : ''.join(raw_exons).split(',') })
-                continue
-            elif line.startswith('exon') and gene_found:
-                exon_hit = True
-            elif line.find('number') != -1 and exon_hit:
-                exon_numbers.append(line[-1])
-                exon_hit = False
-            if mRNAline > 1:
-                raw_exons.append(line.replace(')', ''))
-                if raw_exons[-1][-1] == ',':
-                    mRNAline += 1
-                else:
-                    exon_ranges.update({ gene_name : ''.join(raw_exons).split(',') })
-                    mRNAline = 1
+                elif line.startswith('exon') and gene_found:
+                    exon_hit = True
+                elif line.find('number') != -1 and exon_hit:
+                    exon_numbers.append(line[-1])
+                    exon_hit = False
+                
+                if mRNAline > 1:
+                    raw_exons.append(line.replace(')', ''))
+                    if raw_exons[-1][-1] == ',':
+                        mRNAline += 1
+                    else:
+                        exon_ranges.update({ gene_name : ''.join(raw_exons).split(',') })
+                        mRNAline = 1
+        
+        if region == 'mRNA':
+            break
+
+        region = 'mRNA'
 
     if getall and gene_found:
         for key, anExon in exon_ranges.items():
@@ -605,7 +609,7 @@ def extract_RBC():
         if not value:
             continue
         try:
-            seq_ofRef, exons_ofRef = get_seqbyRef(value[0], gene, getall = True, bymRNA=False)
+            seq_ofRef, exons_ofRef = get_seqbyRef(value[0], gene, getall = True)
         except ValueError:
             print >> sys.stderr, 'Key error %s not found' % gene
             del refseq[gene]
@@ -657,12 +661,22 @@ def extract_RBC():
 
         print '\tExtracting %s from Genome' % gene
         cmd_aligner = ['hisat2', '-x', 'grch38/genome', '-f', '-c']
+        
+        cds_start, cds_end, upstream, downstream = sys.maxint, 0, 0, 0
         for pos in refGeneExon[gene]:
             _, exleft, exright = pos
+            
+            if cds_start > exleft:
+                cds_start = exleft
+            if cds_end < exright:
+                cds_end = exright
+            
             exon = ref[exleft - 1 : exright]
             exons.append(exon)
             
         cmd_aligner += ['%s' % ','.join(exons)]
+        upstream = cds_start - 1
+        downstream = len(ref) - cds_end
 
         align_proc = subprocess.Popen(cmd_aligner,
                                       stdout=subprocess.PIPE,
@@ -704,6 +718,14 @@ def extract_RBC():
             exons.append([left, right])
 
         align_proc.communicate()
+
+        assert downstream not in [1, -1]
+        if strand_reverse:
+            genestart -= downstream
+            geneend += upstream
+        else:
+            genestart -= upstream
+            geneend += downstream
 
         cmd_extractGene = ['samtools', 'faidx', 'genome.fa', '%s:%d-%d' % (genechr, genestart, geneend)]
         extract_proc = subprocess.Popen(cmd_extractGene,
@@ -857,7 +879,7 @@ def extract_RBC():
                         continue
                     msf_alleleseq[allele].append(genSeq[allele][prev:bound-1])
                     prev = bound-1
-                msf_alleleseq[allele].append('') 
+                msf_alleleseq[allele].append(genSeq[allele][prev:len(genSeq[allele])]) 
 
             if fullGene[allele]:
                 full_allele.update({ allele : seq })
