@@ -10,11 +10,12 @@ endif()
 
 option(BOWTIE_MM "enable memory mapping" ON)
 option(BOWTIE_SHARED_MEM "enable shared memory mapping" OFF)
+option(USE_SRA "enable NCBI SRA Toolkit" OFF)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_VERBOSE_MAKEFILE true)
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
-set(USE_SRA ${USE_SRA})
+set(NCBI_NGS_DIR ${NCBI_NGS_DIR})
 
 # Common Flag
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -g3 -Wall -msse2")
@@ -25,14 +26,14 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -funroll-loops")
 
 set(INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE PATH "Installation directory for executables")
 
-#if(MINGW OR CYGWIN)
-#    option(BOWTIE_MM "Memory mapped files not supported on Windows" OFF)
-#    option(BOWTIE_SHARED_MEM "Shared memory not supported on Windows" OFF)
-#endif(MINGW OR CYGWIN)
-# 
-#if (USE_SRA AND APPLE)
-#	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.6")
-#endif(USE_SRA AND APPLE)
+if(MINGW OR CYGWIN)
+    option(BOWTIE_MM "Memory mapped files not supported on Windows" OFF)
+    option(BOWTIE_SHARED_MEM "Shared memory not supported on Windows" OFF)
+endif()
+ 
+if (USE_SRA AND APPLE)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.6")
+endif()
 
 set(HISAT2_BIN_LIST
 	hisat2-build-s
@@ -158,11 +159,19 @@ add_definitions(
 
 
 include_directories(third_party)
-include_directories(hisat2lib)
 
 link_libraries(
 	pthread
 	)
+
+
+if(BOWTIE_MM)
+	add_definitions(-DBOWTIE_MM)
+endif()
+
+if(BOWTIE_SHARED_MEM)
+	add_definitions(-DBOWTIE_SHARED_MEM)
+endif()
 
 include_directories(${PROJECT_SOURCE_DIR})
 add_definitions(-DCOMPILER_OPTIONS="${CMAKE_CXX_FLAGS}")
@@ -193,10 +202,33 @@ set_target_properties(hisat2-align-l hisat2-build-l hisat2-inspect-l hisat2-repe
 target_compile_options(hisat2-inspect-s PUBLIC "-DHISAT2_INSPECT_MAIN")
 target_compile_options(hisat2-inspect-l PUBLIC "-DHISAT2_INSPECT_MAIN")
 
-
+target_compile_options(hisat2-build-s PUBLIC "-DMASSIVE_DATA_RLCSA")
 
 target_compile_options(hisat2lib_static PUBLIC "-fPIC")
+target_include_directories(hisat2lib_static PUBLIC hisat2lib)
+target_include_directories(hisat2lib_shared PUBLIC hisat2lib)
 
+if(USE_SRA)
+	if(NOT NCBI_NGS_DIR)
+		message(FATAL_ERROR "You should set NCBI_NGS_DIR path. cmake3 .... -DNCBI_NGS_DIR=/path/to/ngs")
+	endif()
+	#set(NCBI_NGS_DIR /home/parkch/.local/ngs)
+
+	target_compile_options(hisat2-align-s PUBLIC "-DUSE_SRA")
+	target_compile_options(hisat2-align-l PUBLIC "-DUSE_SRA")
+	target_include_directories(hisat2-align-s PUBLIC "${NCBI_NGS_DIR}/include")
+	target_include_directories(hisat2-align-l PUBLIC "${NCBI_NGS_DIR}/include")
+
+	set(NCBI_LIBS 
+		${NCBI_NGS_DIR}/lib64/libncbi-ngs-c++-static.a
+		${NCBI_NGS_DIR}/lib64/libngs-c++-static.a
+		${NCBI_NGS_DIR}/lib64/libncbi-vdb-static.a
+		${CMAKE_DL_LIBS}
+		)
+
+	target_link_libraries(hisat2-align-s ${NCBI_LIBS})
+	target_link_libraries(hisat2-align-l ${NCBI_LIBS})
+endif()
 
 #
 # Examples
