@@ -35,7 +35,6 @@ hisat2_test/testset*
 
 .idea
 .vscode
-CMakeLists.txt
 
 .ht2lib-obj*
 *.a
