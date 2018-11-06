@@ -725,6 +725,7 @@ public:
         string in7Str = in + ".7." + gfm_ext;
         string in8Str = in + ".8." + gfm_ext;
         
+        // open alts
         if(verbose || startVerbose) cerr << "Opening \"" << in7Str.c_str() << "\"" << endl;
         ifstream in7(in7Str.c_str(), ios::binary);
         if(!in7.good()) {
@@ -735,19 +736,40 @@ public:
         index_t to_alti_far = 0;
         readI32(in7, this->toBe());
         index_t numAlts = readIndex<index_t>(in7, this->toBe());
+
+
+        // open altnames
+        if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
+        ifstream in8(in8Str.c_str(), ios::binary);
+        if(!in8.good()) {
+            cerr << "Could not open index file " << in8Str.c_str() << endl;
+        }
+
+        readI32(in8, this->toBe());
+        index_t numAltnames = readIndex<index_t>(in8, this->toBe());
+
+        assert_eq(numAlts, numAltnames);
+
         if(numAlts > 0) {
             alts.resizeExact(numAlts); alts.clear();
             to_alti.resizeExact(numAlts); to_alti.clear();
-            while(!in7.eof()) {
+            while(!in7.eof() && !in8.eof()) {
                 alts.expand();
                 alts.back().read(in7, this->toBe());
                 to_alti.push_back(to_alti_far);
                 to_alti_far++;
+
+                altnames.expand();
+                in8 >> altnames.back();
+
                 if(!loadSpliceSites) {
                     if(alts.back().splicesite()) {
                         alts.pop_back();
                         assert_gt(numAlts, 0);
+                        altnames.pop_back();
+                        assert_gt(numAltnames, 0);
                         numAlts--;
+                        numAltnames--;
                         to_alti.back() = std::numeric_limits<index_t>::max();
                         to_alti_far--;
                     }
@@ -757,6 +779,7 @@ public:
         }
         assert_eq(alts.size(), numAlts);
         assert_eq(to_alti_far, numAlts);
+        assert_eq(alts.size(), altnames.size());
         // Check if it hits the end of file, and this routine is needed for backward compatibility
         if(in7.peek() != std::ifstream::traits_type::eof()) {
             index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
@@ -777,24 +800,7 @@ public:
                 haplotypes.nullify();
             }
         }
-        
-        if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
-        ifstream in8(in8Str.c_str(), ios::binary);
-        if(!in8.good()) {
-            cerr << "Could not open index file " << in8Str.c_str() << endl;
-        }
-        
-        readI32(in8, this->toBe());
-        numAlts = readIndex<index_t>(in8, this->toBe());
-        if(numAlts > 0) {
-            while(!in8.eof()) {
-                altnames.expand();
-                in8 >> altnames.back();
-                if(altnames.size() == numAlts) break;
-            }
-            assert_eq(altnames.size(), numAlts);
-        }
-        
+
         // Read repeats
         _repeat = false;
         if(repeatdb != NULL) {
