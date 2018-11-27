@@ -577,26 +577,6 @@ def extract_RBC():
             elif empty_exon > 0 and empty_intron > 0:
                 mixed_partials.append(alleleNam)
 
-    # Remove Genes with less than 5 alleles and trim 5' end
-    for gene, allelelist in locus.items():
-        base_counts = []
-        if len(allelelist) < 5:
-            del locus[gene]
-            for name in allelelist:
-                del geneSegment[name]
-                del accession[name]
-
-        for allele in allelelist:
-            five_prime = geneSegment[allele][0][1]
-            if not base_counts:
-                base_counts = [0 for i in range(len(five_prime))]
-            else:
-                assert len(five_prime) == len(base_counts)
-            
-            for itr in range(len(five_prime)):
-                if five_prime[itr] != emptySeq:
-                    base_counts[itr] += 1
-
     # Loading and adding RefSeq gene to data
     print >> sys.stdout, 'Loading RefSeq of RBG Genes from NCBI'
     refGeneSeq = {}
@@ -622,7 +602,56 @@ def extract_RBC():
         genExon.update({ newgene : refGeneExon[gene] })
         fullGene.update({ newgene : True })
         locus[gene].append(newgene)
-    
+
+    # Remove Genes with less than 5 alleles and trim 5' end
+    for gene, allelelist in locus.items():
+        print "Trimming %s 5' end" % gene
+        if len(allelelist) < 5:
+            del locus[gene]
+            for name in allelelist:
+                del geneSegment[name]
+                del accession[name]
+        
+        """ 5' trimming in "promoter" region SAVE for later
+        base_counts = []
+        for allele in allelelist:
+            five_prime = geneSegment[allele][0][1]
+            if not base_counts:
+                base_counts = [0 for i in range(len(five_prime))]
+            else:
+                assert len(five_prime) == len(base_counts)
+            
+            for itr in range(len(five_prime)):
+                if five_prime[itr] != emptySeq:
+                    base_counts[itr] += 1
+
+        for itr in range(len(base_counts)):
+            if base_counts[itr] == 1:
+                continue
+            cut_pos = itr
+            break
+        """
+
+        cut_pos = int(refGeneExon[gene][0][1]) - 1
+
+        for allele in allelelist:
+            if allele not in geneSegment:
+                continue
+            
+            geneSegment[allele][0][1] = geneSegment[allele][0][1][-cut_pos:]
+            exon_count = 0
+            for itr in range(len(geneSegment[allele])): 
+                raw_seq = geneSegment[allele][itr][1].replace(emptySeq, '').replace('.', '')
+                if not raw_seq:
+                    continue
+                
+                left, right = len(genSeq[allele]) + 1, len(genSeq[allele]) + len(raw_seq)
+                genSeq[allele] += raw_seq
+                
+                if geneSegment[allele][itr][0] == 'Exon':
+                    exon_count += 1
+                    genExon[allele].append([exon_count, left, right])
+                     
     # extract HG38 genes
     print >> sys.stdout, 'Extracting Genes from HG38'
     cigar_re = re.compile('\d+\w')
