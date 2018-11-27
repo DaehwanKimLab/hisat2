@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 
 import sys, os, subprocess, re 
-import inspect
-import math
 import urllib2
 import string
 import xml.etree.ElementTree as etree
 from multiprocessing import Pool
 from argparse import ArgumentParser, FileType
+import hisatgenotype_typing_common as typing_common
 
 """
 Download RBC data from website 
@@ -40,7 +39,7 @@ def get_website(url):
             file = resp.read()
             return file.splitlines(True)
 
-def get_geneRefSeq(locus = {}):
+def get_RefSeqID(locus = {}):
     refseq = {}
     for gene in locus:
         refseq.update({ gene : [] })
@@ -70,62 +69,61 @@ def get_seqbyRef(access, gene_name = '', getall = False):
     region = 'CDS'
     seqline = ''
     exon_ranges, exon_numbers, exon_hit = {}, [], False
-    gene_hit, gene_found, gene_end = False, False, False
+    gene_hit, gene_found, gene_end, cds_found = False, False, False, False
     start_seq = False
     mRNAline = 1
 
-    while not gene_end:
-        for line in website:
-            if line.startswith('//'): # end of fine
-                break
-        
-            # get sequence
-            line = line.strip()
-            if start_seq:
-                line = line.replace(' ','')
-                seqline += re.sub(r'\d+', '', line.upper())
-            if line.startswith('ORIGIN'):
-                start_seq = True
-
-            # Get exons
-            if getall and not gene_end:
-                assert gene_name != ''
-                
-                if line.startswith('gene'):
-                    if gene_found:
-                        gene_end = True
-                        continue
-                    gene_range = line.split(' ')[-1].replace('>','').replace('<','').split('..')
-                    gene_hit = True
-                elif line.startswith('/gene') and gene_hit:
-                    if gene_name in line.replace('"', '').split('='):
-                        left, right = int(gene_range[0]) - 1, int(gene_range[1])
-                        gene_found = True
-                elif line.startswith(region) and gene_found:
-                    raw_exons = re.findall('\(([^)]+)', line)
-                    if raw_exons[0][-1] == ',':
-                        mRNAline += 1
-                    if mRNAline == 1:
-                        exon_ranges.update({ gene_name : ''.join(raw_exons).split(',') })
-                    continue
-                elif line.startswith('exon') and gene_found:
-                    exon_hit = True
-                elif line.find('number') != -1 and exon_hit:
-                    exon_numbers.append(line[-1])
-                    exon_hit = False
-                
-                if mRNAline > 1:
-                    raw_exons.append(line.replace(')', ''))
-                    if raw_exons[-1][-1] == ',':
-                        mRNAline += 1
-                    else:
-                        exon_ranges.update({ gene_name : ''.join(raw_exons).split(',') })
-                        mRNAline = 1
-        
-        if region == 'mRNA':
+    for line in website:
+        if line.startswith('//'): # end of fine
             break
+        
+        # get sequence
+        line = line.strip()
+        if start_seq:
+            line = line.replace(' ','')
+            seqline += re.sub(r'\d+', '', line.upper())
+            continue
+        if line.startswith('ORIGIN'):
+            start_seq = True
+            continue
 
-        region = 'mRNA'
+        # Get exons
+        if getall and not gene_end:
+            assert gene_name != ''
+               
+            if line.startswith('gene'):
+                if gene_found:
+                    gene_end = True
+                    continue
+                gene_range = line.split(' ')[-1].replace('>','').replace('<','').split('..')
+                gene_hit = True
+            elif line.startswith('/gene') and gene_hit:
+                if gene_name in line.replace('"', '').split('='):
+                    left, right = int(gene_range[0]) - 1, int(gene_range[1])
+                    gene_found = True
+            elif (line.startswith('CDS') or line.startswith('mRNA')) and \
+                  gene_found and not cds_found:
+                if line.startswith('CDS'):
+                    cds_found = True
+                raw_exons = re.findall('\(([^)]+)', line)
+                if raw_exons[0][-1] == ',':
+                    mRNAline += 1
+                if mRNAline == 1:
+                    exon_ranges.update({ gene_name : ''.join(raw_exons).split(',') })
+                continue
+            elif line.startswith('exon') and gene_found:
+                exon_hit = True
+            elif line.find('number') != -1 and exon_hit:
+                exon_numbers.append(line[-1])
+                exon_hit = False
+                
+            if mRNAline > 1:
+                raw_exons.append(line.replace(')', ''))
+                if raw_exons[-1][-1] == ',':
+                    mRNAline += 1
+                else:
+                    exon_ranges.update({ gene_name : ''.join(raw_exons).split(',') })
+                    mRNAline = 1        
 
     if getall and gene_found:
         for key, anExon in exon_ranges.items():
@@ -143,10 +141,6 @@ def get_seqbyRef(access, gene_name = '', getall = False):
         return seqline, exon_ranges.update({ gene_name : [-1, -1] })
     else:
         return seqline
-
-def rev_comp(seq):
-    complement = {'A' : 'T', 'T' : 'A', 'G' : 'C', 'C' : 'G'}
-    return ''.join(complement[base] for base in re.sub('[^ATCG]', '', seq[::-1]))
 
 def match_seq(ref, seq):
     subseq = [ref[i:i+100] for i in range(0, len(ref), 100)]
@@ -173,7 +167,7 @@ def match_seq(ref, seq):
                 return False
             else:
                 rev_strand = True
-                a = rev_comp(a)
+                a = typing_common.reverse_complement(a)
 
     if not correct:
         correct = check_substr(ref, seq, 50)
@@ -301,10 +295,7 @@ def write_msf(genfilename, nucfilename, gene, alleles = {}, fullGene = [], exon_
                 f.write('%s\n' % parts[0])
             f.close()
 
-    def mute():
-        sys.stdout = open(os.devnull, 'w')
-
-    pool = Pool(8, initializer=mute)
+    pool = Pool(8)
     for itr in range(len(files)):
         in_file = files[itr]
         if itr in exon_seg:
@@ -566,9 +557,7 @@ def extract_RBC():
                 raw_seq = seqReg.replace(emptySeq, '').replace('.', '')
                 if len(raw_seq) < 5:
                     raw_seq = ''
-                    seqReg = re.sub(r'[ACGT]' , emptySeq, seqReg)
-
-                genSeq[alleleNam] += raw_seq                
+                    seqReg = re.sub(r'[ACGT]' , emptySeq, seqReg)              
 
                 if region.startswith(('Intron')):
                     intron_count += 1
@@ -579,10 +568,6 @@ def extract_RBC():
                     exon_count += 1
                     if seq.count(emptySeq) == len(seq):
                         empty_exon +=1
-                    if len(raw_seq) >= 5:
-                        left, right = len(genSeq[alleleNam])+1, len(genSeq[alleleNam])+len(raw_seq)
-                        assert left < right
-                        genExon[alleleNam].append([exon_count, left, right])
                     
                 geneSegment[alleleNam].append([region , seqReg])
 
@@ -592,19 +577,31 @@ def extract_RBC():
             elif empty_exon > 0 and empty_intron > 0:
                 mixed_partials.append(alleleNam)
 
-    # Remove Genes with less than 5 alleles
+    # Remove Genes with less than 5 alleles and trim 5' end
     for gene, allelelist in locus.items():
+        base_counts = []
         if len(allelelist) < 5:
             del locus[gene]
             for name in allelelist:
                 del geneSegment[name]
                 del accession[name]
 
+        for allele in allelelist:
+            five_prime = geneSegment[allele][0][1]
+            if not base_counts:
+                base_counts = [0 for i in range(len(five_prime))]
+            else:
+                assert len(five_prime) == len(base_counts)
+            
+            for itr in range(len(five_prime)):
+                if five_prime[itr] != emptySeq:
+                    base_counts[itr] += 1
+
     # Loading and adding RefSeq gene to data
     print >> sys.stdout, 'Loading RefSeq of RBG Genes from NCBI'
     refGeneSeq = {}
     refGeneExon = {}
-    refseq = get_geneRefSeq(locus)
+    refseq = get_RefSeqID(locus)
     for gene, value in refseq.items():
         if not value:
             continue
@@ -617,27 +614,14 @@ def extract_RBC():
         refGeneSeq.update({ gene : seq_ofRef })
         refGeneExon.update(exons_ofRef)
     
-    refgene_indata = False
-    refGeneKey = {}
     for gene, seq in refGeneSeq.items():
-        for allele in locus[gene]:
-            gen_seq = genSeq[allele]
-            if seq in gen_seq:
-                refGeneKey.update({ gene : allele })
-                refgene_indata = True
-                break
+        newgene = gene + '*refSeq.01'
+        print >> sys.stdout, '\tAdding %s to data' % newgene
 
-        if refgene_indata:
-            refgene_indata = False
-            continue
-        else:
-            newgene = gene + '*refSeq.01'
-
-            print >> sys.stdout, '\tAdding %s to data' % newgene
-            genSeq.update({ newgene : refGeneSeq[gene] })
-            genExon.update({ newgene : refGeneExon[gene] })
-            fullGene.update({ newgene : True })
-            locus[gene].append(newgene)
+        genSeq.update({ newgene : refGeneSeq[gene] })
+        genExon.update({ newgene : refGeneExon[gene] })
+        fullGene.update({ newgene : True })
+        locus[gene].append(newgene)
     
     # extract HG38 genes
     print >> sys.stdout, 'Extracting Genes from HG38'
@@ -757,7 +741,7 @@ def extract_RBC():
             genExon[hg_allele].append([itr+1, hgexons[itr][0], hgexons[itr][1]])
         
         if strand_reverse:            
-            genSeq[hg_allele] = rev_comp(genSeq[hg_allele])
+            genSeq[hg_allele] = typing_common.reverse_complement(genSeq[hg_allele])
 
     # Check and correct sequences in loaded data
     print >> sys.stdout, 'Validating Alleles'    
