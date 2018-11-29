@@ -542,28 +542,6 @@ def extract_vars(base_fname,
         if not partial:
             seq_len = find_seq_len(seqs)
 
-        """
-        # CB - Experimental code: Fill in internal ~ with consensus background sequence
-        # Required if there are ~ regions in the center of alleles
-        for itr in range(len(seqs)):
-            if "~" not in seqs[itr]:
-                continue
-
-            seq = seqs[itr]    
-            assert len(seq) == len(backbone_seq)
-            seq_ = ''
-            for s in range(len(seq)):
-                if seq[s] == "~":
-                    if backbone_seq[s] == "E":
-                        seq_ += "."
-                    else:
-                        seq_ += backbone_seq[s]
-                else:
-                    assert seq[s] in "ACGT.N"
-                    seq_ += seq[s]
-            seqs[itr] = seq_
-        """
-
         if partial and base_fname in spliced_gene:
             partial_MSA_fname = "hisatgenotype_db/%s/msf/%s_nuc.msf" % (base_fname.upper(), gene)
             if not os.path.exists(partial_MSA_fname):
