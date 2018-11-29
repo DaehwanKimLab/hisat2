@@ -35,7 +35,7 @@ def create_map(seq):
     count = 0
     for i in range(len(seq)):
         bp = seq[i]
-        if bp in '.E':
+        if bp in '.EN~':
             continue
         assert bp in "ACGT", '%s not a valid basepair' % bp
         seq_map[count] = i
@@ -50,12 +50,17 @@ def create_consensus_seq(seqs,
                          min_var_freq,
                          remove_empty = True):
     consensus_freq = [[0, 0, 0, 0, 0] for i in range(seq_len)]
+    seq_coverage = [0 for i in range(seq_len)]
     for i in range(len(seqs)):                
         seq = seqs[i]
         if len(seq) != seq_len:
             continue                    
         for j in range(seq_len):
             nt = seq[j]
+            if nt == "~":
+                continue
+            
+            seq_coverage[j] += 1 # coverage of sequence
             assert nt in "ACGT.EN", "Nucleotide %s not supported" % nt
             if nt == 'A':
                 consensus_freq[j][0] += 1
@@ -71,7 +76,7 @@ def create_consensus_seq(seqs,
 
     for j in range(len(consensus_freq)):
         for k in range(len(consensus_freq[j])):
-            consensus_freq[j][k] /= float(len(seqs))
+            consensus_freq[j][k] /= float(seq_coverage[j])
             consensus_freq[j][k] *= 100.0
 
     consensus_seq = ""
@@ -127,8 +132,6 @@ def create_consensus_seq(seqs,
 
     assert len(consensus_seq) == len(consensus_freq)                
     return consensus_seq, consensus_freq
-
-
 
 """
 Left-shift deletions if poissble
@@ -539,6 +542,28 @@ def extract_vars(base_fname,
         if not partial:
             seq_len = find_seq_len(seqs)
 
+        """
+        # CB - Experimental code: Fill in internal ~ with consensus background sequence
+        # Required if there are ~ regions in the center of alleles
+        for itr in range(len(seqs)):
+            if "~" not in seqs[itr]:
+                continue
+
+            seq = seqs[itr]    
+            assert len(seq) == len(backbone_seq)
+            seq_ = ''
+            for s in range(len(seq)):
+                if seq[s] == "~":
+                    if backbone_seq[s] == "E":
+                        seq_ += "."
+                    else:
+                        seq_ += backbone_seq[s]
+                else:
+                    assert seq[s] in "ACGT.N"
+                    seq_ += seq[s]
+            seqs[itr] = seq_
+        """
+
         if partial and base_fname in spliced_gene:
             partial_MSA_fname = "hisatgenotype_db/%s/msf/%s_nuc.msf" % (base_fname.upper(), gene)
             if not os.path.exists(partial_MSA_fname):
@@ -610,7 +635,7 @@ def extract_vars(base_fname,
                         ref_partial_exon = ref_partial_exons[e]
                         new_seq += backbone_seq[right:ref_exon[0]]
                         exon_seq = seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
-                        nt_exon_seq = exon_seq.replace('.', '')
+                        nt_exon_seq = exon_seq.replace('.', '').replace('~', '')
                         if len(nt_exon_seq) == 0:
                             exon_seq = partial_backbone_seq[ref_partial_exon[0]:ref_partial_exon[1] + 1]
                         new_seq += exon_seq
@@ -625,14 +650,36 @@ def extract_vars(base_fname,
                                                                    True) # Remove empty sequences?
                 seq_len = find_seq_len(seqs)
                 
+        # CB - Experimental code: Fill in internal ~ with consensus background sequence
+        # Required if there are ~ regions in the center of alleles
+        missing_seq = False
+        for itr in range(len(seqs)):
+            if "~" not in seqs[itr]:
+                continue
+
+            missing_seq = True
+            seq = seqs[itr]    
+            assert len(seq) == len(backbone_seq)
+            seq_ = ''
+            for s in range(len(seq)):
+                if seq[s] == "~":
+                    seq_ += backbone_seq[s]
+                else:
+                    assert seq[s] in "ACGT.N"
+                    seq_ += seq[s]
+            seqs[itr] = seq_
+        
+        if missing_seq:
+            print "Warning %s contains missing sequence in the data. Filling in with consensus" % gene
+
         if min_var_freq <= 0.0:
-            assert '.' not in backbone_seq and 'E' not in backbone_seq, 'E or . in backbone of %s which is not allowed with no minimum variation set' % gene
+            assert '.' not in backbone_seq and 'E' not in backbone_seq and '~' not in backbone_seq, '~ E or . in backbone of %s which is not allowed with no minimum variation set' % gene
         
         # Reverse complement MSF if this gene is on '-' strand
         if strand == '-':
             # Reverse exons
             ref_seq = seqs[names[ref_gene]]
-            ref_seq = ref_seq.replace('.', '')
+            ref_seq = ref_seq.replace('.', '').replace('~', '')
             ref_seq_len = len(ref_seq)
             if base_fname in spliced_gene:
                 exons = []
@@ -723,7 +770,7 @@ def extract_vars(base_fname,
                 assert not (insertion and deletion)
                 bc = backbone_seq[s]
                 cc = cmp_seq[s]
-                if bc != '.' and cc != '.':
+                if bc not in '.~' and cc not in '.~':
                     if insertion:
                         insertVar('I', insertion)
                         insertion = []
@@ -733,7 +780,7 @@ def extract_vars(base_fname,
                     if bc != cc:
                         mismatch = [s - ndots, s, cc]
                         insertVar('M', mismatch)
-                elif bc == '.' and cc != '.':
+                elif bc == '.' and cc not in '.~':
                     if deletion:
                         insertVar('D', deletion)
                         deletion = []
@@ -741,7 +788,7 @@ def extract_vars(base_fname,
                         insertion[2] += cc
                     else:
                         insertion = [s - ndots, s, cc]
-                elif bc != '.' and cc == '.':
+                elif bc not in '.~' and cc == '.':
                     if insertion:
                         insertVar('I', insertion)
                         insertion = []
@@ -813,6 +860,7 @@ def extract_vars(base_fname,
                 continue
 
             constr_seq = backbone_seq.replace('.', '')
+            assert "~" not in constr_seq
             constr_seq = list(constr_seq)
             locus_diff = 0
 
@@ -842,13 +890,20 @@ def extract_vars(base_fname,
                     constr_seq = constr_seq[:locus + locus_diff] + constr_seq[locus + locus_diff + del_len:]
                     locus_diff -= del_len
 
-            constr_seq = "".join(constr_seq)
+            
             assert id < len(seqs)
             cmp_seq = seqs[id].replace('.', '')
             if len(constr_seq) != len(cmp_seq):
                 print >> sys.stderr, "Error: reconstruction fails (%s)! Lengths different: %d vs. %d" % \
                     (cmp_name, len(constr_seq), len(cmp_seq))
-                assert False
+                exit(1)
+
+            # Add missing sequence markers
+            if "~" in cmp_seq:
+                for s in range(len(constr_seq)):
+                    if cmp_seq[s] == "~":
+                        constr_seq[s] = "~"
+            constr_seq = "".join(constr_seq)                
 
             # Sanity check
             for s in range(len(constr_seq)):
@@ -860,11 +915,12 @@ def extract_vars(base_fname,
 
             if constr_seq != cmp_seq.replace('.', ''):
                 print >> sys.stderr, "Error: reconstruction fails for %s" % (cmp_name)
-                assert False
+                exit(1)
 
         # Write the backbone sequences into a fasta file
         print >> backbone_file, ">%s" % (backbone_name)
         backbone_seq_ = backbone_seq.replace('.', '')
+        assert "~" not in backbone_seq_
         for s in range(0, len(backbone_seq_), 60):
             print >> backbone_file, backbone_seq_[s:s+60]
 
@@ -977,7 +1033,7 @@ def extract_vars(base_fname,
                 exon_seq_ = ""
                 for exon_left, exon_right in exons_:
                     exon_seq_ += seq_[exon_left:exon_right+1]
-                exon_seq_ = exon_seq_.replace('.', '')
+                exon_seq_ = exon_seq_.replace('.', '').replace('~', '')
                 if gene_strand[gene] == '-':
                     exon_seq_ = typing_common.reverse_complement(exon_seq_)
 
@@ -1198,12 +1254,12 @@ def extract_vars(base_fname,
             i = j
 
         print >> sys.stderr, "Length of additional sequences for haplotypes:", add_seq_len
-                    
+
         # Write all the sequences with dots removed into a file
         for name, ID in names.items():
             print >> input_file, ">%s" % (name)
             assert ID < len(seqs)
-            seq = seqs[ID].replace('.', '')
+            seq = seqs[ID].replace('.', '').replace('~', '')
             for s in range(0, len(seq), 60):
                 print >> input_file, seq[s:s+60]
             print >> allele_file, name

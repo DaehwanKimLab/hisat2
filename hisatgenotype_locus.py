@@ -2181,7 +2181,7 @@ def genotyping_locus(base_fname,
             for allele_name, allele_seq in alleles.items():
                 assert allele_name in Genes2[gene_name]
                 allele_seq2 = Genes2[gene_name][allele_name]
-                assert allele_seq == allele_seq2
+                assert allele_seq == allele_seq2, 'Problems with: %s - length %d vs %d' % (allele_name, len(allele_seq), len(allele_seq2))
 
     # alleles names
     Gene_names = {}

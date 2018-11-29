@@ -14,7 +14,7 @@
                 "--base", "rbg",//, "--locus-list", "A"
                 //"--assembly", "-f",
                 //"--locus-list", "ABO",
-                "--debug", "pair, full"
+                "--debug", "pair,full"
                 //"-1", "cor-hla_input_1.fa",
                 //"-2", "cor-hla_input_2.fa"
             ],

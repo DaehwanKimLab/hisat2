@@ -43,6 +43,15 @@ def reverse_complement(seq):
             rc_seq += s
     return rc_seq
 
+"""
+"""
+def string_slice(string, pos):
+    new_string = ''
+    new_string += string[:pos]
+    new_string += string[pos+1:]
+    
+    assert len(string) == 1+len(new_string)
+    return new_string
 
 """
 """

@@ -443,8 +443,8 @@ def write_msf(genfilename, nucfilename, gene, alleles = {}, fullGene = [], exon_
             pass
 
     def write_MSF_file(filename, msf_aligned):
-        # Sanity checking
-        seq_len = 0
+        # Sanity checking and deletion check
+        seq_len = 0  
         for allele, msf_seq in msf_aligned.items():
             if seq_len == 0:
                 seq_len = len(msf_seq)
