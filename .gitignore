@@ -39,3 +39,6 @@ hisat2_test/testset*
 .ht2lib-obj*
 *.a
 *.so
+
+cmake-build-release
+cmake-build-debug
