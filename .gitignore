@@ -28,3 +28,5 @@ hisat2_test/genome*
 hisat2_test/2*
 hisat2_test/snp142*
 hisat2_test/testset*
+
+.idea/
