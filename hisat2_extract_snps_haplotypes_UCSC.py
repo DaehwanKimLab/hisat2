@@ -355,7 +355,7 @@ def main(genome_file,
                                 stdout=subprocess.PIPE,
                                 stderr=open("/dev/null", 'w'))
     ids_seen = set()
-    for line in snp_proc.stdout:
+    for line in snp_proc.stdout.encode('utf-8):
         if not line or line.startswith('#'):
             continue
 
