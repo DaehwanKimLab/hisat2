@@ -23,7 +23,7 @@
 import sys, subprocess
 import re
 from argparse import ArgumentParser, FileType
-
+from functools import cmp_to_key
 
 """
 """
@@ -129,7 +129,7 @@ def generate_haplotypes(snp_file,
     assert len(vars) > 0
 
     # Sort variants and remove redundant variants
-    vars = sorted(vars, cmp=compare_vars)
+    vars = sorted(vars, key=cmp_to_key(compare_vars))
     tmp_vars = []
     v = 0
     while v < len(vars):
@@ -289,7 +289,7 @@ def generate_haplotypes(snp_file,
             return a_begin - b_begin
         return a_end - b_end
     
-    haplotypes = sorted(list(haplotypes2), cmp=cmp_haplotype)
+    haplotypes = sorted(list(haplotypes2), key=cmp_to_key(cmp_haplotype))
 
     # Write haplotypes
     for h_i in range(len(haplotypes)):
@@ -353,9 +353,10 @@ def main(genome_file,
         snp_cmd = ["cat", snp_fname]
     snp_proc = subprocess.Popen(snp_cmd,
                                 stdout=subprocess.PIPE,
-                                stderr=open("/dev/null", 'w'))
+                                stderr=open("/dev/null", 'w'),
+                                universal_newlines=True)
     ids_seen = set()
-    for line in snp_proc.stdout.encode('utf-8):
+    for line in snp_proc.stdout:
         if not line or line.startswith('#'):
             continue
 
