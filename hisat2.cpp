@@ -299,6 +299,8 @@ static bool repeat;
 static bool use_repeat_index;
 static EList<size_t> readLens;
 
+static bool doCTConvert;
+
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -534,6 +536,8 @@ static void resetOptions() {
     repeat = false; // true iff alignments to repeat sequences are directly reported.
     use_repeat_index = true;
     readLens.clear();
+
+    doCTConvert = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -760,6 +764,7 @@ static struct option long_options[] = {
     {(char*)"repeat",          no_argument,        0,        ARG_REPEAT},
     {(char*)"no-repeat-index", no_argument,        0,        ARG_NO_REPEAT_INDEX},
     {(char*)"read-lengths",    required_argument,  0,        ARG_READ_LENGTHS},
+    {(char*)"CT-convert",      no_argument,        0,        ARG_CTCONVERT},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -856,6 +861,7 @@ static void printUsage(ostream& out) {
 #ifdef USE_SRA
         << "  --sra-acc          SRA accession ID" << endl
 #endif
+        << "  --CT-convert       Do C->T Convert" << endl
 		<< endl
 
 	    << " Presets:                 Same as:" << endl
@@ -1765,6 +1771,11 @@ static void parseOption(int next_option, const char *arg) {
             readLens.sort();
             break;
         }
+        case ARG_CTCONVERT: {
+            doCTConvert = true;
+            break;
+        }
+
 		default:
 			printUsage(cerr);
 			throw 1;
@@ -3258,6 +3269,10 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 		} else if(!success) {
 			continue;
 		}
+        if(doCTConvert) {
+            ps->bufa().convert_CT();
+            ps->bufb().convert_CT();
+        }
 		TReadId rdid = ps->rdid();
         if(nthreads > 1 && useTempSpliceSite) {
             assert_gt(tid, 0);
@@ -3283,7 +3298,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                 } else break;
             }
         }
-        
+
 		bool sample = true;
 		if(arbitraryRandom) {
 			ps->bufa().seed = rndArb.nextU32();
@@ -3716,7 +3731,8 @@ static void driver(
 		fuzzy,         // true -> try to parse fuzzy fastq
 		fastaContLen,  // length of sampled reads for FastaContinuous...
 		fastaContFreq, // frequency of sampled reads for FastaContinuous...
-		skipReads      // skip the first 'skip' patterns
+		skipReads,     // skip the first 'skip' patterns
+        doCTConvert    // C->T Convert
 	);
 	if(gVerbose || startVerbose) {
 		cerr << "Creating PatternSource: "; logTime(cerr, true);

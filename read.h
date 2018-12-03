@@ -77,6 +77,9 @@ struct Read {
 		filter = '?';
 		seed = 0;
 		ns_ = 0;
+        converted = false;
+        patOrg.clear();
+        methylMD.clear();
 	}
 	
 	/**
@@ -91,6 +94,44 @@ struct Read {
 		constructRevComps();
 		constructReverses();
 	}
+
+    void convert_CT() {
+        // Save original read
+        patOrg = patFw;
+
+        // convert C to T, build MD string
+        int offset = 0;
+        methylMD.clear();
+
+		for(size_t i = 0; i < patFw.length(); i++) {
+			if((int)patFw[i] == 1) {
+                patFw.set(3, i);
+
+                // append 'offset'+C
+                ostringstream ss;
+                ss << offset << 'C';
+                methylMD.append(ss.str());
+                
+                offset = 0;
+
+                // update seed
+                size_t soff = ((i & 15) << 1);
+                seed ^= (1 << soff); // old 
+                seed ^= (3 << soff); // new
+			} else {
+                offset++;
+            }
+		}
+        if(offset > 0) {
+            ostringstream ss;
+            ss << offset;
+            methylMD.append(ss.str());
+        }
+		constructRevComps();
+		constructReverses();
+
+        converted = true;
+    }
 
 	/**
 	 * Simple init function, used for testing.
@@ -340,6 +381,10 @@ struct Read {
 
 	// For remembering the exact input text used to define a read
 	SStringExpandable<char> readOrigBuf;
+
+    BTDnaString patOrg;
+    bool converted;
+    string methylMD;    // MD:Z strings to get original read 
 
 	BTString name;      // read name
 	TReadId  rdid;      // 0-based id based on pair's offset in read file(s)

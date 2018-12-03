@@ -979,7 +979,7 @@ const
             o.append(buf);
         }
     }
-    
+
     bool snp_first = true;
     index_t prev_snp_idx = INDEX_MAX;
     size_t len_trimmed = rd.length() - res.trimmed5p(true) - res.trimmed3p(true);
@@ -1035,6 +1035,13 @@ const
     if(!res.fw()) {
         Edit::invertPoss(const_cast<EList<Edit>&>(res.ned()), len_trimmed, false);
     }
+
+    // ZD:Z:
+	if(rd.converted) {
+		WRITE_SEP();
+		o.append("ZD:Z:");
+		o.append(rd.methylMD.c_str());
+	}
 
     if(print_xr_) {
         // Original read string
@@ -1243,6 +1250,11 @@ const
         itoa10<uint64_t>(prm.nExIters, buf);
         o.append("ZI:i:");
         o.append(buf);
+    }
+    if(rd.converted) {
+    	WRITE_SEP();
+    	o.append("ZD:Z:");
+    	o.append(rd.methylMD.c_str());
     }
     if(print_xr_) {
         // Original read string

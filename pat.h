@@ -105,7 +105,8 @@ struct PatternParams {
 		bool fuzzy_,
 		int sampleLen_,
 		int sampleFreq_,
-		uint32_t skip_) :
+		uint32_t skip_,
+        bool CT_convert_) :
 		format(format_),
 		fileParallel(fileParallel_),
 		seed(seed_),
@@ -116,7 +117,8 @@ struct PatternParams {
 		fuzzy(fuzzy_),
 		sampleLen(sampleLen_),
 		sampleFreq(sampleFreq_),
-		skip(skip_) { }
+		skip(skip_),
+        CT_convert(CT_convert_) { }
 
 	int format;           // file format
 	bool fileParallel;    // true -> wrap files with separate PairedPatternSources
@@ -129,6 +131,7 @@ struct PatternParams {
 	int sampleLen;        // length of sampled reads for FastaContinuous...
 	int sampleFreq;       // frequency of sampled reads for FastaContinuous...
 	uint32_t skip;        // skip the first 'skip' patterns
+    bool CT_convert;      // C->T Convert(for methylation calling)
 };
 
 /**
