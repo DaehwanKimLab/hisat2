@@ -237,7 +237,7 @@ def extract_vars(base_fname,
         fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
     else:
         assert base_fname in unspliced_gene
-        fasta_fnames = glob.glob("%s/*.fasta" % fasta_dname)
+        fasta_fnames = glob.glob("%s/*_gen.fasta" % fasta_dname)
     for gen_fname in fasta_fnames:
         gene_name = gen_fname.split('/')[-1].split('_')[0]
         if gene_name == "hla":
@@ -503,7 +503,7 @@ def extract_vars(base_fname,
         if base_fname in spliced_gene:
             MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), gene)
         else:
-            MSA_fname = "hisatgenotype_db/%s/msf/%s.msf" % (base_fname.upper(), gene)
+            MSA_fname = "hisatgenotype_db/%s/msf/%s_gen.msf" % (base_fname.upper(), gene)
             
         if not os.path.exists(MSA_fname):
             print >> sys.stderr, "Warning: %s does not exist" % MSA_fname
@@ -649,6 +649,8 @@ def extract_vars(base_fname,
         
         if missing_seq:
             print "Warning %s contains missing sequence in the data. Filling in with consensus" % gene
+
+        names, seqs = typing_common.collapse_alleles(names, seqs) 
 
         if min_var_freq <= 0.0:
             assert '.' not in backbone_seq and 'E' not in backbone_seq and '~' not in backbone_seq, '~ E or . in backbone of %s which is not allowed with no minimum variation set' % gene

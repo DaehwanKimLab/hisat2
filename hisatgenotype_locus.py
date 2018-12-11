@@ -2479,7 +2479,7 @@ if __name__ == '__main__':
                         dest="debug",
                         type=str,
                         default="",
-                        help="Test database or code changes (options: basic_test, pair, full, single-end, test_list, test_id)(e.g., test_id:10,basic)")
+                        help="Test database or code changes (options: basic, pair, full, single-end, test_list, test_id)(e.g., test_id:10,basic)")
     parser.add_argument("--output-base", "--assembly-base",
                         dest="output_base",
                         type=str,

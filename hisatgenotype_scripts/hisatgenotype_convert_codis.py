@@ -581,7 +581,7 @@ def extract_msa(base_dname,
 
         # Write MSF (multiple sequence alignment file)
         msf_len = len(ref_allele_left) + len(ref_allele_right) + repeat_len
-        msf_fname = "%s_gen.msf" % locus_name
+        msf_fname = "%s.msf" % locus_name
         msf_file = open(msf_fname, 'w')
         for s in range(0, msf_len, 50):
             for allele_id, msf in allele_msf.items():

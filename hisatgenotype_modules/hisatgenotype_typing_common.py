@@ -79,7 +79,58 @@ def read_genome(genome_file):
 ##################################################
 #   Alleles, variants, haplotypes, etc.
 ##################################################
+"""
+"""
+def collapse_alleles(index = {}, seqs = [] ,emptySeq = ''):
+    remove = []
+    for allele_i, index_i in index.items():
+        seq_i = seqs[index_i]
+        seq_i_strip = seq_i.replace(emptySeq, '').replace('.','')
+        
+        for allele_j, index_j in index.items():
+            seq_j = seqs[index_j]
+            seq_j_strip = seq_j.replace(emptySeq, '').replace('.','')
+            if allele_i == allele_j:
+                continue
+            
+            if seq_i == seq_j and allele_i > allele_j:
+                if len(allele_i) <= len(allele_j):
+                    print '\t\t %s is %s : Removing' % (allele_i, allele_j)
+                    remove.append([index_i, allele_i])
+                else:
+                    print '\t\t %s is %s : Removing' % (allele_j, allele_i)
+                    remove.append([index_j, allele_j])
+                break
 
+            if len(seq_i_strip) < len(seq_j_strip):
+                if seq_i_strip in seq_j_strip:
+                    if allele_i not in remove:
+                        if 'HG19.ref' in allele_i:
+                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
+                            remove.append([index_i, allele_i])
+                        elif ('refSeq' in allele_j) or (('refSeq' in allele_i) and ('.' not in allele_j)):
+                            print '\t\t Collapsing %s into %s' % (allele_j, allele_i)
+                            remove.append([index_j, allele_j])
+                        elif 'exon' in allele_i:
+                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
+                            remove.append([index_i, allele_i])                            
+                        else:
+                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
+                            remove.append([index_i, allele_i])
+                    break
+    
+    remove.sort(reverse = True, key = lambda x: x[0])
+    for i in remove:
+        del seqs[i[0]]
+        del index[i[1]]
+    for allele, ind in index.items():
+        ind_ = ind
+        for i in remove:
+            if ind_ > i[0]:
+                ind_ = ind_ - 1
+                index[allele] = ind_
+
+    return index, seqs
 
 """
 """

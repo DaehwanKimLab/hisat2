@@ -14,6 +14,7 @@ Download RBC data from website
 
 # Symbol for empty nucleotide/sequence
 emptySeq = '*'
+skip_seqs = []
 
 def get_xml(url):
     file = urllib2.urlopen(url)
@@ -173,48 +174,6 @@ def match_seq(ref, seq):
         correct = check_substr(ref, seq, 50)
      
     return correct
-
-def collapse_alleles(alleles = {}):
-    remove = []
-    for allele_i, seq_i in alleles.items():
-        seq_i_strip = seq_i.replace(emptySeq, '').replace('.','')
-        
-        for allele_j, seq_j in alleles.items():
-            seq_j_strip = seq_j.replace(emptySeq, '').replace('.','')
-            if allele_i == allele_j:
-                continue
-            
-            if seq_i == seq_j and allele_i > allele_j:
-                if len(allele_i) <= len(allele_j):
-                    print '\t\t %s is %s : Removing' % (allele_i, allele_j)
-                    remove.append(allele_i)
-                else:
-                    print '\t\t %s is %s : Removing' % (allele_j, allele_i)
-                    remove.append(allele_j)
-                break
-
-            if len(seq_i_strip) < len(seq_j_strip):
-                if seq_i_strip in seq_j_strip:
-                    if allele_i not in remove:
-                        if 'HG19.ref' in allele_i:
-                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
-                            remove.append(allele_i)
-                        elif ('refSeq' in allele_j) or (('refSeq' in allele_i) and ('.' not in allele_j)):
-                            print '\t\t Collapsing %s into %s' % (allele_j, allele_i)
-                            remove.append(allele_j)
-                        elif 'exon' in allele_i:
-                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
-                            remove.append(allele_i)                            
-                        else:
-                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
-                            remove.append(allele_i)
-                    break
-    
-    for dup in remove:
-        if dup in alleles:
-            del alleles[dup]
-
-    return alleles
 
 def write_fasta(gene, alleles = {}, loc = 'gen'):
     file_path = os.path.dirname('RBG/fasta/')
@@ -521,6 +480,9 @@ def extract_RBC():
         if alleleGene != 'ABO': ## TODO: REMOVE!
             continue
 
+        if alleleNam in skip_seqs:
+            continue
+        
         alleleNam = alleleGene + '*' + alleleNam.replace('?', '').replace('*','_')
         
         if alleleGene not in locus:
@@ -843,19 +805,23 @@ def extract_RBC():
     # Remove any miss aligned data by length and write genes out
     for gene, allelelist in locus.items():
         print >> sys.stdout, 'Processing %s:' % gene
-        alleleseq = {}
+        allele_index = {}
+        seq_list = []
         msf_alleleseq = {}
         exon_seg = []
-
-        for allele in allelelist:
-            alleleseq.update({ allele : genSeq[allele] })
+        
+        for itr in range(len(allelelist)):
+            allele = allelelist[itr]
+            allele_index.update({ allele : itr })
+            seq_list.append(genSeq[allele])
 
         print >> sys.stdout, '\t Checking %s for redundancy' % gene
-        alleleseq = collapse_alleles(alleleseq)
+        allele_index, seq_list = typing_common.collapse_alleles(allele_index, seq_list, emptySeq)
 
         full_allele = {}
         partial_allele = {}
-        for allele, seq in alleleseq.items():
+        for allele, ind in allele_index.items():
+            seq = seq_list[ind]
             ofile = open('RBG/rbg.dat', 'a')
             ofile.write('DE\t%s\n' % allele)
             for exon in genExon[allele]:
