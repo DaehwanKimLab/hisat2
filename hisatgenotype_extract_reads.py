@@ -151,9 +151,14 @@ def extract_reads(base_fname,
             fq_fnames = read_fname
     else:
         if paired:
-            fq_fnames = glob.glob("%s/*.1.%s" % (read_dir, suffix))
+            fq_fnames = glob.glob("%s/*.1.%s" % (read_dir, suffix)) 
         else:
             fq_fnames = glob.glob("%s/*.%s" % (read_dir, suffix))
+        
+        if len(fq_fnames) == 0:
+            print "Error: no files in %s directory" % read_dir
+            exit(1)
+
     count = 0
     pids = [0 for i in range(threads)]
     for file_i in range(len(fq_fnames)):

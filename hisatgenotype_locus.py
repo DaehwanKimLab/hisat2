@@ -247,7 +247,8 @@ def typing(simulation,
            threads,
            best_alleles,
            verbose,
-           assembly_verbose):
+           assembly_verbose,
+           test_i = 0):
     if simulation:
         test_passed = {}
     report_file = open(output_base + ".report", 'w')
@@ -1547,7 +1548,10 @@ def typing(simulation,
                 asm_graph.calculate_coverage()
                 
                 # Start drawing assembly graph
-                asm_graph.begin_draw("%s.%s.%s" % (output_base, base_fname, gene))
+                if simulation:
+                    asm_graph.begin_draw("%s-%d.%s.%s" % (output_base, test_i+1, base_fname, gene))
+                else:
+                    asm_graph.begin_draw("%s.%s.%s" % (output_base, base_fname, gene))
 
                 # Draw assembly graph
                 begin_y = asm_graph.draw(0, "a. Read alignment")
@@ -2309,7 +2313,8 @@ def genotyping_locus(base_fname,
                                      threads,
                                      best_alleles,
                                      verbose,
-                                     assembly_verbose)
+                                     assembly_verbose,
+                                     test_i)
 
             for aligner_type, passed in tmp_test_passed.items():
                 if aligner_type in test_passed:
