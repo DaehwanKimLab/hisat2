@@ -225,6 +225,7 @@ my @unps = ();
 my @mate1s = ();
 my @mate2s = ();
 my @to_delete = ();
+my @to_kills = ();
 my $temp_dir = "/tmp";
 my $bam_out = 0;
 my $ref_str = undef;
@@ -339,6 +340,7 @@ if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 		}
 		my $pid = 0;
 		$pid = fork() unless $no_pipes;
+		push @to_kills, $pid unless $no_pipes;
 		if($pid == 0) {
 			# Open named pipe 1 for writing
 			open(my $ofh, ">$m1fn") || Fail("Can't open '$m1fn' for writing\n");
@@ -356,6 +358,7 @@ if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 		}
 		$pid = 0;
 		$pid = fork() unless $no_pipes;
+		push @to_kills, $pid unless $no_pipes;
 		if($pid == 0) {
 			# Open named pipe 2 for writing
 			open(my $ofh, ">$m2fn") || Fail("Can't open '$m2fn' for writing.\n");
@@ -574,6 +577,8 @@ if(defined($cap_out)) {
 } else {
 	$ret = system($cmd);
 }
+kill 'TERM', @to_kills;
+
 if(!$keep) { for(@to_delete) { unlink($_); } }
 
 if ($ret == -1) {
