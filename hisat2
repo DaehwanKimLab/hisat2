@@ -55,6 +55,7 @@ my $align_prog  = $align_prog_s;
 my $idx_ext_l     = 'ht2l'; 
 my $idx_ext_s     = 'ht2'; 
 my $idx_ext       = $idx_ext_s; 
+my $seq_in_args   = 0;
 my %signo       = ();
 my @signame     = ();
 
@@ -181,6 +182,9 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 		$large_idx = 1;
 		$ht2_args[$i] = undef;
 	}
+	if($arg eq "-c") {
+		$seq_in_args = 1;
+	}
 	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
 		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
 			$ht2_args[$i] = undef;
@@ -269,6 +273,17 @@ Info("Before arg handling:\n");
 Info("  Wrapper args:\n[ @ht2w_args ]\n");
 Info("  Binary args:\n[ @ht2_args ]\n");
 
+sub check_file_exist($$$) {
+	my ($unps, $mate1s, $mate2s) = @_;
+	for my $fn (@$unps, @$mate1s, @$mate2s) {
+		if (not -f $fn) {
+			Fail("Read file '%s' doesn't exist\n", $fn);
+			return 1;
+		}
+	}
+	return 0;
+}
+
 sub cat_file($$) {
 	my ($ifn, $ofh) = @_;
 	my $ifh = undef;
@@ -320,6 +335,10 @@ sub Extract_IndexName_From {
         }
     }
     Info("Cannot find any index option (--reference-string, --ref-string or -x) in the given command line.\n");    
+}
+
+if($seq_in_args == 0) {
+	check_file_exist(\@unps, \@mate1s, \@mate2s);
 }
 
 if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
