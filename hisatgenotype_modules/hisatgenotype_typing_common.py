@@ -81,13 +81,16 @@ def read_genome(genome_file):
 ##################################################
 """
 """
-def collapse_alleles(index = {}, seqs = [] ,emptySeq = ''):
+def collapse_alleles(index = {}, seqs = [], emptySeq = '', list_collapse = False, verbose = False):
     remove = []
+    col_index = {}
     for allele_i, index_i in index.items():
+        if allele_i in [x[1] for x in remove]: continue
         seq_i = seqs[index_i]
         seq_i_strip = seq_i.replace(emptySeq, '').replace('.','')
         
         for allele_j, index_j in index.items():
+            if allele_j in [x[1] for x in remove]: continue
             seq_j = seqs[index_j]
             seq_j_strip = seq_j.replace(emptySeq, '').replace('.','')
             if allele_i == allele_j:
@@ -95,28 +98,29 @@ def collapse_alleles(index = {}, seqs = [] ,emptySeq = ''):
             
             if seq_i == seq_j and allele_i > allele_j:
                 if len(allele_i) <= len(allele_j):
-                    print '\t\t %s is %s : Removing' % (allele_i, allele_j)
+                    if verbose: print '\t\t %s is %s : Removing' % (allele_i, allele_j)
                     remove.append([index_i, allele_i])
+                    col_index.update({ allele_i : allele_j })
                 else:
-                    print '\t\t %s is %s : Removing' % (allele_j, allele_i)
+                    if verbose: print '\t\t %s is %s : Removing' % (allele_j, allele_i)
                     remove.append([index_j, allele_j])
+                    col_index.update({ allele_j : allele_i })
                 break
 
             if len(seq_i_strip) < len(seq_j_strip):
                 if seq_i_strip in seq_j_strip:
-                    if allele_i not in remove:
-                        if 'HG19.ref' in allele_i:
-                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
-                            remove.append([index_i, allele_i])
-                        elif ('refSeq' in allele_j) or (('refSeq' in allele_i) and ('.' not in allele_j)):
-                            print '\t\t Collapsing %s into %s' % (allele_j, allele_i)
-                            remove.append([index_j, allele_j])
-                        elif 'exon' in allele_i:
-                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
-                            remove.append([index_i, allele_i])                            
-                        else:
-                            print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
-                            remove.append([index_i, allele_i])
+                    if 'HG38.ref' in allele_i or 'exon' in allele_i:
+                        if verbose: print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
+                        remove.append([index_i, allele_i])
+                        col_index.update({ allele_i : allele_j })
+                    elif ('refSeq' in allele_j) or (('refSeq' in allele_i) and ('.' not in allele_j)):
+                        if verbose: print '\t\t Collapsing %s into %s' % (allele_j, allele_i)
+                        remove.append([index_j, allele_j])
+                        col_index.update({ allele_j : allele_i })                      
+                    else:
+                        if verbose: print '\t\t Collapsing %s into %s' % (allele_i, allele_j)
+                        remove.append([index_i, allele_i])
+                        col_index.update({ allele_i : allele_j })
                     break
     
     remove.sort(reverse = True, key = lambda x: x[0])
@@ -130,7 +134,10 @@ def collapse_alleles(index = {}, seqs = [] ,emptySeq = ''):
                 ind_ = ind_ - 1
                 index[allele] = ind_
 
-    return index, seqs
+    if list_collapse:
+        return index, seqs, col_index
+    else:
+        return index, seqs
 
 """
 """

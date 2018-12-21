@@ -251,8 +251,8 @@ def extract_vars(base_fname,
     remove_locus_list = []
     for gene in locus_list:
         aligner_cmd = ["hisat2"]
-        if base_fname not in ["cyp"]: # only include genes with no exact match to reference genome
-            aligner_cmd += ["--score-min", "C,0"]
+        if base_fname not in ["cyp", "rbg"]: # only include genes with no exact match to reference genome
+            aligner_cmd += ["--score-min", "C,-12"]
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",
                         "-f", "%s/%s_gen.fasta" % (fasta_dname, gene)]
@@ -345,7 +345,6 @@ def extract_vars(base_fname,
                 left_ext_seq, right_ext_seq = typing_common.reverse_complement(right_ext_seq), typing_common.reverse_complement(left_ext_seq)
             left_ext_seq_dic[gene], right_ext_seq_dic[gene] = left_ext_seq, right_ext_seq
             
-
     # Extract exon information from hla.data
     gene_exons, gene_exon_counts = {}, {}
     if base_fname in spliced_gene:        
@@ -650,7 +649,11 @@ def extract_vars(base_fname,
         if missing_seq:
             print "Warning %s contains missing sequence in the data. Filling in with consensus" % gene
 
-        names, seqs = typing_common.collapse_alleles(names, seqs) 
+        names, seqs, collapsed = typing_common.collapse_alleles(names, seqs, list_collapse= True, verbose = True) 
+
+        if ref_gene in collapsed:
+            ref_gene = collapsed[ref_gene]
+            genes[gene] = ref_gene
 
         if min_var_freq <= 0.0:
             assert '.' not in backbone_seq and 'E' not in backbone_seq and '~' not in backbone_seq, '~ E or . in backbone of %s which is not allowed with no minimum variation set' % gene
@@ -897,20 +900,13 @@ def extract_vars(base_fname,
                 print >> sys.stderr, "Error: reconstruction fails for %s" % (cmp_name)
                 exit(1)
 
-        # Write the backbone sequences into a fasta file
-        print >> backbone_file, ">%s" % (backbone_name)
-        backbone_seq_ = backbone_seq.replace('.', '')
-        assert "~" not in backbone_seq_
-        for s in range(0, len(backbone_seq_), 60):
-            print >> backbone_file, backbone_seq_[s:s+60]
-
         # Remap the backbone allele, which is sometimes slighly different from
         #   fasta version
         ref_backbone_id = names[ref_gene]
         ref_backbone_seq = seqs[ref_backbone_id]
         aligner_cmd = ["hisat2"]
         if base_fname in spliced_gene:
-            aligner_cmd += ["--score-min", "C,0"]
+            aligner_cmd += ["--score-min", "C,-18"]
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",
                         "-f", 
@@ -943,13 +939,19 @@ def extract_vars(base_fname,
                     right += length
             if AS > best_AS:
                 best_chr, best_left, best_right, best_AS = chr, left, right, AS
-
         chr, left, right = best_chr, best_left, best_right
         align_proc.communicate()
         if left == right:
-            print >> sys.stderr, "Warning: %s (%s) is not remapped" % (gene, ref_gene)
-            continue
+            print >> sys.stderr, "Warning: %s (%s) is not remapped: Removing" % (gene, ref_gene)
+            continue # TODO: This is causing no var printout in .snp file
         assert left < right
+
+        # Write the backbone sequences into a fasta file
+        print >> backbone_file, ">%s" % (backbone_name)
+        backbone_seq_ = backbone_seq.replace('.', '')
+        assert "~" not in backbone_seq_
+        for s in range(0, len(backbone_seq_), 60):
+            print >> backbone_file, backbone_seq_[s:s+60]
 
         base_locus = 0                
         ref_seq = seqs[names[ref_gene]]

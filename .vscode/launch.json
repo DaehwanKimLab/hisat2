@@ -11,8 +11,8 @@
             "cwd": "/home/christopher/Documents/hisatgenotype-working", //tmp-RBG",
             "program": "${file}",
             "args": [
-                "--base", "genotype_genome",//, "--locus-list", "A"
-                "--read-dir", "fastq_files", "--out-dir", "extracted_fastq"
+                "--base", "rbg", "--locus-list", "RHCE"
+                //"--read-dir", "fastq_files", "--out-dir", "extracted_fastq"
                 //"--assembly", "-f",
                 //"--locus-list", "ABO",
                 //"--debug", "pair,full"
