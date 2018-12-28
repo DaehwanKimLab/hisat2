@@ -906,7 +906,7 @@ def extract_vars(base_fname,
         ref_backbone_seq = seqs[ref_backbone_id]
         aligner_cmd = ["hisat2"]
         if base_fname in spliced_gene:
-            aligner_cmd += ["--score-min", "C,-18"]
+            aligner_cmd += ["--score-min", "L,-12,-0.0012"] # Guarantee two missmatchs then one per 5000bp
         aligner_cmd += ["--no-unal",
                         "-x", "grch38/genome",
                         "-f", 

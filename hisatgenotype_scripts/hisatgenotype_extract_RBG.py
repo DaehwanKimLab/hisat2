@@ -127,12 +127,15 @@ def get_seqbyRef(access, gene_name = '', getall = False, verbose = False):
                     mRNAline = 1        
 
     if getall and gene_found:
+        use_given = True if exon_numbers else False
         for key, anExon in exon_ranges.items():
             if not anExon:
                 raise ValueError()
             corrected_exon = []
             for itr in range(len(anExon)):
-                exon_num = exon_numbers[itr] if len(exon_numbers)==len(anExon) else itr+1
+                if len(exon_numbers) != len(anExon) and gene_name != 'ABO':
+                    use_given = False
+                exon_num = exon_numbers[itr] if use_given else itr+1
                 pos = anExon[itr].replace('>','').replace('<','').split('..')
                 corrected_exon.append([exon_num, int(pos[0])-left, int(pos[1])-left])
             exon_ranges[key] = corrected_exon
@@ -205,7 +208,7 @@ def run_clustalo_pile(in_file):
     # cmd = 'clustalw2 -infile=%s -output=GDE -outfile=%s -quiet -case=upper > /dev/null' % (in_file, out_file)
     os.system(cmd)
 
-def write_msf(threads, out_dir, genfilename, nucfilename, gene, alleles = {}, fullGene = [], exon_seg = [], verbose = False):
+def write_msf(threads, out_dir, genfilename, nucfilename, gene, allele_key, alleles = {}, fullGene = [], exon_seg = [], verbose = False):
     filepath = '%s/msf/' % out_dir
     file_path = os.path.dirname(filepath)
     if not os.path.exists(file_path):
@@ -249,13 +252,15 @@ def write_msf(threads, out_dir, genfilename, nucfilename, gene, alleles = {}, fu
             f = open(file_name, append_write)
             if len(parts) > 1:
                 for itr in range(len(parts)):
-                    f.write('> %s_pt%d\n' % (allele, itr))
+                    part =  '%s_pt%d' % (allele, itr)
+                    allele_key.update({ re.sub('[^0-9a-zA-Z]+', '_', part) : allele })
+                    f.write('> %s\n' % (part))
                     f.write('%s\n' % parts[itr])
             else:
                 f.write('> %s\n' % allele)
                 f.write('%s\n' % parts[0])
             f.close()
-    
+
     pool = Pool(int(threads))
     for itr in range(len(files)):
         in_file = files[itr]
@@ -266,7 +271,6 @@ def write_msf(threads, out_dir, genfilename, nucfilename, gene, alleles = {}, fu
     pool.close()
     pool.join()
     
-    msf2name = {}
     for itr in range(len(files)):
         file_ = files[itr]
         parts, fulls, filealleles = {}, {}, []
@@ -284,40 +288,30 @@ def write_msf(threads, out_dir, genfilename, nucfilename, gene, alleles = {}, fu
                 if line.startswith('Name'):
                     _, msfname, _, length = line.split()[:4]
                     
-                    gene = msfname.split('_')[0]
-                    if 'NM_' in msfname or 'XM_' in msfname:
-                        allele = '_'.join(msfname.split('_')[1:])
-                    else:
-                        allele = '.'.join(msfname.split('_')[1:])
-
-                    if 'pt' in allele:
-                        name = gene + '*' + allele.split('.pt')[0]
+                    if 'pt' in msfname:
                         parts.update({ msfname : '' })
                     else:
-                        name = gene + '*' + allele
-                        fulls.update({ name : '' })
-
-                    if msfname not in msf2name:
-                        msf2name.update({ msfname : name })
-                    filealleles.append(name)
+                        fulls.update({ allele_key[msfname] : '' })
+                    
+                    filealleles.append(allele_key[msfname])
                 continue
 
             msfallele = line.split()[0]
             seq = ''.join(line.split()[1:])
 
-            assert msfallele in msf2name, "%s not in msf2name" % msfallele
+            assert msfallele in allele_key, "%s not in msf2name" % msfallele
 
             if 'pt' in msfallele:
-                parts[msfallele] += seq.replace('N', '~')
+                parts[msfallele] += seq
             else:
-                fulls[msf2name[msfallele]] += seq.replace('N', '~')
+                fulls[allele_key[msfallele]] += seq
 
         parts_ = {}
         for allele, seq in parts.items():
-            if msf2name[allele] not in parts_:
-                parts_.update({ msf2name[allele] : [] })
+            if allele_key[allele] not in parts_:
+                parts_.update({ allele_key[allele] : [] })
             
-            parts_[msf2name[allele]].append(seq)
+            parts_[allele_key[allele]].append(seq)
 
         for allele, seqs in parts_.items():
             merg = ['~'] * len(seqs[0])
@@ -336,8 +330,7 @@ def write_msf(threads, out_dir, genfilename, nucfilename, gene, alleles = {}, fu
         
         # Parsing Sequences based on full length bool
         length = 0
-        for allele in fulls:
-            seq = fulls[allele]
+        for allele, seq in fulls.items():
             if length == 0:
                 length = len(seq)
             else:           
@@ -495,13 +488,8 @@ def extract_RBC(out_dir,
 
         if alleleNam in skip_seqs or alleleGene in skip_seqs:
             continue
-        
-        if alleleGene == 'RHCE':
-            alleleNam = alleleNam.split('_')[-1]
 
-        alleleNam = alleleGene + '*' + alleleNam.replace('?', '').replace('*','_')
-        if '_' == alleleNam[-2]:
-            alleleNam = alleleNam.replace('_', '.')        
+        alleleNam = alleleGene + '*' + alleleNam.replace('?', '').replace('*','_')        
         
         if alleleGene not in locus:
             locus.update({ alleleGene : [] })
@@ -528,7 +516,7 @@ def extract_RBC(out_dir,
                 region = seqnode.find('type').text
 
                 alt_nuc = 'RYKMSWBDHV' # Make Translation Table 
-                seqReg = seq.translate(string.maketrans(alt_nuc, 'N' * len(alt_nuc)))                
+                seqReg = seq.translate(string.maketrans(alt_nuc, '.' * len(alt_nuc)))                
                 raw_seq = seqReg.replace(emptySeq, '').replace('.', '')
                 if len(raw_seq) < 5:
                     raw_seq = ''
@@ -809,12 +797,11 @@ def extract_RBC(out_dir,
         sys.stdout.flush()
 
     for allele, seq in genSeq.items():
-        gene_name = ''
         for loci, alleles in locus.items():
             if allele in alleles:
                 gene_name = loci
         
-        if gene_name in refGeneSeq or not gene_name:
+        if gene_name not in refGeneSeq:
             continue
         
         try:
@@ -889,12 +876,14 @@ def extract_RBC(out_dir,
     for gene, allelelist in locus.items():
         if verbose: print >> sys.stdout, 'Processing %s:' % gene
         allele_index = {}
+        msf_key = {}
         seq_list = []
         msf_alleleseq = {}
         exon_seg = []
         
         for itr in range(len(allelelist)):
             allele = allelelist[itr]
+            msf_key.update({ re.sub('[^0-9a-zA-Z]+', '_', allele) : allele })
             allele_index.update({ allele : itr })
             seq_list.append(genSeq[allele])
 
@@ -956,7 +945,8 @@ def extract_RBC(out_dir,
                   filepath,
                   fastaname_gen, 
                   fastaname_nuc, 
-                  gene, 
+                  gene,
+                  msf_key, 
                   msf_alleleseq, 
                   fullGene, 
                   exon_seg,
