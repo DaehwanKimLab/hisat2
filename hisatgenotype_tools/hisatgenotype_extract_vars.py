@@ -218,7 +218,7 @@ def extract_vars(base_fname,
 
     # CB TODO: Make this read from a file or read the gen in the file name
     spliced_gene = ['hla', 'rbg']
-    unspliced_gene = ['codis', 'cyp' ,'rRNA']
+    unspliced_gene = ['codis', 'cyp' ,'rrna']
     
     # Corresponding genomic loci found by HISAT2 (reference is GRCh38)
     #   e.g. hisat2 --no-unal --score-min C,0 -x grch38/genome -f hisatgenotype_db/HLA/fasta/A_gen.fasta
@@ -226,9 +226,6 @@ def extract_vars(base_fname,
     left_ext_seq_dic, right_ext_seq_dic = {}, {}
     genes, gene_strand = {}, {}
 
-    # Clone a git repository, hisatgenotype_db
-    if not os.path.exists("hisatgenotype_db"):
-        typing_common.clone_hisatgenotype_database()
     fasta_dname = "hisatgenotype_db/%s/fasta" % base_fname.upper()
 
     # Check HLA genes
@@ -1273,7 +1270,7 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--base",
                         dest="base_fname",
                         type=str,
-                        default="hla",
+                        default="",
                         help="base filename for backbone sequence, variants, and linking info (Default: hla)")
     parser.add_argument("--locus-list",
                         dest="locus_list",
@@ -1325,24 +1322,38 @@ if __name__ == '__main__':
     if args.inter_gap > args.intra_gap:
         print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
-             
-    if args.base_fname.find('/') != -1:
-        elems = args.base_fname.split('/')
-        base_fname = elems[-1]
-        base_dname = '/'.join(elems[:-1])
+    
+    # Clone hisatgenotype database from git
+    if not os.path.exists("hisatgenotype_db"):
+        typing_common.clone_hisatgenotype_database()
+    
+    if not args.base_fname:
+        base_fname = []
+        for database in os.listdir("hisatgenotype_db"):
+            if database in ['.git', 'README.md']:
+                continue
+            base_fname.append(database.lower())
     else:
-        base_fname = args.base_fname
-        base_dname = ""
-        
-    extract_vars(base_fname,
-                 base_dname,
-                 locus_list,
-                 args.inter_gap,
-                 args.intra_gap,
-                 args.whole_haplotype,
-                 args.min_var_freq,
-                 args.ext_seq_len,
-                 args.leftshift,
-                 args.partial,
-                 args.verbose)
+        base_fname = args.base_fname.split(',')
+
+    for base in base_fname:
+        if base.find('/') != -1:
+            elems = base.split('/')
+            base = elems[-1]
+            base_dname = '/'.join(elems[:-1])
+        else:
+            base_dname = ""        
+
+        extract_vars(base,
+                     base_dname,
+                     locus_list,
+                     args.inter_gap,
+                     args.intra_gap,
+                     args.whole_haplotype,
+                     args.min_var_freq,
+                     args.ext_seq_len,
+                     args.leftshift,
+                     args.partial,
+                     args.verbose)
+
 

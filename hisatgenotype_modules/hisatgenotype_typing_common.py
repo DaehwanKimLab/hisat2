@@ -298,7 +298,7 @@ def extract_database_if_not_exists(base,
     if check_files(fnames):
         return
 
-    extract_cmd = ["hisatgenotype_extract_vars.py"]
+    extract_cmd = ["hisatgenotype_toolkit extract-vars"]
     extract_cmd += ["--base", base]
     if len(locus_list) > 0:
         extract_cmd += ["--locus-list", ','.join(locus_list)]    

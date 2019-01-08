@@ -128,7 +128,7 @@ def worker(lock,
     lock.release()
 
     for family, loci in region_list.items():
-        test_hla_cmd = ["hisatgenotype_locus.py",
+        test_hla_cmd = ["hisatgenotype_toolkit locus",
                         "--base", family]
         if len(loci) > 0:
             test_hla_cmd += ["--locus", ','.join(loci)]

@@ -981,7 +981,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    gene_list = []
     if args.gene_list != '':
         gene_list = args.gene_list.upper().split(',')
 

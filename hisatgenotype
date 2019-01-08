@@ -243,7 +243,7 @@ def perform_genotyping(base_fname,
                        local_database,
                        threads,
                        verbose):
-    genotype_cmd = ["hisatgenotype_locus.py"]
+    genotype_cmd = ["hisatgenotype_toolkit locus"]
     if not local_database:
         genotype_cmd += ["--genotype-genome", base_fname]
     genotype_cmd += ["--base", database]

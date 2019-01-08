@@ -480,8 +480,14 @@ if __name__ == '__main__':
         print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
         
-    if args.database_list == "":
-        database_list = ['hla', 'codis', 'cyp']
+    if not args.database_list:
+        database_list = []
+        if not os.path.exists("hisatgenotype_db"):
+            typing_common.clone_hisatgenotype_database()
+        for database in os.listdir("hisatgenotype_db"):
+            if database in ['.git', 'README.md']:
+                continue
+            database_list.append(database.lower())
     else:
         database_list = args.database_list.split(',')
 
@@ -492,7 +498,7 @@ if __name__ == '__main__':
     if args.aligner not in ["hisat2", "bowtie2"]:
         print >> sys.stderr, "Error: --aligner should be either hisat2 or bowtie2."
         sys.exit(1)        
-        
+
     build_genotype_genome(args.base_fname,
                           args.inter_gap,
                           args.intra_gap,

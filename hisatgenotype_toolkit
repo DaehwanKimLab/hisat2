@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+#
+# Copyright 2017, Daehwan Kim <infphilo@gmail.com>
+#
+# This file is part of HISAT-genotype.
+#
+# HISAT-genotype is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# HISAT-genotype is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with HISAT-genotype.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import sys, os, subprocess, re, resource
+import inspect, random
+import math
+from datetime import datetime, date, time
+from argparse import ArgumentParser, FileType
+import hisatgenotype_typing_common as typing_common
+
+if __name__ == '__main__':
+    path = '/'.join(os.path.realpath(__file__).split('/')[:-1])
+    path += '/hisatgenotype_tools/'
+    if not os.path.exists(path):
+        print 'Error! Toolkit Directory not found at %s' % path
+        exit(1)
+    scripts = []
+    scripts = os.listdir(path)
+    
+    parser = ArgumentParser(
+        description='HISAT-genotype Toolkit')
+    parser.add_argument('--see-script',
+                      dest='see_script',
+                      action='store_true',
+                      help='Prints the exact script and options being run')
+    subparser = parser.add_subparsers(title='Tools',
+                                      dest='script',
+                                      help='HISAT-genotype tools and individual scripts')
+
+    subparsers = []
+    script_key = {}
+    for itr in range(len(scripts)):
+        name = scripts[itr].replace('hisatgenotype_', '').replace('run_', '').replace('_', '-').split('.')[0]
+        script = scripts[itr]
+        script_key.update({ name : script })
+
+        subparsers.append(subparser.add_parser(name, 
+                                               help=script,
+                                               add_help=False))
+
+        subparsers[itr].add_argument('-h', '--help',
+                                     dest='script_help', 
+                                     action='store_true' 
+                                     )
+        
+    args, additional = parser.parse_known_args()
+    
+    cmd = path
+    cmd += script_key[args.script]
+    if additional and not args.script_help:
+        cmd += ' ' + ' '.join(additional)
+    elif args.script_help:
+        cmd += ' ' + '--help'
+    
+    if args.see_script:
+        print cmd
+    code = subprocess.call(cmd.split())
+    if code != 0:
+        print 'Script exited with error %d' % code
