@@ -2325,7 +2325,7 @@ included with HISAT2, create a new temporary directory (it doesn't matter where)
     $HISAT2_HOME/hisat2-build $HISAT2_HOME/example/reference/22_20-21M.fa --snp $HISAT2_HOME/example/reference/22_20-21M.snp 22_20-21M_snp
 
 The command should print many lines of output then quit. When the command
-completes, the current directory will contain ten new files that all start with
+completes, the current directory will contain eight new files that all start with
 `22_20-21M_snp` and end with `.1.ht2`, `.2.ht2`, `.3.ht2`, `.4.ht2`, `.5.ht2`, `.6.ht2`,
 `.7.ht2`, and `.8.ht2`.  These files constitute the index - you're done!
 
