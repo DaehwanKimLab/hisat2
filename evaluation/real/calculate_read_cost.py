@@ -1048,6 +1048,7 @@ def calculate_read_cost(single_end,
         # ["star", "", "", "", ""],
         # ["star", "x2", "", "", ""],        
         # ["vg", "", "", "", ""],
+        # ["vg", "", "", "", "-M 10"],
         # ["vg", "", "snp", "", ""],
         # ["vg", "", "snp", "", "-M 10"],
         # ["minimap2", "", "", "", ""],
@@ -1098,7 +1099,10 @@ def calculate_read_cost(single_end,
                     aligner == "hisat" or \
                     aligner == "bowtie" or \
                     aligner == "bowtie2":
-                cmd = ["%s/%s" % (aligner_bin_base, aligner)]
+                if version:
+                    cmd = ["%s/%s_%s/%s" % (aligner_bin_base, aligner, version, aligner)]
+                else:
+                    cmd = ["%s/%s" % (aligner_bin_base, aligner)]
                 cmd += ["--version"]                    
                 cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
                 version = cmd_process.communicate()[0][:-1].split("\n")[0]
@@ -1116,7 +1120,10 @@ def calculate_read_cost(single_end,
                 version = cmd_process.communicate()[1][:-1].split("\n")[0]
                 version = version.split()[2]
             elif aligner == "bwa":
-                cmd = ["%s/bwa" % (aligner_bin_base)]
+                if version:
+                    cmd = ["%s/bwa_%s/bwa" % (aligner_bin_base, version)]
+                else:
+                    cmd = ["%s/bwa" % (aligner_bin_base)]
                 cmd_process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
                 version = cmd_process.communicate()[1][:-1].split("\n")[2]
                 version = version.split()[1]
@@ -1293,7 +1300,10 @@ def calculate_read_cost(single_end,
                 else:
                     cmd += [read1_fname]
             elif aligner == "bowtie2":
-                cmd += ["%s/bowtie2" % (aligner_bin_base)]
+                if version:
+                    cmd += ["%s/bowtie2_%s/bowtie2" % (aligner_bin_base, version)]
+                else:
+                    cmd += ["%s/bowtie2" % (aligner_bin_base)]
                 if num_threads > 1:
                     cmd += ["-p", str(num_threads)]
                 #cmd += ["-k", "10"]
@@ -1303,7 +1313,10 @@ def calculate_read_cost(single_end,
                 if options:
                     cmd += options.split(' ')
 
-                cmd += ["-x %s/Bowtie2%s/" % (index_base, index_add) + genome]
+                if version:
+                    cmd += ["-x %s/Bowtie2_%s%s/" % (index_base, version, index_add) + genome]
+                else:
+                    cmd += ["-x %s/Bowtie2%s/" % (index_base, index_add) + genome]
                 if paired:
                     cmd += ["-1", read1_fname,
                             "-2", read2_fname]
@@ -1323,7 +1336,10 @@ def calculate_read_cost(single_end,
                 if paired:
                     cmd += [read2_fname]
             elif aligner == "bwa":
-                cmd += ["%s/bwa" % (aligner_bin_base)]
+                if version:
+                    cmd += ["%s/bwa_%s/bwa" % (aligner_bin_base, version)]
+                else:
+                    cmd += ["%s/bwa" % (aligner_bin_base)]
                 if type in ["mem", "aln"]:
                     cmd += [type]
                 elif type == "sw":
@@ -1332,7 +1348,10 @@ def calculate_read_cost(single_end,
                     cmd += ["-t", str(num_threads)]
                 if options:
                     cmd += options.split(' ')
-                cmd += ["%s/BWA%s/%s.fa" % (index_base, index_add, genome)]
+                if version:
+                    cmd += ["%s/BWA_%s%s/%s.fa" % (index_base, version, index_add, genome)]
+                else:
+                    cmd += ["%s/BWA%s/%s.fa" % (index_base, index_add, genome)]
                 cmd += [read1_fname]
                 if paired:
                     cmd += [read2_fname]

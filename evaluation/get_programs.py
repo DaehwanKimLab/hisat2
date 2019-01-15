@@ -24,11 +24,11 @@ def get_aligners():
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
         elif program == "Bowtie2":
-            dir = "bowtie2-2.3.2"
+            dir = "bowtie2-2.3.4.3"
             if os.path.exists(dir):
                 continue
             fname = dir + "-source.zip"
-            url = "http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.3.2"
+            url = "http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.3.4.3"
             bins = "bowtie2-align-s bowtie2-build-s bowtie2-inspect-s"
             installs = bins + " bowtie2 bowtie2-build bowtie2-inspect"
             cmd = "wget %s/%s; unzip %s; cd %s; make NO_TBB=1 %s; cp %s ../bin; cd .." % \
@@ -90,7 +90,7 @@ def get_aligners():
             cmd = "wget %s/%s; tar xvzf %s; cd %s; ./configure; make; cd src; cp %s ../../bin; cd ../.." % \
                 (url, fname, fname, dir, installs)
         elif program == "BWA":
-            dir = "bwa-0.7.12"
+            dir = "bwa-0.7.17"
             if os.path.exists(dir):
                 continue
             url = "http://sourceforge.net/projects/bio-bwa/files/%s.tar.bz2" % (dir)
@@ -104,6 +104,12 @@ def get_aligners():
                 (url, dir, dir, dir, bins)
         elif program == "Cufflinks":
             cmd = ""
+        elif program == "vg":
+            version = "v1.13.0"
+            dir = program + "-" + version
+            url = "https://github.com/vgteam/vg/releases/download/%s" % (version)
+            cmd = "wget %s/%s.tar.gz; tar zxvf %s.tar.gz; cd %s" % (url, dir, dir, dir)
+            cmd += "; source ./source_me.sh; make; cp bin/%s ../bin; cd .." % (program)
         else:
             assert False
         print >> sys.stderr, cmd
