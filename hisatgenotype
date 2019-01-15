@@ -19,7 +19,6 @@
 # along with HISAT-genotype.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
 import sys, os, subprocess, re, resource
 import glob, multiprocessing, random
 import hisatgenotype_args as arguments
