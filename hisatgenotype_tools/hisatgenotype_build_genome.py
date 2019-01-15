@@ -25,6 +25,7 @@ import shutil
 import inspect
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
+import hisatgenotype_args as arguments
 
 
 """
@@ -428,59 +429,24 @@ def build_genotype_genome(base_fname,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description="Build genotype genome")
-    parser.add_argument("--base", "--base-fname",
-                        dest="base_fname",
-                        type=str,
-                        default="genotype_genome",
-                        help="base filename for genotype genome (default: genotype_genome)")
-    parser.add_argument("-p", "--threads",
-                        dest="threads",
-                        type=int,
-                        default=1,
-                        help="Number of threads")
-    parser.add_argument("--database-list",
-                        dest="database_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of databases (default: hla,codis,cyp)")
-    parser.add_argument("--commonvar",
-                        dest="use_commonvar",
-                        action="store_true",
-                        help="Include common variants from dbSNP")
-    parser.add_argument("--clinvar",
-                        dest="use_clinvar",
-                        action="store_true",
-                        help="Include variants from ClinVar database")
-    parser.add_argument("--inter-gap",
-                        dest="inter_gap",
-                        type=int,
-                        default=30,
-                        help="Maximum distance for variants to be in the same haplotype")
-    parser.add_argument("--intra-gap",
-                        dest="intra_gap",
-                        type=int,
-                        default=50,
-                        help="Break a haplotype into several haplotypes")
-    parser.add_argument("--aligner",
-                        dest="aligner",
-                        type=str,
-                        default="hisat2",
-                        help="Aligner (default: hisat2)")
-    parser.add_argument("--linear-index",
-                        dest="graph_index",
-                        action="store_false",
-                        help="Build linear index")
-    parser.add_argument("-v", "--verbose",
-                        dest="verbose",
-                        action="store_true",
-                        help="also print some statistics to stderr")
+
+    # Add Arguments
+    arguments.args_databases(parser)
+    arguments.args_var_gaps(parser)
+    arguments.args_set_aligner(parser, 
+                               False) # no missmatch option
+    arguments.args_build_genome(parser)
+    arguments.args_common(parser)
 
     args = parser.parse_args()
     if args.inter_gap > args.intra_gap:
         print >> sys.stderr, "Error: --inter-gap (%d) must be smaller than --intra-gap (%d)" % (args.inter_gap, args.intra_gap)
         sys.exit(1)
-        
-    if not args.database_list:
+    
+    if not args.base_fname:
+        args.base_fname = 'genotype_genome'    
+
+    if not args.locus_list:
         database_list = []
         if not os.path.exists("hisatgenotype_db"):
             typing_common.clone_hisatgenotype_database()
@@ -489,7 +455,7 @@ if __name__ == '__main__':
                 continue
             database_list.append(database.lower())
     else:
-        database_list = args.database_list.split(',')
+        database_list = args.locus_list.split(',')
 
     if args.use_clinvar and args.use_commonvar:
         print >> sys.stderr, "Error: both --clinvar and --commonvar cannot be used together."
@@ -509,4 +475,3 @@ if __name__ == '__main__':
                           args.aligner,
                           args.graph_index,
                           args.verbose)
-    

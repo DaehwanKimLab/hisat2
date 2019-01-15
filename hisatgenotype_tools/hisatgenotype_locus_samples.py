@@ -26,6 +26,7 @@ import random
 import glob
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
+import hisatgenotype_args as arguments
 
 
 # Platinum genomes - CEPH pedigree (17 family members)
@@ -261,59 +262,19 @@ def genotyping(read_dir,
                         included += 1
             print >> sys.stderr, "\t%d / %d" % (included, total)
 
-
 """
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='genotyping on many samples')
-    parser.add_argument("--reference-type",
-                        dest="reference_type",
-                        type=str,
-                        default="gene",
-                        help="Reference type: gene, chromosome, and genome (default: gene)")
-    parser.add_argument("--region-list",
-                        dest="region_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of regions (default: empty)")
-    parser.add_argument('--read-dir',
-                        dest="read_dir",
-                        type=str,
-                        default="",
-                        help='read directory (e.g. read_input)')
-    parser.add_argument("--num-editdist",
-                        dest="num_editdist",
-                        type=int,
-                        default=2,
-                        help="Maximum number of mismatches per read alignment to be considered (default: 2)")
-    parser.add_argument("-p", "--threads",
-                        dest="threads",
-                        type=int,
-                        default=1,
-                        help="Number of threads")
-    parser.add_argument('--assembly',
-                        dest='assembly',
-                        action='store_true',
-                        help='Perform assembly')
-    parser.add_argument("--max-sample",
-                        dest="max_sample",
-                        type=int,
-                        default=sys.maxint,
-                        help="Number of samples to be analyzed (default: sys.maxint)")
-    parser.add_argument("--out-dir",
-                        dest="out_dir",
-                        type=str,
-                        default="",
-                        help='Output directory (default: (empty))')
-    parser.add_argument('-v', '--verbose',
-                        dest='verbose',
-                        action='store_true',
-                        help='also print some statistics to stderr')
-    parser.add_argument('--platinum-check',
-                        dest='platinum_check',
-                        action='store_true',
-                        help='Check for concordance of platinum genomes')
+
+    # Add Arguments
+    arguments.args_databases(parser)
+    arguments.args_input_output(parser)
+    arguments.args_reference_type(parser)
+    arguments.args_assembly(parser)
+    arguments.args_locus_samples(parser)
+    arguments.args_common(parser)
 
     args = parser.parse_args()
 
@@ -340,6 +301,15 @@ if __name__ == '__main__':
                 region_list[family] = set()
             if len(region) == 2:
                 region_list[family].add(locus_name)
+    else:
+        args.base_fname = args.base_fname.split(',')
+        args.locus_list = args.locus_list.split(';')
+        if len(args.base_fname) != len(args.locus_list):
+            print >> sys.stderr, "Error: --base and --locus-list not correct"
+        for itr in range(len(args.base_fname.split)):
+            family = args.base_fname[itr]
+            loci_names = args.locus_list[itr].split(',')
+            region_list.update({ family : loci_names })
 
     genotyping(args.read_dir,
                args.reference_type,

@@ -23,6 +23,7 @@
 import os, sys, subprocess, re
 import inspect, operator
 from argparse import ArgumentParser, FileType
+import hisatgenotype_args as arguments
 
 # sequences for DNA fingerprinting loci are available at http://www.cstl.nist.gov/biotech/strbase/seq_ref.htm
 
@@ -131,23 +132,17 @@ def download_codis(base_dname,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description="Extract multiple sequence alignments for DNA Fingerprinting loci")
-    parser.add_argument("-b", "--base",
-                        dest="base_fname",
-                        type=str,
-                        default="codis",
-                        help="base filename (default: codis)")
-    parser.add_argument("--locus-list",
-                        dest="locus_list",
-                        type=str,
-                        default="",
-                        help="base filename (default: empty)")    
-    parser.add_argument("-v", "--verbose",
-                        dest="verbose",
-                        action="store_true",
-                        help="also print some statistics to stderr")
+
+    # Add Arguments
+    arguments.args_databases(parser)
+    arguments.args_common(parser,
+                          threads = False) # No threading option
 
     args = parser.parse_args()
-    if args.base_fname.find('/') != -1:
+    if not args.base_fname:
+        base_fname = 'codis'
+        base_dname = ''
+    elif args.base_fname.find('/') != -1:
         elems = args.base_fname.split('/')
         base_fname = elems[-1]
         base_dname = '/'.join(elems[:-1])

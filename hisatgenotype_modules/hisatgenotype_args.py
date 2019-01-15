@@ -47,11 +47,11 @@ def args_common(parser, threads = True, debug = False):
 
 def args_databases(parser, genome = False):
     if genome:
-        parser.add_argument("--genotype-genome",
+        parser.add_argument("-x", "--ref-genome",
                             dest="genotype_genome",
                             type=str,
                             default="",
-                            help="Base name for genotype genome if not genotype_genome (default: empty)")
+                            help="Base name for genome index if not genotype_genome (default: empty)")
     parser.add_argument("--base", "--base-fname",
                         dest="base_fname",
                         type=str,
@@ -148,8 +148,19 @@ def args_reference_type(parser):
                         type=str,
                         default="gene",
                         help="Reference type: gene, chromosome, and genome (default: gene)")
- 
 
+def args_no_partial(parser):
+    parser.add_argument('--no-partial',
+                        dest='partial',
+                        action='store_false',
+                        help='Include partial alleles (e.g. A_nuc.fasta)')
+
+def args_single_end(parser):
+    parser.add_argument('--single-end',
+                        dest='paired',
+                        action='store_false',
+                        help='Choose to set files to single-ended reads (unnecessary when using -U -1 -2 options)')
+ 
 def args_var_gaps(parser):
     parser.add_argument("--inter-gap",
                         dest="inter_gap",
@@ -216,16 +227,8 @@ def args_extract_vars(parser):
                         dest="leftshift",
                         action="store_true",
                         help="Shift deletions to the leftmost")
-    parser.add_argument("--no-partial",
-                        dest="partial",
-                        action="store_false",
-                        help="Exclude partial alleles, exon-only sequences in HLA")
 
 def args_locus(parser):
-    parser.add_argument('--no-partial',
-                        dest='partial',
-                        action='store_false',
-                        help='Include partial alleles (e.g. A_nuc.fasta)')
     parser.add_argument("--simulate-interval",
                         dest="simulate_interval",
                         type=int,

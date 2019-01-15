@@ -25,6 +25,7 @@ import inspect, operator
 from copy import deepcopy
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
+import hisatgenotype_args as arguments
 try:
     import openpyxl
 except ImportError:
@@ -613,28 +614,18 @@ def extract_msa(base_dname,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description="Extract multiple sequence alignments for DNA Fingerprinting loci")
-    parser.add_argument("-b", "--base",
-                        dest="base_fname",
-                        type=str,
-                        default="codis",
-                        help="base filename (default: codis)")
-    parser.add_argument("--locus-list",
-                        dest="locus_list",
-                        type=str,
-                        default="",
-                        help="base filename (default: empty)")
-    parser.add_argument("--min-freq",
-                        dest="min_freq",
-                        type=float,
-                        default=0.0,
-                        help="minimum allele frequency (default: 0.0)")    
-    parser.add_argument("-v", "--verbose",
-                        dest="verbose",
-                        action="store_true",
-                        help="also print some statistics to stderr")
+    
+    # Add Arguments
+    arguments.args_databases(parser)
+    arguments.args_convert_codis(parser)
+    arguments.args_common(parser,
+                          threads=False) # No threading option
 
     args = parser.parse_args()
-    if args.base_fname.find('/') != -1:
+    if not base_fname:
+        base_fname = 'codis'
+        base_dname = ''
+    elif args.base_fname.find('/') != -1:
         elems = args.base_fname.split('/')
         base_fname = elems[-1]
         base_dname = '/'.join(elems[:-1])

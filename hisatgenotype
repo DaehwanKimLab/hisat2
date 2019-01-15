@@ -21,81 +21,31 @@
 
 
 import sys, os, subprocess, re, resource
-import inspect, random
-import math
+import glob, multiprocessing, random
+import hisatgenotype_args as arguments
+import hisatgenotype_typing_common as typing_common
 from datetime import datetime, date, time
 from argparse import ArgumentParser, FileType
-import hisatgenotype_typing_common as typing_common
+from hisatgenotype_typing_core import genotyping_locus
+from hisatgenotype_typing_process import extract_reads, extract_vars
 
-
-"""
-Align reads, and sort the alignments into a BAM file
-"""
-def align_reads(base_fname,
-                read_fnames,
-                fastq,
-                threads,
-                verbose):
-    aligner_cmd = ["hisat2",
-                   "--no-unal",
-                   "-p", str(threads),
-                   "--no-spliced-alignment",
-                   "--max-altstried", "64"]
-    aligner_cmd += ["-X", "1000"]
-    # aligner_cmd += ["--mm"]
-    aligner_cmd += ["-x", "%s" % base_fname]
-
-    assert len(read_fnames) > 0
-    if not fastq:
-        aligner_cmd += ["-f"]
-    single = len(read_fnames) == 1
-    if single:
-        aligner_cmd += ["-U", read_fnames[0]]
-    else:
-        aligner_cmd += ["-1", read_fnames[0],
-                        "-2", read_fnames[1]]
-
-    out_base_fname = read_fnames[0].split('/')[-1].split('.')[0]
-
-    print >> sys.stderr, "%s Aligning %s to %s ..." % (str(datetime.now()), ' '.join(read_fnames), base_fname)
-    if verbose:
-        print >> sys.stderr, "\t%s" % (' '.join(aligner_cmd))
-
-    align_proc = subprocess.Popen(aligner_cmd,
-                                  stdout=subprocess.PIPE,
-                                  stderr=open("/dev/null", 'w'))
-
-    unsorted_bam_fname = "%s_unsorted.bam" % out_base_fname
-    sambam_cmd = ["samtools",
-                  "view",
-                  "-bS",
-                  "-"]
-    sambam_proc = subprocess.Popen(sambam_cmd,
-                                   stdin=align_proc.stdout,
-                                   stdout=open(unsorted_bam_fname, 'w'))
-    sambam_proc.communicate()
-
-    # Increase the maximum number of files that can be opened
-    resource.setrlimit(resource.RLIMIT_NOFILE, (10000, 10240))
+class Namespace:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
     
-    print >> sys.stderr, "%s Sorting %s ..." % (str(datetime.now()), unsorted_bam_fname)
-    bam_fname = "%s.bam" % out_base_fname
-    bamsort_cmd = ["samtools",
-                   "sort",
-                   "--threads", str(threads),
-                   "-m", "1536M",
-                   unsorted_bam_fname,
-                   "-o", bam_fname]    
-    if verbose:
-        print >> sys.stderr, "\t%s" % ' '.join(bamsort_cmd)
-    bamsort_proc = subprocess.call(bamsort_cmd)
-    os.remove(unsorted_bam_fname)
+    def __repr__(self):
+        keys = sorted(self.__dict__)
+        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
+        return "{}({})".format(type(self).__name__, ", ".join(items))
 
-    index_bam(bam_fname,
-              verbose)
-    
-    return bam_fname
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
 
+def init(l):
+    global lock
+    lock = l
+
+l = multiprocessing.Lock()
 
 """
 """
@@ -109,27 +59,98 @@ def index_bam(bam_fname,
         print >> sys.stderr, "\t%s" % ' '.join(bamindex_cmd)
     bamindex_proc = subprocess.call(bamindex_cmd)
 
+def check_base(base_fname, aligner):
+    genotype_fnames = ["%s.fa" % base_fname,
+                       "%s.locus" % base_fname,
+                       "%s.snp" % base_fname,
+                       "%s.haplotype" % base_fname,
+                       "%s.link" % base_fname,
+                       "%s.coord" % base_fname,
+                       "%s.clnsig" % base_fname]
+    # graph index files
+    if aligner == "hisat2":
+        genotype_fnames += ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
+    else:
+        assert aligner == "bowtie2"
+        genotype_fnames = ["%s.%d.bt2" % (base_fname, i+1) for i in range(4)]
+        genotype_fnames += ["%s.rev.%d.bt2" % (base_fname, i+1) for i in range(2)]
+        
+    if not typing_common.check_files(genotype_fnames):        
+        return False
+    
+    return True
+
+def run_vars(base_fname,
+            threads,
+            locus_list,
+            inter_gap,
+            intra_gap,
+            whole_haplotype,
+            min_var_freq,
+            ext_seq_len,
+            leftshift,
+            partial,
+            verbose):
+    # Clone hisatgenotype database from git
+    if not os.path.exists("hisatgenotype_db"):
+        typing_common.clone_hisatgenotype_database()
+    
+    if not base_fname:
+        base_fname = []
+        for database in os.listdir("hisatgenotype_db"):
+            if database in ['.git', 'README.md']:
+                continue
+            base_fname.append(database.lower())
+    else:
+        base_fname = base_fname.split(',')
+
+    pool = multiprocessing.Pool(int(threads), initializer=init, initargs=(l,))
+    for base in base_fname:
+        if base.find('/') != -1:
+            elems = base.split('/')
+            base = elems[-1]
+            base_dname = '/'.join(elems[:-1])
+        else:
+            base_dname = ""        
+
+        pool.apply_async(extract_vars, 
+                         args=(base,
+                               base_dname,
+                               locus_list,
+                               inter_gap,
+                               intra_gap,
+                               whole_haplotype,
+                               min_var_freq,
+                               ext_seq_len,
+                               leftshift,
+                               partial,
+                               verbose))
+    pool.close()
+    pool.join()
 
 """
 """
-def extract_reads(bam_fname,
-                  chr,
-                  left,
-                  right,
-                  read_base_fname, # sample => sample.1.fq.gz and sample.2.fq.gz
-                  paired,
-                  fastq,
-                  verbose):
-    out_read_dname = "hisatgenotype_out"
+def reads_from_bam(bam_fname,
+                   out_read_dname,
+                   chr,
+                   left,
+                   right,
+                   read_base_fname, # sample => sample.1.fq.gz and sample.2.fq.gz
+                   paired,
+                   fastq,
+                   verbose):
+
+    lock.acquire()
     if not os.path.exists(out_read_dname):
         os.mkdir(out_read_dname)
+    lock.release()
         
     read_fnames = []
     if paired:
-        read_fnames = [out_read_dname + "/" + read_base_fname + ".1.fq.gz",
-                       out_read_dname + "/" + read_base_fname + ".2.fq.gz"]
+        read_fnames = [out_read_dname + "/" + read_base_fname + "-extracted-1.fq.gz",
+                       out_read_dname + "/" + read_base_fname + "-extracted-2.fq.gz"]
     else:
-        read_fnames = [out_read_dname + "/" + read_base_fname + ".fq.gz"]
+        read_fnames = [out_read_dname + "/" + read_base_fname + "-extracted.fq.gz"]
 
     if paired:
         gzip1_proc = subprocess.Popen(["gzip"],
@@ -228,92 +249,37 @@ def extract_reads(bam_fname,
     if paired:
         gzip2_proc.stdin.close()
 
-    return read_fnames
-
-
-"""
-"""
-def perform_genotyping(base_fname,
-                       database,
-                       locus_list,
-                       read_fnames,
-                       fastq,
-                       num_editdist,
-                       assembly,
-                       local_database,
-                       threads,
-                       verbose):
-    genotype_cmd = ["hisatgenotype_toolkit locus"]
-    if not local_database:
-        genotype_cmd += ["--genotype-genome", base_fname]
-    genotype_cmd += ["--base", database]
-    if len(locus_list) > 0:
-        genotype_cmd += ["--locus-list", ','.join(locus_list)]
-    genotype_cmd += ["-p", str(threads),
-                     "--num-editdist", str(num_editdist)]
-    if not fastq:
-        genotype_cmd += ["-f"]
-
-    if len(read_fnames) == 2: # paired
-        genotype_cmd += ["-1", read_fnames[0],
-                         "-2", read_fnames[1]]
-    elif len(read_fnames) == 1:
-        genotype_cmd += ["-U", read_fnames[0]] 
-    else:
-        assert len(read_fnames) == 0
-
-    if assembly:
-        genotype_cmd += ["--assembly"]
-
-    if verbose:
-        print >> sys.stderr, "\t%s" % ' '.join(genotype_cmd)
-    genotype_proc = subprocess.Popen(genotype_cmd)
-    genotype_proc.communicate()
-        
+    return read_fnames  
 
 """
 """
-def genotype(base_fname,
-             target_region_list,
-             fastq,
-             read_fnames,
-             alignment_fname,
-             threads,
-             num_editdist,
-             assembly,
-             local_database,
-             verbose,
-             debug):
+def extract_bam(file_lists,
+                base,
+                out_dir,
+                target_locus_list,
+                fastq,
+                paired,
+                alignment_fname,
+                aligner,
+                verbose):
     # variants, backbone sequence, and other sequeces
-    genotype_fnames = ["%s.fa" % base_fname,
-                       "%s.locus" % base_fname,
-                       "%s.snp" % base_fname,
-                       "%s.index.snp" % base_fname,
-                       "%s.haplotype" % base_fname,
-                       "%s.link" % base_fname,
-                       "%s.coord" % base_fname,
-                       "%s.clnsig" % base_fname]
-    # hisat2 graph index files
-    genotype_fnames += ["%s.%d.ht2" % (base_fname, i+1) for i in range(8)]
-    if not typing_common.check_files(genotype_fnames):
-        print >> sys.stderr, "Error: some of the following files are missing!"
-        for fname in genotype_fnames:
-            print >> sys.stderr, "\t%s" % fname
+    if not check_base(base, aligner):
+        print >> sys.stderr, "Error: some of the base files are missing!"
         sys.exit(1)
 
-    # Read region alleles (names and sequences)
+    # Read locus alleles (names and sequences)
     regions, region_loci = {}, {}
-    for line in open("%s.locus" % base_fname):
+    for line in open("%s.locus" % base):
         family, allele_name, chr, left, right = line.strip().split()[:5]
         family = family.lower()
-        if len(target_region_list) > 0 and \
-           family not in target_region_list:
+        if len(target_locus_list) > 0 and \
+           family not in target_locus_list:
             continue
         
         locus_name = allele_name.split('*')[0]
-        if family in target_region_list and \
-           len(target_region_list[family]) > 0 and \
-           locus_name not in target_region_list[family]:
+        if family in target_locus_list and \
+           len(target_locus_list[family]) > 0 and \
+           locus_name not in target_locus_list[family]:
             continue
         
         left, right = int(left), int(right)
@@ -322,16 +288,10 @@ def genotype(base_fname,
         region_loci[family].append([locus_name, allele_name, chr, left, right])
 
     if len(region_loci) <= 0:
-        print >> sys.stderr, "Warning: no region exists!"
+        print >> sys.stderr, "Warning: no loci exists!"
         sys.exit(1)
 
-    # Align reads, and sort the alignments into a BAM file
-    if len(read_fnames) > 0:
-        alignment_fname = align_reads(base_fname,
-                                      read_fnames,
-                                      fastq,
-                                      threads,
-                                      verbose)
+    # Sort the BAM file
     assert alignment_fname != "" and os.path.exists(alignment_fname)
     if not os.path.exists(alignment_fname + ".bai"):
         index_bam(alignment_fname,
@@ -340,104 +300,73 @@ def genotype(base_fname,
 
     # Extract reads and perform genotyping
     for family, loci in region_loci.items():
-        print >> sys.stderr, "Analyzing %s ..." % family.upper()
         for locus_name, allele_name, chr, left, right in loci:
             out_read_fname = "%s.%s" % (family, locus_name)
             if verbose:
                 print >> sys.stderr, "\tExtracting reads beloning to %s-%s ..." % \
                     (family, locus_name)
 
-            extracted_read_fnames = extract_reads(alignment_fname,
-                                                  chr,
-                                                  left,
-                                                  right,
-                                                  out_read_fname,
-                                                  len(read_fnames) != 1, # paired?
-                                                  fastq,
-                                                  verbose)
+            extracted_read_fnames = reads_from_bam(alignment_fname,
+                                                   out_dir,
+                                                   chr,
+                                                   left,
+                                                   right,
+                                                   out_read_fname,
+                                                   paired,
+                                                   fastq,
+                                                   verbose)
 
-            perform_genotyping(base_fname,
-                               family,
-                               [locus_name],
-                               extracted_read_fnames,
-                               fastq,
-                               num_editdist,
-                               assembly,
-                               local_database,
-                               threads,
-                               verbose)
         print >> sys.stderr
-
     
-                
+    lock.acquire()
+    file_lists.append(out_read_fname)
+    lock.release()
+    
 """
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='HISAT-genotype')
-    parser.add_argument("--base", "--base-name",
-                        dest="base_fname",
-                        type=str,
-                        default="genotype_genome",
-                        help="base filename for genotype genome")
-    parser.add_argument("--region-list",
-                        dest="region_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of regions (default: empty)")
-    parser.add_argument("-f", "--fasta",
-                        dest='fastq',
-                        action='store_false',
-                        help='FASTA file')    
-    parser.add_argument("-U",
-                        dest="read_fname_U",
-                        type=str,
-                        default="",
-                        help="filename for single-end reads")
-    parser.add_argument("-1",
-                        dest="read_fname_1",
-                        type=str,
-                        default="",
-                        help="filename for paired-end reads")
-    parser.add_argument("-2",
-                        dest="read_fname_2",
-                        type=str,
-                        default="",
-                        help="filename for paired-end reads")
-    parser.add_argument("--alignment-file",
-                        dest="alignment_fname",
-                        type=str,
-                        default="",
-                        help="Sorted BAM alignment file name")
-    parser.add_argument("-p", "--threads",
-                        dest="threads",
-                        type=int,
-                        default=1,
-                        help="Number of threads")
-    parser.add_argument("--num-editdist",
-                        dest="num_editdist",
-                        type=int,
-                        default=2,
-                        help="Maximum number of mismatches per read alignment to be considered (default: 2)")
-    parser.add_argument('--assembly',
-                        dest='assembly',
-                        action='store_true',
-                        help='Perform assembly')
-    parser.add_argument('--local-database',
-                        dest='local_database',
-                        action='store_true',
-                        help='Use local database')    
-    parser.add_argument('-v', '--verbose',
-                        dest='verbose',
-                        action='store_true',
-                        help='also print some statistics to stderr')
-    parser.add_argument("--debug",
-                        dest="debug",
-                        type=str,
-                        default="",
-                        help="e.g., test_id:10,read_id:10000,basic_test")
+        description='HISAT-Genotype')
+    arguments.args_databases(parser,
+                             genome=True) # Add option to change genome name
+    arguments.args_aligner_inputs(parser,
+                                  keep=True) # Add option to keep alignments
+    arguments.args_input_output(parser)                              
+    arguments.args_bamfile(parser)
+    arguments.args_single_end(parser)
+    arguments.args_assembly(parser)
+    arguments.args_common(parser,
+                          debug=True) # Add option for debugging
+    
+    parser_advanced = ArgumentParser(
+        description='Advanced Options',
+        add_help=False)
+    parser_advanced.add_argument('--advanced-help',
+                                 action='help',
+                                 help='Show Advanced Options')
+    parser_advanced.add_argument('--keep-extract',
+                                 dest='keep_extract',
+                                 action='store_true',
+                                 help='Keep extracted fastq read files'
+                                 )
+    parser_advanced.add_argument('--build-base',
+                                 dest='build_index',
+                                 action='store_true',
+                                 help='Build the indexes listed in --base-fname'
+                                 )
+    arguments.args_set_aligner(parser_advanced)
+    arguments.args_var_gaps(parser_advanced)
+    arguments.args_extract_vars(parser_advanced)
+    arguments.args_extract_reads(parser_advanced)
+    arguments.args_no_partial(parser_advanced)
+    arguments.args_locus(parser_advanced)
+    
+    arg_dict = {}
+    arg_dict.update(vars(parser.parse_known_args()[0]))
+    arg_dict.update(vars(parser_advanced.parse_args()))
 
-    args = parser.parse_args()
+    args = Namespace(**arg_dict)
+
     region_list = {}
     if args.region_list != "":
         for region in args.region_list.split(','):
@@ -448,43 +377,275 @@ if __name__ == '__main__':
                 
             family = region[0].lower()
             if len(region) == 2:
-                locus_name = region[1].upper()
+                region_name = region[1].upper()
             if family not in region_list:
                 region_list[family] = set()
             if len(region) == 2:
-                region_list[family].add(locus_name)
-
-    read_fnames = []
-    if args.alignment_fname != "":
-        if not os.path.exists(args.alignment_fname):
-            print >> sys.stderr, "Error: %s does not exist." % args.alignment_fname
-    elif args.read_fname_U != "":
-        read_fnames = [args.read_fname_U]
+                region_list[family].add(region_name)
     else:
-        if args.read_fname_1 == "" or args.read_fname_2 == "":
-            print >> sys.stderr, "Error: please specify read file names correctly: -U or -1 and -2"
-            sys.exit(1)
-        read_fnames = [args.read_fname_1, args.read_fname_2]
+        args.base_fname = args.base_fname.split(',')
+        args.locus_list = args.locus_list.split(';')
+        if len(args.base_fname) != len(args.locus_list):
+            print >> sys.stderr, "Error: --base and --locus-list not correct format (ex. --base hla,rbg --locus-list A,B,C;ABO,RHD"
+        for itr in range(len(args.base_fname.split)):
+            family = args.base_fname[itr]
+            loci_names = args.locus_list[itr].split(',')
+            region_list.update({ family : loci_names })
+
+    if args.aligner not in ["hisat2", "bowtie2"]:
+        print >> sys.stderr, "Error: --aligner should be either hisat2 or bowtie2."
+        sys.exit(1)        
+    block_size = 20000000 if args.extract_whole else 0
+
+    if args.locus_list == "":
+        locus_list = []
+    else:
+        locus_list = args.locus_list.split(',')
+        if args.base_fname == "genome":
+            assert ':' in args.locus_list
+            for i in range(len(locus_list)):
+                assert ':' in locus_list[i] and '-' in locus_list[i]
+                chr, coord = locus_list[i].split(':')
+                left, right = coord.split('-')
+                locus_list[i] = [chr, int(left), int(right)]
+
+    if args.only_locus_list == "":
+        only_locus_list = []
+    else:
+        locus_list = only_locus_list = args.only_locus_list.split(',')
+
+    if args.verbose and args.verbose_level == 0:
+        args.verbose_level = 1
 
     debug = {}
+    debug_opts = ["basic", "full", "pair", "test_list", "test_id", "single-end"]
     if args.debug != "":
         for item in args.debug.split(','):
             if ':' in item:
-                key, value = item.split(':')
+                fields = item.split(':')
+                assert len(fields) >= 2
+                key, value = fields[0], ':'.join(fields[1:])
                 debug[key] = value
             else:
                 debug[item] = 1
+        for item in debug:
+            if item not in debug_opts:
+                print >> sys.stderr, "Warning: %s not valid option for debug" % item
+                exit(1)
+            else:
+                continue
 
-    genotype(args.base_fname,
-             region_list,
-             args.fastq,
-             read_fnames,
-             args.alignment_fname,
-             args.threads,
-             args.num_editdist,
-             args.assembly,
-             args.local_database,
-             args.verbose,
-             debug)
+    if not args.partial:
+        print >> sys.stderr, "Warning: --no-partial should be used for debugging purpose only."
 
+    if args.read_len * 2 > args.fragment_len:
+        print >> sys.stderr, "Warning: fragment might be too short (%d)" % (args.fragment_len)
+
+    skip_fragment_regions = []
+    if args.skip_fragment_regions != "":
+        prev_left, prev_right = -1, -1
+        for region in args.skip_fragment_regions.split(','):
+            left, right = region.split('-')
+            left, right = int(left), int(right)
+            assert left < right
+            assert prev_right < left
+            prev_left, prev_right = left, right
+            skip_fragment_regions.append([left, right])
+
+    if args.display_alleles == "":
+        display_alleles = []
+    else:
+        display_alleles = args.display_alleles.split(',')
+
+    if args.out_dir == "":
+        args.out_dir = os.getcwd()
+        args.out_dir += "/hisatgenotype_out"
+
+    """ 
+    Read Extraction ##################################
+    """ 
+    is_bam, single_run = False, False
+    read_fnames, fq_fname_base = [], []
+    if args.debug == "":
+        if args.read_fname_U != "":
+            read_fnames = ['%s/%s' % (args.read_dir, args.read_fname_U)]
+            single_run = True
+        elif args.read_fname_1 != "" or args.read_fname_2 != "":
+            if args.read_fname_1 == "" or args.read_fname_2 == "":
+                print >> sys.stderr, "Error: please specify both -1 and -2."
+                sys.exit(1)
+            read_fnames = ['%s/%s' % (args.read_dir, args.read_fname_1), 
+                           '%s/%s' % (args.read_dir, args.read_fname_2)]
+            single_run = True
+        elif args.alignment_fname != "":
+            alignment_fnames = [args.alignment_fname]
+            is_bam = True
+        else:
+            if args.read_dir == '' or not os.path.exists(args.read_dir):
+                print >> sys.stderr, "Error: please specify read file names correctly: -U or -1 and -2 or --bamfile or --read-dir"
+                sys.exit(1)
+            alignment_fnames = glob.glob("%s/*.bam" % (args.read_dir))
+            is_bam = True if alignment_fnames else False
+
+        if args.read_fname_U != "":
+            paired = False
+        else:
+            paired = args.paired
+            if (args.read_fname_1 != "" and args.read_fname_2 != "") and not paired:
+                print >> sys.stderr, "Error: Don't set --single-end when using -1 and -2 options."
+                exit(1)
+
+        if not is_bam:
+            database_list = set()
+            if args.base_fname != "":
+                for region in args.base_fname.split(','):
+                    database_list.add(region)
+
+            job_range = []
+            for num in args.job_range.split(','):
+                job_range.append(int(num))
+
+            fq_fname_base = extract_reads(args.genotype_genome if args.genotype_genome != '' else 'genotype_genome',
+                          database_list, # base_fname
+                          "" if single_run else args.read_dir,
+                          args.out_dir,
+                          args.suffix,
+                          read_fnames,
+                          args.fastq,
+                          paired,
+                          args.simulation,
+                          args.threads,
+                          args.threads_aprocess,
+                          args.max_sample,
+                          job_range,
+                          args.aligner,
+                          block_size,
+                          args.verbose)
+        else:
+            pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
+            for bam_file in alignment_fnames:
+                pool.apply_async(extract_bam,
+                                args = (fq_fname_base,
+                                        args.genotype_genome if args.genotype_genome != '' else 'genotype_genome',
+                                        args.out_dir,
+                                        region_list,
+                                        args.fastq,
+                                        args.paired,
+                                        args.alignment_fname,
+                                        args.aligner,
+                                        args.verbose))
+            pool.close()
+            pool.join()
+    
+        assert fq_fname_base
+
+    """
+    Genotyping ##################################
+    """
+    if ',' not in args.aligner and '.' not in args.aligner:
+        if args.graph_index:
+            args.aligner += '.graph'
+        else:
+            args.aligner += '.linear'
+    args.aligner = args.aligner.split(',')
+    for i in range(len(args.aligner)):
+        args.aligner[i] = args.aligner[i].split('.')
+
+    if args.build_index:
+        run_vars(args.base_fname,
+                args.threads,
+                args.locus_list,
+                args.inter_gap,
+                args.intra_gap,
+                args.whole_haplotype,
+                args.min_var_freq,
+                args.ext_seq_len,
+                args.leftshift,
+                args.partial,
+                args.verbose)
+
+    discard_list = []
+    random.seed(args.random_seed)
+    if not fq_fname_base:
+        if args.debug == '':
+            print >> sys.stderr, "No --debug or -U -1 -2 --read-dir options set"
+            exit(1)
+
+        genotyping_locus(args.base_fname,
+                     locus_list,
+                     args.genotype_genome,
+                     only_locus_list,
+                     args.partial,
+                     fq_fname_base,
+                     args.read_fname,
+                     args.fastq,
+                     args.alignment_fname,
+                     args.threads,
+                     args.simulate_interval,
+                     args.read_len,
+                     args.fragment_len,
+                     args.best_alleles,
+                     args.num_editdist,
+                     args.perbase_errorrate,
+                     args.perbase_snprate,
+                     skip_fragment_regions,
+                     args.assembly,
+                     args.output_base,
+                     args.error_correction,
+                     args.keep_alignment,
+                     args.discordant,
+                     args.type_primary_exons,
+                     args.remove_low_abundance_alleles,
+                     display_alleles,
+                     args.verbose_level,
+                     args.assembly_verbose,
+                     args.out_dir,
+                     debug)
+    else:
+        pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
+        for name in fq_fname_base:
+            fasta_fname = glob.glob("%s/%s*" % (args.out_dir, name))
+            assert len(fasta_fname) < 3, "Too many files found"
+            for fname in fasta_fname:
+                discard_list.append(fname)
+
+            pool.apply_async(genotyping_locus,
+                             args = (args.base_fname,
+                                     locus_list,
+                                     args.genotype_genome,
+                                     only_locus_list,
+                                     args.partial,
+                                     fasta_fname,
+                                     args.read_fname,
+                                     args.fastq,
+                                     args.alignment_fname,
+                                     args.threads_aprocess,
+                                     args.simulate_interval,
+                                     args.read_len,
+                                     args.fragment_len,
+                                     args.best_alleles,
+                                     args.num_editdist,
+                                     args.perbase_errorrate,
+                                     args.perbase_snprate,
+                                     skip_fragment_regions,
+                                     args.assembly,
+                                     args.output_base,
+                                     args.error_correction,
+                                     args.keep_alignment,
+                                     args.discordant,
+                                     args.type_primary_exons,
+                                     args.remove_low_abundance_alleles,
+                                     display_alleles,
+                                     args.verbose_level,
+                                     args.assembly_verbose,
+                                     args.out_dir,
+                                     debug))
+        pool.close()
+        pool.join()
+
+    if not args.keep_extract:
+        for fname in discard_list:
+            os.remove(fname)
+
+        
 

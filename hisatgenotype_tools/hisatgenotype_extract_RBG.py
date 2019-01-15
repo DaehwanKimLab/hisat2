@@ -7,6 +7,7 @@ import xml.etree.ElementTree as etree
 from multiprocessing import Pool
 from argparse import ArgumentParser, FileType
 import hisatgenotype_typing_common as typing_common
+import hisatgenotype_args as arguments
 
 """
 Download RBC data from website 
@@ -959,30 +960,20 @@ def extract_RBC(out_dir,
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Extract Red Blood Group Genes')
-    parser.add_argument("--out-dir",
-                        dest="out_dir",
-                        type=str,
-                        default=".",
-                        help="Directory name for extracted read files")
-    parser.add_argument("--gene-list",
-                        dest="gene_list",
-                        type=str,
-                        default="",
-                        help="A comma-separated list of genes (default: empty)")
-    parser.add_argument("-p", "--threads",
-                        dest="threads",
-                        type=int,
-                        default=1,
-                        help="Number of threads")
-    parser.add_argument("-v", "--verbose",
-                        dest="verbose",
-                        action="store_true",
-                        help="Verbose Output")
+
+    # Add Arguments
+    arguments.args_databases(parser)
+    arguments.args_input_output(parser,
+                                indir = False) # No in-directory needed
+    arguments.args_common(parser)
 
     args = parser.parse_args()
 
-    if args.gene_list != '':
-        gene_list = args.gene_list.upper().split(',')
+    if args.base_fname:
+        print "--base, --base-fname not supported yet, ignoring option"
+
+    if args.locus_list != '':
+        gene_list = args.locus_list.upper().split(',')
 
     extract_RBC(args.out_dir,
                 args.threads,
