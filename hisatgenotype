@@ -100,8 +100,6 @@ def run_vars(base_fname,
             if database in ['.git', 'README.md']:
                 continue
             base_fname.append(database.lower())
-    else:
-        base_fname = base_fname.split(',')
 
     pool = multiprocessing.Pool(int(threads), initializer=init, initargs=(l,))
     for base in base_fname:
