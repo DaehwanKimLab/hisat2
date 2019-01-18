@@ -251,7 +251,7 @@ def typing(simulation,
            test_i = 0):
     if simulation:
         test_passed = {}
-    report_file = open('%s/%s.report' % (out_dir, output_base), 'w')
+    report_file = open('%s/%s-%s.report' % (out_dir, output_base, base_fname), 'w')
     for aligner, index_type in aligners:
         for f_ in [sys.stderr, report_file]:
             if index_type == "graph":

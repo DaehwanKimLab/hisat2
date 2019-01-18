@@ -315,11 +315,13 @@ def extract_bam(file_lists,
                                                    fastq,
                                                    verbose)
 
+        lock.acquire()
+        if family not in file_lists:
+            file_lists.update({ family : [] })
+        file_lists[family].append(out_read_fname)
+        lock.release() 
+
         print >> sys.stderr
-    
-    lock.acquire()
-    file_lists.append(out_read_fname)
-    lock.release()
     
 """
 """
@@ -360,58 +362,34 @@ if __name__ == '__main__':
     arguments.args_no_partial(parser_advanced)
     arguments.args_locus(parser_advanced)
     
-    arg_dict = {}
-    arg_dict.update(vars(parser.parse_known_args()[0]))
-    arg_dict.update(vars(parser_advanced.parse_args()))
+    arg_dict, unknown = {}, []
+    args1, _ = parser.parse_known_args()
+    args2, _ = parser_advanced.parse_known_args()
+    arg_dict.update(vars(args1))
+    arg_dict.update(vars(args2))
 
     args = Namespace(**arg_dict)
 
     region_list = {}
-    if args.region_list != "":
-        for region in args.region_list.split(','):
-            region = region.split('.')
-            if len(region) < 1 or len(region) > 2:
-                print >> sys.stderr, "Error: --region-list is incorrectly formatted."
-                sys.exit(1)
-                
-            family = region[0].lower()
-            if len(region) == 2:
-                region_name = region[1].upper()
-            if family not in region_list:
-                region_list[family] = set()
-            if len(region) == 2:
-                region_list[family].add(region_name)
-    else:
-        args.base_fname = args.base_fname.split(',')
-        args.locus_list = args.locus_list.split(';')
-        if len(args.base_fname) != len(args.locus_list):
-            print >> sys.stderr, "Error: --base and --locus-list not correct format (ex. --base hla,rbg --locus-list A,B,C;ABO,RHD"
-        for itr in range(len(args.base_fname.split)):
-            family = args.base_fname[itr]
-            loci_names = args.locus_list[itr].split(',')
-            region_list.update({ family : loci_names })
-
+    args.base_fname = args.base_fname.split(',') if args.base_fname != "" else []
+    args.locus_list = args.locus_list.split(';') if args.locus_list != "" else []
+    if len(args.base_fname) != len(args.locus_list):
+        print >> sys.stderr, "Error: --base and --locus-list not correct format (ex. --base hla,rbg --locus-list A,B,C;ABO,RHD)"
+    for itr in range(len(args.base_fname)):
+        family = args.base_fname[itr]
+        loci_names = args.locus_list[itr].split(',')
+        region_list.update({ family : loci_names })
+        
     if args.aligner not in ["hisat2", "bowtie2"]:
         print >> sys.stderr, "Error: --aligner should be either hisat2 or bowtie2."
         sys.exit(1)        
     block_size = 20000000 if args.extract_whole else 0
 
-    if args.locus_list == "":
-        locus_list = []
-    else:
-        locus_list = args.locus_list.split(',')
-        if args.base_fname == "genome":
-            assert ':' in args.locus_list
-            for i in range(len(locus_list)):
-                assert ':' in locus_list[i] and '-' in locus_list[i]
-                chr, coord = locus_list[i].split(':')
-                left, right = coord.split('-')
-                locus_list[i] = [chr, int(left), int(right)]
-
     if args.only_locus_list == "":
         only_locus_list = []
     else:
-        locus_list = only_locus_list = args.only_locus_list.split(',')
+        if len(args.base_fname) != 1:
+            only_locus_list = args.only_locus_list.split(',')
 
     if args.verbose and args.verbose_level == 0:
         args.verbose_level = 1
@@ -464,7 +442,7 @@ if __name__ == '__main__':
     Read Extraction ##################################
     """ 
     is_bam, single_run = False, False
-    read_fnames, fq_fname_base = [], []
+    read_fnames, fq_fname_base = [], {}
     if args.debug == "":
         if args.read_fname_U != "":
             read_fnames = ['%s/%s' % (args.read_dir, args.read_fname_U)]
@@ -495,31 +473,26 @@ if __name__ == '__main__':
                 exit(1)
 
         if not is_bam:
-            database_list = set()
-            if args.base_fname != "":
-                for region in args.base_fname.split(','):
-                    database_list.add(region)
-
             job_range = []
             for num in args.job_range.split(','):
                 job_range.append(int(num))
 
             fq_fname_base = extract_reads(args.genotype_genome if args.genotype_genome != '' else 'genotype_genome',
-                          database_list, # base_fname
-                          "" if single_run else args.read_dir,
-                          args.out_dir,
-                          args.suffix,
-                          read_fnames,
-                          args.fastq,
-                          paired,
-                          args.simulation,
-                          args.threads,
-                          args.threads_aprocess,
-                          args.max_sample,
-                          job_range,
-                          args.aligner,
-                          block_size,
-                          args.verbose)
+                                          args.base_fname,
+                                          "" if single_run else args.read_dir,
+                                          args.out_dir,
+                                          args.suffix,
+                                          read_fnames,
+                                          args.fastq,
+                                          paired,
+                                          args.simulation,
+                                          args.threads,
+                                          args.threads_aprocess,
+                                          args.max_sample,
+                                          job_range,
+                                          args.aligner,
+                                          block_size,
+                                          args.verbose)
         else:
             pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
             for bam_file in alignment_fnames:
@@ -553,7 +526,7 @@ if __name__ == '__main__':
     if args.build_index:
         run_vars(args.base_fname,
                 args.threads,
-                args.locus_list,
+                [], # Empty Locus-list
                 args.inter_gap,
                 args.intra_gap,
                 args.whole_haplotype,
@@ -563,19 +536,23 @@ if __name__ == '__main__':
                 args.partial,
                 args.verbose)
 
+    if not region_list:
+        region_list.update({ "ALL" : "ALL" })
     discard_list = []
     random.seed(args.random_seed)
     if not fq_fname_base:
         if args.debug == '':
             print >> sys.stderr, "No --debug or -U -1 -2 --read-dir options set"
             exit(1)
-
-        genotyping_locus(args.base_fname,
-                     locus_list,
+        for base, loci in region_list.items():
+            if base == "ALL":
+                base, loci = [], []
+            genotyping_locus(base,
+                     loci if not only_locus_list else only_locus_list,
                      args.genotype_genome,
                      only_locus_list,
                      args.partial,
-                     fq_fname_base,
+                     args.aligner,
                      args.read_fname,
                      args.fastq,
                      args.alignment_fname,
@@ -602,20 +579,22 @@ if __name__ == '__main__':
                      debug)
     else:
         pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
-        for name in fq_fname_base:
-            fasta_fname = glob.glob("%s/%s*" % (args.out_dir, name))
-            assert len(fasta_fname) < 3, "Too many files found"
-            for fname in fasta_fname:
-                discard_list.append(fname)
+        for base, file_list in fq_fname_base.items():
+            for fname in file_list:
+                fasta_fname = glob.glob("%s/%s*" % (args.out_dir, fname))
+                assert len(fasta_fname) < 3, "Too many files found"
+                for fname in fasta_fname:
+                    discard_list.append(fname)
 
-            pool.apply_async(genotyping_locus,
-                             args = (args.base_fname,
+                locus_list = region_list[base] if "ALL" not in region_list else []
+                pool.apply_async(genotyping_locus,
+                             args = (base,
                                      locus_list,
                                      args.genotype_genome,
                                      only_locus_list,
                                      args.partial,
+                                     args.aligner,
                                      fasta_fname,
-                                     args.read_fname,
                                      args.fastq,
                                      args.alignment_fname,
                                      args.threads_aprocess,

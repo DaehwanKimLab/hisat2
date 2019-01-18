@@ -1338,7 +1338,8 @@ def extract_reads(base_fname,
     if block_size > 0:
         resource.setrlimit(resource.RLIMIT_NOFILE, (1000, 1000))
         resource.setrlimit(resource.RLIMIT_NPROC, (1000, 1000))
-        
+    
+    fname_list = {} # For use in Hisatgenotype script
     genotype_fnames = ["%s.fa" % base_fname,
                        "%s.locus" % base_fname,
                        "%s.snp" % base_fname,
@@ -1440,6 +1441,11 @@ def extract_reads(base_fname,
                     continue
         count += 1
 
+        for database in database_list:
+            if database not in fname_list:
+                fname_list.update({ database : [] })
+            fname_list[database].append('%s-%s' % (fq_fname_base, database))
+
         print >> sys.stderr, "\t%d: Extracting reads from %s" % (count, fq_fname_base)
         def work(fq_fname_base,
                  fq_fname, 
@@ -1485,6 +1491,7 @@ def extract_reads(base_fname,
                                                   stdin=subprocess.PIPE,
                                                   stdout=open("%s%s-%s-extracted-2.fq.gz" % (out_dir_slash, fq_fname_base, database), 'w'),
                                                   stderr=open("/dev/null", 'w'))
+
                 else:
                     # LP6005041-DNA_A01-extracted-fq.gz
                     gzip1_proc = subprocess.Popen(["gzip"],
@@ -1658,4 +1665,4 @@ def extract_reads(base_fname,
     if threads > 1:
         wait_pids(pids)
 
-    return fq_fname_base
+    return fname_list
