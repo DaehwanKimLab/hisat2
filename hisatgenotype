@@ -551,7 +551,7 @@ if __name__ == '__main__':
                      only_locus_list,
                      args.partial,
                      args.aligner,
-                     args.read_fname,
+                     read_fnames,
                      args.fastq,
                      args.alignment_fname,
                      args.threads,
