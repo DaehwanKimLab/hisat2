@@ -298,7 +298,7 @@ def extract_database_if_not_exists(base,
     if check_files(fnames):
         return
 
-    extract_cmd = ["hisatgenotype_toolkit extract-vars"]
+    extract_cmd = ["hisatgenotype_toolkit", "extract-vars"]
     extract_cmd += ["--base", base]
     if len(locus_list) > 0:
         extract_cmd += ["--locus-list", ','.join(locus_list)]    
@@ -398,7 +398,8 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
                    frag_len = 250,
                    perbase_errorrate = 0.0,
                    perbase_snprate = 0.0,
-                   skip_fragment_regions = []):
+                   skip_fragment_regions = [],
+                   out_dir = "."):
     reads_1, reads_2 = [], []
     num_pairs = []
 
@@ -640,9 +641,9 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
             num_pairs[-1].append(len(tmp_reads_1))
 
         # Write reads into a FASTA file
-        def write_reads(reads, idx):
-            mkdir_p('dir_%s/dir_%s' % (gene, str(allele_names).replace(", ", "_")))
-            read_file2 = open('dir_%s/dir_%s/%s_input_%d.fa' % (gene, str(allele_names).replace(", ", "_"), base_fname, idx), 'w')
+        def write_reads(reads, idx, out_dir):
+            mkdir_p('%s/dir_%s/dir_%s' % (out_dir, gene, str(allele_names).replace(", ", "_")))
+            read_file2 = open('%s/dir_%s/dir_%s/%s_input_%d.fa' % (out_dir, gene, str(allele_names).replace(", ", "_"), base_fname, idx), 'w')
             read_file = open('%s_input_%d.fa' % (base_fname, idx), 'w')
             for read_i in range(len(reads)):
                 query_name = "%d|%s_%s" % (read_i + 1, "LR"[idx-1], reads[read_i][1])
@@ -654,8 +655,8 @@ def simulate_reads(seq_dic,                       # seq_dic["A"]["A*24:36N"] = "
                 print >> read_file2, reads[read_i][0]
             read_file.close()
             read_file2.close()
-        write_reads(reads_1, 1)
-        write_reads(reads_2, 2)
+        write_reads(reads_1, 1, out_dir)
+        write_reads(reads_2, 2, out_dir)
 
     return num_pairs
 

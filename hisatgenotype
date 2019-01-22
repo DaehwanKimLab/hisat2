@@ -334,8 +334,6 @@ if __name__ == '__main__':
     arguments.args_bamfile(parser)
     arguments.args_single_end(parser)
     arguments.args_assembly(parser)
-    arguments.args_common(parser,
-                          debug=True) # Add option for debugging
     
     parser_advanced = ArgumentParser(
         description='Advanced Options',
@@ -353,6 +351,8 @@ if __name__ == '__main__':
                                  action='store_true',
                                  help='Build the indexes listed in --base-fname'
                                  )
+    arguments.args_common(parser_advanced,
+                          debug=True) # Add option for debugging
     arguments.args_set_aligner(parser_advanced)
     arguments.args_var_gaps(parser_advanced)
     arguments.args_extract_vars(parser_advanced)
@@ -369,8 +369,8 @@ if __name__ == '__main__':
     args = Namespace(**arg_dict)
 
     region_list = {}
-    args.base_fname = args.base_fname.split(',') if args.base_fname != "" else []
-    args.locus_list = args.locus_list.split(';') if args.locus_list != "" else []
+    args.base_fname = args.base_fname.lower().split(',') if args.base_fname != "" else []
+    args.locus_list = args.locus_list.upper().split(';') if args.locus_list != "" else []
     if len(args.base_fname) != len(args.locus_list):
         print >> sys.stderr, "Error: --base and --locus-list not correct format (ex. --base hla,rbg --locus-list A,B,C;ABO,RHD)"
     for itr in range(len(args.base_fname)):
@@ -435,6 +435,9 @@ if __name__ == '__main__':
     if args.out_dir == "":
         args.out_dir = os.getcwd()
         args.out_dir += "/hisatgenotype_out"
+
+    if not os.path.exists(args.out_dir):
+        os.makedirs(args.out_dir)
 
     """ 
     Read Extraction ##################################

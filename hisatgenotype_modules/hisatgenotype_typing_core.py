@@ -251,7 +251,10 @@ def typing(simulation,
            test_i = 0):
     if simulation:
         test_passed = {}
-    report_file = open('%s/%s-%s.report' % (out_dir, output_base, base_fname), 'w')
+        report_file = open('%s/%s-%s_test-%s.report' % (out_dir, output_base, base_fname, test_i + 1), 'w')
+    else:
+        report_file = open('%s/%s-%s.report' % (out_dir, output_base, base_fname), 'w')
+    
     for aligner, index_type in aligners:
         for f_ in [sys.stderr, report_file]:
             if index_type == "graph":
@@ -2021,6 +2024,11 @@ def genotyping_locus(base_fname,
                      assembly_verbose,
                      out_dir,
                      debug_instr):
+    assert isinstance(base_fname, basestring)
+    if ',' in base_fname:
+        print >> sys.stderr, "Don't use list in hisatgenotype_locus"
+        exit(1)
+        
     simulation = (read_fname == [] and alignment_fname == "")
     if genotype_genome == "":
         if not os.path.exists("hisatgenotype_db"):
@@ -2270,7 +2278,8 @@ def genotyping_locus(base_fname,
                                                          fragment_len,
                                                          perbase_errorrate,
                                                          perbase_snprate,
-                                                         skip_fragment_regions)
+                                                         skip_fragment_regions,
+                                                         out_dir)
 
             assert len(num_frag_list) == len(test_locus_list)
             for i_ in range(len(test_locus_list)):

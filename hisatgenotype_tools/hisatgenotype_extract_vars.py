@@ -60,7 +60,7 @@ if __name__ == '__main__':
                 continue
             base_fname.append(database.lower())
     else:
-        base_fname = args.base_fname.split(',')
+        base_fname = args.base_fname.lower().split(',')
 
     def init(l):
         global lock
