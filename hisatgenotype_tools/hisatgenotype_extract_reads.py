@@ -52,10 +52,10 @@ if __name__ == '__main__':
     if not args.genotype_genome:
         args.genotype_genome = 'genotype_genome'
 
-    database_list = set()
+    database_list = []
     if args.base_fname != "":
         for region in args.base_fname.split(','):
-            database_list.add(region)
+            database_list.append(region)
             
     if args.read_fname_U != "":
         args.read_fname = [args.read_fname_U]

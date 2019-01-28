@@ -361,8 +361,8 @@ if __name__ == '__main__':
     arguments.args_locus(parser_advanced)
     
     arg_dict, unknown = {}, []
-    args1, _ = parser.parse_known_args()
-    args2, _ = parser_advanced.parse_known_args()
+    args2, unused = parser_advanced.parse_known_args()
+    args1 = parser.parse_args(unused)
     arg_dict.update(vars(args1))
     arg_dict.update(vars(args2))
 
@@ -439,6 +439,10 @@ if __name__ == '__main__':
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
+    if args.read_dir:
+        if '/' != args.read_dir[-1]:
+            args.read_dir += '/'
+
     """ 
     Read Extraction ##################################
     """ 
@@ -446,23 +450,23 @@ if __name__ == '__main__':
     read_fnames, fq_fname_base = [], {}
     if args.debug == "":
         if args.read_fname_U != "":
-            read_fnames = ['%s/%s' % (args.read_dir, args.read_fname_U)]
+            read_fnames = ['%s%s' % (args.read_dir, args.read_fname_U)]
             single_run = True
         elif args.read_fname_1 != "" or args.read_fname_2 != "":
             if args.read_fname_1 == "" or args.read_fname_2 == "":
                 print >> sys.stderr, "Error: please specify both -1 and -2."
                 sys.exit(1)
-            read_fnames = ['%s/%s' % (args.read_dir, args.read_fname_1), 
-                           '%s/%s' % (args.read_dir, args.read_fname_2)]
+            read_fnames = ['%s%s' % (args.read_dir, args.read_fname_1), 
+                           '%s%s' % (args.read_dir, args.read_fname_2)]
             single_run = True
         elif args.alignment_fname != "":
-            alignment_fnames = [args.alignment_fname]
+            alignment_fnames = ['%s%s' % (args.read_dir, args.alignment_fname)]
             is_bam = True
         else:
             if args.read_dir == '' or not os.path.exists(args.read_dir):
                 print >> sys.stderr, "Error: please specify read file names correctly: -U or -1 and -2 or --bamfile or --read-dir"
                 sys.exit(1)
-            alignment_fnames = glob.glob("%s/*.bam" % (args.read_dir))
+            alignment_fnames = glob.glob("./%s/*.bam" % (args.read_dir))
             is_bam = True if alignment_fnames else False
 
         if args.read_fname_U != "":
@@ -539,7 +543,7 @@ if __name__ == '__main__':
 
     if not region_list:
         region_list.update({ "ALL" : "ALL" })
-    discard_list = []
+    discard_list = set()
     random.seed(args.random_seed)
     if not fq_fname_base:
         if args.debug == '':
@@ -585,7 +589,7 @@ if __name__ == '__main__':
                 fasta_fname = glob.glob("%s/%s*" % (args.out_dir, fname))
                 assert len(fasta_fname) < 3, "Too many files found"
                 for fname in fasta_fname:
-                    discard_list.append(fname)
+                    discard_list.add(fname)
 
                 locus_list = region_list[base] if "ALL" not in region_list else []
                 pool.apply_async(genotyping_locus,

@@ -68,7 +68,10 @@ if __name__ == '__main__':
         cmd += ' ' + ' '.join(additional)
     elif args.script_help:
         cmd += ' ' + '--help'
-    
+    else:
+        print >> sys.stderr, "Please provide options for tool selected"
+        exit(1)    
+
     if args.see_script:
         print cmd
     code = subprocess.call(cmd.split())

@@ -1381,7 +1381,8 @@ def extract_reads(base_fname,
         if chr not in region_loci:
             region_loci[chr] = {}
         region_loci[chr][region_name] = [allele_name, chr, left, right]
-        database_list.add(family.lower())
+        if family.lower() not in database_list:
+            database_list.append(family.lower())
 
     if out_dir != "" and not os.path.exists(out_dir):
         os.mkdir(out_dir)
@@ -1426,7 +1427,7 @@ def extract_reads(base_fname,
             else:
                 fq_fname2 = "%s/%s.2.%s" % (read_dir, fq_fname_base, suffix)
             if not os.path.exists(fq_fname2):
-                print >> sys.stderr, "%s does not exist." % fq_fname2
+                print >> sys.stderr, "%s does not exist." % (fq_fname2)
                 continue
         else:
             fq_fname2 = ""
