@@ -76,40 +76,100 @@ def record_variants(aligner,
                 if cigar[0] == 'M' and cigar[1] == md:
                     continue
 
+        if zs:
+            zs = zs.split(',')
+            zs = [[zs_entry.split('|')] for zs_entry in zs]
+
         # Generate lists of nucleotides and scores
-        seq_qual = [[], [], []]
+        seq_cstr, weight_cstr,  = [], []
         pval_read = 1-(10**(-mapq/10))
+
         # for Substitution
         for itr in range(len(seq)):
             qual_score = float(ord(qual[itr])) - 33
             pval_base = 1-(10**(-qual_score/10))
             base_weight = (pval_base*pval_read)/nh
 
-            seq_qual[0].append(seq[itr])
-            seq_qual[1].append(base_weight)
-            seq_qual[2].append("-")
+            seq_cstr.append(seq[itr])
+            weight_cstr.append(base_weight)
 
         # for indel
-        seq_qual[0].append('indel')
-        seq_qual[1].append(pval_read/nh)
+        seq_cstr.append('indel')
+        weight_cstr.append(pval_read/nh)
 
+        # Parse md and zs field
         md = re.split('(\d+)', md)
-        md_str = []
+        md_list, zs_list, ptr = [], [], 0 
         for field in md:
             if field.isdigit():
                 for itr in range(int(field)):
-                    md_str.append("-")
+                    md_list.append("M")
+                    zs_list.append("-")
+                    ptr += 1
             else:
-                md_str.append(field)
+                md_list.append(field)
+                if field == "^":
+                    zs_list.append('-')
 
-        var_str = []
+                if zs:
+                    for jtr in range(len(zs)):
+                        if ptr == zs[jtr][0]+1:
+                            zs_list.append("%s_%s" % (zs[jtr][1], zs[jtr][2]))
+                else:
+                    zs_list.append('-')
+
+                if field != '^':
+                    ptr += 1
+
+        assert len(md_list) == len(zs_list)
+
+        # CIGAR string expansion and replacement
+        snp_cstr, known_cstr = [], []
+        md_ptr, seq_ptr = 0, 0
         for itr in range(len(cigars)):
             cigar_op, lenth = cigars[itr]
-            md_pos = 0
+
             if cigar_op in "SH":
+                seq_ptr += length
+
+            if cigar_op == 'N':
+                pos += length
+
+            if cigar_op in "MX=":
                 for jtr in range(length):
-                    cigar_str.append(cigar_op)
-            if cigar_op == "M":
+                    if md_list[md_ptr] != 'M': 
+                        snp_cstr.append([pos, md_list[md_ptr]])
+
+                    md_ptr += 1
+                    seq_ptr += 1
+                    
+
+                    cigar_cstr.append(md_list[md_pos])
+                    if zs_list[md_pos] == '-':
+                        if md_list[md_pos] == "M":
+                            known_cstr.append('-')
+                        else:
+                            known_cstr.append('U')
+                    else:
+                        known_cstr.append(zs_list[md_pos])
+                    
+                    md_pos += 1
+
+            if cigar_op == "D":
+                assert md_list[md_pos] == '^'
+                md_pos += 1 # Add one to point to correct position in string
+                for jtr in range(length):
+                    cigar_cstr.append(cigar_op)
+                    if zs_list[md_pos] == '-':
+                        known_cstr.append('U')
+                    else:
+                        known_cstr.append(zs_list[md_pos])
+
+                    md_pos += 1
+
+            if cigar_op in "IN":
+                for jtr in range(length):
+                    cigar_cstr.append(cigar_op)
                 
  
 if __name__ == '__main__':
