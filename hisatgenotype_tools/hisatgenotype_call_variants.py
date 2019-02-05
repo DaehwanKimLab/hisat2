@@ -1,49 +1,79 @@
 #!/usr/bin/env python
 
 import sys, os, subprocess, re
+import itertools
 from multiprocessing import Pool
 from argparse import ArgumentParser
 import hisatgenotype_typing_common as typing_common
 import hisatgenotype_args as arguments
 
-def record_variants(aligner,
-                    is_fastq,
-                    reference,
-                    use_graph,
-                    read_fnames,
-                    alignment_fname,
-                    first_align,
-                    keep_align,
-                    threads):
-    if first_align:
-        if reference == "":
-            print >> sys.stderr, "Error: --ref-genome or -x option not set"
-            exit(1)
 
-        fname_prefix = read_fnames[0].split('.')[0]
-        bam_fname = fname_prefix + '.bam'
-
-        cmd = [aligner]
-        if aligner == "hisat2" or alinger == "bowtie2":
-            cmd += ['-x', reference, '-p', threads]
-            if len(read_fnames) > 1:
-                cmd += ['-1', read_fnames[0], '-2', read_fnames[1]]
-            else:
-                cmd += ['-U', read_fnames[0]]
-        elif alinger == "bwa":
-            cmd += ["mem", reference]
-            cmd += read_fnames
-            
-        cmd += ['|', 'samtools', 'view', '-Sb', '-', '>', bam_fname] 
-        os.system(" ".join(cmd))
-        alignment_fname.append(bam_fname)
-
-    pull_align = ['samtools', 'view', alignment_fname[0]]
+""" WORK IN PROGRESS
+def get_positions (alignemnt_fname):
+    pull_align = ['samtools', 'view', alignment_fname]
     proc = subprocess.Popen(pull_align,
                             stdout=subprocess.PIPE,
                             stderr=open("/dev/null", "w"))
 
-    snp_dict = {}
+    snp_ranges = {}
+    cigar_re = re.compile('\d+\w')
+    for line in proc.stdout:
+        line = line.strip()
+        cols = line.split()
+        _ , flag, chrom , pos, mapq, cigar_str, _ , _ , _ , seq, qual = cols[:11] # All standard fields from SAM
+        flag, pos, mapq, read_len = int(flag), int(pos), int(mapq), len(seq)
+        
+        if flag & 0x4 != 0:
+            continue
+        if chrom not in snp_ranges:
+            snp_ranges.update({ chrom : set() })
+
+        md = ''
+        for itr in range(11, len(cols)):
+            opt, _ , value = cols[itr].split(':')
+            if opt == "MD":
+                md = value # MD field is string of missmatches
+
+        assert md
+
+        cigars = cigar_re.findall(cigar_str)
+        cigars = [[cigar[-1], int(cigar[:-1])] for cigar in cigars]
+
+        # Skip all reads that don't have a variant
+        if all(cigar[0] in "MSH" for cigar in cigars) and md.isdigit():
+            md = int(md)
+            for cigar in cigars:
+                if cigar[0] == 'M' and cigar[1] == md:
+                    continue
+        else:
+            for i in range(pos-read_len, pos+(2*read_len)):
+                snp_ranges[chrom].add(i)
+
+    def make_ranges(plist):
+        plist = sorted(plist)
+        for key, group in itertools.groupby(enumerate(plist), lambda t: t[1] - t[0]):
+            group = list(group)
+            yield group[0][1], group[-1][1]
+
+    for chrom, pos_list in snp_ranges.items():
+        pos_list = make_ranges(pos_list)
+        snp_ranges.update({ chrom : pos_list })
+
+    return snp_ranges
+
+def get_snps(alignment_fname,
+             chromosome,
+             positions):
+    left, right = positions
+    snp_pos, vcf_entry = {}, []
+    for itr in range(left,right+1):
+
+    pull_align = ['samtools', 'view', alignment_fname, '%s:%s-%s' % (chromosome, left, right)]
+    proc = subprocess.Popen(pull_align,
+                            stdout=subprocess.PIPE,
+                            stderr=open("/dev/null", "w"))
+
+    snp_pos = {}
     cigar_re = re.compile('\d+\w')
     for line in proc.stdout:
         line = line.strip()
@@ -51,6 +81,7 @@ def record_variants(aligner,
         _ , flag, chrom , pos, mapq, cigar_str, _ , _ , _ , seq, qual = cols[:11] # All standard fields from SAM
         flag, pos, mapq, read_len= int(flag), int(pos), int(mapq), len(seq)
         
+        assert chrom == chromosome
         if flag & 0x4 != 0:
             continue
 
@@ -170,12 +201,64 @@ def record_variants(aligner,
             if cigar_op in "IN":
                 for jtr in range(length):
                     cigar_cstr.append(cigar_op)
-                
+
+""" 
+
+def samtools_caller(bam_fname,
+                    genome_fname):
+    # file names
+    bam_sort_fname = 'sorted_%s' % bam_fname
+    base_bcf_fname = bam_fname.replace('.bam', '.bcf')
+    
+    # commands
+    sort_cmd = ['samtools', 'sort', bam_fname, bam_sort_fname]
+    genome_index_cmd = ['samtools', 'faidx', genome_fname]
+    mpileup_cmd = ['samtools', 'mpileup', '-g', '-f', genome_fname, bam_sort_fname ,'>' , 'raw_%s' % base_bcf_fname]
+    snp_call_cmd = ['bcftools', 'view', '-vcg', 'raw_%s' % base_bcf_fname, base_bcf_fname]
+
+    # execute commands
+    subprocess.call(sort_cmd)
+    subprocess.call(genome_index_cmd)
+    subprocess.call(mpileup_cmd)
+    subprocess.call(snp_call_cmd)
+
+def record_variants(aligner,
+                    is_fastq,
+                    reference,
+                    use_graph,
+                    read_fnames,
+                    alignment_fname,
+                    first_align,
+                    keep_align,
+                    threads):
+    if first_align:
+        if reference == "":
+            print >> sys.stderr, "Error: --ref-genome or -x option not set"
+            exit(1)
+
+        fname_prefix = read_fnames[0].split('.')[0]
+        bam_fname = fname_prefix + '.bam'
+
+        cmd = [aligner]
+        if aligner == "hisat2" or aligner == "bowtie2":
+            if aligner == "hisat2":
+                cmd += ['--no-spliced-alignment']
+            cmd += ['-x', reference, '-p', threads]
+            if len(read_fnames) > 1:
+                cmd += ['-1', read_fnames[0], '-2', read_fnames[1]]
+            else:
+                cmd += ['-U', read_fnames[0]]
+        elif aligner == "bwa":
+            cmd += ["mem", reference]
+            cmd += read_fnames
+            
+        cmd += ['|', 'samtools', 'view', '-Sb', '-', '>', bam_fname] 
+        os.system(" ".join(cmd))
+        alignment_fname.append(bam_fname)
+
+    samtools_caller(alignment_fname[0], reference)          
  
 if __name__ == '__main__':
-    print "This script is not working yet"   
-    exit(0)
-
     parser = ArgumentParser(
         description='HISAT-Genotype Call Variants')
     arguments.args_aligner_inputs(parser,
@@ -186,7 +269,7 @@ if __name__ == '__main__':
                         default = "",
                         help="Name of reference to use with aligner of choice")
     arguments.args_bamfile(parser)
-    arguments.args_set_alinger(parser,
+    arguments.args_set_aligner(parser,
                                missmatch = False) # Turn off option for setting missmatch
     arguments.args_common(parser)
 
