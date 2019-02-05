@@ -205,22 +205,24 @@ def get_snps(alignment_fname,
 """ 
 
 def samtools_caller(bam_fname,
-                    genome_fname):
+                    genome_fname,
+                    threads):
     # file names
     bam_sort_fname = 'sorted_%s' % bam_fname
-    base_bcf_fname = bam_fname.replace('.bam', '.bcf')
+    bcf_fname = bam_fname.replace('.bam', '.bcf')
     
     # commands
-    sort_cmd = ['samtools', 'sort', bam_fname, bam_sort_fname]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-o', bam_sort_fname, bam_fname]
     genome_index_cmd = ['samtools', 'faidx', genome_fname]
-    mpileup_cmd = ['samtools', 'mpileup', '-g', '-f', genome_fname, bam_sort_fname ,'>' , 'raw_%s' % base_bcf_fname]
-    snp_call_cmd = ['bcftools', 'view', '-vcg', 'raw_%s' % base_bcf_fname, base_bcf_fname]
+    bcf_call_cmd = ['bcftools', 'mpileup', '-Ou', '--threads', str(threads), '-f', genome_fname, bam_sort_fname, '|',
+                    'bcftools', 'call', '-mv', '--threads', str(threads), '-Ob', '-o', bcf_fname]
 
     # execute commands
-    subprocess.call(sort_cmd)
-    subprocess.call(genome_index_cmd)
-    subprocess.call(mpileup_cmd)
-    subprocess.call(snp_call_cmd)
+    if not os.path.exists(bam_sort_fname):
+        subprocess.call(sort_cmd)
+    if not os.path.exists('%s.fai' % genome_fname):
+        subprocess.call(genome_index_cmd)
+    subprocess.call(bcf_call_cmd)
 
 def record_variants(aligner,
                     is_fastq,
@@ -230,6 +232,7 @@ def record_variants(aligner,
                     alignment_fname,
                     first_align,
                     keep_align,
+                    run_sam,
                     threads):
     if first_align:
         if reference == "":
@@ -256,21 +259,27 @@ def record_variants(aligner,
         os.system(" ".join(cmd))
         alignment_fname.append(bam_fname)
 
-    samtools_caller(alignment_fname[0], reference)          
+    if run_sam:
+        samtools_caller(alignment_fname[0], reference, threads)          
  
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='HISAT-Genotype Call Variants')
-    arguments.args_aligner_inputs(parser,
-                                  keep=True) # Add option to keep alignments
     parser.add_argument('-x', '--ref-genome',
                         dest="reference",
                         type=str,
                         default = "",
-                        help="Name of reference to use with aligner of choice")
+                        required = True,
+                        help="Name of reference to use with aligner of choice (Required)")        
+    arguments.args_aligner_inputs(parser,
+                                  keep=True) # Add option to keep alignments
     arguments.args_bamfile(parser)
     arguments.args_set_aligner(parser,
                                missmatch = False) # Turn off option for setting missmatch
+    parser.add_argument('--run-sam',
+                        dest="run_sam",
+                        action='store_true',
+                        help="Use Bcftools variant caller default options (default: False, requires bcftools)")    
     arguments.args_common(parser)
 
     args = parser.parse_args()
@@ -305,5 +314,6 @@ if __name__ == '__main__':
                     bam_fname,
                     False if bam_fname else True,
                     args.keep_alignment,
+                    args.run_sam,
                     args.threads)
 
