@@ -206,23 +206,25 @@ def get_snps(alignment_fname,
 
 def samtools_caller(bam_fname,
                     genome_fname,
-                    threads):
+                    threads,
+                    opts):
     # file names
     bam_sort_fname = 'sorted_%s' % bam_fname
     bcf_fname = bam_fname.replace('.bam', '.bcf')
     
     # commands
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-o', bam_sort_fname, bam_fname]
+    sort_cmd = ['samtools', 'sort'] + opts[0] + ['-@', str(threads), '-o', bam_sort_fname, bam_fname]
     genome_index_cmd = ['samtools', 'faidx', genome_fname]
-    bcf_call_cmd = ['bcftools', 'mpileup', '-Ou', '--threads', str(threads), '-f', genome_fname, bam_sort_fname, '|',
-                    'bcftools', 'call', '-mv', '--threads', str(threads), '-Ob', '-o', bcf_fname]
+    bcf_call_cmd_in = ['bcftools', 'mpileup'] + opts[1] + ['-Ou', '--threads', str(threads), '-f', genome_fname, bam_sort_fname]
+    bcf_call_cmd_out = ['bcftools', 'call'] + opts[2] + ['--threads', str(threads), '-Ob', '-o', bcf_fname]
 
     # execute commands
     if not os.path.exists(bam_sort_fname):
         subprocess.call(sort_cmd)
     if not os.path.exists('%s.fai' % genome_fname):
         subprocess.call(genome_index_cmd)
-    subprocess.call(bcf_call_cmd)
+    bcf_in = subprocess.Popen(bcf_call_cmd_in, stdout=PIPE)
+    bcf_out = subprocess.Popen(bcd_call_cmd_out, stdin=bcf_in.stdout)
 
 def record_variants(aligner,
                     is_fastq,
@@ -232,7 +234,7 @@ def record_variants(aligner,
                     alignment_fname,
                     first_align,
                     keep_align,
-                    run_sam,
+                    sam_bcf_opts,
                     threads):
     if first_align:
         if reference == "":
@@ -259,8 +261,8 @@ def record_variants(aligner,
         os.system(" ".join(cmd))
         alignment_fname.append(bam_fname)
 
-    if run_sam:
-        samtools_caller(alignment_fname[0], reference, threads)          
+    if sam_bcf_opts:
+        samtools_caller(alignment_fname[0], reference, threads, sam_bcf_ops)          
  
 if __name__ == '__main__':
     parser = ArgumentParser(
@@ -276,11 +278,28 @@ if __name__ == '__main__':
     arguments.args_bamfile(parser)
     arguments.args_set_aligner(parser,
                                missmatch = False) # Turn off option for setting missmatch
-    parser.add_argument('--run-sam',
-                        dest="run_sam",
-                        action='store_true',
-                        help="Use Bcftools variant caller default options (default: False, requires bcftools)")    
     arguments.args_common(parser)
+
+    subparser = parser.add_subparsers(title="Method",
+                        dest="method",
+                        help="Choose SNP calling method")    
+    btools_parser = subparser.add_parser("bcftools",
+                         help = 'Set BCFtools as variant caller')
+    btools_parser.add_argument('--sam-opts',
+                               type=str,
+                               dest='sam_opts',
+                               default='',
+                               help='String of options for samtools sort (-@ option already included)')
+    btools_parser.add_argument('--mplp-opts',
+                               type=str,
+                               dest='mplp_opts',
+                               default='',
+                               help='String of additional options for bcftools mpileup (-Ou already used)')
+    btools_parser.add_argument('--vcall-opts',
+                               type=str,
+                               dest='vcall_opts',
+                               default='-mv',
+                               help='String of additional options for bcftools call (-mv are defaults -Ob already used)')
 
     args = parser.parse_args()
 
@@ -304,7 +323,18 @@ if __name__ == '__main__':
         print >> sys.stderr, "Error: Please provide file options"
         exit(1)
 
-    assert (read_fnames or bam_fname) and not (read_fnames and bam_fname)
+    if not ((read_fnames or bam_fname) and not (read_fnames and bam_fname)):
+        print >> sys.stderr, "Error: Please don't use both --bamfile and -U / -1,-2 options"
+        exit(1)
+
+    sopts = []
+    if args.method == 'bcftools':
+        try:
+            sopts = [args.sam_opts.split(),
+                     args.mplp_opts.split(),
+                     args.vcall_opts.split()]
+        except:
+            pass
 
     record_variants(args.aligner,
                     args.fastq,
@@ -314,6 +344,6 @@ if __name__ == '__main__':
                     bam_fname,
                     False if bam_fname else True,
                     args.keep_alignment,
-                    args.run_sam,
+                    sopts,
                     args.threads)
 

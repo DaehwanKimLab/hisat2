@@ -31,8 +31,13 @@ if __name__ == '__main__':
     if not os.path.exists(path):
         print 'Error! Toolkit Directory not found at %s' % path
         exit(1)
+
     scripts = []
-    scripts = os.listdir(path)
+    sfiles = sorted(os.listdir(path))
+    for script in sfiles:
+        if script.startswith('.'):
+            continue
+        scripts.append(script)
     
     parser = ArgumentParser(
         description='HISAT-genotype Toolkit')
@@ -49,6 +54,7 @@ if __name__ == '__main__':
     for itr in range(len(scripts)):
         name = scripts[itr].replace('hisatgenotype_', '').replace('run_', '').replace('_', '-').split('.')[0]
         script = scripts[itr]
+
         script_key.update({ name : script })
 
         subparsers.append(subparser.add_parser(name, 
@@ -62,18 +68,18 @@ if __name__ == '__main__':
         
     args, additional = parser.parse_known_args()
     
-    cmd = path
-    cmd += script_key[args.script]
+    cmd = [path]
+    cmd[0] += script_key[args.script]
     if additional and not args.script_help:
-        cmd += ' ' + ' '.join(additional)
+        cmd += additional
     elif args.script_help:
-        cmd += ' ' + '--help'
+        cmd += additional + ['--help']
     else:
         print >> sys.stderr, "Please provide options for tool selected"
         exit(1)    
 
     if args.see_script:
         print cmd
-    code = subprocess.call(cmd.split())
+    code = subprocess.call(cmd)
     if code != 0:
         print 'Script exited with error %d' % code
