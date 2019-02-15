@@ -466,7 +466,8 @@ def main(genome_file,
             if allele_list[0] == "-":
                 freq = float(alleleFreqs[1])
             else:
-                assert allele_list[1] == "-"
+                if allele_list[1] != "-":
+                    continue
                 freq = float(alleleFreqs[0])
             
             delLen = end - start
