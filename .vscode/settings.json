@@ -1,0 +1,10 @@
+{
+    "editor.fontSize": 14,
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true,
+    "python.pythonPath": "/usr/bin/python",
+    "python.autoComplete.extraPaths": [
+        "/home/christopher/Documents/hisatgenotype-working/hisat2-devel/hisatgenotype_modules",
+        "/opt/rh/devtoolset-4/root/usr/lib64/python2.7/site-packages",
+        "/opt/rh/devtoolset-4/root/usr/lib/python2.7/site-packages"]
+}
