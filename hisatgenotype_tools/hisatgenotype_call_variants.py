@@ -224,7 +224,7 @@ def samtools_caller(bam_fname,
     if not os.path.exists('%s.fai' % genome_fname):
         subprocess.call(genome_index_cmd)
     bcf_in = subprocess.Popen(bcf_call_cmd_in, stdout=PIPE)
-    bcf_out = subprocess.Popen(bcd_call_cmd_out, stdin=bcf_in.stdout)
+    bcf_out = subprocess.Popen(bcf_call_cmd_out, stdin=bcf_in.stdout)
 
 def record_variants(aligner,
                     is_fastq,
@@ -262,7 +262,7 @@ def record_variants(aligner,
         alignment_fname.append(bam_fname)
 
     if sam_bcf_opts:
-        samtools_caller(alignment_fname[0], reference, threads, sam_bcf_ops)          
+        samtools_caller(alignment_fname[0], reference, threads, sam_bcf_opts)          
  
 if __name__ == '__main__':
     parser = ArgumentParser(
@@ -272,7 +272,7 @@ if __name__ == '__main__':
                         type=str,
                         default = "",
                         required = True,
-                        help="Name of reference to use with aligner of choice (Required)")        
+                        help="Name of reference to use with aligner of choice (Required; ex genome.fa)")        
     arguments.args_aligner_inputs(parser,
                                   keep=True) # Add option to keep alignments
     arguments.args_bamfile(parser)
