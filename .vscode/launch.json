@@ -11,11 +11,13 @@
             "cwd": "/home/christopher/Documents/hisatgenotype-working", //tmp-RBG",
             "program": "${file}",
             "args": [
-                "--gene-list", "ABO"
+                //"--gene-list", "ABO"
                 //"--read-dir", "fastq_files", "--out-dir", "extracted_fastq"
                 //"--assembly", "-f",
-                //"--locus-list", "ABO",
-                //"--debug", "pair,full"
+                "--base", "HLA",
+                "--locus-list", "A",
+                "--assembly",
+                "--debug", "pair,full"
                 //"-1", "cor-hla_input_1.fa",
                 //"-2", "cor-hla_input_2.fa"
             ],

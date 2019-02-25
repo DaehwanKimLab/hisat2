@@ -144,7 +144,7 @@ if __name__ == '__main__':
         exit(1)
 
     random.seed(args.random_seed)
-    genotyping_locus(args.base_fname,
+    genotyping_locus(args.base_fname.lower(),
                      locus_list,
                      args.genotype_genome,
                      only_locus_list,
