@@ -207,7 +207,7 @@ def download_genome_and_index():
 """
 """
 def clone_hisatgenotype_database():
-    os.system("git clone https://github.com/infphilo/hisatgenotype_db.git")
+    os.system("git clone https://github.com/DaehwanKimLab/hisatgenotype_db.git")
     
     # Check out one particular revision just to have the same data across multiple computers        
     # revision = "d3b559b34b96ff9e7f0d97476222d8e4cdee63ad" # Revision on November 16, 2016

@@ -801,7 +801,8 @@ public:
                 alts.push_back(alt);
                 alts.back().pos = alt.pos + alt.len - 1;
                 alts.back().reversed = true;
-                altnames.push_back(altnames[s]);
+                string altname = altnames[s];
+                altnames.push_back(altname);
             }
         }
         if(alts.size() > 1 && alts.size() > nalts) {
