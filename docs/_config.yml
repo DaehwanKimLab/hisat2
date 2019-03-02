@@ -1,0 +1,120 @@
+#
+# Basic settings.
+#
+# url: http://localhost:4000
+# baseurl: ""
+url: http://DaehwanKimLab.github.io
+baseurl: /hisat2
+title: HISAT2
+description: Some descriptions of yourself.
+avatar: /assets/img/ogp.png
+# favicon: /favicon.ico
+favicon: /assets/img/ogp.png
+# language: ja
+language: en
+
+#
+# Icons
+#
+icons:
+  rss: true
+  email:
+  github: ttskch
+  bitbucket:
+  twitter: ttskch
+  facebook:
+  google_plus:
+  tumblr:
+  behance:
+  dribbble:
+  flickr:
+  instagram:
+  linkedin: # full URL
+  pinterest:
+  reddit:
+  soundcloud:
+  stack_exchange: # full URL
+  steam:
+  wordpress:
+  youtube:
+
+#
+# Prettify url.
+#
+permalink: pretty
+
+#
+# Scripts.
+#
+google_analytics: # e.g. UA-000000-01
+disqus:
+
+#
+# Localizations.
+#
+str_next: Next
+str_prev: Prev
+str_read_more: Read more...
+str_search: Search
+str_recent_posts: Recent posts
+str_show_all_posts: Show all posts
+
+#
+# Recent posts.
+#
+recent_posts_num: 10
+
+#
+# Pagination.
+#
+paginate: 10
+paginate_path: page/:num
+
+#
+# Social.
+#
+share_buttons:
+  twitter: true
+  facebook: false # needs ogp.fb.app_id
+  hatena: false
+ogp:
+  image_url: //ttskch.github.io/jekyll-ttskch-theme/assets/img/ogp.png
+  fb:
+    admin: # facebook admin id
+    app_id: # facebook application id
+
+#
+# Plugins.
+#
+gems:
+  - jekyll-paginate
+  - jekyll-feed
+  - jemoji
+
+#
+# Styles: see "_sass/base/_variables.scss"
+#
+
+#
+# !! Danger zone !!
+#
+
+include: ["_pages"]
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+excerpt_separator: <!--more-->
+
+sass:
+  sass_dir: _sass
+  style: :compressed # or :expanded
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - LICENSE
+  - README.md
+  - vendor

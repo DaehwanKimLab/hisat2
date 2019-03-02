@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+    {% capture title %}{% if page.title %}{{ page.title }} | {% endif %}{{ site.title }}{% endcapture %}
+
+    {% include page-url-resolver.html page=page %}
+
+    {% if page.excerpt %}
+    {% assign description = page.excerpt | strip_html | strip_newlines | truncate: 160 %}
+    {% else %}
+    {% assign description = site.description %}
+    {% endif %}
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{{ title }}</title>
+
+    <meta name="description" content="{{ description }}">
+
+    <link rel="shortcut icon" href="{{ site.favicon | prepend: site.baseurl }}" type="image/x-icon">
+    <link rel="canonical" href="{{ url }}">
+    <link rel="alternate" type="application/atom+xml" title="{{ site.title }}" href="{{ '/feed.xml' | prepend: site.baseurl }}" />
+
+    {% if page.eye_catch %}
+    {% assign ogp_image_url = page.eye_catch %}
+    {% else %}
+    {% assign ogp_image_url = site.ogp.image_url %}
+    {% endif %}
+
+    <meta property="og:title" content="{{ title }}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="{{ ogp_image_url }}" />
+    <meta property="og:url" content="{{ url }}" />
+    <meta property="og:site_name" content="{{ site.title }}" />
+    <meta property="fb:admins" content="{{ site.ogp.fb.admin }}" />
+    <meta property="fb:app_id" content="{{ site.ogp.fb.app_id }}" />
+    <meta property="og:description" content="{{ description }}" />
+
+    <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+    <script src="https://use.fontawesome.com/1f5f360d80.js"></script>
+    <link href="//fonts.googleapis.com/css?family=Source+Sans+Pro:400,700,700italic,400italic" rel="stylesheet">
+
+    <link href="{{ '/assets/css/style.css' | prepend: site.baseurl }}" rel="stylesheet">
+</head>
+<body>
+
+<header class="site-header">
+    <div class="inner clearfix">
+        {% if site.avatar %}
+        <a href="{{ '/' | prepend: site.baseurl }}">
+            <img class="avatar" src="{{ site.avatar | prepend: site.baseurl }}" alt=""/>
+        </a>
+        {% endif %}
+        <h1 class="clearfix">
+            <a class="title {% if site.avatar == null %}slim{% endif %}" href="{{ '/' | prepend: site.baseurl }}">{{ site.title }}</a>
+            <br><span class="description">{{ site.description }}</span>
+        </h1>
+    </div>
+</header>
+
+<div class="site-container">
+    <div class="site-content">
+        {{ content }}
+    </div>
+
+    <aside class="site-aside">
+        <div class="inner">
+            <div class="block">
+                <form action="{{ site.baseurl }}/search">
+                    <input type="search" id="search" name="q" placeholder="{{ site.str_search }}" />
+                </form>
+            </div>
+            <ul>
+                {% assign pages = site.pages | sort: 'order' %}
+                {% for page in pages %}
+                {% if page.title and page.hide != true %}
+                <li><a class="page-link" href="{{ page.url | prepend: site.baseurl }}">{{ page.title }}</a></li>
+                {% endif %}
+                {% endfor %}
+            </ul>
+            <ul class="icons">
+                {% include icons.html icons=site.icons %}
+            </ul>
+            <hr class="with-no-margin margin-bottom"/>
+
+            <div class="block sticky">
+                <h2>{{ site.str_recent_posts }}</h2>
+                <ul>
+                    {% assign posts = '' | split: '' %}
+                    {% for post in site.posts %}
+                    {% if post.hide != true %}
+                    {% assign posts = posts | push: post %}
+                    {% endif %}
+                    {% endfor %}
+                    {% assign posts = posts | sort: 'date' | reverse %}
+                    {% for post in posts limit:site.recent_posts_num %}
+                    <li><a href="{{ post.url | prepend: site.baseurl }}">{{ post.title }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<footer class="site-footer">
+    <div class="inner">
+        <span>Powered by <a href="http://jekyllrb.com">Jekyll</a> with <a href="https://github.com/ttskch/jekyll-ttskch-theme">TtskchTheme</a></span>
+    </div>
+</footer>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+<script src="{{ '/assets/lib/garand-sticky/jquery.sticky.js' | prepend: site.baseurl }}"></script>
+<script src="{{ '/assets/js/script.js' | prepend: site.baseurl }}"></script>
+
+{% if page.id %}
+<script src="{{ '/assets/js/header-link.js' | prepend: site.baseurl }}"></script>
+{% endif %}
+
+{% if page.permalink == '/search/' %}
+<script src="{{ '/assets/js/search.js' | prepend: site.baseurl }}"></script>
+{% endif %}
+
+{% include fb-root.html %}
+{% include google-analytics.html %}
+
+</body>
+</html>

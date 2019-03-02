@@ -1,0 +1,201 @@
+.site-content {
+    h1, h2, h3, h4, h5, h6 {
+        line-height: 1.3;
+        margin: 1em 0;
+        .header-link {
+            margin-left: 0.2em;
+            color: $link-color;
+            opacity: 0;
+        }
+        &:hover .header-link {
+            opacity: 1;
+        }
+    }
+
+    h1 {
+        font-size: 2.3em;
+    }
+
+    h2 {
+        font-size: 1.9em;
+    }
+
+    blockquote {
+        border-left: 5px solid #ddd;
+        color: $blockquote-color;
+        padding: 0.5em 1em;
+        p:first-child {
+            margin-top: 0;
+        }
+        p:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        td, th {
+            padding: 0.5em 1em;
+            border: 1px solid $border-color;
+            text-align: left;
+        }
+    }
+
+    p, ol, ul, dl, table, blockquote, kbd, pre, samp {
+        margin: 1.5em 0;
+    }
+
+    ul, ol {
+        padding-left: 1em;
+        ul, ol {
+            margin: 0;
+        }
+    }
+
+    ul, ol {
+        &.inline {
+            @extend .clearfix;
+            list-style: none;
+            padding-left: 0;
+            li {
+                float: left;
+                margin-right: 1em;
+                &:last-child {
+                    margin-right: 0;
+                }
+            }
+        }
+    }
+
+    dt {
+        font-weight: bold;
+    }
+
+    dd {
+        margin-left: 2em;
+    }
+
+    p, ol, ul, dl {
+        line-height: 1.5;
+    }
+
+    ol, ul {
+        list-style-position: inside;
+    }
+
+    code {
+        font-family: $code-font-family;
+        font-size: $code-font-size;
+        margin: 0 2px;
+        padding: 0 5px;
+        border: 1px solid #ddd;
+        background-color: rgba(#ddd, .1);
+        border-radius: 3px;
+    }
+
+    pre {
+        border: 1px solid #ccc;
+        background-color: rgba(#ddd, .1);
+        overflow: auto;
+        padding: 10px 15px;
+        line-height: 1em;
+        border-radius: 3px;
+        code {
+            margin: 0;
+            padding: 0;
+            word-wrap: normal;
+            white-space: pre;
+            border: none;
+            background: transparent;
+        }
+    }
+
+    .article-wrapper {
+        @extend .clearfix;
+        margin: $margin 0;
+    }
+
+    article {
+        width: 100%;
+        float: left;
+        header {
+            margin-bottom: $margin;
+            .panel {
+                padding: 1em 1.5em;
+                background-color: rgba($page-title-color, .2);
+                h1 {
+                    margin: 0;
+                    &, a {
+                        color: $page-title-color;
+                    }
+                }
+                ul.meta, ul.tags {
+                    list-style: none;
+                    margin: 0;
+                    padding: 0;
+                    li {
+                        display: inline-block;
+                        color: rgba($text-color, .5);
+                        font-size: 0.95em;
+                        margin-right: 0.5em;
+                        &:last-child {
+                            margin-right: 0;
+                        }
+                    }
+                }
+                ul.meta {
+                    float: right;
+                }
+                ul.icons {
+                    margin: 0;
+                    padding: 0;
+                    li {
+                        margin-right: 0;
+                    }
+                }
+            }
+        }
+        p:last-child {
+            margin-bottom: 0;
+        }
+        footer {
+            margin-top: $margin;
+        }
+        .footnotes {
+            font-size: 0.9em;
+        }
+    }
+
+    .comments {
+        margin-bottom: $margin;
+    }
+
+    .pagination {
+        margin: $margin 0;
+        padding: 0 10%;
+        text-align: center;
+        .btn:first-child {
+            margin-right: 1em;
+        }
+    }
+
+    #search-results {
+        .article-wrapper {
+            margin: 1em 0;
+        }
+        article header {
+            margin-bottom: 0;
+            .panel {
+                padding: 0;
+                background-color: $background-color;
+                h1 {
+                    font-size: 1.5em;
+                    a.tag {
+                        font-size: 0.7em;
+                    }
+                }
+            }
+        }
+    }
+}

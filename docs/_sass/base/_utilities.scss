@@ -1,0 +1,39 @@
+// button.
+.btn {
+    border-radius: 0.3em;
+    border: 1px solid;
+    display: inline-block;
+    padding: 0.5em 0.75em;
+}
+a.btn:hover {
+    background: $link-color;
+    color: $background-color;
+    text-decoration: none;
+}
+
+// margin.
+.margin {
+    margin: $margin 0 !important;
+}
+.margin-top {
+    margin-top: $margin !important;
+}
+.margin-bottom {
+    margin-bottom: $margin !important;
+}
+
+// state.
+.disabled {
+    opacity: 0.7;
+}
+
+// clearfix.
+.clearfix {
+    &:before, &:after {
+        content: " ";
+        display: table;
+    }
+    &:after {
+        clear: both;
+    }
+}
