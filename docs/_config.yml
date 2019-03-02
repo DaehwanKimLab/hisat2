@@ -3,7 +3,7 @@
 #
 # url: http://localhost:4000
 # baseurl: ""
-url: http://DaehwanKimLab.github.io
+url: http://daehwankimlab.github.io
 baseurl: /hisat2
 title: HISAT2
 description: Some descriptions of yourself.
