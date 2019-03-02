@@ -1,0 +1,64 @@
+{% assign page = include.page %}
+
+<header>
+    <div class="panel">
+        <h1>
+            {% if include.link %}
+            <a class="post-link" href="{{ page.url | prepend: site.baseurl }}">{{ page.title }}</a>
+            {% else %}
+            {{ page.title }}
+            {% endif %}
+        </h1>
+
+        <ul class="tags">
+            {% assign tags_num = (page.tags | size) %}
+            {% if tags_num > 0 %}
+            <li><i class="fa fa-tags"></i></li>
+            {% endif %}
+            {% for tag in page.tags %}
+            <li>
+                <a class="tag" href="{{ '/search/?t=' | append: tag | prepend: site.baseurl }}">#{{ tag }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <div class="clearfix">
+            <ul class="meta">
+                {% if page.date %}
+                <li>
+                    <i class="fa fa-calendar"></i>
+                    {{ page.date | date: "%Y-%m-%d" }}
+                </li>
+                {% endif %}
+
+                {% if page.author %}
+                <li>
+                    <a href="{{ '/search/?a=' | append: page.author | prepend: site.baseurl }}">
+                        <i class="fa fa-user"></i>
+                        {{ page.author }}
+                    </a>
+                </li>
+                {% if page.icons %}
+                <li>
+                    <ul class="icons">
+                        {% include icons.html icons=page.icons %}
+                    </ul>
+                </li>
+                {% endif %}
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+
+    {% if site.share_buttons and include.share != false %}
+    <div style="margin-top: 1em;">
+        {% include share-buttons.html page=page %}
+    </div>
+    {% endif %}
+
+    {% if include.eye_catch != false and page.eye_catch %}
+    <p style="text-align: center">
+        <img class="eye-catch" src="{{ page.eye_catch }}"/>
+    </p>
+    {% endif %}
+</header>

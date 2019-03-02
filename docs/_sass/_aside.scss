@@ -1,0 +1,61 @@
+.site-aside {
+    font-size: 0.95em;
+    padding-top: $margin;
+    padding-bottom: $margin;
+
+    @media screen and (max-width: $mobile-width) {
+        border-top: 3px solid $brand-color;
+    }
+
+    h2 {
+        font-size: 1.2em;
+        line-height: 1.3;
+        margin: 1em 0;
+    }
+
+    .block {
+        margin-bottom: $margin;
+        h2 {
+            margin: 0;
+        }
+    }
+
+    #search {
+        box-sizing: border-box;
+        width: 100%;
+    }
+
+    ol, ul {
+        margin: 1.5em 0;
+        list-style: none;
+        line-height: 1.2em;
+        li {
+            border-bottom: 1px solid $border-color;
+            &:first-child {
+                border-top: 1px solid $border-color;
+            }
+            a, span {
+                padding: 0.5em 0.3em;
+                display: block;
+                width: 100%;
+            }
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+    }
+
+    ul.icons {
+        @extend .clearfix;
+        list-style: none;
+        li {
+            border: none;
+            font-size: 1.8em;
+            margin-bottom: 0;
+            float: left;
+            a {
+                padding: 0;
+            }
+        }
+    }
+}
