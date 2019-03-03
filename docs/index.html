@@ -2,21 +2,7 @@
 layout: default
 ---
 
-
-<!--
-{% assign pages = site.pages | where: "title", "About" %}
-<div class="article-wrapper">
-  <article>
-    {% include article-header.html page=post %}
-    <section class="post-content">
-      {{ pages[0].content }}
-    </section>
-   </article>
-</div>
--->
-
-
-{% assign pages = site.pages | where: "title", "About" %}
+{% assign pages = site.pages | where: "title", "Main" %}
 <div class="article-wrapper">
   <article>
     <section class="post-content">
