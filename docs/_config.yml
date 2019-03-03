@@ -1,12 +1,10 @@
 #
 # Basic settings.
 #
-# url: http://localhost:4000
-# baseurl: ""
 url: http://DaehwanKimLab.github.io
 baseurl: /hisat2
-title: Your name
-description: Some descriptions of yourself.
+title: HISAT2
+description: graph-based alignment of next generation sequencing reads to a population of genomes
 avatar: /assets/img/ogp.png
 # favicon: /favicon.ico
 favicon: /assets/img/ogp.png
