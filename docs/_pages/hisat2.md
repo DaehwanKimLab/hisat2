@@ -2,7 +2,7 @@
 layout: page
 title: Main
 permalink: /main/
-order: 2
+order: 1
 share: false
 ---
 

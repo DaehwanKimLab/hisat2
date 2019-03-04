@@ -2,7 +2,7 @@
 layout: page
 title: Manual
 permalink: /manual/
-order: 1
+order: 3
 share: false
 ---
 
