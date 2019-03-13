@@ -277,1240 +277,688 @@ considered valid, and `x` is the read length.
 
 ### Main arguments
 
-<table><tr><td>
-
+* -x `<hisat2-idx>`  
+    The basename of the index for the reference genome.  The basename is the name of
+    any of the index files up to but not including the final `.1.ht2` / etc.
+    `hisat2` looks for the specified index first in the current directory,
+    then in the directory specified in the `HISAT2_INDEXES` environment variable.
+{: #hisat2-options-x}
 [`-x`]: #hisat2-options-x
 
-    -x <hisat2-idx>
-
-</td><td>
-
-The basename of the index for the reference genome.  The basename is the name of
-any of the index files up to but not including the final `.1.ht2` / etc.
-`hisat2` looks for the specified index first in the current directory,
-then in the directory specified in the `HISAT2_INDEXES` environment variable.
-
-</td></tr><tr><td>
-
+* -1 `<m1>`  
+    Comma-separated list of files containing mate 1s (filename usually includes
+    `_1`), e.g. `-1 flyA_1.fq,flyB_1.fq`.  Sequences specified with this option must
+    correspond file-for-file and read-for-read with those specified in `<m2>`. Reads
+    may be a mix of different lengths. If `-` is specified, `hisat2` will read the
+    mate 1s from the "standard in" or "stdin" filehandle.
+{: #hisat2-options-1}
 [`-1`]: #hisat2-options-1
 
-    -1 <m1>
-
-</td><td>
-
-Comma-separated list of files containing mate 1s (filename usually includes
-`_1`), e.g. `-1 flyA_1.fq,flyB_1.fq`.  Sequences specified with this option must
-correspond file-for-file and read-for-read with those specified in `<m2>`. Reads
-may be a mix of different lengths. If `-` is specified, `hisat2` will read the
-mate 1s from the "standard in" or "stdin" filehandle.
-
-</td></tr><tr><td>
-
+* -2 `<m2>`  
+    Comma-separated list of files containing mate 2s (filename usually includes
+    `_2`), e.g. `-2 flyA_2.fq,flyB_2.fq`.  Sequences specified with this option must
+    correspond file-for-file and read-for-read with those specified in `<m1>`. Reads
+    may be a mix of different lengths. If `-` is specified, `hisat2` will read the
+    mate 2s from the "standard in" or "stdin" filehandle.
+{: #hisat2-options-2}
 [`-2`]: #hisat2-options-2
 
-    -2 <m2>
-
-</td><td>
-
-Comma-separated list of files containing mate 2s (filename usually includes
-`_2`), e.g. `-2 flyA_2.fq,flyB_2.fq`.  Sequences specified with this option must
-correspond file-for-file and read-for-read with those specified in `<m1>`. Reads
-may be a mix of different lengths. If `-` is specified, `hisat2` will read the
-mate 2s from the "standard in" or "stdin" filehandle.
-
-</td></tr><tr><td>
-
+* -U `<r>`  
+    Comma-separated list of files containing unpaired reads to be aligned, e.g.
+    `lane1.fq,lane2.fq,lane3.fq,lane4.fq`.  Reads may be a mix of different lengths.
+    If `-` is specified, `hisat2` gets the reads from the "standard in" or "stdin"
+    filehandle.
+{: #hisat2-options-U}
 [`-U`]: #hisat2-options-U
 
-    -U <r>
-
-</td><td>
-
-Comma-separated list of files containing unpaired reads to be aligned, e.g.
-`lane1.fq,lane2.fq,lane3.fq,lane4.fq`.  Reads may be a mix of different lengths.
-If `-` is specified, `hisat2` gets the reads from the "standard in" or "stdin"
-filehandle.
-
-</td></tr><tr><td>
-
+*  \--sra-acc `<SRA accession number>`  
+    Comma-separated list of SRA accession numbers, e.g. `--sra-acc SRR353653,SRR353654`.
+    Information about read types is available at <code>http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?sp=runinfo&acc=<b>sra-acc</b>&retmode=xml</code>,
+    where <b>sra-acc</b> is SRA accession number.  If users run HISAT2 on a computer cluster, it is recommended to disable SRA-related caching (see the instruction at [SRA-MANUAL]).
+{: #hisat2-options-sra-acc}
 [`--sra-acc`]: #hisat2-options-sra-acc
-
-    --sra-acc <SRA accession number>
-
-</td><td>
-
-Comma-separated list of SRA accession numbers, e.g. `--sra-acc SRR353653,SRR353654`.
-Information about read types is available at http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?sp=runinfo&acc=<b>sra-acc</b>&retmode=xml,
-where <b>sra-acc</b> is SRA accession number.  If users run HISAT2 on a computer cluster, it is recommended to disable SRA-related caching (see the instruction at [SRA-MANUAL]).
-
 [SRA-MANUAL]:	     https://github.com/ncbi/sra-tools/wiki/Toolkit-Configuration
 
-</td></tr><tr><td>
-
+*  -S `<hit>`  
+    File to write SAM alignments to.  By default, alignments are written to the
+    "standard out" or "stdout" filehandle (i.e. the console).
+{: #hisat2-options-S}
 [`-S`]: #hisat2-options-S
-
-    -S <hit>
-
-</td><td>
-
-File to write SAM alignments to.  By default, alignments are written to the
-"standard out" or "stdout" filehandle (i.e. the console).
-
-</td></tr></table>
 
 ### Options
 
 #### Input options
 
-<table>
-<tr><td id="hisat2-options-q">
-
+* -q  
+    Reads (specified with `<m1>`, `<m2>`, `<s>`) are FASTQ files.  FASTQ files
+    usually have extension `.fq` or `.fastq`.  FASTQ is the default format.  See
+    also: [`--solexa-quals`] and [`--int-quals`].
+{: #hisat2-options-q}
 [`-q`]: #hisat2-options-q
 
-    -q
-
-</td><td>
-
-Reads (specified with `<m1>`, `<m2>`, `<s>`) are FASTQ files.  FASTQ files
-usually have extension `.fq` or `.fastq`.  FASTQ is the default format.  See
-also: [`--solexa-quals`] and [`--int-quals`].
-
-</td></tr>
-<tr><td id="hisat2-options-qseq">
-
+* \--qseq  
+    Reads (specified with `<m1>`, `<m2>`, `<s>`) are QSEQ files.  QSEQ files usually
+    end in `_qseq.txt`.  See also: [`--solexa-quals`] and [`--int-quals`].
+{: #hisat2-options-qseq}
 [`--qseq`]: #hisat2-options-qseq
 
-    --qseq
-
-</td><td>
-
-Reads (specified with `<m1>`, `<m2>`, `<s>`) are QSEQ files.  QSEQ files usually
-end in `_qseq.txt`.  See also: [`--solexa-quals`] and [`--int-quals`].
-
-</td></tr>
-<tr><td id="hisat2-options-f">
-
+* -f  
+    Reads (specified with `<m1>`, `<m2>`, `<s>`) are FASTA files.  FASTA files
+    usually have extension `.fa`, `.fasta`, `.mfa`, `.fna` or similar.  FASTA files
+    do not have a way of specifying quality values, so when `-f` is set, the result
+    is as if `--ignore-quals` is also set.
+{: #hisat2-options-f}
 [`-f`]: #hisat2-options-f
 
-    -f
-
-</td><td>
-
-Reads (specified with `<m1>`, `<m2>`, `<s>`) are FASTA files.  FASTA files
-usually have extension `.fa`, `.fasta`, `.mfa`, `.fna` or similar.  FASTA files
-do not have a way of specifying quality values, so when `-f` is set, the result
-is as if `--ignore-quals` is also set.
-
-</td></tr>
-<tr><td id="hisat2-options-r">
-
+* -r  
+    Reads (specified with `<m1>`, `<m2>`, `<s>`) are files with one input sequence
+    per line, without any other information (no read names, no qualities).  When
+    `-r` is set, the result is as if `--ignore-quals` is also set.
+{: #hisat2-options-r}
 [`-r`]: #hisat2-options-r
 
-    -r
-
-</td><td>
-
-Reads (specified with `<m1>`, `<m2>`, `<s>`) are files with one input sequence
-per line, without any other information (no read names, no qualities).  When
-`-r` is set, the result is as if `--ignore-quals` is also set.
-
-</td></tr>
-<tr><td id="hisat2-options-c">
-
+* -c  
+    The read sequences are given on command line.  I.e. `<m1>`, `<m2>` and
+    `<singles>` are comma-separated lists of reads rather than lists of read files.
+    There is no way to specify read names or qualities, so `-c` also implies
+    `--ignore-quals`.
+{: #hisat2-options-c}
 [`-c`]: #hisat2-options-c
 
-    -c
-
-</td><td>
-
-The read sequences are given on command line.  I.e. `<m1>`, `<m2>` and
-`<singles>` are comma-separated lists of reads rather than lists of read files.
-There is no way to specify read names or qualities, so `-c` also implies
-`--ignore-quals`.
-
-</td></tr>
-<tr><td id="hisat2-options-s">
-
+* -s/\--skip `<int>`  
+    Skip (i.e. do not align) the first `<int>` reads or pairs in the input.
+{: #hisat2-options-s}
 [`-s`/`--skip`]: #hisat2-options-s
 [`-s`]: #hisat2-options-s
 
-    -s/--skip <int>
-
-</td><td>
-
-Skip (i.e. do not align) the first `<int>` reads or pairs in the input.
-
-</td></tr>
-<tr><td id="hisat2-options-u">
-
+* -u/\--qupto `<int>`  
+    Align the first `<int>` reads or read pairs from the input (after the
+    [`-s`/`--skip`] reads or pairs have been skipped), then stop.  Default: no limit.
+{: #hisat2-options-u}
 [`-u`/`--qupto`]: #hisat2-options-u
 [`-u`]: #hisat2-options-u
 
-    -u/--qupto <int>
-
-</td><td>
-
-Align the first `<int>` reads or read pairs from the input (after the
-[`-s`/`--skip`] reads or pairs have been skipped), then stop.  Default: no limit.
-
-</td></tr>
-<tr><td id="hisat2-options-5">
-
+* -5/\--trim5 `<int>`  
+    Trim `<int>` bases from 5' (left) end of each read before alignment (default: 0).
+{: #hisat2-options-5}
 [`-5`/`--trim5`]: #hisat2-options-5
 [`-5`]: #hisat2-options-5
 
-    -5/--trim5 <int>
-
-</td><td>
-
-Trim `<int>` bases from 5' (left) end of each read before alignment (default: 0).
-
-</td></tr>
-<tr><td id="hisat2-options-3">
-
+* -3/\--trim3 `<int>`  
+    Trim `<int>` bases from 3' (right) end of each read before alignment (default: 0).
+{: #hisat2-options-3}
 [`-3`/`--trim3`]: #hisat2-options-3
 [`-3`]: #hisat2-options-3
 
-    -3/--trim3 <int>
-
-</td><td>
-
-Trim `<int>` bases from 3' (right) end of each read before alignment (default:
-0).
-
-</td></tr><tr><td id="hisat2-options-phred33-quals">
-
+* \--phred33  
+    Input qualities are ASCII chars equal to the [Phred quality] plus 33.  This is
+    also called the "Phred+33" encoding, which is used by the very latest Illumina
+    pipelines.
+{: #hisat2-options-phred33-quals}
 [`--phred33`]: #hisat2-options-phred33-quals
-
-    --phred33
-
-</td><td>
-
-Input qualities are ASCII chars equal to the [Phred quality] plus 33.  This is
-also called the "Phred+33" encoding, which is used by the very latest Illumina
-pipelines.
-
 [Phred quality]: http://en.wikipedia.org/wiki/Phred_quality_score
 
-</td></tr>
-<tr><td id="hisat2-options-phred64-quals">
-
+* \--phred64  
+    Input qualities are ASCII chars equal to the [Phred quality] plus 64.  This is
+    also called the "Phred+64" encoding.
+{: #hisat2-options-phred64-quals}
 [`--phred64`]: #hisat2-options-phred64-quals
 
-    --phred64
-
-</td><td>
-
-Input qualities are ASCII chars equal to the [Phred quality] plus 64.  This is
-also called the "Phred+64" encoding.
-
-</td></tr>
-<tr><td id="hisat2-options-solexa-quals">
-
+* \--solexa-quals  
+    Convert input qualities from [Solexa][Phred quality] (which can be negative) to
+    [Phred][Phred quality] (which can't).  This scheme was used in older Illumina GA
+    Pipeline versions (prior to 1.3).  Default: off.
+{: #hisat2-options-solexa-quals}
 [`--solexa-quals`]: #hisat2-options-solexa-quals
 
-    --solexa-quals
-
-</td><td>
-
-Convert input qualities from [Solexa][Phred quality] (which can be negative) to
-[Phred][Phred quality] (which can't).  This scheme was used in older Illumina GA
-Pipeline versions (prior to 1.3).  Default: off.
-
-</td></tr>
-<tr><td id="hisat2-options-int-quals">
-
+* \--int-quals  
+    Quality values are represented in the read input file as space-separated ASCII
+    integers, e.g., `40 40 30 40`..., rather than ASCII characters, e.g., `II?I`....
+    Integers are treated as being on the [Phred quality] scale unless
+    [`--solexa-quals`] is also specified. Default: off.
+{: #hisat2-options-int-quals}
 [`--int-quals`]: #hisat2-options-int-quals
-
-    --int-quals
-
-</td><td>
-
-Quality values are represented in the read input file as space-separated ASCII
-integers, e.g., `40 40 30 40`..., rather than ASCII characters, e.g., `II?I`....
- Integers are treated as being on the [Phred quality] scale unless
-[`--solexa-quals`] is also specified. Default: off.
-
-</td></tr></table>
 
 #### Alignment options
 
-<table>
-
-<tr><td id="hisat2-options-n-ceil">
-
+* \--n-ceil `<func>`  
+    Sets a function governing the maximum number of ambiguous characters (usually
+    `N`s and/or `.`s) allowed in a read as a function of read length.  For instance,
+    specifying `-L,0,0.15` sets the N-ceiling function `f` to `f(x) = 0 + 0.15 * x`,
+    where x is the read length.  See also: [setting function options].  Reads
+    exceeding this ceiling are [filtered out].  Default: `L,0,0.15`.
+{: #hisat2-options-n-ceil}
 [`--n-ceil`]: #hisat2-options-n-ceil
-
-    --n-ceil <func>
-
-</td><td>
-
-Sets a function governing the maximum number of ambiguous characters (usually
-`N`s and/or `.`s) allowed in a read as a function of read length.  For instance,
-specifying `-L,0,0.15` sets the N-ceiling function `f` to `f(x) = 0 + 0.15 * x`,
-where x is the read length.  See also: [setting function options].  Reads
-exceeding this ceiling are [filtered out].  Default: `L,0,0.15`.
-
 [filtered out]: #filtering
 
-</td></tr>
-
-<tr><td id="hisat2-options-ignore-quals">
-
+* \--ignore-quals  
+    When calculating a mismatch penalty, always consider the quality value at the
+    mismatched position to be the highest possible, regardless of the actual value. 
+    I.e. input is treated as though all quality values are high.  This is also the
+    default behavior when the input doesn't specify quality values (e.g. in [`-f`],
+    [`-r`], or [`-c`] modes).
+{: #hisat2-options-ignore-quals}
 [`--ignore-quals`]: #hisat2-options-ignore-quals
 
-    --ignore-quals
-
-</td><td>
-
-When calculating a mismatch penalty, always consider the quality value at the
-mismatched position to be the highest possible, regardless of the actual value. 
-I.e. input is treated as though all quality values are high.  This is also the
-default behavior when the input doesn't specify quality values (e.g. in [`-f`],
-[`-r`], or [`-c`] modes).
-
-</td></tr>
-<tr><td id="hisat2-options-nofw">
-
+* \--nofw/\--norc  
+    If `--nofw` is specified, `hisat2` will not attempt to align unpaired reads to
+    the forward (Watson) reference strand.  If `--norc` is specified, `hisat2` will
+    not attempt to align unpaired reads against the reverse-complement (Crick)
+    reference strand. In paired-end mode, `--nofw` and `--norc` pertain to the
+    fragments; i.e. specifying `--nofw` causes `hisat2` to explore only those
+    paired-end configurations corresponding to fragments from the reverse-complement
+    (Crick) strand.  Default: both strands enabled. 
+{: #hisat2-options-nofw}
 [`--nofw`]: #hisat2-options-nofw
-
-    --nofw/--norc
-
-</td><td>
-
-If `--nofw` is specified, `hisat2` will not attempt to align unpaired reads to
-the forward (Watson) reference strand.  If `--norc` is specified, `hisat2` will
-not attempt to align unpaired reads against the reverse-complement (Crick)
-reference strand. In paired-end mode, `--nofw` and `--norc` pertain to the
-fragments; i.e. specifying `--nofw` causes `hisat2` to explore only those
-paired-end configurations corresponding to fragments from the reverse-complement
-(Crick) strand.  Default: both strands enabled. 
-
-</td></tr>
-
-</table>
 
 #### Scoring options
 
-<table>
-
-<tr><td id="hisat2-options-mp">
-
+* \--mp `MX,MN`  
+    Sets the maximum (`MX`) and minimum (`MN`) mismatch penalties, both integers.  A
+    number less than or equal to `MX` and greater than or equal to `MN` is
+    subtracted from the alignment score for each position where a read character
+    aligns to a reference character, the characters do not match, and neither is an
+    `N`.  If [`--ignore-quals`] is specified, the number subtracted quals `MX`.
+    Otherwise, the number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
+    where Q is the Phred quality value.  Default: `MX` = 6, `MN` = 2.
+{: #hisat2-options-mp}
 [`--mp`]: #hisat2-options-mp
 
-    --mp MX,MN
-
-</td><td>
-
-Sets the maximum (`MX`) and minimum (`MN`) mismatch penalties, both integers.  A
-number less than or equal to `MX` and greater than or equal to `MN` is
-subtracted from the alignment score for each position where a read character
-aligns to a reference character, the characters do not match, and neither is an
-`N`.  If [`--ignore-quals`] is specified, the number subtracted quals `MX`.
-Otherwise, the number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
-where Q is the Phred quality value.  Default: `MX` = 6, `MN` = 2.
-
-</td></tr>
-<tr><td id="hisat2-options-sp">
-
+* \--sp `MX,MN`  
+    Sets the maximum (`MX`) and minimum (`MN`) penalties for soft-clipping per base, 
+    both integers. A number less than or equal to `MX` and greater than or equal to `MN` is
+    subtracted from the alignment score for each position.
+    The number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
+    where Q is the Phred quality value.  Default: `MX` = 2, `MN` = 1.
+{: #hisat2-options-sp}
 [`--sp`]: #hisat2-options-sp
 
-    --sp MX,MN
-
-</td><td>
-
-Sets the maximum (`MX`) and minimum (`MN`) penalties for soft-clipping per base, 
-both integers. A number less than or equal to `MX` and greater than or equal to `MN` is
-subtracted from the alignment score for each position.
-The number subtracted is `MN + floor( (MX-MN)(MIN(Q, 40.0)/40.0) )`
-where Q is the Phred quality value.  Default: `MX` = 2, `MN` = 1.
-
-</td></tr>
-<tr><td id="hisat2-options-no-softclip">
-
+* \--no-softclip  
+    Disallow soft-clipping.
+{: #hisat2-options-no-softclip}
 [`--sp`]: #hisat2-options-no-softclip
 
-    --no-softclip
-
-</td><td>
-
-Disallow soft-clipping.
-
-</td></tr>
-
-<tr><td id="hisat2-options-np">
-
+* \--np `<int>`  
+    Sets penalty for positions where the read, reference, or both, contain an
+    ambiguous character such as `N`.  Default: 1.
+{: #hisat2-options-np}
 [`--np`]: #hisat2-options-np
 
-    --np <int>
-
-</td><td>
-
-Sets penalty for positions where the read, reference, or both, contain an
-ambiguous character such as `N`.  Default: 1.
-
-</td></tr>
-<tr><td id="hisat2-options-rdg">
-
+* \--rdg `<int1>,<int2>`  
+    Sets the read gap open (`<int1>`) and extend (`<int2>`) penalties.  A read gap of
+    length N gets a penalty of `<int1>` + N * `<int2>`.  Default: 5, 3.
+{: #hisat2-options-rdg}
 [`--rdg`]: #hisat2-options-rdg
 
-    --rdg <int1>,<int2>
-
-</td><td>
-
-Sets the read gap open (`<int1>`) and extend (`<int2>`) penalties.  A read gap of
-length N gets a penalty of `<int1>` + N * `<int2>`.  Default: 5, 3.
-
-</td></tr>
-<tr><td id="hisat2-options-rfg">
-
+* \--rfg `<int1>,<int2>`  
+    Sets the reference gap open (`<int1>`) and extend (`<int2>`) penalties.  A
+    reference gap of length N gets a penalty of `<int1>` + N * `<int2>`.  Default:
+    5, 3.
+{: #hisat2-options-rfg}
 [`--rfg`]: #hisat2-options-rfg
 
-    --rfg <int1>,<int2>
-
-</td><td>
-
-Sets the reference gap open (`<int1>`) and extend (`<int2>`) penalties.  A
-reference gap of length N gets a penalty of `<int1>` + N * `<int2>`.  Default:
-5, 3.
-
-</td></tr>
-<tr><td id="hisat2-options-score-min">
-
+* \--score-min `<func>`  
+    Sets a function governing the minimum alignment score needed for an alignment to
+    be considered "valid" (i.e. good enough to report).  This is a function of read
+    length. For instance, specifying `L,0,-0.6` sets the minimum-score function `f`
+    to `f(x) = 0 + -0.6 * x`, where `x` is the read length.  See also: [setting function options].  The default is `L,0,-0.2`.
+{: #hisat2-options-score-min}
 [`--score-min`]: #hisat2-options-score-min
-
-    --score-min <func>
-
-</td><td>
-
-Sets a function governing the minimum alignment score needed for an alignment to
-be considered "valid" (i.e. good enough to report).  This is a function of read
-length. For instance, specifying `L,0,-0.6` sets the minimum-score function `f`
-to `f(x) = 0 + -0.6 * x`, where `x` is the read length.  See also: [setting
-function options].  The default is `L,0,-0.2`.
-
-</td></tr>
-</table>
 
 #### Spliced alignment options
 
-<table>
-
-<tr><td id="hisat2-options-pen-cansplice">
-
+* \--pen-cansplice `<int>`  
+    Sets the penalty for each pair of canonical splice sites (e.g. GT/AG). Default: 0.
+{: #hisat2-options-pen-cansplice}
 [`--pen-cansplice`]: #hisat2-options-pen-cansplice
 
-    --pen-cansplice <int>
-
-</td><td>
-
-Sets the penalty for each pair of canonical splice sites (e.g. GT/AG). Default: 0.
-
-</td></tr>
-
-<tr><td id="hisat2-options-pen-noncansplice">
-
+* \--pen-noncansplice `<int>`  
+    Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 12.
+{: #hisat2-options-pen-noncansplice}
 [`--pen-noncansplice`]: #hisat2-options-pen-noncansplice
 
-    --pen-noncansplice <int>
-
-</td><td>
-
-Sets the penalty for each pair of non-canonical splice sites (e.g. non-GT/AG). Default: 12.
-
-</td></tr>
-<tr><td id="hisat2-options-pen-canintronlen">
-
+* \--pen-canintronlen `<func>`  
+    Sets the penalty for long introns with canonical splice sites so that alignments with shorter introns are preferred
+    to those with longer ones.  Default: G,-8,1
+{: #hisat2-options-pen-canintronlen}
 [`--pen-canintronlen`]: #hisat2-options-pen-canintronlen
 
-    --pen-canintronlen <func>
-
-</td><td>
-
-Sets the penalty for long introns with canonical splice sites so that alignments with shorter introns are preferred
-to those with longer ones.  Default: G,-8,1
-
-</td></tr>
-<tr><td id="hisat2-options-pen-noncanintronlen">
-
+* \--pen-noncanintronlen `<func>`  
+    Sets the penalty for long introns with noncanonical splice sites so that alignments with shorter introns are preferred
+    to those with longer ones.  Default: G,-8,1
+{: #hisat2-options-pen-noncanintronlen}
 [`--pen-noncanintronlen`]: #hisat2-options-pen-noncanintronlen
 
-    --pen-noncanintronlen <func>
-
-</td><td>
-
-Sets the penalty for long introns with noncanonical splice sites so that alignments with shorter introns are preferred
-to those with longer ones.  Default: G,-8,1
-
-
-</td></tr>
-<tr><td id="hisat2-options-min-intronlen">
-
+* \--min-intronlen `<int>`  
+    Sets minimum intron length. Default: 20
+{: #hisat2-options-min-intronlen}
 [`--min-intronlen`]: #hisat2-options-min-intronlen
 
-    --min-intronlen <int>
-
-</td><td>
-
-Sets minimum intron length. Default: 20
-
-</td></tr>
-
-
-<tr><td id="hisat2-options-pen-intronlen">
-
+* \--max-intronlen `<int>`  
+    Sets maximum intron length. Default: 500000
+{: #hisat2-options-max-intronlen}
 [`--max-intronlen`]: #hisat2-options-max-intronlen
 
-    --max-intronlen <int>
-
-</td><td>
-
-Sets maximum intron length. Default: 500000
-
-</td></tr>
-
-<tr><td id="hisat2-options-known-splicesite-infile">
-
+* \--known-splicesite-infile `<path>`  
+    With this mode, you can provide a list of known splice sites, which HISAT2 makes use of to align reads with small anchors.   
+    You can create such a list using `python hisat2_extract_splice_sites.py genes.gtf > splicesites.txt`,
+    where `hisat2_extract_splice_sites.py` is included in the HISAT2 package, `genes.gtf` is a gene annotation file,
+    and `splicesites.txt` is a list of splice sites with which you provide HISAT2 in this mode.
+    Note that it is better to use indexes built using annotated transcripts (such as <i>genome_tran</i> or <i>genome_snp_tran</i>), which works better
+    than using this option.  It has no effect to provide splice sites that are already included in the indexes.
+{: #hisat2-options-known-splicesite-infile}
 [`--splice-infile`]: #hisat2-options-known-splicesite-infile
 
-    --known-splicesite-infile <path>
+* \--novel-splicesite-outfile `<path>`  
+    In this mode, HISAT2 reports a list of splice sites in the file <path>:  
+    > chromosome name `<tab>` genomic position of the flanking base on the left side of an intron `<tab>` genomic position of the flanking base on the right `<tab>` strand (+, -, and .)
 
-</td><td>
-
-With this mode, you can provide a list of known splice sites, which HISAT2 makes use of to align reads with small anchors.   
-You can create such a list using `python hisat2_extract_splice_sites.py genes.gtf > splicesites.txt`,
-where `hisat2_extract_splice_sites.py` is included in the HISAT2 package, `genes.gtf` is a gene annotation file,
-and `splicesites.txt` is a list of splice sites with which you provide HISAT2 in this mode.
-Note that it is better to use indexes built using annotated transcripts (such as <i>genome_tran</i> or <i>genome_snp_tran</i>), which works better
-than using this option.  It has no effect to provide splice sites that are already included in the indexes.
-
-</td></tr>
-
-<tr><td id="hisat-options-novel-splice-outfile">
-
+    '.' indicates an unknown strand for non-canonical splice sites.
+{: #hisat2-options-novel-splicesite-outfile}
 [`--novel-splicesite-outfile`]: #hisat2-options-novel-splicesite-outfile
 
-    --novel-splicesite-outfile <path>
-
-</td><td>
-
-In this mode, HISAT2 reports a list of splice sites in the file <path>:  
-   chromosome name `<tab>` genomic position of the flanking base on the left side of an intron `<tab>` genomic position of the flanking base on the right `<tab>` strand (+, -, and .)
-   '.' indicates an unknown strand for non-canonical splice sites.
-
-</td></tr>
-
-<tr><td id="hisat2-options-novel-splicesite-infile">
-
+* \--novel-splicesite-infile `<path>`  
+    With this mode, you can provide a list of novel splice sites that were generated from the above option "--novel-splicesite-outfile".
+{: #hisat2-options-novel-splicesite-infile}
 [`--novel-splicesite-infile`]: #hisat2-options-novel-splicesite-infile
 
-    --novel-splicesite-infile <path>
-
-</td><td>
-
-With this mode, you can provide a list of novel splice sites that were generated from the above option "--novel-splicesite-outfile".
-
-</td></tr>
-
-<tr><td id="hisat2-options-no-temp-splicesite">
-
+* \--no-temp-splicesite  
+    HISAT2, by default, makes use of splice sites found by earlier reads to align later reads in the same run,
+    in particular, reads with small anchors (<= 15 bp).  
+    The option disables this default alignment strategy. 
+{: #hisat2-options-no-temp-splicesite}
 [`--no-temp-splicesite`]: #hisat2-options-no-temp-splicesite
 
-    --no-temp-splicesite
-
-</td><td>
-
-HISAT2, by default, makes use of splice sites found by earlier reads to align later reads in the same run,
-in particular, reads with small anchors (<= 15 bp).  
-The option disables this default alignment strategy. 
-
-</td></tr>
-
-<tr><td id="hisat2-options-no-spliced-alignment">
-
+* \--no-spliced-alignment  
+    Disable spliced alignment.
+{: #hisat2-options-no-spliced-alignment}
 [`--no-spliced-alignment`]: #hisat2-options-no-spliced-alignment
 
-    --no-spliced-alignment
+* \--rna-strandness `<string>`  
+    Specify strand-specific information: the default is unstranded.  
+    For single-end reads, use F or R. 
+    >'F' means a read corresponds to a transcript.  
+    >'R' means a read corresponds to the reverse complemented counterpart of a transcript.
+    
+    For paired-end reads, use either FR or RF.  
+    With this option being used, every read alignment will have an XS attribute tag:
+    >'+' means a read belongs to a transcript on '+' strand of genome.  
+    >'-' means a read belongs to a transcript on '-' strand of genome.
 
-</td><td>
-
-Disable spliced alignment.
-
-</td></tr>
-
-
-<tr><td id="hisat2-options-rna-strandness">
+    (TopHat has a similar option, --library-type option, where fr-firststrand corresponds to R and RF; fr-secondstrand corresponds to F and FR.)
+{: #hisat2-options-rna-strandness}
 [`--rna-strandness`]: #hisat2-options-rna-strandness
 
-    --rna-strandness <string>
-
-</td><td>
-
-Specify strand-specific information: the default is unstranded.  
-For single-end reads, use F or R. 
- 'F' means a read corresponds to a transcript.
- 'R' means a read corresponds to the reverse complemented counterpart of a transcript.
-For paired-end reads, use either FR or RF.  
-With this option being used, every read alignment will have an XS attribute tag:
- '+' means a read belongs to a transcript on '+' strand of genome.
- '-' means a read belongs to a transcript on '-' strand of genome.
-
-(TopHat has a similar option, --library-type option, where fr-firststrand corresponds to R and RF; fr-secondstrand corresponds to F and FR.)
-</td></tr>
-
-<tr><td id="hisat2-options-tmo">
+* \--tmo/--transcriptome-mapping-only  
+    Report only those alignments within known transcripts.
+{: #hisat2-options-tmo}
 [`--tmo/--transcriptome-mapping-only`]: #hisat2-options-tmo
 
-    --tmo/--transcriptome-mapping-only
-
-</td><td>
-
-Report only those alignments within known transcripts.
-
-</td></tr>
-
-<tr><td id="hisat2-options-dta">
+* \--dta/\--downstream-transcriptome-assembly  
+    Report alignments tailored for transcript assemblers including StringTie.
+    With this option, HISAT2 requires longer anchor lengths for de novo discovery of splice sites.
+    This leads to fewer alignments with short-anchors, 
+    which helps transcript assemblers improve significantly in computation and memory usage.
+{: #hisat2-options-dta}
 [`--dta/--downstream-transcriptome-assembly`]: #hisat2-options-dta
 
-    --dta/--downstream-transcriptome-assembly
-
-</td><td>
-
-Report alignments tailored for transcript assemblers including StringTie.
-With this option, HISAT2 requires longer anchor lengths for de novo discovery of splice sites.
-This leads to fewer alignments with short-anchors, 
-which helps transcript assemblers improve significantly in computation and memory usage.
-
-</td></tr>
-
-<tr><td id="hisat2-options-dta-cufflinks">
+* \--dta-cufflinks  
+    Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta),
+    With this option, HISAT2 looks for novel splice sites with three signals (GT/AG, GC/AG, AT/AC), but all user-provided splice sites are used irrespective of their signals.
+    HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
+{: #hisat2-options-dta-cufflinks}
 [`--dta-cufflinks`]: #hisat2-options-dta-cufflinks
 
-    --dta-cufflinks
-
-</td><td>
-
-Report alignments tailored specifically for Cufflinks. In addition to what HISAT2 does with the above option (--dta),
-With this option, HISAT2 looks for novel splice sites with three signals (GT/AG, GC/AG, AT/AC), but all user-provided splice sites are used irrespective of their signals.
-HISAT2 produces an optional field, XS:A:[+-], for every spliced alignment.
-
-</td></tr>
-
-<tr><td id="hisat2-options-avoid-pseudogene">
+* \--avoid-pseudogene  
+    Try to avoid aligning reads to pseudogenes.  Note this option is experimental and needs further investigation.
+{: #hisat2-options-avoid-pseudogene}
 [`--avoid-pseudogene`]: #hisat2-options-avoid-pseudogene
 
-    --avoid-pseudogene
-
-</td><td>
-
-Try to avoid aligning reads to pseudogenes.  Note this option is experimental and needs further investigation.
-
-</td></tr>
-
-<tr><td id="hisat2-options-no-templatelen-adjustment">
+* \--no-templatelen-adjustment  
+    Disables template length adjustment for RNA-seq reads.
+{: #hisat2-options-no-templatelen-adjustment}
 [`--no-templatelen-adjustment`]: #hisat2-options-no-templatelen-adjustment
-
-    --no-templatelen-adjustment
-
-</td><td>
-
-Disables template length adjustment for RNA-seq reads.
-
-</td></tr>
-
-</table>
 
 #### Reporting options
 
-<table>
-
-<tr><td id="hisat2-options-k">
-
+* -k `<int>`  
+    It searches for at most `<int>` distinct, primary alignments for each read.
+    Primary alignments mean alignments whose alignment score is equal or higher than any other alignments.
+    The search terminates when it can't find more distinct valid alignments, or when it
+    finds `<int>`, whichever happens first. The alignment score for a paired-end
+    alignment equals the sum of the alignment scores of the individual mates. Each
+    reported read or pair alignment beyond the first has the SAM 'secondary' bit
+    (which equals 256) set in its FLAGS field.  For reads that have more than
+    `<int>` distinct, valid alignments, `hisat2` does not guarantee that the
+    `<int>` alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)
+    <p/>
+    Note: HISAT2 is not designed with large values for `-k` in mind, and when
+    aligning reads to long, repetitive genomes large `-k` can be very, very slow.
+{: #hisat2-options-k}
 [`-k`]: #hisat2-options-k
 
-    -k <int>
-
-</td><td>
-
-It searches for at most `<int>` distinct, primary alignments for each read.
-Primary alignments mean alignments whose alignment score is equal or higher than any other alignments.
-The search terminates when it can't find more distinct valid alignments, or when it
-finds `<int>`, whichever happens first. The alignment score for a paired-end
-alignment equals the sum of the alignment scores of the individual mates. Each
-reported read or pair alignment beyond the first has the SAM 'secondary' bit
-(which equals 256) set in its FLAGS field.  For reads that have more than
-`<int>` distinct, valid alignments, `hisat2` does not guarantee that the
-`<int>` alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)
-
-Note: HISAT2 is not designed with large values for `-k` in mind, and when
-aligning reads to long, repetitive genomes large `-k` can be very, very slow.
-
-</td></tr>
-<tr><td id="hisat2-options-max-seeds">
-
+* \--max-seeds `<int>`  
+    HISAT2, like other aligners, uses seed-and-extend approaches.  HISAT2 tries to extend seeds to full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that will be extended. HISAT2 extends up to these many seeds and skips the rest of the seeds. Large values for `--max-seeds` may improve alignment sensitivity, but HISAT2 is not designed with large values for `--max-seeds` in mind, and when aligning reads to long, repetitive genomes large `--max-seeds` can be very, very slow. The default value is the maximum of 5 and the value that comes with`-k`.
+{: #hisat2-options-max-seeds}
 [`--max-seeds`]: #hisat2-options-max-seeds
 
-    --max-seeds <int>
-
-</td><td>
-
-HISAT2, like other aligners, uses seed-and-extend approaches.  HISAT2 tries to extend seeds to full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that will be extended. HISAT2 extends up to these many seeds and skips the rest of the seeds. Large values for `--max-seeds` may improve alignment sensitivity, but HISAT2 is not designed with large values for `--max-seeds` in mind, and when aligning reads to long, repetitive genomes large `--max-seeds` can be very, very slow. The default value is the maximum of 5 and the value that comes with`-k`.
-
-</td></tr>
-
-<tr><td id="hisat2-options-secondary">
-
+* \--secondary  
+    Report secondary alignments.
+{: #hisat2-options-secondary}
 [`--secondary`]: #hisat2-options-secondary
-
-    --secondary
-
-</td><td>
-
-Report secondary alignments.
-
-</td></tr>
-
-</table>
 
 #### Paired-end options
 
-<table>
-
-<tr><td id="hisat2-options-I">
-
+* -I/\--minins `<int>`  
+    The minimum fragment length for valid paired-end alignments.This option is valid only with [`--no-spliced-alignment`].
+    E.g. if `-I 60` is specified and a paired-end alignment consists of two 20-bp alignments in the
+    appropriate orientation with a 20-bp gap between them, that alignment is
+    considered valid (as long as [`-X`] is also satisfied). A 19-bp gap would not
+    be valid in that case.  If trimming options [`-3`] or [`-5`] are also used, the
+    [`-I`] constraint is applied with respect to the untrimmed mates.  
+    <p/>
+    The larger the difference between [`-I`] and [`-X`], the slower HISAT2 will
+    run.  This is because larger differences between [`-I`] and [`-X`] require that
+    HISAT2 scan a larger window to determine if a concordant alignment exists.
+    For typical fragment length ranges (200 to 400 nucleotides), HISAT2 is very
+    efficient.  
+    <p/>
+    Default: 0 (essentially imposing no minimum) 
+{: #hisat2-options-I}
 [`-I`/`--minins`]: #hisat2-options-I
 [`-I`]: #hisat2-options-I
 
-    -I/--minins <int>
-
-</td><td>
-
-The minimum fragment length for valid paired-end alignments.This option is valid only with --no-spliced-alignment.
-E.g. if `-I 60` is specified and a paired-end alignment consists of two 20-bp alignments in the
-appropriate orientation with a 20-bp gap between them, that alignment is
-considered valid (as long as [`-X`] is also satisfied).  A 19-bp gap would not
-be valid in that case.  If trimming options [`-3`] or [`-5`] are also used, the
-[`-I`] constraint is applied with respect to the untrimmed mates.
-
-The larger the difference between [`-I`] and [`-X`], the slower HISAT2 will
-run.  This is because larger differences between [`-I`] and [`-X`] require that
-HISAT2 scan a larger window to determine if a concordant alignment exists.
-For typical fragment length ranges (200 to 400 nucleotides), HISAT2 is very
-efficient.
-
-Default: 0 (essentially imposing no minimum) 
-
-</td></tr>
-<tr><td id="hisat2-options-X">
-
+* -X/\--maxins `<int>`  
+    The maximum fragment length for valid paired-end alignments. This option is valid only with \--no-spliced-alignment.
+    E.g. if `-X 100` is specified and a paired-end alignment consists of two 20-bp alignments in the
+    proper orientation with a 60-bp gap between them, that alignment is considered
+    valid (as long as [`-I`] is also satisfied).  A 61-bp gap would not be valid in
+    that case.  If trimming options [`-3`] or [`-5`] are also used, the `-X`
+    constraint is applied with respect to the untrimmed mates, not the trimmed
+    mates.  
+    <p/>
+    The larger the difference between [`-I`] and [`-X`], the slower HISAT2 will
+    run.  This is because larger differences between [`-I`] and [`-X`] require that
+    HISAT2 scan a larger window to determine if a concordant alignment exists.
+    For typical fragment length ranges (200 to 400 nucleotides), HISAT2 is very
+    efficient.  
+    <p/>
+    Default: 500.
+{: #hisat2-options-X}
 [`-X`/`--maxins`]: #hisat2-options-X
 [`-X`]: #hisat2-options-X
 
-    -X/--maxins <int>
-
-</td><td>
-
-The maximum fragment length for valid paired-end alignments.  This option is valid only with --no-spliced-alignment.
-E.g. if `-X 100` is specified and a paired-end alignment consists of two 20-bp alignments in the
-proper orientation with a 60-bp gap between them, that alignment is considered
-valid (as long as [`-I`] is also satisfied).  A 61-bp gap would not be valid in
-that case.  If trimming options [`-3`] or [`-5`] are also used, the `-X`
-constraint is applied with respect to the untrimmed mates, not the trimmed
-mates.
-
-The larger the difference between [`-I`] and [`-X`], the slower HISAT2 will
-run.  This is because larger differences between [`-I`] and [`-X`] require that
-HISAT2 scan a larger window to determine if a concordant alignment exists.
-For typical fragment length ranges (200 to 400 nucleotides), HISAT2 is very
-efficient.
-
-Default: 500.
-
-</td></tr>
-<tr><td id="hisat2-options-fr">
-
+* \--fr/\--rf/\--ff  
+    The upstream/downstream mate orientations for a valid paired-end alignment
+    against the forward reference strand.  E.g., if `--fr` is specified and there is
+    a candidate paired-end alignment where mate 1 appears upstream of the reverse
+    complement of mate 2 and the fragment length constraints ([`-I`] and [`-X`]) are
+    met, that alignment is valid.  Also, if mate 2 appears upstream of the reverse
+    complement of mate 1 and all other constraints are met, that too is valid.
+    `--rf` likewise requires that an upstream mate1 be reverse-complemented and a
+    downstream mate2 be forward-oriented. `--ff` requires both an upstream mate 1
+    and a downstream mate 2 to be forward-oriented.  Default: `--fr` (appropriate
+    for Illumina's Paired-end Sequencing Assay).
+{: #hisat2-options-fr}
 [`--fr`/`--rf`/`--ff`]: #hisat2-options-fr
 [`--fr`]: #hisat2-options-fr
 [`--rf`]: #hisat2-options-fr
 [`--ff`]: #hisat2-options-fr
 
-    --fr/--rf/--ff
-
-</td><td>
-
-The upstream/downstream mate orientations for a valid paired-end alignment
-against the forward reference strand.  E.g., if `--fr` is specified and there is
-a candidate paired-end alignment where mate 1 appears upstream of the reverse
-complement of mate 2 and the fragment length constraints ([`-I`] and [`-X`]) are
-met, that alignment is valid.  Also, if mate 2 appears upstream of the reverse
-complement of mate 1 and all other constraints are met, that too is valid.
-`--rf` likewise requires that an upstream mate1 be reverse-complemented and a
-downstream mate2 be forward-oriented. ` --ff` requires both an upstream mate 1
-and a downstream mate 2 to be forward-oriented.  Default: `--fr` (appropriate
-for Illumina's Paired-end Sequencing Assay).
-
-</td></tr>
-<tr><td id="hisat2-options-no-mixed">
-
+* \--no-mixed  
+    By default, when `hisat2` cannot find a concordant or discordant alignment for
+    a pair, it then tries to find alignments for the individual mates.  This option
+    disables that behavior.
+{: #hisat2-options-no-mixed}
 [`--no-mixed`]: #hisat2-options-no-mixed
 
-    --no-mixed
-
-</td><td>
-
-By default, when `hisat2` cannot find a concordant or discordant alignment for
-a pair, it then tries to find alignments for the individual mates.  This option
-disables that behavior.
-
-</td></tr>
-<tr><td id="hisat2-options-no-discordant">
-
+* \--no-discordant  
+    By default, `hisat2` looks for discordant alignments if it cannot find any
+    concordant alignments.  A discordant alignment is an alignment where both mates
+    align uniquely, but that does not satisfy the paired-end constraints
+    ([`--fr`/`--rf`/`--ff`], [`-I`], [`-X`]).  This option disables that behavior.
+{: #hisat2-options-no-discordant}
 [`--no-discordant`]: #hisat2-options-no-discordant
-
-    --no-discordant
-
-</td><td>
-
-By default, `hisat2` looks for discordant alignments if it cannot find any
-concordant alignments.  A discordant alignment is an alignment where both mates
-align uniquely, but that does not satisfy the paired-end constraints
-([`--fr`/`--rf`/`--ff`], [`-I`], [`-X`]).  This option disables that behavior.
-
-</td></tr></table>
 
 #### Output options
 
-<table>
-
-<tr><td id="hisat2-options-t">
-
+* -t/\--time  
+    Print the wall-clock time required to load the index files and align the reads. 
+    This is printed to the "standard error" ("stderr") filehandle.  Default: off.
+{: #hisat2-options-t}
 [`-t`/`--time`]: #hisat2-options-t
 [`-t`]: #hisat2-options-t
 
-    -t/--time
-
-</td><td>
-
-Print the wall-clock time required to load the index files and align the reads. 
-This is printed to the "standard error" ("stderr") filehandle.  Default: off.
-
-</td></tr>
-<tr><td id="hisat2-options-un">
-
+* \--un `<path>`, \--un-gz `<path>`, \--un-bz2 `<path>`  
+    Write unpaired reads that fail to align to file at `<path>`.  These reads
+    correspond to the SAM records with the FLAGS `0x4` bit set and neither the
+    `0x40` nor `0x80` bits set.  If `--un-gz` is specified, output will be gzip
+    compressed. If `--un-bz2` is specified, output will be bzip2 compressed.  Reads
+    written in this way will appear exactly as they did in the input file, without
+    any modification (same sequence, same name, same quality string, same quality
+    encoding).  Reads will not necessarily appear in the same order as they did in
+    the input.
+{: #hisat2-options-un}
 [`--un`]: #hisat2-options-un
 [`--un-gz`]: #hisat2-options-un
 [`--un-bz2`]: #hisat2-options-un
 
-    --un <path>
-    --un-gz <path>
-    --un-bz2 <path>
-
-</td><td>
-
-Write unpaired reads that fail to align to file at `<path>`.  These reads
-correspond to the SAM records with the FLAGS `0x4` bit set and neither the
-`0x40` nor `0x80` bits set.  If `--un-gz` is specified, output will be gzip
-compressed. If `--un-bz2` is specified, output will be bzip2 compressed.  Reads
-written in this way will appear exactly as they did in the input file, without
-any modification (same sequence, same name, same quality string, same quality
-encoding).  Reads will not necessarily appear in the same order as they did in
-the input.
-
-</td></tr>
-<tr><td id="hisat2-options-al">
-
+* \--al `<path>`, \--al-gz `<path>`, \--al-bz2 `<path>`  
+    Write unpaired reads that align at least once to file at `<path>`.  These reads
+    correspond to the SAM records with the FLAGS `0x4`, `0x40`, and `0x80` bits
+    unset.  If `--al-gz` is specified, output will be gzip compressed. If `--al-bz2`
+    is specified, output will be bzip2 compressed.  Reads written in this way will
+    appear exactly as they did in the input file, without any modification (same
+    sequence, same name, same quality string, same quality encoding).  Reads will
+    not necessarily appear in the same order as they did in the input.
+{: #hisat2-options-al}
 [`--al`]: #hisat2-options-al
 [`--al-gz`]: #hisat2-options-al
 [`--al-bz2`]: #hisat2-options-al
 
-    --al <path>
-    --al-gz <path>
-    --al-bz2 <path>
-
-</td><td>
-
-Write unpaired reads that align at least once to file at `<path>`.  These reads
-correspond to the SAM records with the FLAGS `0x4`, `0x40`, and `0x80` bits
-unset.  If `--al-gz` is specified, output will be gzip compressed. If `--al-bz2`
-is specified, output will be bzip2 compressed.  Reads written in this way will
-appear exactly as they did in the input file, without any modification (same
-sequence, same name, same quality string, same quality encoding).  Reads will
-not necessarily appear in the same order as they did in the input.
-
-</td></tr>
-<tr><td id="hisat2-options-un-conc">
-
+* \--un-conc `<path>`, \--un-conc-gz `<path>`, \--un-conc-bz2 `<path>`  
+    Write paired-end reads that fail to align concordantly to file(s) at `<path>`.
+    These reads correspond to the SAM records with the FLAGS `0x4` bit set and
+    either the `0x40` or `0x80` bit set (depending on whether it's mate #1 or #2).
+    `.1` and `.2` strings are added to the filename to distinguish which file
+    contains mate #1 and mate #2.  If a percent symbol, `%`, is used in `<path>`,
+    the percent symbol is replaced with `1` or `2` to make the per-mate filenames.
+    Otherwise, `.1` or `.2` are added before the final dot in `<path>` to make the
+    per-mate filenames.  Reads written in this way will appear exactly as they did
+    in the input files, without any modification (same sequence, same name, same
+    quality string, same quality encoding).  Reads will not necessarily appear in
+    the same order as they did in the inputs.  
+{: #hisat2-options-un-conc}
 [`--un-conc`]: #hisat2-options-un-conc
 [`--un-conc-gz`]: #hisat2-options-un-conc
 [`--un-conc-bz2`]: #hisat2-options-un-conc
 
-    --un-conc <path>
-    --un-conc-gz <path>
-    --un-conc-bz2 <path>
-
-</td><td>
-
-Write paired-end reads that fail to align concordantly to file(s) at `<path>`.
-These reads correspond to the SAM records with the FLAGS `0x4` bit set and
-either the `0x40` or `0x80` bit set (depending on whether it's mate #1 or #2).
-`.1` and `.2` strings are added to the filename to distinguish which file
-contains mate #1 and mate #2.  If a percent symbol, `%`, is used in `<path>`,
-the percent symbol is replaced with `1` or `2` to make the per-mate filenames.
-Otherwise, `.1` or `.2` are added before the final dot in `<path>` to make the
-per-mate filenames.  Reads written in this way will appear exactly as they did
-in the input files, without any modification (same sequence, same name, same
-quality string, same quality encoding).  Reads will not necessarily appear in
-the same order as they did in the inputs.
-
-</td></tr>
-<tr><td id="hisat2-options-al-conc">
-
+* \--al-conc `<path>`, \--al-conc-gz `<path>`, \--al-conc-bz2 `<path>`  
+    Write paired-end reads that align concordantly at least once to file(s) at
+    `<path>`. These reads correspond to the SAM records with the FLAGS `0x4` bit
+    unset and either the `0x40` or `0x80` bit set (depending on whether it's mate #1
+    or #2). `.1` and `.2` strings are added to the filename to distinguish which
+    file contains mate #1 and mate #2.  If a percent symbol, `%`, is used in
+    `<path>`, the percent symbol is replaced with `1` or `2` to make the per-mate
+    filenames. Otherwise, `.1` or `.2` are added before the final dot in `<path>` to
+    make the per-mate filenames.  Reads written in this way will appear exactly as
+    they did in the input files, without any modification (same sequence, same name,
+    same quality string, same quality encoding).  Reads will not necessarily appear
+    in the same order as they did in the inputs.
+{: #hisat2-options-al-conc}
 [`--al-conc`]: #hisat2-options-al-conc
 [`--al-conc-gz`]: #hisat2-options-al-conc
 [`--al-conc-bz2`]: #hisat2-options-al-conc
 
-    --al-conc <path>
-    --al-conc-gz <path>
-    --al-conc-bz2 <path>
-
-</td><td>
-
-Write paired-end reads that align concordantly at least once to file(s) at
-`<path>`. These reads correspond to the SAM records with the FLAGS `0x4` bit
-unset and either the `0x40` or `0x80` bit set (depending on whether it's mate #1
-or #2). `.1` and `.2` strings are added to the filename to distinguish which
-file contains mate #1 and mate #2.  If a percent symbol, `%`, is used in
-`<path>`, the percent symbol is replaced with `1` or `2` to make the per-mate
-filenames. Otherwise, `.1` or `.2` are added before the final dot in `<path>` to
-make the per-mate filenames.  Reads written in this way will appear exactly as
-they did in the input files, without any modification (same sequence, same name,
-same quality string, same quality encoding).  Reads will not necessarily appear
-in the same order as they did in the inputs.
-
-</td></tr>
-<tr><td id="hisat2-options-quiet">
-
+* \--quiet  
+    Print nothing besides alignments and serious errors.
+{: #hisat2-options-quiet}
 [`--quiet`]: #hisat2-options-quiet
 
-    --quiet
-
-</td><td>
-
-Print nothing besides alignments and serious errors.
-
-</td></tr>
-
-<tr><td id="hisat2-summary-file">
-
+* \--summary-file  
+    Print alignment summary to this file.
+{: #hisat2-options-summary-file}
 [`--summary-file`]: #hisat2-options-summary-file
 
-    --summary-file
-
-</td><td>
-
-Print alignment summary to this file.
-
-</td></tr>
-
-<tr><td id="hisat2-new-summary">
-
+* \--new-summary  
+    Print alignment summary in a new style, which is more machine-friendly.
+{: #hisat2-options-new-summary}
 [`--new-summary`]: #hisat2-options-new-summary
 
-    --new-summary
-
-</td><td>
-
-Print alignment summary in a new style, which is more machine-friendly.
-
-</td></tr>
-
-<tr><td id="hisat2-options-met-file">
-
+* \--met-file `<path>`  
+    Write `hisat2` metrics to file `<path>`.  Having alignment metric can be useful
+    for debugging certain problems, especially performance issues.  See also:
+    [`--met`].  Default: metrics disabled.
+{: #hisat2-options-met-file}
 [`--met-file`]: #hisat2-options-met-file
 
-    --met-file <path>
-
-</td><td>
-
-Write `hisat2` metrics to file `<path>`.  Having alignment metric can be useful
-for debugging certain problems, especially performance issues.  See also:
-[`--met`].  Default: metrics disabled.
-
-</td></tr>
-<tr><td id="hisat2-options-met-stderr">
-
+* \--met-stderr  
+    Write `hisat2` metrics to the "standard error" ("stderr") filehandle.  This is
+    not mutually exclusive with [`--met-file`].  Having alignment metric can be
+    useful for debugging certain problems, especially performance issues.  See also:
+    [`--met`].  Default: metrics disabled.
+{: #hisat2-options-met-stderr}
 [`--met-stderr`]: #hisat2-options-met-stderr
 
-    --met-stderr
-
-</td><td>
-
-Write `hisat2` metrics to the "standard error" ("stderr") filehandle.  This is
-not mutually exclusive with [`--met-file`].  Having alignment metric can be
-useful for debugging certain problems, especially performance issues.  See also:
-[`--met`].  Default: metrics disabled.
-
-</td></tr>
-<tr><td id="hisat2-options-met">
-
+* \--met `<int>`  
+    Write a new `hisat2` metrics record every `<int>` seconds.  Only matters if
+    either [`--met-stderr`] or [`--met-file`] are specified.  Default: 1.
+{: #hisat2-options-met}
 [`--met`]: #hisat2-options-met
-
-    --met <int>
-
-</td><td>
-
-Write a new `hisat2` metrics record every `<int>` seconds.  Only matters if
-either [`--met-stderr`] or [`--met-file`] are specified.  Default: 1.
-
-</td></tr>
-</table>
 
 #### SAM options
 
-<table>
-
-<tr><td id="hisat2-options-no-unal">
-
+* \--no-unal  
+    Suppress SAM records for reads that failed to align.
+{: #hisat2-options-no-unal}
 [`--no-unal`]: #hisat2-options-no-unal
 
-    --no-unal
-
-</td><td>
-
-Suppress SAM records for reads that failed to align.
-
-</td></tr>
-<tr><td id="hisat2-options-no-hd">
-
+* \--no-hd  
+    Suppress SAM header lines (starting with `@`).
+{: #hisat2-options-no-hd}
 [`--no-hd`]: #hisat2-options-no-hd
 
-    --no-hd
-
-</td><td>
-
-Suppress SAM header lines (starting with `@`).
-
-</td></tr>
-<tr><td id="hisat2-options-no-sq">
-
+* \--no-sq  
+    Suppress `@SQ` SAM header lines.
+{: #hisat2-options-no-sq}
 [`--no-sq`]: #hisat2-options-no-sq
 
-    --no-sq
-
-</td><td>
-
-Suppress `@SQ` SAM header lines.
-
-</td></tr>
-<tr><td id="hisat2-options-rg-id">
-
+* \--rg-id `<text>`  
+    Set the read group ID to `<text>`.  This causes the SAM `@RG` header line to be
+    printed, with `<text>` as the value associated with the `ID:` tag.  It also
+    causes the `RG:Z:` extra field to be attached to each SAM output record, with
+    value set to `<text>`.
+{: #hisat2-options-rg-id}
 [`--rg-id`]: #hisat2-options-rg-id
 
-    --rg-id <text>
-
-</td><td>
-
-Set the read group ID to `<text>`.  This causes the SAM `@RG` header line to be
-printed, with `<text>` as the value associated with the `ID:` tag.  It also
-causes the `RG:Z:` extra field to be attached to each SAM output record, with
-value set to `<text>`.
-
-</td></tr>
-<tr><td id="hisat2-options-rg">
-
+* \--rg `<text>`  
+    Add `<text>` (usually of the form `TAG:VAL`, e.g. `SM:Pool1`) as a field on the
+    `@RG` header line.  Note: in order for the `@RG` line to appear, [`--rg-id`]
+    must also be specified.  This is because the `ID` tag is required by the [SAM
+    Spec][SAM].  Specify `--rg` multiple times to set multiple fields.  See the
+    [SAM Spec][SAM] for details about what fields are legal.
+{: #hisat2-options-rg}
 [`--rg`]: #hisat2-options-rg
 
-    --rg <text>
-
-</td><td>
-
-Add `<text>` (usually of the form `TAG:VAL`, e.g. `SM:Pool1`) as a field on the
-`@RG` header line.  Note: in order for the `@RG` line to appear, [`--rg-id`]
-must also be specified.  This is because the `ID` tag is required by the [SAM
-Spec][SAM].  Specify `--rg` multiple times to set multiple fields.  See the
-[SAM Spec][SAM] for details about what fields are legal.
-
-
-</td></tr>
-<tr><td id="hisat2-options-remove-chrname">
-
+* \--remove-chrname  
+    Remove 'chr' from reference names in alignment (e.g., chr18 to 18)
+{: #hisat2-remove-chrname}
 [`--remove-chrname`]: #hisat2-remove-chrname
 
-    --remove-chrname
-
-</td><td>
-
-Remove 'chr' from reference names in alignment (e.g., chr18 to 18)
-
-</td></tr>
-<tr><td id="hisat2-options-add-chrname">
-
+* \--add-chrname  
+    Add 'chr' to reference names in alignment (e.g., 18 to chr18)
+{: #hisat2-options-add-chrname}
 [`--add-chrname`]: #hisat2-options-add-chrname
 
-    --add-chrname
-
-</td><td>
-
-Add 'chr' to reference names in alignment (e.g., 18 to chr18)
-
-</td></tr>
-<tr><td id="hisat2-options-omit-sec-seq">
-
+* \--omit-sec-seq  
+    When printing secondary alignments, HISAT2 by default will write out the `SEQ`
+    and `QUAL` strings.  Specifying this option causes HISAT2 to print an asterisk
+    in those fields instead.
+{: #hisat2-options-omit-sec-seq}
 [`--omit-sec-seq`]: #hisat2-options-omit-sec-seq
-
-    --omit-sec-seq
-
-</td><td>
-
-When printing secondary alignments, HISAT2 by default will write out the `SEQ`
-and `QUAL` strings.  Specifying this option causes HISAT2 to print an asterisk
-in those fields instead.
-
-</td></tr>
-
-
-</table>
 
 #### Performance options
 
-<table><tr>
-
-<td id="hisat2-options-o">
-
+* -o/\--offrate `<int>`  
+    Override the offrate of the index with `<int>`.  If `<int>` is greater
+    than the offrate used to build the index, then some row markings are
+    discarded when the index is read into memory.  This reduces the memory
+    footprint of the aligner but requires more time to calculate text
+    offsets.  `<int>` must be greater than the value used to build the
+    index.
+{: #hisat2-options-o}
 [`-o`/`--offrate`]: #hisat2-options-o
 [`-o`]: #hisat2-options-o
 [`--offrate`]: #hisat2-options-o
 
-    -o/--offrate <int>
-
-</td><td>
-
-Override the offrate of the index with `<int>`.  If `<int>` is greater
-than the offrate used to build the index, then some row markings are
-discarded when the index is read into memory.  This reduces the memory
-footprint of the aligner but requires more time to calculate text
-offsets.  `<int>` must be greater than the value used to build the
-index.
-
-</td></tr>
-<tr><td id="hisat2-options-p">
-
+* -p/\--threads `NTHREADS`  
+    Launch `NTHREADS` parallel search threads (default: 1).  Threads will run on
+    separate processors/cores and synchronize when parsing reads and outputting
+    alignments.  Searching for alignments is highly parallel, and speedup is close
+    to linear.  Increasing `-p` increases HISAT2's memory footprint. E.g. when
+    aligning to a human genome index, increasing `-p` from 1 to 8 increases the
+    memory footprint by a few hundred megabytes.  This option is only available if
+    `bowtie` is linked with the `pthreads` library.
+{: #hisat2-options-p}
 [`-p`/`--threads`]: #hisat2-options-p
 [`-p`]: #hisat2-options-p
 
-    -p/--threads NTHREADS
-
-</td><td>
-
-Launch `NTHREADS` parallel search threads (default: 1).  Threads will run on
-separate processors/cores and synchronize when parsing reads and outputting
-alignments.  Searching for alignments is highly parallel, and speedup is close
-to linear.  Increasing `-p` increases HISAT2's memory footprint. E.g. when
-aligning to a human genome index, increasing `-p` from 1 to 8 increases the
-memory footprint by a few hundred megabytes.  This option is only available if
-`bowtie` is linked with the `pthreads` library (i.e. if `BOWTIE_PTHREADS=0` is
-not specified at build time).
-
-</td></tr>
-<tr><td id="hisat2-options-reorder">
-
+* \--reorder  
+    Guarantees that output SAM records are printed in an order corresponding to the
+    order of the reads in the original input file, even when [`-p`] is set greater
+    than 1.  Specifying `--reorder` and setting [`-p`] greater than 1 causes HISAT2
+    to run somewhat slower and use somewhat more memory then if `--reorder` were
+    not specified.  Has no effect if [`-p`] is set to 1, since output order will
+    naturally correspond to input order in that case.
+{: #hisat2-options-reorder}
 [`--reorder`]: #hisat2-options-reorder
 
-    --reorder
-
-</td><td>
-
-Guarantees that output SAM records are printed in an order corresponding to the
-order of the reads in the original input file, even when [`-p`] is set greater
-than 1.  Specifying `--reorder` and setting [`-p`] greater than 1 causes HISAT2
-to run somewhat slower and use somewhat more memory then if `--reorder` were
-not specified.  Has no effect if [`-p`] is set to 1, since output order will
-naturally correspond to input order in that case.
-
-</td></tr>
-<tr><td id="hisat2-options-mm">
-
+* \--mm  
+    Use memory-mapped I/O to load the index, rather than typical file I/O.
+    Memory-mapping allows many concurrent `bowtie` processes on the same computer to
+    share the same memory image of the index (i.e. you pay the memory overhead just
+    once).  This facilitates memory-efficient parallelization of `bowtie` in
+    situations where using [`-p`] is not possible or not preferable.
+{: #hisat2-options-mm}
 [`--mm`]: #hisat2-options-mm
-
-    --mm
-
-</td><td>
-
-Use memory-mapped I/O to load the index, rather than typical file I/O.
-Memory-mapping allows many concurrent `bowtie` processes on the same computer to
-share the same memory image of the index (i.e. you pay the memory overhead just
-once).  This facilitates memory-efficient parallelization of `bowtie` in
-situations where using [`-p`] is not possible or not preferable.
-
-</td></tr></table>
 
 #### Other options
 
-<table>
-<tr><td id="hisat2-options-qc-filter">
-
+* \--qc-filter  
+    Filter out reads for which the QSEQ filter field is non-zero.  Only has an
+    effect when read format is [`--qseq`].  Default: off.
+{: #hisat2-options-qc-filter}
 [`--qc-filter`]: #hisat2-options-qc-filter
 
-    --qc-filter
-
-</td><td>
-
-Filter out reads for which the QSEQ filter field is non-zero.  Only has an
-effect when read format is [`--qseq`].  Default: off.
-
-</td></tr>
-<tr><td id="hisat2-options-seed">
-
+* \--seed `<int>`  
+    Use `<int>` as the seed for pseudo-random number generator.  Default: 0.
+{: #hisat2-options-seed}
 [`--seed`]: #hisat2-options-seed
 
-    --seed <int>
-
-</td><td>
-
-Use `<int>` as the seed for pseudo-random number generator.  Default: 0.
-
-</td></tr>
-<tr><td id="hisat2-options-non-deterministic">
-
+* \--non-deterministic  
+    Normally, HISAT2 re-initializes its pseudo-random generator for each read.  It
+    seeds the generator with a number derived from (a) the read name, (b) the
+    nucleotide sequence, (c) the quality sequence, (d) the value of the [`--seed`]
+    option.  This means that if two reads are identical (same name, same
+    nucleotides, same qualities) HISAT2 will find and report the same alignment(s)
+    for both, even if there was ambiguity.  When `--non-deterministic` is specified,
+    HISAT2 re-initializes its pseudo-random generator for each read using the
+    current time.  This means that HISAT2 will not necessarily report the same
+    alignment for two identical reads.  This is counter-intuitive for some users,
+    but might be more appropriate in situations where the input consists of many
+    identical reads.
+{: #hisat2-options-non-deterministic}
 [`--non-deterministic`]: #hisat2-options-non-deterministic
 
-    --non-deterministic
-
-</td><td>
-
-Normally, HISAT2 re-initializes its pseudo-random generator for each read.  It
-seeds the generator with a number derived from (a) the read name, (b) the
-nucleotide sequence, (c) the quality sequence, (d) the value of the [`--seed`]
-option.  This means that if two reads are identical (same name, same
-nucleotides, same qualities) HISAT2 will find and report the same alignment(s)
-for both, even if there was ambiguity.  When `--non-deterministic` is specified,
-HISAT2 re-initializes its pseudo-random generator for each read using the
-current time.  This means that HISAT2 will not necessarily report the same
-alignment for two identical reads.  This is counter-intuitive for some users,
-but might be more appropriate in situations where the input consists of many
-identical reads.
-
-</td></tr>
-<tr><td id="hisat2-options-version">
-
+* \--version  
+    Print version information and quit.
+{: #hisat2-options-version}
 [`--version`]: #hisat2-options-version
 
-    --version
-
-</td><td>
-
-Print version information and quit.
-
-</td></tr>
-<tr><td id="hisat2-options-h">
-
-    -h/--help
-
-</td><td>
-
-Print usage information and quit.
-
-</td></tr></table>
+* -h/\--help  
+    Print usage information and quit.
+{: #hisat2-options-h}
+[`-h`]: #hisat2-options-h
 
 SAM output
 ----------
@@ -1525,288 +973,111 @@ tabs.
 
 Each subsequent line describes an alignment or, if the read failed to align, a
 read.  Each line is a collection of at least 12 fields separated by tabs; from
-left to right, the fields are:
+left to right, the fields are:  
 
-1.  Name of read that aligned.
 
+1.  Name of read that aligned. 
     Note that the [SAM specification] disallows whitespace in the read name.
-	If the read name contains any whitespace characters, HISAT2 will truncate
-	the name at the first whitespace character.  This is similar to the
-	behavior of other tools.
-
-2.  Sum of all applicable flags.  Flags relevant to HISAT2 are:
-
-    <table><tr><td>
-
-        1
-
-    </td><td>
-
-    The read is one of a pair
-
-    </td></tr><tr><td>
-
-        2
-
-    </td><td>
-
-    The alignment is one end of a proper paired-end alignment
-
-    </td></tr><tr><td>
-
-        4
-
-    </td><td>
-
-    The read has no reported alignments
-
-    </td></tr><tr><td>
-
-        8
-
-    </td><td>
-
-    The read is one of a pair and has no reported alignments
-
-    </td></tr><tr><td>
-
-        16
-
-    </td><td>
-
-    The alignment is to the reverse reference strand
-
-    </td></tr><tr><td>
-
-        32
-
-    </td><td>
-
-    The other mate in the paired-end alignment is aligned to the
-    reverse reference strand
-
-    </td></tr><tr><td>
-
-        64
-
-    </td><td>
-
-    The read is mate 1 in a pair
-
-    </td></tr><tr><td>
-
-        128
-
-    </td><td>
-
-    The read is mate 2 in a pair
-
-    </td></tr></table>
-
+    If the read name contains any whitespace characters, HISAT2 will truncate
+    the name at the first whitespace character.  This is similar to the
+    behavior of other tools.
+2.  Sum of all applicable flags.  
+    Flags relevant to HISAT2 are  
+    * 1: The read is one of a pair
+    * 2: The alignment is one end of a proper paired-end alignment
+    * 4: The read has no reported alignments
+    * 8: The read is one of a pair and has no reported alignments
+    * 16: The alignment is to the reverse reference strand
+    * 32: The other mate in the paired-end alignment is aligned to the reverse reference strand
+    * 64: The read is mate 1 in a pair
+    * 128: The read is mate 2 in a pair  
+    ^
     Thus, an unpaired read that aligns to the reverse reference strand
     will have flag 16.  A paired-end read that aligns and is the first
     mate in the pair will have flag 83 (= 64 + 16 + 2 + 1).
-
 3.  Name of reference sequence where alignment occurs
-
 4.  1-based offset into the forward reference strand where leftmost
-    character of the alignment occurs
-
+    character of the alignment occurs  
 5.  Mapping quality.  Mapping quality of HISAT2 
-
 6.  CIGAR string representation of alignment
-
 7.  Name of reference sequence where mate's alignment occurs.  Set to `=` if the
 mate's reference sequence is the same as this alignment's, or `*` if there is no
 mate.
-
 8.  1-based offset into the forward reference strand where leftmost character of
 the mate's alignment occurs.  Offset is 0 if there is no mate.
-
 9.  Inferred fragment length.  Size is negative if the mate's alignment occurs
 upstream of this alignment.  Size is 0 if the mates did not align concordantly.
 However, size is non-0 if the mates aligned discordantly to the same
 chromosome.
-
 10. Read sequence (reverse-complemented if aligned to the reverse strand)
-
 11. ASCII-encoded read qualities (reverse-complemented if the read aligned to
 the reverse strand).  The encoded quality values are on the [Phred quality]
 scale and the encoding is ASCII-offset by 33 (ASCII char `!`), similarly to a
 [FASTQ] file.
-
 12. Optional fields.  Fields are tab-separated.  `hisat2` outputs zero or more
 of these optional fields for each alignment, depending on the type of the
 alignment:
-
-    <table>
-    <tr><td id="hisat2-build-opt-fields-as">
-
-        AS:i:<N>
-
-    </td>
-    <td>
-
-    Alignment score.  Can be negative.  Only present if SAM record is for
-    an aligned read.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-xs">
-
-        ZS:i:<N>
-
-    </td>
-    <td>
-    Alignment score for the best-scoring alignment found other than the
-    alignment reported.  Can be negative.  Only present if the SAM record is
-    for an aligned read and more than one alignment was found for the read.
-    Note that, when the read is part of a concordantly-aligned pair, this score
-    could be greater than [`AS:i`].
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-ys">
-
-        YS:i:<N>
-
-    </td>
-    <td>
-
-    Alignment score for opposite mate in the paired-end alignment.  Only present
-    if the SAM record is for a read that aligned as part of a paired-end
-    alignment.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-xn">
-
-        XN:i:<N>
-
-    </td>
-    <td>
-
-    The number of ambiguous bases in the reference covering this alignment. 
-    Only present if SAM record is for an aligned read.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-xm">
-
-        XM:i:<N>
-
-    </td>
-    <td>
-
-    The number of mismatches in the alignment.  Only present if SAM record is
-    for an aligned read.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-xo">
-
-        XO:i:<N>
-
-    </td>
-    <td>
-
-    The number of gap opens, for both read and reference gaps, in the alignment.
-    Only present if SAM record is for an aligned read.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-xg">
-
-        XG:i:<N>
-
-    </td>
-    <td>
-
-    The number of gap extensions, for both read and reference gaps, in the
-    alignment. Only present if SAM record is for an aligned read.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-nm">
-
-        NM:i:<N>
-
-    </td>
-    <td>
-
-    The edit distance; that is, the minimal number of one-nucleotide edits
-    (substitutions, insertions and deletions) needed to transform the read
-    string into the reference string.  Only present if SAM record is for an
-    aligned read.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-yf">
-
-        YF:Z:<S>
-
-    </td><td>
-
-    String indicating reason why the read was filtered out.  See also:
-    [Filtering].  Only appears for reads that were filtered out.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-yt">
-
-        YT:Z:<S>
-
-    </td><td>
-
-    Value of `UU` indicates the read was not part of a pair.  Value of `CP`
-    indicates the read was part of a pair and the pair aligned concordantly.
-    Value of `DP` indicates the read was part of a pair and the pair aligned
-    discordantly.  Value of `UP` indicates the read was part of a pair but the
-    pair failed to aligned either concordantly or discordantly.
-
-    </td></tr>
-    <tr><td id="hisat2-build-opt-fields-md">
-
-        MD:Z:<S>
-
-    </td><td>
-
-    A string representation of the mismatched reference bases in the alignment. 
-    See [SAM] format specification for details.  Only present if SAM record is
-    for an aligned read.
-
-    </td></tr>
-    <tr><td id="hisat2-opt-fields-xs">
-
-        XS:A:<A>
-
-    </td><td>
-
-    Values of `+` and `-` indicate the read is mapped to transcripts on sense and anti-sense
-    strands, respectively.  Spliced alignments need to have this field, which is required in Cufflinks and StringTie.  
-    We can report this field for the canonical-splice site (GT/AG), but not for non-canonical splice sites.
-    You can direct HISAT2 not to output such alignments (involving non-canonical splice sites)  using "--pen-noncansplice 1000000".
-
-    </td></tr>
-    <tr><td id="hisat2-opt-fields-nh">
-
-        NH:i:<N>
-
-    </td><td>
-
-    The number of mapped locations for the read or the pair.
-    
-    </td></tr>
-    <tr><td id="hisat2-opt-fields-Zs">
-
-        Zs:Z:<S>
-
-    </td><td>
-
-    When the alignment of a read involves SNPs that are in the index, this option is used to indicate where exactly the read involves the SNPs.
-    This optional field is similar to the above MD:Z field.
-    For example, `Zs:Z:1|S|rs3747203,97|S|rs16990981` indicates the second base of the read corresponds to a known SNP (ID: rs3747203).
-    97 bases after the third base (the base after the second one), the read at 100th base involves another known SNP (ID: rs16990981).
-    'S' indicates a single nucleotide polymorphism.  'D' and 'I' indicate a deletion and an insertion, respectively.
-    </td></tr>
-    
-    </table>
+    * {: #hisat2-opt-fields-as} `AS:i:<N>` : Alignment score.  Can be negative.  Only present if SAM record is for
+      an aligned read.
+    * {: #hisat2-opt-fields-xs} `ZS:i:<N>` : Alignment score for the best-scoring alignment found other than the
+      alignment reported.  Can be negative.  Only present if the SAM record is
+      for an aligned read and more than one alignment was found for the read.
+      Note that, when the read is part of a concordantly-aligned pair, this score
+      could be greater than [`AS:i`].
+    * {: #hisat2-opt-fields-ys} `YS:i:<N>` : Alignment score for opposite mate in the paired-end alignment.  Only present
+      if the SAM record is for a read that aligned as part of a paired-end
+      alignment.
+    * {: #hisat2-opt-fields-xn} `XN:i:<N>` : The number of ambiguous bases in the reference covering this alignment. 
+      Only present if SAM record is for an aligned read.
+    * {: #hisat2-opt-fields-xm} `XM:i:<N>` : The number of mismatches in the alignment.  Only present if SAM record is
+      for an aligned read.
+    * {: #hisat2-opt-fields-xo} `XO:i:<N>` : The number of gap opens, for both read and reference gaps, in the alignment.
+      Only present if SAM record is for an aligned read.
+    * {: #hisat2-opt-fields-xg} `XG:i:<N>` : The number of gap extensions, for both read and reference gaps, in the
+      alignment. Only present if SAM record is for an aligned read.
+    * {: #hisat2-opt-fields-nm} `NM:i:<N>` : The edit distance; that is, the minimal number of one-nucleotide edits
+      (substitutions, insertions and deletions) needed to transform the read
+      string into the reference string.  Only present if SAM record is for an
+      aligned read.
+    * {: #hisat2-opt-fields-yf} `YF:Z:<S>` : String indicating reason why the read was filtered out.  See also:
+      [Filtering].  Only appears for reads that were filtered out.
+    * {: #hisat2-opt-fields-yt} `YT:Z:<S>` : Value of `UU` indicates the read was not part of a pair.  Value of `CP`
+      indicates the read was part of a pair and the pair aligned concordantly.
+      Value of `DP` indicates the read was part of a pair and the pair aligned
+      discordantly.  Value of `UP` indicates the read was part of a pair but the
+      pair failed to aligned either concordantly or discordantly.
+    * {: #hisat2-opt-fields-md} `MD:Z:<S>` : A string representation of the mismatched reference bases in the alignment. 
+      See [SAM] format specification for details.  Only present if SAM record is
+      for an aligned read.
+    * {: #hisat2-opt-fields-xs} `XS:A:<A>` : Values of `+` and `-` indicate the read is mapped to transcripts on sense and anti-sense
+      strands, respectively.  Spliced alignments need to have this field, which is required in Cufflinks and StringTie.  
+      We can report this field for the canonical-splice site (GT/AG), but not for non-canonical splice sites.
+      You can direct HISAT2 not to output such alignments (involving non-canonical splice sites)  using "--pen-noncansplice 1000000".
+    * {: #hisat2-opt-fields-nh} `NH:i:<N>` : The number of mapped locations for the read or the pair.
+    * {: #hisat2-opt-fields-Zs} `Zs:Z:<S>` : When the alignment of a read involves SNPs that are in the index, this option is used to indicate where exactly the read involves the SNPs.
+      This optional field is similar to the above MD:Z field.
+      For example, `Zs:Z:1|S|rs3747203,97|S|rs16990981` indicates the second base of the read corresponds to a known SNP (ID: rs3747203).
+      97 bases after the third base (the base after the second one), the read at 100th base involves another known SNP (ID: rs16990981).
+      'S' indicates a single nucleotide polymorphism.  'D' and 'I' indicate a deletion and an insertion, respectively.
 
 [SAM format specification]: http://samtools.sf.net/SAM1.pdf
 [FASTQ]: http://en.wikipedia.org/wiki/FASTQ_format
 [`-S`/`--sam`]: #hisat2-options-S
 [`-m`]: #hisat2-options-m
+[`AS:i`]: #hisat2-opt-fields-as
+[`ZS:i`]: #hisat2-opt-fields-xs
+[`YS:i`]: #hisat2-opt-fields-ys
+[`XN:i`]: #hisat2-opt-fields-xn
+[`XM:i`]: #hisat2-opt-fields-xm
+[`XO:i`]: #hisat2-opt-fields-xo
+[`XG:i`]: #hisat2-opt-fields-xg
+[`NM:i`]: #hisat2-opt-fields-nm
+[`YF:Z`]: #hisat2-opt-fields-yf
+[`YT:Z`]: #hisat2-opt-fields-yt
+[`MD:Z`]: #hisat2-opt-fields-md
+[`XS:A`]: #hisat2-opt-fields-xs
+[`NH:i`]: #hisat2-opt-fields-nh
+[`Zs:Z`]: #hisat2-opt-fields-Zs
 
 The `hisat2-build` indexer
 ===========================
@@ -1861,306 +1132,185 @@ Usage:
     
 ### Main arguments
 
-<table><tr><td>
+* `<reference_in>`  
+  A comma-separated list of FASTA files containing the reference sequences to be
+  aligned to, or, if [`-c`](#hisat2-build-options-c) is specified, the sequences
+  themselves. E.g., `<reference_in>` might be `chr1.fa,chr2.fa,chrX.fa,chrY.fa`,
+  or, if [`-c`](#hisat2-build-options-c) is specified, this might be
+  `GGTCATCCT,ACGGGTCGT,CCGTTCTATGCGGCTTA`.  
+{: #hisat2-build-options-ref}
 
-    <reference_in>
-
-</td><td>
-
-A comma-separated list of FASTA files containing the reference sequences to be
-aligned to, or, if [`-c`](#hisat2-build-options-c) is specified, the sequences
-themselves. E.g., `<reference_in>` might be `chr1.fa,chr2.fa,chrX.fa,chrY.fa`,
-or, if [`-c`](#hisat2-build-options-c) is specified, this might be
-`GGTCATCCT,ACGGGTCGT,CCGTTCTATGCGGCTTA`.
-
-</td></tr><tr><td>
-
-    <ht2_base>
-
-</td><td>
-
-The basename of the index files to write.  By default, `hisat2-build` writes
-files named `NAME.1.ht2`, `NAME.2.ht2`, `NAME.3.ht2`, `NAME.4.ht2`,
-`NAME.5.ht2`, `NAME.6.ht2`, `NAME.7.ht2`, and `NAME.8.ht2` where `NAME` is `<ht2_base>`.
-
-</td></tr></table>
+* `<ht2_base>`  
+  The basename of the index files to write.  By default, `hisat2-build` writes
+  files named `NAME.1.ht2`, `NAME.2.ht2`, `NAME.3.ht2`, `NAME.4.ht2`,
+  `NAME.5.ht2`, `NAME.6.ht2`, `NAME.7.ht2`, and `NAME.8.ht2` where `NAME` is `<ht2_base>`.  
+{: #hisat2-build-options-base}
 
 ### Options
 
-<table><tr><td>
+* -f  
+  The reference input files (specified as `<reference_in>`) are FASTA files
+  (usually having extension `.fa`, `.mfa`, `.fna` or similar).
+{: #hisat2-build-options-f}
 
-    -f
+* -c  
+  The reference sequences are given on the command line.  I.e. `<reference_in>` is
+  a comma-separated list of sequences rather than a list of FASTA files.
+{: #hisat2-build-options-c}
 
-</td><td>
-
-The reference input files (specified as `<reference_in>`) are FASTA files
-(usually having extension `.fa`, `.mfa`, `.fna` or similar).
-
-</td></tr><tr><td id="hisat2-build-options-c">
-
-    -c
-
-</td><td>
-
-The reference sequences are given on the command line.  I.e. `<reference_in>` is
-a comma-separated list of sequences rather than a list of FASTA files.
-
-</td></tr>
-</td></tra><tr><td id="hisat2-build-options-large-index">
-
+* \--large-index  
+  Force `hisat2-build` to build a [large index](#small-and-large-indexes), even if the reference is less
+  than ~ 4 billion nucleotides long.
+{: #hisat2-build-options-large-index}
 [`--large-index`]: #hisat2-build-options-large-index
 
-    --large-index
-
-</td><td>
-
-Force `hisat2-build` to build a [large index](#small-and-large-indexes), even if the reference is less
-than ~ 4 billion nucleotides long.
-
-</td></tr>
-<tr><td id="hisat2-build-options-a">
-
+* -a/\--noauto  
+  Disable the default behavior whereby `hisat2-build` automatically selects
+  values for the [`--bmax`], [`--dcv`] and [`--packed`] parameters according to
+  available memory.  Instead, user may specify values for those parameters.  If
+  memory is exhausted during indexing, an error message will be printed; it is up
+  to the user to try new parameters.
+{: #hisat2-build-options-a}
 [`-a`/`--noauto`]: #hisat2-build-options-a
 
-    -a/--noauto
-
-</td><td>
-
-Disable the default behavior whereby `hisat2-build` automatically selects
-values for the [`--bmax`], [`--dcv`] and [`--packed`] parameters according to
-available memory.  Instead, user may specify values for those parameters.  If
-memory is exhausted during indexing, an error message will be printed; it is up
-to the user to try new parameters.
-
-</td></tr><tr><td id="hisat2-build-options-bmax">
-
+* \--bmax `<int>`  
+  The maximum number of suffixes allowed in a block.  Allowing more suffixes per
+  block makes indexing faster, but increases peak memory usage.  Setting this
+  option overrides any previous setting for [`--bmax`], or [`--bmaxdivn`]. 
+  Default (in terms of the [`--bmaxdivn`] parameter) is [`--bmaxdivn`] 4.  This is
+  configured automatically by default; use [`-a`/`--noauto`] to configure manually.
+{: #hisat2-build-options-bmax}
 [`--bmax`]: #hisat2-build-options-bmax
 
-    --bmax <int>
-
-</td><td>
-
-The maximum number of suffixes allowed in a block.  Allowing more suffixes per
-block makes indexing faster, but increases peak memory usage.  Setting this
-option overrides any previous setting for [`--bmax`], or [`--bmaxdivn`]. 
-Default (in terms of the [`--bmaxdivn`] parameter) is [`--bmaxdivn`] 4.  This is
-configured automatically by default; use [`-a`/`--noauto`] to configure manually.
-
-</td></tr><tr><td id="hisat2-build-options-bmaxdivn">
-
+* \--bmaxdivn `<int>`  
+  The maximum number of suffixes allowed in a block, expressed as a fraction of
+  the length of the reference.  Setting this option overrides any previous setting
+  for [`--bmax`], or [`--bmaxdivn`].  Default: [`--bmaxdivn`] 4.  This is
+  configured automatically by default; use [`-a`/`--noauto`] to configure manually.
+{: #hisat2-build-options-bmaxdivn}
 [`--bmaxdivn`]: #hisat2-build-options-bmaxdivn
 
-    --bmaxdivn <int>
-
-</td><td>
-
-The maximum number of suffixes allowed in a block, expressed as a fraction of
-the length of the reference.  Setting this option overrides any previous setting
-for [`--bmax`], or [`--bmaxdivn`].  Default: [`--bmaxdivn`] 4.  This is
-configured automatically by default; use [`-a`/`--noauto`] to configure manually.
-
-</td></tr><tr><td id="hisat2-build-options-dcv">
-
+* \--dcv `<int>`  
+  Use `<int>` as the period for the difference-cover sample.  A larger period
+  yields less memory overhead, but may make suffix sorting slower, especially if
+  repeats are present.  Must be a power of 2 no greater than 4096.  Default: 1024.
+  This is configured automatically by default; use [`-a`/`--noauto`] to configure
+  manually.
+{: #hisat2-build-options-dcv}
 [`--dcv`]: #hisat2-build-options-dcv
 
-    --dcv <int>
-
-</td><td>
-
-Use `<int>` as the period for the difference-cover sample.  A larger period
-yields less memory overhead, but may make suffix sorting slower, especially if
-repeats are present.  Must be a power of 2 no greater than 4096.  Default: 1024.
- This is configured automatically by default; use [`-a`/`--noauto`] to configure
-manually.
-
-</td></tr><tr><td id="hisat2-build-options-nodc">
-
+* \--nodc  
+  Disable use of the difference-cover sample.  Suffix sorting becomes
+  quadratic-time in the worst case (where the worst case is an extremely
+  repetitive reference).  Default: off.
+{: #hisat2-build-options-nodc}
 [`--nodc`]: #hisat2-build-options-nodc
 
-    --nodc
+* -r/\--noref  
+  Do not build the `NAME.3.ht2` and `NAME.4.ht2` portions of the index, which
+  contain a bitpacked version of the reference sequences and are used for
+  paired-end alignment.
+{: #hisat2-build-options-r}
 
-</td><td>
+* -3/\--justref  
+  Build only the `NAME.3.ht2` and `NAME.4.ht2` portions of the index, which
+  contain a bitpacked version of the reference sequences and are used for
+  paired-end alignment.
+{: #hisat2-build-options-3}
 
-Disable use of the difference-cover sample.  Suffix sorting becomes
-quadratic-time in the worst case (where the worst case is an extremely
-repetitive reference).  Default: off.
+* -o/\--offrate `<int>`  
+  To map alignments back to positions on the reference sequences, it's necessary
+  to annotate ("mark") some or all of the [Burrows-Wheeler] rows with their
+  corresponding location on the genome. 
+  [`-o`/`--offrate`](#hisat2-build-options-o) governs how many rows get marked:
+  the indexer will mark every 2^`<int>` rows.  Marking more rows makes
+  reference-position lookups faster, but requires more memory to hold the
+  annotations at runtime.  The default is 4 (every 16th row is marked; for human
+  genome, annotations occupy about 680 megabytes).  
+{: #hisat2-build-options-o}
 
-</td></tr><tr><td>
+* -t/\--ftabchars `<int>`  
+  The ftab is the lookup table used to calculate an initial [Burrows-Wheeler]
+  range with respect to the first `<int>` characters of the query.  A larger
+  `<int>` yields a larger lookup table but faster query times.  The ftab has size
+  4^(`<int>`+1) bytes.  The default setting is 10 (ftab is 4MB).
+{: #hisat2-build-options-t}
 
-    -r/--noref
+* \--localoffrate `<int>`  
+  This option governs how many rows get marked in a local index:
+  the indexer will mark every 2^`<int>` rows.  Marking more rows makes
+  reference-position lookups faster, but requires more memory to hold the
+  annotations at runtime.  The default is 3 (every 8th row is marked,
+  this occupies about 16KB per local index).  
+{: #hisat2-build-options-localoffrate}
 
-</td><td>
+* \--localftabchars `<int>`  
+  The local ftab is the lookup table in a local index.
+  The default setting is 6 (ftab is 8KB per local index).
+{: #hisat2-build-options-localftabchars}
 
-Do not build the `NAME.3.ht2` and `NAME.4.ht2` portions of the index, which
-contain a bitpacked version of the reference sequences and are used for
-paired-end alignment.
+* \-p `<int>`  
+  Launch `NTHREADS` parallel build threads (default: 1).
+{: #hisat2-build-options-p}
 
-</td></tr><tr><td>
-
-    -3/--justref
-
-</td><td>
-
-Build only the `NAME.3.ht2` and `NAME.4.ht2` portions of the index, which
-contain a bitpacked version of the reference sequences and are used for
-paired-end alignment.
-
-</td></tr><tr><td id="hisat2-build-options-o">
-
-    -o/--offrate <int>
-
-</td><td>
-
-To map alignments back to positions on the reference sequences, it's necessary
-to annotate ("mark") some or all of the [Burrows-Wheeler] rows with their
-corresponding location on the genome. 
-[`-o`/`--offrate`](#hisat2-build-options-o) governs how many rows get marked:
-the indexer will mark every 2^`<int>` rows.  Marking more rows makes
-reference-position lookups faster, but requires more memory to hold the
-annotations at runtime.  The default is 4 (every 16th row is marked; for human
-genome, annotations occupy about 680 megabytes).  
-
-</td></tr><tr><td>
-
-    -t/--ftabchars <int>
-
-</td><td>
-
-The ftab is the lookup table used to calculate an initial [Burrows-Wheeler]
-range with respect to the first `<int>` characters of the query.  A larger
-`<int>` yields a larger lookup table but faster query times.  The ftab has size
-4^(`<int>`+1) bytes.  The default setting is 10 (ftab is 4MB).
-
-
-</td></tr><tr><td id="hisat2-build-options-localoffrate">
-
-    --localoffrate <int>
-
-</td><td>
-
-This option governs how many rows get marked in a local index:
-the indexer will mark every 2^`<int>` rows.  Marking more rows makes
-reference-position lookups faster, but requires more memory to hold the
-annotations at runtime.  The default is 3 (every 8th row is marked,
-this occupies about 16KB per local index).  
-
-</td></tr><tr><td>
-
-    --localftabchars <int>
-
-</td><td>
-
-The local ftab is the lookup table in a local index.
-The default setting is 6 (ftab is 8KB per local index).
-
-</td></tr><tr><td>
-
-    -p <int>
-
-</td><td>
-
-Launch `NTHREADS` parallel build threads (default: 1).
-
-</td></tr><tr><td>
-
-    --snp <path>
-
-</td><td>
-
-Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).
+* \--snp `<path>`  
+  Provide a list of SNPs (in the HISAT2's own format) as follows (five columns).  
+  > SNP ID `<tab>` snp type (single, deletion, or insertion) `<tab>` chromosome name `<tab>` zero-offset based genomic position of a SNP `<tab>` alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)
    
-   SNP ID `<tab>` snp type (single, deletion, or insertion) `<tab>` chromosome name `<tab>` zero-offset based genomic position of a SNP `<tab>` alternative base (single), the length of SNP (deletion), or insertion sequence (insertion)
-   
-   For example,
-       rs58784443      single  13      18447947        T
+  For example,  
+  `rs58784443      single  13      18447947        T`  
 
-Use `hisat2_extract_snps_haplotypes_UCSC.py` (in the HISAT2 package) to extract SNPs and haplotypes from a dbSNP file (e.g. http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/snp144Common.txt.gz).
-or `hisat2_extract_snps_haplotypes_VCF.py` to extract SNPs and haplotypes from a VCF file (e.g. ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/ALL.chr22.phase3_shapeit2_mvncall_integrated_v3plus_nounphased.rsID.genotypes.GRCh38_dbSNP_no_SVs.vcf.gz).
+  Use `hisat2_extract_snps_haplotypes_UCSC.py` (in the HISAT2 package) to extract SNPs and haplotypes from a dbSNP file (e.g. http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/snp144Common.txt.gz).
+  or `hisat2_extract_snps_haplotypes_VCF.py` to extract SNPs and haplotypes from a VCF file (e.g. ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/ALL.chr22.phase3_shapeit2_mvncall_integrated_v3plus_nounphased.rsID.genotypes.GRCh38_dbSNP_no_SVs.vcf.gz).
+{: #hisat2-build-options-snp}
 
-</td></tr><tr><td>
+* \--haplotype `<path>`  
+  Provide a list of haplotypes (in the HISAT2's own format) as follows (five columns).
+  > Haplotype ID `<tab>` chromosome name `<tab>` zero-offset based left coordinate of haplotype `<tab>` zero-offset based right coordinate of haplotype `<tab>` a comma separated list of SNP ids in the haplotype
+  
+  For example,  
+  `ht35    13      18446877        18446945        rs12381094,rs12381056,rs192016659,rs538569910`  
 
-    --haplotype <path>
+  See the above option, --snp, about how to extract haplotypes.  This option is not required, but haplotype information can keep the index construction from exploding and reduce the index size substantially.
+{: #hisat2-build-options-haplotype}
 
-</td><td>
+* \--ss `<path>`  
+  Note this option should be used with the following --exon option.
+  Provide a list of splice sites (in the HISAT2's own format) as follows (four columns).
+  > chromosome name `<tab>` zero-offset based genomic position of the flanking base on the left side of an intron `<tab>` zero-offset based genomic position of the flanking base on the right `<tab>` strand
 
-Provide a list of haplotypes (in the HISAT2's own format) as follows (five columns).
-   
-   Haplotype ID `<tab>` chromosome name `<tab>` zero-offset based left coordinate of haplotype `<tab>` zero-offset based right coordinate of haplotype `<tab>` a comma separated list of SNP ids in the haplotype
-   
-   For example,
-       ht35    13      18446877        18446945        rs12381094,rs12381056,rs192016659,rs538569910
+  Use `hisat2_extract_splice_sites.py` (in the HISAT2 package) to extract splice sites from a GTF file.
+{: #hisat2-build-options-ss}
 
-See the above option, --snp, about how to extract haplotypes.  This option is not required, but haplotype information can keep the index construction from exploding and reduce the index size substantially.
+* \--exon `<path>`  
+  Note this option should be used with the above --ss option.
+  Provide a list of exons (in the HISAT2's own format) as follows (three columns).
+  > chromosome name `<tab>` zero-offset based left genomic position of an exon `<tab>` zero-offset based right genomic position of an exon
 
-</td></tr><tr><td>
+  Use `hisat2_extract_exons.py` (in the HISAT2 package) to extract exons from a GTF file.
+{: #hisat2-build-options-exon}
 
-    --ss <path>
+* \--seed `<int>`  
+  Use `<int>` as the seed for pseudo-random number generator.
+{: #hisat2-build-options-seed}
 
-</td><td>
+* \--cutoff `<int>`  
+  Index only the first `<int>` bases of the reference sequences (cumulative across
+  sequences) and ignore the rest.
+{: #hisat2-build-options-cutoff}
 
-Note this option should be used with the following --exon option.
-Provide a list of splice sites (in the HISAT2's own format) as follows (four columns).
-   
-   chromosome name `<tab>` zero-offset based genomic position of the flanking base on the left side of an intron `<tab>` zero-offset based genomic position of the flanking base on the right `<tab>` strand
+* -q/\--quiet  
+  `hisat2-build` is verbose by default.  With this option `hisat2-build` will
+  print only error messages.
+{: #hisat2-build-options-q}
 
-Use `hisat2_extract_splice_sites.py` (in the HISAT2 package) to extract splice sites from a GTF file.
+* -h/\--help  
+  Print usage information and quit.
+{: #hisat2-build-options-h}
 
-</td></tr><tr><td>
-
-    --exon <path>
-
-</td><td>
-
-Note this option should be used with the above --ss option.
-Provide a list of exons (in the HISAT2's own format) as follows (three columns).
-   
-   chromosome name `<tab>` zero-offset based left genomic position of an exon `<tab>` zero-offset based right genomic position of an exon
-
-Use `hisat2_extract_exons.py` (in the HISAT2 package) to extract exons from a GTF file.
-
-</td></tr><tr><td>
-
-    --seed <int>
-
-</td><td>
-
-Use `<int>` as the seed for pseudo-random number generator.
-
-</td></tr><tr><td>
-
-    --cutoff <int>
-
-</td><td>
-
-Index only the first `<int>` bases of the reference sequences (cumulative across
-sequences) and ignore the rest.
-
-</td></tr><tr><td>
-
-    -q/--quiet
-
-</td><td>
-
-`hisat2-build` is verbose by default.  With this option `hisat2-build` will
-print only error messages.
-
-</td></tr><tr><td>
-
-    -h/--help
-
-</td><td>
-
-Print usage information and quit.
-
-</td></tr><tr><td>
-
-    --version
-
-</td><td>
-
-Print version information and quit.
-
-</td></tr></table>
+* \--version  
+  Print version information and quit.
+{: #hisat2-build-options-version}
 
 The `hisat2-inspect` index inspector
 =====================================
@@ -2182,51 +1332,29 @@ Usage:
 
 ### Main arguments
 
-<table><tr><td>
-
-    <ht2_base>
-
-</td><td>
-
-The basename of the index to be inspected.  The basename is name of any of the
-index files but with the `.X.ht2` suffix omitted.
-`hisat2-inspect` first looks in the current directory for the index files, then
-in the directory specified in the `HISAT2_INDEXES` environment variable.
-
-</td></tr></table>
+* `<ht2_base>`  
+  The basename of the index to be inspected.  The basename is name of any of the
+  index files but with the `.X.ht2` suffix omitted.
+  `hisat2-inspect` first looks in the current directory for the index files, then
+  in the directory specified in the `HISAT2_INDEXES` environment variable.
+{: #hisat2-inspect-options-base}
 
 ### Options
 
-<table><tr><td>
-
-    -a/--across <int>
-
-</td><td>
-
-When printing FASTA output, output a newline character every `<int>` bases
-(default: 60).
-
-</td></tr><tr><td id="hisat2-inspect-options-n">
-
+* -a/\--across `<int>`  
+  When printing FASTA output, output a newline character every `<int>` bases
+  (default: 60).
+{: #hisat2-inspect-options-a}
+ 
+* -n/\--names  
+  Print reference sequence names, one per line, and quit.
+{: #hisat2-inspect-options-n}
 [`-n`/`--names`]: #hisat2-inspect-options-n
 
-    -n/--names
-
-</td><td>
-
-Print reference sequence names, one per line, and quit.
-
-</td></tr><tr><td id="hisat2-inspect-options-s">
-
-[`-s`/`--summary`]: #hisat2-inspect-options-s
-
-    -s/--summary
-
-</td><td>
-
-Print a summary that includes information about index settings, as well as the
-names and lengths of the input sequences.  The summary has this format: 
-
+* -s/\--summary  
+  Print a summary that includes information about index settings, as well as the
+  names and lengths of the input sequences.  The summary has this format: 
+  ```
     Colorspace	<0 or 1>
     SA-Sample	1 in <sample>
     FTab-Chars	<chars>
@@ -2234,74 +1362,40 @@ names and lengths of the input sequences.  The summary has this format:
     Sequence-2	<name>	<len>
     ...
     Sequence-N	<name>	<len>
+  ```
+  Fields are separated by tabs.  Colorspace is always set to 0 for HISAT2.
+{: #hisat2-inspect-options-s}
+[`-s`/`--summary`]: #hisat2-inspect-options-s
 
-Fields are separated by tabs.  Colorspace is always set to 0 for HISAT2.
-
-</td></tr><tr><td id="hisat2-inspect-options-snp">
-
+* \--snp  
+  Print SNPs, and quit.
+{: #hisat2-inspect-options-snp}
 [`--snp`]: #hisat2-inspect-options-snp
 
-    --snp
-
-</td><td>
-
-Print SNPs, and quit.
-
-</td></tr><tr><td id="hisat2-inspect-options-ss">
-
+* \--ss  
+  Print splice sites, and quit.
+{: #hisat2-inspect-options-ss}
 [`--ss`]: #hisat2-inspect-options-ss
 
-    --ss
-
-</td><td>
-
-Print splice sites, and quit.
-
-</td></tr><tr><td id="hisat2-inspect-options-ss-all">
-
+* \--ss-all  
+  Print splice sites including those not in the global index, and quit.
+{: #hisat2-inspect-options-ss-all}
 [`--ss-all`]: #hisat2-inspect-options-ss-all
 
-    --ss-all
-
-</td><td>
-
-Print splice sites including those not in the global index, and quit.
-
-</td></tr><tr><td id="hisat2-inspect-options-exon">
-
+* \--exon  
+  Print exons, and quit.
+{: #hisat2-inspect-options-exon}
 [`--exon`]: #hisat2-inspect-options-exon
 
-    --exon
-
-</td><td>
-
-Print exons, and quit.
-
-</td></tr><tr><td>
-
-    -v/--verbose
-
-</td><td>
-
-Print verbose output (for debugging).
-
-</td></tr><tr><td>
-
-    --version
-
-</td><td>
-
-Print version information and quit.
-
-</td></tr><tr><td>
-
-    -h/--help
-
-</td><td>
-
-Print usage information and quit.
-
-</td></tr></table>
+* -v/\--verbose  
+  Print verbose output (for debugging).
+^
+* \--version  
+  Print version information and quit.
+^
+* -h/\--help  
+  Print usage information and quit.
+^
 
 Getting started with HISAT2
 ===================================================
