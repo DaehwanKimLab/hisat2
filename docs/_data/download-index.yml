@@ -1,0 +1,77 @@
+- organism: H. sapiens
+  data:
+    GRCh38:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz
+      genome_snp: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_snp.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_tran.tar.gz
+      genome_snp_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_snp_tran.tar.gz
+    UCSC hg38:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38_tran.tar.gz
+    GRCh37:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37.tar.gz
+      genome_snp: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_snp.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_tran.tar.gz
+      genome_snp_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_snp_tran.tar.gz
+    UCSC hg19:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg19.tar.gz
+- organism: M. musculus
+  data:
+    GRCm38:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38.tar.gz
+      genome_snp: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_snp.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_tran.tar.gz
+      genome_snp_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_snp_tran.tar.gz
+    UCSC mm10:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/mm10.tar.gz
+- organism: R. norvegicus
+  data:
+    UCSC rn6:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/rn6.tar.gz
+- organism: D. melanogaster
+  data:
+    BDGP6:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/bdgp6.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/bdgp6_tran.tar.gz
+    UCSC dm6:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/dm6.tar.gz
+- organism: C. elegans
+  data:
+    WBcel235:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/wbcel235.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/wbcel235_tran.tar.gz
+    UCSC ce10:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/ce10.tar.gz
+- organism: S. cerevisiae
+  data: 
+    R64-1-1:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64_tran.tar.gz
+    UCSC sacCer3:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/sc3.tar.gz
