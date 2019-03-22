@@ -2053,7 +2053,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 local_off -= local_index_interval;
             }
             for(;local_off < next_cumlen; local_off += local_index_interval) {
-                if(local_off + local_index_size < cumlen) {
+                if(local_off + local_index_size <= cumlen) {
                     continue;
                 }
                 index_t local_idx = local_off / local_index_interval;
@@ -2067,7 +2067,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 EList_RefRecord& local_recs = ref_local_recs[local_idx];
                 assert_gt(local_off + local_index_size, cumlen);
                 local_recs.expand();
-                if(local_off + local_index_size <= cumlen + rec.off) {
+                if(local_off + local_index_size < cumlen + rec.off) {
                     local_recs.back().off = local_off + local_index_size - std::max(local_off, cumlen);
                     local_recs.back().len = 0;
                 } else {
@@ -2085,7 +2085,7 @@ HGFM<index_t, local_index_t>::HGFM(
         
         // Store a cap entry for the end of the last reference seq
         _refLens.push_back(cumlen);
-        
+
 #ifndef NDEBUG
         EList<RefRecord> temp_szs;
         index_t temp_sztot = 0;
@@ -2146,11 +2146,14 @@ HGFM<index_t, local_index_t>::HGFM(
                         temp_szs.back().len += local_rec.len;
                     }
                 }
-                if(i + 1 < ref_local_recs.size()) {
+                if(i + 2 < ref_local_recs.size()) {
                     assert_eq(local_len, local_index_size);
                     assert_eq(temp_ref_len % local_index_interval, 0);
+                } else if (i + 1 < ref_local_recs.size()) {
+                    assert_leq(local_len, local_index_size);
+                    assert_geq(local_len, local_index_interval);
                 } else {
-                    assert_eq(local_len, _refLens[tidx] % local_index_interval);
+                    assert_eq(local_len % local_index_interval, _refLens[tidx] % local_index_interval);
                 }
             }
             assert_eq(temp_ref_len, _refLens[tidx]);
