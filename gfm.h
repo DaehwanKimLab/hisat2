@@ -4212,7 +4212,6 @@ void GFM<index_t>::joinToDisk(
 			}
 			// Increment seqsRead if this is the first fragment
 			if(rec.first && rec.len > 0) seqsRead++;
-			if(bases == 0) continue;
             assert_lt(szsi, szs.size());
             assert_eq(rec.off, szs[szsi].off);
             assert_eq(rec.len, szs[szsi].len);
@@ -4225,7 +4224,11 @@ void GFM<index_t>::joinToDisk(
 			patoff += rec.off; // add fragment's offset from end of last frag.
 			// Adjust rpcps
 			//index_t seq = seqsRead-1;
-			ASSERT_ONLY(entsWritten++);
+#ifndef NDEBUG
+            if(bases > 0) {
+			    ASSERT_ONLY(entsWritten++);
+            }
+#endif
 			// This is where rstarts elements are written to the output stream
 			//writeU32(out1, oldRetLen, this->toBe()); // offset from beginning of joined string
 			//writeU32(out1, seq,       this->toBe()); // sequence id
