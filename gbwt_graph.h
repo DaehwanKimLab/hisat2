@@ -1235,7 +1235,7 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
         }
         assert_eq(tmp_num_nodes, num_nodes_written);
         tmp_num_edges = (index_t)edges.size();
-        assert_gt(tmp_num_edges, num_head_nodes + prev_tail_nodes.size());
+        assert_geq(tmp_num_edges, num_head_nodes + prev_tail_nodes.size());
         if(head_off) tmp_num_edges -= num_head_nodes;
         if(tail_off) tmp_num_edges -= prev_tail_nodes.size();
         writeIndex<index_t>(rg_out_file, tmp_num_edges, bigEndian);

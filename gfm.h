@@ -1173,6 +1173,29 @@ public:
 	 * Write the rstarts array given the szs array for the reference.
 	 */
 	void szsToDisk(const EList<RefRecord>& szs, ostream& os, int reverse);
+
+    bool checkPosToSzs(const EList<RefRecord>& szs, index_t start_idx, index_t pos)
+    {
+        assert(szs[start_idx].first);
+        for(index_t i = start_idx; i < szs.size(); i++) {
+            if((i != start_idx) && (szs[i].first)) {
+                // span to next chr
+                return false;
+            }
+
+            if(pos < szs[i].off) {
+                return false;
+            } else {
+                pos -= szs[i].off;
+                if(pos < szs[i].len) {
+                    return true;
+                }
+                pos -= szs[i].len;
+            }
+        }
+        assert(false);
+        return false;
+    }
 	
 	/**
 	 * Helper for the constructors above.  Takes a vector of text
@@ -1569,6 +1592,14 @@ public:
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
                         const index_t szs_idx = tmp_pair.second;
+
+                        // check whether ambiguous base is in exon's last and first base
+                        if(!checkPosToSzs(szs, szs_idx, left - 1)
+                                || !checkPosToSzs(szs, szs_idx, right + 1)) {
+                            //cerr << "Skip ss. " << chr << ", " << left - 1 << ", " << right + 1 << endl;
+                            continue;
+                        }
+
                         bool inside_Ns = false;
                         index_t add_pos = 0;
                         assert(szs[szs_idx].first);
