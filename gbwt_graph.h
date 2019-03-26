@@ -62,7 +62,7 @@ class RefGraph {
     friend class PathGraph<index_t>;
 public:
     struct Node {
-        char    label; // ACGTN + Y(head) + Z(tail)
+        char    label; // ACGT + Y(head) + Z(tail)
         index_t value; // location in a whole genome
         
         Node() { reset(); }
@@ -2388,7 +2388,16 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
     indiv = time(0);
 
     // build an index for nodes
-    for(index_t i = 0; i < nodes.size(); i++) {
+    index_t node_size = nodes.size();
+    for(index_t i = 0; i < node_size; i++) {
+        // very rare case where the number of prefix-sorted nodes is smaller than the number of the initial nodes
+        //  , which could happen with a very small graph and a variant as follows
+        // ATAGAGCAGTTCTGAAAAACACTTTTTGTTGAATCTGCAAG(T)GGACATTTGGATAGATTTGAAGATTTCGTTGGAAACGGGAATATCTTCATATCAAATG
+        //                                          (G)
+        // where G(T) and G(G) will be combined as there is no other node that intervene those two path nodes.
+        if(nodes[i].from + 1 >= nodes.size()) {
+            nodes.resize(nodes[i].from + 2);
+        }
         nodes[nodes[i].from + 1].key.second = i + 1;
     }
 
@@ -2462,6 +2471,12 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
     base.nullify();
+
+    // delete unused nodes
+    if(node_size != nodes.size()) {
+        assert_lt(node_size, nodes.size());
+        nodes.resize(node_size);
+    }
 
     if(verbose) cerr << "MADE NEW EDGES: " << time(0) - indiv << endl;
     indiv = time(0);
@@ -2600,6 +2615,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
     if(verbose) cerr << "SORT, Make index: " << time(0) - indiv << endl;
     if(verbose) cerr << "TOTAL: " << time(0) - overall << endl;
+
     return true;
 
 //-----------------------------------------------------------------------------------------------------
