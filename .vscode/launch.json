@@ -17,9 +17,9 @@
                 "--base", "HLA",
                 "--locus-list", "A",
                 "--assembly",
-                "--debug", "pair,full"
-                //"-1", "cor-hla_input_1.fa",
-                //"-2", "cor-hla_input_2.fa"
+                //"--debug", "pair,full"
+                "-1", "assembly_opt-and-test/NA12878.hla.extracted.1.fq.gz",
+                "-2", "assembly_opt-and-test/NA12878.hla.extracted.2.fq.gz"
             ],
             "env" : {
                 "PYTHONPATH": "~/Documents/hisatgenotype-working/hisat2-devel/hisatgenotype_modules:$PYTHONPATH"

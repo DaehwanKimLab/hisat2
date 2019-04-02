@@ -323,7 +323,7 @@ class Node:
 
         return vars
 
-    
+
     # Get variant ids
     #   left and right are gene-level coordinates
     def get_vars(self, left = 0, right = sys.maxint):
@@ -610,17 +610,18 @@ class Graph:
                 node_seq["%s.%d" % (id, node_i)] = seq
             
         for id in self.nodes.keys():
-            add_node_seq(node_seq, id)
+            add_node_seq(node_seq, id) # Rough dictionary of node sequences indexed by node id
             
         # AAA.1 => AAA, 1
         def get_id_and_sub(id):
             id_split = id.split('.')
             return '.'.join(id_split[:-1]), int(id_split[-1])
 
+        # Build and clean de Bruijn Graph
         try_hard = False
         while True:
             delete_ids = set()
-            nodes = []
+            nodes = [] # list of nodes to contain kmers
             for id, node in self.nodes.items():
                 nodes_ = [node]
                 if id in self.other_nodes:
@@ -643,9 +644,9 @@ class Graph:
                     return a[1] - b[1]
                 else:
                     return a[2] - b[2]
-            nodes = sorted(nodes, cmp=node_cmp)
+            nodes = sorted(nodes, cmp=node_cmp) # Sort by left position
 
-            # Generate numerical read IDs
+            # Generate numerical read IDs (Positional Indecies)
             id_to_num = {}
             num_to_id = []
             for id in [node[0] for node in nodes]:
@@ -708,7 +709,7 @@ class Graph:
                 vertices = debruijn[pos]
                 num_vertices = 0
                 num_kmers = 0
-                for v in range(len(vertices)):
+                for v in range(len(vertices)): # TODO Check to see if this DRB1 handling is needed
                     _, _, predecessors, num_ids = vertices[v]
                     if not (set(num_ids) <= delete_ids):
                         num_vertices += 1
@@ -723,9 +724,9 @@ class Graph:
                     continue
                 
                 vertice_count = [0] * len(vertices)
-                for v in range(len(vertices)):
+                for v in range(len(vertices)): # Iter through each position vertex
                     _, _, predecessors, num_ids = vertices[v]
-                    for num_id in num_ids:
+                    for num_id in num_ids: # Iter through each node id
                         if num_id in delete_ids:
                             continue
                         read_id = get_id_and_sub(num_to_id[num_id])[0]
@@ -826,7 +827,7 @@ class Graph:
                     print >> sys.stderr
                     print >> sys.stderr           
                 
-            # delete nodes
+            # delete nodes based on delete_ids
             ids_to_be_updated = set()
             for num_id in delete_ids:
                 id_sub = num_to_id[num_id]
@@ -836,7 +837,8 @@ class Graph:
                     self.nodes[id] = None
                 else:
                     self.other_nodes[id][sub-1] = None
-            
+
+            # Cleaning up other nodes
             for id in self.nodes.keys():
                 other_nodes = []
                 if id in self.other_nodes:
@@ -857,7 +859,7 @@ class Graph:
 
             for id in ids_to_be_updated:
                 if id in self.nodes:
-                    add_node_seq(node_seq, id)
+                    add_node_seq(node_seq, id) # Update node sequences
 
             if len(delete_ids) == 0:
                 if try_hard:
@@ -865,7 +867,7 @@ class Graph:
                 else:
                     try_hard = True
 
-        # Print De Bruijn graph
+        # Print De Bruijn graph TODO: add condition of if print_msg up at top
         for i in range(len(debruijn)):
             curr_vertices = debruijn[i]
             if len(curr_vertices) == 0:
@@ -897,7 +899,7 @@ class Graph:
                     
                 if print_msg: print >> sys.stderr, "\t%d:" % v, kmer_seq, len(num_ids), predecessors, num_ids
 
-        id_to_num = {}
+        id_to_num = {} # Regenerate new ID_to_num
         for num in range(len(num_to_id)):
             id_sub = num_to_id[num]
             id = get_id_and_sub(id_sub)[0]
@@ -906,7 +908,7 @@ class Graph:
                 id_to_num[id] = set()
             id_to_num[id].add(num)          
                     
-        # Generate compressed nodes
+        ### Compress read nodes
         paths = []
         path_queue, done = deque(), set()
         for i in range(len(debruijn)):
@@ -984,7 +986,7 @@ class Graph:
             return mate_num_ids
         
 
-        # Generate a compressed assembly graph
+        ### Generate a compressed assembly graph
         def path_cmp(a, b):
             if a[0] != b[0]:
                 return a[0] - b[0]
@@ -995,6 +997,7 @@ class Graph:
         for p in range(len(paths)):
             if print_msg: print >> sys.stderr, "path:", p, paths[p]
 
+        # Build list of equivalent nodes
         excl_num_ids = set() # exclusive num ids
         equiv_list = []
         p = 0
@@ -1031,9 +1034,10 @@ class Graph:
             new_equiv_list.append(classes)
         equiv_list = new_equiv_list
 
+        # Compress and phase de Bruijn to allele
         known_alleles = False
         while True:
-            for i in range(len(equiv_list)):
+            for i in range(len(equiv_list)): # TODO add if print_msg
                 classes = equiv_list[i]
                 for j in range(len(classes)):
                     ids, num_ids, all_ids, alleles = classes[j]
@@ -1041,7 +1045,8 @@ class Graph:
 
                 if print_msg: print >> sys.stderr
 
-            if known_alleles:
+            # Collapse nodes to reference
+            if known_alleles: 
                 for i in range(len(equiv_list)):
                     classes = equiv_list[i]
                     for j in range(len(classes)):
@@ -1060,7 +1065,7 @@ class Graph:
                                 max_alleles.add(anode.id)
                         classes[j][3] = max_alleles
 
-            
+            # Identify identical stretches of nodes to merge
             best_common_mat, best_stat, best_i, best_i2 = [], -sys.maxint, -1, -1
             for i in range(len(equiv_list) - 1):
                 classes = equiv_list[i]
@@ -1104,7 +1109,9 @@ class Graph:
             if known_alleles and best_stat < 0:
                 self.remove_nodes(self.nodes2)
                 break
-            if best_stat < 0:
+
+            # Compress nodes    
+            if best_stat < 0: 
                 known_alleles = True
                 new_nodes = {}
                 for i in range(len(equiv_list)):
