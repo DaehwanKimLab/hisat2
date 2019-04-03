@@ -55,6 +55,19 @@ ifneq (,$(findstring Darwin,$(shell uname)))
 	MACOS = 1
 endif
 
+FREEBSD = 0
+ifneq (,$(findstring FreeBSD,$(shell uname)))
+        FREEBSD = 1
+	# System and ports clang do not have to be in the same path,
+	# so it depends on the CLANG_SUFFIX.
+	CLANG_SUFFIX ?= 
+	CLANG_PATH = $(shell which clang$(CLANG_SUFFIX))
+	CLANG_PREFIX = $(shell dirname $(CLANG_PATH))
+	CC = $(CLANG_PREFIX)/clang$(CLANG_SUFFIX)
+	CPP = $(CLANG_PREFIX)/clang++$(CLANG_SUFFIX)
+	CXX = $(CPP) 
+endif
+
 EXTRA_FLAGS += -DPOPCNT_CAPABILITY
 INC += -I third_party
 
@@ -138,6 +151,12 @@ BITS=32
 ifeq (x86_64,$(shell uname -m))
 BITS=64
 endif
+
+# FreeBSD uses "amd64" instead of "x86_64" 
+ifeq (amd64,$(shell uname -m))
+BITS=64
+endif
+
 # msys will always be 32 bit so look at the cpu arch instead.
 ifneq (,$(findstring AMD64,$(PROCESSOR_ARCHITEW6432)))
 	ifeq (1,$(MINGW))
