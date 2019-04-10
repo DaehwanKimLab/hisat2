@@ -249,11 +249,14 @@ def typing(simulation,
            assembly_verbose,
            out_dir,
            test_i = 0):
+
+    core_fid = "" # May add to bottom of options
     if simulation:
         test_passed = {}
         report_file = open('%s/%s-%s_test-%s.report' % (out_dir, output_base, base_fname, test_i + 1), 'w')
     else:
-        report_file = open('%s/%s-%s.report' % (out_dir, output_base, base_fname), 'w')
+        core_fid = read_fname[0].split('/')[-1].split('.')[0]
+        report_file = open('%s/%s-%s-%s.report' % (out_dir, output_base, base_fname, core_fid), 'w')
     
     for aligner, index_type in aligners:
         for f_ in [sys.stderr, report_file]:
@@ -269,8 +272,8 @@ def typing(simulation,
             if simulation:
                 alignment_fname = "%s_output.bam" % base_fname
             else:
-                alignment_fname = read_fname[0].split('/')[-1]
-                alignment_fname = "%s.bam" % '.'.join(alignment_fname.split('.')[:2])
+                # alignment_fname = read_fname[0].split('/')[-1] #Temporary removal for testing
+                alignment_fname = "%s.bam" % core_fid # '.'.join(alignment_fname.split('.')[:2])
                     
             typing_common.align_reads(aligner,
                                       simulation,

@@ -325,7 +325,8 @@ def extract_bam(file_lists,
 """
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='HISAT-Genotype')
+        description='HISAT-Genotype v1.1.2 (Built on HISAT2 v2.1.0)',
+        epilog='See --advanced-help for further options available')
     arguments.args_databases(parser,
                              genome=True) # Add option to change genome name
     arguments.args_aligner_inputs(parser,
@@ -334,7 +335,8 @@ if __name__ == '__main__':
     arguments.args_bamfile(parser)
     arguments.args_single_end(parser)
     arguments.args_assembly(parser)
-    
+    arguments.args_common(parser)
+ 
     parser_advanced = ArgumentParser(
         description='Advanced Options',
         add_help=False)
@@ -351,14 +353,20 @@ if __name__ == '__main__':
                                  action='store_true',
                                  help='Build the indexes listed in --base-fname'
                                  )
-    arguments.args_common(parser_advanced,
-                          debug=True) # Add option for debugging
+
     arguments.args_set_aligner(parser_advanced)
     arguments.args_var_gaps(parser_advanced)
     arguments.args_extract_vars(parser_advanced)
     arguments.args_extract_reads(parser_advanced)
     arguments.args_no_partial(parser_advanced)
     arguments.args_locus(parser_advanced)
+    parser_advanced.add_argument("--debug",
+                                 dest="debug",
+                                 type=str,
+                                 default="",
+                                 help="Test database or code (options: basic, pair, full, single-end, test_list, test_id)(e.g., test_id:10,basic)"
+                                 )
+
     
     arg_dict, unknown = {}, []
     args2, unused = parser_advanced.parse_known_args()
@@ -371,11 +379,18 @@ if __name__ == '__main__':
     region_list = {}
     args.base_fname = args.base_fname.lower().split(',') if args.base_fname != "" else []
     args.locus_list = args.locus_list.upper().split(';') if args.locus_list != "" else []
+
     if len(args.base_fname) != len(args.locus_list):
         print >> sys.stderr, "Error: --base and --locus-list not correct format (ex. --base hla,rbg --locus-list A,B,C;ABO,RHD)"
+
     for itr in range(len(args.base_fname)):
         family = args.base_fname[itr]
-        loci_names = args.locus_list[itr].split(',')
+
+        if args.locus_list:
+            loci_names = args.locus_list[itr].split(',')
+        else:
+            loci_names = []
+
         region_list.update({ family : loci_names })
         
     if args.aligner not in ["hisat2", "bowtie2"]:

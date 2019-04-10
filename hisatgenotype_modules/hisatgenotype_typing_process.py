@@ -1388,6 +1388,41 @@ def extract_reads(base_fname,
         os.mkdir(out_dir)
 
     # Extract reads
+    def fn_match(fns): # Goal is to match file names in directory if paired
+        fnames, fnames2, fnbase = [], [], []
+        for i in range(0, len(fns), 2):
+            sets = fns[i:i+2]
+            fileL, fileR = sets
+            common = ''
+            for j in range(len(fileL)):
+                s = fileL[j]
+                if s != fileR[j]:
+                    if s not in "LR12":
+                        print "Potential Error: Paired-end mode is selected and files %s and %s have an unexpected character %s to mark left and right pairings" % (fileL, fileR, s)
+                        usr_input = ''
+                        while True:
+                            usr_input = raw_input("Continue? (y/n): ")
+                            if usr_input == "y":
+                                break
+                            if usr_input == "n":
+                                print "Exiting"
+                                exit(1)
+
+                    if common[-1] in "._-":
+                        common = common[:-1]
+                    break
+                common += s
+
+            if not common:
+                print "Error matching files %s and %s. Names don't match. Skipping inclusion" % (fileL, fileR)
+                continue
+
+            fnames.append(fileL)
+            fnames2.append(fileR)
+            fnbase.append(common)
+        
+        return fnames, fnames2, fnbase
+
     if len(read_fname) > 0:
         if paired:
             fq_fnames = [read_fname[0]]
@@ -1395,13 +1430,13 @@ def extract_reads(base_fname,
         else:
             fq_fnames = read_fname
     else:
+        fq_fnames = glob.glob("%s/*.%s" % (read_dir, suffix)) 
+        fq_fnames = sorted(fq_fnames)
         if paired:
-            fq_fnames = glob.glob("%s/*.1.%s" % (read_dir, suffix)) 
-        else:
-            fq_fnames = glob.glob("%s/*.%s" % (read_dir, suffix))
+            fq_fnames, fq_fnames2, paired_fq_basen = fn_match(fq_fnames)
         
         if len(fq_fnames) == 0:
-            print "Error: no files in %s directory" % read_dir
+            print "Error: no files identified in %s directory with suffix .%s" % (read_dir, suffix)
             exit(1)
 
     count = 0
@@ -1414,18 +1449,13 @@ def extract_reads(base_fname,
             if job_range[0] != (file_i % job_range[1]):
                 continue
 
-        fq_fname_base = fq_fname.split('/')[-1]
-        one_suffix = ".1." + suffix
-        if fq_fname_base.find(one_suffix) != -1:
-            fq_fname_base = fq_fname_base[:fq_fname_base.find(one_suffix)]
+        if paired:
+            fq_fname_base = paired_fq_basen[file_i]
         else:
-            fq_fname_base = fq_fname_base.split('.')[0]
+            fq_fname_base = fq_fname.split('/')[-1].split('.')[0]
             
         if paired:
-            if read_dir == "":
-                fq_fname2 = fq_fnames2[file_i]
-            else:
-                fq_fname2 = "%s/%s.2.%s" % (read_dir, fq_fname_base, suffix)
+            fq_fname2 = fq_fnames2[file_i]
             if not os.path.exists(fq_fname2):
                 print >> sys.stderr, "%s does not exist." % (fq_fname2)
                 continue
