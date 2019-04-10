@@ -380,8 +380,9 @@ if __name__ == '__main__':
     args.base_fname = args.base_fname.lower().split(',') if args.base_fname != "" else []
     args.locus_list = args.locus_list.upper().split(';') if args.locus_list != "" else []
 
-    if len(args.base_fname) != len(args.locus_list):
+    if (len(args.base_fname) != len(args.locus_list)) and args.locus_list:
         print >> sys.stderr, "Error: --base and --locus-list not correct format (ex. --base hla,rbg --locus-list A,B,C;ABO,RHD)"
+        exit(1)
 
     for itr in range(len(args.base_fname)):
         family = args.base_fname[itr]
