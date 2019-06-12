@@ -232,7 +232,8 @@ struct ReportingParams {
                              bool localAlign_,
                              int bowtie2_dp_,
                              bool sensitive_,
-                             bool repeat_)
+                             bool repeat_,
+                             THitInt seedsLimits_)
                              
 	{
 		init(
@@ -247,7 +248,8 @@ struct ReportingParams {
              localAlign_,
              bowtie2_dp_,
              sensitive_,
-             repeat_);
+             repeat_,
+             seedsLimits_);
 	}
 
 	void init(
@@ -262,7 +264,8 @@ struct ReportingParams {
               bool localAlign_,
               int bowtie2_dp_,
               bool sensitive_,
-              bool repeat_)
+              bool repeat_,
+              THitInt seedsLimits_)
 	{
 		khits   = khits_;     // -k (or high if -a)
         kseeds  = kseeds_;
@@ -276,6 +279,7 @@ struct ReportingParams {
         bowtie2_dp = bowtie2_dp_;
         sensitive = sensitive_;
         repeat = repeat_;
+        seedsLimit = seedsLimits_;
 	}
 	
 #ifndef NDEBUG
@@ -332,7 +336,7 @@ struct ReportingParams {
 	THitInt khits;
     
     // Number of seeds allowed to extend
-    THitInt kseeds;
+    THitInt kseeds, seedsLimit;
 	
 	// Read is non-unique if mhits-1 next-best alignments are within
 	// pengap of the best alignment

@@ -5508,7 +5508,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
     assert(hit.done());
     index_t minOff = 0;
-    if(hit.minWidth(minOff) == std::numeric_limits<index_t>::max()) return false;
+    if(hit.minWidth(minOff) >= rp.seedsLimit) return false;
     
     // Don't try to align if the potential alignment for this read might be
     // worse than the best alignment of its reverse complement

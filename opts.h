@@ -187,7 +187,9 @@ enum {
     ARG_DP,
     ARG_REPEAT,
     ARG_NO_REPEAT_INDEX,
-    ARG_READ_LENGTHS
+    ARG_READ_LENGTHS,
+    ARG_RNA_SENSITIVE,          // --rna-sensitive
+    ARG_END
 };
 
 #endif

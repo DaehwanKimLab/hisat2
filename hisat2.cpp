@@ -299,6 +299,8 @@ static bool repeat;
 static bool use_repeat_index;
 static EList<size_t> readLens;
 
+static bool rna_sensitive;    // --rna-sensitive
+
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -534,6 +536,8 @@ static void resetOptions() {
     repeat = false; // true iff alignments to repeat sequences are directly reported.
     use_repeat_index = true;
     readLens.clear();
+
+    rna_sensitive = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -760,6 +764,7 @@ static struct option long_options[] = {
     {(char*)"repeat",          no_argument,        0,        ARG_REPEAT},
     {(char*)"no-repeat-index", no_argument,        0,        ARG_NO_REPEAT_INDEX},
     {(char*)"read-lengths",    required_argument,  0,        ARG_READ_LENGTHS},
+    {(char*)"rna-sensitive",   no_argument,        0,        ARG_RNA_SENSITIVE},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -1763,6 +1768,10 @@ static void parseOption(int next_option, const char *arg) {
                 readLens.push_back(readLen);
             }
             readLens.sort();
+            break;
+        }
+        case ARG_RNA_SENSITIVE: {
+            rna_sensitive = true;
             break;
         }
 		default:
@@ -3137,7 +3146,8 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     const BitPairReference*          rref     = multiseed_rrefs;
 	AlnSink<index_t>&                msink    = *multiseed_msink;
 	OutFileBuf*                      metricsOfb = multiseed_metricsOfb;
-    
+    THitInt seedLimits = std::numeric_limits<THitInt>::max();
+
 	// Sinks: these are so that we can print tables encoding counts for
 	// events of interest on a per-read, per-seed, per-join, or per-SW
 	// level.  These in turn can be used to diagnose performance
@@ -3151,6 +3161,14 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     if(maxSeeds == 0) {
         maxSeeds = max<size_t>(5, khits * 2);
     }
+
+    // RNA alignment without rna_sensitive option
+    // TODO: if we can add Seqwho module,
+    //    we have to change '!no_spliced_alignment' to 'is_RNA_read' flag
+    if(!no_spliced_alignment && !rna_sensitive) {
+        seedLimits = maxSeeds * 2 + 1;
+    }
+
     ReportingParams rp(
                        (allHits ? std::numeric_limits<THitInt>::max() : khits), // -k
                        (allHits ? std::numeric_limits<THitInt>::max() : maxSeeds), // --max-seeds
@@ -3163,7 +3181,8 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                        localAlign,
                        bowtie2_dp,
                        sensitive | very_sensitive,
-                       repeat);
+                       repeat,
+                       seedLimits);
     
 	// Instantiate a mapping quality calculator
 	auto_ptr<Mapq> bmapq(new_mapq(mapqv, scoreMin, sc));
