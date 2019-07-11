@@ -2031,7 +2031,7 @@ def genotyping_locus(base_fname,
     if ',' in base_fname:
         print >> sys.stderr, "Don't use list in hisatgenotype_locus"
         exit(1)
-        
+    
     simulation = (read_fname == [] and alignment_fname == "")
     if genotype_genome == "":
         if not os.path.exists("hisatgenotype_db"):

@@ -8,18 +8,19 @@
             "name": "Python: HISAT genotype",
             "type": "python",
             "request": "launch",
-            "cwd": "/home/christopher/Documents/hisatgenotype-working", //tmp-RBG",
+            "cwd" : "/home/christopher/Documents/scratch-folder/HG_issue_139",
+            //"cwd": "/home/christopher/Documents/hisatgenotype-working", //tmp-RBG",
             "program": "${file}",
             "args": [
                 //"--gene-list", "ABO"
                 //"--read-dir", "fastq_files", "--out-dir", "extracted_fastq"
                 //"--assembly", "-f",
-                "--base", "HLA",
+                "--base", "hla",
                 "--locus-list", "A",
-                "--assembly",
+                //"--assembly",
                 //"--debug", "pair,full"
-                "-1", "assembly_opt-and-test/NA12878.hla.extracted.1.fq.gz",
-                "-2", "assembly_opt-and-test/NA12878.hla.extracted.2.fq.gz"
+                "-1", "ILMN/NA12892.extracted.1.fq.gz",
+                "-2", "ILMN/NA12892.extracted.2.fq.gz"
             ],
             "env" : {
                 "PYTHONPATH": "~/Documents/hisatgenotype-working/hisat2-devel/hisatgenotype_modules:$PYTHONPATH"

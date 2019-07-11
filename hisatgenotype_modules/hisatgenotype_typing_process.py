@@ -1402,11 +1402,13 @@ def extract_reads(base_fname,
                         usr_input = ''
                         while True:
                             usr_input = raw_input("Continue? (y/n): ")
-                            if usr_input == "y":
+                            if usr_input in ["y", "Y", "Yes", "yes"]:
                                 break
-                            if usr_input == "n":
+                            elif usr_input in ["n", "N", "No", "no"]:
                                 print "Exiting"
                                 exit(1)
+                            else:
+                                print "Improper Entry. Use y or n"
 
                     if common[-1] in "._-":
                         common = common[:-1]
@@ -1450,7 +1452,10 @@ def extract_reads(base_fname,
                 continue
 
         if paired:
-            fq_fname_base = paired_fq_basen[file_i]
+            if len(read_fname) > 0:
+                fq_fname_base = fq_fname.split('/')[-1]
+            else:
+                fq_fname_base = paired_fq_basen[file_i]
         else:
             fq_fname_base = fq_fname.split('/')[-1].split('.')[0]
             
@@ -1484,6 +1489,7 @@ def extract_reads(base_fname,
                  ranges,
                  simulation,
                  verbose):
+            
             aligner_cmd = [aligner]
             if threads_aprocess > 1:
                 aligner_cmd += ["-p", "%d" % threads_aprocess]
@@ -1501,6 +1507,7 @@ def extract_reads(base_fname,
                 aligner_cmd += ["-U", fq_fname]
             if verbose:
                 print >> sys.stderr, "\t\trunning", ' '.join(aligner_cmd)
+
             align_proc = subprocess.Popen(aligner_cmd,
                                           stdout=subprocess.PIPE,
                                           stderr=open("/dev/null", 'w'))

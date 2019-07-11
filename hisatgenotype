@@ -608,8 +608,7 @@ if __name__ == '__main__':
                     discard_list.add(fname)
 
                 locus_list = region_list[base] if "ALL" not in region_list else []
-                pool.apply_async(genotyping_locus,
-                             args = (base,
+                genotyping_locus(base,
                                      locus_list,
                                      args.genotype_genome,
                                      only_locus_list,
@@ -638,7 +637,7 @@ if __name__ == '__main__':
                                      args.verbose_level,
                                      args.assembly_verbose,
                                      args.out_dir,
-                                     debug))
+                                     debug)
         pool.close()
         pool.join()
 
