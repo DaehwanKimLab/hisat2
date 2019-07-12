@@ -592,6 +592,7 @@ def extract_vars(base_fname,
                 if next_exon_len >= len(ref_partial_seq_map):
                     print >> sys.stderr, "Warning: partial sequences (%s) seem to be incomplete" % gene
                     complete = False
+                    seq_len = find_seq_len(seqs)
                     break
                 ref_partial_exons.append([ref_partial_seq_map[exon_len], ref_partial_seq_map[next_exon_len]])
                 exon_len += (right - left + 1)
@@ -683,6 +684,7 @@ def extract_vars(base_fname,
             for i in range(len(seqs)):
                 seqs[i] = typing_common.reverse_complement(seqs[i])
             backbone_seq, backbone_freq = create_consensus_seq(seqs, seq_len, min_var_freq, True)
+            seq_len = find_seq_len(seqs)
 
         if leftshift:
             for seq_i in range(len(seqs)):

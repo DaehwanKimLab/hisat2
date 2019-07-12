@@ -599,7 +599,7 @@ if __name__ == '__main__':
                      args.out_dir,
                      debug)
     else:
-        pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
+        #pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
         for base, file_list in fq_fname_base.items():
             for fname in file_list:
                 fasta_fname = glob.glob("%s/%s*" % (args.out_dir, fname))
@@ -638,8 +638,8 @@ if __name__ == '__main__':
                                      args.assembly_verbose,
                                      args.out_dir,
                                      debug)
-        pool.close()
-        pool.join()
+        #pool.close()
+        #pool.join()
 
     if not args.keep_extract:
         for fname in discard_list:

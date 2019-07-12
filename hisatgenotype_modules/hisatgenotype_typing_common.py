@@ -25,6 +25,7 @@ import random
 import errno
 from copy import deepcopy
 from datetime import datetime
+import hisatgenotype_typing_process as typing_process
 
 ##################################################
 #   Sequence processing routines
@@ -312,12 +313,24 @@ def extract_database_if_not_exists(base,
     if base == "codis":
         extract_cmd += ["--leftshift"]
 
+    typing_process.extract_vars(base,
+                                '',
+                                locus_list,
+                                inter_gap,
+                                intra_gap,
+                                True,
+                                0.1 if base == 'hla' else 0.0,
+                                0,
+                                True if base == 'codis' else False,
+                                partial,
+                                verbose)
+
     # DK - debugging purposes
     # extract_cmd += ["--ext-seq", "300"]
     if verbose:
         print >> sys.stderr, "\tRunning:", ' '.join(extract_cmd)
-    proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
-    proc.communicate()
+    #proc = subprocess.Popen(extract_cmd, stdout=open("/dev/null", 'w'), stderr=open("/dev/null", 'w'))
+    #proc.communicate()
 
     if not check_files(fnames):
         print >> sys.stderr, "Error: hisatgenotype_extract_vars failed!"
