@@ -25,7 +25,13 @@ from argparse import ArgumentParser, FileType
 from hisatgenotype_typing_process import extract_vars
 import hisatgenotype_typing_common as typing_common
 import hisatgenotype_args as arguments
-        
+
+def init(l):
+    global lock
+    lock = l
+
+l = multiprocessing.Lock()
+
 """
 This is the Wrapper script that runs the processing code found in hisatgenotype_modules/hisatgenotype_typing_process
 """
@@ -61,11 +67,6 @@ if __name__ == '__main__':
             base_fname.append(database.lower())
     else:
         base_fname = args.base_fname.lower().split(',')
-
-    def init(l):
-        global lock
-        lock = l
-    l = multiprocessing.Lock()
 
     pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
     for base in base_fname:

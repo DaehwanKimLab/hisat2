@@ -19,7 +19,8 @@
 # along with HISAT-genotype.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys, os, subprocess, re, resource
+import sys, os, subprocess, re
+import traceback, functools
 import glob, multiprocessing, random
 import hisatgenotype_args as arguments
 import hisatgenotype_typing_common as typing_common
@@ -39,6 +40,16 @@ class Namespace:
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
+
+def traceback_unhandled_exceptions(func):
+    @functools.wraps(func)
+    def wrapped_func(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except:
+            print 'Exception in '+func.__name__
+            traceback.print_exc()
+    return wrapped_func
 
 def init(l):
     global lock
@@ -599,7 +610,9 @@ if __name__ == '__main__':
                      args.out_dir,
                      debug)
     else:
-        #pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
+        # DB TODO: Pickling error with this step. Right now no assert error are seen without this
+        #genotyping_locus = traceback_unhandled_exceptions(genotyping_locus)
+        pool = multiprocessing.Pool(int(args.threads), initializer=init, initargs=(l,))
         for base, file_list in fq_fname_base.items():
             for fname in file_list:
                 fasta_fname = glob.glob("%s/%s*" % (args.out_dir, fname))
@@ -608,7 +621,8 @@ if __name__ == '__main__':
                     discard_list.add(fname)
 
                 locus_list = region_list[base] if "ALL" not in region_list else []
-                genotyping_locus(base,
+                pool.apply_async(genotyping_locus,
+                                 args = (base,
                                      locus_list,
                                      args.genotype_genome,
                                      only_locus_list,
@@ -637,9 +651,9 @@ if __name__ == '__main__':
                                      args.verbose_level,
                                      args.assembly_verbose,
                                      args.out_dir,
-                                     debug)
-        #pool.close()
-        #pool.join()
+                                     debug))
+        pool.close()
+        pool.join()
 
     if not args.keep_extract:
         for fname in discard_list:
