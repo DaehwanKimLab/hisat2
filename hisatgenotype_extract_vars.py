@@ -637,6 +637,7 @@ def extract_vars(base_fname,
             for i in range(len(seqs)):
                 seqs[i] = typing_common.reverse_complement(seqs[i])
             backbone_seq, backbone_freq = create_consensus_seq(seqs, seq_len, min_var_freq, True)
+            seq_len = find_seq_len(seqs)
 
         if leftshift:
             for seq_i in range(len(seqs)):

@@ -1110,9 +1110,9 @@ def typing(simulation,
 
                                 # DK - debugging purposes
                                 # for cmpt, count in Gene_primary_exons_count_per_read.items():
-                                if cur_primary_exons_cmpt.find("A*24:145") != -1 and cur_primary_exons_cmpt.find("A*24:02:01") == -1:
-                                    print prev_read_id
-                                    print cur_primary_exons_cmpt
+                                #if cur_primary_exons_cmpt.find("A*24:145") != -1 and cur_primary_exons_cmpt.find("A*24:02:01") == -1:
+                                #    print prev_read_id
+                                #    print cur_primary_exons_cmpt
         
 
             
