@@ -207,10 +207,10 @@ def download_genome_and_index():
 """
 """
 def clone_hisatgenotype_database():
-    #os.system("git clone https://github.com/DaehwanKimLab/hisatgenotype_db.git")
-    #os.system("cd hisatgenotype_db; git checkout hisatgenotype_v1.0.1_beta; cd ..")
-    os.mkdir("hisatgenotype_db")
-    os.system("git clone -b 3350 https://github.com/ANHIG/IMGTHLA.git hisatgenotype_db/HLA")
+    os.system("git clone https://github.com/DaehwanKimLab/hisatgenotype_db.git")
+    os.system("cd hisatgenotype_db; git checkout hisatgenotype_v1.0.1_beta; cd ..")
+    #os.mkdir("hisatgenotype_db")
+    #os.system("git clone -b 3350 https://github.com/ANHIG/IMGTHLA.git hisatgenotype_db/HLA")
 
 
 """
