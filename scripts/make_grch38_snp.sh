@@ -49,7 +49,7 @@ fi
 
 HISAT2_SNP_SCRIPT=./hisat2_extract_snps_haplotypes_UCSC.py
 if [ ! -x "$HISAT2_SNP_SCRIPT" ] ; then
-	if ! which hisat2_extract_snps.py ; then
+	if ! which hisat2_extract_snps_haplotypes_UCSC.py ; then
 		echo "Could not find hisat2_extract_snps_haplotypes_UCSC.py in current directory or in PATH"
 		exit 1
 	else
