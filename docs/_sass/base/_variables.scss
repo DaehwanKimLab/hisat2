@@ -13,12 +13,12 @@ $margin: 50px;
 $brand-color: #003c6e;
 
 // other major colors.
-$site-title-color: rgba(#000, .6);
+$site-title-color: rgba(#fff, .9);
 $page-title-color: $brand-color;
 $background-color: #fff;
 $border-color: rgba(#000, .25);
 
 // typography colors.
 $text-color: #383838;
-$link-color: darken($brand-color, 15%);
+$link-color: lighten($brand-color, 15%);
 $blockquote-color: #777;
