@@ -575,7 +575,7 @@ if(defined($cap_out)) {
 					my $l = <HT>;
 					chomp($l);
 					$l =~ s/%(..)/chr(hex($1))/eg;
-					if((defined($read_fhs{un}) || defined($read_fhs{al})) && $unp) {
+					if((defined($read_fhs{un}) || defined($read_fhs{al})) && $unp && !$secondary) {
 						if($unal) {
 							# Failed to align
 							print {$read_fhs{un}} $l if defined($read_fhs{un});
