@@ -131,7 +131,7 @@ HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
 HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
 
 SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
-VERSION = $(shell cat VERSION)
+VERSION = $(shell head -1 VERSION)
 
 # Convert BITS=?? to a -m flag
 BITS=32
