@@ -1607,7 +1607,22 @@ public:
 		assert_eq(refid(), omate.refid());
 		getExtendedCoords(st, en, st2, en2);
 		omate.getExtendedCoords(ost, oen, ost2, oen2);
-		bool imUpstream = st.off() < ost.off() || (st.off() == ost.off() && en2.off() < oen2.off());
+		bool imUpstream = false;
+
+		if(st.off() < ost.off()) {
+		    imUpstream = true;
+		} else if(st.off() == ost.off()) {
+		    if(st.fw() && ost.fw() && readMate1()) {
+		        imUpstream = true;
+		    } else if(st.fw() && !ost.fw()) {
+		        imUpstream = true;
+		    } else {
+		        imUpstream = false;
+		    }
+		} else {
+		    imUpstream = false;
+		}
+
         TRefOff up, dn, up_right, dn_left;
         if(imUpstream) {
             up = std::min(st2.off(), ost.off());
