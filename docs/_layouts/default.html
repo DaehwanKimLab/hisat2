@@ -70,11 +70,12 @@
 
     <aside class="site-aside">
         <div class="inner">
-            <div class="block">
-                <form action="{{ site.baseurl }}/search">
-                    <input type="search" id="search" name="q" placeholder="{{ site.str_search }}" />
-                </form>
-            </div>
+                <div class="block">
+                        <form action="{{ site.baseurl }}/search">
+                            <input type="search" id="search" name="q" placeholder="{{ site.str_search }}" />
+                        </form>
+                    </div>
+
             <ul>
                 {% assign pages = site.pages | sort: 'order' %}
                 {% for page in pages %}
@@ -83,11 +84,25 @@
                 {% endif %}
                 {% endfor %}
             </ul>
+            <!--
             <ul class="icons">
                 {% include icons.html icons=site.icons %}
             </ul>
             <hr class="with-no-margin margin-bottom"/>
+            -->
 
+            {% if site.data.collaborate %}
+            <div class="block">
+            {% for item in site.data.collaborate %}
+                    <ul style="text-align: center">
+                        <a href="{{ item.url }}">
+                            <img class="avatar" src="{{ item.logo | prepend: site.baseurl }}" alt="{{ item.name }}" />
+                        </a>
+                    </ul>
+            {% endfor %}
+            </div>
+            {% endif %}
+            
             <div class="block sticky">
                 <h2>{{ site.str_recent_posts }}</h2>
                 <ul>
@@ -103,6 +118,7 @@
                     {% endfor %}
                 </ul>
             </div>
+
         </div>
     </aside>
 </div>
