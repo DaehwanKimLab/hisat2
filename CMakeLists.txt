@@ -197,7 +197,7 @@ add_executable(hisat2-inspect-l ${INSPECT_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-repeat ${REPEAT_CPPS} ${SHARED_CPPS})
 set_target_properties(${HISAT2_BIN_LIST} PROPERTIES DEBUG_POSTFIX "-debug")
 set_target_properties(hisat2-align-l hisat2-build-l hisat2-inspect-l hisat2-repeat 
-	PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DBOWTIE2_64BIT_INDEX")
+	PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DBOWTIE_64BIT_INDEX")
 
 target_compile_options(hisat2-inspect-s PUBLIC "-DHISAT2_INSPECT_MAIN")
 target_compile_options(hisat2-inspect-l PUBLIC "-DHISAT2_INSPECT_MAIN")
