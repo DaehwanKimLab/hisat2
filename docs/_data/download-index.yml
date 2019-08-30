@@ -1,42 +1,42 @@
 - organism: H. sapiens
   data:
     GRCh38:
-      genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz
+      genome:
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38/download
       genome_snp: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_snp.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp/download
       genome_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_tran/download
       genome_snp_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_snp_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp_tran/download
     UCSC hg38:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/hg38/download
       genome_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/hg38_tran/download
     GRCh37:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37/download
       genome_snp: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_snp.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_snp/download
       genome_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_tran/download
       genome_snp_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_snp_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_snp_tran/download
     UCSC hg19:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg19.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/hg19/download
 - organism: M. musculus
   data:
     GRCm38:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38/download
       genome_snp: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_snp.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp/download
       genome_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_tran/download
       genome_snp_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_snp_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp_tran/download
     UCSC mm10:
       genome: 
         url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/mm10.tar.gz
