@@ -37,13 +37,13 @@
  <ul>
    <table width="100%"><tbody><tr><td>version 2.1.0</td> <td align="right">6/8/2017</td></tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
+	 <td><a href="https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-source/download" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
        </tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
+	 <td><a href="https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-Linux_x86_64/download" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
        </tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
+	 <td><a href="https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-OSX_x86_64/download" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
        </tr>
        <tr>
 	 <td><a href="http://www.di.fc.ul.pt/~afalcao/hisat2_windows.html" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Windowns binary</a></td>

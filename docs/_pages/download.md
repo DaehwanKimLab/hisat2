@@ -31,3 +31,19 @@ share: false
 
 ## Binaries
 
+{% assign target = site.data.download-binary.latest_version %}
+{% for release in site.data.download-binary.release %}
+{% assign version = release['version'] %}
+{% if version == target or target == null %}
+{% assign name = release['name'] %}
+### Version: {{name}} {{version}}
+<table style="border-collapse: collapse; border: none;">
+<tr style="border: none;"><td style="border: none;" colspan="2"><b>Release Date</b>: {{release['date']}}</td></tr>
+{% for artifact in release['artifacts'] %}
+{% assign type = artifact[0] %}
+<tr style="border: none;"><td style="border: none;">{{type}}</td><td style="border: none;"><a href="{{artifact[1]}}">{{artifact[1]}}</a></td></tr>
+{% endfor %}
+</table>
+{% endif %}
+{% endfor %}
+

@@ -1,0 +1,52 @@
+latest_version: 2.1.0
+release:
+  - version: 2.1.0
+    date: 6/8/2017
+    name: HISAT2
+    artifacts:
+      Source: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-source/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-OSX_x86_64/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-Linux_x86_64/download
+      Windows: http://www.di.fc.ul.pt/~afalcao/hisat2_windows.html
+  - version: 2.0.5
+    date: 11/4/2016
+    name: HISAT2
+    artifacts:
+      Source: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-205-source/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-205-OSX_x86_64/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-205-Linux_x86_64/download
+  - version: 2.0.4
+    date: 5/18/2016
+    name: HISAT2
+    artifacts:
+      Source: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-204-source/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-204-OSX_x86_64/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-204-Linux_x86_64/download
+  - version: 2.0.3-beta
+    date: 3/28/2016
+    name: HISAT2
+    artifacts:
+      Source: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-203-beta-source/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-203-beta-OSX_x86_64/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-203-beta-Linux_x86_64/download
+  - version: 2.0.2-beta
+    date: 3/17/2016
+    name: HISAT2
+    artifacts:
+      Source: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-202-beta-source/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-202-beta-OSX_x86_64/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-202-beta-Linux_x86_64/download
+  - version: 2.0.1-beta
+    date: 11/19/2015
+    name: HISAT2
+    artifacts:
+      Source: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-201-beta-source/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-201-beta-OSX_x86_64/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-201-beta-Linux_x86_64/download
+  - version: 2.0.0-beta
+    date: 9/8/2015
+    name: HISAT2
+    artifacts:
+      Source: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-200-beta-source/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-200-beta-OSX_x86_64/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/hisat2-200-beta-Linux_x86_64/download
