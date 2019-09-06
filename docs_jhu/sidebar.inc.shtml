@@ -217,7 +217,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/mm10.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/mm10/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.5 GB</b>
@@ -230,7 +230,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/rn6.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/rn6/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.7 GB</b>

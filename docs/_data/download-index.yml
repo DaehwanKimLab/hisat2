@@ -39,12 +39,12 @@
         url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp_tran/download
     UCSC mm10:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/mm10.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/mm10/download
 - organism: R. norvegicus
   data:
     UCSC rn6:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/rn6.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/rn6/download
 - organism: D. melanogaster
   data:
     BDGP6:
