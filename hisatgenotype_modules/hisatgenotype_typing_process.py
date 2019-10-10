@@ -1423,7 +1423,7 @@ def extract_reads(base_fname,
 
             fnames.append(fileL)
             fnames2.append(fileR)
-            fnbase.append(common)
+            fnbase.append(common if '/' not in common else common.split('/')[-1])
         
         return fnames, fnames2, fnbase
 
