@@ -93,6 +93,6 @@ We extended the BWT/FM index to incorporate genomic differences among individual
 * We plan to incorporate a larger set of SNPs and structural variations (SV) into this index (e.g., long insertions/deletions, inversions, and translocations).
 
 
-### The HISAT2 source code is available in a [public GitHub repository](https://github.com/infphilo/hisat2) (5/30/2015).
+### The HISAT2 source code is available in a [public GitHub repository](https://github.com/DaehwanKimLab/hisat2) (5/30/2015).
 
 
