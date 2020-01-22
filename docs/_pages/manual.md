@@ -235,8 +235,7 @@ and use the appropriate index.
 Performance tuning
 ------------------
 
-1.  If your computer has multiple processors/cores, use `-p`
-
+1.  If your computer has multiple processors/cores, use `-p`  
     The [`-p`] option causes HISAT2 to launch a specified number of parallel
     search threads.  Each thread runs on a different processor/core and all
     threads find alignments in parallel, increasing alignment throughput by
@@ -623,24 +622,31 @@ considered valid, and `x` is the read length.
 
 * -k `<int>`  
   It searches for at most `<int>` distinct, primary alignments for each read.
-  Primary alignments mean alignments whose alignment score is equal or higher than any other alignments.
-  The search terminates when it can't find more distinct valid alignments, or when it
+  Primary alignments mean alignments whose alignment score is equal to or higher than any other alignments.
+  The search terminates when it cannot find more distinct valid alignments, or when it
   finds `<int>`, whichever happens first. The alignment score for a paired-end
   alignment equals the sum of the alignment scores of the individual mates. Each
   reported read or pair alignment beyond the first has the SAM 'secondary' bit
   (which equals 256) set in its FLAGS field.  For reads that have more than
-  `<int>` distinct, valid alignments, `hisat2` does not guarantee that the
-  `<int>` alignments reported are the best possible in terms of alignment score. Default: 5 (HFM) or 10 (HGFM)
+  `<int>` distinct, valid alignments, **hisat2** does not guarantee that the
+  `<int>` alignments reported are the best possible in terms of alignment score. Default: 5 (linear index) or 10 (graph index).
   <p/>
   Note: HISAT2 is not designed with large values for `-k` in mind, and when
-  aligning reads to long, repetitive genomes large `-k` can be very, very slow.
+  aligning reads to long, repetitive genomes, large `-k` could make alignment much slower.
 {: #hisat2-options-k}
 [`-k`]: #hisat2-options-k
 
 * \--max-seeds `<int>`  
-  HISAT2, like other aligners, uses seed-and-extend approaches.  HISAT2 tries to extend seeds to full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that will be extended. HISAT2 extends up to these many seeds and skips the rest of the seeds. Large values for `--max-seeds` may improve alignment sensitivity, but HISAT2 is not designed with large values for `--max-seeds` in mind, and when aligning reads to long, repetitive genomes large `--max-seeds` can be very, very slow. The default value is the maximum of 5 and the value that comes with`-k`.
+  HISAT2, like other aligners, uses seed-and-extend approaches. HISAT2 tries to extend seeds to full-length alignments. In HISAT2, `--max-seeds` is used to control the maximum number of seeds that will be extended. For DNA-read alignment ([`--no-spliced-alignment`]), HISAT2 extends up to these many seeds and skips the rest of the seeds. For RNA-read alignment, HISAT2 skips extending seeds and reports no alignments if the number of seeds is larger than the number specified with the option, to be compatible with previous versions of HISAT2. Large values for `--max-seeds` may improve alignment sensitivity, but HISAT2 is not designed with large values for `--max-seeds` in mind, and when aligning reads to long, repetitive genomes, large `--max-seeds` could make alignment much slower. The default value is the maximum of 5 and the value that comes with `-k` times 2.
 {: #hisat2-options-max-seeds}
 [`--max-seeds`]: #hisat2-options-max-seeds
+
+* -a/\--all  
+  HISAT2 reports all alignments it can find. Using the option is equivalent to using both [`--max-seeds`] and [`-k`] with the maximum value that a 64-bit signed integer can represent (9,223,372,036,854,775,807).
+{: #hisat2-options-a}
+[`-a`/`--all`]: #hisat2-options-a
+[`-a`]: #hisat2-options-a
+
 
 * \--secondary  
   Report secondary alignments.
