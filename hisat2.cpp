@@ -913,8 +913,10 @@ static void printUsage(ostream& out) {
 		<< "                     (L,0.0,-0.2)" << endl
 		<< endl
 	    << " Reporting:" << endl
-	    << "  -k <int> report up to <int> alns per read (default: 5)" << endl
-        << "  --repeat report alignments to repeat sequences directly" << endl
+	    << "  -k <int>           report up to <int> alns per read (default: 5 for linear index, 10 for graph index)" << endl
+        << "  --max-seeds <int>  maximum number of seeds to be extended (default: maximum of 5 and the values that comes with -k times 2)" << endl
+        << "  -a/--all           report all alignments" << endl
+        << "  --repeat           report alignments to repeat sequences directly" << endl
 		<< endl
 	    //<< " Effort:" << endl
 	    //<< "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
