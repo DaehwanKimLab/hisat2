@@ -498,6 +498,7 @@ if __name__ == '__main__':
 
         if args.read_fname_U != "":
             paired = False
+            args.discordant = True
         else:
             paired = args.paired
             if (args.read_fname_1 != "" and args.read_fname_2 != "") and not paired:
@@ -651,7 +652,8 @@ if __name__ == '__main__':
                                      args.verbose_level,
                                      args.assembly_verbose,
                                      args.out_dir,
-                                     debug))
+                                     debug)) 
+        
         pool.close()
         pool.join()
 

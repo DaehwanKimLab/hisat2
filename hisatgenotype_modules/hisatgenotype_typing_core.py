@@ -511,7 +511,7 @@ def typing(simulation,
             prev_read_id = None
             prev_right_pos = 0
             prev_lines = []
-            left_read_ids, right_read_ids = set(), set()
+            left_read_ids, right_read_ids, single_read_ids = set(), set(), set()
             if index_type == "graph":
                 # nodes for reads
                 read_nodes = []
@@ -735,21 +735,26 @@ def typing(simulation,
                     if not allow_discordant and not concordant:
                         continue
 
-                    # Left read?
                     is_left_read = flag & 0x40 != 0
-                    if is_left_read:
+                    if is_left_read:                    # Left read?
                         if read_id in left_read_ids:
                             continue
                         left_read_ids.add(read_id)
                         if not simulation:
                             node_read_id += '|L'
-                    else: # Right read?
-                        assert flag & 0x80 != 0
+                    elif flag & 0x80 != 0:              # Right read?
                         if read_id in right_read_ids:
                             continue
                         right_read_ids.add(read_id)
                         if not simulation:
                             node_read_id += '|R'
+                    else:                               # Single end?
+                        if read_id in single_read_ids:
+                            continue
+                        single_read_ids.add(read_id)
+                        if not simulation:
+                            node_read_id += '|U'
+
 
                     if Zs:
                         Zs_str = Zs
@@ -957,8 +962,8 @@ def typing(simulation,
                             cigar_str += str(length)
                             cigar_str += type
 
-                    if sum(softclip) > 0:
-                        continue
+                    # if sum(softclip) > 0: # TODO in next version: Find way of adding a configuration or flag for this
+                    #     continue
 
                     if right_pos > len(ref_seq):
                         continue
