@@ -230,6 +230,16 @@ if(USE_SRA)
 	target_link_libraries(hisat2-align-l ${NCBI_LIBS})
 endif()
 
+add_custom_target(hisat2-all)
+add_dependencies(hisat2-all
+		hisat2-align-s
+		hisat2-align-l
+		hisat2-build-s
+		hisat2-build-l
+		hisat2-inspect-s
+		hisat2-inspect-l
+		hisat2-repeat)
+
 #
 # Examples
 #
