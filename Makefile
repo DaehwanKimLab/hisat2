@@ -217,14 +217,27 @@ HT2LIB_RELEASE_OBJS = $(addprefix .ht2lib-obj-release/,$(HT2LIB_OBJS))
 HT2LIB_SHARED_DEBUG_OBJS = $(addprefix .ht2lib-obj-debug-shared/,$(HT2LIB_OBJS))
 HT2LIB_SHARED_RELEASE_OBJS = $(addprefix .ht2lib-obj-release-shared/,$(HT2LIB_OBJS))
 
+HT2LIB_PKG_SRC = \
+	$(HT2LIB_DIR)/ht2_init.cpp \
+	$(HT2LIB_DIR)/ht2_repeat.cpp \
+	$(HT2LIB_DIR)/ht2_index.cpp \
+	$(HT2LIB_DIR)/ht2.h \
+	$(HT2LIB_DIR)/ht2_handle.h \
+	$(HT2LIB_DIR)/java_jni/Makefile \
+	$(HT2LIB_DIR)/java_jni/ht2module.c \
+	$(HT2LIB_DIR)/java_jni/HT2Module.java \
+	$(HT2LIB_DIR)/java_jni/HT2ModuleExample.java \
+	$(HT2LIB_DIR)/pymodule/Makefile \
+	$(HT2LIB_DIR)/pymodule/ht2module.c \
+	$(HT2LIB_DIR)/pymodule/setup.py \
+	$(HT2LIB_DIR)/pymodule/ht2example.py
+
+
 GENERAL_LIST = $(wildcard scripts/*.sh) \
 	$(wildcard scripts/*.pl) \
 	$(wildcard *.py) \
 	$(wildcard hisatgenotype_modules/*.py) \
 	$(wildcard hisatgenotype_scripts/*.py) \
-	doc/manual.inc.html \
-	doc/README \
-	doc/style.css \
 	$(wildcard example/index/*.ht2) \
 	$(wildcard example/reads/*.fa) \
 	example/reference/22_20-21M.fa \
@@ -253,8 +266,9 @@ SRC_PKG_LIST = $(wildcard *.h) \
 	$(wildcard *.hh) \
 	$(wildcard *.c) \
 	$(wildcard *.cpp) \
-	doc/strip_markdown.pl \
+	$(HT2LIB_PKG_SRC) \
 	Makefile \
+	CMakeLists.txt \
 	$(GENERAL_LIST)
 
 BIN_PKG_LIST = $(GENERAL_LIST)
