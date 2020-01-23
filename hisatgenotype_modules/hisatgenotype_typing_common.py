@@ -207,7 +207,7 @@ def download_genome_and_index():
 """
 """
 def clone_hisatgenotype_database():
-    os.system("git clone https://github.com/infphilo/hisatgenotype_db.git")
+    os.system("git clone https://github.com/DaehwanKimLab/hisatgenotype_db.git")
     os.system("cd hisatgenotype_db; git checkout hisatgenotype_v1.0.2_beta; cd ..")
 
 
@@ -607,7 +607,7 @@ def align_reads(aligner,
             if base_fname == "codis":
                 aligner_cmd += ["--enable-codis"]
                 aligner_cmd += ["--no-softclip"]
-    
+
     elif aligner == "bowtie2":
         aligner_cmd = [aligner,
                        "--no-unal",

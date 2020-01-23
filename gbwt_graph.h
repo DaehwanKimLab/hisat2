@@ -1988,7 +1988,7 @@ void PathGraph<index_t>::lateGeneration() {
     indiv = time(0);
 
     mergeUpdateRank();
-    
+
     if(from_table_size != from_table.size()) {
         assert_lt(from_table_size, from_table.size());
         from_table.resize(from_table_size);
@@ -2471,7 +2471,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
         }
     }
     base.nullify();
-    
+
     // delete unused nodes
     if(node_size != nodes.size()) {
         assert_lt(node_size, nodes.size());
@@ -2615,7 +2615,7 @@ bool PathGraph<index_t>::generateEdges(RefGraph<index_t>& base)
 
     if(verbose) cerr << "SORT, Make index: " << time(0) - indiv << endl;
     if(verbose) cerr << "TOTAL: " << time(0) - overall << endl;
-    
+
     return true;
 
 //-----------------------------------------------------------------------------------------------------

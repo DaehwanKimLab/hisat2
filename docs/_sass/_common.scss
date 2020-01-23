@@ -1,0 +1,43 @@
+html {
+    background: $background-color;
+}
+
+body {
+    color: $text-color;
+    font-family: $font-family;
+    font-size: $font-size;
+    word-wrap: break-word;
+}
+
+a {
+    color: $link-color;
+    text-decoration: none;
+    &:hover {
+        opacity: .8;
+        text-decoration: underline;
+    }
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid $border-color;
+    border-bottom: 1px solid #fff;
+    margin: 1em 0;
+    &.with-margin {
+        margin: $margin 0;
+    }
+    &.with-no-margin {
+        margin: 0;
+    }
+}
+
+input, select, textarea {
+    border-radius: 0.3em;
+    border: 1px solid $border-color;
+    display: inline-block;
+    padding: 0.5em 0.75em;
+}
+
+iframe, img, embed, object, video {
+    max-width: 100%;
+}

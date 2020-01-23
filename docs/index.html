@@ -1,0 +1,14 @@
+---
+layout: default
+---
+
+{% assign pages = site.pages | where: "title", "Main" %}
+<div class="article-wrapper">
+  <article>
+    <section class="post-content">
+      {{ pages[0].content }}
+    </section>
+  </article>
+</div>
+
+

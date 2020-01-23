@@ -865,7 +865,8 @@ public:
                 alts.push_back(alt);
                 alts.back().pos = alt.pos + alt.len - 1;
                 alts.back().reversed = true;
-                altnames.push_back(altnames[s]);
+                string altname = altnames[s];
+                altnames.push_back(altname);
             }
         }
         if(alts.size() > 1 && alts.size() > nalts) {
@@ -1275,7 +1276,7 @@ public:
         assert(false);
         return false;
     }
-	
+
 	/**
 	 * Helper for the constructors above.  Takes a vector of text
 	 * strings and joins them into a single string with a call to
@@ -1379,7 +1380,7 @@ public:
                 }
                 writeIndex<int32_t>(fout7, 1, this->toBe()); // endianness sentinel
                 writeIndex<int32_t>(fout8, 1, this->toBe()); // endianness sentinel
-                
+
                 for(index_t i = 0; i < _refnames.size(); i++) {
                     _refnames_nospace.push_back("");
                     for(index_t j = 0; j < _refnames[i].size(); j++) {
@@ -1917,7 +1918,7 @@ public:
                     if(parent_refnames == NULL) {
                         throw 1;
                     }
-                    
+
                     EList<pair<index_t, index_t> > parent_chr_szs;
                     index_t tmp_len = 0;
                     for(index_t i = 0; i < parent_szs->size(); i++) {
@@ -1929,7 +1930,7 @@ public:
                         tmp_len += (index_t)(*parent_szs)[i].len;
                     }
                     index_t parent_jlen = joinedLen(*parent_szs);
-                    
+
                     string prev_repName = "";
                     while(!repeat_file.eof()) {
                         // >rep1*0    rep    0    100    470    0
@@ -1953,7 +1954,7 @@ public:
                             string strID = repAlleleName.substr(star_pos + 1);
                             istringstream(strID) >> alleleID;
                         }
-        
+
                         string refRepName;
                         index_t repPos, repLen;
                         repeat_file >> refRepName >> repPos >> repLen;
@@ -1966,7 +1967,7 @@ public:
                             cerr << "Error: " << refRepName << " is not found in " << endl;
                             throw 1;
                         }
-                        
+
                         if(repeats.size() == 0 ||
                            repeats.back().repID != rep_idx ||
                            repeats.back().repName != repName) {
@@ -1976,7 +1977,7 @@ public:
                             repeats.expand();
                             repeats.back().init(repName, rep_idx, repPos, repLen);
                         }
-                        
+
                         // update repPos and repLen
                         if(repPos < repeats.back().repPos) {
                             repeats.back().repLen += (repeats.back().repPos - repPos);
@@ -1985,12 +1986,12 @@ public:
                         if(repPos + repLen > repeats.back().repPos + repeats.back().repLen) {
                             repeats.back().repLen = repPos + repLen - repeats.back().repPos;
                         }
-                        
+
                         size_t baseOff = 0;
                         if(repeats.size() > 1 && repeats[repeats.size() - 2].repID == rep_idx) {
                             baseOff = repeats[repeats.size() - 2].repPos + repeats[repeats.size() - 2].repLen;
                         }
-                        
+
                         index_t numCoords, numAlts;
                         repeat_file >> numCoords >> numAlts;
                         EList<index_t> snpIDs;
@@ -2013,7 +2014,7 @@ public:
                                 snpIDs.push_back(numID);
                             }
                         }
-                        
+
                         EList<RepeatCoord<index_t> >& positions = repeats.back().positions;
                         size_t sofar_numCoords = positions.size();
                         while(positions.size() - sofar_numCoords < numCoords) {
@@ -2040,13 +2041,13 @@ public:
                             }
                             assert_eq(parent_chr_szs.size(), parent_refnames->size());
                             assert_lt(chr_idx, parent_chr_szs.size());
-                            
+
                             positions.expand();
                             positions.back().tid = chr_idx;
                             positions.back().toff = pos;
                             positions.back().fw = repfw;
                             positions.back().alleleID = alleleID;
-                            
+
                             pair<index_t, index_t> tmp_pair = parent_chr_szs[chr_idx];
                             const index_t sofar_len = tmp_pair.first;
                             const index_t szs_idx = tmp_pair.second;
@@ -2086,19 +2087,19 @@ public:
                                     throw 1;
                                 }
                             }
-                            
+
                             positions.back().joinedOff = pos;
                         }
                         repeats.back().alleles.expand();
                         assert_geq(repPos, baseOff);
                         repeats.back().alleles.back().init(repPos - baseOff, repLen);
-                        
+
                     }
                     if(repeats.size() > 0) {
                         repeats.back().positions.sort();
                     }
                     repeat_file.close();
-                    
+
                     index_t total_repeat_len = 0;
                     for(size_t r = 0; r + 1 < repeats.size(); r++) {
                         if(repeats[r].repID != repeats[r+1].repID) {
@@ -2163,7 +2164,7 @@ public:
                             assert_range(0, 3, c);
                             seqs.back().push_back("ACGT"[c]);
                         }
-                        
+
                         if(i + 1 == repeats.size() || repeats[i].repID != repeats[i+1].repID) {
                             const size_t w = RB_Minimizer<string>::default_w, k = RB_Minimizer<string>::default_k;
                             RB_KmerTable kmer_table;
@@ -2181,7 +2182,7 @@ public:
                     }
                     fout7.seekp(origpos);
                 }
-                    
+
                 fout7.close();
                 fout8.close();
             }
@@ -2215,7 +2216,7 @@ public:
 			}
 			throw 1;
 		}
-        
+
 		// Succesfully obtained joined reference string
 		assert_geq(s.length(), jlen);
 		if(bmax != (index_t)OFF_MASK) {
@@ -2233,12 +2234,12 @@ public:
 			bmax = (uint32_t)sqrt(s.length());
 			// VMSG_NL("bmax defaulted to: " << bmax);
 		}
-        
+
 		int iter = 0;
 		bool first = true;
 		streampos out1pos = out1.tellp();
 		streampos out2pos = out2.tellp();
-        
+
         if(!_repeat) {
             // Look for bmax/dcv parameters that work.
             while(true) {
@@ -2325,7 +2326,7 @@ public:
                                                                         std::numeric_limits<index_t>::max(),
                                                                         _nthreads,
                                                                         verbose);
-                        
+
                         if(verbose) { cerr << "Generating edges... " << endl; }
                         if(!pg->generateEdges(*graph)) { return; }
                         // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
@@ -2360,7 +2361,7 @@ public:
                 first = false;
             }
             assert(repOk());
-    
+
             // Now write reference sequence names on the end
             assert_eq(this->_refnames.size(), this->_nPat);
             for(index_t i = 0; i < this->_refnames.size(); i++) {
@@ -2440,7 +2441,7 @@ public:
     bool        fw() const           { return fw_; }
     bool        repeat() const       { return _repeat; }
     const EList<uint8_t>& getReadIncluded() const { return _readIncluded; }
-    
+
 #ifdef POPCNT_CAPABILITY
     bool _usePOPCNTinstruction;
 #endif
@@ -2806,7 +2807,7 @@ public:
             extra_version = "";
         }
     }
-    
+
     static int getIndexVersion() {
         int major_version = 0, minor_version = 0;
         string extra_version;
@@ -4302,7 +4303,7 @@ public:
     EList<Haplotype<index_t> > _haplotypes;
     RepeatDB<index_t>          _repeatdb;
     EList<RB_KmerTable>        _repeat_kmertables;
-    
+
     bool _repeat;
     EList<pair<index_t, index_t> > _readLens;
     EList<uint8_t>                 _readIncluded;
@@ -4508,7 +4509,7 @@ void GFM<index_t>::join(EList<FileBuf*>& l,
 			if(bases == 0) continue;
 		}
 	}
-    
+
     // Change 'C' in CG to 'T' so that CG becomes TG
     if(CGtoTG) {
         for(TIndexOffU i = 0; i + 1 < guessLen; i++) {
@@ -4518,7 +4519,7 @@ void GFM<index_t>::join(EList<FileBuf*>& l,
             }
         }
     }
-    
+
     // Append reverse complement
     if(include_rc) {
         for(TIndexOffU i = 0; i < guessLen; i++) {
@@ -5914,9 +5915,9 @@ void GFM<index_t>::readIntoMemory(
             assert_eq(1, endianSwapU32(one));
             switchEndian = true;
         }
-        
+
         _toBigEndian = switchEndian;
-        
+
         // Can't switch endianness and use memory-mapped files; in order to
         // support this, someone has to modify the file to switch
         // endiannesses appropriately, and we can't do this inside Bowtie
@@ -5925,7 +5926,7 @@ void GFM<index_t>::readIntoMemory(
             cerr << "Error: Can't use memory-mapped files when the index is the opposite endianness" << endl;
             throw 1;
         }
-        
+
         // Reads header entries one by one from primary stream
         int index_version = (int)readU32(_in1, switchEndian); bytesRead += 4;
         int major_index_version, minor_index_version;
@@ -6423,7 +6424,7 @@ void GFM<index_t>::readIntoMemory(
     
     // Be kind
     if(deleteGh) delete gh;
-    
+
     if(!subIndex) {
 #ifdef BOWTIE_MM
         fseek(_in1, 0, SEEK_SET);
@@ -6593,7 +6594,7 @@ void GFM<index_t>::writeFromMemory(bool justHeader,
     uint32_t be = this->toBe();
     assert(out1.good());
     assert(out2.good());
-    
+
     // When building an Ebwt, these header parameters are known
     // "up-front", i.e., they can be written to disk immediately,
     // before we join() or buildToDisk()

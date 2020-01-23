@@ -1,0 +1,14 @@
+---
+layout: page
+title: Tags
+permalink: /tags/
+order: 2
+share: false
+hide: true
+---
+
+<ul class="inline">
+    {% for tag in site.tags %}
+    <li><a href="{{ '/search/?t=' | prepend: site.baseurl }}{{ tag[0] }}">#{{ tag[0] }}</a></li>
+    {% endfor %}
+</ul>

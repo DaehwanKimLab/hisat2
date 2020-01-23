@@ -53,7 +53,7 @@ my $align_prog_s= File::Spec->catpath($vol,$script_path,$align_bin_s);
 my $align_prog_l= File::Spec->catpath($vol,$script_path,$align_bin_l);
 my $align_prog  = $align_prog_s;
 my $read_stat_prog = File::Spec->catpath($vol,$script_path,"hisat2_read_statistics.py");
-my $idx_ext_l     = 'ht2l'; 
+my $idx_ext_l     = 'ht2l';
 my $idx_ext_s     = 'ht2'; 
 my $idx_ext       = $idx_ext_s; 
 my $seq_in_args = 0;
@@ -230,6 +230,7 @@ my @unps = ();
 my @mate1s = ();
 my @mate2s = ();
 my @to_delete = ();
+my @to_kills = ();
 my $temp_dir = "/tmp";
 my $bam_out = 0;
 my $ref_str = undef;
@@ -294,6 +295,17 @@ if ((scalar(@read_files) > 0) && ($seq_in_args == 0)) {
 		Info("Read Length String: $read_len_str\n");
 		push @ht2_args, ("--read-lengths", $read_len_str);
 	}
+}
+
+sub check_file_exist($$$) {
+	my ($unps, $mate1s, $mate2s) = @_;
+	for my $fn (@$unps, @$mate1s, @$mate2s) {
+		if (not -f $fn) {
+			Fail("Read file '%s' doesn't exist\n", $fn);
+			return 1;
+		}
+	}
+	return 0;
 }
 
 sub cat_file($$) {
@@ -362,6 +374,10 @@ sub Extract_IndexName_From {
     Info("Cannot find any index option (--reference-string, --ref-string or -x) in the given command line.\n");    
 }
 
+if($seq_in_args == 0) {
+	check_file_exist(\@unps, \@mate1s, \@mate2s);
+}
+
 if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 	if(scalar(@mate2s) > 0) {
 		#
@@ -380,6 +396,7 @@ if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 		}
 		my $pid = 0;
 		$pid = fork() unless $no_pipes;
+		push @to_kills, $pid unless $no_pipes;
 		if($pid == 0) {
 			# Open named pipe 1 for writing
 			open(my $ofh, ">$m1fn") || Fail("Can't open '$m1fn' for writing\n");
@@ -397,6 +414,7 @@ if(wrapInput(\@unps, \@mate1s, \@mate2s)) {
 		}
 		$pid = 0;
 		$pid = fork() unless $no_pipes;
+		push @to_kills, $pid unless $no_pipes;
 		if($pid == 0) {
 			# Open named pipe 2 for writing
 			open(my $ofh, ">$m2fn") || Fail("Can't open '$m2fn' for writing.\n");
@@ -614,6 +632,8 @@ if(defined($cap_out)) {
 } else {
 	$ret = system($cmd);
 }
+kill 'TERM', @to_kills;
+
 if(!$keep) { for(@to_delete) { unlink($_); } }
 
 if ($ret == -1) {

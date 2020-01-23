@@ -1878,7 +1878,7 @@ void HGFM<index_t, local_index_t>::gbwt_worker(void* vp)
                 }
                 if(exploded) {
                     cerr << "Warning: a local graph exploded (offset: " << tParam.curr_sztot << ", length: " << tParam.local_sztot << ")" << endl;
-                    
+
                     delete tParam.pg; tParam.pg = NULL;
                     delete tParam.rg; tParam.rg = NULL;
                     if(tParam.alts.size() <= 1) {
@@ -1992,7 +1992,7 @@ HGFM<index_t, local_index_t>::HGFM(
     _in6Str = outfile + ".6." + gfm_ext;
     
     // const bool repeat_index = (parent_szs != NULL);
-    
+
     int32_t local_lineRate;
     if(snpfile == "" && ssfile == "" && exonfile == "") {
         local_lineRate = local_lineRate_fm;
@@ -2023,7 +2023,7 @@ HGFM<index_t, local_index_t>::HGFM(
     index_t cumlen = 0;
     typedef EList<RefRecord, 1> EList_RefRecord;
     ELList<EList_RefRecord> all_local_recs;
-    
+
     if(localIndex) {
         // For each unambiguous stretch...
         for(index_t i = 0; i < szs.size(); i++) {
@@ -2043,7 +2043,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 << "'first'" << endl;
                 throw 1;
             }
-            
+
             assert_gt(_nrefs, 0);
             assert_eq(_nrefs, all_local_recs.size());
             EList<EList_RefRecord>& ref_local_recs = all_local_recs[_nrefs-1];
@@ -2057,7 +2057,7 @@ HGFM<index_t, local_index_t>::HGFM(
                     continue;
                 }
                 index_t local_idx = local_off / local_index_interval;
-                
+
                 if(local_idx >= ref_local_recs.size()) {
                     assert_eq(local_idx, ref_local_recs.size());
                     ref_local_recs.expand();
@@ -2082,7 +2082,7 @@ HGFM<index_t, local_index_t>::HGFM(
             }
             cumlen = next_cumlen;
         }
-        
+
         // Store a cap entry for the end of the last reference seq
         _refLens.push_back(cumlen);
 
@@ -2170,14 +2170,14 @@ HGFM<index_t, local_index_t>::HGFM(
         assert_eq(_nlocalGFMs, temp_nlocalGFMs);
 #endif
     }
-    
+
     uint32_t be = this->toBe();
     assert(fout5.good());
     assert(fout6.good());
     
     // const local_index_t new_localFtabChars = (repeat_index ? 4 : localFtabChars);
     const local_index_t new_localFtabChars = localFtabChars;
-    
+
     // When building an Ebwt, these header parameters are known
     // "up-front", i.e., they can be written to disk immediately,
     // before we join() or buildToDisk()
@@ -2213,7 +2213,7 @@ HGFM<index_t, local_index_t>::HGFM(
                 tParams.back().mainThread = true;
             }
         }
-        
+
         // build local FM indexes
         index_t curr_sztot = 0;
         EList<ALT<index_t> > alts;
@@ -2227,12 +2227,12 @@ HGFM<index_t, local_index_t>::HGFM(
                 while(local_offset < refLen && t < (index_t)this->_nthreads) {
                     assert_lt(t, tParams.size());
                     ThreadParam& tParam = tParams[t];
-                    
+
                     tParam.index_size = std::min<index_t>(refLen - local_offset, local_index_size);
                     assert_lt(tidx, all_local_recs.size());
                     assert_lt(local_offset / local_index_interval, all_local_recs[tidx].size());
                     EList_RefRecord& local_szs = all_local_recs[tidx][local_offset / local_index_interval];
-                    
+
                     tParam.conv_local_szs.clear();
                     index_t local_len = 0, local_sztot = 0, local_sztot_interval = 0;
                     for(size_t i = 0; i < local_szs.size(); i++) {
@@ -2250,7 +2250,7 @@ HGFM<index_t, local_index_t>::HGFM(
                         local_sztot += local_szs[i].len;
                         local_len += local_szs[i].len;
                     }
-                    
+
                     // Extract sequence corresponding to this local index
                     tParam.s.resize(local_sztot);
                     if(refparams.reverse == REF_READ_REVERSE) {
@@ -2258,7 +2258,7 @@ HGFM<index_t, local_index_t>::HGFM(
                     } else {
                         tParam.s.install(s.buf() + curr_sztot, local_sztot);
                     }
-                    
+
                     // Extract ALTs corresponding to this local index
                     map<index_t, index_t> alt_map;
                     tParam.alts.clear();
@@ -2293,7 +2293,7 @@ HGFM<index_t, local_index_t>::HGFM(
                             assert(alt.exon());
                         }
                     }
-                    
+
                     // Extract haplotypes
                     tParam.haplotypes.clear();
                     Haplotype<index_t> haplotype;
@@ -2317,24 +2317,24 @@ HGFM<index_t, local_index_t>::HGFM(
                             }
                         }
                     }
-                    
+
                     tParam.local_offset = local_offset;
                     tParam.curr_sztot = curr_sztot;
                     tParam.local_sztot = local_sztot;
-                    
+
                     assert(tParam.rg == NULL);
                     assert(tParam.pg == NULL);
                     tParam.done = false;
                     curr_sztot += local_sztot_interval;
                     local_offset += local_index_interval;
-                    
+
                     t++;
                 }
-                
+
                 if(!tParams.back().done) {
                     gbwt_worker((void*)&tParams.back());
                 }
-                
+
                 for(index_t t2 = 0; t2 < t; t2++) {
                     ThreadParam& tParam = tParams[t2];
                     while(!tParam.done) {
@@ -2345,7 +2345,7 @@ HGFM<index_t, local_index_t>::HGFM(
                         nanosleep(&ts, NULL);
 #endif
                     }
-                    
+
                     LocalGFM<local_index_t, index_t>(
                                                      tParam.s,
                                                      tParam.sa,

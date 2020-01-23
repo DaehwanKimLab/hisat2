@@ -1,0 +1,77 @@
+- organism: H. sapiens
+  data:
+    GRCh38:
+      genome:
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38/download
+      genome_snp: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp/download
+      genome_tran: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_tran/download
+      genome_snp_tran: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp_tran/download
+    UCSC hg38:
+      genome: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/hg38/download
+      genome_tran: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/hg38_tran/download
+    GRCh37:
+      genome: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37/download
+      genome_snp: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_snp/download
+      genome_tran: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_tran/download
+      genome_snp_tran: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_snp_tran/download
+    UCSC hg19:
+      genome: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/hg19/download
+- organism: M. musculus
+  data:
+    GRCm38:
+      genome: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38/download
+      genome_snp: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp/download
+      genome_tran: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_tran/download
+      genome_snp_tran: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp_tran/download
+    UCSC mm10:
+      genome: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/mm10/download
+- organism: R. norvegicus
+  data:
+    UCSC rn6:
+      genome: 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/rn6/download
+- organism: D. melanogaster
+  data:
+    BDGP6:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/bdgp6.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/bdgp6_tran.tar.gz
+    UCSC dm6:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/dm6.tar.gz
+- organism: C. elegans
+  data:
+    WBcel235:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/wbcel235.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/wbcel235_tran.tar.gz
+    UCSC ce10:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/ce10.tar.gz
+- organism: S. cerevisiae
+  data: 
+    R64-1-1:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64.tar.gz
+      genome_tran: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64_tran.tar.gz
+    UCSC sacCer3:
+      genome: 
+        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/sc3.tar.gz

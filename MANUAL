@@ -799,7 +799,7 @@ alignments.  Searching for alignments is highly parallel, and speedup is close
 to linear.  Increasing `-p` increases HISAT2's memory footprint. E.g. when
 aligning to a human genome index, increasing `-p` from 1 to 8 increases the
 memory footprint by a few hundred megabytes.  This option is only available if
-`bowtie` is linked with the `pthreads` library (i.e. if `BOWTIE_PTHREADS=0` is
+`hisat2` is linked with the `pthreads` library (i.e. if `HISAT2_PTHREADS=0` is
 not specified at build time).
 
     --reorder
@@ -814,9 +814,9 @@ naturally correspond to input order in that case.
     --mm
 
 Use memory-mapped I/O to load the index, rather than typical file I/O.
-Memory-mapping allows many concurrent `bowtie` processes on the same computer to
+Memory-mapping allows many concurrent `hisat2` processes on the same computer to
 share the same memory image of the index (i.e. you pay the memory overhead just
-once).  This facilitates memory-efficient parallelization of `bowtie` in
+once).  This facilitates memory-efficient parallelization of `hisat2` in
 situations where using `-p` is not possible or not preferable.
 
 #### Other options

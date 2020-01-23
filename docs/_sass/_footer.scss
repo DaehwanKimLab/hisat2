@@ -1,0 +1,7 @@
+.site-footer {
+    border-top: 3px solid $brand-color;
+    padding: $margin/2 0;
+    color: lighten($text-color, 30%);
+    text-align: center;
+    font-size: 0.9em;
+}

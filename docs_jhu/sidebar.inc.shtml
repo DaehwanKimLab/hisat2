@@ -37,13 +37,13 @@
  <ul>
    <table width="100%"><tbody><tr><td>version 2.1.0</td> <td align="right">6/8/2017</td></tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-source.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
+	 <td><a href="https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-source/download" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Source code</a></td>
        </tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-Linux_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
+	 <td><a href="https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-Linux_x86_64/download" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Linux x86_64 binary</a></td>
        </tr>
        <tr>
-	 <td><a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.1.0-OSX_x86_64.zip" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
+	 <td><a href="https://cloud.biohpc.swmed.edu/index.php/s/hisat2-210-OSX_x86_64/download" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Mac OS X x86_64 binary</a></td>
        </tr>
        <tr>
 	 <td><a href="http://www.di.fc.ul.pt/~afalcao/hisat2_windows.html" onclick="javascript: pageTracker._trackPageview('/downloads/hisat'); ">&nbsp;&nbsp;&nbsp;Windowns binary</a></td>
@@ -63,7 +63,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grch38/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.9 GB</b>
@@ -71,7 +71,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_snp.tar.gz"><i>genome_snp</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp/download"><i>genome_snp</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.6 GB</b>
@@ -79,7 +79,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_tran.tar.gz"><i>genome_tran</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grch38_tran/download"><i>genome_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.1 GB</b>
@@ -87,7 +87,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch38_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp_tran/download"><i>genome_snp_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.6 GB</b>
@@ -101,7 +101,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/hg38/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.1 GB</b>
@@ -115,7 +115,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg38_tran.tar.gz"><i>genome_tran</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/hg38_tran/download"><i>genome_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.2 GB</b>
@@ -129,7 +129,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grch37/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.9 GB</b>
@@ -137,7 +137,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_snp.tar.gz"><i>genome_snp</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grch37_snp/download"><i>genome_snp</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.5 GB</b>
@@ -145,7 +145,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_tran.tar.gz"><i>genome_tran</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grch37_tran/download"><i>genome_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.0 GB</b>
@@ -153,7 +153,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grch37_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grch37_snp_tran/download"><i>genome_snp_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.5 GB</b>
@@ -166,7 +166,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/hg19.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/hg19/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.9 GB</b>
@@ -180,7 +180,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grcm38/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.7 GB</b>
@@ -188,7 +188,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_snp.tar.gz"><i>genome_snp</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp/download"><i>genome_snp</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.0 GB</b>
@@ -196,7 +196,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_tran.tar.gz"><i>genome_tran</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grcm38_tran/download"><i>genome_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.7 GB</b>
@@ -204,7 +204,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/grcm38_snp_tran.tar.gz"><i>genome_snp_tran</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp_tran/download"><i>genome_snp_tran</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>4.0 GB</b>
@@ -217,7 +217,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/mm10.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/mm10/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.5 GB</b>
@@ -230,7 +230,7 @@
       </tr>
       <tr>
         <td>
-	  <a href="ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/rn6.tar.gz"><i>genome</i></a>
+	  <a href="https://cloud.biohpc.swmed.edu/index.php/s/rn6/download"><i>genome</i></a>
         </td>
 	<td align="right" style="font-size: x-small">
 	  <b>3.7 GB</b>

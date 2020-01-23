@@ -1,0 +1,35 @@
+---
+layout: page
+title: Archives
+permalink: /archives/
+order: 3
+share: false
+hide: true
+---
+
+{% for post in site.posts %}
+    {% unless post.next %}
+        <h3>{{ post.date | date: '%Y' }}</h3>
+        <ul>
+    {% else %}
+        {% assign year = post.date | date: '%Y' %}
+        {% assign next_year = post.next.date | date: '%Y' %}
+        {% if year != next_year %}
+        </ul>
+        <h3>{{ post.date | date: '%Y' }}</h3>
+        <ul>
+        {% endif %}
+    {% endunless %}
+
+    {% assign month = post.date | date: '%m' %}
+    {% assign next_month = post.next.date | date: '%m' %}
+    {% if year != next_year or month != next_month %}
+    <li><a href="{{ '/search/?d=' | prepend: site.baseurl }}{{ post.date | date: '%Y-%m' }}">{{ post.date | date: '%Y/%m' }}</a></li>
+    {% endif %}
+{% endfor %}
+
+{% if site.posts %}
+</ul>
+{% endif %}
+
+<a class="btn" href="{{ '/archives/all/' | prepend: site.baseurl }}">{{ site.str_show_all_posts }}</a>
