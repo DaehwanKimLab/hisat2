@@ -14,7 +14,7 @@ share: false
 
 ### Building indexes
 Depend on your purpose, you have to download reference sequence, gene annotation and SNP files.  
-We also provides scripts to build indexes. [Download Link]
+We also provides scripts to build indexes. [Download]({{ site.baseurl }}{% link _pages/download.md %})
 
 #### Prepare data
 1. Download reference
