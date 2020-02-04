@@ -111,7 +111,7 @@ def parse_type(fname):
         compression_type = COMPRESSION_BZIP2
         ext = ff[-2]
 
-    if ext.lower() == "fq":
+    if ext.lower() == "fq" or ext.lower() == "fastq":
         sequence_type = SEQUENCE_FASTQ
 
     return sequence_type, compression_type
