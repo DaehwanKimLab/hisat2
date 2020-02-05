@@ -180,6 +180,8 @@ def reads_stat(read_file, read_count):
 
     cnt, mn, mx, avg =  generate_stats(length_map)
     length_map = sorted(length_map.iteritems(), key=lambda (k,v):(v,k), reverse=True)
+    if len(length_map) == 0:
+        length_map.append((0,0))
     print cnt, mn, mx, avg, ",".join([str(k) for (k,v) in length_map])
 
 if __name__ == '__main__':

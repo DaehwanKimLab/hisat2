@@ -291,7 +291,7 @@ if ((scalar(@read_files) > 0) && ($seq_in_args == 0)) {
 	}
 	close($fh);
 
-	if ($read_len_str ne "") {
+	if (($read_len_str ne "") && ($read_len_str ne "0")) {
 		Info("Read Length String: $read_len_str\n");
 		push @ht2_args, ("--read-lengths", $read_len_str);
 	}
