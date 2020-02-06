@@ -63,18 +63,28 @@ void ReportingState::nextRead(bool paired) {
 	doneUnpair_ = doneUnpair1_ && doneUnpair2_;
 	done_ = false;
 	nconcord_ = ndiscord_ = nunpair1_ = nunpair2_ = 0;
+    nunpairRepeat1_ = nunpairRepeat2_ = 0;
+    concordBest_ = getMinScore();
 }
 
 /**
  * Caller uses this member function to indicate that one additional
  * concordant alignment has been found.
  */
-bool ReportingState::foundConcordant() {
+bool ReportingState::foundConcordant(TAlScore score) {
 	assert(paired_);
 	assert_geq(state_, ReportingState::CONCORDANT_PAIRS);
 	assert(!doneConcord_);
+    
+    if(score > concordBest_) {
+        concordBest_ = score;
+        nconcord_ = 0;
+    }
 	nconcord_++;
-	areDone(nconcord_, doneConcord_, exitConcord_);
+    
+    // DK CONCORDANT - debugging purpuses
+	// areDone(nconcord_, doneConcord_, exitConcord_);
+    
 	// No need to search for discordant alignments if there are one or more
 	// concordant alignments.
 	doneDiscord_ = true;
@@ -104,12 +114,15 @@ bool ReportingState::foundConcordant() {
  * Caller uses this member function to indicate that one additional unpaired
  * mate alignment has been found for the specified mate.
  */
-bool ReportingState::foundUnpaired(bool mate1) {
+bool ReportingState::foundUnpaired(bool mate1, bool repeat) {
 	assert_gt(state_, ReportingState::NO_READ);
 	// Note: it's not right to assert !doneUnpair1_/!doneUnpair2_ here.
 	// Even if we're done with finding 
 	if(mate1) {
 		nunpair1_++;
+        if(repeat) {
+            nunpairRepeat1_++;
+        }
 		// Did we just finish with this mate?
 		if(!doneUnpair1_) {
 			areDone(nunpair1_, doneUnpair1_, exitUnpair1_);
@@ -124,6 +137,9 @@ bool ReportingState::foundUnpaired(bool mate1) {
 		}
 	} else {
 		nunpair2_++;
+        if(repeat) {
+            nunpairRepeat2_++;
+        }
 		// Did we just finish with this mate?
 		if(!doneUnpair2_) {
 			areDone(nunpair2_, doneUnpair2_, exitUnpair2_);
@@ -212,12 +228,15 @@ void ReportingState::getReport(
 	uint64_t& ndiscordAln, // # discordant alignments to report
 	uint64_t& nunpair1Aln, // # unpaired alignments for mate #1 to report
 	uint64_t& nunpair2Aln, // # unpaired alignments for mate #2 to report
+    uint64_t& nunpairRepeat1Aln, // # unpaired alignments for mate #1 to report
+    uint64_t& nunpairRepeat2Aln, // # unpaired alignments for mate #2 to report
 	bool& pairMax,         // repetitive concordant alignments
 	bool& unpair1Max,      // repetitive alignments for mate #1
 	bool& unpair2Max)      // repetitive alignments for mate #2
 	const
 {
 	nconcordAln = ndiscordAln = nunpair1Aln = nunpair2Aln = 0;
+    nunpairRepeat1Aln = nunpairRepeat2Aln = 0;
 	pairMax = unpair1Max = unpair2Max = false;
 	assert_gt(p_.khits, 0);
 	assert_gt(p_.mhits, 0);
@@ -242,8 +261,7 @@ void ReportingState::getReport(
 		} else if(exitConcord_ == ReportingState::EXIT_WITH_ALIGNMENTS) {
 			assert_gt(nconcord_, 0);
 			// <= k at random
-			nconcordAln = min<uint64_t>(nconcord_, p_.khits);
-			return;
+            nconcordAln = min<uint64_t>(p_.khits, nconcord_);
 		}
 		assert(!p_.mhitsSet() || nconcord_ <= (uint64_t)p_.mhits+1);
 		
@@ -280,6 +298,7 @@ void ReportingState::getReport(
 		nunpair1Aln = min<uint64_t>(nunpair1_, (uint64_t)p_.khits);
 	}
 	assert(!p_.mhitsSet() || paired_ || nunpair1_ <= (uint64_t)p_.mhits+1);
+    if(p_.repeat) nunpairRepeat1Aln = nunpairRepeat1_;
 
 	// Do we have 2 or more alignments for mate #2 to report?
 	if(exitUnpair2_ == ReportingState::EXIT_SHORT_CIRCUIT_k) {
@@ -296,6 +315,7 @@ void ReportingState::getReport(
 		nunpair2Aln = min<uint64_t>(nunpair2_, (uint64_t)p_.khits);
 	}
 	assert(!p_.mhitsSet() || paired_ || nunpair2_ <= (uint64_t)p_.mhits+1);
+    if(p_.repeat) nunpairRepeat2Aln = nunpairRepeat2_;
 }
 
 /**

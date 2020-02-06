@@ -31,6 +31,7 @@
 #include "assert_helpers.h"
 #include "endian_swap.h"
 #include "hgfm.h"
+#include "rfm.h"
 #include "formats.h"
 #include "sequence_io.h"
 #include "tokenize.h"
@@ -55,6 +56,7 @@
 #include "presets.h"
 #include "opts.h"
 #include "outq.h"
+#include "repeat_kmer.h"
 
 using namespace std;
 
@@ -288,6 +290,16 @@ static bool templateLenAdjustment;
 static string alignSumFile; // write alignment summary stat. to this file
 static bool newAlignSummary;
 
+static int bowtie2_dp; // Bowtie2's dynamic programming alignment (0: no dynamic programming, 1: conditional dynamic programming, and 2: uncoditional dynamic programming)
+static bool fast;           // --fast
+static bool sensitive;      // --sensitive
+static bool very_sensitive; // --very-sensitive
+
+static bool repeat;
+static bool use_repeat_index;
+static EList<size_t> readLens;
+
+
 #define DMAX std::numeric_limits<double>::max()
 
 static void resetOptions() {
@@ -330,7 +342,7 @@ static void resetOptions() {
 	useMm					= false; // use memory-mapped files to hold the index
 	mmSweep					= false; // sweep through memory-mapped files immediately after mapping
 	gMinInsert				= 0;     // minimum insert size
-	gMaxInsert				= 500;   // maximum insert size
+	gMaxInsert				= 1000;   // maximum insert size
 	gMate1fw				= true;  // -1 mate aligns in fw orientation on fw strand
 	gMate2fw				= false; // -2 mate aligns in rc orientation on fw strand
 	gFlippedMatesOK         = false; // allow mates to be in wrong order
@@ -513,6 +525,15 @@ static void resetOptions() {
     templateLenAdjustment = true;
     alignSumFile = "";
     newAlignSummary = false;
+    
+    bowtie2_dp = 0; // disable Bowtie2's dynamic programming alignment
+    fast = false;
+    sensitive = false;
+    very_sensitive = false;
+    
+    repeat = false; // true iff alignments to repeat sequences are directly reported.
+    use_repeat_index = true;
+    readLens.clear();
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -734,6 +755,11 @@ static struct option long_options[] = {
     {(char*)"enable-codis",    no_argument,        0,        ARG_CODIS},
     {(char*)"summary-file",    required_argument,  0,        ARG_SUMMARY_FILE},
     {(char*)"new-summary",     no_argument,        0,        ARG_NEW_SUMMARY},
+    {(char*)"enable-dp",       no_argument,        0,        ARG_DP},
+    {(char*)"bowtie2-dp",      required_argument,  0,        ARG_DP},
+    {(char*)"repeat",          no_argument,        0,        ARG_REPEAT},
+    {(char*)"no-repeat-index", no_argument,        0,        ARG_NO_REPEAT_INDEX},
+    {(char*)"read-lengths",    required_argument,  0,        ARG_READ_LENGTHS},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -831,31 +857,29 @@ static void printUsage(ostream& out) {
         << "  --sra-acc          SRA accession ID" << endl
 #endif
 		<< endl
-#if 0
+
 	    << " Presets:                 Same as:" << endl
-		<< "  For --end-to-end:" << endl
-		<< "   --very-fast            -D 5 -R 1 -N 0 -L 22 -i S,0,2.50" << endl
-		<< "   --fast                 -D 10 -R 2 -N 0 -L 22 -i S,0,2.50" << endl
-		<< "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
-		<< "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
+		// << "  For --end-to-end:" << endl
+		// << "   --very-fast            -D 5 -R 1 -N 0 -L 22 -i S,0,2.50" << endl
+		// << "   --fast                 -D 10 -R 2 -N 0 -L 22 -i S,0,2.50" << endl
+		// << "   --sensitive            -D 15 -R 2 -N 0 -L 22 -i S,1,1.15 (default)" << endl
+		// << "   --very-sensitive       -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
+        << "   --fast                 --no-repeat-index" << endl
+        << "   --sensitive            --bowtie2-dp 1 -k 30 --score-min L,0,-0.5" << endl
+        << "   --very-sensitive       --bowtie2-dp 2 -k 50 --score-min L,0,-1" << endl
 		<< endl
-		<< "  For --local:" << endl
-		<< "   --very-fast-local      -D 5 -R 1 -N 0 -L 25 -i S,1,2.00" << endl
-		<< "   --fast-local           -D 10 -R 2 -N 0 -L 22 -i S,1,1.75" << endl
-		<< "   --sensitive-local      -D 15 -R 2 -N 0 -L 20 -i S,1,0.75 (default)" << endl
-		<< "   --very-sensitive-local -D 20 -R 3 -N 0 -L 20 -i S,1,0.50" << endl
-		<< endl
-#endif
 	    << " Alignment:" << endl
 		//<< "  -N <int>           max # mismatches in seed alignment; can be 0 or 1 (0)" << endl
 		//<< "  -L <int>           length of seed substrings; must be >3, <32 (22)" << endl
 		//<< "  -i <func>          interval between seed substrings w/r/t read len (S,1,1.15)" << endl
+        << "  --bowtie2-dp <int> use Bowtie2's dynamic programming alignment algorithm (0) - 0: no dynamic programming, 1: conditional dynamic programming, and 2: unconditional dynamic programming (slowest)" << endl
 		<< "  --n-ceil <func>    func for max # non-A/C/G/Ts permitted in aln (L,0,0.15)" << endl
 		//<< "  --dpad <int>       include <int> extra ref chars on sides of DP table (15)" << endl
 		//<< "  --gbar <int>       disallow gaps within <int> nucs of read extremes (4)" << endl
 		<< "  --ignore-quals     treat all quality values as 30 on Phred scale (off)" << endl
 	    << "  --nofw             do not align forward (original) version of read (off)" << endl
 	    << "  --norc             do not align reverse-complement version of read (off)" << endl
+        << "  --no-repeat-index  do not use repeat index" << endl
 		<< endl
         << " Spliced Alignment:" << endl
         << "  --pen-cansplice <int>              penalty for a canonical splice site (0)" << endl
@@ -874,7 +898,7 @@ static void printUsage(ostream& out) {
         << "  --tmo                              reports only those alignments within known transcriptome" << endl
         << "  --dta                              reports alignments tailored for transcript assemblers" << endl
         << "  --dta-cufflinks                    reports alignments tailored specifically for cufflinks" << endl
-        << "  --avoid-pseudogene                 tries to avoid aligning reads to pseudogenes (experimental option)" << endl
+        << "  --avoid-pseudogene                 tries to avoid aligning reads to pseudogenes (experimental option)" << endl
         << "  --no-templatelen-adjustment        disables template length adjustment for RNA-seq reads" << endl
         << endl
 		<< " Scoring:" << endl
@@ -889,7 +913,28 @@ static void printUsage(ostream& out) {
 		<< "                     (L,0.0,-0.2)" << endl
 		<< endl
 	    << " Reporting:" << endl
-	    << "  -k <int> (default: 5) report up to <int> alns per read" << endl
+	    << "  -k <int>           It searches for at most <int> distinct, primary alignments for each read. Primary alignments mean " << endl
+        << "                     alignments whose alignment score is equal to or higher than any other alignments. The search terminates " << endl
+        << "                     when it cannot find more distinct valid alignments, or when it finds <int>, whichever happens first. " << endl
+        << "                     The alignment score for a paired-end alignment equals the sum of the alignment scores of " << endl 
+        << "                     the individual mates. Each reported read or pair alignment beyond the first has the SAM ‘secondary’ bit " << endl
+        << "                     (which equals 256) set in its FLAGS field. For reads that have more than <int> distinct, " << endl
+        << "                     valid alignments, hisat2 does not guarantee that the <int> alignments reported are the best possible " << endl 
+        << "                     in terms of alignment score. Default: 5 (linear index) or 10 (graph index)." << endl
+        << "                     Note: HISAT2 is not designed with large values for -k in mind, and when aligning reads to long, " << endl
+        << "                     repetitive genomes, large -k could make alignment much slower." << endl
+        << "  --max-seeds <int>  HISAT2, like other aligners, uses seed-and-extend approaches. HISAT2 tries to extend seeds to " << endl
+        << "                     full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that " << endl
+        << "                     will be extended. For DNA-read alignment (--no-spliced-alignment), HISAT2 extends up to these many seeds" << endl
+        << "                     and skips the rest of the seeds. For RNA-read alignment, HISAT2 skips extending seeds and reports " << endl
+        << "                     no alignments if the number of seeds is larger than the number specified with the option, " << endl
+        << "                     to be compatible with previous versions of HISAT2. Large values for --max-seeds may improve alignment " << endl
+        << "                     sensitivity, but HISAT2 is not designed with large values for --max-seeds in mind, and when aligning " << endl
+        << "                     reads to long, repetitive genomes, large --max-seeds could make alignment much slower. " << endl
+        << "                     The default value is the maximum of 5 and the value that comes with -k times 2." << endl
+        << "  -a/--all           HISAT2 reports all alignments it can find. Using the option is equivalent to using both --max-seeds " << endl
+        << "                     and -k with the maximum value that a 64-bit signed integer can represent (9,223,372,036,854,775,807)." << endl 
+        << "  --repeat           report alignments to repeat sequences directly" << endl
 		<< endl
 	    //<< " Effort:" << endl
 	    //<< "  -D <int>           give up extending after <int> failed extends in a row (15)" << endl
@@ -1399,14 +1444,17 @@ static void parseOption(int next_option, const char *arg) {
 		}
 		case ARG_PRESET_FAST_LOCAL: localAlign = true;
 		case ARG_PRESET_FAST: {
+            fast = true;
 			presetList.push_back("fast%LOCAL%"); break;
 		}
 		case ARG_PRESET_SENSITIVE_LOCAL: localAlign = true;
 		case ARG_PRESET_SENSITIVE: {
+            sensitive = true;
 			presetList.push_back("sensitive%LOCAL%"); break;
 		}
 		case ARG_PRESET_VERY_SENSITIVE_LOCAL: localAlign = true;
 		case ARG_PRESET_VERY_SENSITIVE: {
+            very_sensitive = true;
 			presetList.push_back("very-sensitive%LOCAL%"); break;
 		}
 		case 'P': { presetList.push_back(arg); break; }
@@ -1715,6 +1763,28 @@ static void parseOption(int next_option, const char *arg) {
             newAlignSummary = true;
             break;
         }
+        case ARG_DP: {
+            bowtie2_dp = parseInt(0, "--bowtie2-dp arg must be 0, 1, or 2", arg);
+            break;
+        }
+        case ARG_REPEAT: {
+            repeat = true;
+            break;
+        }
+        case ARG_NO_REPEAT_INDEX: {
+            use_repeat_index = false;
+            break;
+        }
+        case ARG_READ_LENGTHS: {
+            EList<string> str_readLens;
+            tokenize(arg, ",", str_readLens);
+            for(size_t i = 0; i < str_readLens.size(); i++) {
+                int readLen = parseInt(20, "--read-lengths arg must be at least 20", str_readLens[i].c_str());
+                readLens.push_back(readLen);
+            }
+            readLens.sort();
+            break;
+        }
 		default:
 			printUsage(cerr);
 			throw 1;
@@ -1771,7 +1841,8 @@ static void parseOptions(int argc, const char **argv) {
 	if(gVerbose) {
 		cerr << "Final policy string: '" << polstr.c_str() << "'" << endl;
 	}
-	size_t failStreakTmp = 0;
+    
+    size_t failStreakTmp = 0;
 	SeedAlignmentPolicy::parseString(
                                      polstr,
                                      localAlign,
@@ -1812,6 +1883,28 @@ static void parseOptions(int argc, const char **argv) {
 		assert_gt(mhits, 0);
 		msample = true;
 	}
+    
+    if(fast) {
+        use_repeat_index = false;
+    } else if(sensitive) {
+        if(bowtie2_dp == 0) {
+            bowtie2_dp = 1;
+        }
+        
+        if(khits < 10) {
+            khits = 10;
+            saw_k = true;
+        }
+        scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -0.5f);
+    } else if(very_sensitive) {
+        bowtie2_dp = 2;
+        if(khits < 30) {
+            khits = 30;
+            saw_k = true;
+        }
+        scoreMin.init(SIMPLE_FUNC_LINEAR, 0.0f, -1.0f);
+    }
+    
 	if(mates1.size() != mates2.size()) {
 		cerr << "Error: " << mates1.size() << " mate files/sequences were specified with -1, but " << mates2.size() << endl
 		     << "mate files/sequences were specified with -2.  The same number of mate files/" << endl
@@ -1911,12 +2004,16 @@ typedef TIndexOffU index_t;
 typedef uint16_t local_index_t;
 static PairedPatternSource*              multiseed_patsrc;
 static HGFM<index_t>*                    multiseed_gfm;
+static RFM<index_t>*                     multiseed_rgfm;
 static Scoring*                          multiseed_sc;
 static BitPairReference*                 multiseed_refs;
+static BitPairReference*                 multiseed_rrefs;
 static AlnSink<index_t>*                 multiseed_msink;
 static OutFileBuf*                       multiseed_metricsOfb;
 static SpliceSiteDB*                     ssdb;
 static ALTDB<index_t>*                   altdb;
+static RepeatDB<index_t>*                repeatdb;
+static ALTDB<index_t>*                   raltdb;
 static TranscriptomePolicy*              multiseed_tpol;
 static GraphPolicy*                      gpol;
 
@@ -3054,8 +3151,10 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	assert(multiseedMms == 0);
 	PairedPatternSource&             patsrc   = *multiseed_patsrc;
 	const HGFM<index_t>&             gfm      = *multiseed_gfm;
+    const RFM<index_t>*              rgfm     = multiseed_rgfm;
 	const Scoring&                   sc       = *multiseed_sc;
     const BitPairReference&          ref      = *multiseed_refs;
+    const BitPairReference*          rref     = multiseed_rrefs;
 	AlnSink<index_t>&                msink    = *multiseed_msink;
 	OutFileBuf*                      metricsOfb = multiseed_metricsOfb;
     
@@ -3079,7 +3178,12 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                        0,                 // penalty gap (not used now)
                        msample,           // true -> -M was specified, otherwise assume -m
                        gReportDiscordant, // report discordang paired-end alignments?
-                       gReportMixed);     // report unpaired alignments for paired reads?
+                       gReportMixed,      // report unpaired alignments for paired reads?
+                       secondary,
+                       localAlign,
+                       bowtie2_dp,
+                       sensitive | very_sensitive,
+                       repeat);
     
 	// Instantiate a mapping quality calculator
 	auto_ptr<Mapq> bmapq(new_mapq(mapqv, scoreMin, sc));
@@ -3097,8 +3201,6 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     SplicedAligner<index_t, local_index_t> splicedAligner(
                                                           gfm,
                                                           anchorStop,
-                                                          secondary,
-                                                          localAlign,
                                                           thread_rids_mindist);
 	SwAligner sw;
 	OuterLoopMetrics olm;
@@ -3432,7 +3534,26 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     splicedAligner.initRead(rds[1], nofw[1], norc[1], minsc[1], maxpen[1], true);
                 }
                 if(filt[0] || filt[1]) {
-                    int ret = splicedAligner.go(sc, pepol, *multiseed_tpol, *gpol, gfm, *altdb, ref, sw, *ssdb, wlm, prm, swmSeed, him, rnd, msinkwrap);
+                    int ret = splicedAligner.go(
+                                                sc,
+                                                pepol,
+                                                *multiseed_tpol,
+                                                *gpol,
+                                                gfm,
+                                                rgfm,
+                                                *altdb,
+                                                *repeatdb,
+                                                *raltdb,
+                                                ref,
+                                                rref,
+                                                sw,
+                                                *ssdb,
+                                                wlm,
+                                                prm,
+                                                swmSeed,
+                                                him,
+                                                rnd,
+                                                msinkwrap);
                     MERGE_SW(sw);
                     // daehwan
                     size_t mate = 0;
@@ -3537,17 +3658,21 @@ static void multiseedSearch(
                             PairedPatternSource& patsrc,  // pattern source
                             AlnSink<index_t>& msink,      // hit sink
                             HGFM<index_t>& gfm,           // index of original text
-                            BitPairReference* refs,
+                            RFM<index_t>* rgfm,           // index of repeat sequences
+                            BitPairReference* refs,       // base reference
+                            BitPairReference* rrefs,      // repeat reference
                             OutFileBuf *metricsOfb)
 {
     multiseed_patsrc       = &patsrc;
 	multiseed_msink        = &msink;
 	multiseed_gfm          = &gfm;
+    multiseed_rgfm         = rgfm;
 	multiseed_sc           = &sc;
     multiseed_tpol         = &tpol;
     gpol                   = &gp;
 	multiseed_metricsOfb   = metricsOfb;
-	multiseed_refs = refs;
+	multiseed_refs         = refs;
+    multiseed_rrefs        = rrefs;
 	AutoArray<tthread::thread*> threads(nthreads);
 	AutoArray<int> tids(nthreads);	
 	// Start the metrics thread
@@ -3645,10 +3770,14 @@ static void driver(
 		cerr << "About to initialize fw GFM: "; logTime(cerr, true);
 	}
     altdb = new ALTDB<index_t>();
+    repeatdb = new RepeatDB<index_t>();
+    raltdb = new ALTDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
 	HGFM<index_t, local_index_t> gfm(
                                      adjIdxBase,
                                      altdb,
+                                     NULL,
+                                     NULL,
                                      -1,       // fw index
                                      true,     // index is for the forward direction
                                      /* overriding: */ offRate,
@@ -3698,6 +3827,76 @@ static void driver(
                            !noRefNames,  // load names?
                            startVerbose);
     }
+    RFM<index_t>* rgfm = NULL;
+    string rep_adjIdxBase = adjIdxBase + ".rep";
+    bool rep_index_exists = false;
+    {
+        std::ifstream infile((rep_adjIdxBase + ".1." + gfm_ext.c_str()).c_str());
+        rep_index_exists = infile.good();
+    }
+    if(rep_index_exists && use_repeat_index) {
+        rgfm = new RFM<index_t>(
+                                rep_adjIdxBase,
+                                raltdb,
+                                repeatdb,
+                                &readLens,
+                                -1,       // fw index
+                                true,     // index is for the forward direction
+                                /* overriding: */ offRate,
+                                0, // amount to add to index offrate or <= 0 to do nothing
+                                useMm,    // whether to use memory-mapped files
+                                useShmem, // whether to use shared memory
+                                mmSweep,  // sweep memory-mapped files
+                                !noRefNames, // load names?
+                                true,        // load SA sample?
+                                true,        // load ftab?
+                                true,        // load rstarts?
+                                !no_spliced_alignment, // load splice sites?
+                                gVerbose, // whether to be talkative
+                                startVerbose, // talkative during initialization
+                                false /*passMemExc*/,
+                                sanityCheck,
+                                false); //use haplotypes?
+
+        // CP to do
+#if 0
+        if(sanityCheck && !os.empty()) {
+            // Sanity check number of patterns and pattern lengths in GFM
+            // against original strings
+            assert_eq(os.size(), gfm.nPat());
+            for(size_t i = 0; i < os.size(); i++) {
+                assert_eq(os[i].length(), rgfm->plen()[i]);
+            }
+        }
+        // Sanity-check the restored version of the GFM
+        if(sanityCheck && !os.empty()) {
+            rgfm->loadIntoMemory(
+                               -1, // fw index
+                               true, // load SA sample
+                               true, // load ftab
+                               true, // load rstarts
+                               !noRefNames,
+                               startVerbose);
+            rgfm->checkOrigs(os, false);
+            rgfm->evictFromMemory();
+        }
+#endif
+        {
+            // Load the other half of the index into memory
+            assert(!rgfm->isInMemory());
+            Timer _t(cerr, "Time loading forward index: ", timing);
+            rgfm->loadIntoMemory(
+                                 -1, // not the reverse index
+                                 true,         // load SA samp? (yes, need forward index's SA samp)
+                                 true,         // load ftab (in forward index)
+                                 true,         // load rstarts (in forward index)
+                                 !noRefNames,  // load names?
+                                 startVerbose);
+            
+            repeatdb->construct(gfm.rstarts(), gfm.nFrag());
+        }
+    }
+    
     if(!saw_k) {
         if(gfm.gh().linearFM()) khits = 5;
         else                    khits = 10;
@@ -3747,6 +3946,12 @@ static void driver(
 		}
 		EList<string> refnames;
 		readEbwtRefnames<index_t>(adjIdxBase, refnames);
+        EList<size_t> replens;
+        EList<string> repnames;
+        if(rep_index_exists && use_repeat_index) {
+            rgfm->getReferenceNames(repnames);
+            rgfm->getReferenceLens(replens);
+        }
         if(rmChrName && addChrName) {
             cerr << "Error: --remove-chrname and --add-chrname cannot be used at the same time" << endl;
             throw 1;
@@ -3766,10 +3971,14 @@ static void driver(
                 }
             }
         }
-        
+
+        EList<size_t> empty_replens;
+        EList<string> empty_repnames;
 		SamConfig<index_t> samc(
 			refnames,               // reference sequence names
 			reflens,                // reference sequence lengths
+            repeat ? repnames : empty_repnames, // repeat sequence names
+            repeat ? replens : empty_replens,   // repeat sequence lengths
 			samTruncQname,          // whether to truncate QNAME to 255 chars
 			samOmitSecSeqQual,      // omit SEQ/QUAL for 2ndary alignments?
 			samNoUnal,              // omit unaligned-read records?
@@ -3826,6 +4035,7 @@ static void driver(
         auto_ptr<BitPairReference> refs(
                                         new BitPairReference(
                                                              adjIdxBase,
+                                                             NULL,
                                                              false,
                                                              sanityCheck,
                                                              NULL,
@@ -3839,6 +4049,25 @@ static void driver(
                                         );
         delete _tRef;
         if(!refs->loaded()) throw 1;
+        
+        BitPairReference* rrefs = NULL;
+        if(rep_index_exists && use_repeat_index) {
+            const EList<uint8_t>& included = rgfm->getReadIncluded();
+            rrefs = new BitPairReference(
+                                         rep_adjIdxBase,
+                                         &included,
+                                         false,
+                                         sanityCheck,
+                                         NULL,
+                                         NULL,
+                                         false,
+                                         useMm,
+                                         useShmem,
+                                         mmSweep,
+                                         gVerbose,
+                                         startVerbose);
+            if(!rrefs->loaded()) throw 1;
+        }
         
         bool xsOnly = (tranAssm_program == "cufflinks");
         TranscriptomePolicy tpol(minIntronLen,
@@ -3888,6 +4117,7 @@ static void driver(
                                                  oq,           // output queue
                                                  samc,         // settings & routines for SAM output
                                                  refnames,     // reference names
+                                                 repnames,     // repeat names
                                                  gQuiet,       // don't print alignment summary at end
                                                  altdb,
                                                  ssdb);
@@ -3921,7 +4151,9 @@ static void driver(
                         *patsrc, // pattern source
                         *mssink, // hit sink
                         gfm,     // BWT
+                        rgfm,
                         refs.get(),
+                        rrefs,
                         metricsOfb);
 		// Evict any loaded indexes from memory
 		if(gfm.isInMemory()) {
@@ -3966,8 +4198,12 @@ static void driver(
 		delete patsrc;
 		delete mssink;
         delete altdb;
+        delete repeatdb;
+        delete raltdb;
         delete ssdb;
 		delete metricsOfb;
+        delete rgfm;
+        delete rrefs;
 		if(fout != NULL) {
 			delete fout;
 		}

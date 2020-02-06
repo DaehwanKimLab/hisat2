@@ -158,7 +158,8 @@ void AlnRes::init(
 	size_t             pretrim3p,       // trimming prior to alignment
 	bool               trimSoft,
 	size_t             trim5p,          // trimming from alignment
-	size_t             trim3p)          // trimming from alignment
+	size_t             trim3p,          // trimming from alignment
+    bool               repeat)          // repeat
 {
     assert(raw_edits != NULL);
     assert(raw_edits_ == NULL || raw_edits_ == raw_edits);
@@ -207,6 +208,7 @@ void AlnRes::init(
 	trimSoft_     = trimSoft;
 	trim5p_       = trim5p;
 	trim3p_       = trim3p;
+    repeat_       = repeat;
 	rdextent_     = rdlen;      // # read characters after any hard trimming
 	if(pretrimSoft) {
 		rdextent_ -= (pretrim5p + pretrim3p);
@@ -1172,7 +1174,8 @@ void AlnSetSumm::init(
 	bool exhausted1,
 	bool exhausted2,
 	TRefId orefid,
-	TRefOff orefoff)
+	TRefOff orefoff,
+    bool repeat)
 {
 	assert(rd1 != NULL || rd2 != NULL);
 	assert((rs1 == NULL) == (rs2 == NULL));
@@ -1244,6 +1247,7 @@ void AlnSetSumm::init(
              exhausted2,
              orefid,
              orefoff,
+             repeat,
              numAlns1,
              numAlns2,
              numAlnsPaired);
@@ -1251,6 +1255,7 @@ void AlnSetSumm::init(
 		reset();
 		orefid_ = orefid;
 		orefoff_ = orefoff;
+        repeat_ = repeat;
 	}
 }
 

@@ -3,20 +3,20 @@
 #
 # Copyright 2017, Daehwan Kim <infphilo@gmail.com>
 #
-# This file is part of HISAT 2.
+# This file is part of HISAT-genotype.
 #
-# HISAT 2 is free software: you can redistribute it and/or modify
+# HISAT-genotype is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# HISAT 2 is distributed in the hope that it will be useful,
+# HISAT-genotype is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
+# along with HISAT-genotype.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 
@@ -24,7 +24,13 @@ import os, sys, subprocess, re
 import inspect, operator
 from copy import deepcopy
 from argparse import ArgumentParser, FileType
-import typing_common
+import hisatgenotype_typing_common as typing_common
+try:
+    import openpyxl
+except ImportError:
+    print >> sys.stderr, "Error: please install openpyxl by running 'pip install openpyxl'."
+    sys.exit(1)
+
 
 # sequences for DNA fingerprinting loci are available at http://www.cstl.nist.gov/biotech/strbase/seq_ref.htm
 
@@ -104,10 +110,10 @@ orig_CODIS_seq = {
     "D13S317" :
     # http://www.cstl.nist.gov/biotech/strbase/str_D13S317.htm
     # Perhaps, allele 11: 13:82147921-82148112 +
-    ["[TATC]11",
+    ["[TATC]11A",
      "ATCACAGAAGTCTGGGATGTGGAGGAGAGTTCATTTCTTTAGTGGGCATCCGTGACTCTCTGGACTCTGACCCATCTAACGCCTATCTGTATTTACAAATACAT",
-     "TATCTATCTATCTATCTATCTATCTATCTATCTATCTATCTATC",
-     "AATCAATCATCTATCTATCTTTCTGTCTGTCTTTTTGGGCTGCC"],
+     "TATCTATCTATCTATCTATCTATCTATCTATCTATCTATCTATCA",
+     "ATCAATCATCTATCTATCTTTCTGTCTGTCTTTTTGGGCTGCC"],
              
     "D16S539" :
     # http://www.cstl.nist.gov/biotech/strbase/str_D16S539.htm
@@ -131,11 +137,22 @@ orig_CODIS_seq = {
     ["[TCTA]4[TCTG]6[TCTA]3TA[TCTA]3TCA[TCTA]2TCCATA[TCTA]11",
      "GTGAGTCAATTCCCCAAGTGAATTGCCT",
      "TCTATCTATCTATCTATCTGTCTGTCTGTCTGTCTGTCTGTCTATCTATCTATATCTATCTATCTATCATCTATCTATCCATATCTATCTATCTATCTATCTATCTATCTATCTATCTATCTATCTA",
-     "TCGTCTATCTATCCAGTCTATCTACCTCCTATTAGTCTGTCTCTGGAGAACATTGACTAATACAAC"]
-}
+     "TCGTCTATCTATCCAGTCTATCTACCTCCTATTAGTCTGTCTCTGGAGAACATTGACTAATACAAC"],
 
-# "AMEL" - http://www.cstl.nist.gov/biotech/strbase/jpg_amel.htm
-#          X chromosome has 6 bp deletion and Y chromosome doesn't
+    # "AMEL" - http://www.cstl.nist.gov/biotech/strbase/jpg_amel.htm
+    #          X chromosome has 6 bp deletion and Y chromosome doesn't
+    "AMELX" :
+    ["",
+     "TGTTGATTCTTTATCCCAGATGTTTCTCAAGTGG", # chromosome X at 11296898
+     "",
+     ""],
+
+    "AMELY" :
+    ["",
+     "AGAAACCACTTTATTTGGGATGAAGAATCCACC", # chromosome Y at 6869902
+     "",
+     ""]
+}
 
 CODIS_ref_name = {}
 
@@ -207,7 +224,18 @@ def get_flanking_seqs(seq,
 """
 def get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j):
     if repeat_i == repeat_j:
-        return 0
+        # DK - experimental SW alignment
+        min_diff = sys.maxint
+        for repeat_num_i in repeat_nums_i:
+            for repeat_num_j in repeat_nums_j:
+                min_diff = min(abs(repeat_num_i - repeat_num_j), min_diff)
+        equal_score = -min_diff / 10.0 + (len(repeat_nums_i) + len(repeat_nums_j)) / 100.0
+        equal_score = max(min(0.0 if min_diff == 0 else -0.1, equal_score), -0.9)
+
+        # DK - just for now
+        equal_score = 0
+        
+        return equal_score
     elif repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1]):
         return -1
     else:
@@ -219,28 +247,15 @@ Smith Waterman Algorithm
 """
 def SW_alignment(allele_i, allele_j):
     n, m = len(allele_i), len(allele_j)
-    a = [[0 for j in range(m)] for i in range(n)]
+    a = [[-(i+j) if i == 0 or j == 0 else 0 for j in range(m + 1)] for i in range(n + 1)]
 
     # Fill 2D array
     for i in range(n):
         repeat_i, repeat_nums_i = allele_i[i]
         for j in range(m):
             repeat_j, repeat_nums_j = allele_j[j]
-            if i == 0:
-                if j == 0:
-                    if repeat_i == repeat_j:
-                        a[i][j] = 0
-                    else:
-                        a[i][j] = -1
-                else:
-                    assert j > 0
-                    a[i][j] = a[i][j-1] - 1
-            elif j == 0:
-                assert i > 0
-                a[i][j] = a[i-1][j] - 1
-            else:
-                equal_score = get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j)
-                a[i][j] = max(a[i-1][j] - 1, a[i][j-1] - 1, a[i-1][j-1] + equal_score)
+            equal_score = get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j)
+            a[i+1][j+1] = max(a[i][j+1] - 1, a[i+1][j] - 1, a[i][j] + equal_score)
 
     return a, n, m
 
@@ -254,34 +269,27 @@ def combine_alleles(backbone_allele, add_allele):
     # Back tracking
     new_backbone_allele = []
     i, j = n - 1, m - 1
-    while i >= 0 and j >= 0:
-        repeat_i, repeat_nums_i = allele_i[i]
-        repeat_j, repeat_nums_j = allele_j[j]
-        if i == 0:
-            if j == 0:
-                if repeat_i == repeat_j:
-                    new_backbone_allele.append([repeat_i, repeat_nums_i | repeat_nums_j])
-                else:
-                    assert repeat_nums_i == repeat_nums_j
-                    assert repeat_nums_i == set([1])
-                    new_backbone_allele.append([repeat_i | repeat_j, repeat_nums_i | repeat_nums_j])
-            else:
-                new_backbone_allele.append([repeat_j, repeat_nums_j | set([0])])
+    while i >= 0 or j >= 0:
+        if i < 0:
+            repeat_j, repeat_nums_j = allele_j[j]
+            new_backbone_allele.append([repeat_j, repeat_nums_j | set([0])])
             j -= 1
-        elif j == 0:
-            assert i > 0
+        elif j < 0:
+            repeat_i, repeat_nums_i = allele_i[i]
             new_backbone_allele.append([repeat_i, repeat_nums_i | set([0])])
             i -= 1
         else:
+            repeat_i, repeat_nums_i = allele_i[i]
+            repeat_j, repeat_nums_j = allele_j[j]    
             equal_score = get_equal_score(repeat_i, repeat_nums_i, repeat_j, repeat_nums_j)
-            if a[i-1][j] - 1 == a[i][j]:
+            if a[i][j+1] - 1 == a[i+1][j+1]:
                 new_backbone_allele.append([repeat_i, repeat_nums_i | set([0])])
                 i -= 1
-            elif a[i][j-1] - 1 == a[i][j]:
+            elif a[i+1][j] - 1 == a[i+1][j+1]:
                 new_backbone_allele.append([repeat_j, repeat_nums_j | set([0])])
                 j -= 1
             else:
-                assert a[i-1][j-1] + equal_score == a[i][j]
+                assert a[i][j] + equal_score == a[i+1][j+1]
                 if repeat_i == repeat_j:
                     new_backbone_allele.append([repeat_i, repeat_nums_i | repeat_nums_j])
                 else:
@@ -292,7 +300,6 @@ def combine_alleles(backbone_allele, add_allele):
                 j -= 1
 
     new_backbone_allele = new_backbone_allele[::-1]
-
     return new_backbone_allele
 
 
@@ -305,7 +312,8 @@ def msf_alignment(backbone_allele, allele):
     # Back tracking
     allele_seq, backbone_seq = "", ""
     i, j = n - 1, m - 1
-    while i >= 0 and j >= 0:
+    while i >= 0 or j >= 0:
+        assert i >= 0
         repeats_i, repeat_nums_i = allele_i[i]
         repeat_i = ""
         max_repeat = ""
@@ -313,44 +321,27 @@ def msf_alignment(backbone_allele, allele):
             if len(repeat_str) > len(repeat_i):
                 repeat_i = repeat_str
         repeat_num_i = max(repeat_nums_i)
-        repeats_j, repeat_nums_j = allele_j[j]
-        assert len(repeats_j) == 1 and len(repeat_nums_j) == 1
-        repeat_j, repeat_num_j = list(repeats_j)[0], list(repeat_nums_j)[0]
-        if i == 0:
-            assert j == 0
-            if repeats_i == repeats_j:
-                add_seq = repeat_i * repeat_num_j
-                dot_seq = '.' * (len(repeat_i) * (repeat_num_i - repeat_num_j))
-                allele_seq = add_seq + dot_seq + allele_seq
-                add_seq = repeat_i * repeat_num_i
-                backbone_seq = add_seq + backbone_seq
-            else:
-                assert repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1])
-                dot_seq = '.' * (len(repeat_i) - len(repeat_j))
-                allele_seq = repeat_j + dot_seq + allele_seq
-                backbone_seq = repeat_i + backbone_seq                    
-            j -= 1
-        elif j == 0:
-            assert i > 0
+        if j < 0:
             allele_seq = '.' * (len(repeat_i) * repeat_num_i) + allele_seq
             backbone_seq = repeat_i * repeat_num_i + backbone_seq
             i -= 1
         else:
+            repeats_j, repeat_nums_j = allele_j[j]
+            assert len(repeats_j) == 1 and len(repeat_nums_j) == 1
+            repeat_j, repeat_num_j = list(repeats_j)[0], list(repeat_nums_j)[0]
             equal_score = get_equal_score(repeats_i, repeat_nums_i, repeats_j, repeat_nums_j)
-            if a[i-1][j] - 1 == a[i][j]:
+            if a[i][j+1] - 1 == a[i+1][j+1]:
                 allele_seq = '.' * (len(repeat_i) * repeat_num_i) + allele_seq
                 backbone_seq = repeat_i * repeat_num_i + backbone_seq
                 i -= 1
-            elif a[i][j-1] - 1 == a[i][j]:
-                assert False
             else:
-                assert a[i-1][j-1] + equal_score == a[i][j]
+                assert a[i][j] + equal_score == a[i+1][j+1]
                 if repeat_i == repeat_j:
                     add_seq = repeat_i * repeat_num_j
                     dot_seq = '.' * (len(repeat_i) * (repeat_num_i - repeat_num_j))
                     allele_seq = add_seq + dot_seq + allele_seq
                     add_seq = repeat_i * repeat_num_i
-                    backbone_seq = add_seq + backbone_seq
+                    backbone_seq = add_seq + backbone_seq                    
                 else:
                     assert repeat_nums_i == repeat_nums_j and repeat_nums_i == set([1])
                     dot_seq = '.' * (len(repeat_i) - len(repeat_j))
@@ -368,6 +359,7 @@ Extract multiple sequence alignments
 def extract_msa(base_dname,
                 base_fname,
                 locus_list,
+                min_freq,
                 verbose):    
     # Download human genome and HISAT2 index
     HISAT2_fnames = ["grch38",
@@ -375,6 +367,29 @@ def extract_msa(base_dname,
                      "genome.fa.fai"]
     if not typing_common.check_files(HISAT2_fnames):
         typing_common.download_genome_and_index(ex_path)
+
+    # Load allele frequency information
+    allele_freq = {}
+    if min_freq > 0.0:
+        excel = openpyxl.load_workbook("hisatgenotype_db/CODIS/NIST-US1036-AlleleFrequencies.xlsx")
+        sheet = excel.get_sheet_by_name(u'All data, n=1036')
+        for col in range(2, 100):
+            locus_name = sheet.cell(row = 3, column = col).value
+            if not locus_name:
+                break
+            locus_name = locus_name.encode('ascii','ignore')
+            locus_name = locus_name.upper()
+            assert locus_name not in allele_freq
+            allele_freq[locus_name] = {}
+
+            for row in range(4, 101):
+                allele_id = sheet.cell(row = row, column = 1).value
+                allele_id = str(allele_id)
+                freq = sheet.cell(row = row, column = col).value
+                if not freq:
+                    continue
+                allele_freq[locus_name][allele_id] = float(freq)
+        excel.close()
 
     CODIS_seq = orig_CODIS_seq
     if len(locus_list) > 0:
@@ -400,6 +415,12 @@ def extract_msa(base_dname,
             locus_name2, allele_id, repeat_st = line.strip().split('\t')
             if locus_name != locus_name2:
                 continue
+            if min_freq > 0.0:
+                assert locus_name in allele_freq
+                if allele_id not in allele_freq[locus_name] or \
+                   allele_freq[locus_name][allele_id] < min_freq:
+                    continue
+                
             alleles.append([allele_id, repeat_st])
 
         # From   [TTTC]3TTTTTTCT[CTTT]20CTCC[TTCC]2
@@ -541,9 +562,9 @@ def extract_msa(base_dname,
 
         # Sanity check
         assert len(allele_dic) == len(allele_repeat_msf)
-        repeat_len = -1
-        for repeat_msf in allele_repeat_msf.values():
-            if repeat_len < 0:
+        repeat_len = None
+        for allele_id, repeat_msf in allele_repeat_msf.items():
+            if not repeat_len:
                 repeat_len = len(repeat_msf)
             else:
                 assert repeat_len == len(repeat_msf)
@@ -601,7 +622,12 @@ if __name__ == '__main__':
                         dest="locus_list",
                         type=str,
                         default="",
-                        help="base filename (default: empty)")    
+                        help="base filename (default: empty)")
+    parser.add_argument("--min-freq",
+                        dest="min_freq",
+                        type=float,
+                        default=0.0,
+                        help="minimum allele frequency (default: 0.0)")    
     parser.add_argument("-v", "--verbose",
                         dest="verbose",
                         action="store_true",
@@ -623,5 +649,6 @@ if __name__ == '__main__':
     extract_msa(base_dname,
                 base_fname,
                 locus_list,
+                args.min_freq,
                 args.verbose)
 

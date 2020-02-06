@@ -64,6 +64,8 @@ public:
 	SamConfig(
               const StrList& refnames,  // reference sequence names
               const LenList& reflens,   // reference sequence lengths
+              const StrList& repnames,  // repeat sequence names
+              const LenList& replens,   // repeat sequence lengths
               bool truncQname,          // truncate read name to 255?
               bool omitsec,             // omit secondary SEQ/QUAL
               bool noUnal,              // omit unaligned reads
@@ -122,6 +124,8 @@ public:
 		rgs_(rgs),
 		refnames_(refnames),
 		reflens_(reflens),
+        repnames_(repnames),
+        replens_(replens),
         rna_strandness_(rna_strandness),
 		print_as_(print_as), // alignment score of best alignment
 		print_xs_(print_xs), // alignment score of second-best alignment
@@ -256,7 +260,8 @@ public:
 	 */
 	void printRefNameFromIndex(
 		BTString& o,
-		size_t i)
+		size_t i,
+        bool repeat = false)
 		const;
 	
 	/**
@@ -347,6 +352,9 @@ protected:
 	const StrList& refnames_; // reference sequence names
 	const LenList& reflens_;  // reference sequence lengths
     
+    const StrList& repnames_; // repeat sequence names
+    const LenList& replens_;  // repeat sequence lengths
+    
     int rna_strandness_;
 	
 	// Which alignment flags to print?
@@ -423,8 +431,12 @@ void SamConfig<index_t>::printRefName(
  * Print a reference name given a reference index.
  */
 template<typename index_t>
-void SamConfig<index_t>::printRefNameFromIndex(BTString& o, size_t i) const {
-    printRefName(o, refnames_[i]);
+void SamConfig<index_t>::printRefNameFromIndex(BTString& o, size_t i, bool repeat) const {
+    if(repeat) {
+        printRefName(o, repnames_[i]);
+    } else {
+        printRefName(o, refnames_[i]);
+    }
 }
 
 /**
@@ -471,6 +483,14 @@ void SamConfig<index_t>::printSqLines(BTString& o) const {
         printRefName(o, refnames_[i]);
         o.append("\tLN:");
         itoa10<size_t>(reflens_[i], buf);
+        o.append(buf);
+        o.append('\n');
+    }
+    for(size_t i = 0; i < repnames_.size(); i++) {
+        o.append("@SQ\tSN:");
+        printRefName(o, repnames_[i]);
+        o.append("\tLN:");
+        itoa10<size_t>(replens_[i], buf);
         o.append(buf);
         o.append('\n');
     }
@@ -967,55 +987,55 @@ const
         Edit::invertPoss(const_cast<EList<Edit>&>(res.ned()), len_trimmed, false);
     }
     for(size_t i = 0; i < res.ned().size(); i++) {
-        if(res.ned()[i].snpID < altdb->alts().size()) {
-            index_t snp_idx = res.ned()[i].snpID;
-            assert_lt(snp_idx, altdb->alts().size());
-            const ALT<index_t>& snp = altdb->alts()[snp_idx];
-            const string& snpID = altdb->altnames()[snp_idx];
-            if(snp_idx == prev_snp_idx) continue;
-            if(snp_first) {
-                WRITE_SEP();
-                o.append("Zs:Z:");
-            }
-            if(!snp_first) o.append(",");
-            uint64_t pos = res.ned()[i].pos;
-            size_t j = i;
-            while(j > 0) {
-                if(res.ned()[j-1].snpID < altdb->alts().size()) {
-                    const ALT<index_t>& snp2 = altdb->alts()[res.ned()[j-1].snpID];
-                    if(snp2.type == ALT_SNP_SGL) {
-                        pos -= (res.ned()[j-1].pos + 1);
-                    } else if(snp2.type == ALT_SNP_DEL) {
-                        pos -= res.ned()[j-1].pos;
-                    } else if(snp2.type == ALT_SNP_INS) {
-                        pos -= (res.ned()[j-1].pos + snp.len);
-                    }
-                    break;
-                }
-                j--;
-            }
-            itoa10<uint64_t>(pos, buf);
-            o.append(buf);
-            o.append("|");
-            if(snp.type == ALT_SNP_SGL) {
-                o.append("S");
-            } else if(snp.type == ALT_SNP_DEL) {
-                o.append("D");
-            } else {
-                assert_eq(snp.type, ALT_SNP_INS);
-                o.append("I");
-            }
-            o.append("|");
-            o.append(snpID.c_str());
-            
-            if(snp_first) snp_first = false;
-            prev_snp_idx = snp_idx;
+        if(res.ned()[i].snpID >= altdb->alts().size())
+            continue;
+        index_t snp_idx = res.ned()[i].snpID;
+        assert_lt(snp_idx, altdb->alts().size());
+        const ALT<index_t>& snp = altdb->alts()[snp_idx];
+        const string& snpID = altdb->altnames()[snp_idx];
+        if(snp_idx == prev_snp_idx) continue;
+        if(snp_first) {
+            WRITE_SEP();
+            o.append("Zs:Z:");
         }
+        if(!snp_first) o.append(",");
+        uint64_t pos = res.ned()[i].pos;
+        size_t j = i;
+        while(j > 0) {
+            if(res.ned()[j-1].snpID < altdb->alts().size()) {
+                const ALT<index_t>& snp2 = altdb->alts()[res.ned()[j-1].snpID];
+                if(snp2.type == ALT_SNP_SGL) {
+                    pos -= (res.ned()[j-1].pos + 1);
+                } else if(snp2.type == ALT_SNP_DEL) {
+                    pos -= res.ned()[j-1].pos;
+                } else if(snp2.type == ALT_SNP_INS) {
+                    pos -= (res.ned()[j-1].pos + snp.len);
+                }
+                break;
+            }
+            j--;
+        }
+        itoa10<uint64_t>(pos, buf);
+        o.append(buf);
+        o.append("|");
+        if(snp.type == ALT_SNP_SGL) {
+            o.append("S");
+        } else if(snp.type == ALT_SNP_DEL) {
+            o.append("D");
+        } else {
+            assert_eq(snp.type, ALT_SNP_INS);
+            o.append("I");
+        }
+        o.append("|");
+        o.append(snpID.c_str());
+        
+        if(snp_first) snp_first = false;
+        prev_snp_idx = snp_idx;
     }
     if(!res.fw()) {
         Edit::invertPoss(const_cast<EList<Edit>&>(res.ned()), len_trimmed, false);
     }
-    
+
     if(print_xr_) {
         // Original read string
         o.append("\n");

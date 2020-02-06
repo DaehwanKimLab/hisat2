@@ -62,7 +62,7 @@ def download_codis(base_dname,
     allele_re = re.compile('>(\d+\.?\d?\"?\'*\(?\d*\.?\d?\"?\'*\)?\*?)</')
     #   <td width="35%"><font size="2">[TTTC]<sub>4</sub>TTTT TT<span style="mso-spacerun: yes"> </span>[CTTT]<sub>14</sub>[CTGT]<sub>3</sub>[CTTT]<sub>14 </sub>[CTTC]<sub>4</sub>[CTTT]<sub>3</sub>CTCC[TTCC]<sub>4</sub></font> </td>
     # repeat_re = re.compile('^(\[[ACGT]+\]\d+|[ACGT]+)+$')
-    repeat_re = re.compile('^(\[[ACGT]+\]\d+|[ACGT]+|\s)+$')
+    repeat_re = re.compile('^(\[[ACGT]+\]\d+|\[[ACGT]+\]|[ACGT]+|\s)+$')
     # Remove extra tags
     tag_re = re.compile('(<[^>]*>)')
     nbsp_re = re.compile('&nbsp;')

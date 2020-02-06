@@ -68,6 +68,7 @@ public:
                     TAlScore score,
                     TAlScore ns,
                     TAlScore gaps,
+                    bool repeat = false,
                     TAlScore splicescore = 0,
                     bool knownTranscripts = false,
                     bool nearSpliceSites = false,
@@ -76,6 +77,7 @@ public:
 		score_ = score;
 		ns_ = ns;
 		gaps_ = gaps;
+        repeat_ = repeat;
         splicescore_ = splicescore;
         knownTranscripts_ = knownTranscripts;
         nearSpliceSites_ = nearSpliceSites;
@@ -90,6 +92,7 @@ public:
 	 */
 	void reset() {
 		score_ = hisat2_score_ = ns_ = gaps_ = 0;
+        repeat_ = false;
         splicescore_ = 0;
         knownTranscripts_ = false;
         nearSpliceSites_ = false;
@@ -161,6 +164,7 @@ public:
 		gaps_  = o.gaps_;
 		ns_    = o.ns_;
 		score_ = o.score_;
+        repeat_ = o.repeat_;
         hisat2_score_ = o.hisat2_score_;
         splicescore_ = o.splicescore_;
         knownTranscripts_ = o.knownTranscripts_;
@@ -242,6 +246,7 @@ public:
 		s.gaps_ = gaps_ + o.gaps_;
 		s.ns_ = ns_;
 		s.score_ = score_ + o.score_;
+        s.repeat_ = repeat_ | o.repeat_;
         s.splicescore_ = splicescore_ + o.splicescore_;
         s.hisat2_score_ = hisat2_score_ + o.hisat2_score_;
         s.knownTranscripts_ = knownTranscripts_ | o.knownTranscripts_;
@@ -259,6 +264,7 @@ public:
 		if(VALID_AL_SCORE(*this)) {
 			gaps_ += o.gaps_;
 			score_ += o.score_;
+            repeat_ |= o.repeat_;
             splicescore_ += o.splicescore_;
             hisat2_score_ += o.hisat2_score_;
             knownTranscripts_ |= o.knownTranscripts_;
@@ -307,6 +313,7 @@ public:
 	TAlScore penalty()          const { return -score_; }
 	TAlScore gaps()             const { return  gaps_;  }
 	TAlScore ns()               const { return  ns_;    }
+    bool     repeat()           const { return repeat_;}
     TAlScore splicescore()      const { return splicescore_; }
     bool     knownTranscripts() const { return knownTranscripts_; }
     bool     nearSpliceSites()  const { return nearSpliceSites_; }
@@ -319,7 +326,11 @@ public:
         if(score > MAX_I32) score = MAX_I32;
         else if(score < MIN_I32) score = MIN_I32;
         
-        // Next 8 bits for alignments against transcripts
+        // Next 4 bits for repeat score
+        TAlScore repeat_score = 0;
+        if(repeat_) repeat_score = 1;
+        
+        // Next 4 bits for alignments against transcripts
         TAlScore transcript_score = 0;
         if(knownTranscripts_) transcript_score = 2;
         else if(nearSpliceSites_) transcript_score = 1;
@@ -333,7 +344,7 @@ public:
         TAlScore trim = leftTrim_ + rightTrim_;
         if(trim > MAX_U16) trim = 0;
         else               trim = MAX_U16 - trim;
-        return (score << 32) | (transcript_score << 24) | (splicescore << 16) | trim;
+        return (score << 32) | (repeat_score << 28) | (transcript_score << 24) | (splicescore << 16) | trim;
     }
 
 	// Score accumulated so far (penalties are subtracted starting at 0)
@@ -350,6 +361,8 @@ public:
 	// target, in which case the score becomes invalid and therefore <=
 	// all other scores
 	TAlScore gaps_;
+    
+    bool repeat_;
     
     // splice scores
     TAlScore splicescore_;
@@ -932,6 +945,7 @@ public:
         trimSoft_ = other.trimSoft_;
         trim5p_ = other.trim5p_;
         trim3p_ = other.trim3p_;
+        repeat_ = other.repeat_;
         
         num_spliced_ = other.num_spliced_;
         raw_edits_ = other.raw_edits_;
@@ -978,6 +992,7 @@ public:
         trimSoft_ = other.trimSoft_;
         trim5p_ = other.trim5p_;
         trim3p_ = other.trim3p_;
+        repeat_ = other.repeat_;
         
         num_spliced_ = other.num_spliced_;
         assert(raw_edits_ == NULL || raw_edits_ == other.raw_edits_);
@@ -1019,12 +1034,27 @@ public:
         }
 #endif
         if(ned_ != NULL) {
+            ned_->clear(); aed_->clear();
             raw_edits_->delete_node(ned_node_);
-            raw_edits_->delete_node(aed_node_);
+            raw_edits_->delete_node(aed_node_);            
             ned_ = aed_ = NULL;
             ned_node_ = aed_node_ = NULL;
             raw_edits_ = NULL;
         }
+    }
+    
+    /* DK - temporary implementation */
+    void init_raw_edits(LinkedEList<EList<Edit> >* raw_edits) {
+        if(raw_edits == NULL)
+            return;
+        raw_edits_ = raw_edits;
+        assert(ned_ == NULL && aed_ == NULL);
+        assert(ned_node_ == NULL && aed_node_ == NULL);
+        ned_node_ = raw_edits_->new_node();
+        aed_node_ = raw_edits_->new_node();
+        assert(ned_node_ != NULL && aed_node_ != NULL);
+        ned_ = &(ned_node_->payload);
+        aed_ = &(aed_node_->payload);
     }
 
 	/**
@@ -1059,8 +1089,8 @@ public:
 	 */
 	bool empty() const {
 		if(!VALID_AL_SCORE(score_)) {
-			assert(ned_->empty());
-			assert(aed_->empty());
+			assert(ned_ == NULL || ned_->empty());
+			assert(aed_ == NULL || aed_->empty());
 			assert(!refcoord_.inited());
 			assert(!refival_.inited());
 			return true;
@@ -1364,8 +1394,8 @@ public:
 			assert_lt(refoff(), reflen_);
 		}
 		assert(refival_.repOk());
-		assert(VALID_AL_SCORE(score_) || ned_->empty());
-		assert(VALID_AL_SCORE(score_) || aed_->empty());
+		assert(VALID_AL_SCORE(score_) || ned_ == NULL || ned_->empty());
+		assert(VALID_AL_SCORE(score_) || aed_ == NULL || aed_->empty());
 		assert(empty() || refcoord_.inited());
 		assert(empty() || refival_.inited());
 		assert_geq(rdexrows_, rdextent_);
@@ -1637,7 +1667,9 @@ public:
         }
 		assert_geq(dn, up);
         TRefOff intron_len = 0;
-        if(ssdb != NULL && up_right + 100 < dn_left) {
+        if(ssdb != NULL &&
+           !repeat() &&
+           up_right + 100 < dn_left) {
             assert(spliceSites != NULL);
             if(spliceSites->size() == 0) {
                 ssdb->getRightSpliceSites(refid(), up_right, dn_left - up_right, *spliceSites);
@@ -1699,7 +1731,8 @@ public:
 		size_t             pretrim3p    = 0, // trimming prior to alignment
 		bool               trimSoft     = true,
 		size_t             trim5p       = 0, // trimming from alignment
-		size_t             trim3p       = 0);// trimming from alignment
+		size_t             trim3p       = 0, // trimming from alignment
+        bool               repeat       = false); // repeat
 
 	/**
 	 * Return number of bases trimmed from the 5' end.  Argument determines
@@ -1738,6 +1771,8 @@ public:
 	size_t trimmedRight(bool soft) const {
 		return fw() ? trimmed3p(soft) : trimmed5p(soft);
 	}
+    
+    bool repeat() const { return repeat_; }
 
 	/**
 	 * Set the number of reference Ns covered by the alignment.
@@ -1811,6 +1846,7 @@ public:
 			trimSoft_     == o.trimSoft_ &&
 			trim5p_       == o.trim5p_ &&
 			trim3p_       == o.trim3p_ &&
+            repeat_       == o.repeat_ &&
             num_spliced_  == o.num_spliced_;
 	}
 	
@@ -1889,6 +1925,7 @@ protected:
 	bool        trimSoft_;     // trimming by local alignment is soft?
 	size_t      trim5p_;       // # bases trimmed from 5p end by local alignment
 	size_t      trim3p_;       // # bases trimmed from 3p end by local alignment
+    bool        repeat_;       // repeat?
     
     size_t                          num_spliced_;
     LinkedEListNode<EList<Edit> >*  ned_node_;
@@ -2048,10 +2085,11 @@ public:
 		bool exhausted1,
 		bool exhausted2,
 		TRefId orefid,
-		TRefOff orefoff)
+		TRefOff orefoff,
+        bool repeat)
 	{
 		init(rd1, rd2, rs1, rs2, rs1u, rs2u, exhausted1, exhausted2, 
-		     orefid, orefoff);
+		     orefid, orefoff, repeat);
 	}
 
 	explicit AlnSetSumm(
@@ -2068,6 +2106,7 @@ public:
 		bool     exhausted2,
 		TRefId   orefid,
 		TRefOff  orefoff,
+        bool repeat,
         TNumAlns numAlns1,
         TNumAlns numAlns2,
         TNumAlns numAlnsPaired)
@@ -2086,6 +2125,7 @@ public:
              exhausted2,
              orefid,
              orefoff,
+             repeat,
              numAlns1,
              numAlns2,
              numAlnsPaired);
@@ -2106,6 +2146,7 @@ public:
 		exhausted1_ = exhausted2_ = false;
 		orefid_ = -1;
 		orefoff_ = -1;
+        repeat_ = false;
         numAlns1_ = numAlns2_= numAlnsPaired_ = 0;
 	}
 	
@@ -2119,7 +2160,8 @@ public:
 		bool exhausted1,
 		bool exhausted2,
 		TRefId orefid,
-		TRefOff orefoff);
+		TRefOff orefoff,
+        bool repeat);
 	
 	/**
 	 * Initialize given fields.  See constructor for how fields are set.
@@ -2138,6 +2180,7 @@ public:
 		bool     exhausted2,
 		TRefId   orefid,
 		TRefOff  orefoff,
+        bool repeat,
         TNumAlns numAlns1,
         TNumAlns numAlns2,
         TNumAlns numAlnsPaired)
@@ -2155,6 +2198,7 @@ public:
 		exhausted2_    = exhausted2;
 		orefid_        = orefid;
 		orefoff_       = orefoff;
+        repeat_        = repeat;
         numAlns1_      = numAlns1;
         numAlns2_      = numAlns2;
         numAlnsPaired_ = numAlnsPaired;
@@ -2195,6 +2239,7 @@ public:
 	bool     exhausted2()    const { return exhausted2_;    }
 	TRefId   orefid()        const { return orefid_;        }
 	TRefOff  orefoff()       const { return orefoff_;       }
+    bool     repeat()        const { return repeat_;        }
     
     TNumAlns numAlns1()      const { return numAlns1_;      }
     TNumAlns numAlns2()      const { return numAlns2_;      }
@@ -2263,6 +2308,7 @@ protected:
 	bool     exhausted2_;    // searched exhaustively for mate 2 alignments?
 	TRefId   orefid_;
 	TRefOff  orefoff_;
+    bool     repeat_;
     
     TNumAlns numAlns1_;      // number of alignments for mate 1 as singleton or discordantly mapped
     TNumAlns numAlns2_;      // number of alignments for mate 2 as singleton or discordantly mapped

@@ -64,6 +64,7 @@ public:
 	 */
 	BitPairReference(
 		const string& in,
+        const EList<uint8_t>* included,
 		bool color,
 		bool sanity = false,
 		EList<string>* infiles = NULL,
@@ -160,7 +161,8 @@ public:
 		bool bigEndian,
 		const RefReadInParams& refparams,
 		EList<RefRecord>& szs,
-		bool sanity);
+		bool sanity,
+		EList<string> *names = NULL);
 	
 protected:
 

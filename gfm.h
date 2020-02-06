@@ -56,6 +56,8 @@
 #include "mem_ids.h"
 #include "btypes.h"
 #include "tokenize.h"
+#include "repeat.h"
+#include "repeat_kmer.h"
 
 #ifdef POPCNT_CAPABILITY
 #include "processor_support.h"
@@ -651,6 +653,8 @@ public:
 	/// Construct a GFM from the given input file
 	GFM(const string& in,
         ALTDB<index_t>* altdb,
+        RepeatDB<index_t>* repeatdb,
+        EList<size_t>* readLens,
         int needEntireReverse,
         bool fw,
         int32_t overrideOffRate, // = -1,
@@ -683,26 +687,34 @@ public:
 		useShmem_ = useShmem;
 		_in1Str = in + ".1." + gfm_ext;
 		_in2Str = in + ".2." + gfm_ext;
+        if(readLens != NULL) {
+            _readLens.resizeExact(readLens->size());
+            for(size_t i = 0; i < readLens->size(); i++) {
+                _readLens[i].first = _readLens[i].second = (*readLens)[i];
+            }
+        }
         if(skipLoading) return;
 		
-        readIntoMemory(
-                       fw ? -1 : needEntireReverse, // need REF_READ_REVERSE
-                       loadSASamp,  // load the SA sample portion?
-                       loadFtab,    // load the ftab & eftab?
-                       loadRstarts, // load the rstarts array?
-                       true,        // stop after loading the header portion?
-                       &_gh,        // params
-                       mmSweep,     // mmSweep
-                       loadNames,   // loadNames
-                       startVerbose); // startVerbose
-        // If the offRate has been overridden, reflect that in the
-        // _eh._offRate field
-        if(offRatePlus > 0 && _overrideOffRate == -1) {
-            _overrideOffRate = _gh._offRate + offRatePlus;
-        }
-        if(_overrideOffRate > _gh._offRate) {
-            _gh.setOffRate(_overrideOffRate);
-            assert_eq(_overrideOffRate, _gh._offRate);
+        if(repeatdb == NULL) {
+            readIntoMemory(
+                           fw ? -1 : needEntireReverse, // need REF_READ_REVERSE
+                           loadSASamp,  // load the SA sample portion?
+                           loadFtab,    // load the ftab & eftab?
+                           loadRstarts, // load the rstarts array?
+                           true,        // stop after loading the header portion?
+                           &_gh,        // params
+                           mmSweep,     // mmSweep
+                           loadNames,   // loadNames
+                           startVerbose); // startVerbose
+            // If the offRate has been overridden, reflect that in the
+            // _eh._offRate field
+            if(offRatePlus > 0 && _overrideOffRate == -1) {
+                _overrideOffRate = _gh._offRate + offRatePlus;
+            }
+            if(_overrideOffRate > _gh._offRate) {
+                _gh.setOffRate(_overrideOffRate);
+                assert_eq(_overrideOffRate, _gh._offRate);
+            }
         }
 
         // Read ALTs
@@ -713,6 +725,7 @@ public:
         string in7Str = in + ".7." + gfm_ext;
         string in8Str = in + ".8." + gfm_ext;
         
+        // open alts
         if(verbose || startVerbose) cerr << "Opening \"" << in7Str.c_str() << "\"" << endl;
         ifstream in7(in7Str.c_str(), ios::binary);
         if(!in7.good()) {
@@ -723,19 +736,40 @@ public:
         index_t to_alti_far = 0;
         readI32(in7, this->toBe());
         index_t numAlts = readIndex<index_t>(in7, this->toBe());
+
+
+        // open altnames
+        if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
+        ifstream in8(in8Str.c_str(), ios::binary);
+        if(!in8.good()) {
+            cerr << "Could not open index file " << in8Str.c_str() << endl;
+        }
+
+        readI32(in8, this->toBe());
+        index_t numAltnames = readIndex<index_t>(in8, this->toBe());
+
+        assert_eq(numAlts, numAltnames);
+
         if(numAlts > 0) {
             alts.resizeExact(numAlts); alts.clear();
             to_alti.resizeExact(numAlts); to_alti.clear();
-            while(!in7.eof()) {
+            while(!in7.eof() && !in8.eof()) {
                 alts.expand();
                 alts.back().read(in7, this->toBe());
                 to_alti.push_back(to_alti_far);
                 to_alti_far++;
+
+                altnames.expand();
+                in8 >> altnames.back();
+
                 if(!loadSpliceSites) {
                     if(alts.back().splicesite()) {
                         alts.pop_back();
                         assert_gt(numAlts, 0);
+                        altnames.pop_back();
+                        assert_gt(numAltnames, 0);
                         numAlts--;
+                        numAltnames--;
                         to_alti.back() = std::numeric_limits<index_t>::max();
                         to_alti_far--;
                     }
@@ -745,41 +779,71 @@ public:
         }
         assert_eq(alts.size(), numAlts);
         assert_eq(to_alti_far, numAlts);
-        if(useHaplotype) {
-            // Check if it hits the end of file, and this routine is needed for backward compatibility
-            if(in7.peek() != std::ifstream::traits_type::eof()) {
-                index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
-                if(numHaplotypes > 0) {
-                    haplotypes.resizeExact(numHaplotypes);
-                    haplotypes.clear();
-                    while(!in7.eof()) {
-                        haplotypes.expand();
-                        haplotypes.back().read(in7, this->toBe());
-                        Haplotype<index_t>& ht = haplotypes.back();
-                        for(index_t h = 0; h < ht.alts.size(); h++) {
-                            ht.alts[h] = to_alti[ht.alts[h]];
-                        }
-                        if(haplotypes.size() == numHaplotypes) break;
+        assert_eq(alts.size(), altnames.size());
+        // Check if it hits the end of file, and this routine is needed for backward compatibility
+        if(in7.peek() != std::ifstream::traits_type::eof()) {
+            index_t numHaplotypes = readIndex<index_t>(in7, this->toBe());
+            if(numHaplotypes > 0) {
+                haplotypes.resizeExact(numHaplotypes);
+                haplotypes.clear();
+                while(!in7.eof()) {
+                    haplotypes.expand();
+                    haplotypes.back().read(in7, this->toBe());
+                    Haplotype<index_t>& ht = haplotypes.back();
+                    for(index_t h = 0; h < ht.alts.size(); h++) {
+                        ht.alts[h] = to_alti[ht.alts[h]];
                     }
+                    if(haplotypes.size() == numHaplotypes) break;
                 }
             }
-        }
-        
-        if(verbose || startVerbose) cerr << "Opening \"" << in8Str.c_str() << "\"" << endl;
-        ifstream in8(in8Str.c_str(), ios::binary);
-        if(!in8.good()) {
-            cerr << "Could not open index file " << in8Str.c_str() << endl;
-        }
-        
-        readI32(in8, this->toBe());
-        numAlts = readIndex<index_t>(in8, this->toBe());
-        if(numAlts > 0) {
-            while(!in8.eof()) {
-                altnames.expand();
-                in8 >> altnames.back();
-                if(altnames.size() == numAlts) break;
+            if(!useHaplotype) {
+                haplotypes.nullify();
             }
-            assert_eq(altnames.size(), numAlts);
+        }
+
+        // Read repeats
+        _repeat = false;
+        if(repeatdb != NULL) {
+            _repeat = true;
+            index_t numRepeatIndex = readIndex<index_t>(in7, this->toBe());
+            assert_gt(numRepeatIndex, 0);
+            EList<pair<index_t, index_t> > repeatLens; repeatLens.resizeExact(numRepeatIndex);
+            for(size_t k = 0; k < numRepeatIndex; k++) {
+                repeatLens[k].first = readIndex<index_t>(in7, this->toBe());
+                repeatLens[k].second = readIndex<index_t>(in7, this->toBe());
+            }
+            if(_readLens.empty()) {
+                _readLens = repeatLens;
+            }
+            _readIncluded.resizeExact(numRepeatIndex);
+            _readIncluded.fillZero();
+            size_t k = 0, k2 = 0;
+            while(k < numRepeatIndex && k2 < _readLens.size()) {
+                if(repeatLens[k].first >= _readLens[k2].first) {
+                    _readIncluded[k] = true;
+                    _readLens[k2] = repeatLens[k];
+                    k2++;
+                } else {
+                    k++;
+                }
+            }
+            _readLens.resize(k2);
+            repeatdb->read(in7, this->toBe(), _readIncluded);
+            index_t numKmertables = readIndex<index_t>(in7, this->toBe());
+            EList<streampos> filePos; filePos.resizeExact(numKmertables);
+            for(size_t k = 0; k < numKmertables; k++) {
+                filePos[k] = readIndex<uint64_t>(in7, this->toBe());
+            }
+            for(size_t k = 0; k < numKmertables; k++) {
+                if(!_readIncluded[k])
+                    continue;
+                if(k > 0) {
+                    in7.seekg(filePos[k-1]);
+                }
+                _repeat_kmertables.expand();
+                _repeat_kmertables.back().read(in7, this->toBe());
+            }
+            in7.seekg(filePos.back());
         }
         
         in7.close();
@@ -840,7 +904,7 @@ public:
             }
         }
         
-        assert(repOk());
+        assert(repeatdb != NULL || repOk());
 	}
 	
 	/// Construct an Ebwt from the given header parameters and string
@@ -900,6 +964,7 @@ public:
         const string& ssfile,
         const string& exonfile,
         const string& svfile,
+        const string& repeatfile,
 		const string& outfile,   // base filename for GFM files
 		bool fw,
 		bool useBlockwise,
@@ -911,6 +976,8 @@ public:
 		EList<RefRecord>& szs,
 		index_t sztot,
 		const RefReadInParams& refparams,
+        EList<RefRecord>* parent_szs,
+        EList<string>* parent_refnames,
 		uint32_t seed,
 		int32_t overrideOffRate = -1,
 		bool verbose = false,
@@ -960,6 +1027,7 @@ public:
                              ssfile,
                              exonfile,
                              svfile,
+                             repeatfile,
 							 is,
 							 szs,
 							 sztot,
@@ -972,6 +1040,8 @@ public:
 							 bmaxSqrtMult,
 							 bmaxDivN,
 							 dcv,
+                             parent_szs,
+                             parent_refnames,
 							 seed,
 							 verbose);
 		// Close output files
@@ -1111,7 +1181,12 @@ public:
 		// characters in one of the input sequences.
 		EList<RefRecord> szs(EBWT_CAT);
 		std::pair<index_t, index_t> sztot;
-		sztot = BitPairReference::szsFromFasta(is, file, bigEndian, refparams, szs, sanity);
+		sztot = BitPairReference::szsFromFasta(is,
+                                               file,
+                                               bigEndian,
+                                               refparams,
+                                               szs,
+                                               sanity);
 		// Construct Ebwt from input strings and parameters
 		GFM<index_t> *gfmFw = new GFM<index_t>(
                                                TStr(),
@@ -1138,7 +1213,12 @@ public:
                                                sanity);      // verify results and internal consistency
 		refparams.reverse = reverse;
 		szs.clear();
-		sztot = BitPairReference::szsFromFasta(is, file, bigEndian, refparams, szs, sanity);
+		sztot = BitPairReference::szsFromFasta(is,
+                                               file,
+                                               bigEndian,
+                                               refparams,
+                                               szs,
+                                               sanity);
 		// Construct Ebwt from input strings and parameters
 		GFM<index_t> *gfmBw = new GFM<index_t>(
                                                TStr(),
@@ -1196,7 +1276,7 @@ public:
         assert(false);
         return false;
     }
-	
+
 	/**
 	 * Helper for the constructors above.  Takes a vector of text
 	 * strings and joins them into a single string with a call to
@@ -1214,6 +1294,7 @@ public:
                         const string& ssfile,
                         const string& exonfile,
                         const string& svfile,
+                        const string& repeatfile,
 						EList<FileBuf*>& is,
 	                    EList<RefRecord>& szs,
 	                    index_t sztot,
@@ -1226,6 +1307,8 @@ public:
 	                    index_t bmaxSqrtMult,
 	                    index_t bmaxDivN,
 	                    int dcv,
+                        EList<RefRecord>* parent_szs,
+                        EList<string>* parent_refnames,
 	                    uint32_t seed,
 						bool verbose)
 	{
@@ -1233,6 +1316,7 @@ public:
 		VMSG_NL("Calculating joined length");
 		index_t jlen;
 		jlen = joinedLen(szs);
+        _repeat = (parent_szs != NULL);
 		assert_geq(jlen, sztot);
 		VMSG_NL("Writing header");
 		writeFromMemory(true, out1, out2);
@@ -1296,14 +1380,13 @@ public:
                 }
                 writeIndex<int32_t>(fout7, 1, this->toBe()); // endianness sentinel
                 writeIndex<int32_t>(fout8, 1, this->toBe()); // endianness sentinel
-                
-                EList<string> refnames_nospace;
+
                 for(index_t i = 0; i < _refnames.size(); i++) {
-                    refnames_nospace.push_back("");
+                    _refnames_nospace.push_back("");
                     for(index_t j = 0; j < _refnames[i].size(); j++) {
                         char c = _refnames[i][j];
                         if(c == ' ') break;
-                        refnames_nospace.back().push_back(c);
+                        _refnames_nospace.back().push_back(c);
                     }
                 }
                 
@@ -1338,14 +1421,14 @@ public:
                             snp_file >> ins_seq;
                         }
                         index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
+                        for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
+                            if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) {
+                        if(chr_idx >= _refnames_nospace.size()) {
                             continue;
                         }
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1475,14 +1558,14 @@ public:
                         ht_file >> chr >> left >> right >> alt_list;
                         assert_leq(left, right);
                         index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
+                        for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
+                            if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) {
+                        if(chr_idx >= _refnames_nospace.size()) {
                             continue;
                         }
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1582,12 +1665,12 @@ public:
                         left += 1; right -= 1;
                         if(left >= right) continue;
                         index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
+                        for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
+                            if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) continue;
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        if(chr_idx >= _refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1703,12 +1786,12 @@ public:
                         left += 1; right -= 1;
                         if(left >= right) continue;
                         index_t chr_idx = 0;
-                        for(; chr_idx < refnames_nospace.size(); chr_idx++) {
-                            if(chr == refnames_nospace[chr_idx])
+                        for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
+                            if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= refnames_nospace.size()) continue;
-                        assert_eq(chr_szs.size(), refnames_nospace.size());
+                        if(chr_idx >= _refnames_nospace.size()) continue;
+                        assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
                         const index_t sofar_len = tmp_pair.first;
@@ -1822,6 +1905,284 @@ public:
                     _haplotypes[i].write(fout7, this->toBe());
                 }
                 
+                EList<Repeat<index_t> >& repeats = _repeatdb.repeats();
+                if(_repeat) {
+                    ifstream repeat_file(repeatfile.c_str(), ios::in);
+                    if(!repeat_file.is_open()) {
+                        cerr << "Error: could not open " << ssfile.c_str() << endl;
+                        throw 1;
+                    }
+                    if(parent_szs == NULL) {
+                        throw 1;
+                    }
+                    if(parent_refnames == NULL) {
+                        throw 1;
+                    }
+
+                    EList<pair<index_t, index_t> > parent_chr_szs;
+                    index_t tmp_len = 0;
+                    for(index_t i = 0; i < parent_szs->size(); i++) {
+                        if((*parent_szs)[i].first) {
+                            parent_chr_szs.expand();
+                            parent_chr_szs.back().first = tmp_len;
+                            parent_chr_szs.back().second = i;
+                        }
+                        tmp_len += (index_t)(*parent_szs)[i].len;
+                    }
+                    index_t parent_jlen = joinedLen(*parent_szs);
+
+                    string prev_repName = "";
+                    while(!repeat_file.eof()) {
+                        // >rep1*0    rep    0    100    470    0
+                        // 20_rep:26622650:+ 20_rep:26628088:+ 20_rep:26632508:+ 20_rep:26635636:+
+                        // 20_rep:26669936:+ 20_rep:26672654:+ 20_rep:26675373:+ 20_rep:26678095:+
+                        string repName, repAlleleName;
+                        repeat_file >> repAlleleName;
+                        if(repAlleleName.empty()) // Reached the end of file
+                            break;
+                        if(repAlleleName[0] != '>') {
+                            cerr << "Error: the file format is not correct" << endl;
+                            throw 1;
+                        }
+                        repAlleleName = repAlleleName.substr(1); // Remove '>'
+                        index_t alleleID = 0;
+                        size_t star_pos = repAlleleName.find('*');
+                        if(star_pos >= repAlleleName.length()) {
+                            repName = repAlleleName;
+                        } else {
+                            repName = repAlleleName.substr(0, star_pos);
+                            string strID = repAlleleName.substr(star_pos + 1);
+                            istringstream(strID) >> alleleID;
+                        }
+
+                        string refRepName;
+                        index_t repPos, repLen;
+                        repeat_file >> refRepName >> repPos >> repLen;
+                        index_t rep_idx = 0;
+                        for(; rep_idx < _refnames_nospace.size(); rep_idx++) {
+                            if(refRepName == _refnames_nospace[rep_idx])
+                                break;
+                        }
+                        if(rep_idx >= _refnames_nospace.size()) {
+                            cerr << "Error: " << refRepName << " is not found in " << endl;
+                            throw 1;
+                        }
+
+                        if(repeats.size() == 0 ||
+                           repeats.back().repID != rep_idx ||
+                           repeats.back().repName != repName) {
+                            if(repeats.size() > 0) {
+                                repeats.back().positions.sort();
+                            }
+                            repeats.expand();
+                            repeats.back().init(repName, rep_idx, repPos, repLen);
+                        }
+
+                        // update repPos and repLen
+                        if(repPos < repeats.back().repPos) {
+                            repeats.back().repLen += (repeats.back().repPos - repPos);
+                            repeats.back().repPos = repPos;
+                        }
+                        if(repPos + repLen > repeats.back().repPos + repeats.back().repLen) {
+                            repeats.back().repLen = repPos + repLen - repeats.back().repPos;
+                        }
+
+                        size_t baseOff = 0;
+                        if(repeats.size() > 1 && repeats[repeats.size() - 2].repID == rep_idx) {
+                            baseOff = repeats[repeats.size() - 2].repPos + repeats[repeats.size() - 2].repLen;
+                        }
+
+                        index_t numCoords, numAlts;
+                        repeat_file >> numCoords >> numAlts;
+                        EList<index_t> snpIDs;
+                        EList<string> snpStrIDs;
+                        if(numAlts > 0) {
+                            string snpStrID;
+                            repeat_file >> snpStrID;
+                            tokenize(snpStrID, ",", snpStrIDs);
+                            if(snpStrIDs.size() != numAlts) {
+                                assert(false);
+                                cerr << "Error: the number of SNPs (" << snpIDs.size() << ", " << snpStrID << ") does not equal to " << numAlts << endl;
+                                throw 1;
+                            }
+                            for(index_t i = 0; i < snpStrIDs.size(); i++) {
+                                if(snpID2num.find(snpStrIDs[i]) == snpID2num.end()) {
+                                    cerr << "Error: " << snpStrIDs[i] << " is not found" << endl;
+                                    throw 1;
+                                }
+                                index_t numID = snpID2num[snpStrIDs[i]];
+                                snpIDs.push_back(numID);
+                            }
+                        }
+
+                        EList<RepeatCoord<index_t> >& positions = repeats.back().positions;
+                        size_t sofar_numCoords = positions.size();
+                        while(positions.size() - sofar_numCoords < numCoords) {
+                            string chr_pos;
+                            repeat_file >> chr_pos;
+                            size_t colon_pos = chr_pos.find(':');
+                            if(colon_pos + 1 >= chr_pos.length()) {
+                                cerr << "Error: : is not found in " << chr_pos << endl;
+                                throw 1;
+                            }
+                            string chr = chr_pos.substr(0, colon_pos);
+                            string strPos = chr_pos.substr(colon_pos + 1, chr_pos.length() - colon_pos - 3);
+                            bool repfw = (chr_pos[chr_pos.length() - 1] == '+');
+                            index_t pos = 0;
+                            istringstream(strPos) >> pos;
+                            index_t chr_idx = 0;
+                            for(; chr_idx < parent_refnames->size(); chr_idx++) {
+                                if(chr == (*parent_refnames)[chr_idx])
+                                    break;
+                            }
+                            if(chr_idx >= parent_refnames->size()) {
+                                cerr << "Error: " << chr << " is not found in " << endl;
+                                throw 1;
+                            }
+                            assert_eq(parent_chr_szs.size(), parent_refnames->size());
+                            assert_lt(chr_idx, parent_chr_szs.size());
+
+                            positions.expand();
+                            positions.back().tid = chr_idx;
+                            positions.back().toff = pos;
+                            positions.back().fw = repfw;
+                            positions.back().alleleID = alleleID;
+
+                            pair<index_t, index_t> tmp_pair = parent_chr_szs[chr_idx];
+                            const index_t sofar_len = tmp_pair.first;
+                            const index_t szs_idx = tmp_pair.second;
+                            bool involve_Ns = false;
+                            index_t add_pos = 0;
+                            assert((*parent_szs)[szs_idx].first);
+                            for(index_t i = szs_idx; i < parent_szs->size(); i++) {
+                                if(i != szs_idx && (*parent_szs)[i].first) {
+                                    break;
+                                }
+                                if(pos < (*parent_szs)[i].off) {
+                                    involve_Ns = true;
+                                    break;
+                                } else {
+                                    pos -= (*parent_szs)[i].off;
+                                    if(pos < (*parent_szs)[i].len) {
+                                        break;
+                                    } else {
+                                        pos -= (*parent_szs)[i].len;
+                                        add_pos += (*parent_szs)[i].len;
+                                    }
+                                }
+                            }
+                            if(involve_Ns) {
+                                assert(false);
+                                throw 1;
+                            }
+                            pos = sofar_len + add_pos + pos;
+                            if(chr_idx + 1 < parent_chr_szs.size()) {
+                                if(pos >= parent_chr_szs[chr_idx + 1].first) {
+                                    assert(false);
+                                    throw 1;
+                                }
+                            } else {
+                                if(pos >= parent_jlen){
+                                    assert(false);
+                                    throw 1;
+                                }
+                            }
+
+                            positions.back().joinedOff = pos;
+                        }
+                        repeats.back().alleles.expand();
+                        assert_geq(repPos, baseOff);
+                        repeats.back().alleles.back().init(repPos - baseOff, repLen);
+
+                    }
+                    if(repeats.size() > 0) {
+                        repeats.back().positions.sort();
+                    }
+                    repeat_file.close();
+
+                    index_t total_repeat_len = 0;
+                    for(size_t r = 0; r + 1 < repeats.size(); r++) {
+                        if(repeats[r].repID != repeats[r+1].repID) {
+                            index_t repeat_len = repeats[r].repPos + repeats[r].repLen;
+                            total_repeat_len += repeat_len;
+                        }
+                    }
+                    index_t repeat_len = repeats.back().repPos + repeats.back().repLen;
+                    total_repeat_len += repeat_len;
+                    if(total_repeat_len != s.length()) {
+                        cerr << "Error: repeat length (" << repeats.back().repPos + repeats.back().repLen;
+                        cerr << ") does not match sequence length (" << s.length() << ")" << endl;
+                        throw 1;
+                    }
+
+                    _readLens.resizeExact(szs.size());
+                    for(size_t i = 0; i < _readLens.size(); i++) {
+                        _readLens[i].first = numeric_limits<index_t>::max();
+                        _readLens[i].second = 0;
+                    }
+                    for(size_t i = 0; i < repeats.size(); i++) {
+                        index_t id = repeats[i].repID;
+                        index_t len = repeats[i].repLen;
+                        assert_lt(id, _readLens.size());
+                        if(_readLens[id].first > len) {
+                            _readLens[id].first = len;
+                        }
+                        if(_readLens[id].second < len) {
+                            _readLens[id].second = len;
+                        }
+                    }
+
+                    writeIndex<index_t>(fout7, _readLens.size(), this->toBe());
+                    for(size_t i = 0; i < _readLens.size(); i++) {
+                        writeIndex<index_t>(fout7, _readLens[i].first, this->toBe());
+                        writeIndex<index_t>(fout7, _readLens[i].second, this->toBe());
+                    }
+                    _repeatdb.write(fout7, this->toBe());
+                    writeIndex<index_t>(fout7, chr_szs.size(), this->toBe()); // number of repeat indexes
+                    EList<string> seqs;
+                    EList<streampos> tableFilePos;
+                    streampos filepos = fout7.tellp();
+                    for(size_t i = 0; i < chr_szs.size(); i++) {
+                        writeIndex<uint64_t>(fout7, 0, this->toBe());
+                    }
+                    for(size_t i = 0; i < repeats.size(); i++) {
+                        const Repeat<index_t>& repeat = repeats[i];
+                        assert_lt(repeat.repID, chr_szs.size());
+                        index_t template_len = 0;
+                        if(repeat.repID + 1 < chr_szs.size()) {
+                            template_len = chr_szs[repeat.repID + 1].first - chr_szs[repeat.repID].first;
+                        } else {
+                            template_len = s.length() - chr_szs[repeat.repID].first;
+                        }
+                        assert_leq(repeat.repPos + repeat.repLen, template_len);
+                        index_t pos = chr_szs[repeat.repID].first + repeat.repPos;
+                        assert_leq(pos + repeat.repLen, s.length());
+                        seqs.expand();
+                        seqs.back().clear();
+                        for(index_t j = 0; j < repeat.repLen; j++) {
+                            int c = s[pos + j];
+                            assert_range(0, 3, c);
+                            seqs.back().push_back("ACGT"[c]);
+                        }
+
+                        if(i + 1 == repeats.size() || repeats[i].repID != repeats[i+1].repID) {
+                            const size_t w = RB_Minimizer<string>::default_w, k = RB_Minimizer<string>::default_k;
+                            RB_KmerTable kmer_table;
+                            kmer_table.build(seqs, w, k);
+                            kmer_table.write(fout7, this->toBe());
+                            seqs.clear();
+                            tableFilePos.push_back(fout7.tellp());
+                        }
+                    }
+                    assert_eq(tableFilePos.size(), chr_szs.size());
+                    streampos origpos = fout7.tellp();
+                    fout7.seekp(filepos);
+                    for(size_t i = 0; i < tableFilePos.size(); i++) {
+                        writeIndex<uint64_t>(fout7, tableFilePos[i], this->toBe());
+                    }
+                    fout7.seekp(origpos);
+                }
+
                 fout7.close();
                 fout8.close();
             }
@@ -1855,6 +2216,7 @@ public:
 			}
 			throw 1;
 		}
+
 		// Succesfully obtained joined reference string
 		assert_geq(s.length(), jlen);
 		if(bmax != (index_t)OFF_MASK) {
@@ -1865,148 +2227,153 @@ public:
 			// VMSG_NL("bmax according to bmaxSqrtMult setting: " << bmax);
 		}
 		else if(bmaxDivN != (index_t)OFF_MASK) {
-			bmax = max<uint32_t>(jlen / bmaxDivN, 1);
+			bmax = max<uint32_t>(jlen / (bmaxDivN * _nthreads), 1);
 			// VMSG_NL("bmax according to bmaxDivN setting: " << bmax);
 		}
 		else {
 			bmax = (uint32_t)sqrt(s.length());
 			// VMSG_NL("bmax defaulted to: " << bmax);
 		}
+
 		int iter = 0;
 		bool first = true;
 		streampos out1pos = out1.tellp();
 		streampos out2pos = out2.tellp();
-		// Look for bmax/dcv parameters that work.
-		while(true) {
-			if(!first && bmax < 40 && _passMemExc) {
-				cerr << "Could not find approrpiate bmax/dcv settings for building this index." << endl;
-				if(!isPacked()) {
-					// Throw an exception exception so that we can
-					// retry using a packed string representation
-					throw bad_alloc();
-				} else {
-					cerr << "Already tried a packed string representation." << endl;
-				}
-				cerr << "Please try indexing this reference on a computer with more memory." << endl;
-				if(sizeof(void*) == 4) {
-					cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
-						 << "this executable is 32-bit." << endl;
-				}
-				throw 1;
-			}
-			if(!first) {
-				out1.seekp(out1pos);
-				out2.seekp(out2pos);
-			}
-			if(dcv > 4096) dcv = 4096;
-			if((iter % 6) == 5 && dcv < 4096 && dcv != 0) {
-				dcv <<= 1; // double difference-cover period
-			} else {
-				bmax -= (bmax >> 2); // reduce by 25%
-			}
-			iter++;
-			try {
-                if(_alts.empty()) {
-                    VMSG("Using parameters --bmax " << bmax);
-                    if(dcv == 0) {
-                        VMSG_NL(" and *no difference cover*");
-                    } else {
-                        VMSG_NL(" --dcv " << dcv);
-                    }
-                    {
-                        VMSG_NL("  Doing ahead-of-time memory usage test");
-                        // Make a quick-and-dirty attempt to force a bad_alloc iff
-                        // we would have thrown one eventually as part of
-                        // constructing the DifferenceCoverSample
-                        dcv <<= 1;
-                        index_t sz = (index_t)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
-                        if(_nthreads > 1) sz *= (_nthreads + 1);
-                        AutoArray<uint8_t> tmp(sz, EBWT_CAT);
-                        dcv >>= 1;
-                        // Likewise with the KarkkainenBlockwiseSA
-                        sz = (index_t)KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
-                        AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
-                        // Now throw in the 'ftab' and 'isaSample' structures
-                        // that we'll eventually allocate in buildToDisk
-                        AutoArray<index_t> ftab(_gh._ftabLen * 2, EBWT_CAT);
-                        AutoArray<uint8_t> side(_gh._sideSz, EBWT_CAT);
-                        // Grab another 20 MB out of caution
-                        AutoArray<uint32_t> extra(20*1024*1024, EBWT_CAT);
-                        // If we made it here without throwing bad_alloc, then we
-                        // passed the memory-usage stress test
-                        VMSG("  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv);
-                        if(isPacked()) {
-                            VMSG(" --packed");
-                        }
-                        VMSG_NL("");
-                    }
-                    VMSG_NL("Constructing suffix-array element generator");
-                    KarkkainenBlockwiseSA<TStr> bsa(s, bmax, _nthreads, dcv, seed, _sanity, _passMemExc, _verbose, outfile);
-                    assert(bsa.suffixItrIsReset());
-                    assert_eq(bsa.size(), s.length()+1);
-                    VMSG_NL("Converting suffix-array elements to index image");
-                    buildToDisk(bsa, s, out1, out2);
-                } else {
-                    RefGraph<index_t>* graph = new RefGraph<index_t>(
-                                                                     s,
-                                                                     szs,
-                                                                     _alts,
-                                                                     _haplotypes,
-                                                                     outfile,
-                                                                     _nthreads,
-                                                                     verbose);
-                    PathGraph<index_t>* pg = new PathGraph<index_t>(
-                                                                    *graph,
-                                                                    outfile,
-                                                                    std::numeric_limits<index_t>::max(),
-                                                                    _nthreads,
-                                                                    verbose);
 
-                    if(verbose) { cerr << "Generating edges... " << endl; }
-                    if(!pg->generateEdges(*graph)) { return; }
-                    // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
-                    _gh.init(
-                             _gh.len(),
-                             pg->getNumEdges(),
-                             pg->getNumNodes(),
-                             _gh.lineRate(),
-                             _gh.offRate(),
-                             _gh.ftabChars(),
-                             0,
-                             _gh.entireReverse());
-                    buildToDisk(*pg, s, out1, out2);
-                    delete pg; pg = NULL;
-                    delete graph; graph = NULL;
+        if(!_repeat) {
+            // Look for bmax/dcv parameters that work.
+            while(true) {
+                if(!first && bmax < 40 && _passMemExc) {
+                    cerr << "Could not find approrpiate bmax/dcv settings for building this index." << endl;
+                    if(!isPacked()) {
+                        // Throw an exception exception so that we can
+                        // retry using a packed string representation
+                        throw bad_alloc();
+                    } else {
+                        cerr << "Already tried a packed string representation." << endl;
+                    }
+                    cerr << "Please try indexing this reference on a computer with more memory." << endl;
+                    if(sizeof(void*) == 4) {
+                        cerr << "If this computer has more than 4 GB of memory, try using a 64-bit executable;" << endl
+                        << "this executable is 32-bit." << endl;
+                    }
+                    throw 1;
                 }
-                out1.flush(); out2.flush();
-				if(out1.fail() || out2.fail()) {
-					cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
-					throw 1;
-				}
-				break;
-			} catch(bad_alloc& e) {
-				if(_passMemExc) {
-					VMSG_NL("  Ran out of memory; automatically trying more memory-economical parameters.");
-				} else {
-					cerr << "Out of memory while constructing suffix array.  Please try using a smaller" << endl
-						 << "number of blocks by specifying a smaller --bmax or a larger --bmaxdivn" << endl;
-					throw 1;
-				}
-			}
-			first = false;
-		}
-		assert(repOk());
-		// Now write reference sequence names on the end
-		assert_eq(this->_refnames.size(), this->_nPat);
-		for(index_t i = 0; i < this->_refnames.size(); i++) {
-			out1 << this->_refnames[i].c_str() << endl;
-		}
-		out1 << '\0';
-		out1.flush(); out2.flush();
-		if(out1.fail() || out2.fail()) {
-			cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
-			throw 1;
-		}
+                if(!first) {
+                    out1.seekp(out1pos);
+                    out2.seekp(out2pos);
+                }
+                if(dcv > 4096) dcv = 4096;
+                if((iter % 6) == 5 && dcv < 4096 && dcv != 0) {
+                    dcv <<= 1; // double difference-cover period
+                } else {
+                    bmax -= (bmax >> 2); // reduce by 25%
+                }
+                iter++;
+                try {
+                    if(_alts.empty()) {
+                        VMSG("Using parameters --bmax " << bmax);
+                        if(dcv == 0) {
+                            VMSG_NL(" and *no difference cover*");
+                        } else {
+                            VMSG_NL(" --dcv " << dcv);
+                        }
+                        {
+                            VMSG_NL("  Doing ahead-of-time memory usage test");
+                            // Make a quick-and-dirty attempt to force a bad_alloc iff
+                            // we would have thrown one eventually as part of
+                            // constructing the DifferenceCoverSample
+                            dcv <<= 1;
+                            index_t sz = (index_t)DifferenceCoverSample<TStr>::simulateAllocs(s, dcv >> 1);
+                            if(_nthreads > 1) sz *= (_nthreads + 1);
+                            AutoArray<uint8_t> tmp(sz, EBWT_CAT);
+                            dcv >>= 1;
+                            // Likewise with the KarkkainenBlockwiseSA
+                            sz = (index_t)KarkkainenBlockwiseSA<TStr>::simulateAllocs(s, bmax);
+                            AutoArray<uint8_t> tmp2(sz, EBWT_CAT);
+                            // Now throw in the 'ftab' and 'isaSample' structures
+                            // that we'll eventually allocate in buildToDisk
+                            AutoArray<index_t> ftab(_gh._ftabLen * 2, EBWT_CAT);
+                            AutoArray<uint8_t> side(_gh._sideSz, EBWT_CAT);
+                            // Grab another 20 MB out of caution
+                            AutoArray<uint32_t> extra(20*1024*1024, EBWT_CAT);
+                            // If we made it here without throwing bad_alloc, then we
+                            // passed the memory-usage stress test
+                            VMSG("  Passed!  Constructing with these parameters: --bmax " << bmax << " --dcv " << dcv);
+                            if(isPacked()) {
+                                VMSG(" --packed");
+                            }
+                            VMSG_NL("");
+                        }
+                        VMSG_NL("Constructing suffix-array element generator");
+                        KarkkainenBlockwiseSA<TStr> bsa(s, bmax, _nthreads, dcv, seed, _sanity, _passMemExc, _verbose, outfile);
+                        assert(bsa.suffixItrIsReset());
+                        assert_eq(bsa.size(), s.length()+1);
+                        VMSG_NL("Converting suffix-array elements to index image");
+                        buildToDisk(bsa, s, out1, out2);
+                    } else {
+                        RefGraph<index_t>* graph = new RefGraph<index_t>(
+                                                                         s,
+                                                                         szs,
+                                                                         _alts,
+                                                                         _haplotypes,
+                                                                         outfile,
+                                                                         _nthreads,
+                                                                         verbose);
+                        PathGraph<index_t>* pg = new PathGraph<index_t>(
+                                                                        *graph,
+                                                                        outfile,
+                                                                        std::numeric_limits<index_t>::max(),
+                                                                        _nthreads,
+                                                                        verbose);
+
+                        if(verbose) { cerr << "Generating edges... " << endl; }
+                        if(!pg->generateEdges(*graph)) { return; }
+                        // Re-initialize GFM parameters to reflect real number of edges (gbwt string)
+                        _gh.init(
+                                 _gh.len(),
+                                 pg->getNumEdges(),
+                                 pg->getNumNodes(),
+                                 _gh.lineRate(),
+                                 _gh.offRate(),
+                                 _gh.ftabChars(),
+                                 0,
+                                 _gh.entireReverse());
+                        buildToDisk(*pg, s, out1, out2);
+                        delete pg; pg = NULL;
+                        delete graph; graph = NULL;
+                    }
+                    out1.flush(); out2.flush();
+                    if(out1.fail() || out2.fail()) {
+                        cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
+                        throw 1;
+                    }
+                    break;
+                } catch(bad_alloc& e) {
+                    if(_passMemExc) {
+                        VMSG_NL("  Ran out of memory; automatically trying more memory-economical parameters.");
+                    } else {
+                        cerr << "Out of memory while constructing suffix array.  Please try using a smaller" << endl
+                        << "number of blocks by specifying a smaller --bmax or a larger --bmaxdivn" << endl;
+                        throw 1;
+                    }
+                }
+                first = false;
+            }
+            assert(repOk());
+
+            // Now write reference sequence names on the end
+            assert_eq(this->_refnames.size(), this->_nPat);
+            for(index_t i = 0; i < this->_refnames.size(); i++) {
+                out1 << this->_refnames[i].c_str() << endl;
+            }
+            out1 << '\0';
+            out1.flush(); out2.flush();
+            if(out1.fail() || out2.fail()) {
+                cerr << "An error occurred writing the index to disk.  Please check if the disk is full." << endl;
+                throw 1;
+            }
+        }
 		VMSG_NL("Returning from initFromVector");
 	}
 	
@@ -2072,7 +2439,9 @@ public:
 	bool        sanityCheck() const  { return _sanity; }
 	EList<string>& refnames()        { return _refnames; }
     bool        fw() const           { return fw_; }
-    
+    bool        repeat() const       { return _repeat; }
+    const EList<uint8_t>& getReadIncluded() const { return _readIncluded; }
+
 #ifdef POPCNT_CAPABILITY
     bool _usePOPCNTinstruction;
 #endif
@@ -2439,6 +2808,22 @@ public:
         }
     }
 
+    static int getIndexVersion() {
+        int major_version = 0, minor_version = 0;
+        string extra_version;
+        readProgramVersion(major_version, minor_version, extra_version);
+        int version = 2; // HISAT2
+        version = (version << 8) | (major_version & 0xff);
+        version = (version << 8) | (minor_version & 0xff);
+        version = version << 8;
+        if(extra_version == "alpha") {
+            version |= 0x1;
+        } else if(extra_version == "beta") {
+            version |= 0x2;
+        }
+        return version;
+    }
+
 	/**
 	 * Pretty-print the Ebwt to the given output stream.
 	 */
@@ -2506,13 +2891,13 @@ public:
 
 	// Building
 	template <typename TStr> static TStr join(EList<TStr>& l, uint32_t seed);
-	template <typename TStr> static TStr join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed);
+	template <typename TStr> static void join(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, uint32_t seed, TStr& s, bool include_rc = false, bool CGtoTG = false);
 	template <typename TStr> void joinToDisk(EList<FileBuf*>& l, EList<RefRecord>& szs, index_t sztot, const RefReadInParams& refparams, TStr& ret, ostream& out1, ostream& out2);
-	template <typename TStr> void buildToDisk(PathGraph<index_t>& gbwt, const TStr& s, ostream& out1, ostream& out2);
-    template <typename TStr> void buildToDisk(InorderBlockwiseSA<TStr>& sa, const TStr& s, ostream& out1, ostream& out2);
+	template <typename TStr> void buildToDisk(PathGraph<index_t>& gbwt, const TStr& s, ostream& out1, ostream& out2, streampos headerPos = -1);
+    template <typename TStr> void buildToDisk(InorderBlockwiseSA<TStr>& sa, const TStr& s, ostream& out1, ostream& out2, streampos headerPos = -1);
 
 	// I/O
-	void readIntoMemory(int needEntireRev, bool loadSASamp, bool loadFtab, bool loadRstarts, bool justHeader, GFMParams<index_t> *params, bool mmSweep, bool loadNames, bool startVerbose);
+	void readIntoMemory(int needEntireRev, bool loadSASamp, bool loadFtab, bool loadRstarts, bool justHeader, GFMParams<index_t> *params, bool mmSweep, bool loadNames, bool startVerbose, bool subIndex = false);
 	void writeFromMemory(bool justHeader, ostream& out1, ostream& out2) const;
 	void writeFromMemory(bool justHeader, const string& out1, const string& out2) const;
 
@@ -3886,6 +4271,7 @@ public:
 	bool       _useMm;        /// use memory-mapped files to hold the index
 	bool       useShmem_;     /// use shared memory to hold large parts of the index
 	EList<string> _refnames; /// names of the reference sequences
+    EList<string> _refnames_nospace; // names of the reference sequences (names stop at space)
     char *mmFile1_;
 	char *mmFile2_;
     int _nthreads;
@@ -3911,9 +4297,16 @@ public:
 	static const int      default_ftabChars = 10;
 	static const bool     default_bigEndian = false;
     
+    // data used to build an index
     EList<ALT<index_t> >       _alts;
     EList<string>              _altnames;
     EList<Haplotype<index_t> > _haplotypes;
+    RepeatDB<index_t>          _repeatdb;
+    EList<RB_KmerTable>        _repeat_kmertables;
+
+    bool _repeat;
+    EList<pair<index_t, index_t> > _readLens;
+    EList<uint8_t>                 _readIncluded;
 
 protected:
 
@@ -4081,18 +4474,24 @@ TStr GFM<index_t>::join(EList<TStr>& l, uint32_t seed) {
  */
 template <typename index_t>
 template <typename TStr>
-TStr GFM<index_t>::join(EList<FileBuf*>& l,
-                EList<RefRecord>& szs,
-                index_t sztot,
-                const RefReadInParams& refparams,
-                uint32_t seed)
+void GFM<index_t>::join(EList<FileBuf*>& l,
+                        EList<RefRecord>& szs,
+                        index_t sztot,
+                        const RefReadInParams& refparams,
+                        uint32_t seed,
+                        TStr& s,
+                        bool include_rc,
+						bool CGtoTG)
 {
 	RandomSource rand; // reproducible given same seed
 	rand.init(seed);
 	RefReadInParams rpcp = refparams;
-	TStr ret;
 	index_t guessLen = sztot;
-	ret.resize(guessLen);
+    if(include_rc) {
+        s.resize(guessLen << 1);
+    } else {
+        s.resize(guessLen);
+    }
 	ASSERT_ONLY(index_t szsi = 0);
 	TIndexOffU dstoff = 0;
 	for(index_t i = 0; i < l.size(); i++) {
@@ -4100,17 +4499,35 @@ TStr GFM<index_t>::join(EList<FileBuf*>& l,
 		assert(!l[i]->eof());
 		bool first = true;
 		while(!l[i]->eof()) {
-			RefRecord rec = fastaRefReadAppend(*l[i], first, ret, dstoff, rpcp);
+			RefRecord rec = fastaRefReadAppend(*l[i], first, s, dstoff, rpcp);
 			first = false;
 			index_t bases = (index_t)rec.len;
-			assert_eq(rec.off, szs[szsi].off);
+            assert_eq(rec.off, szs[szsi].off);
 			assert_eq(rec.len, szs[szsi].len);
 			assert_eq(rec.first, szs[szsi].first);
 			ASSERT_ONLY(szsi++);
 			if(bases == 0) continue;
 		}
 	}
-	return ret;
+
+    // Change 'C' in CG to 'T' so that CG becomes TG
+    if(CGtoTG) {
+        for(TIndexOffU i = 0; i + 1 < guessLen; i++) {
+            int nt1 = s[i], nt2 = s[i+1];
+            if(nt1 == 1 && nt2 == 2) {
+                s[i] = 3;
+            }
+        }
+    }
+
+    // Append reverse complement
+    if(include_rc) {
+        for(TIndexOffU i = 0; i < guessLen; i++) {
+            int nt = s[guessLen - i - 1];
+            assert_range(0, 3, nt);
+            s[guessLen + i] = dnacomp[nt];
+        }
+    }
 }
 
 /**
@@ -4226,7 +4643,7 @@ void GFM<index_t>::joinToDisk(
 			//index_t seq = seqsRead-1;
 #ifndef NDEBUG
             if(bases > 0) {
-			    ASSERT_ONLY(entsWritten++);
+                ASSERT_ONLY(entsWritten++);
             }
 #endif
 			// This is where rstarts elements are written to the output stream
@@ -4277,7 +4694,8 @@ void GFM<index_t>::buildToDisk(
                                PathGraph<index_t>& gbwt,
                                const TStr& s,
                                ostream& out1,
-                               ostream& out2)
+                               ostream& out2,
+                               streampos headerPos)
 {
     const GFMParams<index_t>& gh = this->_gh;
 	assert(gh.repOk());
@@ -4287,7 +4705,11 @@ void GFM<index_t>::buildToDisk(
 	
 	index_t  gbwtLen = gh._gbwtLen;
     streampos out1pos = out1.tellp();
-    out1.seekp(8 + sizeof(index_t));
+    if(headerPos < 0) {
+        out1.seekp(8 + sizeof(index_t));
+    } else {
+        out1.seekp(headerPos);
+    }
     writeIndex<index_t>(out1, gbwtLen, this->toBe());
     writeIndex<index_t>(out1, gh._numNodes, this->toBe());
     out1.seekp(out1pos);
@@ -4667,7 +5089,11 @@ void GFM<index_t>::buildToDisk(
 	}
     // Write eftab to primary file
     out1pos = out1.tellp();
-    out1.seekp(24 + sizeof(index_t) * 3);
+    if(headerPos < 0) {
+        out1.seekp(24 + sizeof(index_t) * 3);
+    } else {
+        out1.seekp((int)headerPos + 16 + sizeof(index_t) * 2);
+    }
     writeIndex<index_t>(out1, eftabLen, this->toBe());
     out1.seekp(out1pos);
     for(index_t i = 0; i < eftabLen; i++) {
@@ -4707,7 +5133,8 @@ void GFM<index_t>::buildToDisk(
                                InorderBlockwiseSA<TStr>& sa,
                                const TStr& s,
                                ostream& out1,
-                               ostream& out2)
+                               ostream& out2,
+                               streampos headerPos)
 {
     const GFMParams<index_t>& gh = this->_gh;
     assert(gh.repOk());
@@ -4720,7 +5147,11 @@ void GFM<index_t>::buildToDisk(
     index_t  gbwtLen = gh._gbwtLen;
     assert_eq(len + 1, gbwtLen);
     streampos out1pos = out1.tellp();
-    out1.seekp(8 + sizeof(index_t));
+    if(headerPos < 0) {
+        out1.seekp(8 + sizeof(index_t));
+    } else {
+        out1.seekp(headerPos);
+    }
     writeIndex<index_t>(out1, gbwtLen, this->toBe());
     writeIndex<index_t>(out1, gh._numNodes, this->toBe());
     out1.seekp(out1pos);
@@ -5023,7 +5454,11 @@ void GFM<index_t>::buildToDisk(
     }
     // Write eftab to primary file
     out1pos = out1.tellp();
-    out1.seekp(24 + sizeof(index_t) * 3);
+    if(headerPos < 0) {
+        out1.seekp(24 + sizeof(index_t) * 3);
+    } else {
+        out1.seekp((int)headerPos + 16 + sizeof(index_t) * 2);
+    }
     writeIndex<index_t>(out1, eftabLen, this->toBe());
     out1.seekp(out1pos);
     for(index_t i = 0; i < eftabLen; i++) {
@@ -5378,13 +5813,14 @@ void GFM<index_t>::readIntoMemory(
                                   GFMParams<index_t> *params,
                                   bool mmSweep,
                                   bool loadNames,
-                                  bool startVerbose)
+                                  bool startVerbose,
+                                  bool subIndex)
 {
     bool switchEndian; // dummy; caller doesn't care
 #ifdef BOWTIE_MM
     char *mmFile[] = { NULL, NULL };
 #endif
-    if(_in1Str.length() > 0) {
+    if(_in1Str.length() > 0 && !subIndex) {
         if(_verbose || startVerbose) {
             cerr << "  About to open input files: ";
             logTime(cerr);
@@ -5463,50 +5899,56 @@ void GFM<index_t>::readIntoMemory(
     
     // Read endianness hints from both streams
     size_t bytesRead = 0;
-    switchEndian = false;
-    uint32_t one = readU32(_in1, switchEndian); // 1st word of primary stream
-    bytesRead += 4;
-    if(loadSASamp) {
+    if(!subIndex) {
+        switchEndian = false;
+        uint32_t one = readU32(_in1, switchEndian); // 1st word of primary stream
+        bytesRead += 4;
+        if(loadSASamp) {
 #ifndef NDEBUG
-        assert_eq(one, readU32(_in2, switchEndian)); // should match!
+            assert_eq(one, readU32(_in2, switchEndian)); // should match!
 #else
-        readU32(_in2, switchEndian);
+            readU32(_in2, switchEndian);
 #endif
-    }
-    if(one != 1) {
-        assert_eq((1u<<24), one);
-        assert_eq(1, endianSwapU32(one));
-        switchEndian = true;
-    }
-    
-    // Can't switch endianness and use memory-mapped files; in order to
-    // support this, someone has to modify the file to switch
-    // endiannesses appropriately, and we can't do this inside Bowtie
-    // or we might be setting up a race condition with other processes.
-    if(switchEndian && _useMm) {
-        cerr << "Error: Can't use memory-mapped files when the index is the opposite endianness" << endl;
-        throw 1;
-    }
-    
-    // Reads header entries one by one from primary stream
-    int index_version = (int)readU32(_in1, switchEndian); bytesRead += 4;
-    int major_index_version, minor_index_version;
-    string index_version_extra;
-    readIndexVersion(index_version, major_index_version, minor_index_version, index_version_extra);
-    int major_program_version, minor_program_version;
-    string program_version_extra;
-    readProgramVersion(major_program_version, minor_program_version, program_version_extra);
-    if(major_program_version < major_index_version ||
-       (major_program_version == major_index_version && minor_program_version < minor_index_version)) {
-        cerr << "Warning: the current version of HISAT2 (" << HISAT2_VERSION << ") is older than the version (2."
-        << major_index_version << "." << minor_index_version;
-        if(index_version_extra.length() > 0) {
-            cerr << "-" << index_version_extra;
         }
-        cerr << ") used to build the index." << endl;
-        cerr << "         Users are strongly recommended to update HISAT2 to the latest version." << endl;
+        if(one != 1) {
+            assert_eq((1u<<24), one);
+            assert_eq(1, endianSwapU32(one));
+            switchEndian = true;
+        }
+
+        _toBigEndian = switchEndian;
+
+        // Can't switch endianness and use memory-mapped files; in order to
+        // support this, someone has to modify the file to switch
+        // endiannesses appropriately, and we can't do this inside Bowtie
+        // or we might be setting up a race condition with other processes.
+        if(switchEndian && _useMm) {
+            cerr << "Error: Can't use memory-mapped files when the index is the opposite endianness" << endl;
+            throw 1;
+        }
+
+        // Reads header entries one by one from primary stream
+        int index_version = (int)readU32(_in1, switchEndian); bytesRead += 4;
+        int major_index_version, minor_index_version;
+        string index_version_extra;
+        readIndexVersion(index_version, major_index_version, minor_index_version, index_version_extra);
+        int major_program_version, minor_program_version;
+        string program_version_extra;
+        readProgramVersion(major_program_version, minor_program_version, program_version_extra);
+        if(major_program_version < major_index_version ||
+           (major_program_version == major_index_version && minor_program_version < minor_index_version)) {
+            cerr << "Warning: the current version of HISAT2 (" << HISAT2_VERSION << ") is older than the version (2."
+            << major_index_version << "." << minor_index_version;
+            if(index_version_extra.length() > 0) {
+                cerr << "-" << index_version_extra;
+            }
+            cerr << ") used to build the index." << endl;
+            cerr << "         Users are strongly recommended to update HISAT2 to the latest version." << endl;
+        }
+    } else {
+        switchEndian = _toBigEndian;
     }
-    
+
     index_t len       = readIndex<index_t>(_in1, switchEndian);
     bytesRead += sizeof(index_t);
     index_t gbwtLen       = readIndex<index_t>(_in1, switchEndian);
@@ -5982,13 +6424,16 @@ void GFM<index_t>::readIntoMemory(
     
     // Be kind
     if(deleteGh) delete gh;
+
+    if(!subIndex) {
 #ifdef BOWTIE_MM
-    fseek(_in1, 0, SEEK_SET);
-    if(loadSASamp) fseek(_in2, 0, SEEK_SET);
+        fseek(_in1, 0, SEEK_SET);
+        if(loadSASamp) fseek(_in2, 0, SEEK_SET);
 #else
-    rewind(_in1);
-    if(loadSASamp) rewind(_in2);
+        rewind(_in1);
+        if(loadSASamp) rewind(_in2);
 #endif
+    }
 }
 
 /**
@@ -6149,25 +6594,13 @@ void GFM<index_t>::writeFromMemory(bool justHeader,
     uint32_t be = this->toBe();
     assert(out1.good());
     assert(out2.good());
-    
-    int major_version = 0, minor_version = 0;
-    string extra_version;
-    readProgramVersion(major_version, minor_version, extra_version);
-    int version = 2; // HISAT2
-    version = (version << 8) | (major_version & 0xff);
-    version = (version << 8) | (minor_version & 0xff);
-    version = version << 8;
-    if(extra_version == "alpha") {
-        version |= 0x1;
-    } else if(extra_version == "beta") {
-        version |= 0x2;
-    }
-    
+
     // When building an Ebwt, these header parameters are known
     // "up-front", i.e., they can be written to disk immediately,
     // before we join() or buildToDisk()
     writeI32(out1, 1, be); // endian hint for priamry stream
     writeI32(out2, 1, be); // endian hint for secondary stream
+    int version = getIndexVersion();
     writeI32(out1, version, be); // version
     writeIndex<index_t>(out1, gh._len, be); // length of string (and bwt and suffix array)
     writeIndex<index_t>(out1, 0,       be); // dummy for gbwt len

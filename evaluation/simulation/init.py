@@ -13,38 +13,26 @@ def extract_pair(RNA):
     out_file = open("sim_paired.sam", "w")
     hits_file = open("sim.sam")
     for line in hits_file:
-        if line[0] == '@':
+        if line.startswith('@'):
             continue
 
-        cols = line[:-1].split()
-        read_id, flag, chr1, pos1, mapQ, cigar1, chr2, pos2 = cols[:8]
-        if len(read_id) >= 3 and read_id[-2] == "/":
-            read_id = read_id[:-2]
-
-        if read_id.find("seq.") == 0:
-            read_id = read_id[4:]
+        fields = line[:-1].split()
+        read_id, flag, chr1, pos1, mapQ, cigar1, chr2, pos2 = fields[:8]
 
         flag = int(flag)
+        assert flag & 0x4 == 0
         pos1, pos2 = int(pos1), int(pos2)
 
-        if flag & 0x4 != 0:
-            continue
-
-        TI, NM1 = "", ""
-        for i in range(11, len(cols)):
-            col = cols[i]
-            if col[:2] == "TI":
-                TI = "\t" + col[5:]
-            # "nM" from STAR
-            elif col[:2] == "NM" or col[:2] == "nM":
-                NM1 = col
+        TI, NM1, Zs1 = "", "", ""
+        for field in fields[11:]:
+            if field.startswith("TI"):
+                TI = "\t" + field
+            elif field.startswith("NM"):
+                NM1 = "\t" + field
+            elif field.startswith("Zs"):
+                Zs1 = "\t" + field
         assert NM1 != ""
-        
-        if chr2 == '*':
-            continue
-
-        if chr2 == '=':
-            chr2 = chr1
+        assert chr1 == chr2
 
         me = "%s\t%s\t%d" % (read_id, chr1, pos1)
         partner = "%s\t%s\t%d" % (read_id, chr2, pos2)
@@ -52,13 +40,13 @@ def extract_pair(RNA):
             maps = read_dic[partner]
             for map in maps:
                 if map[0] == me:
-                    cigar2, NM2 = map[1:3]
+                    cigar2, NM2, Zs2 = map[1:4]
                     if int(pos2) > int(pos1):
-                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s%s\t%s\t%s" % \
-                                (read_id, chr1, pos1, cigar1, chr2, pos2, cigar2, TI, NM1, NM2)
+                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s%s%s%s%s%s" % \
+                                (read_id, chr1, pos1, cigar1, chr2, pos2, cigar2, TI, NM1, NM2, Zs1, Zs2)
                     else:
-                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s%s\t%s\t%s" % \
-                                (read_id, chr2, pos2, cigar2, chr1, pos1, cigar1, TI, NM2, NM1)
+                        p_str = "%s\t%s\t%d\t%s\t%s\t%d\t%s%s%s%s%s%s" % \
+                                (read_id, chr2, pos2, cigar2, chr1, pos1, cigar1, TI, NM2, NM1, Zs2, Zs1)
 
                     if p_str not in pair_reported:
                         pair_reported.add(p_str)
@@ -67,7 +55,7 @@ def extract_pair(RNA):
         if not me in read_dic:
             read_dic[me] = []
 
-        read_dic[me].append([partner, cigar1, NM1])
+        read_dic[me].append([partner, cigar1, NM1, Zs1])
 
         
     hits_file.close()
@@ -75,16 +63,31 @@ def extract_pair(RNA):
 
 
 def init_reads(read_dir, RNA):
-    if RNA:
-        sam_cmd = "awk '{TI = $NF; NM = $13; if ($2 < 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' sim.sam > sim_1.sam"
-    else:
-        sam_cmd = "awk '{NM = $13; if ($2 < 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"NM}' sim.sam > sim_1.sam"
-    os.system(sam_cmd)
-    if RNA:
-        sam_cmd = "awk '{TI = $NF; NM = $13; if ($2 >= 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"substr(TI,6)\"\\t\"NM}' sim.sam > sim_2.sam"
-    else:
-        sam_cmd = "awk '{NM = $13; if ($2 >= 128) print $1\"\\t\"$3\"\\t\"$4\"\\t\"$6\"\\t\"NM}' sim.sam > sim_2.sam"
-    os.system(sam_cmd)
+    sim1_file = open("sim_1.sam", 'w')
+    sim2_file = open("sim_2.sam", 'w')
+
+    for line in open("sim.sam"):
+        if line.startswith('@'):
+            continue
+        
+        fields = line[:-1].split('\t')
+        read_id, flag, chr, pos, _, cigar = fields[:6]
+        left_read = int(flag) < 128
+        
+        NM, TI, Zs  = "", "", ""
+        for field in fields:
+            if field.startswith("NM"):
+                NM = "\t" + field
+            elif field.startswith("TI"):
+                TI = "\t" + field
+            elif field.startswith("Zs"):
+                Zs = "\t" + field
+
+        print >> (sim1_file if left_read else sim2_file), \
+            "%s\t%s\t%s\t%s%s%s%s" % (read_id, chr, pos, cigar, TI, NM, Zs)
+
+    sim1_file.close()
+    sim2_file.close()
     extract_pair(RNA)
 
 
@@ -242,16 +245,11 @@ def classify_reads(RNA):
                 return junctions
 
             for line in sam_file:
+                fields = line[:-1].split()
                 if paired:
-                    if RNA:
-                        read_id, chr, pos, cigar, chr2, pos2, cigar2, trans_id, NM, NM2 = line[:-1].split()
-                    else:
-                        read_id, chr, pos, cigar, chr2, pos2, cigar2, NM, NM2 = line[:-1].split()
+                    read_id, chr, pos, cigar, chr2, pos2, cigar2 = fields[:7]
                 else:
-                    if RNA:
-                        read_id, chr, pos, cigar, trans_id, NM = line[:-1].split()
-                    else:
-                        read_id, chr, pos, cigar, NM = line[:-1].split()
+                    read_id, chr, pos, cigar = fields[:4]
 
                 read_id = int(read_id)
                 readtype2 = get_read_type(cigar)

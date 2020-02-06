@@ -224,6 +224,7 @@ struct ReadBWTHit {
         _done = false;
         _numPartialSearch = 0;
         _numUniqueSearch = 0;
+        _repeat = false;
         _partialHits.clear();
 	}
 
@@ -238,6 +239,7 @@ struct ReadBWTHit {
         _done = false;
         _numPartialSearch = 0;
         _numUniqueSearch = 0;
+        _repeat = false;
         _partialHits.clear();
 	}
     
@@ -259,6 +261,7 @@ struct ReadBWTHit {
     
     index_t len() const { return _len; }
     index_t cur() const { return _cur; }
+    bool    repeat() const { return _repeat; }
     
     index_t offsetSize()             { return (index_t)_partialHits.size(); }
     size_t  numPartialSearch()       { return _numPartialSearch; }
@@ -380,6 +383,7 @@ struct ReadBWTHit {
     index_t  _numPartialSearch;
     index_t  _numUniqueSearch;
     index_t  _cur_local;
+    bool     _repeat;
     
     EList<BWTHit<index_t> >       _partialHits;
 };
@@ -434,6 +438,7 @@ struct GenomeHit {
     _tidx((index_t)INDEX_MAX),
     _toff((index_t)INDEX_MAX),
     _joinedOff((index_t)INDEX_MAX),
+    _repeat(false),
     _edits(NULL),
     _ht_list(NULL),
     _score(MIN_I64),
@@ -462,6 +467,7 @@ struct GenomeHit {
              otherHit._toff,
              otherHit._joinedOff,
              *(otherHit._sharedVars),
+             otherHit._repeat,
              otherHit._edits,
              otherHit._ht_list,
              otherHit._score,
@@ -480,6 +486,7 @@ struct GenomeHit {
              otherHit._toff,
              otherHit._joinedOff,
              *(otherHit._sharedVars),
+             otherHit._repeat,
              otherHit._edits,
              otherHit._ht_list,
              otherHit._score,
@@ -517,6 +524,7 @@ struct GenomeHit {
               index_t                   toff,
               index_t                   joinedOff,
               SharedTempVars<index_t>&  sharedVars,
+              bool                      repeat = false,
               EList<Edit>*              edits = NULL,
               EList<pair<index_t, index_t> >* ht_list = NULL,
               int64_t                   score = 0,
@@ -531,6 +539,7 @@ struct GenomeHit {
         _tidx = tidx;
         _toff = toff;
         _joinedOff = joinedOff;
+        _repeat = repeat;
 		_score = score;
         _localscore = localscore;
         _splicescore = splicescore;
@@ -582,6 +591,7 @@ struct GenomeHit {
                      const GFM<index_t>&        gfm,
                      const BitPairReference&    ref,
                      const ALTDB<index_t>&      altdb,
+                     const RepeatDB<index_t>&   repeatdb,
                      SpliceSiteDB&              ssdb,
                      SwAligner&                 swa,
                      SwMetrics&                 swm,
@@ -605,6 +615,7 @@ struct GenomeHit {
                 const GFM<index_t>&        gfm,
                 const BitPairReference&    ref,
                 const ALTDB<index_t>&      altdb,
+                const RepeatDB<index_t>&   repeatdb,
                 SpliceSiteDB&              ssdb,
                 SwAligner&                 swa,
                 SwMetrics&                 swm,
@@ -659,12 +670,12 @@ struct GenomeHit {
     /*
      * Find offset differences due to deletions
      */
-    static void findOffDiffs(
-                             const GFM<index_t>&         gfm,
-                             const ALTDB<index_t>&       altdb,
-                             index_t                     start,
-                             index_t                     end,
-                             EList<pair<index_t, int> >& offDiffs);
+    static index_t findOffDiffs(
+                                const GFM<index_t>&         gfm,
+                                const ALTDB<index_t>&       altdb,
+                                index_t                     start,
+                                index_t                     end,
+                                EList<pair<index_t, int> >& offDiffs);
     
     /*
      *
@@ -864,9 +875,28 @@ struct GenomeHit {
                        ref);
     }
     
+    // for repeat alignments
+    //  reverse fw
+    void reverse(const Read& rd)
+    {
+        _fw = !_fw;
+        index_t end = _trim5 + _rdoff + _len;
+        assert_leq(end, rd.length());
+        _rdoff = rd.length() - end;
+        index_t tmp_trim = _trim5;
+        _trim5 = _trim3;
+        _trim3 = tmp_trim;
+        Edit::invertPoss(*_edits, rd.length());
+        // complements
+        Edit::complement(*_edits);
+    }
+    
     index_t ref()    const { return _tidx; }
     index_t refoff() const { return _toff; }
     index_t fw()     const { return _fw; }
+    
+    bool    repeat() const { return _repeat; }
+    void    repeat(bool repeat) { _repeat = repeat;}
     
     index_t hitcount() const { return _hitcount; }
     
@@ -1196,6 +1226,109 @@ struct GenomeHit {
 	bool repOk(const Read& rd, const BitPairReference& ref);
 #endif
     
+    void replace_edits_with_alts(const Read&      rd,
+                                 const EList<ALT<index_t> >& alts,
+                                 SpliceSiteDB&    ssdb,
+                                 const Scoring&   sc,
+                                 index_t          minK_local,
+                                 index_t          minIntronLen,
+                                 index_t          maxIntronLen,
+                                 index_t          minAnchorLen,
+                                 index_t          minAnchorLen_noncan,
+                                 const            BitPairReference& ref) {
+        assert(inited());
+        if(alts.size() <= 0)
+            return;
+        if(_edits->size() <= 0)
+            return;
+        
+        index_t joinedOff = _joinedOff;
+        int offset = 0;
+        size_t i = 0, next_i;
+        while(i < _edits->size()) {
+            next_i = i + 1;
+            Edit& ed = (*_edits)[i];
+            if(ed.type == EDIT_TYPE_SPL) {
+                assert(false);
+            } else if(ed.type == EDIT_TYPE_READ_GAP || ed.type == EDIT_TYPE_REF_GAP) {
+                for(; next_i < _edits->size(); next_i++) {
+                    Edit& next_ed = (*_edits)[next_i];
+                    if(ed.type != next_ed.type) break;
+                }
+            }
+
+            if(ed.snpID == (index_t)INDEX_MAX) {
+                ALT<index_t> cmp_alt;
+                cmp_alt.pos = joinedOff + ed.pos + offset;
+                index_t alt_i = (index_t)alts.bsearchLoBound(cmp_alt);
+                for(; alt_i < alts.size(); alt_i++) {
+                    const ALT<index_t>& alt = alts[alt_i];
+                    if(alt.left > cmp_alt.pos) break;
+                    if(ed.type == EDIT_TYPE_MM) {
+                        if(alt.type != ALT_SNP_SGL) continue;
+                        if("ACGT"[alt.seq] == ed.qchr) {
+                            ed.snpID = alt_i;
+                            break;
+                        }
+                    } else {
+                        size_t gap = next_i - i;
+                        if(ed.type == EDIT_TYPE_READ_GAP) {
+                            if(alt.type != ALT_SNP_DEL) continue;
+                            if(alt.len == gap) {
+                                for(size_t ii = i; ii < next_i; ii++) {
+                                    Edit& ii_ed = (*_edits)[ii];
+                                    ii_ed.snpID = alt_i;
+                                }
+                                break;
+                            }
+                        } else {
+                            assert_eq(ed.type, EDIT_TYPE_REF_GAP);
+                            if(alt.type != ALT_SNP_INS) continue;
+                            if(alt.len == gap) {
+                                uint64_t seq = 0;
+                                for(size_t ii = i; ii < next_i; ii++) {
+                                    Edit& ii_ed = (*_edits)[ii];
+                                    seq = (seq << 2) | asc2dna[ii_ed.qchr];
+                                }
+                                if(alt.seq == seq) {
+                                    for(size_t ii = i; ii < next_i; ii++) {
+                                        Edit& ii_ed = (*_edits)[ii];
+                                        ii_ed.snpID = alt_i;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if(ed.type == EDIT_TYPE_SPL) {
+                offset += ed.splLen;
+            } else if(ed.type == EDIT_TYPE_READ_GAP || ed.type == EDIT_TYPE_REF_GAP) {
+                size_t gap = next_i - i;
+                if(ed.type == EDIT_TYPE_READ_GAP) {
+                    assert_gt(joinedOff, gap);
+                    offset += gap;
+                } else {
+                    offset -= gap;
+                }
+            }
+            
+            i = next_i;
+        }
+        
+        calculateScore(rd,
+                       ssdb,
+                       sc,
+                       minK_local,
+                       minIntronLen,
+                       maxIntronLen,
+                       minAnchorLen,
+                       minAnchorLen_noncan,
+                       ref);
+    }
+    
 private:
     /**
 	 * Calculate alignment score
@@ -1221,6 +1354,7 @@ public:
     index_t         _tidx;
     index_t         _toff;
     index_t         _joinedOff;
+    bool            _repeat;
 	EList<Edit>*    _edits;
     EList<pair<index_t, index_t> >* _ht_list;
     int64_t         _score;
@@ -1289,6 +1423,7 @@ bool GenomeHit<index_t>::combineWith(
                                      const GFM<index_t>&        gfm,
                                      const BitPairReference&    ref,
                                      const ALTDB<index_t>&      altdb,
+                                     const RepeatDB<index_t>&   repeatdb,
                                      SpliceSiteDB&              ssdb,
                                      SwAligner&                 swa,
                                      SwMetrics&                 swm,
@@ -1772,6 +1907,7 @@ bool GenomeHit<index_t>::combineWith(
             }
         }
     } else {
+        index_t ins_len = 0;
         for(index_t i = 0; i < len; i++) {
             char rdc = seq[this_rdoff + i];
             char rfc = (i <= maxscorei ? refbuf[i] : refbuf2[i]);
@@ -1780,7 +1916,7 @@ bool GenomeHit<index_t>::combineWith(
             if(rdc != rfc) {
                 ALT<index_t> cmp_alt;
                 assert_geq(this_toff, this->_toff);
-                cmp_alt.pos = this->_joinedOff + i + (this_toff - this->_toff);
+                cmp_alt.pos = this->_joinedOff + i + (this_toff - this->_toff) - ins_len;
                 index_t alt_i = (index_t)altdb.alts().bsearchLoBound(cmp_alt);
                 index_t add_alt_i = std::numeric_limits<index_t>::max();
                 for(; alt_i < altdb.alts().size(); alt_i++) {
@@ -1798,6 +1934,8 @@ bool GenomeHit<index_t>::combineWith(
             }
             if(i == maxscorei) {
                 index_t left = this_toff + i + 1;
+                if(other_toff + other_len < len - i - 1)
+                    return false;
                 index_t right = other_toff + other_len - (len - i - 1);
                 index_t skipLen = 0;
                 if(del) {
@@ -1823,6 +1961,7 @@ bool GenomeHit<index_t>::combineWith(
                         _edits->push_back(e);
                     }
                     i += skipLen;
+                    ins_len += skipLen;
                 }
             }
         }
@@ -1894,6 +2033,7 @@ bool GenomeHit<index_t>::extend(
                                 const GFM<index_t>&        gfm,
                                 const BitPairReference&    ref,
                                 const ALTDB<index_t>&      altdb,
+                                const RepeatDB<index_t>&   repeatdb,
                                 SpliceSiteDB&              ssdb,
                                 SwAligner&                 swa,
                                 SwMetrics&                 swm,
@@ -1965,7 +2105,7 @@ bool GenomeHit<index_t>::extend(
                                          mm,
                                          &numNs);
         // Do not allow for any edits including known snps and splice sites when extending zero-length hit
-        if(_len == 0 && _edits->size() > 0) {
+        if(_len == 0 && mm == 0 && _edits->size() > 0) {
             _edits->clear();
             return false;
         }
@@ -2045,7 +2185,7 @@ bool GenomeHit<index_t>::extend(
                                              NULL,
                                              mm);
             // Do not allow for any edits including known snps and splice sites when extending zero-length hit
-            if(_len == 0 && _edits->size() > 0) {
+            if(_len == 0 && mm == 0 && _edits->size() > 0) {
                 _edits->clear();
                 return false;
             }
@@ -2068,7 +2208,9 @@ bool GenomeHit<index_t>::extend(
                             tmp_tlen,
                             true,        // reject straddlers?
                             straddled);  // straddled?
-        assert_eq(tmp_tidx, _tidx);
+        if(!gfm.repeat()) {
+            assert_eq(tmp_tidx, _tidx);
+        }
         assert_eq(tmp_toff, _toff);
     }
 #endif
@@ -2153,7 +2295,12 @@ bool GenomeHit<index_t>::adjustWithALT(
                                sharedVars);
         GenomeHit<index_t>& genomeHit = genomeHits.back();
         EList<pair<index_t, int> >& offDiffs = sharedVars.offDiffs;
-        findOffDiffs(gfm, altdb, (genomeHit._joinedOff >= width ? genomeHit._joinedOff - width : 0), genomeHit._joinedOff + width, offDiffs);
+        const index_t single_offDiffs_size = findOffDiffs(gfm,
+                                                          altdb,
+                                                          (genomeHit._joinedOff >= width ? genomeHit._joinedOff - width : 0),
+                                                          genomeHit._joinedOff + width,
+                                                          offDiffs);
+        assert_leq(single_offDiffs_size, offDiffs.size());
         
         const BTDnaString& seq = genomeHit._fw ? rd.patFw : rd.patRc;
         const EList<ALT<index_t> >& alts = altdb.alts();
@@ -2164,18 +2311,13 @@ bool GenomeHit<index_t>::adjustWithALT(
         // maxAltsTried is not directly related to the size of offDiffs,
         // but let's make the size of offDiffs is determined by maxAltsTried
         const index_t max_offDiffs_size = max<index_t>(4, gpol.maxAltsTried() / 4);
-        if(offDiffs.size() > max_offDiffs_size) offDiffs.resize(max_offDiffs_size);
+        if(offDiffs.size() - single_offDiffs_size > max_offDiffs_size) offDiffs.resize(single_offDiffs_size + max_offDiffs_size);
         for(index_t o = 0; o < offDiffs.size() && !found2; o++) {
             const pair<index_t, int>& offDiff = offDiffs[o];
 #ifndef NDEBUG
             if(o == 0) {
                 assert_eq(offDiff.first, 0);
                 assert_eq(offDiff.second, 0);
-            } else {
-                assert_leq(offDiffs[o-1].first, offDiff.first);
-                if(offDiffs[o-1].first == offDiff.first) {
-                    assert_lt(offDiffs[o-1].second, offDiff.second);
-                }
             }
 #endif
             if(offDiff.second >= 0) {
@@ -2187,6 +2329,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                 genomeHit._joinedOff = orig_joinedOff - offDiff.first;
                 genomeHit._toff = orig_toff - offDiff.first;
             }
+            
             genomeHit._edits->clear();
             ELList<Edit, 128, 4>& candidate_edits = sharedVars.candidate_edits;
             candidate_edits.clear();
@@ -2262,7 +2405,12 @@ bool GenomeHit<index_t>::adjustWithALT(
     assert(_sharedVars != NULL);
     EList<pair<index_t, int> >& offDiffs = _sharedVars->offDiffs;
     index_t width = 1 << (gfm.gh()._offRate + 2);
-    findOffDiffs(gfm, altdb, (this->_joinedOff >= width ? this->_joinedOff - width : 0), this->_joinedOff + width, offDiffs);
+    const index_t single_offDiffs_size = findOffDiffs(gfm,
+                                                      altdb,
+                                                      (this->_joinedOff >= width ? this->_joinedOff - width : 0),
+                                                      this->_joinedOff + width,
+                                                      offDiffs);
+    assert_leq(single_offDiffs_size, offDiffs.size());
     
     const BTDnaString& seq = _fw ? rd.patFw : rd.patRc;
     const EList<ALT<index_t> >& alts = altdb.alts();
@@ -2273,18 +2421,13 @@ bool GenomeHit<index_t>::adjustWithALT(
     // maxAltsTried is not directly related to the size of offDiffs,
     // but let's make the size of offDiffs is determined by maxAltsTried
     const index_t max_offDiffs_size = max<index_t>(4, gpol.maxAltsTried() / 4);
-    if(offDiffs.size() > max_offDiffs_size) offDiffs.resize(max_offDiffs_size);
+    if(offDiffs.size() - single_offDiffs_size > max_offDiffs_size) offDiffs.resize(single_offDiffs_size + max_offDiffs_size);
     for(index_t o = 0; o < offDiffs.size() && !found; o++) {
         const pair<index_t, int>& offDiff = offDiffs[o];
 #ifndef NDEBUG
         if(o == 0) {
             assert_eq(offDiff.first, 0);
             assert_eq(offDiff.second, 0);
-        } else {
-            assert_leq(offDiffs[o-1].first, offDiff.first);
-            if(offDiffs[o-1].first == offDiff.first) {
-                assert_lt(offDiffs[o-1].second, offDiff.second);
-            }
         }
 #endif
         if(offDiff.second >= 0) {
@@ -2399,17 +2542,17 @@ void GenomeHit<index_t>::findSSOffs(
  * Find offset differences due to indels
  */
 template <typename index_t>
-void GenomeHit<index_t>::findOffDiffs(
-                                      const GFM<index_t>&         gfm,
-                                      const ALTDB<index_t>&       altdb,
-                                      index_t                     start,
-                                      index_t                     end,
-                                      EList<pair<index_t, int> >& offDiffs)
+index_t GenomeHit<index_t>::findOffDiffs(
+                                         const GFM<index_t>&         gfm,
+                                         const ALTDB<index_t>&       altdb,
+                                         index_t                     start,
+                                         index_t                     end,
+                                         EList<pair<index_t, int> >& offDiffs)
 {
     offDiffs.clear();
     offDiffs.expand();
     offDiffs.back().first = offDiffs.back().second = 0;
-    if(gfm.gh().linearFM()) return;
+    if(gfm.gh().linearFM()) return offDiffs.size();
     const EList<ALT<index_t> >& alts = altdb.alts();
     pair<index_t, index_t> alt_range;
     
@@ -2420,41 +2563,29 @@ void GenomeHit<index_t>::findOffDiffs(
         alt_range.first = alt_range.second = (index_t)alts.bsearchLoBound(alt_search);
         for(alt_range.second = alt_range.first; alt_range.second < alts.size(); alt_range.second++) {
             const ALT<index_t>& alt = alts[alt_range.second];
-            if(alt.splicesite()) {
-                if(alt.left > alt.right) continue;
-            }
-            if(alt.deletion()) {
-                if(alt.reversed) continue;
-            }
+            if(alt.splicesite() && alt.left > alt.right) continue;
+            if(alt.deletion() && alt.reversed) continue;
             if(alt.pos >= end) break;
         }
     }
-    if(alt_range.first >= alt_range.second) return;
+    if(alt_range.first >= alt_range.second) return offDiffs.size();
     
-    for(; alt_range.second > alt_range.first; alt_range.second--) {
-        assert_leq(alt_range.second, alts.size());
-        const ALT<index_t>& alt = alts[alt_range.second - 1];
-        if(!alt.gap()) continue;
-        if(alt.splicesite()) continue;
-        if(alt.deletion() && alt.reversed) continue;
-        index_t numOffs = (index_t)offDiffs.size();
-        for(index_t i = 0; i < numOffs; i++) {
-            if(offDiffs[i].first > 10) continue;
-            int off = offDiffs[i].first * offDiffs[i].second;
-            if(alt.type == ALT_SNP_DEL) {
-                off += alt.len;
-            } else if(alt.type == ALT_SNP_INS) {
-                off -= alt.len;
-            } else {
-                assert(false);
-            }
-            
-            if(off != 0) {
-                offDiffs.expand();
-                offDiffs.back().first = abs(off);
-                offDiffs.back().second = (off > 0 ? 1 : -1);
-            }
+    for(index_t second = alt_range.second; second > alt_range.first; second--) {
+        assert_leq(second, alts.size());
+        const ALT<index_t>& alt = alts[second - 1];
+        if(!alt.gap() || alt.splicesite() || (alt.deletion() && alt.reversed))
+            continue;
+        int off = 0;
+        if(alt.type == ALT_SNP_DEL) {
+            off = alt.len;
+        } else {
+            assert_eq(alt.type, ALT_SNP_INS);
+            off = -alt.len;
         }
+        assert_neq(off, 0);
+        offDiffs.expand();
+        offDiffs.back().first = abs(off);
+        offDiffs.back().second = (off > 0 ? 1 : -1);
     }
 
     if(offDiffs.size() > 1) {
@@ -2462,6 +2593,51 @@ void GenomeHit<index_t>::findOffDiffs(
         index_t new_size = (index_t)(unique(offDiffs.begin(), offDiffs.end()) - offDiffs.begin());
         offDiffs.resize(new_size);
     }
+    
+    const index_t single_offDiffs_size = offDiffs.size();
+    for(index_t second = alt_range.second; second > alt_range.first; second--) {
+        assert_leq(alt_range.second, alts.size());
+        const ALT<index_t>& alt = alts[second - 1];
+        if(!alt.gap() || alt.splicesite() || (alt.deletion() && alt.reversed))
+            continue;
+        int off = 0;
+        if(alt.type == ALT_SNP_DEL) {
+            off = alt.len;
+        } else {
+            assert_eq(alt.type, ALT_SNP_INS);
+            off = -alt.len;
+        }
+        for(index_t second2 = second - 1; second2 > alt_range.first; second2--) {
+            const ALT<index_t>& alt2 = alts[second2 - 1];
+            if(!alt2.gap() || alt2.splicesite() || (alt2.deletion() && alt2.reversed))
+                continue;
+            if(alt2.type == ALT_SNP_DEL) {
+                if(alt2.pos + alt2.len >= alt.pos)
+                    continue;
+                off += alt2.len;
+            } else {
+                assert_eq(alt2.type, ALT_SNP_INS);
+                if(alt2.pos >= alt.pos)
+                    continue;
+                off -= alt2.len;
+            }
+            bool found = false;
+            for(index_t i = 0; i < offDiffs.size(); i++) {
+                int off_cmp = offDiffs[i].first * offDiffs[i].second;
+                if(off == off_cmp) {
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) {
+                offDiffs.expand();
+                offDiffs.back().first = abs(off);
+                offDiffs.back().second = (off > 0 ? 1 : -1);
+            }
+        }
+    }
+    
+    return single_offDiffs_size;
 }
 
 
@@ -3794,12 +3970,8 @@ public:
 	HI_Aligner(
                const GFM<index_t>& gfm,
                bool anchorStop = true,
-               bool secondary = false,
-               bool local = false,
                uint64_t threads_rids_mindist = 0) :
     _anchorStop(anchorStop),
-    _secondary(secondary),
-    _local(local),
     _gwstate(GW_CAT),
     _gwstate_local(GW_CAT),
     _thread_rids_mindist(threads_rids_mindist)
@@ -3837,7 +4009,7 @@ public:
             _hits[0][fwi].init(fw, (index_t)_rds[0]->length());
         }
         _genomeHits.clear();
-        _concordantPairs.clear();
+        _genomeHits_rep[0].clear();
         _hits_searched[0].clear();
         assert(!_paired);
     }
@@ -3861,7 +4033,9 @@ public:
             _hits_searched[rdi].clear();
         }
         _genomeHits.clear();
-        _concordantPairs.clear();
+        _genomeHits_rep[0].clear();
+        _genomeHits_rep[1].clear();
+        _concordantIdxInspected.first = _concordantIdxInspected.second = 0;
         assert(_paired);
         assert(!_rightendonly);
     }
@@ -3877,8 +4051,12 @@ public:
            const TranscriptomePolicy& tpol,
            const GraphPolicy&         gpol,
            const GFM<index_t>&        gfm,
+           const GFM<index_t>*        rgfm,
            const ALTDB<index_t>&      altdb,
+           const RepeatDB<index_t>&   repeatdb,
+           const ALTDB<index_t>&      raltdb,
            const BitPairReference&    ref,
+           const BitPairReference*    rref,
            SwAligner&                 swa,
            SpliceSiteDB&              ssdb,
            WalkMetrics&               wlm,
@@ -3888,23 +4066,26 @@ public:
            RandomSource&              rnd,
            AlnSinkWrap<index_t>&      sink)
     {
+        const ReportingParams& rp = sink.reportingParams();
+        
         index_t rdi;
         bool fw;
-        bool found[2] = {true, this->_paired};
+        bool found[2][2] = {{true, true}, {this->_paired, this->_paired}};
         // given read and its reverse complement
         //  (and mate and the reverse complement of mate in case of pair alignment),
         // pick up one with best partial alignment
         while(nextBWT(sc, pepol, tpol, gpol, gfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink)) {
             // given the partial alignment, try to extend it to full alignments
-        	found[rdi] = align(sc, pepol, tpol, gpol, gfm, altdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
-            if(!found[0] && !found[1]) {
+            index_t fwi = (fw == true ? 0 : 1);
+            found[rdi][fwi] = align(sc, pepol, tpol, gpol, gfm, altdb, repeatdb, ref, swa, ssdb, rdi, fw, wlm, prm, swm, him, rnd, sink);
+            if(!found[0][0] && !found[0][1] && !found[1][0] && !found[1][1]) {
                 break;
             }
             
             // try to combine this alignment with some of mate alignments
             // to produce pair alignment
             if(this->_paired) {
-                pairReads(sc, pepol, tpol, gpol, gfm, altdb, ref, wlm, prm, him, rnd, sink);
+                pairReads(sc, pepol, tpol, gpol, gfm, altdb, repeatdb, ref, wlm, prm, him, rnd, sink);
                 // if(sink.bestPair() >= _minsc[0] + _minsc[1]) break;
             }
         }
@@ -3912,7 +4093,7 @@ public:
         // if no concordant pair is found, try to use alignment of one-end
         // as an anchor to align the other-end
         if(this->_paired) {
-            if(_concordantPairs.size() == 0 &&
+            if(sink.numPair() == 0 &&
                (sink.bestUnp1() >= _minsc[0] || sink.bestUnp2() >= _minsc[1])) {
                 bool mate_found = false;
                 const EList<AlnRes> *rs[2] = {NULL, NULL};
@@ -3930,6 +4111,7 @@ public:
                                                 gpol,
                                                 gfm,
                                                 altdb,
+                                                repeatdb,
                                                 ref,
                                                 swa,
                                                 ssdb,
@@ -3947,10 +4129,509 @@ public:
                 }
                 
                 if(mate_found) {
-                    pairReads(sc, pepol, tpol, gpol, gfm, altdb, ref, wlm, prm, him, rnd, sink);
+                    pairReads(
+                              sc,
+                              pepol,
+                              tpol,
+                              gpol,
+                              gfm,
+                              altdb,
+                              repeatdb,
+                              ref,
+                              wlm,
+                              prm,
+                              him,
+                              rnd,
+                              sink);
                 }
             }
         }
+        
+        
+        // Determine whether reads map to repetitive sequences
+        bool repeat[2][2] = {{false, false}, {false, false}};
+        bool perform_repeat_alignment = false;
+        
+        index_t indexIdx[2] = {0, 0};
+#if 1
+        if(rgfm != NULL && !((RFM<index_t>*)rgfm)->empty()) {
+            // use repeat index to decide whether a read or a pair is from repetitive sequences
+            indexIdx[0] = ((RFM<index_t>*)rgfm)->getLocalRFM_idx((*_rds)[0].length());
+            if(_paired) {
+                indexIdx[1] = ((RFM<index_t>*)rgfm)->getLocalRFM_idx((*_rds)[1].length());
+            }
+            LocalRFM<index_t>& rfm = ((RFM<index_t>*)rgfm)->getLocalRFM(indexIdx[0]);
+            bool skip_repeat[2][2] = {{false, false}, {false, false}};
+            if(_paired) {
+                const EList<AlnRes> *rs[2] = {NULL, NULL};
+                sink.getPair(rs[0], rs[1]);
+                assert_eq(rs[0]->size(), rs[1]->size());
+                TAlScore bestScore[2][2] = {{_minsc[rdi], _minsc[rdi]}, {_minsc[rdi], _minsc[rdi]}};
+                for(size_t r = 0; r < rs[0]->size(); r++) {
+                    const AlnRes& rs1 = (*rs[0])[r];
+                    const AlnRes& rs2 = (*rs[1])[r];
+                    TAlScore score = rs1.score().score() + rs2.score().score();
+                    int fwi[2] = {rs1.fw() ? 0 : 1, rs2.fw() ? 0 : 1};
+                    if(score > bestScore[fwi[0]][fwi[1]]) {
+                        bestScore[fwi[0]][fwi[1]] = score;
+                    }
+                }
+                for(index_t fwi = 0; fwi < 2; fwi++) {
+                    for(index_t fwi2 = 0; fwi2 < 2; fwi2++) {
+                        if(bestScore[fwi][fwi2] < 0)
+                            continue;
+                        
+                        ReadBWTHit<index_t>& hit = _hits[0][fwi];
+                        bool unique = false;
+                        for(size_t hi = 0; hi < hit.offsetSize(); hi++) {
+                            BWTHit<index_t>& partialHit = hit.getPartialHit(hi);
+                            if(partialHit.len() >= _minK + 8 && partialHit.size() == 1) {
+                                unique = true;
+                                break;
+                            }
+                        }
+                        if(!unique)
+                            continue;
+                        
+                        bool unique2 = false;
+                        ReadBWTHit<index_t>& hit2 = _hits[1][fwi2];
+                        for(size_t hi = 0; hi < hit2.offsetSize(); hi++) {
+                            BWTHit<index_t>& partialHit = hit2.getPartialHit(hi);
+                            if(partialHit.len() >= _minK + 8 && partialHit.size() == 1) {
+                                unique2 = true;
+                                break;
+                            }
+                        }
+                        if(!unique2)
+                            continue;
+                        
+                        skip_repeat[0][fwi] = skip_repeat[1][fwi2] = true;
+                    }
+                }
+            } else {
+                const EList<AlnRes> *rs = NULL;
+                if(rdi == 0) sink.getUnp1(rs);
+                else sink.getUnp2(rs);
+                
+                TAlScore bestScore[2] = {_minsc[rdi], _minsc[rdi]};
+                for(index_t r = 0; r < rs->size(); r++) {
+                    TAlScore score = (*rs)[r].score().score();
+                    if((*rs)[r].fw()) {
+                        if(score > bestScore[0]) {
+                            bestScore[0] = score;
+                        }
+                    } else {
+                        if(score > bestScore[1]) {
+                            bestScore[1] = score;
+                        }
+                    }
+                }
+                for(index_t fwi = 0; fwi < 2; fwi++) {
+                    if(bestScore[fwi] < 0)
+                        continue;
+                    
+                    ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
+                    index_t offsetSize = hit.offsetSize();
+                    for(size_t hi = 0; hi < offsetSize; hi++) {
+                        BWTHit<index_t>& partialHit = hit.getPartialHit(hi);
+                        if(partialHit.len() >= _minK + 8 && partialHit.size() == 1) {
+                            skip_repeat[rdi][fwi] = true;
+                            break;
+                        }
+                    }
+                    if(skip_repeat[rdi][fwi]) break;
+                }
+            }
+            
+            for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                for(size_t fwi = 0; fwi < 2; fwi++) {
+                    if(skip_repeat[rdi][fwi]) continue;
+                    bool fw = (fwi == 0);
+                    _hits[rdi][fwi].init(fw, (index_t)_rds[rdi]->length());
+                }
+            }
+            
+            while(nextBWT(sc, pepol, tpol, gpol, rfm, altdb, ref, rdi, fw, wlm, prm, him, rnd, sink));
+            for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                for(size_t fwi = 0; fwi < 2; fwi++) {
+                    if(skip_repeat[rdi][fwi]) continue;
+                    ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
+                    index_t offsetSize = hit.offsetSize();
+                    assert_gt(offsetSize, 0);
+                    for(size_t hi = 0; hi < offsetSize; hi++) {
+                        BWTHit<index_t>& partialHit = hit.getPartialHit(hi);
+                        if(partialHit.len() >= (_minK << 1)) {
+                            repeat[rdi][fwi] = true;
+                            perform_repeat_alignment = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+#else
+        // use minimizer to decide whether a read or a pair is from repetitive sequences
+        perform_repeat_alignment = false;
+        for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+            Read& read = *_rds[rdi];
+            for(size_t fwi = 0; fwi < 2; fwi++) {
+                const BTDnaString& seq = (fwi == 0 ? read.patFw : read.patRc);
+                repeat[rdi][fwi] = repeat_kmertable.isRepeat(seq, _tmp_minimizers);
+                perform_repeat_alignment |= repeat[rdi][fwi];
+            }
+        }
+#endif
+        
+        // Handle alignment to repetitive regions
+        if(rgfm != NULL &&
+           perform_repeat_alignment) {
+            LocalRFM<index_t>& rfm = ((RFM<index_t>*)rgfm)->getLocalRFM(indexIdx[0]);
+            RB_KmerTable& repeatKmertable = ((RFM<index_t>*)rgfm)->getKmertable(indexIdx[0]);
+            
+            _repeatConcordant.clear();
+            index_t prev_align_size[2] = {0, 0};
+            for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                const EList<AlnRes> *rs = NULL;
+                if(rdi == 0) sink.getUnp1(rs);
+                else         sink.getUnp2(rs);
+                prev_align_size[rdi] = rs->size();
+            }
+            
+            for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                for(size_t fwi = 0; fwi < 2; fwi++) {
+                    if(!repeat[rdi][fwi]) continue;
+                    
+                    // choose candidate partial alignments for further alignment
+                    index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
+      
+#if 0
+                    ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
+                    if(!hit.done()) continue;
+                    getAnchorHits(rfm,
+                                  pepol,
+                                  tpol,
+                                  gpol,
+                                  altdb,
+                                  repeatdb,
+                                  *rref,
+                                  rnd,
+                                  rdi,
+                                  fwi == 0, // fw
+                                  _genomeHits_rep[rdi],
+                                  _genomeHits_rep[rdi].size() + maxsize,
+                                  _sharedVars,
+                                  wlm,
+                                  prm,
+                                  him,
+                                  true); // repeat?
+#else
+                    
+                    getRepeatHits(rfm,
+                                  pepol,
+                                  tpol,
+                                  gpol,
+                                  raltdb,
+                                  repeatdb,
+                                  repeatKmertable,
+                                  *rref,
+                                  rnd,
+                                  rdi,
+                                  fwi == 0, // fw
+                                  indexIdx[0],
+                                  _genomeHits_rep[rdi],
+                                  _genomeHits_rep[rdi].size() + maxsize,
+                                  _sharedVars,
+                                  sc,
+                                  swa,
+                                  ssdb,
+                                  swm,
+                                  wlm,
+                                  prm,
+                                  him,
+                                  sink);
+#endif
+                }
+            }
+            
+            EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >& positions = _positions;
+            for(size_t rdi = 0; rdi < (_paired ? 2 : 1); rdi++) {
+                for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
+                    if(_genomeHits_rep[rdi][i].len() < (_minK << 1)) continue;
+                    
+                    // DK - debugging purposes
+#if 0
+                    positions.clear();
+                    repeatdb.getCoords(_genomeHits_rep[rdi][i]._tidx,
+                                       _genomeHits_rep[rdi][i]._joinedOff,
+                                       _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
+                                       _snpIDs,
+                                       raltdb,
+                                       positions,
+                                       rp.khits * 1000);
+#endif
+                    
+                    const EList<AlnRes> *rs = NULL;
+                    if(rdi == 0) sink.getUnp2(rs);
+                    else         sink.getUnp1(rs);
+                    assert(rs != NULL);
+                    
+                    bool candidate_found = false;
+                    for(size_t j = 0; j < prev_align_size[1-rdi]; j++) {
+                        const AlnRes& res = (*rs)[j];
+                        if(res.repeat())
+                            continue;
+                        
+                        TAlScore estScore = res.score().score() + _genomeHits_rep[rdi][i].score();
+                        if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
+                            break;
+                        
+                        positions.clear();
+                        index_t joinedOff = 0;
+                        gfm.textOffToJoined(res.refid(), res.refoff(), joinedOff);
+                        repeatdb.findCoords(joinedOff,
+                                            joinedOff + res.refExtent(),
+                                            _genomeHits_rep[rdi][i]._tidx,
+                                            _genomeHits_rep[rdi][i]._joinedOff,
+                                            _genomeHits_rep[rdi][i]._joinedOff + _genomeHits_rep[rdi][i].len(),
+                                            _snpIDs,
+                                            raltdb,
+                                            positions,
+                                            rp.khits * 10);
+                        if(positions.size() <= 0)
+                            continue;
+                        
+                        for(size_t p = 0; p < positions.size(); p++) {
+                            if(positions[p].first.tid != res.refid()) continue;
+                            if(positions[p].first.toff + 1000 < res.refoff() ||
+                               res.refoff() + 1000 < positions[p].first.toff) continue;
+                            if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
+                                break;
+                            
+                            candidate_found = true;
+                            
+                            _genomeHits.clear();
+                            _genomeHits.expand();
+                            _genomeHits.back() = _genomeHits_rep[rdi][i];
+                            _genomeHits.back()._tidx = positions[p].first.tid;
+                            _genomeHits.back()._toff = positions[p].first.toff;
+                            _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
+                            if(!positions[p].first.fw) {
+                                _genomeHits.back().reverse(*_rds[rdi]);
+                            }
+                            
+                            // extend the partial alignments bidirectionally using
+                            // local search, extension, and (less often) global search
+                            hybridSearch(sc,
+                                         pepol,
+                                         tpol,
+                                         gpol,
+                                         gfm,
+                                         altdb,
+                                         repeatdb,
+                                         ref,
+                                         swa,
+                                         ssdb,
+                                         rdi,
+                                         _genomeHits.back()._fw,
+                                         wlm,
+                                         prm,
+                                         swm,
+                                         him,
+                                         rnd,
+                                         sink);
+                        }
+                        
+                        if(candidate_found) {
+                            pairReads(
+                                      sc,
+                                      pepol,
+                                      tpol,
+                                      gpol,
+                                      gfm,
+                                      altdb,
+                                      repeatdb,
+                                      ref,
+                                      wlm,
+                                      prm,
+                                      him,
+                                      rnd,
+                                      sink);
+                        }
+                    }
+                    
+                    if(rdi == 0 && _paired) {
+                        for(size_t j = 0; j < _genomeHits_rep[1].size(); j++) {
+                            if(_genomeHits_rep[1][j].len() < (_minK << 1)) continue;
+                            
+                            TAlScore estScore = _genomeHits_rep[0][i].score() + _genomeHits_rep[1][j].score();
+                            // if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
+                            //    break;
+
+                            positions.clear();
+                            repeatdb.findCommonCoords(_genomeHits_rep[0][i]._tidx,
+                                                      _genomeHits_rep[0][i]._joinedOff,
+                                                      _genomeHits_rep[0][i]._joinedOff + _genomeHits_rep[0][i].len(),
+                                                      _snpIDs,
+                                                      _genomeHits_rep[1][j]._tidx,
+                                                      _genomeHits_rep[1][j]._joinedOff,
+                                                      _genomeHits_rep[1][j]._joinedOff + _genomeHits_rep[1][j].len(),
+                                                      _snpIDs2,
+                                                      raltdb,
+                                                      positions,
+                                                      rp.khits * 10);
+                            if(positions.size() <= 0) continue;
+                            
+                            _repeatConcordant.expand();
+                            _repeatConcordant.back().first = _genomeHits_rep[0][i]._joinedOff;
+                            _repeatConcordant.back().second = _genomeHits_rep[1][j]._joinedOff;
+                            
+                            for(size_t p = 0; p < positions.size(); p++) {
+                                if(sink.bestPair() >= estScore && sink.numBestPair().first > rp.khits)
+                                    break;
+                                
+                                _genomeHits.clear();
+                                _genomeHits.expand();
+                                _genomeHits.back() = _genomeHits_rep[0][i];
+                                _genomeHits.back()._tidx = positions[p].first.tid;
+                                _genomeHits.back()._toff = positions[p].first.toff;
+                                _genomeHits.back()._joinedOff = positions[p].first.joinedOff;
+                                if(!positions[p].first.fw) {
+                                    _genomeHits.back().reverse(*_rds[0]);
+                                }
+                                
+                                // extend the partial alignments bidirectionally using
+                                // local search, extension, and (less often) global search
+                                hybridSearch(sc,
+                                             pepol,
+                                             tpol,
+                                             gpol,
+                                             gfm,
+                                             altdb,
+                                             repeatdb,
+                                             ref,
+                                             swa,
+                                             ssdb,
+                                             0,
+                                             _genomeHits.back()._fw,
+                                             wlm,
+                                             prm,
+                                             swm,
+                                             him,
+                                             rnd,
+                                             sink);
+                                
+                                _genomeHits.clear();
+                                _genomeHits.expand();
+                                _genomeHits.back() = _genomeHits_rep[1][j];
+                                _genomeHits.back()._tidx = positions[p].second.tid;
+                                _genomeHits.back()._toff = positions[p].second.toff;
+                                _genomeHits.back()._joinedOff = positions[p].second.joinedOff;
+                                if(!positions[p].second.fw) {
+                                    _genomeHits.back().reverse(*_rds[1]);
+                                }
+                                
+                                // extend the partial alignments bidirectionally using
+                                // local search, extension, and (less often) global search
+                                hybridSearch(sc,
+                                             pepol,
+                                             tpol,
+                                             gpol,
+                                             gfm,
+                                             altdb,
+                                             repeatdb,
+                                             ref,
+                                             swa,
+                                             ssdb,
+                                             1,
+                                             _genomeHits.back()._fw,
+                                             wlm,
+                                             prm,
+                                             swm,
+                                             him,
+                                             rnd,
+                                             sink);
+                            }
+                            
+                            if(positions.size() > 0) {
+                                pairReads(
+                                          sc,
+                                          pepol,
+                                          tpol,
+                                          gpol,
+                                          gfm,
+                                          altdb,
+                                          repeatdb,
+                                          ref,
+                                          wlm,
+                                          prm,
+                                          him,
+                                          rnd,
+                                          sink);
+                            }
+                        }
+                    } // if(rdi == 0)
+                } // for(size_t i = 0; i < _genomeHits_rep[rdi].size()
+                
+                bool align2repeat = false;
+                if(_paired) {
+                    index_t numBestPair = sink.numBestPair().first;
+                    align2repeat = (numBestPair == 0 || numBestPair > rp.khits);
+                } else {
+                    const EList<AlnRes> *rs = NULL;
+                    if(rdi == 0) sink.getUnp1(rs);
+                    else         sink.getUnp2(rs);
+                    assert(rs != NULL);
+                    align2repeat = (rs->size() == 0 || sink.numBestUnp(rdi).first > rp.khits);
+                }
+                
+                if(align2repeat) {
+                    for(size_t i = 0; i < _genomeHits_rep[rdi].size(); i++) {
+                        _genomeHits.clear();
+                        _genomeHits.expand();
+                        _genomeHits.back() = _genomeHits_rep[rdi][i];
+                        _genomeHits.back()._repeat = true;
+                        hybridSearch(sc,
+                                     pepol,
+                                     tpol,
+                                     gpol,
+                                     rfm,
+                                     altdb,
+                                     repeatdb,
+                                     *rref,
+                                     swa,
+                                     ssdb,
+                                     rdi,
+                                     _genomeHits.back()._fw,
+                                     wlm,
+                                     prm,
+                                     swm,
+                                     him,
+                                     rnd,
+                                     sink);
+                    }
+                    
+                    if(_paired && rdi == 1) {
+                        if(sink.numBestUnp(rdi).first > rp.khits) {
+                            pairReads(
+                                      sc,
+                                      pepol,
+                                      tpol,
+                                      gpol,
+                                      gfm,
+                                      altdb,
+                                      repeatdb,
+                                      ref,
+                                      wlm,
+                                      prm,
+                                      him,
+                                      rnd,
+                                      sink);
+                        }
+                    }
+                }
+                
+            } // for(size_t rdi = 0
+        } // repeat
         
         return EXTEND_POLICY_FULFILLED;
     }
@@ -3976,6 +4657,8 @@ public:
                  RandomSource&              rnd,
                  AlnSinkWrap<index_t>&      sink)
     {
+        const ReportingParams& rp = sink.reportingParams();
+        
         // Pick up a candidate from a read or its reverse complement
         // (for pair, also consider mate and its reverse complement)
         while(pickNextReadToSearch(rdi, fw)) {
@@ -3984,8 +4667,8 @@ public:
             ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
             assert(!hit.done());
             bool pseudogeneStop = gfm.gh().linearFM() && !tpol.no_spliced_alignment();
-            bool anchorStop = _anchorStop;
-            if(!_secondary) {
+            bool anchorStop = _anchorStop && !gfm.repeat();
+            if(!rp.secondary) {
                 index_t numSearched = hit.numActualPartialSearch();
                 int64_t bestScore = 0;
                 if(rdi == 0) {
@@ -3998,7 +4681,7 @@ public:
                             hit.done(true);
                             if(_paired) {
                                 if(sink.bestUnp2() >= _minsc[1-rdi] &&
-                                   _concordantPairs.size() > 0) return false;
+                                   sink.numPair() > 0) return false;
                                 else continue;
                             } else {
                                 return false;
@@ -4017,7 +4700,7 @@ public:
                             hit.done(true);
                             if(_paired) {
                                 if(sink.bestUnp1() >= _minsc[1-rdi] &&
-                                   _concordantPairs.size() > 0) return false;
+                                   sink.numPair() > 0) return false;
                                 else continue;
                             } else {
                                 return false;
@@ -4080,6 +4763,7 @@ public:
                const GraphPolicy&               gpol,
                const GFM<index_t>&              gfm,
                const ALTDB<index_t>&            altdb,
+               const RepeatDB<index_t>&         repeatdb,
                const BitPairReference&          ref,
                SwAligner&                       swa,
                SpliceSiteDB&                    ssdb,
@@ -4104,6 +4788,7 @@ public:
                    const GraphPolicy&               gpol,
                    const GFM<index_t>&              gfm,
                    const ALTDB<index_t>&            altdb,
+                   const RepeatDB<index_t>&         repeatdb,
                    const BitPairReference&          ref,
                    SwAligner&                       swa,
                    SpliceSiteDB&                    ssdb,
@@ -4131,6 +4816,7 @@ public:
                       const GraphPolicy&                 gpol,
                       const GFM<index_t>&                gfm,
                       const ALTDB<index_t>&              altdb,
+                      const RepeatDB<index_t>&           repeatdb,
                       const BitPairReference&            ref,
                       SwAligner&                         swa,
                       SpliceSiteDB&                      ssdb,
@@ -4157,6 +4843,7 @@ public:
                                const GraphPolicy&               gpol,
                                const GFM<index_t>&              gfm,
                                const ALTDB<index_t>&            altdb,
+                               const RepeatDB<index_t>&         repeatdb,
                                const BitPairReference&          ref,
                                SwAligner&                       swa,
                                SpliceSiteDB&                    ssdb,
@@ -4170,6 +4857,7 @@ public:
                                HIMetrics&                       him,
                                RandomSource&                    rnd,
                                AlnSinkWrap<index_t>&            sink,
+                               bool                             alignMate = false,
                                index_t                          dep = 0)
     { return numeric_limits<int64_t>::min(); }
     
@@ -4220,7 +4908,8 @@ public:
                           ReadBWTHit<index_t>&    hit,     // holds all the seed hits (and exact hit)
                           RandomSource&           rnd,
                           bool&                   pseudogeneStop,  // stop if mapped to multiple locations due to processed pseudogenes
-                          bool&                   anchorStop);
+                          bool&                   anchorStop,
+                          index_t                 maxHitLen = (index_t)INDEX_MAX);
     
     /**
      * Global FM index search
@@ -4261,7 +4950,8 @@ public:
                            RandomSource&                    rnd,
                            bool&                            uniqueStop,
                            local_index_t                    minUniqueLen,
-                           local_index_t                    maxHitLen = (local_index_t)INDEX_MAX);
+                           local_index_t                    maxHitLen = (local_index_t)INDEX_MAX,
+                           local_index_t                    maxHits = 0);
     
     /**
      * Convert FM offsets to the corresponding genomic offset (chromosome id, offset)
@@ -4320,6 +5010,7 @@ public:
                           const TranscriptomePolicy&        tpol,
                           const GraphPolicy&                gpol,
                           const ALTDB<index_t>&             altdb,
+                          const RepeatDB<index_t>&          repeatdb,
                           const BitPairReference&           ref,
                           RandomSource&                     rnd,
                           index_t                           rdi,
@@ -4329,7 +5020,8 @@ public:
                           SharedTempVars<index_t>&          sharedVars,
                           WalkMetrics&                      wlm,
                           PerReadMetrics&                   prm,
-                          HIMetrics&                        him)
+                          HIMetrics&                        him,
+                          bool                              repeat = false)
     {
         index_t fwi = (fw ? 0 : 1);
         assert_lt(rdi, 2);
@@ -4338,14 +5030,11 @@ public:
         assert(hit.done());
         index_t offsetSize = hit.offsetSize();
         assert_gt(offsetSize, 0);
-        const index_t max_size = (hit._cur >= hit._len ? maxGenomeHitSize : 1);
-        genomeHits.clear();
         for(size_t hi = 0; hi < offsetSize; hi++) {
             index_t hj = 0;
             for(; hj < offsetSize; hj++) {
                 BWTHit<index_t>& partialHit_j = hit.getPartialHit(hj);
                 if(partialHit_j.empty() ||
-                   (partialHit_j._hit_type == CANDIDATE_HIT && partialHit_j.size() > max_size) ||
                    partialHit_j.hasGenomeCoords() ||
                    partialHit_j.len() <= _minK + 2) continue;
                 else break;
@@ -4355,7 +5044,6 @@ public:
                 BWTHit<index_t>& partialHit_j = hit.getPartialHit(hj);
                 BWTHit<index_t>& partialHit_k = hit.getPartialHit(hk);
                 if(partialHit_k.empty() ||
-                   (partialHit_k._hit_type == CANDIDATE_HIT && partialHit_k.size() > max_size) ||
                    partialHit_k.hasGenomeCoords() ||
                    partialHit_k.len() <= _minK + 2) continue;
                 
@@ -4372,27 +5060,84 @@ public:
             }
             BWTHit<index_t>& partialHit = hit.getPartialHit(hj);
             assert(!partialHit.hasGenomeCoords());
+            
+            // Retrieve genomic coordinates
+            //  If there are too many genomic coordinates to get,
+            //  then we randomly choose and retrieve a small set of them
+            assert_leq(genomeHits.size(), maxGenomeHitSize);
+            index_t remainedGenomeHitSize = maxGenomeHitSize - genomeHits.size();
+            if(remainedGenomeHitSize <= 0)
+                break;
+            index_t expectedNumCoords = partialHit._node_bot - partialHit._node_top;
             bool straddled = false;
-            getGenomeCoords(
-                            gfm,
-                            altdb,
-                            ref,
-                            rnd,
-                            partialHit._top,
-                            partialHit._bot,
-                            partialHit._node_top,
-                            partialHit._node_bot,
-                            partialHit._node_iedge_count,
-                            fw,
-                            partialHit._bot - partialHit._top,
-                            hit._len - partialHit._bwoff - partialHit._len,
-                            partialHit._len,
-                            partialHit._coords,
-                            wlm,
-                            prm,
-                            him,
-                            false, // reject straddled
-                            straddled);
+            if(expectedNumCoords <= remainedGenomeHitSize) {
+                getGenomeCoords(
+                                gfm,
+                                altdb,
+                                ref,
+                                rnd,
+                                partialHit._top,
+                                partialHit._bot,
+                                partialHit._node_top,
+                                partialHit._node_bot,
+                                partialHit._node_iedge_count,
+                                fw,
+                                partialHit._bot - partialHit._top,
+                                hit._len - partialHit._bwoff - partialHit._len,
+                                partialHit._len,
+                                partialHit._coords,
+                                wlm,
+                                prm,
+                                him,
+                                false, // reject straddled
+                                straddled);
+            } else {
+                index_t edgeIdx = 0;
+                index_t top = partialHit._top;
+                index_t added = 0;
+                for(index_t node = partialHit._node_top; node < partialHit._node_bot; node++, expectedNumCoords--) {
+                    index_t bot = top + 1;
+                    _tmp_node_iedge_count.clear();
+                    if(edgeIdx < partialHit._node_iedge_count.size()) {
+                        assert_leq(node - partialHit._node_top, partialHit._node_iedge_count[edgeIdx].first);
+                        if(node - partialHit._node_top == partialHit._node_iedge_count[edgeIdx].first) {
+                            bot += partialHit._node_iedge_count[edgeIdx].second;
+                            _tmp_node_iedge_count.expand();
+                            _tmp_node_iedge_count.back().first = 0;
+                            _tmp_node_iedge_count.back().second = partialHit._node_iedge_count[edgeIdx].second;
+                            edgeIdx++;
+                        }
+                    }
+                    assert_lt(added, remainedGenomeHitSize);
+                    uint32_t rndi = rnd.nextU32() % expectedNumCoords;
+                    if(rndi < remainedGenomeHitSize - added) {
+                        getGenomeCoords(
+                                        gfm,
+                                        altdb,
+                                        ref,
+                                        rnd,
+                                        top,
+                                        bot,
+                                        node,
+                                        node + 1,
+                                        _tmp_node_iedge_count,
+                                        fw,
+                                        partialHit._bot - partialHit._top,
+                                        hit._len - partialHit._bwoff - partialHit._len,
+                                        partialHit._len,
+                                        partialHit._coords,
+                                        wlm,
+                                        prm,
+                                        him,
+                                        false, // reject straddled
+                                        straddled);
+                        added++;
+                        if(added >= remainedGenomeHitSize) break;
+                    }
+                    top = bot;
+                }
+            }
+            
             if(!partialHit.hasGenomeCoords()) continue;
             EList<Coord>& coords = partialHit._coords;
             assert_gt(coords.size(), 0);
@@ -4402,6 +5147,8 @@ public:
             }
             for(index_t k = 0; k < coords.size(); k++) {
                 const Coord& coord = coords[k];
+                if(coord.ref() == numeric_limits<index_t>::max())
+                    continue;
                 index_t len = partialHit._len;
                 index_t rdoff = hit._len - partialHit._bwoff - len;
                 bool overlapped = false;
@@ -4412,16 +5159,22 @@ public:
                     assert_lt(rdoff, hit._len);
                     index_t hitoff = genomeHit.refoff() + hit._len - genomeHit.rdoff();
                     index_t hitoff2 = (index_t)coord.off() + hit._len - rdoff;
-                    if(abs((int64_t)hitoff - (int64_t)hitoff2) <= (int64_t)tpol.maxIntronLen()) {
+                    int64_t hitoff_diff = (tpol.no_spliced_alignment() ? 0 : tpol.maxIntronLen());
+                    if(abs((int64_t)hitoff - (int64_t)hitoff2) <= hitoff_diff) {
                         overlapped = true;
                         genomeHit._hitcount++;
                         break;
                     }
                 }
+                if(repeat) {
+                    if(!repeatdb.repeatExist(coord.ref(), coord.off(), coord.off() + len)) {
+                        continue;
+                    }
+                }
                 if(!overlapped) {
                     GenomeHit<index_t>::adjustWithALT(
                                                       rdoff,
-                                                      straddled ? 1 : len,
+                                                      len,
                                                       coord,
                                                       _sharedVars,
                                                       genomeHits,
@@ -4435,6 +5188,122 @@ public:
             }
             if(partialHit._hit_type == CANDIDATE_HIT && genomeHits.size() >= maxGenomeHitSize) break;
         }
+
+        return (index_t)genomeHits.size();
+    }
+    
+    /**
+     *
+     */
+    index_t getRepeatHits(
+                          const GFM<index_t>&               gfm,
+                          const PairedEndPolicy&            pepol, // paired-end policy
+                          const TranscriptomePolicy&        tpol,
+                          const GraphPolicy&                gpol,
+                          const ALTDB<index_t>&             altdb,
+                          const RepeatDB<index_t>&          repeatdb,
+                          const RB_KmerTable&               repeat_kmertable,
+                          const BitPairReference&           ref,
+                          RandomSource&                     rnd,
+                          index_t                           rdi,
+                          bool                              fw,
+                          index_t                           repID,
+                          EList<GenomeHit<index_t> >&       genomeHits,
+                          index_t                           maxGenomeHitSize,
+                          SharedTempVars<index_t>&          sharedVars,
+                          const Scoring&                    sc,
+                          SwAligner&                        swa,
+                          SpliceSiteDB&                     ssdb,
+                          SwMetrics&                        swm,
+                          WalkMetrics&                      wlm,
+                          PerReadMetrics&                   prm,
+                          HIMetrics&                        him,
+                          AlnSinkWrap<index_t>&             sink)
+    {
+        assert_lt(rdi, 2);
+        assert(_rds[rdi] != NULL);
+        Read& rd = *_rds[rdi];
+        const BTDnaString& seq = fw ? rd.patFw : rd.patRc;
+        repeat_kmertable.findAlignments(seq,
+                                        _tmp_minimizers,
+                                        _tmp_position2D,
+                                        _tmp_alignments);
+        
+        const TAlScore cushion = sc.mmpMax;
+     
+        TAlScore bestScore = _minsc[rdi];
+        size_t prev_numHits = genomeHits.size();
+        for(index_t i = 0; i < _tmp_alignments.size(); i++) {
+            const RB_Alignment& coord = _tmp_alignments[i];
+            index_t len = seq.length();
+            index_t rdoff = 0;
+            if(!repeatdb.repeatExist(repID, coord.pos, coord.pos + len)) {
+                continue;
+            }
+            
+            genomeHits.expand();
+            GenomeHit<index_t>& genomeHit = genomeHits.back();
+            genomeHit.init(fw,
+                           rdoff,
+                           0,
+                           0, // trim5
+                           0, // trim3
+                           repID, // ref,
+                           coord.pos,
+                           coord.pos,
+                           this->_sharedVars);
+            
+            index_t maxmm = (index_t)(-bestScore / sc.mmpMax);
+            index_t leftext = 0, rightext = len;
+            genomeHit.extend(rd,
+                             gfm,
+                             ref,
+                             altdb,
+                             repeatdb,
+                             ssdb,
+                             swa,
+                             swm,
+                             prm,
+                             sc,
+                             this->_minsc[rdi],
+                             rnd,
+                             (index_t)this->_minK_local,
+                             tpol,
+                             gpol,
+                             leftext,
+                             rightext,
+                             maxmm);
+            
+            if(genomeHit.len() < len) {
+                genomeHits.pop_back();
+                continue;
+            }
+
+            if(genomeHit.score() > bestScore) {
+                bestScore = genomeHit.score();
+                size_t remove_count = 0;
+                size_t k = prev_numHits;
+                for(size_t j = prev_numHits; j < genomeHits.size(); j++) {
+                    if(genomeHits[j].score() >= max(_minsc[rdi], bestScore - cushion)) {
+                        assert_leq(k, j);
+                        if(k < j) {
+                            genomeHits[k] = genomeHits[j];
+                        }
+                        k++;
+                    } else {
+                        remove_count++;
+                    }
+                }
+                assert_eq(k + remove_count, genomeHits.size());
+                assert_leq(prev_numHits + remove_count, genomeHits.size());
+                if(remove_count > 0) {
+                    genomeHits.resize(genomeHits.size() - remove_count);
+                }
+            } else if(genomeHit.score() < max(_minsc[rdi], bestScore - cushion)) {
+                genomeHits.pop_back();
+            }
+        }
+        
         return (index_t)genomeHits.size();
     }
     
@@ -4445,6 +5314,7 @@ public:
                    const GraphPolicy&         gpol,
                    const GFM<index_t>&        gfm,
                    const ALTDB<index_t>&      altdb,
+                   const RepeatDB<index_t>&   repeatdb,
                    const BitPairReference&    ref,
                    WalkMetrics&               wlm,
                    PerReadMetrics&            prm,
@@ -4462,11 +5332,13 @@ public:
                    const GraphPolicy&               gpol,
                    const GFM<index_t>&              gfm,
                    const ALTDB<index_t>&            altdb,
+                   const RepeatDB<index_t>&         repeatdb,
                    const BitPairReference&          ref,
                    const SpliceSiteDB&              ssdb,
                    AlnSinkWrap<index_t>&            sink,
                    index_t                          rdi,
                    const GenomeHit<index_t>&        hit,
+                   bool                             alignMate = false,
                    const GenomeHit<index_t>*        ohit = NULL);
     
     /**
@@ -4513,9 +5385,6 @@ protected:
     
     bool     _anchorStop;
     
-    bool     _secondary;  // allow secondary alignments
-    bool     _local;      // perform local alignments
-    
     ReadBWTHit<index_t> _hits[2][2];
     
     EList<index_t, 16>                                 _offs;
@@ -4537,11 +5406,16 @@ protected:
     
     // temporary
     EList<GenomeHit<index_t> >     _genomeHits;
+    EList<GenomeHit<index_t> >     _genomeHits_rep[2];
+    EList<index_t>                 _snpIDs;
+    EList<index_t>                 _snpIDs2;
     EList<bool>                    _genomeHits_done;
     ELList<Coord>                  _coords;
+    EList<pair<RepeatCoord<index_t>, RepeatCoord<index_t> > >     _positions;
     ELList<SpliceSite>             _spliceSites;
     
-    EList<pair<index_t, index_t> >  _concordantPairs;
+    pair<index_t, index_t>         _concordantIdxInspected;
+    EList<pair<index_t, index_t> > _repeatConcordant;
     
     size_t _minK; // log4 of the size of a genome
     size_t _minK_local; // log4 of the size of a local index (8)
@@ -4564,6 +5438,10 @@ protected:
     
     EList<pair<local_index_t, local_index_t> > _local_node_iedge_count;
     EList<pair<local_index_t, local_index_t> > _tmp_local_node_iedge_count;
+    
+    EList<pair<uint64_t, size_t> > _tmp_minimizers;
+    ELList<RB_Alignment>           _tmp_position2D;
+    EList<RB_Alignment>            _tmp_alignments;
 
     // For AlnRes::matchesRef
 	ASSERT_ONLY(EList<bool> raw_matches_);
@@ -4610,6 +5488,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
                                                const GraphPolicy&               gpol,
                                                const GFM<index_t>&              gfm,
                                                const ALTDB<index_t>&            altdb,
+                                               const RepeatDB<index_t>&         repeatdb,
                                                const BitPairReference&          ref,
                                                SwAligner&                       swa,
                                                SpliceSiteDB&                    ssdb,
@@ -4629,7 +5508,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
     ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
     assert(hit.done());
     index_t minOff = 0;
-    if(hit.minWidth(minOff) > (index_t)(rp.kseeds * 2)) return false;
+    if(hit.minWidth(minOff) == std::numeric_limits<index_t>::max()) return false;
     
     // Don't try to align if the potential alignment for this read might be
     // worse than the best alignment of its reverse complement
@@ -4638,15 +5517,17 @@ bool HI_Aligner<index_t, local_index_t>::align(
     if(bestScore < _minsc[rdi]) bestScore = _minsc[rdi];
     index_t maxmm = (index_t)((-bestScore + sc.mmpMax - 1) / sc.mmpMax);
     index_t numActualPartialSearch = hit.numActualPartialSearch();
-    if(!_secondary && numActualPartialSearch > maxmm + num_spliced + 1) return true;
+    if(!rp.secondary && numActualPartialSearch > maxmm + num_spliced + 1) return true;
     
     // choose candidate partial alignments for further alignment
     const index_t maxsize = max<index_t>(rp.khits, rp.kseeds);
+    _genomeHits.clear();
     index_t numHits = getAnchorHits(gfm,
                                     pepol,
                                     tpol,
                                     gpol,
                                     altdb,
+                                    repeatdb,
                                     ref,
                                     rnd,
                                     rdi,
@@ -4656,12 +5537,13 @@ bool HI_Aligner<index_t, local_index_t>::align(
                                     _sharedVars,
                                     wlm,
                                     prm,
-                                    him);
+                                    him,
+                                    gfm.repeat());
     if(numHits <= 0) return false;
    
     // limit the number of local index searches used for alignment of the read
     uint64_t add = 0;
-    if(_secondary) add = (-_minsc[rdi] / sc.mmpMax) * numHits * 2;
+    if(rp.secondary) add = (-_minsc[rdi] / sc.mmpMax) * numHits * 2;
     else           add = (-_minsc[rdi] / sc.mmpMax) * numHits;
     max_localindexatts = him.localindexatts + max<uint64_t>(10, add);
     // extend the partial alignments bidirectionally using
@@ -4672,6 +5554,7 @@ bool HI_Aligner<index_t, local_index_t>::align(
                  gpol,
                  gfm,
                  altdb,
+                 repeatdb,
                  ref,
                  swa,
                  ssdb,
@@ -4700,6 +5583,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                    const GraphPolicy&               gpol,
                                                    const GFM<index_t>&              gfm,
                                                    const ALTDB<index_t>&            altdb,
+                                                   const RepeatDB<index_t>&         repeatdb,
                                                    const BitPairReference&          ref,
                                                    SwAligner&                       swa,
                                                    SpliceSiteDB&                    ssdb,
@@ -4714,6 +5598,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                    index_t                          tidx,
                                                    index_t                          toff)
 {
+    const ReportingParams& rp = sink.reportingParams();
+    
     assert_lt(rdi, 2);
     index_t ordi = 1 - rdi;
     bool ofw = (fw == gMate2fw ? gMate1fw : gMate2fw);
@@ -4731,14 +5617,19 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
     // local search to find anchors
     const HGFM<index_t, local_index_t>* hGFM = (const HGFM<index_t, local_index_t>*)(&gfm);
     const LocalGFM<local_index_t, index_t>* lGFM = hGFM->getLocalGFM(tidx, toff);
-    bool success = false, first = true;
+    bool first = true;
     index_t count = 0;
     index_t max_hitlen = 0;
-    while(!success && count++ < 2) {
+    while(count++ < 2) {
         if(first) {
             first = false;
         } else {
-            lGFM = hGFM->prevLocalGFM(lGFM);
+            if(_genomeHits.size() > 0) break;
+            if(fw) {
+                lGFM = hGFM->nextLocalGFM(lGFM);
+            } else {
+                lGFM = hGFM->prevLocalGFM(lGFM);
+            }
             if(lGFM == NULL || lGFM->empty()) break;
         }
         index_t hitoff = rdlen - 1;
@@ -4767,7 +5658,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
             assert_leq(top, bot);
             assert_eq(nelt, (index_t)(node_bot - node_top));
             assert_leq(hitlen, hitoff + 1);
-            if(nelt > 0 && nelt <= 5 && hitlen > max_hitlen) {
+            if(nelt > 0 && nelt <= rp.kseeds && hitlen > max_hitlen) {
                 coords.clear();
                 bool straddled = false;
                 getGenomeCoords_local(
@@ -4793,6 +5684,11 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                 _genomeHits.clear();
                 for(index_t ri = 0; ri < coords.size(); ri++) {
                     const Coord& coord = coords[ri];
+                    if(tpol.no_spliced_alignment()) {
+                        if(coord.off() + pepol.maxFragLen() * 2 < toff || toff + pepol.maxFragLen() * 2 < coord.off())
+                            continue;
+                    }
+                    
                     GenomeHit<index_t>::adjustWithALT(
                                                       hitoff - hitlen + 1,
                                                       hitlen,
@@ -4805,19 +5701,16 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                                                       ref,
                                                       gpol);
                 }
-                max_hitlen = hitlen;
+                 max_hitlen = hitlen;
             }
-            
             assert_leq(hitlen, hitoff + 1);
             if(hitlen > 0) hitoff -= (hitlen - 1);
             if(hitoff > 0) hitoff -= 1;
-        } // while(hitoff >= _minK_local - 1)
-    } // while(!success && count++ < 2)
-    
-    if(max_hitlen < _minK_local) return false;
+        } // while(hitoff >= minHitLen - 1)
+    } // while(count++ < 2)
     
     // randomly select
-    const index_t maxsize = 5;
+    const index_t maxsize = rp.kseeds;
     if(_genomeHits.size() > maxsize) {
         _genomeHits.shufflePortion(0, _genomeHits.size(), rnd);
         _genomeHits.resize(maxsize);
@@ -4833,6 +5726,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                          gfm,
                          ref,
                          altdb,
+                         repeatdb,
                          ssdb,
                          swa,
                          swm,
@@ -4852,6 +5746,7 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                            gpol,
                            gfm,
                            altdb,
+                           repeatdb,
                            ref,
                            swa,
                            ssdb,
@@ -4864,7 +5759,8 @@ bool HI_Aligner<index_t, local_index_t>::alignMate(
                            swm,
                            him,
                            rnd,
-                           sink);
+                           sink,
+                           true); // alignMate?
     }
     
     return true;
@@ -4901,7 +5797,6 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
     assert_leq(node_bot - node_top, bot - top);
     index_t nelt = node_bot - node_top;
     nelt = min<index_t>(nelt, maxelt);
-    coords.clear();
     him.globalgenomecoords += nelt;
     _offs.resize(nelt);
     _offs.fill((index_t)INDEX_MAX);
@@ -4949,7 +5844,11 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords(
         
         // Coordinate of the seed hit w/r/t the pasted reference string
         coords.expand();
-        coords.back().init(global_tidx, (int64_t)global_toff, fw, wr.toff);
+        if(!straddled2) {
+            coords.back().init(global_tidx, (int64_t)global_toff, fw, wr.toff);
+        } else {
+            coords.back().init(numeric_limits<index_t>::max(), (int64_t)global_toff, fw, wr.toff);
+        }
     }
     
     return true;
@@ -4983,7 +5882,6 @@ bool HI_Aligner<index_t, local_index_t>::getGenomeCoords_local(
     assert_gt(bot, top);
     assert_leq(node_bot - node_top, bot - top);
     index_t nelt = node_bot - node_top;
-    coords.clear();
     him.localgenomecoords += nelt;
     _offs_local.resize(nelt);
     _offs_local.fill((local_index_t)INDEX_MAX);
@@ -5054,6 +5952,7 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
                                                    const GraphPolicy&         gpol,
                                                    const GFM<index_t>&        gfm,
                                                    const ALTDB<index_t>&      altdb,
+                                                   const RepeatDB<index_t>&   repeatdb,
                                                    const BitPairReference&    ref,
                                                    WalkMetrics&               wlm,
                                                    PerReadMetrics&            prm,
@@ -5061,76 +5960,95 @@ bool HI_Aligner<index_t, local_index_t>::pairReads(
                                                    RandomSource&              rnd,
                                                    AlnSinkWrap<index_t>&      sink)
 {
+    const ReportingParams& rp = sink.reportingParams();
     assert(_paired);
     const EList<AlnRes> *rs1 = NULL, *rs2 = NULL;
     sink.getUnp1(rs1); assert(rs1 != NULL);
     sink.getUnp2(rs2); assert(rs2 != NULL);
+    index_t start_i = _concordantIdxInspected.first, start_j = _concordantIdxInspected.second;
+    _concordantIdxInspected.first = rs1->size();
+    _concordantIdxInspected.second = rs2->size();
     for(index_t i = 0; i < rs1->size(); i++) {
-        for(index_t j = 0; j < rs2->size(); j++) {
-            bool exists = false;
-            for(index_t k = 0; k < _concordantPairs.size(); k++) {
-                const pair<index_t, index_t>& p = _concordantPairs[k];
-                if(i == p.first && j == p.second) {
-                    exists = true;
-                    break;
-                }
+        for(index_t j = (i >= start_i ? 0 : start_j); j < rs2->size(); j++) {
+            if(sink.state().doneConcordant()) {
+                return true;
             }
-            if(exists) continue;
-            if(sink.state().doneConcordant()) return true;
             const AlnRes& r1 = (*rs1)[i];
             Coord left = r1.refcoord(), right = r1.refcoord_right();
             assert_eq(left.ref(), right.ref());
             const AlnRes& r2 = (*rs2)[j];
             Coord left2 = r2.refcoord(), right2 = r2.refcoord_right();
             assert_eq(left2.ref(), right2.ref());
-            if(left.ref() != left2.ref()) continue;
-            assert_eq(left.orient(), right.orient());
-            assert_eq(left2.orient(), right2.orient());
-            if(left.orient() == gMate1fw) {
-                if(left2.orient() != gMate2fw) continue;
-            } else {
-                if(left2.orient() == gMate2fw) continue;
-                Coord temp = left; left = left2; left2 = temp;
-                temp = right; right = right2; right2 = temp;
-            }
-            if(left.off() > left2.off()) continue;
-            if(right.off() > right2.off()) continue;
-            if(right.off() + (int)tpol.maxIntronLen() < left2.off()) continue;
-            assert_geq(r1.score().score(), _minsc[0]);
-            assert_geq(r2.score().score(), _minsc[1]);
+            
+            if(r1.repeat() != r2.repeat())
+                continue;
+            
             bool dna_frag_pass = true;
-            if(tpol.no_spliced_alignment()) {
-                int pairCl = PE_ALS_DISCORD;
-                assert_eq(r1.refid(), r2.refid());
-                index_t off1, off2, len1, len2;
-                bool fw1, fw2;
-                if(r1.refoff() < r2.refoff()) {
-                    off1 = r1.refoff(); off2 = r2.refoff();
-                    len1 = r1.refExtent(); len2 = r2.refExtent();
-                    fw1 = r1.fw(); fw2 = r2.fw();
-                } else {
-                    off1 = r2.refoff(); off2 = r1.refoff();
-                    len1 = r2.refExtent(); len2 = r1.refExtent();
-                    fw1 = r2.fw(); fw2 = r1.fw();
+            if(r1.repeat() && r2.repeat()) {
+                bool found = false;
+                for(size_t r = 0; r < _repeatConcordant.size(); r++) {
+                    if(_repeatConcordant[r].first == left.off() &&
+                       _repeatConcordant[r].second == left2.off()) {
+                        found = true;
+                        break;
+                    }
                 }
-                // Check that final mate alignments are consistent with
-                // paired-end fragment constraints
-                pairCl = pepol.peClassifyPair(
-                                              off1,
-                                              len1,
-                                              fw1,
-                                              off2,
-                                              len2,
-                                              fw2);
-                dna_frag_pass = (pairCl != PE_ALS_DISCORD);
+                if(!found) {
+                    dna_frag_pass = false;
+                }
+            } else{
+                if(left.ref() != left2.ref()) continue;
+                assert_eq(left.orient(), right.orient());
+                assert_eq(left2.orient(), right2.orient());
+                if(left.orient() == gMate1fw) {
+                    if(left2.orient() != gMate2fw) continue;
+                } else {
+                    if(left2.orient() == gMate2fw) continue;
+                    Coord temp = left; left = left2; left2 = temp;
+                    temp = right; right = right2; right2 = temp;
+                }
+                if(left.off() > left2.off()) continue;
+                if(right.off() > right2.off()) continue;
+                if(right.off() + (int)tpol.maxIntronLen() < left2.off()) continue;
+                assert_geq(r1.score().score(), _minsc[0]);
+                assert_geq(r2.score().score(), _minsc[1]);
+                if(tpol.no_spliced_alignment()){
+                    int pairCl = PE_ALS_DISCORD;
+                    assert_eq(r1.refid(), r2.refid());
+                    index_t off1, off2, len1, len2;
+                    bool fw1, fw2;
+                    if(r1.refoff() < r2.refoff()) {
+                        off1 = r1.refoff(); off2 = r2.refoff();
+                        len1 = r1.refExtent(); len2 = r2.refExtent();
+                        fw1 = r1.fw(); fw2 = r2.fw();
+                    } else {
+                        off1 = r2.refoff(); off2 = r1.refoff();
+                        len1 = r2.refExtent(); len2 = r1.refExtent();
+                        fw1 = r2.fw(); fw2 = r1.fw();
+                    }
+                    // Check that final mate alignments are consistent with
+                    // paired-end fragment constraints
+                    pairCl = pepol.peClassifyPair(
+                                                  off1,
+                                                  len1,
+                                                  fw1,
+                                                  off2,
+                                                  len2,
+                                                  fw2);
+                    dna_frag_pass = (pairCl != PE_ALS_DISCORD);
+                }
             }
         
             if(!tpol.no_spliced_alignment() || dna_frag_pass) {
-                if(r1.score().score() + r2.score().score() >= sink.bestPair() || _secondary) {
+                TAlScore threshold = sink.bestPair();
+                if(sink.bestUnp1() >= _minsc[0] && sink.bestUnp2() >= _minsc[1]) {
+                    TAlScore tmp = sink.bestUnp1() + sink.bestUnp2() - (r1.readLength() + r2.readLength()) * 0.03 * sc.mm(255);
+                    if(tmp > threshold) {
+                        threshold = tmp;
+                    }
+                }
+                if(r1.score().score() + r2.score().score() >= threshold || rp.secondary) {
                     sink.report(0, &r1, &r2);
-                    _concordantPairs.expand();
-                    _concordantPairs.back().first = i;
-                    _concordantPairs.back().second = j;
                 }
             }
         }
@@ -5150,11 +6068,13 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                                                    const GraphPolicy&               gpol,
                                                    const GFM<index_t>&              gfm,
                                                    const ALTDB<index_t>&            altdb,
+                                                   const RepeatDB<index_t>&         repeatdb,
                                                    const BitPairReference&          ref,
                                                    const SpliceSiteDB&              ssdb,
                                                    AlnSinkWrap<index_t>&            sink,
                                                    index_t                          rdi,
                                                    const GenomeHit<index_t>&        hit,
+                                                   bool                             alignMate,
                                                    const GenomeHit<index_t>*        ohit)
 {
     assert_lt(rdi, 2);
@@ -5163,6 +6083,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     index_t rdlen = (index_t)rd.length();
     if(hit.rdoff() - hit.trim5() > 0 || hit.len() + hit.trim5() + hit.trim3() < rdlen) return false;
     if(hit.score() < _minsc[rdi]) return false;
+    if(!sink.reportingParams().repeat && hit.repeat()) return false;
     
     // Edits are represented from 5' end of read to 3' end, not an alignment of read
     EList<Edit>& edits = const_cast<EList<Edit>&>(hit.edits());
@@ -5209,6 +6130,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
                  hit.score(),       // numeric score
                  hit.ns(),          // # Ns
                  hit.ngaps(),       // # gaps
+                 hit.repeat(),
                  hit.splicescore(), // splice score
                  spliced.second,    // mapped to known transcripts?
                  spliced.first,     // spliced alignment or near splice sites (novel)?
@@ -5227,7 +6149,7 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
             0,                          // ambig base first pos
             0,                          // ambig base last pos
             hit.coord(),                // coord of leftmost aligned char in ref
-            gfm.plen()[hit.ref()],      // length of reference aligned to
+            hit.repeat() ? gfm.plen()[0] : gfm.plen()[hit.ref()], // length of reference aligned to
             &_rawEdits,
             -1,                         // # seed mms allowed
             -1,                         // seed length
@@ -5240,7 +6162,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
             0,                          // 3p pre-trimming
             softTrim,                   // soft trimming?
             hit.fw() ? hit.trim5() : hit.trim3(),  // 5p trimming
-            hit.fw() ? hit.trim3() : hit.trim5()); // 3p trimming
+            hit.fw() ? hit.trim3() : hit.trim5(),  // 3p trimming
+            hit.repeat());              // repeat?
     if(!hit.fw()) {
         Edit::invertPoss(edits, rdlen, false);
     }
@@ -5249,6 +6172,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
             edits[i].pos -= hit.trim5();
         }
     }
+    
+
     //rs.setRefNs(nrefn);
     assert(rs.matchesRef(
                          rd,
@@ -5265,9 +6190,9 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
     if(ohit == NULL) {
         bool done;
         if(rdi == 0 && !_rightendonly) {
-            done = sink.report(0, &rs, NULL);
+            done = sink.report(0, &rs, NULL, alignMate);
         } else {
-            done = sink.report(0, NULL, &rs);
+            done = sink.report(0, NULL, &rs, alignMate);
         }
         return done;
     }
@@ -5287,9 +6212,10 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
         Edit::invertPoss(oedits, ordlen, false);
     }
     AlnScore oasc(
-                  ohit->score(),  // numeric score
-                  ohit->ns(),     // # Ns
-                  ohit->ngaps()); // # gaps
+                  ohit->score(),   // numeric score
+                  ohit->ns(),      // # Ns
+                  ohit->ngaps(),   // # gaps
+                  ohit->repeat()); // repeat?
     bool osoftTrim = ohit->trim5() > 0 || ohit->trim3() > 0;
     AlnRes ors;
     ors.init(
@@ -5316,7 +6242,8 @@ bool HI_Aligner<index_t, local_index_t>::reportHit(
              0,                          // 3p pre-trimming
              osoftTrim,                  // soft trimming?
              ohit->fw() ? ohit->trim5() : ohit->trim3(),  // 5p trimming
-             ohit->fw() ? ohit->trim3() : ohit->trim5()); // 3p trimming
+             ohit->fw() ? ohit->trim3() : ohit->trim5(),  // 3p trimming
+             ohit->repeat());            // repeat?
     if(!ohit->fw()) {
         Edit::invertPoss(oedits, ordlen, false);
     }
@@ -5443,7 +6370,8 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
                                                           ReadBWTHit<index_t>&      hit,     // holds all the seed hits (and exact hit)
                                                           RandomSource&             rnd,     // pseudo-random source
                                                           bool&                     pseudogeneStop,
-                                                          bool&                     anchorStop)
+                                                          bool&                     anchorStop,
+                                                          index_t                   maxHitLen)
 {
     bool pseudogeneStop_ = pseudogeneStop, anchorStop_ = anchorStop;
     pseudogeneStop = anchorStop = false;
@@ -5528,7 +6456,7 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
     index_t same_range = 0, similar_range = 0;
     HIER_INIT_LOCS(range.first, range.second, tloc, bloc, gfm);
     // Keep going
-    while(dep < len) {
+    while(dep < len && dep - offset < maxHitLen) {
         int c = seq[len-dep-1];
         if(c > 3) {
             rangeTemp.first = rangeTemp.second = 0;
@@ -5557,7 +6485,6 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
         if(rangeTemp.first >= rangeTemp.second) {
             break;
         }
-
         if(pseudogeneStop_) {
             if(node_rangeTemp.second - node_rangeTemp.first < node_range.second - node_range.first && node_range.second - node_range.first <= min<index_t>(5, (index_t)rp.khits)) {
                 static const index_t minLenForPseudogene = (index_t)_minK + 6;
@@ -5599,7 +6526,7 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
             _node_iedge_count.clear();
         }
         dep++;
-
+        
         if(anchorStop_) {
             if(dep - offset >= _minK + 12 && range.second - range.first == 1) {
                 hit._numUniqueSearch++;
@@ -5837,8 +6764,10 @@ index_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
                                                            RandomSource&                    rnd,
                                                            bool&                            uniqueStop,
                                                            local_index_t                    minUniqueLen,
-                                                           local_index_t                    maxHitLen)
+                                                           local_index_t                    maxHitLen,
+                                                           local_index_t                    maxHits)
 {
+    maxHits = max<local_index_t>(maxHits, rp.kseeds);
     bool uniqueStop_ = uniqueStop;
     uniqueStop = false;
     const local_index_t ftabLen = (local_index_t)gfm.gh().ftabChars();
@@ -5934,7 +6863,7 @@ index_t HI_Aligner<index_t, local_index_t>::localGFMSearch(
     }
     
     // Done
-    if(node_range.first < node_range.second && node_range.second - node_range.first <= rp.kseeds) {
+    if(node_range.first < node_range.second && node_range.second - node_range.first <= maxHits) {
         assert_leq(node_range.second - node_range.first, range.second - range.first);
 #ifndef NDEBUG
         if(node_range.second - node_range.first < range.second - range.first) {

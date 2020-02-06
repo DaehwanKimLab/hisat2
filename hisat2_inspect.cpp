@@ -241,6 +241,7 @@ static void print_ref_sequences(
 {
 	BitPairReference ref(
 		adjustedGFMFileBase, // input basename
+        NULL,
 		false,                // true -> expect colorspace reference
 		false,                // sanity-check reference
 		NULL,                 // infiles
@@ -352,6 +353,8 @@ static void print_snps(
     GFM<index_t> gfm(
                      fname,
                      &altdb,
+                     NULL,
+                     NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -434,6 +437,8 @@ static void print_splicesites(
     GFM<index_t> gfm(
                      fname,
                      &altdb,
+					 NULL,
+                     NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -506,6 +511,8 @@ static void print_exons(
     GFM<index_t> gfm(
                      fname,
                      &altdb,
+                     NULL,
+                     NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -580,6 +587,8 @@ static void print_index_summary(
 	GFM<index_t> gfm(
                      fname,
                      &altdb,
+                     NULL,
+                     NULL,
                      -1,                   // don't require entire reverse
                      true,                 // index is for the forward direction
                      -1,                   // offrate (-1 = index default)
@@ -663,6 +672,8 @@ static void driver(
 		HGFM<TIndexOffU, uint16_t> gfm(
                                        adjustedEbwtFileBase,
                                        &altdb,
+									   NULL,
+                                       NULL,
                                        -1,                   // don't care about entire-reverse
                                        true,                 // index is for the forward direction
                                        -1,                   // offrate (-1 = index default)

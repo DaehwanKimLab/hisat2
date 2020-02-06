@@ -1,6 +1,6 @@
 ---
 layout: page
-title: HOWTO
+title: HowTo
 permalink: /howto/
 order: 5
 share: false

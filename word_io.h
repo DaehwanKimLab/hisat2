@@ -100,6 +100,13 @@ static inline void writeI16(std::ostream& out, int16_t x) {
 }
 
 /**
+ * Write a 8-bit unsigned to an output stream.
+ */
+static inline void writeU8(std::ostream& out, uint8_t x) {
+    out.write((const char*)&x, 1);
+}
+
+/**
  * Read a 32-bit unsigned from an input stream, inverting endianness
  * if necessary.
  */
@@ -296,6 +303,16 @@ static inline uint16_t readI16(FILE* in, bool swap) {
 	} else {
 		return x;
 	}
+}
+
+/**
+ * Read a 8-bit unsigned from an input stream
+ */
+static inline uint8_t readU8(std::istream& in) {
+    uint8_t x;
+    in.read((char *)&x, 1);
+    assert_eq(1, in.gcount());
+    return x;
 }
 
 template <typename index_t>

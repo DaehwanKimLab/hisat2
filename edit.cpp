@@ -48,6 +48,21 @@ void Edit::print(ostream& os, const EList<Edit>& edits, char delim) {
 	}
 }
 
+void Edit::complement(EList<Edit> &edits)
+{
+    for(size_t i = 0; i < edits.size(); i++) {
+        Edit& e = edits[i];
+
+        if(e.type != EDIT_TYPE_SPL) {
+			assert_in(e.chr, "ACMGRSVTWYHKDBN-");
+			assert_in(e.qchr, "ACGTN-");
+
+			e.chr = asc2dnacomp[e.chr];
+			e.qchr = asc2dnacomp[e.qchr];
+        }
+    }
+}
+
 /**
  * Flip all the edits.pos fields so that they're with respect to
  * the other end of the read (of length 'sz').

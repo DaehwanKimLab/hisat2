@@ -208,10 +208,7 @@ def download_genome_and_index():
 """
 def clone_hisatgenotype_database():
     os.system("git clone https://github.com/DaehwanKimLab/hisatgenotype_db.git")
-    
-    # Check out one particular revision just to have the same data across multiple computers        
-    # revision = "d3b559b34b96ff9e7f0d97476222d8e4cdee63ad" # Revision on November 16, 2016
-    # os.system("cd IMGTHLA; git checkout %s; cd .." % revision)
+    os.system("cd hisatgenotype_db; git checkout hisatgenotype_v1.0.2_beta; cd ..")
 
 
 """
@@ -229,6 +226,7 @@ def extract_database_if_not_exists(base,
               base + ".index.snp",
               base + ".haplotype",
               base + ".link",
+              base + ".allele",
               base + ".partial"]
     if check_files(fnames):
         return
@@ -239,11 +237,8 @@ def extract_database_if_not_exists(base,
         extract_cmd += ["--locus-list", ','.join(locus_list)]    
     if not partial:
         extract_cmd += ["--no-partial"]
-    if base == "codis":
-        extract_cmd += ["--whole-haplotype"]
-    else:
-        extract_cmd += ["--inter-gap", str(inter_gap),
-                        "--intra-gap", str(intra_gap)]
+    extract_cmd += ["--inter-gap", str(inter_gap),
+                    "--intra-gap", str(intra_gap)]
     if base == "hla":
         extract_cmd += ["--min-var-freq", "0.1"]
 
@@ -610,7 +605,9 @@ def align_reads(aligner,
             aligner_cmd += ["--max-altstried", "64"]
             aligner_cmd += ["--haplotype"]
             if base_fname == "codis":
-                aligner_cmd += ["--enable-codis"]        
+                aligner_cmd += ["--enable-codis"]
+                aligner_cmd += ["--no-softclip"]
+
     elif aligner == "bowtie2":
         aligner_cmd = [aligner,
                        "--no-unal",
@@ -627,6 +624,7 @@ def align_reads(aligner,
     else:
         aligner_cmd += ["-1", "%s" % read_fname[0],
                         "-2", "%s" % read_fname[1]]
+
     if verbose >= 1:
         print >> sys.stderr, ' '.join(aligner_cmd)
     align_proc = subprocess.Popen(aligner_cmd,
@@ -905,7 +903,9 @@ def Gene_prob_cmp(a, b):
 
 """
 """
-def single_abundance(Gene_cmpt, Gene_length, exonic = False):
+def single_abundance(Gene_cmpt,
+                     remove_low_abundance_allele = False,
+                     Gene_length = {}):
     def normalize(prob):
         total = sum(prob.values())
         for allele, mass in prob.items():
@@ -927,10 +927,10 @@ def single_abundance(Gene_cmpt, Gene_length, exonic = False):
             if allele not in Gene_prob:
                 Gene_prob[allele] = 0.0
             Gene_prob[allele] += (float(count) / len(alleles))
-    if exonic:
-        normalize(Gene_prob)
-    else:
+    if len(Gene_length) > 0:
         normalize_len(Gene_prob, Gene_length)
+    else:
+        normalize(Gene_prob)
 
     def next_prob(Gene_cmpt, Gene_prob, Gene_length):
         Gene_prob_next = {}
@@ -949,10 +949,10 @@ def single_abundance(Gene_cmpt, Gene_length, exonic = False):
                 if allele not in Gene_prob_next:
                     Gene_prob_next[allele] = 0.0
                 Gene_prob_next[allele] += (float(count) * Gene_prob[allele] / alleles_prob)
-        if exonic:
-            normalize(Gene_prob_next)
-        else:
+        if len(Gene_length) > 0:
             normalize_len(Gene_prob_next, Gene_length)
+        else:
+            normalize(Gene_prob_next)
         return Gene_prob_next
 
     def select_alleles(Gene_prob):
@@ -991,23 +991,24 @@ def single_abundance(Gene_cmpt, Gene_length, exonic = False):
         Gene_prob = Gene_prob_next
 
         # Accelerate convergence
-        if iter >= 10:
+        if iter >= 10 and remove_low_abundance_allele:
             Gene_prob = select_alleles(Gene_prob)
 
         # DK - debugging purposes
         if iter % 10 == 0 and False:
             print >> sys.stderr, "iter", iter
             for allele, prob in Gene_prob.items():
-                if prob >= 0.01:
+                if prob >= 0.001:
                     print >> sys.stderr, "\t", iter, allele, prob
         
         iter += 1
-        
-    Gene_prob = select_alleles(Gene_prob)
-    if exonic:
-        normalize(Gene_prob)
+
+    if remove_low_abundance_allele:
+        Gene_prob = select_alleles(Gene_prob)
+    if len(Gene_length) > 0:
+            normalize_len(Gene_prob, Gene_length)
     else:
-        normalize_len(Gene_prob, Gene_length)
+        normalize(Gene_prob)
     Gene_prob = [[allele, prob] for allele, prob in Gene_prob.items()]
     Gene_prob = sorted(Gene_prob, cmp=Gene_prob_cmp)
     return Gene_prob
@@ -1292,7 +1293,7 @@ def identify_ambigious_diffs(ref_seq,
         type, cur_left, length = cmp_i[:3]
         var_id = cmp_i[3] if type in ["mismatch", "deletion"] else ""
 
-        # DK - debugging purpose
+        # DK - debugging purposes
         if type in ["mismatch", "deletion", "insertion"]:
             if not var_id.startswith("hv"):
                 continue
@@ -1314,6 +1315,7 @@ def identify_ambigious_diffs(ref_seq,
                 break            
             if ht_pos > cur_right:
                 continue
+
             if len(cur_ht) > 0:
                 if ht.find('-'.join(cur_ht)) == -1:
                     continue
@@ -1321,27 +1323,27 @@ def identify_ambigious_diffs(ref_seq,
             ht = ht.split('-')[:-1]
             if len(cur_ht) + 1 == len(ht):
                 ht_pos = int(ht[0])
+                if left < ht_pos:
+                    continue
             else:
                 var_id2 = ht[len(ht) - len(cur_ht) - 1]
                 ht_type, ht_pos, ht_data = Vars[var_id2]
                 if ht_type == "deletion":
                     ht_pos = ht_pos + int(ht_data) - 1
-                    
-            if left < ht_pos:
-                continue
+                if left <= ht_pos:
+                    continue
 
             i_found = True
-
             if debug:
                 print cmp_list[:i+1]
-                print "\t", cur_ht, "vs", Alts_left_list[ht_j], ht_pos
+                print "\t", cur_ht, "vs", Alts_left_list[ht_j]
 
             _, rep_ht = Alts_left_list[ht_j]
 
             if debug:
                 print "DK1:", cmp_i, cmp_list
                 print "DK2:", rep_ht, Alts_left[rep_ht]
-                print "DK3:", left, right, ht_pos
+                print "DK3:", left, right
 
             for alt_ht_str in Alts_left[rep_ht]:
                 alt_ht = alt_ht_str.split('-')
@@ -1441,12 +1443,13 @@ def identify_ambigious_diffs(ref_seq,
             ht = ht.split('-')[1:]
             if len(cur_ht) + 1 == len(ht):
                 ht_pos = int(ht[-1])
+                if right > ht_pos:
+                    continue
             else:
                 var_id2 = ht[len(cur_ht)]
-                _, ht_pos, _ = Vars[var_id2]
-
-            if right > ht_pos:
-                continue
+                var_type, ht_pos, _ = Vars[var_id2]
+                if right >= ht_pos:
+                    continue
 
             i_found = True
             _, rep_ht = Alts_right_list[ht_j]

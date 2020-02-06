@@ -1,0 +1,57 @@
+date; time bowtie2 -X 800 --extends 1000 --score-min C,0 -p 3 -x 20 -f -1 1.fa -2 2.fa > bowtie2.sam
+
+date; time hisat2 --no-spliced-alignment --score-min C,0 -X 800 -p 3 -x 20 -f -1 1.fa -2 2.fa > hisat2.sam
+
+
+
+# Chromosome 22
+
+/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --repeat-length 51-300,76-300,100-300,101-300,151-300 --repeat-count 5 22.fa 22_rep
+
+/usr/bin/time -l hisat2-build -p 3 22.fa --repeat-ref 22_rep.rep.fa --repeat-info 22_rep.rep.info 22_rep
+
+hisat2_simulate_reads.py --dna --num-fragment 1000000 --repeat-info 22_rep.rep.info 22.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 1000000 --error-rate 0.2 --repeat-info 22_rep.rep.info 22.fa /dev/null /dev/null sim
+
+cp 22_rep.rep.info ../../data/
+cp 22_rep*ht2 ../../indexes/HISAT2_22
+
+
+
+
+# Human genome
+
+/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --repeat-length 100-300,101-300 --repeat-count 5 genome.fa genome_rep
+
+/usr/bin/time -l hisat2-build -p 3 genome.fa --repeat-ref genome_rep.rep.fa --repeat-info genome_rep.rep.info genome_rep
+
+/usr/bin/time -l hisat2-repeat -p 3 --save-sa --load-sa --repeat-edit 0 --repeat-length 101--300 --repeat-count 5 genome.fa genome_rep-101-300
+
+/usr/bin/time -l hisat2-build -p 3 genome.fa --repeat-ref genome_rep-101-300.rep.fa --repeat-info genome_rep-101-300.rep.info  genome_rep-101-300
+
+hisat2_simulate_reads.py --dna --num-fragment 1000 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 1000 --error-rate 0.2 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 10000 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 10000 --error-rate 0.2 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 10000000 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+hisat2_simulate_reads.py --dna --num-fragment 10000000 --error-rate 0.2 --repeat-info genome_rep.rep.info genome.fa /dev/null /dev/null sim
+
+cp genome_rep.rep.info ../../data/
+cp genome_rep.*ht2 ../../indexes/HISAT2
+
+
+
+
+# Bisulfite-treated sequencing
+
+/usr/bin/time -l hisat2-repeat -p 3 --repeat-length 100 --repeat-count 2 --repeat-edit 0 --forward-only --CGtoTG 22.fa 22_rep
+
+/usr/bin/time -l hisat2-repeat -p 3 --repeat-length 200 --repeat-count 2 --repeat-edit 0 --forward-only --CGtoTG genome.fa genome_rep
+
+

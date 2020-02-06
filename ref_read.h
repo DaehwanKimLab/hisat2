@@ -129,7 +129,8 @@ fastaRefReadSize(
 	FileBuf& in,
 	const RefReadInParams& rparms,
 	bool first,
-	BitpairOutFileBuf* bpout = NULL);
+	BitpairOutFileBuf* bpout,
+	string *name = NULL);
 
 extern std::pair<size_t, size_t>
 fastaRefReadSizes(
@@ -138,6 +139,15 @@ fastaRefReadSizes(
 	const RefReadInParams& rparms,
 	BitpairOutFileBuf* bpout,
 	TIndexOff& numSeqs);
+
+extern std::pair<size_t, size_t>
+fastaRefReadFragsNames(
+	EList<FileBuf*>& in,
+	EList<RefRecord>& recs,
+	const RefReadInParams& rparms,
+	BitpairOutFileBuf* bpout,
+	TIndexOff& numSeqs,
+	EList<string>& names);
 
 extern void
 reverseRefRecords(
@@ -282,7 +292,7 @@ static RefRecord fastaRefReadAppend(
 		if(cat == 1) {
 			// Consume it
 			if(!rparms.color || lc != -1) len++;
-			// Add it to referenece buffer
+			// Add it to reference buffer
 			if(rparms.color) {
 				dst.set((char)dinuc2color[asc2dna[(int)c]][lc], dstoff++);
 			} else if(!rparms.color) {

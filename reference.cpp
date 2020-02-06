@@ -29,6 +29,7 @@ using namespace std;
  */
 BitPairReference::BitPairReference(
 	const string& in,
+    const EList<uint8_t>* included,
 	bool color,
 	bool sanity,
 	EList<string>* infiles,
@@ -126,9 +127,20 @@ BitPairReference::BitPairReference(
 	// allocate in buf_)
 	TIndexOffU cumsz = 0;
 	TIndexOffU cumlen = 0;
+    
+    EList<TIndexOffU> seq_poss;
+    TIndexOffU seq_cumpos = 0;
+    TIndexOffU skips = 0;
 	// For each unambiguous stretch...
 	for(TIndexOffU i = 0; i < sz; i++) {
 		recs_.push_back(RefRecord(f3, swap));
+        if(included != NULL && !(*included)[i]) {
+            seq_cumpos += recs_.back().len;
+            recs_.pop_back();
+            skips++;
+            continue;
+        }
+        seq_poss.push_back(seq_cumpos);
 		if(recs_.back().first) {
 			// This is the first record for this reference sequence (and the
 			// last record for the one before)
@@ -153,6 +165,7 @@ BitPairReference::BitPairReference(
 		cumsz += recs_.back().len;
 		cumlen += recs_.back().off;
 		cumlen += recs_.back().len;
+        seq_cumpos += recs_.back().len;
 	}
 	if(verbose_ || startVerbose) {
 		cerr << "Read " << nrefs_ << " reference strings from "
@@ -167,8 +180,9 @@ BitPairReference::BitPairReference(
 	cumRefOff_.push_back(cumlen);
 	bufSz_ = cumsz;
 	assert_eq(nrefs_, refLens_.size());
-	assert_eq(sz, recs_.size());
+	assert_eq(sz, recs_.size() + skips);
 	if (f3 != NULL) fclose(f3); // done with .3.gfm_ext file
+    
 	// Round cumsz up to nearest byte boundary
 	if((cumsz & 3) != 0) {
 		cumsz += (4 - (cumsz & 3));
@@ -223,18 +237,70 @@ BitPairReference::BitPairReference(
 				loaded_ = false;
 				return;
 			}
-			// Read the whole thing in
-			size_t ret = fread(buf_, 1, cumsz >> 2, f4);
-			// Didn't read all of it?
-			if(ret != (cumsz >> 2)) {
-				cerr << "Only read " << ret << " bytes (out of " << (cumsz >> 2) << ") from reference index file " << s4.c_str() << endl;
-				throw 1;
-			}
-			// Make sure there's no more
-			char c;
-			ret = fread(&c, 1, 1, f4);
-			assert_eq(0, ret); // should have failed
-			fclose(f4);
+            if(included == NULL) {
+                // Read the whole thing in
+                size_t ret = fread(buf_, 1, cumsz >> 2, f4);
+                // Didn't read all of it?
+                if(ret != (cumsz >> 2)) {
+                    cerr << "Only read " << ret << " bytes (out of " << (cumsz >> 2) << ") from reference index file " << s4.c_str() << endl;
+                    throw 1;
+                }
+                // Make sure there's no more
+                char c;
+                ret = fread(&c, 1, 1, f4);
+                assert_eq(0, ret); // should have failed
+            } else {
+                TIndexOffU buf_pos = 0;
+                uint8_t four_buf = 0, four_buf2 = 0;
+                for(size_t i = 0; i < seq_poss.size(); i++) {
+                    TIndexOffU seq_pos = seq_poss[i];
+                    TIndexOffU cur_len = refLens_[i];
+                    TIndexOffU seq_pos2 = seq_pos + cur_len;
+                    TIndexOffU left_pad = seq_pos & 3;
+                    assert_eq((seq_pos - left_pad) & 3, 0);
+                    TIndexOffU right_pad = 4 - (seq_pos2 & 3);
+                    if(right_pad == 4) right_pad = 0;
+                    assert_eq((seq_pos2 + right_pad) & 3, 0);
+                    TIndexOffU cur_len2 = left_pad + cur_len + right_pad;
+                    assert_eq(cur_len2 & 3, 0);
+                    uint8_t *buf2_ = new uint8_t[cur_len2 >> 2];
+                    // Read sequences selectively
+                    fseek(f4, (seq_pos - left_pad) >> 2, SEEK_SET);
+                    size_t ret = fread(buf2_, 1, cur_len2 >> 2, f4);
+                    // Didn't read all of it?
+                    if(ret != (cur_len2 >> 2)) {
+                        cerr << "Only read " << ret << " bytes (out of " << (cur_len2 >> 2) << ") from reference index file " << s4.c_str() << endl;
+                        throw 1;
+                    }
+                    four_buf2 = buf2_[0] >> (left_pad << 1);
+                    for(TIndexOffU j = seq_pos; j < seq_pos2; j++, buf_pos++) {
+                        if((j & 3) == 0) {
+                            four_buf2 = buf2_[(j - (seq_pos - left_pad)) >> 2];
+                        }
+                        uint8_t nt = four_buf2 & 3;
+                        four_buf2 >>= 2;
+                        four_buf |= (nt << ((buf_pos & 3) << 1));
+                        if((buf_pos & 3) == 3) {
+                            buf_[buf_pos >> 2] = four_buf;
+                            four_buf = 0;
+                        }
+                    }
+                    delete [] buf2_;
+                    seq_pos += cur_len;
+                }
+#ifndef NDEBUG
+                TIndexOffU cumsz2 = 0;
+                for(size_t i = 0; i < refLens_.size(); i++) {
+                    cumsz2 += refLens_[i];
+                }
+                assert_eq(buf_pos, cumsz2);
+#endif
+                if((buf_pos & 3) != 0) {
+                    buf_[buf_pos >> 2] = four_buf;
+                }
+                assert_eq(nrefs_, refLens_.size());
+            }
+            fclose(f4);
 #ifdef BOWTIE_SHARED_MEM
 			if(useShmem_) NOTIFY_SHARED(buf_, (cumsz >> 2));
 #endif
@@ -590,7 +656,8 @@ BitPairReference::szsFromFasta(
 	bool bigEndian,
 	const RefReadInParams& refparams,
 	EList<RefRecord>& szs,
-	bool sanity)
+	bool sanity,
+	EList<string> *names)
 {
 	RefReadInParams parms = refparams;
 	std::pair<size_t, size_t> sztot;
@@ -611,32 +678,10 @@ BitPairReference::szsFromFasta(
 		// into a vector of RefRecords.  The input streams are reset once
 		// it's done.
 		writeIndex<int32_t>(fout3, 1, bigEndian); // endianness sentinel
-		bool color = parms.color;
-		if(color) {
-			parms.color = false;
-			// Make sure the .3.gfm_ext and .4.gfm_ext files contain
-			// nucleotides; not colors
-			TIndexOff numSeqs = 0;
-			ASSERT_ONLY(std::pair<size_t, size_t> sztot2 =)
-			fastaRefReadSizes(is, szs, parms, &bpout, numSeqs);
-			parms.color = true;
-			writeIndex<TIndexOffU>(fout3, (TIndexOffU)szs.size(), bigEndian); // write # records
-			for(size_t i = 0; i < szs.size(); i++) {
-				szs[i].write(fout3, bigEndian);
-			}
-			szs.clear();
-			// Now read in the colorspace size records; these are
-			// the ones that were indexed
-			TIndexOff numSeqs2 = 0;
-			sztot = fastaRefReadSizes(is, szs, parms, NULL, numSeqs2);
-			assert_eq(numSeqs, numSeqs2);
-			assert_eq(sztot2.second, sztot.second + numSeqs);
-		} else {
-			TIndexOff numSeqs = 0;
-			sztot = fastaRefReadSizes(is, szs, parms, &bpout, numSeqs);
-			writeIndex<TIndexOffU>(fout3, (TIndexOffU)szs.size(), bigEndian); // write # records
-			for(size_t i = 0; i < szs.size(); i++) szs[i].write(fout3, bigEndian);
-		}
+        TIndexOff numSeqs = 0;
+        sztot = fastaRefReadSizes(is, szs, parms, &bpout, numSeqs);
+        writeIndex<TIndexOffU>(fout3, (TIndexOffU)szs.size(), bigEndian); // write # records
+        for(size_t i = 0; i < szs.size(); i++) szs[i].write(fout3, bigEndian);
 		if(sztot.first == 0) {
 			cerr << "Error: No unambiguous stretches of characters in the input.  Aborting..." << endl;
 			throw 1;
@@ -649,7 +694,8 @@ BitPairReference::szsFromFasta(
 		// Read in the sizes of all the unambiguous stretches of the
 		// genome into a vector of RefRecords
 		TIndexOff numSeqs = 0;
-		sztot = fastaRefReadSizes(is, szs, parms, NULL, numSeqs);
+		//sztot = fastaRefReadSizes(is, szs, parms, NULL, numSeqs);
+		sztot = fastaRefReadFragsNames(is, szs, parms, NULL, numSeqs, *names);
 #ifndef NDEBUG
 		if(parms.color) {
 			parms.color = false;

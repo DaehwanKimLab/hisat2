@@ -199,11 +199,11 @@ class Node:
     
     # Combine two nodes with considering deletions
     def combine_with(self, other):
-
         # DK - debugging purposes
         if self.left > other.left:
             self.print_info()
             other.print_info()
+            return
         
         assert self.left <= other.left
 
@@ -325,7 +325,7 @@ class Node:
 
     
     # Get variant ids
-    #   left, right are absolute coordinates
+    #   left and right are gene-level coordinates
     def get_vars(self, left = 0, right = sys.maxint):
         vars = []
         left = max(left, self.left)
@@ -362,7 +362,7 @@ class Node:
                 assert var in self.ref_vars
                 type, var_pos, data = self.ref_vars[var]                    
                 if data == nt or (type == "deletion" and nt == 'D'):
-                    assert pos >= var_pos
+                    assert pos + ins_len >= var_pos
                     if type == "deletion" and pos > var_pos:
                         continue                    
                     if type == "deletion":
@@ -443,6 +443,7 @@ class Graph:
                  backbone,
                  gene_vars,
                  exons,
+                 primary_exons,
                  partial_allele_ids,
                  true_allele_nodes = {},
                  predicted_allele_nodes = {},
@@ -451,6 +452,7 @@ class Graph:
         self.backbone = backbone # backbone sequence
         self.gene_vars = gene_vars
         self.exons = exons
+        self.primary_exons = primary_exons
         self.partial_allele_ids = partial_allele_ids
         self.true_allele_nodes = true_allele_nodes
         self.predicted_allele_nodes = predicted_allele_nodes
@@ -459,36 +461,38 @@ class Graph:
         self.simulation = simulation
 
         self.read_nodes = self.nodes = {}
+        self.other_nodes = {}
         self.edges = {}
         self.to_node, self.from_node = {}, {}
 
-        self.left_margin = 300
+        self.left_margin = 350
         self.right_margin = 20
         self.top_margin = 20
         self.bottom_margin = 20
 
-        if len(backbone) <= 4000:
-            self.scalex = 5
-        elif len(backbone) <= 8000:
-            self.scalex = 2
-        else:
-            self.scalex = 1
-        self.scaley = 2
+        self.scalex, self.scaley = 5, 2
         self.width = len(self.backbone) * self.scalex + self.left_margin + self.right_margin
         self.unscaled_height = 6000
         self.height = self.unscaled_height * self.scaley
+        self.coverage = {}
 
 
     # Add node, which is an alignment w.r.t. the reference
-    def add_node(self, id, node, simulation = False):
+    def add_node(self, id, id_i, node, simulation = False):
         if simulation:
             id = id.split('_')[0]
-        if id in self.nodes:
-            print >> sys.stderr, "Warning) multi-mapped read:", id
-            # assert False
-            return
-        assert id not in self.nodes
-        self.nodes[id] = node
+            
+        if id_i == 0:
+            if id in self.nodes:
+                print >> sys.stderr, "Warning) multi-mapped read:", id
+                # assert False
+                return
+            assert id not in self.nodes
+            self.nodes[id] = node
+        else:
+            if id not in self.other_nodes:
+                self.other_nodes[id] = []
+            self.other_nodes[id].append(node)
 
         
     # Remove nodes that are inside other nodes or with low coverage
@@ -544,73 +548,95 @@ class Graph:
         k = 60 # k-mer
 
         DRB1_debug = False
-        CP_IMPL = True
 
         node_seq = {}
-        for id, node in self.nodes.items():
-            s, seq = 0, []
-            while s < len(node.seq):
-                nt_dic = node.seq[s] # {'C': [1, '']}
-                nt = get_major_nt(nt_dic)
-                if nt in "ACGTND":
-                    seq.append(nt)
-                else:
-                    assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
-                s += 1
+        def add_node_seq(node_seq, id):
+            nodes = [self.nodes[id]]
+            if id in self.other_nodes:
+                nodes += self.other_nodes[id]
+            for node_i in range(len(nodes)):
+                node = nodes[node_i]
+                s, seq = 0, []
+                while s < len(node.seq):
+                    nt_dic = node.seq[s] # {'C': [1, '']}
+                    nt = get_major_nt(nt_dic)
+                    if nt in "ACGTND":
+                        seq.append(nt)
+                    else:
+                        assert len(nt) == 2 and nt[0] == 'I' and nt[1] in "ACGT"
+                    s += 1
 
-            if len(seq) < k:
-                continue
+                if len(seq) < k:
+                    continue
 
-            def leftshift(seq, ref_seq):
-                seq_len = len(seq)
-                assert seq_len > 0 and seq[0] != 'D'
+                def leftshift(seq, ref_seq):
+                    seq_len = len(seq)
+                    assert seq_len > 0 and seq[0] != 'D'
 
-                bp_i = 0
-                while bp_i < seq_len:
-                    bp = seq[bp_i]
-                    if bp != 'D':
-                        bp_i += 1
-                        continue
-                    bp_j = bp_i + 1
-                    while bp_j < seq_len:
-                        bp2 = seq[bp_j]
-                        if bp2 != 'D':
-                            break
-                        else:
-                            bp_j += 1
-
-                    if bp_j >= seq_len:
-                        bp_i = bp_j
-                        break
-
-                    prev_i, prev_j = bp_i, bp_j
-                    while bp_i > 0 and seq[bp_i-1] in "ACGT" and ref_seq[bp_j-1] in "ACGT":
-                        if seq[bp_i-1] != ref_seq[bp_j-1]:
-                            break
-                        seq[bp_j-1] = seq[bp_i-1]
-                        seq[bp_i-1] = 'D'
-                        bp_i -= 1
-                        bp_j -= 1
-                    bp_i = bp_j
+                    bp_i = 0
                     while bp_i < seq_len:
-                        if seq[bp_i] in "ACGT":
-                            break
-                        bp_i += 1
+                        bp = seq[bp_i]
+                        if bp != 'D':
+                            bp_i += 1
+                            continue
+                        bp_j = bp_i + 1
+                        while bp_j < seq_len:
+                            bp2 = seq[bp_j]
+                            if bp2 != 'D':
+                                break
+                            else:
+                                bp_j += 1
 
-            if DRB1_debug:
-                leftshift(seq, self.backbone[node.left:node.left + len(seq)])
-            node_seq[id] = seq
+                        if bp_j >= seq_len:
+                            bp_i = bp_j
+                            break
+
+                        prev_i, prev_j = bp_i, bp_j
+                        while bp_i > 0 and seq[bp_i-1] in "ACGT" and ref_seq[bp_j-1] in "ACGT":
+                            if seq[bp_i-1] != ref_seq[bp_j-1]:
+                                break
+                            seq[bp_j-1] = seq[bp_i-1]
+                            seq[bp_i-1] = 'D'
+                            bp_i -= 1
+                            bp_j -= 1
+                        bp_i = bp_j
+                        while bp_i < seq_len:
+                            if seq[bp_i] in "ACGT":
+                                break
+                            bp_i += 1
+
+                if DRB1_debug:
+                    leftshift(seq, self.backbone[node.left:node.left + len(seq)])
+                node_seq["%s.%d" % (id, node_i)] = seq
+            
+        for id in self.nodes.keys():
+            add_node_seq(node_seq, id)
+            
+        # AAA.1 => AAA, 1
+        def get_id_and_sub(id):
+            id_split = id.split('.')
+            return '.'.join(id_split[:-1]), int(id_split[-1])
 
         try_hard = False
         while True:
             delete_ids = set()
             nodes = []
             for id, node in self.nodes.items():
-                seq = node_seq[id]
-                if len(seq) < k:
-                    continue
-                kmer, seq = seq[:k], seq[k:]
-                nodes.append([id, node.left, node.right, kmer, seq])
+                nodes_ = [node]
+                if id in self.other_nodes:
+                    nodes_ += self.other_nodes[id]
+                for node_i in range(len(nodes_)):
+                    node = nodes_[node_i]
+                    id_ = "%s.%d" % (id, node_i)
+                    if id_ not in node_seq:
+                        continue
+                    seq = node_seq[id_]
+
+                    if len(seq) < k or \
+                       'N' in seq:
+                        continue
+                    kmer, seq = seq[:k], seq[k:]
+                    nodes.append([id_, node.left, node.right, kmer, seq])
                 
             def node_cmp(a, b):
                 if a[1] != b[1]:
@@ -702,12 +728,23 @@ class Graph:
                     for num_id in num_ids:
                         if num_id in delete_ids:
                             continue
-                        read_id = num_to_id[num_id]
+                        read_id = get_id_and_sub(num_to_id[num_id])[0]
+                        if read_id in self.other_nodes:
+                            continue
                         mate_read_id = get_mate_node_id(read_id)
                         if mate_read_id in self.nodes:
                             vertice_count[v] += 1
 
-                # DK - debugging purposes
+                # First look at and remove reads that are multi-aligned locally
+                first_pair = None
+                for v in range(len(vertices)):
+                    read_ids = set([get_id_and_sub(num_to_id[num_id])[0] for num_id in vertices[v][3]])
+                    for v2 in range(v + 1, len(vertices)):
+                        read_ids2 = set([get_id_and_sub(num_to_id[num_id])[0] for num_id in vertices[v2][3]])
+                        if read_ids & read_ids2:
+                            first_pair = [v, v2, read_ids & read_ids2]
+                            break
+
                 debug_msg = False
                 if debug_msg:
                     print >> sys.stderr, "at", pos, vertices
@@ -723,64 +760,112 @@ class Graph:
                         if debug_msg:
                             print >> sys.stderr, v, "is removed with", num_ids
                 else:
-                    for v in range(len(vertices)):
+                    if first_pair:
+                        v, v2, multi_read_ids = first_pair
+                        v_ = v if vertice_count[v] < vertice_count[v2] else v2
+                        for num_id in vertices[v_][3]:
+                            id = get_id_and_sub(num_to_id[num_id])[0]
+                            if id in multi_read_ids:
+                                delete_ids.add(num_id)
+                    else:
                         assert len(vertices) >= 2
                         relative_avg = (sum(vertice_count) - vertice_count[v]) / float(len(vertice_count) - 1)
                         if len(vertices) == 2:
-                            # Eliminate reads that have conflicts with other reads due to a deletion
-                            if vertice_count[v] * 2 < relative_avg:
-                                nt, kmer, _, num_ids = vertices[1-v]
-                                if nt == 'D':
-                                    num_id = num_ids[0]
-                                    read_id = num_to_id[num_id]
-                                    left, seq = pos - self.nodes[read_id].left, node_seq[read_id]
-                                    seq_right = ''.join(seq[left+k:])
-                                    seq_right = seq_right.replace('D', '')
-                                    success = True
-                                    for num_id2 in vertices[v][3]:
-                                        read_id2 = num_to_id[num_id2]
-                                        left2, seq2 = pos-self.nodes[read_id2].left, node_seq[read_id2]
-                                        seq2_right = ''.join(seq2[left2+k:])
-                                        if seq_right.find(seq2_right) != 0:
-                                            success = False
-                                            break
-                                    if success:
-                                        delete_ids |= set(vertices[v][3])
+                            for v in range(len(vertices)):
+                                # Eliminate reads that have conflicts with other reads due to a deletion
+                                if vertice_count[v] * 2 < relative_avg:
+                                    nt, kmer, _, num_ids = vertices[1-v]
+                                    if nt == 'D':
+                                        num_id = num_ids[0]
+                                        id_sub = num_to_id[num_id]
+                                        id, sub = get_id_and_sub(id_sub)
+                                        if sub == 0:
+                                            left = pos - self.nodes[id].left
+                                        else:
+                                            left = pos - self.other_nodes[id][sub - 1].left
+                                        seq = node_seq[id_sub]
+                                        seq_right = ''.join(seq[left+k:])
+                                        seq_right = seq_right.replace('D', '')
+                                        success = True
+                                        for num_id2 in vertices[v][3]:
+                                            id_sub2 = num_to_id[num_id2]
+                                            id2, sub2 = get_id_and_sub(id_sub2)
+                                            if sub2 == 0:
+                                                left2 = pos - self.nodes[id2].left
+                                            else:
+                                                left2 = pos - self.other_nodes[id2][sub2 - 1].left
+                                            seq2 = node_seq[id_sub2]
+                                            seq2_right = ''.join(seq2[left2+k:])
+                                            if seq_right.find(seq2_right) != 0:
+                                                success = False
+                                                break
+                                        if success:
+                                            delete_ids |= set(vertices[v][3])
 
-                            # DK - working on ...
-                            if DRB1_debug:
-                                if vertice_count[v] * 8 < relative_avg:
+                                # DK - working on ...
+                                if DRB1_debug:
+                                    if vertice_count[v] * 8 < relative_avg:
+                                        num_ids = vertices[v][3]
+                                        delete_ids |= set(num_ids)
+                                        if debug_msg:
+                                            print >> sys.stderr, v, "is removed with", num_ids
+                                    elif vertice_count[v] * 8 < avg_kmers:
+                                        num_ids = vertices[v][3]
+                                        delete_ids |= set(num_ids)
+                        else:
+                            second2last = sorted(vertice_count)[1]
+                            for v in range(len(vertices)):
+                                # if vertice_count[v] * 3 < relative_avg:
+                                if vertice_count[v] < second2last:
                                     num_ids = vertices[v][3]
                                     delete_ids |= set(num_ids)
                                     if debug_msg:
                                         print >> sys.stderr, v, "is removed with", num_ids
-                                elif vertice_count[v] * 8 < avg_kmers:
-                                    num_ids = vertices[v][3]
-                                    delete_ids |= set(num_ids)
-                        else:
-                            if vertice_count[v] * 3 < relative_avg:
-                                num_ids = vertices[v][3]
-                                delete_ids |= set(num_ids)
-                                if debug_msg:
-                                    print >> sys.stderr, v, "is removed with", num_ids
 
                 if debug_msg:
                     print >> sys.stderr
-                    print >> sys.stderr             
+                    print >> sys.stderr           
                 
+            # delete nodes
+            ids_to_be_updated = set()
+            for num_id in delete_ids:
+                id_sub = num_to_id[num_id]
+                id, sub = get_id_and_sub(id_sub)
+                ids_to_be_updated.add(id)
+                if sub == 0:
+                    self.nodes[id] = None
+                else:
+                    self.other_nodes[id][sub-1] = None
+            
+            for id in self.nodes.keys():
+                other_nodes = []
+                if id in self.other_nodes:
+                    for other_node in self.other_nodes[id]:
+                        if other_node != None:
+                            other_nodes.append(other_node)
+                if self.nodes[id] == None:
+                    if len(other_nodes) == 0:
+                        del self.nodes[id]
+                    else:
+                        self.nodes[id] = other_nodes[0]
+                        del other_nodes[0]
+                if id in self.other_nodes:
+                    if len(other_nodes) == 0:
+                        del self.other_nodes[id]
+                    else:
+                        self.other_nodes[id] = other_nodes
+
+            for id in ids_to_be_updated:
+                if id in self.nodes:
+                    add_node_seq(node_seq, id)
+
             if len(delete_ids) == 0:
                 if try_hard:
                     break
                 else:
                     try_hard = True
 
-            for num_id in delete_ids:
-                read_id = num_to_id[num_id]
-                del self.nodes[read_id]
-
         # Print De Bruijn graph
-        # """
-        # for i in range(len(debruijn)):
         for i in range(len(debruijn)):
             curr_vertices = debruijn[i]
             if len(curr_vertices) == 0:
@@ -811,10 +896,16 @@ class Graph:
                         kmer_seq += "\033[00m"
                     
                 if print_msg: print >> sys.stderr, "\t%d:" % v, kmer_seq, len(num_ids), predecessors, num_ids
+
+        id_to_num = {}
+        for num in range(len(num_to_id)):
+            id_sub = num_to_id[num]
+            id = get_id_and_sub(id_sub)[0]
+            num_to_id[num] = id
+            if id not in id_to_num:
+                id_to_num[id] = set()
+            id_to_num[id].add(num)          
                     
-
-        # """
-
         # Generate compressed nodes
         paths = []
         path_queue, done = deque(), set()
@@ -888,7 +979,7 @@ class Graph:
                 mate_read_id = get_mate_node_id(read_id)
                 if mate_read_id in id_to_num:
                     mate_num_id = id_to_num[mate_read_id]
-                    mate_num_ids.add(mate_num_id)
+                    mate_num_ids |= mate_num_id
                     
             return mate_num_ids
         
@@ -901,7 +992,6 @@ class Graph:
                 return a[1] - b[1]
         paths = sorted(paths, cmp=path_cmp)
 
-        # DK - debugging purposes
         for p in range(len(paths)):
             if print_msg: print >> sys.stderr, "path:", p, paths[p]
 
@@ -943,8 +1033,6 @@ class Graph:
 
         known_alleles = False
         while True:
-            # DK - debugging purposes
-            # """
             for i in range(len(equiv_list)):
                 classes = equiv_list[i]
                 for j in range(len(classes)):
@@ -952,7 +1040,6 @@ class Graph:
                     if print_msg: print >> sys.stderr, i, j, ids, len(num_ids), sorted(list(num_ids))[:20], alleles
 
                 if print_msg: print >> sys.stderr
-            # """
 
             if known_alleles:
                 for i in range(len(equiv_list)):
@@ -1009,13 +1096,10 @@ class Graph:
                     if common_stat > best_stat:
                         best_common_mat, best_stat, best_i, best_i2 = common_mat, common_stat, i, i2
 
-            # DK - debugging purposes
-            # """
             if print_msg:
                 print >> sys.stderr, "best:", best_i, best_i2, best_stat, best_common_mat
                 print >> sys.stderr
                 print >> sys.stderr
-            # """
 
             if known_alleles and best_stat < 0:
                 self.remove_nodes(self.nodes2)
@@ -1029,7 +1113,6 @@ class Graph:
                         ids, num_ids, all_ids, alleles = classes[j]
                         num_ids = sorted(list(num_ids))
 
-                        # DK - debugging purposes
                         if print_msg: print >> sys.stderr, i, j, num_ids
 
                         assert (num_ids) > 0
@@ -1050,7 +1133,6 @@ class Graph:
                 self.remove_nodes(self.nodes)
                 continue
 
-            # DK - for the moment
             mat = best_common_mat
             classes, classes2 = equiv_list[best_i], equiv_list[best_i2]
 
@@ -1140,8 +1222,11 @@ class Graph:
                     add_merge(classes, classes2, 0, 1, 0)
                 else:
                     classes.append(deepcopy(classes[0]))
+
                     # Handle a special case at 5' end
-                    if 0 in classes[0][0] and len(classes[0][0]) == 1 and mat[0][0] != mat[0][1]:
+                    if 0 in classes[0][0] and \
+                       len(classes[0][0]) == 1 and \
+                       (mat[0][0] > mat[0][1] * 2 or mat[0][1] > mat[0][0] * 2):
                         if mat[0][0] > mat[0][1]:
                             add_merge(classes, classes2, 0, 0, 0)
                             add_copy(classes, classes2, 1, 1, 1)
@@ -1221,9 +1306,6 @@ class Graph:
                     new_nodes[node_id] = node
                         
                 self.nodes2 = new_nodes
-            
-        # DK - debugging purposes
-        # sys.exit(1)
             
         
     # Display graph information
@@ -1325,21 +1407,78 @@ class Graph:
             print >> sys.stderr, p
             for seq, id in cur_seqs:
                 print >> sys.stderr, "\t", seq, id
+
+                
+    # Calculate coverage
+    def calculate_coverage(self):
+        allele_nodes = self.true_allele_nodes if self.simulation else self.predicted_allele_nodes
+        allele_nodes = [[id, node.left, node.right] for id, node in allele_nodes.items()]
+        coverage = {}
+        for allele_id, _, _ in allele_nodes:
+            coverage[allele_id] = [0.0 for _ in range(len(self.backbone))]
+
+        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
+        for id, left, right in nodes:
+            node = self.nodes[id]
+            nodes2 = [[node, left, right]]
+            if id in self.other_nodes:
+                for node in self.other_nodes[id]:
+                    nodes2.append([node, node.left, node.right])
+
+            for node, left, right in nodes2:
+                node_vars = node.get_vars()
+                node_var_ids = node.get_var_ids()
+                max_common = -sys.maxint
+                max_allele_node_ids = []
+                for allele_node_id, allele_left, allele_right in allele_nodes:
+                    if right - left <= 500 and (left < allele_left or right > allele_right):
+                        continue
+                    if self.simulation:
+                        allele_node = self.true_allele_nodes[allele_node_id]
+                    else:
+                        allele_node = self.predicted_allele_nodes[allele_node_id]
+                    allele_vars = allele_node.get_var_ids(left, right)
+                    common_vars = set(node_var_ids) & set(allele_vars)
+                    tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
+                    if max_common < tmp_common:
+                        max_common = tmp_common
+                        max_allele_node_ids = [allele_node_id]
+                    elif max_common == tmp_common:
+                        max_allele_node_ids.append(allele_node_id)
+                if len(max_allele_node_ids) <= 0:
+                    continue
+                add_cov = 1.0 / len(nodes2) / len(max_allele_node_ids)
+                assert add_cov > 0.0
+                for allele_node_id in max_allele_node_ids:
+                    for p in range(left, right + 1):
+                        coverage[allele_node_id][p] += add_cov
+
+        max_cov = 0.0
+        for allele_id, cov in coverage.items():
+            max_cov = max(max_cov, max(cov))
+        for allele_id, cov in coverage.items():
+            cov2 = [c / max_cov for c in cov]
+            coverage[allele_id] = cov2
+        self.coverage = coverage
                                 
         
     # Begin drawing graph
     def begin_draw(self, fname_base):
-        assert len(self.nodes) > 0
-        nodes = [[id, node.left, node.right] for id, node in self.nodes.items()]
-        def node_cmp(a, b):
-            return a[1] - b[1]
-        nodes = sorted(nodes, cmp=node_cmp)
-
+        pdfDraw = self.pdfDraw = open(fname_base + '.pdf', 'w')
+        print >> pdfDraw, r'%PDF-1.7'
+        self.objects, self.stream = [], []
+        self.draw_items = []
+        
+    # End drawing graph
+    def end_draw(self):
+        self.unscaled_height += 50
+        self.height = self.unscaled_height * self.scaley
+        
         def get_x(x):
             return self.left_margin + x * self.scalex
 
         def get_y(y):
-            return self.top_margin + y * self.scaley
+            return self.height - self.top_margin - y * self.scaley
 
         # Get scalar
         def get_sx(x):
@@ -1347,39 +1486,98 @@ class Graph:
 
         def get_sy(y):
             return y * self.scaley
-
-        htmlDraw = self.htmlDraw = HtmlDraw(fname_base)
-        htmlDraw.write_html_css(self.width, self.height)
-        htmlDraw.start_js()
-        # htmlDraw.draw_smile()
-        js_file = htmlDraw.js_file
-
-        # Choose font
-        print >> js_file, r'ctx.font = "12px Times New Roman";'
+        
+        pdfDraw = self.pdfDraw
+        self.add_pdf_object('<</Type /Catalog /Pages 2 0 R>>')
+        self.add_pdf_object('<</Type /Pages /Kids [3 0 R] /Count 1>>')
+        self.add_pdf_object('<</Type /Page /Parent 2 0 R /Resources 4 0 R /MediaBox [0 0 %d %d] /Contents 6 0 R>>' % \
+                   (self.width, self.height))
+        self.add_pdf_object('<</Font <</F1 5 0 R>>>>')
+        self.add_pdf_object('<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>')
 
         # Draw vertical dotted lines at every 100nt and thick lines at every 500nt
-        print >> js_file, r'ctx.fillStyle = "gray";'
-        for pos in range(0, nodes[-1][2], 100):
-            if pos != 0 and pos % 500 == 0:
-                print >> js_file, r'ctx.setLineDash([]);'
-                print >> js_file, r'ctx.lineWidth = 1;'
+        pre_items = []
+        for pos in range(0, len(self.backbone), 100):
+            main_line = (pos != 0 and pos % 500 == 0)
+            dic = {"coord": [pos, 2, pos, self.unscaled_height - 2],
+                   "stroke" : "0.5 0.5 0.5",
+                   "line_width" : 1 if main_line else 0.2}
+            if not main_line:
+                dic["line_dash"] = "[3] 0"
+            pre_items.append(["line", dic])
+        self.draw_items = pre_items + self.draw_items
+
+        fill, stroke, line_width, line_dash = "0 0 0", "0 0 0", 2.0, ""
+        for type, dic in self.draw_items:
+            commands = []
+            if type != "state":
+                assert "coord" in dic
+
+            if "fill" in dic and dic["fill"] != fill:
+                fill = dic["fill"]
+                commands.append("%s rg" % fill)
+            if "stroke" in dic and dic["stroke"] != stroke:
+                stroke = dic["stroke"]
+                commands.append("%s RG" % stroke)
+            if "line_width" in dic and dic["line_width"] != line_width:
+                line_width = dic["line_width"]
+                commands.append("%.1f w" % line_width)
+            if "line_dash" in dic:
+                if dic["line_dash"] != line_dash:
+                    line_dash = dic["line_dash"]
+                    commands.append("%s d" % line_dash)
+            elif line_dash != "":
+                line_dash = ""
+                commands.append("[] 0 d")
+                    
+            if type == "rect":
+                x, y, sx, sy = dic["coord"]
+                re_str = "%d %d %d %d" % (get_x(x), get_y(y), get_sx(sx), get_sy(sy))
+                if "fill" in dic:
+                    commands.append("%s re f" % re_str)
+                if "stroke" in dic:
+                    commands.append("%s re S" % re_str)
+                    
+            elif type == "line":
+                x, y, x2, y2 = dic["coord"]
+                commands.append("%d %d m %d %d l h S" % \
+                                (get_x(x), get_y(y), get_x(x2), get_y(y2)))
+            elif type == "text":
+                assert "text" in dic and "font_size" in dic
+                x, y = dic["coord"]
+                commands.append("BT /F1 %d Tf %d %d Td (%s) Tj ET" % \
+                                (dic["font_size"], get_x(x), get_y(y), dic["text"]))
             else:
-                print >> js_file, r'ctx.setLineDash([5, 15]);'
-                print >> js_file, r'ctx.lineWidth = 0.2;'
+                assert type == "state"
+                
+            self.stream.append(' '.join(commands))
 
-            print >> js_file, r'ctx.beginPath();'
-            print >> js_file, r'ctx.moveTo(%d, %d);' % \
-                (get_x(pos), self.top_margin)
-            print >> js_file, r'ctx.lineTo(%d, %d);' % \
-                (get_x(pos), self.height)
-            print >> js_file, r'ctx.stroke();'
+        # Write stream
+        self.add_pdf_stream('\n'.join(self.stream))
 
-        print >> js_file, r'ctx.setLineDash([]);'
+        # Write xref and trailer
+        to_xref = pdfDraw.tell()
+        print >> pdfDraw, 'xref'
+        print >> pdfDraw, "0 %d" % (len(self.objects) + 1)
+        print >> pdfDraw, r'0000000000 65535 f'
+        for object in self.objects:
+            print >> pdfDraw, "%s 00000 n" % "{:010}".format(object)
+        print >> pdfDraw, 'trailer <</Size %d /Root 1 0 R>>' % (len(self.objects) + 1)
+        print >> pdfDraw, 'startxref'
+        print >> pdfDraw, str(to_xref)
+        print >> pdfDraw, r'%%EOF'
+        
+        self.pdfDraw.close()
+
+        
+    def add_pdf_object(self, obj):
+        self.objects.append(self.pdfDraw.tell())
+        print >> self.pdfDraw, "%d 0 obj %s" % (len(self.objects), obj)
+        print >> self.pdfDraw, 'endobj'
 
 
-    # End drawing graph
-    def end_draw(self):
-        self.htmlDraw.end_js()
+    def add_pdf_stream(self, stream):
+        self.add_pdf_object("<</Length %d>>\nstream\n%s\nendstream" % (len(stream), stream))
 
         
     # Draw graph
@@ -1395,7 +1593,7 @@ class Graph:
         max_right = len(self.backbone)
 
         # display space
-        end_y = self.unscaled_height if begin_y > 0 else self.unscaled_height * 0.8
+        end_y = begin_y + 10000
         dspace = [[[begin_y, end_y]]] * (max_right + 1)
         def get_dspace(left, right, height):
             assert left < len(dspace) and right < len(dspace)
@@ -1442,7 +1640,7 @@ class Graph:
             return self.left_margin + x * self.scalex
 
         def get_y(y):
-            return self.top_margin + y * self.scaley
+            return self.height - self.top_margin - y * self.scaley
 
         # Get scalar
         def get_sx(x):
@@ -1451,45 +1649,66 @@ class Graph:
         def get_sy(y):
             return y * self.scaley
 
-        htmlDraw = self.htmlDraw
-        # htmlDraw.draw_smile()
-        js_file = htmlDraw.js_file
-
         # Draw exons
         y = get_dspace(0, max_right, 14)
         for e in range(len(self.exons)):
             left, right = self.exons[e]
             right += 1
 
-            # Draw node
-            print >> js_file, r'ctx.beginPath();'
-            print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-            print >> js_file, r'ctx.fillStyle = "white";'
-            print >> js_file, r'ctx.fill();'
-            print >> js_file, r'ctx.lineWidth = 2;'
-            print >> js_file, r'ctx.strokeStyle = "black";'
-            print >> js_file, r'ctx.stroke();'
+            # Draw exon
+            self.draw_items.append(["rect",
+                                    {"coord" : [left, y + 10, right - left, 10],
+                                     "fill" : "1 1 1",
+                                     "stroke" : "0 0 0",
+                                     "line_width" : 2}])
+
+            primary = False
+            for left_, _ in self.primary_exons:
+                if left == left_:
+                    primary = True
+                    break                
 
             # Draw label
-            print >> js_file, r'ctx.fillStyle = "blue";'
-            print >> js_file, r'ctx.fillText("Exon %d", %d, %d);' % \
-                (e+1, get_x(left + 2), get_y(y + 7))
-
+            self.draw_items.append(["text",
+                                    {"coord" : [left + 2, y + 7],
+                                     "text" : "Exon %d%s" % (e+1, " (primary)" if primary else ""),
+                                     "fill" : "0 0 0",
+                                     "font_size" : 12}])
             if e > 0:
                 prev_right = self.exons[e-1][1] + 1
-                print >> js_file, r'ctx.beginPath();'
-                print >> js_file, r'ctx.moveTo(%d, %d);' % (get_x(left), get_y(y + 5))
-                print >> js_file, r'ctx.lineTo(%d, %d);' % (get_x(prev_right), get_y(y + 5))
-                print >> js_file, r'ctx.stroke();'
+                self.draw_items.append(["line",
+                                        {"coord": [prev_right, y + 5, left, y + 5],
+                                         "line_width" : 2}])
+
+        # Draw backbone sequence
+        y = get_dspace(0, max_right, 4)
+        for pos in range(len(self.backbone)):
+            base = self.backbone[pos]
+            self.draw_items.append(["text",
+                                    {"coord" : [pos, y + 2],
+                                     "text" : base,
+                                     "fill" : "0.5 0 0.5",
+                                     "font_size" : 8}])
 
         # Draw true or predicted alleles
-        node_colors = ["#FFFF00", "#00FF00", "#FFCBA4", "#C14581"]
-        allele_node_colors = ["#DDDD00", "#008800", "#DDA982", "#A12561"]
+        node_colors = ["1 1 0", "0 1 0", "1 0.8 0.64", "0.76 0.27 0.5"]
+        allele_node_colors = ["0.87 0.87 0", "0 0.53 0", "0.87 0.66 0.5", "0.63 0.14 0.38"]
         def draw_alleles(allele_node_dic, allele_node_colors, display = False):
             if len(allele_node_dic) <= 0:
                 return
             allele_nodes, seqs, colors = self.get_node_comparison_info(allele_node_dic)
+
+            def draw_coverage(allele_node, allele_id, left, right, allele_node_color):
+                if allele_id not in self.coverage:
+                    return
+                y = get_dspace(0, max_right, 14)
+                for p in range(left, right):
+                    cov = math.ceil(self.coverage[allele_id][p] * 12)
+                    self.draw_items.append(["rect",
+                                            {"coord" : [p, y + 13, 1, cov],
+                                             "fill" : allele_node_color}])
+
+
             for n_ in range(len(allele_nodes)):
                 n = -1
                 prob = ""
@@ -1508,37 +1727,32 @@ class Graph:
                 allele_id, left, right = allele_nodes[n]
                 right += 1
                 allele_node = allele_node_dic[allele_id]
+                allele_node_color = allele_node_colors[n % len(allele_node_colors)]
+
+                draw_coverage(allele_node, allele_id, left, right, allele_node_color)
+                
                 y = get_dspace(0, max_right, 14)
 
                 # Draw allele name
                 if display:
-                    allele_type = "Omixon"
+                    allele_type = "display"
                 else:
                     if self.simulation:
                         allele_type = "true"
                     else:
                         allele_type = "predicted"
-                print >> js_file, r'ctx.fillStyle = "blue";'
-                print >> js_file, r'ctx.font = "20px Times New Roman";'
-                print >> js_file, r'ctx.fillText("%s (%s, %s%s)", %d, %d);' % \
-                    (allele_id,
-                     "partial" if allele_id in self.partial_allele_ids else "full",
-                     allele_type,
-                     # prob,
-                     "",
-                     10,
-                     get_y(y + 5))
-                print >> js_file, r'ctx.font = "12px Times New Roman";'
-        
+                self.draw_items.append(["text",
+                                    {"coord" : [-55, y + 7],
+                                     "text" : "%s (%s, %s)" % (allele_id, "partial" if allele_id in self.partial_allele_ids else "full", allele_type),
+                                     "fill" : "0 0 1",
+                                     "font_size" : 18}])
                 # Draw node
-                print >> js_file, r'ctx.beginPath();'
-                print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                    (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-                print >> js_file, r'ctx.fillStyle = "%s";' % (allele_node_colors[n % len(allele_node_colors)])
-                print >> js_file, r'ctx.fill();'
-                print >> js_file, r'ctx.lineWidth = 2;'
-                print >> js_file, r'ctx.strokeStyle = "black";'
-                print >> js_file, r'ctx.stroke();'
+                self.draw_items.append(["rect",
+                                        {"coord" : [left, y + 10, right - left, 10],
+                                         "fill" : allele_node_color,
+                                         "stroke" : "0 0 0",
+                                         "line_width" : 2}])
+
 
                 color_boxes = []
                 c = 0
@@ -1559,213 +1773,130 @@ class Graph:
                     cleft, cright, color = color_box
                     cleft += left; cright += left
                     if color == 'B':
-                        color = "blue" 
+                        color = "0 0 1" # blue 
                     else:
-                        color = "#1E90FF"
+                        color = "0.12 0.56 1"
                     # DK - debugging purposes
-                    color = "blue"
-                    print >> js_file, r'ctx.beginPath();'
-                    print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                        (get_x(cleft), get_y(y + 1), get_x(cright) - get_x(cleft), get_sy(8))
-                    print >> js_file, r'ctx.fillStyle = "%s";' % (color)
-                    print >> js_file, r'ctx.fill();'
+                    color = "0 0 1"
+                    self.draw_items.append(["rect",
+                                            {"coord" : [cleft, y + 9, cright - cleft, 8],
+                                             "fill" : color}])
+
             return allele_nodes, seqs, colors
 
         allele_nodes, seqs, colors = draw_alleles(self.true_allele_nodes if self.simulation else self.predicted_allele_nodes,
                                                   allele_node_colors)
         draw_alleles(self.display_allele_nodes,
-                     ["#FFF5EE"],
+                     ["1 0.96 0.95"],
                      True) # display alleles?
 
         # Draw location at every 100bp
         y = get_dspace(0, nodes[-1][2], 14)
         for pos in range(0, nodes[-1][2], 100):
             # Draw label
-            print >> js_file, r'ctx.fillStyle = "blue";'
-            print >> js_file, r'ctx.fillText("%d", %d, %d);' % \
-                (pos, get_x(pos+2), get_y(y + 2))
-
+            self.draw_items.append(["text",
+                                    {"coord" : [pos + 1, y + 2],
+                                     "text" : "%d" % (pos + 1),
+                                     "fill" : "0 0 0",
+                                     "font_size" : 10}])
+                
         # Draw nodes
         node_to_y = {}
         draw_title = False
         for id, left, right in nodes:
             node = self.nodes[id]
+            nodes2 = [[node, left, right]]
+            if id in self.other_nodes:
+                for node in self.other_nodes[id]:
+                    nodes2.append([node, node.left, node.right])
+                    if left > node.left:
+                        left = node.left
+                    if right < node.right:
+                        right = node.right
 
             # Get y position
-            y = get_dspace(left, right, 14)
-            if y < 0:
-                continue
-            node_to_y[id] = y
+            y = get_dspace(left, right, 14 * len(nodes2))
+            for node, left, right in nodes2:
+                if y < 0:
+                    continue
+                node_to_y[id] = y
 
-            node_vars = node.get_vars()
-            node_var_ids = node.get_var_ids()
-            if len(allele_nodes) > 0:
-                color = "white"
-                max_common = -sys.maxint
-                for a in range(len(allele_nodes)):
-                    allele_node_id, allele_left, allele_right = allele_nodes[a]
-                    if right - left <= 500 and (left < allele_left or right > allele_right):
-                        continue
-                    if self.simulation:
-                        allele_node = self.true_allele_nodes[allele_node_id]
+                node_vars = node.get_vars()
+                node_var_ids = node.get_var_ids()
+                if len(nodes2) > 1:
+                    color = "0.85 0.85 0.85"
+                elif len(allele_nodes) > 0:
+                    color = "1 1 1"
+                    max_common = -sys.maxint
+                    for a in range(len(allele_nodes)):
+                        allele_node_id, allele_left, allele_right = allele_nodes[a]
+                        if right - left <= 500 and (left < allele_left or right > allele_right):
+                            continue
+                        if self.simulation:
+                            allele_node = self.true_allele_nodes[allele_node_id]
+                        else:
+                            allele_node = self.predicted_allele_nodes[allele_node_id]
+                        allele_vars = allele_node.get_var_ids(left, right)
+                        common_vars = set(node_var_ids) & set(allele_vars)
+                        tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
+                        if max_common < tmp_common:
+                            max_common = tmp_common
+                            color = node_colors[a % len(node_colors)]
+                        elif max_common == tmp_common:
+                            color = "1 1 1"
+                else:
+                    color = "1 1 0" # yellow
+
+                # Draw node
+                right += 1
+                self.draw_items.append(["rect",
+                                        {"coord" : [left, y + 10, right - left, 10],
+                                         "fill" : color,
+                                         "stroke" : "0 0 0",
+                                         "line_width" : 2}])
+                
+                # Draw variants
+                for var_id, pos in node_vars:
+                    if var_id == "gap":
+                        var_type, var_left = "single", pos
+                        color = "0 0 0"
+                    elif var_id == "unknown" or var_id.startswith("nv"):
+                        var_type, var_left = "single", pos
+                        color = "1 0 0"
                     else:
-                        allele_node = self.predicted_allele_nodes[allele_node_id]
-                    allele_vars = allele_node.get_var_ids(left, right)
-                    common_vars = set(node_var_ids) & set(allele_vars)
-                    tmp_common = len(common_vars) - len(set(node_var_ids) | set(allele_vars))
-                    if max_common < tmp_common:
-                        max_common = tmp_common
-                        color = node_colors[a % len(node_colors)]
-                    elif max_common == tmp_common:
-                        color = "white"
-            else:
-                color = "yellow"    
+                        var_type, var_left, var_data = self.gene_vars[var_id]
+                        color = "0 0 1"
+                    if var_type == "single":
+                        var_right = var_left + 1
+                    elif var_type == "insertion":
+                        var_right = var_left + len(var_data)
+                    else:
+                        assert var_type == "deletion"
+                        var_right = var_left + int(var_data)
+                    self.draw_items.append(["rect",
+                                            {"coord" : [var_left, y + 9, var_right - var_left, 8],
+                                             "fill" : color}])
 
-            # Draw node
-            right += 1
-            print >> js_file, r'ctx.beginPath();'
-            print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                (get_x(left), get_y(y), get_x(right) - get_x(left), get_sy(10))
-            print >> js_file, r'ctx.fillStyle = "%s";' % color
-            print >> js_file, r'ctx.fill();'
-            print >> js_file, r'ctx.lineWidth = 2;'
-            print >> js_file, r'ctx.strokeStyle = "black";'
-            print >> js_file, r'ctx.stroke();'
+                # Draw label
+                if get_sx(right - left) >= 300:
+                    self.draw_items.append(["text",
+                                            {"coord" : [left + 2, y + 7],
+                                             "text" : node.id,
+                                             "fill" : "0 0 1",
+                                             "font_size" : 12}])
+            
 
-            # Draw variants
-            for var_id, pos in node_vars:
-                if var_id == "gap":
-                    var_type, var_left = "single", pos
-                    color = "black"
-                elif var_id == "unknown" or var_id.startswith("nv"):
-                    var_type, var_left = "single", pos
-                    color = "red"
-                else:
-                    var_type, var_left, var_data = self.gene_vars[var_id]
-                    color = "blue"
-                if var_type == "single":
-                    var_right = var_left + 1
-                else:
-                    assert var_type == "deletion"
-                    var_right = var_left + int(var_data)
-                print >> js_file, r'ctx.beginPath();'
-                print >> js_file, r'ctx.rect(%d, %d, %d, %d);' % \
-                    (get_x(var_left), get_y(y + 1), get_x(var_right) - get_x(var_left), get_sy(8))
-                print >> js_file, r'ctx.fillStyle = "%s";' % (color)
-                print >> js_file, r'ctx.fill();'
-
-            # Draw label
-            if get_sx(right - left) >= 300:
-                print >> js_file, r'ctx.fillStyle = "blue";'
-                print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                    (node.id, get_x(left + 2), get_y(y + 7))
-
-            if not draw_title:
-                draw_title = True
-                print >> js_file, r'ctx.font = "24px Times New Roman";'
-                print >> js_file, r'ctx.fillText("%s", %d, %d);' % \
-                    (title, 10, get_y(y + 7))
-                print >> js_file, r'ctx.font = "12px Times New Roman";'
-
-
-        # Draw edges
-        print >> js_file, r'ctx.lineWidth = 1;'
-        line_colors = ["red", "black", "blue"]
-        for node_id, to_node_ids in self.to_node.items():
-            node = self.nodes[node_id]
-            node_x = (get_x(node.left) + get_x(node.right)) / 2
-            node_y = get_y(node_to_y[node_id] + 5)
-            print >> js_file, r'ctx.strokeStyle = "%s";' % \
-                line_colors[random.randrange(len(line_colors))]
-            for to_node_id, _ in to_node_ids:
-                to_node = self.nodes[to_node_id]
-                to_node_x = (get_x(to_node.left) + get_x(to_node.right) + (random.random() * 10 - 5)) / 2
-                to_node_y = get_y(node_to_y[to_node_id] + 5)
-
-                jitter1, jitter2 = (random.random() * 10 - 5), (random.random() * 10 - 5)
-                jitter1, jitter2 = get_sx(jitter1), get_sx(jitter2)
-
-                print >> js_file, r'ctx.beginPath();'
-                print >> js_file, r'ctx.moveTo(%d, %d);' % (node_x + jitter1, node_y)
-                print >> js_file, r'ctx.lineTo(%d, %d);' % (to_node_x + jitter2, to_node_y)
-                print >> js_file, r'ctx.stroke();'
+                if not draw_title:
+                    draw_title = True
+                    self.draw_items.append(["text",
+                                            {"coord" : [-68, y + 7],
+                                             "text" : title,
+                                             "fill" : "0 0 0",
+                                             "font_size" : 24}])
+                    
+                y += 14
 
         curr_y = get_dspace(0, nodes[-1][2], 1)
-        return curr_y if curr_y > 0 else end_y
+        self.unscaled_height = curr_y if curr_y > 0 else end_y
+        return self.unscaled_height
 
-        
-class HtmlDraw:
-    def __init__(self, base_fname):
-        self.base_fname = base_fname
-
-        
-    def write_html_css(self, width = 2000, height = 1000):
-        base_fname = self.base_fname
-        html_file = open("%s.html" % base_fname, 'w')
-        print >> html_file, r'<!DOCTYPE html>'
-        print >> html_file, r'<html>'
-        print >> html_file, r'<head>'
-        print >> html_file, r'<title>HISAT-genotyping HLA</title>'
-        print >> html_file, r'<link rel="stylesheet" type="text/css" href="%s.css"/>' % (base_fname.split("/")[-1])
-        print >> html_file, r'</head>'
-        print >> html_file, r'<body>'
-        print >> html_file, r'<canvas id="a" width="%d" height="%d">' % (width, height)
-        print >> html_file, r'This text is displayed if your browser does not support HTML5 Canvas.'
-        print >> html_file, r'</canvas>'
-        print >> html_file, r'<script type="text/javascript" src="%s.js"></script>' % (base_fname.split("/")[-1])
-        print >> html_file, r'</body>'
-        print >> html_file, r'</html>'
-        html_file.close()
-
-        css_file = open("%s.css" % base_fname, 'w')
-        print >> css_file, r'canvas {'
-        print >> css_file, r'border: 1px dotted black;'
-        print >> css_file, r'}'
-        css_file.close()
-
-        
-    def start_js(self):
-        self.js_file = open("%s.js" % self.base_fname, 'w')
-        print >> self.js_file, r'var a_canvas = document.getElementById("a");'
-        print >> self.js_file, r'var ctx = a_canvas.getContext("2d");'
-
-        
-    def end_js(self):
-        self.js_file.close()
-
-        
-    def draw_smile(self):
-        js_file = self.js_file
-        
-        # Draw the face
-        print >> js_file, r'ctx.fillStyle = "yellow";'
-        print >> js_file, r'ctx.beginPath();'
-        print >> js_file, r'ctx.arc(95, 85, 40, 0, 2*Math.PI);'
-        print >> js_file, r'ctx.closePath();'
-        print >> js_file, r'ctx.fill();'
-        print >> js_file, r'ctx.lineWidth = 2;'
-        print >> js_file, r'ctx.stroke();'
-        print >> js_file, r'ctx.fillStyle = "black";'
-        
-        # Draw the left eye
-        print >> js_file, r'ctx.beginPath();'
-        print >> js_file, r'ctx.arc(75, 75, 5, 0, 2*Math.PI);'
-        print >> js_file, r'ctx.closePath();'
-        print >> js_file, r'ctx.fill();'
-
-        # Draw the right eye
-        print >> js_file, r'ctx.beginPath();'
-        print >> js_file, r'ctx.arc(114, 75, 5, 0, 2*Math.PI);'
-        print >> js_file, r'ctx.closePath();'
-        print >> js_file, r'ctx.fill();'
-
-        # Draw the mouth
-        print >> js_file, r'ctx.beginPath();'
-        print >> js_file, r'ctx.arc(95, 90, 26, Math.PI, 2*Math.PI, true);'
-        print >> js_file, r'ctx.closePath();'
-        print >> js_file, r'ctx.fill();'
-
-        # Write "Hello, World!"
-        print >> js_file, r'ctx.font = "30px Garamond";'
-        print >> js_file, r'ctx.fillText("Hello, World!", 15, 175);'
-       

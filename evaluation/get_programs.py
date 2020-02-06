@@ -11,7 +11,7 @@ def get_aligners():
     os.chdir("aligners")
     if not os.path.exists("bin"):
         os.mkdir("bin")
-    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks"]
+    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks", "minimap2"]
     for program in programs:
         if program == "HISAT":
             dir = "hisat-0.1.6-beta"
@@ -24,14 +24,14 @@ def get_aligners():
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
         elif program == "Bowtie2":
-            dir = "bowtie2-2.2.5"
+            dir = "bowtie2-2.3.4.3"
             if os.path.exists(dir):
                 continue
             fname = dir + "-source.zip"
-            url = "http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.2.5"
+            url = "http://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.3.4.3"
             bins = "bowtie2-align-s bowtie2-build-s bowtie2-inspect-s"
             installs = bins + " bowtie2 bowtie2-build bowtie2-inspect"
-            cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
+            cmd = "wget %s/%s; unzip %s; cd %s; make NO_TBB=1 %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
         elif program == "Bowtie":
             dir = "bowtie-1.1.2"
@@ -43,6 +43,16 @@ def get_aligners():
             installs = bins + " bowtie bowtie-build bowtie-inspect"
             cmd = "wget %s/%s; unzip %s; cd %s; make %s; cp %s ../bin; cd .." % \
                 (url, fname, fname, dir, bins, installs)
+        elif program == "minimap2":
+            dir = "minimap2-2.12"
+            if os.path.exists(dir):
+                continue
+            fname = dir + ".tar.bz2"
+            #https://github.com/lh3/minimap2/releases/download/v2.12/minimap2-2.12.tar.bz2
+            url = "https://github.com/lh3/minimap2/releases/download/v2.12"
+            bins = "minimap2"
+            cmd = "wget %s/%s; tar jxvf %s; cd %s; make ; cp %s ../bin; cd .." % \
+                (url, fname, fname, dir,bins)
         elif program == "TopHat2":
             if mac:
                 dir = "tophat-2.1.0.OSX_x86_64"
@@ -80,12 +90,12 @@ def get_aligners():
             cmd = "wget %s/%s; tar xvzf %s; cd %s; ./configure; make; cd src; cp %s ../../bin; cd ../.." % \
                 (url, fname, fname, dir, installs)
         elif program == "BWA":
-            dir = "bwa-0.7.12"
+            dir = "bwa-0.7.17"
             if os.path.exists(dir):
                 continue
             url = "http://sourceforge.net/projects/bio-bwa/files/%s.tar.bz2" % (dir)
             installs = "bwa"
-            cmd = "wget %s; tar xvzf %s.tar.bz2; cd %s; make; cp %s ../bin/; cd .." % (url, dir, dir, installs)
+            cmd = "wget %s; tar xvjf %s.tar.bz2; cd %s; make; cp %s ../bin/; cd .." % (url, dir, dir, installs)
         elif program == "StringTie":
             dir = "stringtie-1.0.4"
             url = "http://ccb.jhu.edu/software/stringtie/dl"
@@ -94,12 +104,18 @@ def get_aligners():
                 (url, dir, dir, dir, bins)
         elif program == "Cufflinks":
             cmd = ""
+        elif program == "vg":
+            version = "v1.13.0"
+            dir = program + "-" + version
+            url = "https://github.com/vgteam/vg/releases/download/%s" % (version)
+            cmd = "wget %s/%s.tar.gz; tar zxvf %s.tar.gz; cd %s" % (url, dir, dir, dir)
+            cmd += "; source ./source_me.sh; make; cp bin/%s ../bin; cd .." % (program)
         else:
             assert False
         print >> sys.stderr, cmd
         os.system(cmd)
 
-    files = ["hisat2", "hisat2-align-s", "hisat2-build", "hisat2-build-s", "hisat2-inspect", "hisat2-inspect-s", "extract_splice_sites.py", "extract_snps.py", "simulate_reads.py"]
+    files = ["hisat2", "hisat2-align-s", "hisat2-build", "hisat2-build-s", "hisat2-inspect", "hisat2-inspect-s", "extract_splice_sites.py", "hisat2_extract_snps_haplotypes_UCSC.py", "hisat2_simulate_reads.py"]
     os.chdir("bin")
     for file in files:
         if os.path.exists(file):
