@@ -913,9 +913,27 @@ static void printUsage(ostream& out) {
 		<< "                     (L,0.0,-0.2)" << endl
 		<< endl
 	    << " Reporting:" << endl
-	    << "  -k <int>           report up to <int> alns per read (default: 5 for linear index, 10 for graph index)" << endl
-        << "  --max-seeds <int>  maximum number of seeds to be extended (default: maximum of 5 and the values that comes with -k times 2)" << endl
-        << "  -a/--all           report all alignments" << endl
+	    << "  -k <int>           It searches for at most <int> distinct, primary alignments for each read. Primary alignments mean " << endl
+        << "                     alignments whose alignment score is equal to or higher than any other alignments. The search terminates " << endl
+        << "                     when it cannot find more distinct valid alignments, or when it finds <int>, whichever happens first. " << endl
+        << "                     The alignment score for a paired-end alignment equals the sum of the alignment scores of " << endl 
+        << "                     the individual mates. Each reported read or pair alignment beyond the first has the SAM ‘secondary’ bit " << endl
+        << "                     (which equals 256) set in its FLAGS field. For reads that have more than <int> distinct, " << endl
+        << "                     valid alignments, hisat2 does not guarantee that the <int> alignments reported are the best possible " << endl 
+        << "                     in terms of alignment score. Default: 5 (linear index) or 10 (graph index)." << endl
+        << "                     Note: HISAT2 is not designed with large values for -k in mind, and when aligning reads to long, " << endl
+        << "                     repetitive genomes, large -k could make alignment much slower." << endl
+        << "  --max-seeds <int>  HISAT2, like other aligners, uses seed-and-extend approaches. HISAT2 tries to extend seeds to " << endl
+        << "                     full-length alignments. In HISAT2, --max-seeds is used to control the maximum number of seeds that " << endl
+        << "                     will be extended. For DNA-read alignment (--no-spliced-alignment), HISAT2 extends up to these many seeds" << endl
+        << "                     and skips the rest of the seeds. For RNA-read alignment, HISAT2 skips extending seeds and reports " << endl
+        << "                     no alignments if the number of seeds is larger than the number specified with the option, " << endl
+        << "                     to be compatible with previous versions of HISAT2. Large values for --max-seeds may improve alignment " << endl
+        << "                     sensitivity, but HISAT2 is not designed with large values for --max-seeds in mind, and when aligning " << endl
+        << "                     reads to long, repetitive genomes, large --max-seeds could make alignment much slower. " << endl
+        << "                     The default value is the maximum of 5 and the value that comes with -k times 2." << endl
+        << "  -a/--all           HISAT2 reports all alignments it can find. Using the option is equivalent to using both --max-seeds " << endl
+        << "                     and -k with the maximum value that a 64-bit signed integer can represent (9,223,372,036,854,775,807)." << endl 
         << "  --repeat           report alignments to repeat sequences directly" << endl
 		<< endl
 	    //<< " Effort:" << endl
