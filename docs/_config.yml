@@ -37,6 +37,18 @@ icons:
   youtube:
 
 #
+# default for front matter
+#
+defaults:
+  - 
+    scope:
+      path: ""
+    values:
+      category: "main"
+
+
+
+#
 # Prettify url.
 #
 permalink: pretty

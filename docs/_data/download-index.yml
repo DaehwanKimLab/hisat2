@@ -9,6 +9,10 @@
         url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_tran/download
       genome_snp_tran: 
         url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp_tran/download
+      genome_rep(above 2.2.0): 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_rep/download
+      genome_snp_rep(above 2.2.0): 
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp_rep/download
     UCSC hg38:
       genome: 
         url: https://cloud.biohpc.swmed.edu/index.php/s/hg38/download

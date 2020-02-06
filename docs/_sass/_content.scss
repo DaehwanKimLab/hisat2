@@ -68,6 +68,10 @@
         }
     }
 
+	ul {
+		margin-left: 0.5em;
+	}
+
     dt {
         font-weight: bold;
     }
@@ -81,17 +85,15 @@
     }
 
     ol, ul {
-        list-style-position: inside;
+        list-style-position: outside;
     }
 
     code {
         font-family: $code-font-family;
         font-size: $code-font-size;
-        margin: 0 2px;
-        padding: 0 5px;
-        border: 1px solid #ddd;
+        margin: 0 1px;
+        padding: 0 1px;
         background-color: rgba(#ddd, .1);
-        border-radius: 3px;
     }
 
     pre {

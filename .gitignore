@@ -32,10 +32,12 @@ hisat2_test/2*
 hisat2_test/snp142*
 hisat2_test/testset*
 
-
 .idea
 .vscode
 
 .ht2lib-obj*
 *.a
 *.so
+docs/_site
+docs/*.lock
+docs/.*-cache

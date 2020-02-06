@@ -6,6 +6,9 @@ order: 4
 share: false
 ---
 
+Please cite:  
+>Kim, D., Paggi, J.M., Park, C. _et al._ Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype. _Nat Biotechnol_ **37**, 907–915 (2019). <https://doi.org/10.1038/s41587-019-0201-4>
+
 - TOC
 {:toc}
 
@@ -29,12 +32,14 @@ share: false
     genome_tran: HISAT2 Graph index for reference plus transcripts
     genome_snp_tran: HISAT2 Graph index for reference plus SNPs and transcripts
 
-## Binaries
 
-{% assign target = site.data.download-binary.latest_version %}
+## Binaries
+{: binaries }
+
+{% assign targets = site.data.download-binary.latest_version | split: "," %}
 {% for release in site.data.download-binary.release %}
 {% assign version = release['version'] %}
-{% if version == target or target == null %}
+{% if targets contains version or targets == null %}
 {% assign name = release['name'] %}
 ### Version: {{name}} {{version}}
 <table style="border-collapse: collapse; border: none;">
