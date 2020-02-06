@@ -183,8 +183,9 @@ FILE_FLAGS     = -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE
 
 ifeq (1,$(USE_SRA))
 	ifeq (1, $(MACOS))
-		DEBUG_FLAGS += -mmacosx-version-min=10.6
-		RELEASE_FLAGS += -mmacosx-version-min=10.6
+		SRA_LIB += -stdlib=libc++
+		DEBUG_FLAGS += -mmacosx-version-min=10.10
+		RELEASE_FLAGS += -mmacosx-version-min=10.10
 	endif
 endif
 
