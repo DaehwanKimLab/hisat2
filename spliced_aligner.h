@@ -160,7 +160,7 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
                          leftext,
                          rightext);
     }
-    
+
     // for the candidate alignments, examine the longest (best) one first
     this->_genomeHits_done.resize(this->_genomeHits.size());
     this->_genomeHits_done.fill(false);

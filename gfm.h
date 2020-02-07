@@ -72,6 +72,8 @@ extern uint8_t cCntLUT_4[4][4][256];
 extern uint8_t cCntLUT_4_rev[4][4][256];
 extern uint8_t cCntBIT[8][256];
 
+extern bool threeN;
+
 static const uint64_t c_table[4] = {
     0xffffffffffffffff,
     0xaaaaaaaaaaaaaaaa,
@@ -650,6 +652,7 @@ public:
 	    mmFile2_(NULL), \
         _nthreads(1)
 
+        GFM() {}
 	/// Construct a GFM from the given input file
 	GFM(const string& in,
         ALTDB<index_t>* altdb,
@@ -1488,8 +1491,10 @@ public:
                             uint64_t bp = asc2dna[(int)snp_ch];
                             assert_lt(bp, 4);
                             if((int)bp == s[pos]) {
-                                cerr << "Warning: single type should have a different base than " << "ACGTN"[(int)s[pos]]
-                                     << " (" << snp_id << ") at " << genome_pos << " on " << chr << endl;
+                                if (!threeN) {
+                                    cerr << "Warning: single type should have a different base than " << "ACGTN"[(int)s[pos]]
+                                         << " (" << snp_id << ") at " << genome_pos << " on " << chr << endl;
+                                }
                                 _alts.pop_back();
                                 continue;
                                 // throw 1;
@@ -4522,7 +4527,7 @@ void GFM<index_t>::join(EList<FileBuf*>& l,
 
     // Append reverse complement
     if(include_rc) {
-        for(TIndexOffU i = 0; i < guessLen; i++) {
+        for (TIndexOffU i = 0; i < guessLen; i++) {
             int nt = s[guessLen - i - 1];
             assert_range(0, 3, nt);
             s[guessLen + i] = dnacomp[nt];

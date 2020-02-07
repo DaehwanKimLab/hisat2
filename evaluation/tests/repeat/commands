@@ -19,6 +19,13 @@ cp 22_rep*ht2 ../../indexes/HISAT2_22
 
 
 
+# 3-base
+/usr/bin/time -l hisat2-repeat -p 30 --save-sa --load-sa --repeat-length 26-100,51-100 --repeat-count 5 genome.fa genome_rep
+/usr/bin/time -l hisat2-build -p 30 genome.fa --repeat-ref genome_rep-26-100.rep.fa --repeat-info genome_rep-26-100.rep.info genome_rep
+
+
+
+
 
 # Human genome
 

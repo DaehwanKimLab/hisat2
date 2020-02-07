@@ -19,9 +19,9 @@
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# hisat2:
+# hisat-3n:
 #
-# A wrapper script for hisat2.  Provides various advantages over running
+# A wrapper script for hisat-3n.  Provides various advantages over running
 # hisat directly, including:
 #
 # 1. Handling compressed inputs
@@ -58,6 +58,8 @@ my $idx_ext_s     = 'ht2';
 my $idx_ext       = $idx_ext_s; 
 my $seq_in_args = 0;
 my $skip_read_stat = 0;
+my $base_change_opt = 0;
+my $no_base_change_opt = 0;
 my %signo       = ();
 my @signame     = ();
 
@@ -193,6 +195,12 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 	if($arg eq "-c") {
 		$seq_in_args = 1;
 	}
+	if($arg eq "--base-change") {
+		$base_change_opt = 1;
+	}
+	if($arg eq "--no-base-change") {
+		$no_base_change_opt = 1;
+	}
 	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
 		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
 			$ht2_args[$i] = undef;
@@ -210,6 +218,7 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 		}
 	}
 }
+
 # If the user asked us to redirect some reads to files, or to suppress
 # unaligned reads, then we need to capture the output from HISAT and pass it
 # through this wrapper.
@@ -308,6 +317,13 @@ if ((scalar(@read_files) > 0)
 		Info("Read Length String: $read_len_str\n");
 		push @ht2_args, ("--read-lengths", $read_len_str);
 	}
+}
+
+# Check options for HISAT-3N
+# --base-change or --no-base-change
+# one of the two options must be set.
+if ($base_change_opt == 0 && $help == 0) {
+	Fail("--base-change must be set\n");
 }
 
 sub check_file_exist($$$) {

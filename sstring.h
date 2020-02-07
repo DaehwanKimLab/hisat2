@@ -2565,6 +2565,10 @@ std::ostream& operator<< (std::ostream& os, const SStringFixed<T, S>& str) {
 extern uint8_t asc2dna[];
 extern uint8_t asc2col[];
 
+extern uint8_t asc2dna_3N[2][256];
+
+
+
 /**
  * Encapsulates a fixed-length DNA string with characters encoded as
  * chars.  Only capable of encoding A, C, G, T and N.  The length is

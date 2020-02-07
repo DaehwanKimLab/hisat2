@@ -928,6 +928,39 @@ void StackedAln::writeCigar(
 	}
 }
 
+void StackedAln::writeCigar(Alignment* o, char* occ) const {
+    const EList<char>& op = cigOp_;
+    const EList<size_t>& run = cigRun_;
+    assert_eq(op.size(), run.size());
+    if(o != NULL || occ != NULL) {
+        char buf[128];
+        ASSERT_ONLY(bool printed = false);
+        o->cigarSegments.reserve(op.size());
+        for(size_t i = 0; i < op.size(); i++) {
+            size_t r = run[i];
+            if(r > 0) {
+                itoa10<size_t>(r, buf);
+                ASSERT_ONLY(printed = true);
+                if(o != NULL) {
+                    o->cigarString.append(buf);
+                    o->cigarString.append(op[i]);
+                    o->cigarSegments.emplace_back(r, op[i]);
+                    o->cigarLength += r;
+                }
+                if(occ != NULL) {
+                    COPY_BUF();
+                    *occ = op[i];
+                    occ++;
+                }
+            }
+        }
+        assert(printed);
+        if(occ != NULL) {
+            *occ = '\0';
+        }
+    }
+}
+
 /**
  * Write an MD:Z representation of the alignment to the given string and/or
  * char buffer.

@@ -3165,11 +3165,13 @@ void RB_SWAligner::doTestCase1(const string& refstr,
 
 template<typename TStr>
 RepeatBuilder<TStr>::RepeatBuilder(TStr& s,
+                                   TStr& sOriginal,
                                    const EList<RefRecord>& szs,
                                    const EList<string>& ref_names,
                                    bool forward_only,
                                    const string& filename) :
 s_(s),
+sOriginal_(sOriginal),
 coordHelper_(s.length(), forward_only ? s.length() : s.length() / 2, szs, ref_names),
 forward_only_(forward_only),
 filename_(filename),
@@ -3304,13 +3306,15 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
         cerr << endl;
         
         string query, rc_query;
+        string queryOriginal;
         EList<pair<uint64_t, size_t> > minimizers;
         size_t total = 0, num_repeat = 0, correct = 0, false_positive = 0, false_negative = 0;
         for(size_t i = 0; i + rp.min_repeat_len <= forward_length_; i += 1000) {
             if(coordHelper_.getEnd(i) != coordHelper_.getEnd(i + rp.min_repeat_len))
                 continue;
             query = getString(s_, i, rp.min_repeat_len);
-            rc_query = reverseComplement(query);
+            queryOriginal = getString(sOriginal_, i, rp.min_repeat_len);
+            rc_query = reverseComplement(queryOriginal);
             
             TIndexOffU idx = subSA_.find_repeat_idx(s_, query);
             const EList<TIndexOffU>& test_repeat_index = subSA_.getRepeatIndex();
@@ -3328,7 +3332,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                     false_positive++;
                 } else {
                     false_negative++;
-                    assert(false);
+                    //assert(false);
                 }
             }
         }
@@ -3349,6 +3353,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
         }
         size_t total_alignments = 0, max_alignments = 0;
         string query2, rc_query2;
+        string queryOriginal2, rc_queryOriginal2;
         for(size_t i = 0; i < test_repeat_index.size(); i += interval) {
             TIndexOffU saElt_idx = test_repeat_index[i];
             TIndexOffU saElt_idx_end = (i + 1 < test_repeat_index.size() ? test_repeat_index[i+1] : subSA_.size());
@@ -3356,26 +3361,35 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             TIndexOffU saElt = subSA_[saElt_idx];
             query = getString(s_, saElt, rp.min_repeat_len);
             query2 = query;
+
+            queryOriginal = getString(sOriginal_, saElt, rp.min_repeat_len);
+            queryOriginal2 = queryOriginal;
             
             // introduce three mismatches into a query when the query is at lest 100-bp
             if(rp.min_repeat_len >= 100) {
                 const size_t mid_pos1 = (size_t)(rp.min_repeat_len * 0.1);
                 if(query2[mid_pos1] == 'A') {
                     query2[mid_pos1] = 'C';
+                    queryOriginal2[mid_pos1] ='C';
                 } else {
                     query2[mid_pos1] = 'A';
+                    queryOriginal2[mid_pos1] = 'A';
                 }
                 const size_t mid_pos2 = (size_t)(rp.min_repeat_len * 0.5);
                 if(query2[mid_pos2] == 'C') {
                     query2[mid_pos2] = 'G';
+                    queryOriginal2[mid_pos2] = 'G';
                 } else {
                     query2[mid_pos2] = 'C';
+                    queryOriginal2[mid_pos1] = 'G';
                 }
                 const size_t mid_pos3 = (size_t)(rp.min_repeat_len * 0.9);
                 if(query2[mid_pos3] == 'G') {
                     query2[mid_pos3] = 'T';
+                    queryOriginal2[mid_pos3] = 'T';
                 } else {
                     query2[mid_pos3] = 'G';
+                    queryOriginal2[mid_pos3] = 'G';
                 }
             }
             
@@ -3406,8 +3420,8 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
                 assert_leq(found, 1);
             }
         
-            rc_query = reverseComplement(query);
-            rc_query2 = reverseComplement(query2);
+            rc_query = reverseComplement(queryOriginal);
+            rc_query2 = reverseComplement(queryOriginal2);
             size_t rc_found = 0;
             if(kmer_table.isRepeat(rc_query2, minimizers)) {
                 kmer_table.findAlignments(rc_query2,
@@ -3510,6 +3524,7 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
     if(sanity_check) {
         EList<pair<size_t, size_t> > kmer_table;
         string query;
+        string queryOriginal;
         size_t total = 0, match = 0;
         EList<TIndexOffU> positions;
         const EList<TIndexOffU>& test_repeat_index = subSA_.getRepeatIndex();
@@ -3543,10 +3558,11 @@ void RepeatBuilder<TStr>::build(const RepeatParameter& rp)
             TIndexOffU saElt = subSA_[saElt_idx];
             size_t true_count = saElt_idx_end - saElt_idx;
             getString(s_, saElt, rp.min_repeat_len, query);
+            getString(sOriginal_, saElt, rp.min_repeat_len, queryOriginal);
             total++;
             
             size_t count = 0, rc_count = 0;
-            string rc_query = reverse_complement(query);
+            string rc_query = reverse_complement(queryOriginal);
             for(map<size_t, RB_Repeat*>::iterator it = repeat_map_.begin(); it != repeat_map_.end(); it++) {
                 RB_Repeat& repeat = *(it->second);
                 int pos = repeat.consensus().find(query);
@@ -4427,7 +4443,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         EList<TIndexOffU> positions; positions.reserveExact(end - begin);
         for(size_t j = begin; j < end; j++) positions.push_back(repeat_list_[j]);
         
-        if(!isSenseDominant(coordHelper, positions, seed_len_))
+        if(!isSenseDominant(coordHelper, positions, seed_len_) && !threeN)
             continue;
         
         senseDominant[i] = 1;

@@ -2,6 +2,7 @@
  * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
  *
  * This file is part of Bowtie 2.
+ * This file is edited by Yun (Leo) Zhang for HISAT-3N.
  *
  * Bowtie 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,12 +58,15 @@ struct Read {
 		trimmed5 = trimmed3 = 0;
 		readOrigBuf.clear();
 		patFw.clear();
+		patFw_3N.clear();
 		patRc.clear();
 		qual.clear();
 		patFwRev.clear();
 		patRcRev.clear();
 		qualRev.clear();
 		name.clear();
+		originalFw.clear();
+		originalRc.clear();
 		for(int j = 0; j < 3; j++) {
 			altPatFw[j].clear();
 			altPatFwRev[j].clear();
@@ -77,8 +81,10 @@ struct Read {
 		filter = '?';
 		seed = 0;
 		ns_ = 0;
+		cycle_3N = 0;
+        oppositeConversion_3N = false;
 	}
-	
+
 	/**
 	 * Finish initializing a new read.
 	 */
@@ -91,6 +97,33 @@ struct Read {
 		constructRevComps();
 		constructReverses();
 	}
+
+    /*// use pathFW1 for alignment
+    void planB(){
+        if(name.length()>0){
+            ns_ = 0;
+            swap(patFw, patFw_3N);
+            plan = 'B';
+            finalize();
+        }
+    }*/
+
+    void changePlan3N(int nCycle) {
+	    if (name.length() == 0) return;
+	    if ((cycle_3N < 2 && nCycle >= 2) || (cycle_3N >= 2 && nCycle < 2)) {
+            ns_ = 0;
+            swap(patFw, patFw_3N);
+            finalize();
+	    }
+        cycle_3N = nCycle;
+        oppositeConversion_3N = false;
+	}
+
+    void changePlan3N() {
+        ns_ = 0;
+        swap(patFw, patFw_3N);
+        finalize();
+    }
 
 	/**
 	 * Simple init function, used for testing.
@@ -141,11 +174,13 @@ struct Read {
 			for(int j = 0; j < alts; j++) {
 				altPatRc[j].installReverse(altPatFw[j]);
 			}
+            originalRc.installReverse(originalFw);
 		} else {
 			patRc.installReverseComp(patFw);
 			for(int j = 0; j < alts; j++) {
 				altPatRc[j].installReverseComp(altPatFw[j]);
 			}
+            originalRc.installReverseComp(originalFw);
 		}
 	}
 
@@ -323,8 +358,12 @@ struct Read {
 #endif
 
 	BTDnaString patFw;            // forward-strand sequence
-	BTDnaString patRc;            // reverse-complement sequence
+    BTDnaString patFw_3N;
+    BTDnaString patRc;            // reverse-complement sequence
+    BTDnaString patRc1;
 	BTString    qual;             // quality values
+    BTDnaString originalFw;       // the forward-strand sequence from read (without editing)
+    BTDnaString originalRc;       // the reverse-complement sequence from read (without editing)
 
 	BTDnaString altPatFw[3];
 	BTDnaString altPatRc[3];
@@ -357,6 +396,10 @@ struct Read {
 	int      trimmed5;  // amount actually trimmed off 5' end
 	int      trimmed3;  // amount actually trimmed off 3' end
 	HitSet  *hitset;    // holds previously-found hits; for chaining
+
+	//char plan;          // which plan is it. Default is plan A.
+	int cycle_3N;
+	bool oppositeConversion_3N;
 };
 
 /**

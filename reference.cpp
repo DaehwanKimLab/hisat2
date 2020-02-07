@@ -377,6 +377,14 @@ BitPairReference::BitPairReference(
 		}
 	}
 #endif
+
+	// generate minkRepeat
+    long long int genomeLen = approxLen(0);
+    minkRepeat = 0;
+    while(genomeLen > 0) {
+        genomeLen >>= 2;
+        minkRepeat++;
+    }
 }
 
 BitPairReference::~BitPairReference() {

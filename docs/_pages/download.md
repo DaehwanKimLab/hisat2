@@ -2,7 +2,7 @@
 layout: page
 title: Download
 permalink: /download/
-order: 4
+order: 5
 share: false
 ---
 

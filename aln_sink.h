@@ -2,6 +2,7 @@
  * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
  *
  * This file is part of Bowtie 2.
+ * This file is edited by Yun (Leo) Zhang for HISAT-3N.
  *
  * Bowtie 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -409,7 +410,28 @@ public:
 	};
 	
 	ReportingState(const ReportingParams& p) : p_(p) { reset(); }
-	
+
+    ReportingState operator=(ReportingState& copySource) {
+        state_ = copySource.state_;
+        paired_ = copySource.paired_;;
+        nconcord_ = copySource.nconcord_;
+        ndiscord_ = copySource.ndiscord_;
+        nunpair1_ = copySource.nunpair1_;
+        nunpair2_ = copySource.nunpair2_;
+        nunpairRepeat1_ = copySource.nunpairRepeat1_;
+        nunpairRepeat2_ = copySource.nunpairRepeat2_;
+        doneConcord_ = copySource.doneConcord_;
+        doneDiscord_ = copySource.doneDiscord_;
+        doneUnpair_  = copySource.doneUnpair_;
+        doneUnpair1_ = copySource.doneUnpair1_;
+        doneUnpair2_ = copySource.doneUnpair2_;
+        exitConcord_ = copySource.exitConcord_;
+        exitDiscord_ = copySource.exitDiscord_;
+        exitUnpair1_ = copySource.exitUnpair1_;
+        exitUnpair2_ = copySource.exitUnpair2_;
+        concordBest_ = copySource.concordBest_;
+        done_ = copySource.done_;
+    }
 	/**
 	 * Set all state to uninitialized defaults.
 	 */
@@ -564,6 +586,13 @@ public:
     
     inline int64_t concordBest() const { return concordBest_; }
 
+    void addNumUnpaired1() {
+        nunpair1_++;
+	}
+    void addNumUnpaired2() {
+        nunpair2_++;
+    }
+
 #ifndef NDEBUG
 	/**
 	 * Check that ReportingState is internally consistent.
@@ -693,6 +722,11 @@ public:
 	 */
 	void addWrapper() { numWrappers_++; }
 
+	// for HISAT-3N
+	virtual void output(int threadId0, ReportingMetrics& met, BTString& o) {
+
+	}
+
 	/**
 	 * Append a single hit to the given output stream.  If
 	 * synchronization is required, append() assumes the caller has
@@ -716,6 +750,27 @@ public:
 		const Mapq&           mapq,
 		const Scoring&        sc,
 		bool                  report2) = 0;
+
+    virtual void append(
+            ReportingMetrics&     met,
+            BTString&             o,
+            StackedAln&           staln,
+            size_t                threadId,
+            const Read           *rd1,
+            const Read           *rd2,
+            const TReadId         rdid,
+            AlnRes               *rs1,
+            AlnRes               *rs2,
+            const AlnSetSumm&     summ,
+            const SeedAlSumm&     ssm1,
+            const SeedAlSumm&     ssm2,
+            const AlnFlags*       flags1,
+            const AlnFlags*       flags2,
+            const PerReadMetrics& prm,
+            const Mapq&           mapq,
+            const Scoring&        sc,
+            bool                  report2) = 0;
+
 
 	/**
 	 * Report a given batch of hits for the given read or read pair.
@@ -809,6 +864,89 @@ public:
 		}
 	}
 
+    virtual void report3NHits(
+            ReportingMetrics&     met,          // reporting metrics
+            BTString&             o,              // write to this buffer
+            StackedAln&           staln,       // StackedAln to write stacked alignment
+            size_t                threadId,       // which thread am I?
+            const Read           *rd1,            // mate #1
+            const Read           *rd2,            // mate #2
+            const TReadId         rdid,           // read ID
+            const EList<size_t>&  select1,        // random subset of rd1s
+            const EList<size_t>*  select2,        // random subset of rd2s
+            EList<AlnRes>        *rs1,            // alignments for mate #1
+            EList<AlnRes>        *rs2,            // alignments for mate #2
+            bool                  maxed,          // true iff -m/-M exceeded
+            const AlnSetSumm&     summ,           // summary
+            const SeedAlSumm&     ssm1,           // seed alignment summ
+            const SeedAlSumm&     ssm2,           // seed alignment summ
+            const AlnFlags*       flags1,         // flags for mate #1
+            const AlnFlags*       flags2,         // flags for mate #2
+            const PerReadMetrics& prm,            // per-read metrics
+            const Mapq&           mapq,           // MAPQ generator
+            const Scoring&        sc,             // scoring scheme
+            bool                  getLock = true) // true iff lock held by caller
+    {
+        // There are a few scenarios:
+        // 1. Read is unpaired, in which case rd2 is NULL
+        // 2. Read is paired-end and we're reporting concordant alignments
+        // 3. Read is paired-end and we're reporting discordant alignments
+        // 4. Read is paired-end and we're reporting unpaired alignments for
+        //    both mates
+        // 5. Read is paired-end and we're reporting an unpaired alignments for
+        //    just one mate or the other
+        assert(rd1 != NULL || rd2 != NULL);
+        assert(rs1 != NULL || rs2 != NULL);
+        AlnFlags flagscp1, flagscp2;
+        if(flags1 != NULL) {
+            flagscp1 = *flags1;
+            flags1 = &flagscp1;
+            flagscp1.setPrimary(true);
+        }
+        if(flags2 != NULL) {
+            flagscp2 = *flags2;
+            flags2 = &flagscp2;
+            flagscp2.setPrimary(true);
+        }
+        if(select2 != NULL) {
+            // Handle case 5
+            assert(rd1 != NULL); assert(flags1 != NULL);
+            assert(rd2 != NULL); assert(flags2 != NULL);
+            assert_gt(select1.size(), 0);
+            assert_gt(select2->size(), 0);
+            AlnRes* r1pri = ((rs1 != NULL) ? &rs1->get(select1[0]) : NULL);
+            AlnRes* r2pri = ((rs2 != NULL) ? &rs2->get((*select2)[0]) : NULL);
+            append(met, o, staln, threadId, rd1, rd2, rdid, r1pri, r2pri, summ,
+                   ssm1, ssm2, flags1, flags2, prm, mapq, sc, true);
+            flagscp1.setPrimary(false);
+            flagscp2.setPrimary(false);
+            for(size_t i = 1; i < select1.size(); i++) {
+                AlnRes* r1 = ((rs1 != NULL) ? &rs1->get(select1[i]) : NULL);
+                append(met, o, staln, threadId, rd1, rd2, rdid, r1, r2pri, summ,
+                       ssm1, ssm2, flags1, flags2, prm, mapq, sc, false);
+            }
+            for(size_t i = 1; i < select2->size(); i++) {
+                AlnRes* r2 = ((rs2 != NULL) ? &rs2->get((*select2)[i]) : NULL);
+                append(met, o, staln, threadId, rd2, rd1, rdid, r2, r1pri, summ,
+                       ssm2, ssm1, flags2, flags1, prm, mapq, sc, false);
+            }
+        } else {
+            // Handle cases 1-4
+            for(size_t i = 0; i < select1.size(); i++) {
+                AlnRes* r1 = ((rs1 != NULL) ? &rs1->get(select1[i]) : NULL);
+                AlnRes* r2 = ((rs2 != NULL) ? &rs2->get(select1[i]) : NULL);
+                append(met, o, staln, threadId, rd1, rd2, rdid, r1, r2, summ,
+                       ssm1, ssm2, flags1, flags2, prm, mapq, sc, true);
+                if(flags1 != NULL) {
+                    flagscp1.setPrimary(false);
+                }
+                if(flags2 != NULL) {
+                    flagscp2.setPrimary(false);
+                }
+            }
+        }
+    }
+
 	/**
 	 * Report an unaligned read.  Typically we do nothing, but we might
 	 * want to print a placeholder when output is chained.
@@ -834,6 +972,26 @@ public:
 		append(o, staln, threadId, rd1, rd2, rdid, NULL, NULL, summ,
 		       ssm1, ssm2, flags1, flags2, prm, mapq, sc, report2);
 	}
+
+    virtual void report3NUnaligned(
+            ReportingMetrics&     met,
+            BTString&             o,              // write to this string
+            StackedAln&           staln,          // StackedAln to write stacked alignment
+            size_t                threadId,       // which thread am I?
+            const Read           *rd1,            // mate #1
+            const Read           *rd2,            // mate #2
+            const TReadId         rdid,           // read ID
+            const AlnSetSumm&     summ,           // summary
+            const SeedAlSumm&     ssm1,           // seed alignment summary
+            const SeedAlSumm&     ssm2,           // seed alignment summary
+            const AlnFlags*       flags1,         // flags for mate #1
+            const AlnFlags*       flags2,         // flags for mate #2
+            const PerReadMetrics& prm,            // per-read metrics
+            const Mapq&           mapq,           // MAPQ calculator
+            const Scoring&        sc,             // scoring scheme
+            bool                  report2,        // report alns for both mates?
+            bool                  getLock = true)=0; // true iff lock held by caller
+
 
 	/**
 	 * Print summary of how many reads aligned, failed to align and aligned
@@ -1098,6 +1256,11 @@ public:
 		assert(rp_.repOk());
 	}
 
+	void resetInit_(){
+        init_ = false;
+	};
+
+
 	/**
 	 * Initialize the wrapper with a new read pair and return an
 	 * integer >= -1 indicating which stage the aligner should start
@@ -1119,7 +1282,7 @@ public:
 	 * counters, creating the output record, and delivering the record
 	 * to the appropriate output stream.
 	 */
-	void finishRead(
+    void finishRead(
 		const SeedResults<index_t> *sr1, // seed alignment results for mate 1
 		const SeedResults<index_t> *sr2, // seed alignment results for mate 2
 		bool               exhaust1,     // mate 1 exhausted?
@@ -1140,7 +1303,30 @@ public:
 		bool suppressSeedSummary = true,
 		bool suppressAlignments = false,
         bool templateLenAdjustment = true);
-	
+
+    void finish3NRead(
+            const SeedResults<index_t> *sr1, // seed alignment results for mate 1
+            const SeedResults<index_t> *sr2, // seed alignment results for mate 2
+            bool               exhaust1,     // mate 1 exhausted?
+            bool               exhaust2,     // mate 2 exhausted?
+            bool               nfilt1,       // mate 1 N-filtered?
+            bool               nfilt2,       // mate 2 N-filtered?
+            bool               scfilt1,      // mate 1 score-filtered?
+            bool               scfilt2,      // mate 2 score-filtered?
+            bool               lenfilt1,     // mate 1 length-filtered?
+            bool               lenfilt2,     // mate 2 length-filtered?
+            bool               qcfilt1,      // mate 1 qc-filtered?
+            bool               qcfilt2,      // mate 2 qc-filtered?
+            bool               sortByScore,  // prioritize alignments by score
+            RandomSource&      rnd,          // pseudo-random generator
+            ReportingMetrics&  met,          // reporting metrics
+            const PerReadMetrics& prm,       // per-read metrics
+            const Scoring& sc,               // scoring scheme
+            bool suppressSeedSummary = true,
+            bool suppressAlignments = false,
+            bool templateLenAdjustment = true);
+
+
 	/**
 	 * Called by the aligner when a new unpaired or paired alignment is
 	 * discovered in the given stage.  This function checks whether the
@@ -1503,7 +1689,9 @@ protected:
 	StackedAln staln_;
     
     EList<SpliceSite> spliceSites_;
+
 };
+
 
 /**
  * An AlnSink concrete subclass for printing SAM alignments.  The user might
@@ -1515,6 +1703,7 @@ template <typename index_t>
 class AlnSinkSam : public AlnSink<index_t> {
 
 	typedef EList<std::string> StrList;
+
 
 public:
 
@@ -1582,6 +1771,57 @@ public:
 		}
 	}
 
+    /**
+	 * Append a single alignment result, this function is for HSIAT-3N.
+	 */
+    virtual void append(
+            ReportingMetrics&     met,
+            BTString&             o,
+            StackedAln&           staln,
+            size_t                threadId,
+            const Read           *rd1,
+            const Read           *rd2,
+            const TReadId         rdid,
+            AlnRes               *rs1,
+            AlnRes               *rs2,
+            const AlnSetSumm&     summ,
+            const SeedAlSumm&     ssm1,
+            const SeedAlSumm&     ssm2,
+            const AlnFlags*       flags1,
+            const AlnFlags*       flags2,
+            const PerReadMetrics& prm,
+            const Mapq&           mapq,
+            const Scoring&        sc,
+            bool                  report2){
+
+	}
+
+    // for hisat-3n
+    virtual void output(int threadId0, ReportingMetrics& met, BTString& o) {
+
+    }
+
+    virtual void report3NUnaligned(
+            ReportingMetrics&     met,
+            BTString&             o,              // write to this string
+            StackedAln&           staln,          // StackedAln to write stacked alignment
+            size_t                threadId,       // which thread am I?
+            const Read           *rd1,            // mate #1
+            const Read           *rd2,            // mate #2
+            const TReadId         rdid,           // read ID
+            const AlnSetSumm&     summ,           // summary
+            const SeedAlSumm&     ssm1,           // seed alignment summary
+            const SeedAlSumm&     ssm2,           // seed alignment summary
+            const AlnFlags*       flags1,         // flags for mate #1
+            const AlnFlags*       flags2,         // flags for mate #2
+            const PerReadMetrics& prm,            // per-read metrics
+            const Mapq&           mapq,           // MAPQ calculator
+            const Scoring&        sc,             // scoring scheme
+            bool                  report2,        // report alns for both mates?
+            bool                  getLock = true) {
+
+	}
+
 protected:
 
 	/**
@@ -1589,7 +1829,7 @@ protected:
 	 * stream.  If the alignment is part of a pair, information about
 	 * the opposite mate and its alignment are given in rdo/rso.
 	 */
-	void appendMate(
+	virtual void appendMate(
 		BTString&     o,
 		StackedAln&   staln,
 		const Read&   rd,
@@ -1609,6 +1849,378 @@ protected:
 	BTDnaString               dseq_;    // buffer for decoded read sequence
 	BTString                  dqual_;   // buffer for decoded quality sequence
 };
+
+/**
+ * This is the class similar to AlnSinkSAM.
+ * AlnSink3NSam will put all the alignment result information into the class Alignment in "alignment_3N.h".
+ * This class should only be used for HISAT-3N (3N mode for HISAT2).
+ */
+
+template <typename index_t>
+class AlnSink3NSam : public AlnSinkSam<index_t> {
+
+public:
+
+    using AlnSinkSam<index_t>::samc_;
+    typedef EList<std::string> StrList;
+    using AlnSink<index_t>::oq_;
+
+    //int nThreads;
+    vector<Alignments*> alignmentsEachThreads;
+
+    AlnSink3NSam(
+            OutputQueue&     oq,            // output queue
+            const SamConfig<index_t>& samc, // settings & routines for SAM output
+            const StrList&   refnames,      // reference names
+            const StrList&   repnames,      // repeat names
+            bool             quiet,         // don't print alignment summary at end
+            int              nthreads,
+            BitPairReference* ref,
+            bool             DNA,
+            ALTDB<index_t>*  altdb = NULL,
+            SpliceSiteDB*    ssdb  = NULL) :
+            AlnSinkSam<index_t>(
+                    oq,
+                    samc,
+                    refnames,
+                    repnames,
+                    quiet,
+                    altdb,
+                    ssdb)
+//                    samc_(samc)
+    {
+        //nThreads = nthreads;
+        for (int i = 0; i < nthreads; i++) {
+            Alignments* newAlignments = new Alignments(ref, DNA);
+            alignmentsEachThreads.push_back(newAlignments);
+        }
+    }
+
+    ~AlnSink3NSam() {
+        for (int i = 0; i < alignmentsEachThreads.size(); i++) {
+            delete alignmentsEachThreads[i];
+        }
+    };
+
+    virtual void report3NUnaligned(
+            ReportingMetrics&     met,
+            BTString&             o,              // write to this string
+            StackedAln&           staln,          // StackedAln to write stacked alignment
+            size_t                threadId,       // which thread am I?
+            const Read           *rd1,            // mate #1
+            const Read           *rd2,            // mate #2
+            const TReadId         rdid,           // read ID
+            const AlnSetSumm&     summ,           // summary
+            const SeedAlSumm&     ssm1,           // seed alignment summary
+            const SeedAlSumm&     ssm2,           // seed alignment summary
+            const AlnFlags*       flags1,         // flags for mate #1
+            const AlnFlags*       flags2,         // flags for mate #2
+            const PerReadMetrics& prm,            // per-read metrics
+            const Mapq&           mapq,           // MAPQ calculator
+            const Scoring&        sc,             // scoring scheme
+            bool                  report2,        // report alns for both mates?
+            bool                  getLock = true)
+            {
+        append(met, o, staln, threadId, rd1, rd2, rdid, NULL, NULL, summ,
+               ssm1, ssm2, flags1, flags2, prm, mapq, sc, report2);
+    }
+
+    /**
+     * output the rest of alignment information in alignmentsEachThreads[threadId0].
+     * this function will be used after we receive new alignment result (with different rdid to previous one).
+     */
+    void output(int threadId0, ReportingMetrics& met, BTString& o) {
+        if (alignmentsEachThreads[threadId0]->readName->empty()) {
+            return;
+        }
+        met.nread++;
+        if (alignmentsEachThreads[threadId0]->paired) {
+            met.npaired++;
+        } else {
+            met.nunpaired++;
+        }
+        alignmentsEachThreads[threadId0]->output(met, o);
+    }
+
+    /**
+	 * Append a single alignment result, this function is for HSIAT-3N.
+	 */
+    void append(
+            ReportingMetrics&     met,          // reporting metrics
+            BTString&     o,           // write output to this string
+            StackedAln&   staln,       // StackedAln to write stacked alignment
+            size_t        threadId,    // which thread am I?
+            const Read*   rd1,         // mate #1
+            const Read*   rd2,         // mate #2
+            const TReadId rdid,        // read ID
+            AlnRes* rs1,               // alignments for mate #1
+            AlnRes* rs2,               // alignments for mate #2
+            const AlnSetSumm& summ,    // summary
+            const SeedAlSumm& ssm1,    // seed alignment summary
+            const SeedAlSumm& ssm2,    // seed alignment summary
+            const AlnFlags* flags1,    // flags for mate #1
+            const AlnFlags* flags2,    // flags for mate #2
+            const PerReadMetrics& prm, // per-read metrics
+            const Mapq& mapq,          // MAPQ calculator
+            const Scoring& sc,         // scoring scheme
+            bool report2)              // report alns for both mates
+    {
+        // this function is for HLA alignment result report.
+        size_t threadId0 = threadId-1;
+
+        assert(rd1 != NULL || rd2 != NULL);
+        if(rd1 != NULL) {
+            assert(flags1 != NULL);
+            appendMate(staln, *rd1, rd2, rdid, rs1, rs2, summ, ssm1, ssm2,
+                       *flags1, prm, mapq, sc, threadId0);
+            if(rs1 != NULL && rs1->spliced() && this->spliceSiteDB_ != NULL) {
+                this->spliceSiteDB_->addSpliceSite(*rd1, *rs1);
+            }
+        }
+        if(rd2 != NULL && report2) {
+            assert(flags2 != NULL);
+            appendMate(staln, *rd2, rd1, rdid, rs2, rs1, summ, ssm2, ssm1,
+                       *flags2, prm, mapq, sc, threadId0);
+            if(rs2 != NULL && rs2->spliced() && this->spliceSiteDB_ != NULL) {
+                this->spliceSiteDB_->addSpliceSite(*rd2, *rs2);
+            }
+        }
+    }
+
+    /**
+	 * Append a single per-mate alignment result to the Alignment class.
+     * This function is for HISAT-3N.
+	 */
+    void appendMate(
+            //Alignment*    newAlignment,
+            StackedAln&   staln,       // store stacked alignment struct here
+            const Read&   rd,
+            const Read*   rdo,
+            const TReadId rdid,
+            AlnRes* rs,
+            AlnRes* rso,
+            const AlnSetSumm& summ,
+            const SeedAlSumm& ssm,
+            const SeedAlSumm& ssmo,
+            const AlnFlags& flags,
+            const PerReadMetrics& prm,
+            const Mapq& mapqCalc,
+            const Scoring& sc,
+            size_t        threadId0)    // which thread am I?
+    {
+        // check whether we want to recieve this alignment reuslt.
+        if(rs == NULL && samc_.omitUnalignedReads() || !alignmentsEachThreads[threadId0]->acceptNewAlignment()) {
+            return;
+        }
+        // get the Alignment pointer and append information into it.
+        Alignment* newAlignment;
+        alignmentsEachThreads[threadId0]->getFreeAlignmentPointer(newAlignment);
+        alignmentsEachThreads[threadId0]->getSequence(rd);
+        newAlignment->cycle_3N = rd.cycle_3N;
+
+        char buf[1024];
+        char mapqInps[1024];
+        if(rs != NULL) {
+            staln.reset();
+            rs->initStacked(rd, staln);
+            staln.leftAlign(false /* not past MMs */);
+        }
+        int offAdj = 0;
+        // QNAME
+        samc_.printReadName(newAlignment->readName, rd.name, flags.partOfPair());
+        // FLAG
+        int fl = 0;
+        if(flags.partOfPair()) {
+            fl |= SAM_FLAG_PAIRED;
+            if(flags.alignedConcordant()) {
+                fl |= SAM_FLAG_MAPPED_PAIRED;
+            }
+            if(!flags.mateAligned()) {
+                // Other fragment is unmapped
+                fl |= SAM_FLAG_MATE_UNMAPPED;
+            }
+            fl |= (flags.readMate1() ?
+                   SAM_FLAG_FIRST_IN_PAIR : SAM_FLAG_SECOND_IN_PAIR);
+            if(flags.mateAligned() && rso != NULL) {
+                if(!rso->fw()) {
+                    fl |= SAM_FLAG_MATE_STRAND;
+                }
+            }
+        }
+        if(!flags.isPrimary()) {
+            fl |= SAM_FLAG_NOT_PRIMARY;
+        }
+        if(rs != NULL && !rs->fw()) {
+            fl |= SAM_FLAG_QUERY_STRAND;
+        }
+        if(rs == NULL) {
+            // Failed to align
+            fl |= SAM_FLAG_UNMAPPED;
+        }
+        newAlignment->flag = fl;
+        // RNAME
+        if(rs != NULL) {
+            samc_.printRefNameFromIndex(newAlignment->chromosomeName, (size_t)rs->refid(), rs->repeat());
+            newAlignment->chromosomeIndex = rs->refid();
+            if (rs->repeat()) {
+                newAlignment->repeat = true;
+            }
+        } else {
+            if(summ.orefid() != -1) {
+                // Opposite mate aligned but this one didn't - print the opposite
+                // mate's RNAME and POS as is customary
+                assert(flags.partOfPair());
+                samc_.printRefNameFromIndex(newAlignment->chromosomeName, (size_t)summ.orefid(), summ.repeat());
+                if (newAlignment->repeat) {
+                    newAlignment->pairToRepeat = true;
+                }
+            } else {
+                // No alignment
+                newAlignment->chromosomeName = "*";
+            }
+        }
+        // POS
+        // Note: POS is *after* soft clipping.  I.e. POS points to the
+        // upstream-most character *involved in the clipped alignment*.
+        if(rs != NULL) {
+            newAlignment->location = rs->refoff()+1+offAdj;
+        } else {
+            if(summ.orefid() != -1) {
+                // Opposite mate aligned but this one didn't - print the opposite
+                // mate's RNAME and POS as is customary
+                assert(flags.partOfPair());
+                newAlignment->location = summ.orefoff()+1+offAdj;
+            } else {
+                // No alignment
+                newAlignment->location = 0;
+            }
+        }
+        // MAPQ
+        mapqInps[0] = '\0';
+        if(rs != NULL) {
+            itoa10<TMapq>(mapqCalc.mapq(
+                    summ, flags, rd.mate < 2, rd.length(),
+                    rdo == NULL ? 0 : rdo->length(), mapqInps), buf);
+            newAlignment->MAPQ = buf;
+        } else {
+            // No alignment
+            newAlignment->MAPQ = "0";
+        }
+        // CIGAR
+        if(rs != NULL) {
+            staln.buildCigar(false);
+            staln.writeCigar(newAlignment, NULL);
+            //newAlignment->getCigarSegement(staln);
+        } else {
+            // No alignment
+            newAlignment->cigarString = "*";
+        }
+        if (rso != NULL) {
+            if (rso->repeat()) {
+                newAlignment->pairToRepeat = true;
+            }
+        }
+        // RNEXT
+        if(rs != NULL && flags.partOfPair()) {
+            if(rso != NULL && (rs->refid() != rso->refid() || rs->repeat() != rso->repeat())) {
+                samc_.printRefNameFromIndex(newAlignment->pairToChromosome, (size_t)rso->refid(), rso->repeat());
+            } else {
+                newAlignment->pairToChromosome = "=";
+            }
+        } else if(summ.orefid() != -1) {
+            // The convention if this mate fails to align but the other doesn't is
+            // to copy the mate's details into here
+            newAlignment->pairToChromosome = "=";
+        } else {
+            newAlignment->pairToChromosome = "*";
+        }
+        // PNEXT
+        if(rs != NULL && flags.partOfPair()) {
+            if(rso != NULL) {
+                newAlignment->pairToLocation = rso->refoff()+1;
+            } else {
+                // The convenstion is that if this mate aligns but the opposite
+                // doesn't, we print this mate's offset here
+                newAlignment->pairToLocation = rs->refoff()+1;
+            }
+        } else if(summ.orefid() != -1) {
+            // The convention if this mate fails to align but the other doesn't is
+            // to copy the mate's details into here
+            newAlignment->pairToLocation = summ.orefoff()+1;
+        } else {
+            newAlignment->pairToLocation = 0;
+        }
+        // ISIZE
+        if(rs != NULL && rs->isFraglenSet()) {
+            newAlignment->pairingDistance = rs->fragmentLength();
+        } else {
+            // No fragment
+            newAlignment->pairingDistance = 0;
+        }
+        // SEQ
+        if(!flags.isPrimary() && samc_.omitSecondarySeqQual()) {
+            newAlignment->readSequence = "*";
+        } else {
+            // Print the read
+            if(rd.patFw.length() == 0) {
+                newAlignment->readSequence = "*";
+            } else {
+                if(rs == NULL || rs->fw()) {
+                    newAlignment->readSequence = rd.originalFw.toZBuf();
+                } else {
+                    newAlignment->readSequence = rd.originalRc.toZBuf();
+                }
+            }
+        }
+        // QUAL
+        if(!flags.isPrimary() && samc_.omitSecondarySeqQual()) {
+            newAlignment->readQuality = "*";
+        } else {
+            // Print the quals
+            if(rd.qual.length() == 0) {
+                newAlignment->readQuality = "*";
+            } else {
+                if(rs == NULL || rs->fw()) {
+                    newAlignment->readQuality = rd.qual.toZBuf();
+                } else {
+                    newAlignment->readQuality = rd.qualRev.toZBuf();
+                }
+            }
+        }
+
+        // Optional fields
+        //
+        if(rs != NULL) {
+            samc_.printAlignedOptFlags(
+                    newAlignment,
+                    true,        // first opt flag printed is first overall?
+                    rd,          // read
+                    *rs,         // individual alignment result
+                    staln,       // stacked alignment
+                    flags,       // alignment flags
+                    summ,        // summary of alignments for this read
+                    ssm,         // seed alignment summary
+                    prm,         // per-read metrics
+                    sc,          // scoring scheme
+                    mapqInps,    // inputs to MAPQ calculation
+                    this->altdb_);
+        } else {
+            samc_.printEmptyOptFlags(
+                    newAlignment->unChangedTags,
+                    true,        // first opt flag printed is first overall?
+                    rd,          // read
+                    flags,       // alignment flags
+                    summ,        // summary of alignments for this read
+                    ssm,         // seed alignment summary
+                    prm,         // per-read metrics
+                    sc);         // scoring scheme
+        }
+
+        alignmentsEachThreads[threadId0]->append(newAlignment);
+
+    }
+};
+
 
 static inline std::ostream& printPct(
 							  std::ostream& os,
@@ -2015,7 +2627,7 @@ void AlnSinkWrap<index_t>::finishRead(
             AlnSetSumm concordSumm(
                                    rd1_, rd2_, &rs1_, &rs2_, &rs1u_, &rs2u_,
                                    exhaust1, exhaust2, -1, -1, false);
-            
+
 			// Possibly select a random subset
 			size_t off;
 			if(sortByScore) {
@@ -2025,9 +2637,9 @@ void AlnSinkWrap<index_t>::finishRead(
 				// Select subset randomly
 				off = selectAlnsToReport(rs1_, nconcord, select1_, rnd);
 			}
-            
+
             concordSumm.numAlnsPaired(select1_.size());
-            
+
 			assert_lt(off, rs1_.size());
 			const AlnRes *rs1 = &rs1_[off];
 			const AlnRes *rs2 = &rs2_[off];
@@ -2200,14 +2812,14 @@ void AlnSinkWrap<index_t>::finishRead(
 		// the mates having more than one.
 		//assert(nunpair1 == 0 || nunpair2 == 0);
 		assert(!pairMax);
-			
+
 		const AlnRes *repRs1 = NULL, *repRs2 = NULL;
 		AlnSetSumm summ1, summ2;
 		AlnFlags flags1, flags2;
         TRefId refid = -1; TRefOff refoff = -1; bool repeat = false;
 		bool rep1 = rd1_ != NULL && nunpair1 > 0;
 		bool rep2 = rd2_ != NULL && nunpair2 > 0;
-		
+
 		// This is the preliminary if statement for mate 1 - here we're
 		// gathering some preliminary information, making it possible to call
 		// g_.reportHits(...) with information about both mates potentially
@@ -2239,7 +2851,7 @@ void AlnSinkWrap<index_t>::finishRead(
 			// summary
 			assert(!unpair1Max);
 		}
-		
+
 		if(rep2) {
             if(rep1) {
                 summ2.init(
@@ -2267,7 +2879,7 @@ void AlnSinkWrap<index_t>::finishRead(
 			// summary
 			assert(!unpair2Max);
 		}
-        
+
         // Update counters given that one mate didn't align
         if(readIsPair()) {
             met.nconcord_0++;
@@ -2344,7 +2956,7 @@ void AlnSinkWrap<index_t>::finishRead(
                 else               met.nunp_0++;
             }
         }
-		
+
 		// Now set up flags
 		if(rep1) {
 			// Initialize flags.  Note: We want to have information about how
@@ -2390,7 +3002,7 @@ void AlnSinkWrap<index_t>::finishRead(
 				rs2u_[i].setMateParams(ALN_RES_TYPE_UNPAIRED_MATE2, NULL, flags2);
 			}
 		}
-		
+
 		// Now report mate 1
 		if(rep1) {
 			SeedAlSumm ssm1, ssm2;
@@ -2422,7 +3034,7 @@ void AlnSinkWrap<index_t>::finishRead(
 			refoff = rs1u_[select1_[0]].refoff();
             repeat = rs1u_[select1_[0]].repeat();
 		}
-		
+
 		// Now report mate 2
 		if(rep2 && !rep1) {
 			SeedAlSumm ssm1, ssm2;
@@ -2454,7 +3066,7 @@ void AlnSinkWrap<index_t>::finishRead(
 			refoff = rs2u_[select2_[0]].refoff();
             repeat = rs2u_[select2_[0]].repeat();
 		}
-		
+
 		if(rd1_ != NULL && nunpair1 == 0) {
 			if(nunpair2 > 0) {
 				assert_neq(-1, refid);
@@ -2492,7 +3104,7 @@ void AlnSinkWrap<index_t>::finishRead(
 							   NULL,    // read 2
 							   rdid_,   // read id
 							   summ1,   // summ
-							   ssm1,    // 
+							   ssm1,    //
 							   ssm2,
 							   &flags1, // flags 1
 							   NULL,    // flags 2
@@ -2551,6 +3163,545 @@ void AlnSinkWrap<index_t>::finishRead(
 	init_ = false;
 	return;
 }
+
+template <typename index_t>
+void AlnSinkWrap<index_t>::finish3NRead(
+        const SeedResults<index_t> *sr1, // seed alignment results for mate 1
+        const SeedResults<index_t> *sr2, // seed alignment results for mate 2
+        bool               exhaust1,     // mate 1 exhausted?
+        bool               exhaust2,     // mate 2 exhausted?
+        bool               nfilt1,       // mate 1 N-filtered?
+        bool               nfilt2,       // mate 2 N-filtered?
+        bool               scfilt1,      // mate 1 score-filtered?
+        bool               scfilt2,      // mate 2 score-filtered?
+        bool               lenfilt1,     // mate 1 length-filtered?
+        bool               lenfilt2,     // mate 2 length-filtered?
+        bool               qcfilt1,      // mate 1 qc-filtered?
+        bool               qcfilt2,      // mate 2 qc-filtered?
+        bool               sortByScore,  // prioritize alignments by score
+        RandomSource&      rnd,          // pseudo-random generator
+        ReportingMetrics&  met,          // reporting metrics
+        const PerReadMetrics& prm,       // per-read metrics
+        const Scoring& sc,               // scoring scheme
+        bool suppressSeedSummary,        // = true
+        bool suppressAlignments,         // = false
+        bool templateLenAdjustment)      // = true
+{
+    obuf_.clear();
+    OutputQueueMark qqm(g_.outq(), obuf_, rdid_, threadid_);
+    assert(init_);
+    if(!suppressSeedSummary) {
+        if(sr1 != NULL) {
+            assert(rd1_ != NULL);
+            // Mate exists and has non-empty SeedResults
+            g_.reportSeedSummary(obuf_, *rd1_, rdid_, threadid_, *sr1, true);
+        } else if(rd1_ != NULL) {
+            // Mate exists but has NULL SeedResults
+            g_.reportEmptySeedSummary(obuf_, *rd1_, rdid_, true);
+        }
+        if(sr2 != NULL) {
+            assert(rd2_ != NULL);
+            // Mate exists and has non-empty SeedResults
+            g_.reportSeedSummary(obuf_, *rd2_, rdid_, threadid_, *sr2, true);
+        } else if(rd2_ != NULL) {
+            // Mate exists but has NULL SeedResults
+            g_.reportEmptySeedSummary(obuf_, *rd2_, rdid_, true);
+        }
+    }
+    if(!suppressAlignments) {
+        // Ask the ReportingState what to report
+        st_.finish();
+        uint64_t nconcord = 0, ndiscord = 0, nunpair1 = 0, nunpair2 = 0;
+        uint64_t nunpairRepeat1 = 0, nunpairRepeat2 = 0;
+        bool pairMax = false, unpair1Max = false, unpair2Max = false;
+        st_.getReport(
+                nconcord,
+                ndiscord,
+                nunpair1,
+                nunpair2,
+                nunpairRepeat1,
+                nunpairRepeat2,
+                pairMax,
+                unpair1Max,
+                unpair2Max);
+        assert_leq(nconcord, rs1_.size());
+        assert_leq(nunpair1, rs1u_.size());
+        assert_leq(nunpair2, rs2u_.size());
+        assert_leq(ndiscord, 1);
+        assert_gt(rp_.khits, 0);
+        assert_gt(rp_.mhits, 0);
+        assert(!pairMax    || rs1_.size()  >= (uint64_t)rp_.mhits);
+        assert(!unpair1Max || rs1u_.size() >= (uint64_t)rp_.mhits);
+        assert(!unpair2Max || rs2u_.size() >= (uint64_t)rp_.mhits);
+
+        // Report concordant paired-end alignments if possible
+        if(nconcord > 0) {
+            AlnSetSumm concordSumm(
+                    rd1_, rd2_, &rs1_, &rs2_, &rs1u_, &rs2u_,
+                    exhaust1, exhaust2, -1, -1, false);
+
+            // Possibly select a random subset
+            size_t off;
+            if(sortByScore) {
+                // Sort by score then pick from low to high
+                off = selectByScore(&rs1_, &rs2_, nconcord, select1_, rnd);
+            } else {
+                // Select subset randomly
+                off = selectAlnsToReport(rs1_, nconcord, select1_, rnd);
+            }
+
+            concordSumm.numAlnsPaired(select1_.size());
+
+            assert_lt(off, rs1_.size());
+            const AlnRes *rs1 = &rs1_[off];
+            const AlnRes *rs2 = &rs2_[off];
+            AlnFlags flags1(
+                    ALN_FLAG_PAIR_CONCORD_MATE1,
+                    st_.params().mhitsSet(),
+                    unpair1Max,
+                    pairMax,
+                    nfilt1,
+                    scfilt1,
+                    lenfilt1,
+                    qcfilt1,
+                    st_.params().mixed,
+                    true,       // primary
+                    true,       // opp aligned
+                    rs2->fw()); // opp fw
+            AlnFlags flags2(
+                    ALN_FLAG_PAIR_CONCORD_MATE2,
+                    st_.params().mhitsSet(),
+                    unpair2Max,
+                    pairMax,
+                    nfilt2,
+                    scfilt2,
+                    lenfilt2,
+                    qcfilt2,
+                    st_.params().mixed,
+                    false,      // primary
+                    true,       // opp aligned
+                    rs1->fw()); // opp fw
+            // Issue: we only set the flags once, but some of the flags might
+            // vary from pair to pair among the pairs we're reporting.  For
+            // instance, whether a given mate aligns to the forward strand.
+            SeedAlSumm ssm1, ssm2;
+            if(sr1 != NULL && sr2 != NULL) {
+                sr1->toSeedAlSumm(ssm1);
+                sr2->toSeedAlSumm(ssm2);
+            }
+            for(size_t i = 0; i < rs1_.size(); i++) {
+                spliceSites_.clear();
+                if(templateLenAdjustment) {
+                    rs1_[i].setMateParams(ALN_RES_TYPE_MATE1, &rs2_[i], flags1, ssdb_, threads_rids_mindist_, &spliceSites_);
+                    rs2_[i].setMateParams(ALN_RES_TYPE_MATE2, &rs1_[i], flags2, ssdb_, threads_rids_mindist_, &spliceSites_);
+                } else {
+                    rs1_[i].setMateParams(ALN_RES_TYPE_MATE1, &rs2_[i], flags1);
+                    rs2_[i].setMateParams(ALN_RES_TYPE_MATE2, &rs1_[i], flags2);
+                }
+                assert_eq(abs(rs1_[i].fragmentLength()), abs(rs2_[i].fragmentLength()));
+            }
+            assert(!select1_.empty());
+            g_.report3NHits(
+                    met,
+                    obuf_,
+                    staln_,
+                    threadid_,
+                    rd1_,
+                    rd2_,
+                    rdid_,
+                    select1_,
+                    NULL,
+                    &rs1_,
+                    &rs2_,
+                    pairMax,
+                    concordSumm,
+                    ssm1,
+                    ssm2,
+                    &flags1,
+                    &flags2,
+                    prm,
+                    mapq_,
+                    sc);
+
+            init_ = false;
+            if (rd1_->cycle_3N == 3) {
+                g_.output(threadid_-1, met, obuf_);
+            }
+            return;
+        }
+            // Report concordant paired-end alignments if possible
+        else if(ndiscord > 0) {
+            ASSERT_ONLY(bool ret =) prepareDiscordants();
+            assert(ret);
+            assert_eq(1, rs1_.size());
+            assert_eq(1, rs2_.size());
+            AlnSetSumm discordSumm(
+                    rd1_, rd2_, &rs1_, &rs2_, &rs1u_, &rs2u_,
+                    exhaust1, exhaust2, -1, -1, false);
+            const AlnRes *rs1 = &rs1_[0];
+            const AlnRes *rs2 = &rs2_[0];
+            AlnFlags flags1(
+                    ALN_FLAG_PAIR_DISCORD_MATE1,
+                    st_.params().mhitsSet(),
+                    false,
+                    pairMax,
+                    nfilt1,
+                    scfilt1,
+                    lenfilt1,
+                    qcfilt1,
+                    st_.params().mixed,
+                    true,       // primary
+                    true,       // opp aligned
+                    rs2->fw()); // opp fw
+            AlnFlags flags2(
+                    ALN_FLAG_PAIR_DISCORD_MATE2,
+                    st_.params().mhitsSet(),
+                    false,
+                    pairMax,
+                    nfilt2,
+                    scfilt2,
+                    lenfilt2,
+                    qcfilt2,
+                    st_.params().mixed,
+                    false,      // primary
+                    true,       // opp aligned
+                    rs1->fw()); // opp fw
+            SeedAlSumm ssm1, ssm2;
+            if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
+            if(sr2 != NULL) sr2->toSeedAlSumm(ssm2);
+            for(size_t i = 0; i < rs1_.size(); i++) {
+                rs1_[i].setMateParams(ALN_RES_TYPE_MATE1, &rs2_[i], flags1);
+                rs2_[i].setMateParams(ALN_RES_TYPE_MATE2, &rs1_[i], flags2);
+                assert(rs1_[i].isFraglenSet() == rs2_[i].isFraglenSet());
+                assert(!rs1_[i].isFraglenSet() || abs(rs1_[i].fragmentLength()) == abs(rs2_[i].fragmentLength()));
+            }
+            ASSERT_ONLY(size_t off);
+            if(sortByScore) {
+                // Sort by score then pick from low to high
+                ASSERT_ONLY(off =) selectByScore(&rs1_, &rs2_, ndiscord, select1_, rnd);
+            } else {
+                // Select subset randomly
+                ASSERT_ONLY(off =) selectAlnsToReport(rs1_, ndiscord, select1_, rnd);
+            }
+            assert_eq(0, off);
+            assert(!select1_.empty());
+            g_.report3NHits(
+                    met,
+                    obuf_,
+                    staln_,
+                    threadid_,
+                    rd1_,
+                    rd2_,
+                    rdid_,
+                    select1_,
+                    NULL,
+                    &rs1_,
+                    &rs2_,
+                    pairMax,
+                    discordSumm,
+                    ssm1,
+                    ssm2,
+                    &flags1,
+                    &flags2,
+                    prm,
+                    mapq_,
+                    sc);
+            init_ = false;
+            // output alignment result if cycle_3N == 3 (the last one)
+            if (rd1_->cycle_3N == 3) {
+                g_.output(threadid_-1, met, obuf_);
+            }
+            return;
+        }
+        // If we're at this point, at least one mate failed to align.
+        // BTL: That's not true.  It could be that there are no concordant
+        // alignments but both mates have unpaired alignments, with one of
+        // the mates having more than one.
+        //assert(nunpair1 == 0 || nunpair2 == 0);
+        assert(!pairMax);
+
+        const AlnRes *repRs1 = NULL, *repRs2 = NULL;
+        AlnSetSumm summ1, summ2;
+        AlnFlags flags1, flags2;
+        TRefId refid = -1; TRefOff refoff = -1; bool repeat = false;
+        bool rep1 = rd1_ != NULL && nunpair1 > 0;
+        bool rep2 = rd2_ != NULL && nunpair2 > 0;
+
+        // This is the preliminary if statement for mate 1 - here we're
+        // gathering some preliminary information, making it possible to call
+        // g_.reportHits(...) with information about both mates potentially
+        if(rep1) {
+            // Mate 1 aligned at least once
+            if(rep2) {
+                summ1.init(
+                        rd1_, rd2_, NULL, NULL, &rs1u_, &rs2u_,
+                        exhaust1, exhaust2, -1, -1, false);
+            } else {
+                summ1.init(
+                        rd1_, NULL, NULL, NULL, &rs1u_, NULL,
+                        exhaust1, exhaust2, -1, -1, false);
+            }
+            size_t off;
+            if(sortByScore) {
+                // Sort by score then pick from low to high
+                off = selectByScore(&rs1u_, NULL, nunpair1, select1_, rnd);
+            } else {
+                // Select subset randomly
+                off = selectAlnsToReport(rs1u_, nunpair1, select1_, rnd);
+            }
+            summ1.numAlns1(select1_.size());
+            summ2.numAlns1(select1_.size());
+            repRs1 = &rs1u_[off];
+        } else if(rd1_ != NULL) {
+            // Mate 1 failed to align - don't do anything yet.  First we want
+            // to collect information on mate 2 in case that factors into the
+            // summary
+            assert(!unpair1Max);
+        }
+
+        if(rep2) {
+            if(rep1) {
+                summ2.init(
+                        rd1_, rd2_, NULL, NULL, &rs1u_, &rs2u_,
+                        exhaust1, exhaust2, -1, -1, false);
+            } else {
+                summ2.init(
+                        NULL, rd2_, NULL, NULL, NULL, &rs2u_,
+                        exhaust1, exhaust2, -1, -1, false);
+            }
+            size_t off;
+            if(sortByScore) {
+                // Sort by score then pick from low to high
+                off = selectByScore(&rs2u_, NULL, nunpair2, select2_, rnd);
+            } else {
+                // Select subset randomly
+                off = selectAlnsToReport(rs2u_, nunpair2, select2_, rnd);
+            }
+            repRs2 = &rs2u_[off];
+            summ1.numAlns2(select2_.size());
+            summ2.numAlns2(select2_.size());
+        } else if(rd2_ != NULL) {
+            // Mate 2 failed to align - don't do anything yet.  First we want
+            // to collect information on mate 1 in case that factors into the
+            // summary
+            assert(!unpair2Max);
+        }
+
+        // Now set up flags
+        if(rep1) {
+            // Initialize flags.  Note: We want to have information about how
+            // the other mate aligned (if it did) at this point
+            flags1.init(
+                    readIsPair() ?
+                    ALN_FLAG_PAIR_UNPAIRED_MATE1 :
+                    ALN_FLAG_PAIR_UNPAIRED,
+                    st_.params().mhitsSet(),
+                    unpair1Max,
+                    pairMax,
+                    nfilt1,
+                    scfilt1,
+                    lenfilt1,
+                    qcfilt1,
+                    st_.params().mixed,
+                    true,   // primary
+                    repRs2 != NULL,                    // opp aligned
+                    repRs2 == NULL || repRs2->fw());   // opp fw
+            for(size_t i = 0; i < rs1u_.size(); i++) {
+                rs1u_[i].setMateParams(ALN_RES_TYPE_UNPAIRED_MATE1, NULL, flags1);
+            }
+        }
+        if(rep2) {
+            // Initialize flags.  Note: We want to have information about how
+            // the other mate aligned (if it did) at this point
+            flags2.init(
+                    readIsPair() ?
+                    ALN_FLAG_PAIR_UNPAIRED_MATE2 :
+                    ALN_FLAG_PAIR_UNPAIRED,
+                    st_.params().mhitsSet(),
+                    unpair2Max,
+                    pairMax,
+                    nfilt2,
+                    scfilt2,
+                    lenfilt2,
+                    qcfilt2,
+                    st_.params().mixed,
+                    true,   // primary
+                    repRs1 != NULL,                  // opp aligned
+                    repRs1 == NULL || repRs1->fw()); // opp fw
+            for(size_t i = 0; i < rs2u_.size(); i++) {
+                rs2u_[i].setMateParams(ALN_RES_TYPE_UNPAIRED_MATE2, NULL, flags2);
+            }
+        }
+
+        // Now report mate 1
+        if(rep1) {
+            SeedAlSumm ssm1, ssm2;
+            if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
+            if(sr2 != NULL) sr2->toSeedAlSumm(ssm2);
+            assert(!select1_.empty());
+            g_.report3NHits(
+                    met,
+                    obuf_,
+                    staln_,
+                    threadid_,
+                    rd1_,
+                    repRs2 != NULL ? rd2_ : NULL,
+                    rdid_,
+                    select1_,
+                    repRs2 != NULL ? &select2_ : NULL,
+                    &rs1u_,
+                    repRs2 != NULL ? &rs2u_ : NULL,
+                    unpair1Max,
+                    summ1,
+                    ssm1,
+                    ssm2,
+                    &flags1,
+                    repRs2 != NULL ? &flags2 : NULL,
+                    prm,
+                    mapq_,
+                    sc);
+            assert_lt(select1_[0], rs1u_.size());
+            refid = rs1u_[select1_[0]].refid();
+            refoff = rs1u_[select1_[0]].refoff();
+            repeat = rs1u_[select1_[0]].repeat();
+        }
+
+        // Now report mate 2
+        if(rep2 && !rep1) {
+            SeedAlSumm ssm1, ssm2;
+            if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
+            if(sr2 != NULL) sr2->toSeedAlSumm(ssm2);
+            assert(!select2_.empty());
+            g_.report3NHits(
+                    met,
+                    obuf_,
+                    staln_,
+                    threadid_,
+                    rd2_,
+                    repRs1 != NULL ? rd1_ : NULL,
+                    rdid_,
+                    select2_,
+                    repRs1 != NULL ? &select1_ : NULL,
+                    &rs2u_,
+                    repRs1 != NULL ? &rs1u_ : NULL,
+                    unpair2Max,
+                    summ2,
+                    ssm1,
+                    ssm2,
+                    &flags2,
+                    repRs1 != NULL ? &flags1 : NULL,
+                    prm,
+                    mapq_,
+                    sc);
+            assert_lt(select2_[0], rs2u_.size());
+            refid = rs2u_[select2_[0]].refid();
+            refoff = rs2u_[select2_[0]].refoff();
+            repeat = rs2u_[select2_[0]].repeat();
+        }
+
+        if(rd1_ != NULL && nunpair1 == 0) {
+            if(nunpair2 > 0) {
+                assert_neq(-1, refid);
+                summ1.init(
+                        rd1_, NULL, NULL, NULL, NULL, NULL,
+                        exhaust1, exhaust2, refid, refoff, repeat);
+            } else {
+                summ1.init(
+                        rd1_, NULL, NULL, NULL, NULL, NULL,
+                        exhaust1, exhaust2, -1, -1, false);
+            }
+            SeedAlSumm ssm1, ssm2;
+            if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
+            if(sr2 != NULL) sr2->toSeedAlSumm(ssm2);
+            flags1.init(
+                    readIsPair() ?
+                    ALN_FLAG_PAIR_UNPAIRED_MATE1 :
+                    ALN_FLAG_PAIR_UNPAIRED,
+                    st_.params().mhitsSet(),
+                    false,
+                    false,
+                    nfilt1,
+                    scfilt1,
+                    lenfilt1,
+                    qcfilt1,
+                    st_.params().mixed,
+                    true,           // primary
+                    repRs2 != NULL, // opp aligned
+                    (repRs2 != NULL) ? repRs2->fw() : false); // opp fw
+            g_.report3NUnaligned(
+                    met,
+                    obuf_,      // string to write output to
+                    staln_,
+                    threadid_,
+                    rd1_,    // read 1
+                    NULL,    // read 2
+                    rdid_,   // read id
+                    summ1,   // summ
+                    ssm1,    //
+                    ssm2,
+                    &flags1, // flags 1
+                    NULL,    // flags 2
+                    prm,     // per-read metrics
+                    mapq_,   // MAPQ calculator
+                    sc,      // scoring scheme
+                    true);   // get lock?
+        }
+        if(rd2_ != NULL && nunpair2 == 0) {
+            if(nunpair1 > 0) {
+                assert_neq(-1, refid);
+                summ2.init(
+                        NULL, rd2_, NULL, NULL, NULL, NULL,
+                        exhaust1, exhaust2, refid, refoff, repeat);
+            } else {
+                summ2.init(
+                        NULL, rd2_, NULL, NULL, NULL, NULL,
+                        exhaust1, exhaust2, -1, -1, false);
+            }
+            SeedAlSumm ssm1, ssm2;
+            if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
+            if(sr2 != NULL) sr2->toSeedAlSumm(ssm2);
+            flags2.init(
+                    readIsPair() ?
+                    ALN_FLAG_PAIR_UNPAIRED_MATE2 :
+                    ALN_FLAG_PAIR_UNPAIRED,
+                    st_.params().mhitsSet(),
+                    false,
+                    false,
+                    nfilt2,
+                    scfilt2,
+                    lenfilt2,
+                    qcfilt2,
+                    st_.params().mixed,
+                    true,           // primary
+                    repRs1 != NULL, // opp aligned
+                    (repRs1 != NULL) ? repRs1->fw() : false); // opp fw
+            g_.report3NUnaligned(
+                    met,
+                    obuf_,      // string to write output to
+                    staln_,
+                    threadid_,
+                    rd2_,    // read 1
+                    NULL,    // read 2
+                    rdid_,   // read id
+                    summ2,   // summ
+                    ssm1,
+                    ssm2,
+                    &flags2, // flags 1
+                    NULL,    // flags 2
+                    prm,     // per-read metrics
+                    mapq_,   // MAPQ calculator
+                    sc,      // scoring scheme
+                    true);   // get lock?
+        }
+    } // if(suppress alignments)
+    init_ = false;
+    // output alignment result if cycle_3N == 3 (the last one)
+    if (rd1_->cycle_3N == 3) {
+        g_.output(threadid_-1, met, obuf_);
+    }
+    return;
+}
+
 
 /**
  * Called by the aligner when a new unpaired or paired alignment is

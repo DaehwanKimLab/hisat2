@@ -41,7 +41,7 @@ struct ht2_handle {
 
     string ht2_idx_name;
 
-    struct ht2_options options; 
+    struct ht2_options options;
 };
 
 #endif /* __HT2_HANDLE_H__ */

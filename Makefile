@@ -101,6 +101,12 @@ endif
 
 LIBS = $(PTHREAD_LIB)
 
+HT2LIB_DIR = hisat2lib
+
+HT2LIB_CPPS = $(HT2LIB_DIR)/ht2_init.cpp \
+			  $(HT2LIB_DIR)/ht2_repeat.cpp \
+			  $(HT2LIB_DIR)/ht2_index.cpp
+
 SHARED_CPPS = ccnt_lut.cpp ref_read.cpp alphabet.cpp shmem.cpp \
 	edit.cpp gfm.cpp \
 	reference.cpp ds.cpp multikey_qsort.cpp limit.cpp \
@@ -123,7 +129,10 @@ SEARCH_CPPS = qual.cpp pat.cpp \
 	aligner_swsse_loc_u8.cpp \
 	aligner_swsse_ee_u8.cpp \
 	aligner_driver.cpp \
-	splice_site.cpp 
+	splice_site.cpp \
+	alignment_3N.cpp \
+	position_3N.cpp \
+	$(HT2LIB_CPPS)
 
 BUILD_CPPS = diff_sample.cpp
 
@@ -180,7 +189,7 @@ RELEASE_FLAGS  = -O3 $(BITS_FLAG) $(SSE_FLAG) -funroll-loops -g3
 RELEASE_DEFS   = -DCOMPILER_OPTIONS="\"$(RELEASE_FLAGS) $(EXTRA_FLAGS)\""
 NOASSERT_FLAGS = -DNDEBUG
 FILE_FLAGS     = -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE
-
+HT2LIB_FLAGS   = -DHISAT2_BUILD_LIB
 ifeq (1,$(USE_SRA))
 	ifeq (1, $(MACOS))
 		SRA_LIB += -stdlib=libc++
@@ -197,6 +206,7 @@ HISAT2_BIN_LIST = hisat2-build-s \
 	hisat2-inspect-s \
 	hisat2-inspect-l \
 	hisat2-repeat
+
 HISAT2_BIN_LIST_AUX = hisat2-build-s-debug \
 	hisat2-build-l-debug \
 	hisat2-align-s-debug \
@@ -205,11 +215,8 @@ HISAT2_BIN_LIST_AUX = hisat2-build-s-debug \
 	hisat2-inspect-l-debug \
 	hisat2-repeat-debug
 
-HT2LIB_DIR = hisat2lib
 HT2LIB_SRCS = $(SHARED_CPPS) \
-			  $(HT2LIB_DIR)/ht2_init.cpp \
-			  $(HT2LIB_DIR)/ht2_repeat.cpp \
-			  $(HT2LIB_DIR)/ht2_index.cpp
+              $(HT2LIB_CPPS)
 
 HT2LIB_OBJS = $(HT2LIB_SRCS:.cpp=.o)
 
@@ -476,22 +483,22 @@ libhisat2lib.so: $(HT2LIB_SHARED_RELEASE_OBJS)
 	
 .ht2lib-obj-debug/%.o: %.cpp
 	@mkdir -p $(dir $@)/$(dir $<)
-	$(CXX) -fPIC $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) -DBOWTIE2 -Wall $(INC) $(SEARCH_INC) \
+	$(CXX) -fPIC $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) $(HT2LIB_FLAGS) -DBOWTIE2 -Wall $(INC) $(SEARCH_INC) \
 	-c -o $@ $< 
 
 .ht2lib-obj-release/%.o: %.cpp
 	@mkdir -p $(dir $@)/$(dir $<)
-	$(CXX) -fPIC $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall $(INC) $(SEARCH_INC) \
+	$(CXX) -fPIC $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) $(HT2LIB_FLAGS) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall $(INC) $(SEARCH_INC) \
 	-c -o $@ $< 
 
 .ht2lib-obj-debug-shared/%.o: %.cpp
 	@mkdir -p $(dir $@)/$(dir $<)
-	$(CXX) -fPIC $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) -DBOWTIE2 -Wall $(INC) $(SEARCH_INC) \
+	$(CXX) -fPIC $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) $(HT2LIB_FLAGS) -DBOWTIE2 -Wall $(INC) $(SEARCH_INC) \
 	-c -o $@ $< 
 
 .ht2lib-obj-release-shared/%.o: %.cpp
 	@mkdir -p $(dir $@)/$(dir $<)
-	$(CXX) -fPIC $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall $(INC) $(SEARCH_INC) \
+	$(CXX) -fPIC $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) $(HT2LIB_FLAGS) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall $(INC) $(SEARCH_INC) \
 	-c -o $@ $< 
 
 #

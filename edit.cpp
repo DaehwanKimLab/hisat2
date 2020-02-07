@@ -410,7 +410,7 @@ bool Edit::repOk(
             if(ee.type != EDIT_TYPE_SPL) {
                 if(ee.qchr != '-') {
                     assert(ee.isRefGap() || ee.isMismatch());
-                    assert_eq((int)ee.qchr, s.toChar(ee.pos+trimBeg));
+                    //assert_eq((int)ee.qchr, s.toChar(ee.pos+trimBeg));
                 }
             }
 			if(ee.isMismatch()) {

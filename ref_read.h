@@ -105,7 +105,8 @@ struct RefRecord {
 enum {
 	REF_READ_FORWARD = 0, // don't reverse reference sequence
 	REF_READ_REVERSE,     // reverse entire reference sequence
-	REF_READ_REVERSE_EACH // reverse each unambiguous stretch of reference
+	REF_READ_REVERSE_EACH, // reverse each unambiguous stretch of reference
+    REF_READ_REVERSE_REPLACEMENT, // reverse the entire reference sequence and replace specific base by others.
 };
 
 /**

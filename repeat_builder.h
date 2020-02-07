@@ -846,6 +846,7 @@ class RepeatBuilder {
 
 public:
 	RepeatBuilder(TStr& s,
+                  TStr& sOriginal,
                   const EList<RefRecord>& szs,
                   const EList<string>& ref_names,
                   bool forward_only,
@@ -937,6 +938,7 @@ private:
     const int output_width = 60;
     
     TStr& s_;
+    TStr& sOriginal_;
     bool forward_only_;
     string filename_;
     

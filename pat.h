@@ -256,6 +256,9 @@ public:
 	 */
 	TReadId readCnt() const { return readCnt_ - 1; }
 
+    int paired_type; // 1 - left or unpaird, 2-right
+    int align_times = 0;
+
 protected:
 
 	uint32_t seed_;
@@ -516,6 +519,16 @@ public:
 		buf1_(), buf2_(), rdid_(0xffffffff), endid_(0xffffffff) { }
 
 	virtual ~PatternSourcePerThread() { }
+
+	/*void planB(){
+	    buf1_.planB();
+        buf2_.planB();
+	}*/
+
+	void changePlan3N(int nCycle) {
+        buf1_.changePlan3N(nCycle);
+        buf2_.changePlan3N(3-nCycle);
+	}
 
 	/**
 	 * Read the next read pair.

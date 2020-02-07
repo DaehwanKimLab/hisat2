@@ -163,6 +163,11 @@ public:
 		EList<RefRecord>& szs,
 		bool sanity,
 		EList<string> *names = NULL);
+
+	size_t getMinK() const{
+	    return 5;
+	    return minkRepeat;
+	}
 	
 protected:
 
@@ -185,6 +190,7 @@ protected:
 	bool     useMm_;    /// load the reference as a memory-mapped file
 	bool     useShmem_; /// load the reference into shared memory
 	bool     verbose_;
+    size_t minkRepeat; // log4 of the size of repeat genome
 	ASSERT_ONLY(SStringExpandable<uint32_t> tmp_destU32_);
 };
 

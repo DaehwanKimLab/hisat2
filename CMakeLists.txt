@@ -140,6 +140,8 @@ set(HT2LIB_CPPS
 	hisat2lib/ht2_index.cpp
 	)
 
+set(threeN_CPPS
+		alignment_3N.cpp position_3N.cpp)
 
 string(TIMESTAMP BUILD_DATE)
 file(STRINGS VERSION HISAT2_VERSION)
@@ -188,13 +190,14 @@ set_target_properties(hisat2lib_shared PROPERTIES OUTPUT_NAME hisat2lib)
 
 
 
-add_executable(hisat2-align-s ${SEARCH_CPPS} ${SHARED_CPPS})
-add_executable(hisat2-align-l ${SEARCH_CPPS} ${SHARED_CPPS})
+add_executable(hisat2-align-s ${SEARCH_CPPS} ${SHARED_CPPS} ${HT2LIB_CPPS} ${threeN_CPPS})
+add_executable(hisat2-align-l ${SEARCH_CPPS} ${SHARED_CPPS} ${HT2LIB_CPPS} ${threeN_CPPS})
 add_executable(hisat2-build-s ${BUILD_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-build-l ${BUILD_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-inspect-s ${INSPECT_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-inspect-l ${INSPECT_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-repeat ${REPEAT_CPPS} ${SHARED_CPPS})
+
 set_target_properties(${HISAT2_BIN_LIST} PROPERTIES DEBUG_POSTFIX "-debug")
 set_target_properties(hisat2-align-l hisat2-build-l hisat2-inspect-l hisat2-repeat 
 	PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DBOWTIE_64BIT_INDEX")
@@ -204,7 +207,9 @@ target_compile_options(hisat2-inspect-l PUBLIC "-DHISAT2_INSPECT_MAIN")
 
 target_compile_options(hisat2-build-s PUBLIC "-DMASSIVE_DATA_RLCSA")
 
-target_compile_options(hisat2lib_static PUBLIC "-fPIC")
+target_compile_options(hisat2lib_static PUBLIC "-fPIC" "-DHISAT2_BUILD_LIB")
+target_compile_options(hisat2lib_shared PUBLIC "-fPIC" "-DHISAT2_BUILD_LIB")
+
 target_include_directories(hisat2lib_static PUBLIC hisat2lib)
 target_include_directories(hisat2lib_shared PUBLIC hisat2lib)
 
@@ -239,6 +244,7 @@ add_dependencies(hisat2-all
 		hisat2-inspect-s
 		hisat2-inspect-l
 		hisat2-repeat)
+
 
 #
 # Examples
