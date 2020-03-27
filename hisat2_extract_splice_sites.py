@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #
 # Copyright 2015, Daehwan Kim <infphilo@gmail.com>
@@ -18,8 +18,6 @@
 # You should have received a copy of the GNU General Public License
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
-
-from __future__ import print_function
 
 from sys import stderr, exit
 from collections import defaultdict as dd, Counter
@@ -105,18 +103,18 @@ def extract_splice_sites(gtf_file, verbose=False):
                 len(genes), sum(len(v) > 1 for v in genes.values())),
               file=stderr)
         print('transcripts: {}, transcript avg. length: {:.0f}'.format(
-                len(trans), sum(trans_lengths.elements())/len(trans)),
+                len(trans), sum(trans_lengths.elements())//len(trans)),
               file=stderr)
         print('exons: {}, exon avg. length: {:.0f}'.format(
                 sum(exon_lengths.values()),
-                sum(exon_lengths.elements())/sum(exon_lengths.values())),
+                sum(exon_lengths.elements())//sum(exon_lengths.values())),
               file=stderr)
         print('introns: {}, intron avg. length: {:.0f}'.format(
                 sum(intron_lengths.values()),
-                sum(intron_lengths.elements())/sum(intron_lengths.values())),
+                sum(intron_lengths.elements())//sum(intron_lengths.values())),
               file=stderr)
         print('average number of exons per transcript: {:.0f}'.format(
-                sum(exon_lengths.values())/len(trans)),
+                sum(exon_lengths.values())//len(trans)),
               file=stderr)
 
 

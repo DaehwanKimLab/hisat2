@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #
 # Copyright 2018, Chanhee Park <parkchanhee@gmail.com> and Daehwan Kim <infphilo@gmail.com>
@@ -42,7 +42,7 @@ def parser_FQ(fp):
             return
 
         if line[0] == '@':
-            break;
+            break
 
     while True:
         id = line[1:].split()[0]
@@ -55,9 +55,9 @@ def parser_FQ(fp):
         seq = line.strip()
         yield id, seq
 
-        line = fp.readline() # '+'
-        line = fp.readline() # quality
-        line = fp.readline() # next ID
+        line = fp.readline()  # '+'
+        line = fp.readline()  # quality
+        line = fp.readline()  # next ID
         if line == "":
             return
 
@@ -73,7 +73,7 @@ def parser_FA(fp):
             return
 
         if line[0] == '>':
-            break;
+            break
 
     while True:
         id = line[1:].split()[0]
@@ -119,10 +119,10 @@ def parse_type(fname):
 """
 """
 def generate_stats(length_map):
-    mn = 0 # minimun read length
-    mx = 0 # maximum read length
-    cnt = 0 # number of reads
-    avg = 0 # average read length
+    mn = 0  # minimun read length
+    mx = 0  # maximum read length
+    cnt = 0  # number of reads
+    avg = 0  # average read length
 
     sum = 0
 
@@ -135,11 +135,11 @@ def generate_stats(length_map):
     mn = sorted_map[0]
     mx = sorted_map[-1]
 
-    for k in sorted(length_map):
-        sum += int(k) * length_map[k]
-        cnt += length_map[k]
+    for k, v in length_map.items():
+        sum += k * v
+        cnt += v
 
-    avg = sum / cnt
+    avg = sum // cnt
 
     return cnt, mn, mx, avg
 
@@ -179,10 +179,12 @@ def reads_stat(read_file, read_count):
     fp.close()
 
     cnt, mn, mx, avg =  generate_stats(length_map)
-    length_map = sorted(length_map.iteritems(), key=lambda (k,v):(v,k), reverse=True)
+    # sort by (read count, read length)
+    length_map = sorted(length_map.items(), key=lambda t: (t[1], t[0]), reverse=True)
     if len(length_map) == 0:
-        length_map.append((0,0))
-    print cnt, mn, mx, avg, ",".join([str(k) for (k,v) in length_map])
+        length_map.append((0, 0))
+    print(cnt, mn, mx, avg, ",".join([str(k) for (k,v) in length_map]))
+
 
 if __name__ == '__main__':
 
