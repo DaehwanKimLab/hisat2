@@ -267,7 +267,6 @@ def generate_rna_expr_profile(expr_profile_type, num_transcripts = 10000):
     expr_sum = sum(expr_profile)
     expr_profile = [expr_profile[i] / expr_sum for i in range(len(expr_profile))]
     assert abs(sum(expr_profile) - 1.0) < 0.001
-    #print(expr_sum, expr_profile, file=sys.stderr)
     return expr_profile
 
 
@@ -697,7 +696,6 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                    num_frag, expr_profile_type, repeat_fname,
                    error_rate, max_mismatch,
                    random_seed, snp_prob, sanity_check, verbose):
-    print('random seed', random_seed, file=sys.stderr)
     random.seed(random_seed, version=1)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
     
@@ -705,7 +703,6 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
         frag_len = read_len
 
     genome_seq = read_genome(genome_file)
-    #print(genome_seq)
     if rna:
         genes, transcripts = read_transcript(genome_seq, gtf_file, frag_len)
     else:
@@ -728,8 +725,6 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
             expr_profile[i] += 1
     assert num_frag == sum(expr_profile)
     
-    #print(expr_profile)
-
     repeat_loci = {}
     if repeat_fname != "" and os.path.exists(repeat_fname):
         for line in open(repeat_fname):
@@ -744,15 +739,10 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
 
     if rna:
         transcript_ids = sorted(list(transcripts.keys()))
-        #transcript_ids = list(transcripts.keys())
-        #random.shuffle(transcript_ids)
+        random.shuffle(transcript_ids, random=random.random)
         assert len(transcript_ids) >= len(expr_profile)
     else:
-        transcript_ids = list() 
         chr_ids = list(genome_seq.keys())
-
-    for k in transcript_ids:
-        print(k, file=sys.stderr)
 
     sam_file = open(base_fname + ".sam", "w")
 

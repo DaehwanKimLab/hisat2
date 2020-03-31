@@ -185,7 +185,6 @@ def reads_stat(read_file, read_count):
         length_map.append((0, 0))
     print(cnt, mn, mx, avg, ",".join([str(k) for (k,v) in length_map]))
 
-
 if __name__ == '__main__':
 
     parser = ArgumentParser(
