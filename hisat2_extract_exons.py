@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #
 # Copyright 2015, Daehwan Kim <infphilo@gmail.com>
@@ -18,8 +18,6 @@
 # You should have received a copy of the GNU General Public License
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
-
-from __future__ import print_function
 
 from sys import stderr, exit
 from collections import defaultdict as dd, Counter
