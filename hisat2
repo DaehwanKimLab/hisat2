@@ -287,7 +287,11 @@ if ((scalar(@read_files) > 0) && ($seq_in_args == 0)) {
 		chomp;
 		next if /^\s*$/;
 		my @ts = split(/ /);
-		$read_len_str = $ts[4];
+		if (scalar(@ts) > 4) {
+			$read_len_str = $ts[4];
+		} else {
+			$read_len_str = "";
+		}
 	}
 	close($fh);
 
