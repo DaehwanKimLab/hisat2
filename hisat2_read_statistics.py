@@ -27,14 +27,20 @@ COMPRESSION_NON   = 0
 COMPRESSION_GZIP  = 1
 COMPRESSION_BZIP2 = 2
 
+SEQUENCE_UNKNOWN  = -1
 SEQUENCE_FASTA    = 0
 SEQUENCE_FASTQ    = 1
 
+FASTA_EXTENSIONS = ["fa", "fasta", "fna"]
+FASTQ_EXTENSIONS = ["fq", "fastq"]
+
+MAX_SKIP_LINES = 10000
 """
 """
 def parser_FQ(fp):
     # skip empty line
-    while True:
+    skip_line_count = 0
+    while skip_line_count < MAX_SKIP_LINES:
         line = fp.readline()
 
         if line == "":
@@ -43,6 +49,11 @@ def parser_FQ(fp):
 
         if line[0] == '@':
             break
+
+        skip_line_count += 1
+
+    if skip_line_count == MAX_SKIP_LINES:
+        raise ValueError("Invalid file format")
 
     while True:
         id = line[1:].split()[0]
@@ -65,7 +76,8 @@ def parser_FQ(fp):
 """
 def parser_FA(fp):
     # skip empty line
-    while True:
+    skip_line_count = 0
+    while skip_line_count < MAX_SKIP_LINES:
         line = fp.readline()
 
         if line == "":
@@ -74,6 +86,11 @@ def parser_FA(fp):
 
         if line[0] == '>':
             break
+
+        skip_line_count += 1
+
+    if skip_line_count == MAX_SKIP_LINES:
+        raise ValueError("Invalid file format")
 
     while True:
         id = line[1:].split()[0]
@@ -99,7 +116,7 @@ def parser_FA(fp):
 """
 def parse_type(fname):
     compression_type = COMPRESSION_NON
-    sequence_type = SEQUENCE_FASTA
+    sequence_type = SEQUENCE_UNKNOWN
 
     ff = fname.split('.')
 
@@ -111,7 +128,9 @@ def parse_type(fname):
         compression_type = COMPRESSION_BZIP2
         ext = ff[-2]
 
-    if ext.lower() == "fq" or ext.lower() == "fastq":
+    if ext.lower() in FASTA_EXTENSIONS:
+        sequence_type = SEQUENCE_FASTA
+    elif ext.lower() in FASTQ_EXTENSIONS:
         sequence_type = SEQUENCE_FASTQ
 
     return sequence_type, compression_type
@@ -146,37 +165,41 @@ def generate_stats(length_map):
 """
 """
 def reads_stat(read_file, read_count):
-    sequence_type, compression_type = parse_type(read_file)
-
-    if compression_type == COMPRESSION_GZIP:
-        fp = gzip.open(read_file, 'r')
-    elif compression_type == COMPRESSION_BZIP2:
-        fp = bz2.BZ2File(read_file, 'r')
-    else:
-        assert (compression_type == COMPRESSION_NON)
-        fp = open(read_file, 'r')
-
-    if sequence_type == SEQUENCE_FASTA:
-        fstream = parser_FA(fp)
-    else:
-        assert (sequence_type == SEQUENCE_FASTQ)
-        fstream = parser_FQ(fp)
-
     length_map = {}
+    try:
+        sequence_type, compression_type = parse_type(read_file)
 
-    cnt = 0
-    for id, seq in fstream:
-        l = len(seq)
-        if l in length_map:
-            length_map[l] += 1
+        if compression_type == COMPRESSION_GZIP:
+            fp = gzip.open(read_file, 'rt')
+        elif compression_type == COMPRESSION_BZIP2:
+            fp = bz2.open(read_file, 'rt')
         else:
-            length_map[l] = 1
+            assert (compression_type == COMPRESSION_NON)
+            fp = open(read_file, 'r')
 
-        cnt += 1
-        if read_count > 0 and cnt >= read_count:
-            break
+        if sequence_type == SEQUENCE_FASTA:
+            fstream = parser_FA(fp)
+        elif sequence_type == SEQUENCE_FASTQ:
+            fstream = parser_FQ(fp)
+        else:
+            raise ValueError("Unsupported file format")
 
-    fp.close()
+        cnt = 0
+        for id, seq in fstream:
+            l = len(seq)
+            if l in length_map:
+                length_map[l] += 1
+            else:
+                length_map[l] = 1
+
+            cnt += 1
+            if read_count > 0 and cnt >= read_count:
+                break
+
+        fp.close()
+
+    except BaseException as e:
+        print("Warning: {}".format(e), file=sys.stderr)
 
     cnt, mn, mx, avg =  generate_stats(length_map)
     # sort by (read count, read length)
@@ -184,6 +207,7 @@ def reads_stat(read_file, read_count):
     if len(length_map) == 0:
         length_map.append((0, 0))
     print(cnt, mn, mx, avg, ",".join([str(k) for (k,v) in length_map]))
+
 
 if __name__ == '__main__':
 
