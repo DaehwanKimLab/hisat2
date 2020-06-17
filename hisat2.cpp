@@ -1779,7 +1779,7 @@ static void parseOption(int next_option, const char *arg) {
             EList<string> str_readLens;
             tokenize(arg, ",", str_readLens);
             for(size_t i = 0; i < str_readLens.size(); i++) {
-                int readLen = parseInt(20, "--read-lengths arg must be at least 20", str_readLens[i].c_str());
+                int readLen = parseInt(0, "--read-lengths arg must be at least 20", str_readLens[i].c_str());
                 readLens.push_back(readLen);
             }
             readLens.sort();
