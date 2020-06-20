@@ -26,7 +26,7 @@ GCC_SUFFIX =
 CC = $(GCC_PREFIX)/gcc$(GCC_SUFFIX)
 CPP = $(GCC_PREFIX)/g++$(GCC_SUFFIX)
 CXX = $(CPP)
-HEADERS = $(wildcard *.h)
+HEADERS = $(sort $(wildcard *.h))
 BOWTIE_MM = 1
 BOWTIE_SHARED_MEM = 0
 
@@ -149,7 +149,7 @@ HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
 HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
 HISAT2_REPEAT_CPPS_MAIN = $(REPEAT_CPPS) $(BUILD_CPPS) hisat2_repeat_main.cpp
 
-SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
+SEARCH_FRAGMENTS = $(sort $(wildcard search_*_phase*.c))
 VERSION = $(shell cat VERSION)
 
 # Convert BITS=?? to a -m flag
@@ -234,13 +234,13 @@ HT2LIB_PKG_SRC = \
 	$(HT2LIB_DIR)/pymodule/ht2example.py
 
 
-GENERAL_LIST = $(wildcard scripts/*.sh) \
-	$(wildcard scripts/*.pl) \
-	$(wildcard *.py) \
-	$(wildcard hisatgenotype_modules/*.py) \
-	$(wildcard hisatgenotype_scripts/*.py) \
-	$(wildcard example/index/*.ht2) \
-	$(wildcard example/reads/*.fa) \
+GENERAL_LIST = $(sort $(wildcard scripts/*.sh)) \
+	$(sort $(wildcard scripts/*.pl)) \
+	$(sort $(wildcard *.py)) \
+	$(sort $(wildcard hisatgenotype_modules/*.py)) \
+	$(sort $(wildcard hisatgenotype_scripts/*.py)) \
+	$(sort $(wildcard example/index/*.ht2)) \
+	$(sort $(wildcard example/reads/*.fa)) \
 	example/reference/22_20-21M.fa \
 	example/reference/22_20-21M.snp \
 	$(PTHREAD_PKG) \
@@ -263,10 +263,10 @@ endif
 # the Windows FIND tool instead.
 FIND=$(shell which find)
 
-SRC_PKG_LIST = $(wildcard *.h) \
-	$(wildcard *.hh) \
-	$(wildcard *.c) \
-	$(wildcard *.cpp) \
+SRC_PKG_LIST = $(sort $(wildcard *.h)) \
+	$(sort $(wildcard *.hh)) \
+	$(sort $(wildcard *.c)) \
+	$(sort $(wildcard *.cpp)) \
 	$(HT2LIB_PKG_SRC) \
 	Makefile \
 	CMakeLists.txt \
@@ -288,15 +288,20 @@ repeat: hisat2-repeat
 
 repeat-debug: hisat2-repeat-debug
 
+BUILD_HOST ?= $(shell hostname)
+BUILD_TIME ?= $(shell date)
+
 DEFS=-fno-strict-aliasing \
      -DHISAT2_VERSION="\"`cat VERSION`\"" \
-     -DBUILD_HOST="\"`hostname`\"" \
-     -DBUILD_TIME="\"`date`\"" \
+     -DBUILD_HOST="\"${BUILD_HOST}\"" \
+     -DBUILD_TIME="\"${BUILD_TIME}\"" \
      -DCOMPILER_VERSION="\"`$(CXX) -v 2>&1 | tail -1`\"" \
      $(FILE_FLAGS) \
      $(PREF_DEF) \
      $(MM_DEF) \
-     $(SHMEM_DEF)
+     $(SHMEM_DEF) \
+     $(CXXFLAGS) \
+     $(CPPFLAGS)
 
 #
 # hisat-bp targets
