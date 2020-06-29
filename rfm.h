@@ -444,16 +444,16 @@ public:
     }
     
     index_t getLocalRFM_idx(index_t readLen) {
-        for(size_t i = 0; i < this->_readLens.size(); i++) {
-            if(this->_readLens[i].first >= readLen) {
+        for(size_t i = 0; i < this->_repeatLens.size(); i++) {
+            if(this->_repeatLens[i].first >= readLen) {
                 return i;
             }
         }
-        return this->_readLens.size() - 1;
+        return this->_repeatLens.size() - 1;
     }
 
     index_t getLocalRFM_idx(const char *refname) {
-        for(size_t i = 0; i < this->_readLens.size(); i++) {
+        for(size_t i = 0; i < this->_repeatLens.size(); i++) {
             assert_eq(_localRFMs[i]->refnames().size(), 1);
 
             string& ref = _localRFMs[i]->refnames()[0];
@@ -461,13 +461,13 @@ public:
                 return i;
             }
         }
-        return this->_readLens.size() - 1;
+        return this->_repeatLens.size() - 1;
     }
     
     bool empty() const { return _localRFMs.empty(); }
     
     LocalRFM<index_t>& getLocalRFM(index_t idx) {
-        assert_lt(idx, this->_readLens.size());
+        assert_lt(idx, this->_repeatLens.size());
         return *_localRFMs[idx];
     }
     
@@ -721,11 +721,11 @@ RFM<index_t>::RFM(
     writeI32(fout2, 1, be); // endian hint for secondary stream
     int version = GFM<index_t>::getIndexVersion();
     writeI32(fout1, version, be); // version
-    index_t nLocalRFMs = this->_readLens.size();
+    index_t nLocalRFMs = this->_repeatLens.size();
     writeIndex<index_t>(fout1, nLocalRFMs, be); // number of local Ebwts
-    for(size_t i = 0; i < this->_readLens.size(); i++) {
-        writeIndex<index_t>(fout1, this->_readLens[i].first, be);
-        writeIndex<index_t>(fout1, this->_readLens[i].second, be);
+    for(size_t i = 0; i < this->_repeatLens.size(); i++) {
+        writeIndex<index_t>(fout1, this->_repeatLens[i].first, be);
+        writeIndex<index_t>(fout1, this->_repeatLens[i].second, be);
     }
     streampos filepos = fout1.tellp();
     _localRFMFilePos.resizeExact(szs.size());
@@ -1083,10 +1083,10 @@ void RFM<index_t>::readIntoMemory(
 	
 	clearLocalRFMs();
 	
-    assert_eq(this->_readIncluded.size(), nlocalRFMs);
+    assert_eq(this->_repeatIncluded.size(), nlocalRFMs);
     string base = "";
 	for(size_t i = 0; i < nlocalRFMs; i++) {
-        if(!this->_readIncluded[i])
+        if(!this->_repeatIncluded[i])
             continue;
         if(i > 0) {
             fseek(_in1, _localRFMFilePos[i-1].first, SEEK_SET);
