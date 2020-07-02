@@ -687,12 +687,7 @@ public:
 		useShmem_ = useShmem;
 		_in1Str = in + ".1." + gfm_ext;
 		_in2Str = in + ".2." + gfm_ext;
-        if(readLens != NULL) {
-            _readLens.resizeExact(readLens->size());
-            for(size_t i = 0; i < readLens->size(); i++) {
-                _readLens[i].first = _readLens[i].second = (*readLens)[i];
-            }
-        }
+
         if(skipLoading) return;
 		
         if(repeatdb == NULL) {
@@ -805,37 +800,58 @@ public:
         _repeat = false;
         if(repeatdb != NULL) {
             _repeat = true;
+
+			// Number of repeat groups in the index
             index_t numRepeatIndex = readIndex<index_t>(in7, this->toBe());
             assert_gt(numRepeatIndex, 0);
             EList<pair<index_t, index_t> > repeatLens; repeatLens.resizeExact(numRepeatIndex);
+
             for(size_t k = 0; k < numRepeatIndex; k++) {
                 repeatLens[k].first = readIndex<index_t>(in7, this->toBe());
                 repeatLens[k].second = readIndex<index_t>(in7, this->toBe());
             }
-            if(_readLens.empty()) {
-                _readLens = repeatLens;
-            }
-            _readIncluded.resizeExact(numRepeatIndex);
-            _readIncluded.fillZero();
-            size_t k = 0, k2 = 0;
-            while(k < numRepeatIndex && k2 < _readLens.size()) {
-                if(repeatLens[k].first >= _readLens[k2].first) {
-                    _readIncluded[k] = true;
-                    _readLens[k2] = repeatLens[k];
-                    k2++;
-                } else {
-                    k++;
-                }
-            }
-            _readLens.resize(k2);
-            repeatdb->read(in7, this->toBe(), _readIncluded);
+
+			if (readLens != NULL && !readLens->empty()) {
+				// Load subset of repeat groups.
+				size_t k = 0;
+				size_t k2 = 0;
+
+				_repeatIncluded.resizeExact(numRepeatIndex);
+				_repeatIncluded.fillZero();
+
+				while(k < numRepeatIndex && k2 < readLens->size()) {
+					if (repeatLens[k].first >= (*readLens)[k2]) {
+						_repeatIncluded[k] = true;
+						k2++;
+					} else {
+						k++;
+					}
+				}
+
+				// at least last repeat group is included
+				_repeatIncluded[numRepeatIndex - 1] = true;
+
+				_repeatLens.clear();
+				for(size_t i = 0; i < numRepeatIndex; i++) {
+					if (_repeatIncluded[i]) {
+						_repeatLens.push_back(repeatLens[i]);
+					}
+				}
+			} else {
+				// Load all repeat groups
+				_repeatLens = repeatLens;
+				_repeatIncluded.resizeExact(numRepeatIndex);
+				_repeatIncluded.fill(true);
+			}
+
+            repeatdb->read(in7, this->toBe(), _repeatIncluded);
             index_t numKmertables = readIndex<index_t>(in7, this->toBe());
             EList<streampos> filePos; filePos.resizeExact(numKmertables);
             for(size_t k = 0; k < numKmertables; k++) {
                 filePos[k] = readIndex<uint64_t>(in7, this->toBe());
             }
             for(size_t k = 0; k < numKmertables; k++) {
-                if(!_readIncluded[k])
+                if(!_repeatIncluded[k])
                     continue;
                 if(k > 0) {
                     in7.seekg(filePos[k-1]);
@@ -2115,27 +2131,27 @@ public:
                         throw 1;
                     }
 
-                    _readLens.resizeExact(szs.size());
-                    for(size_t i = 0; i < _readLens.size(); i++) {
-                        _readLens[i].first = numeric_limits<index_t>::max();
-                        _readLens[i].second = 0;
+                    _repeatLens.resizeExact(szs.size());
+                    for(size_t i = 0; i < _repeatLens.size(); i++) {
+                        _repeatLens[i].first = numeric_limits<index_t>::max();
+                        _repeatLens[i].second = 0;
                     }
                     for(size_t i = 0; i < repeats.size(); i++) {
                         index_t id = repeats[i].repID;
                         index_t len = repeats[i].repLen;
-                        assert_lt(id, _readLens.size());
-                        if(_readLens[id].first > len) {
-                            _readLens[id].first = len;
+                        assert_lt(id, _repeatLens.size());
+                        if(_repeatLens[id].first > len) {
+                            _repeatLens[id].first = len;
                         }
-                        if(_readLens[id].second < len) {
-                            _readLens[id].second = len;
+                        if(_repeatLens[id].second < len) {
+                            _repeatLens[id].second = len;
                         }
                     }
 
-                    writeIndex<index_t>(fout7, _readLens.size(), this->toBe());
-                    for(size_t i = 0; i < _readLens.size(); i++) {
-                        writeIndex<index_t>(fout7, _readLens[i].first, this->toBe());
-                        writeIndex<index_t>(fout7, _readLens[i].second, this->toBe());
+                    writeIndex<index_t>(fout7, _repeatLens.size(), this->toBe());
+                    for(size_t i = 0; i < _repeatLens.size(); i++) {
+                        writeIndex<index_t>(fout7, _repeatLens[i].first, this->toBe());
+                        writeIndex<index_t>(fout7, _repeatLens[i].second, this->toBe());
                     }
                     _repeatdb.write(fout7, this->toBe());
                     writeIndex<index_t>(fout7, chr_szs.size(), this->toBe()); // number of repeat indexes
@@ -2440,7 +2456,7 @@ public:
 	EList<string>& refnames()        { return _refnames; }
     bool        fw() const           { return fw_; }
     bool        repeat() const       { return _repeat; }
-    const EList<uint8_t>& getReadIncluded() const { return _readIncluded; }
+    const EList<uint8_t>& getRepeatIncluded() const { return _repeatIncluded; }
 
 #ifdef POPCNT_CAPABILITY
     bool _usePOPCNTinstruction;
@@ -4305,8 +4321,8 @@ public:
     EList<RB_KmerTable>        _repeat_kmertables;
 
     bool _repeat;
-    EList<pair<index_t, index_t> > _readLens;
-    EList<uint8_t>                 _readIncluded;
+    EList<pair<index_t, index_t> > _repeatLens;
+    EList<uint8_t>                 _repeatIncluded;
 
 protected:
 
