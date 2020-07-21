@@ -353,7 +353,7 @@ def main(genome_file,
     else:
         snp_cmd = ["cat", snp_fname]
     snp_proc = subprocess.Popen(snp_cmd,
-                                text=True,
+                                universal_newlines=True,
                                 stdout=subprocess.PIPE,
                                 stderr=open("/dev/null", 'w'))
     ids_seen = set()

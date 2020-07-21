@@ -465,7 +465,7 @@ def main(genome_file,
         else:
             vcf_cmd = ["cat", genotype_vcf]
         vcf_proc = subprocess.Popen(vcf_cmd,
-                                    text=True,
+                                    universal_newlines=True,
                                     stdout=subprocess.PIPE,
                                     stderr=open("/dev/null", 'w'))
         for line in vcf_proc.stdout:
@@ -606,7 +606,7 @@ def main(genome_file,
             else:
                 vcf_cmd = ["cat", VCF_fname]
             vcf_proc = subprocess.Popen(vcf_cmd,
-                                        text=True,
+                                        universal_newlines=True,
                                         stdout=subprocess.PIPE,
                                         stderr=open("/dev/null", 'w'))
 
@@ -886,7 +886,7 @@ if __name__ == '__main__':
             else:
                 vcf_cmd = ["cat", args.genotype_vcf]
             vcf_proc = subprocess.Popen(vcf_cmd,
-                                        text=True,
+                                        universal_newlines=True,
                                         stdout=subprocess.PIPE,
                                         stderr=open("/dev/null", 'w'))
             for line in vcf_proc.stdout:
