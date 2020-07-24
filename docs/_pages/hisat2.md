@@ -9,6 +9,14 @@ share: false
 **HISAT2** is a fast and sensitive alignment program for mapping next-generation sequencing reads (both DNA and RNA) to a population of human genomes as well as to a single reference genome. Based on an extension of BWT for graphs ([Sir&eacute;n et al. 2014](http://dl.acm.org/citation.cfm?id=2674828)), we designed and implemented a graph FM index (GFM), an original approach and its first implementation. In addition to using one global GFM index that represents a population of human genomes, **HISAT2** uses a large set of small GFM indexes that collectively cover the whole genome. These small indexes (called local indexes), combined with several alignment strategies, enable rapid and accurate alignment of sequencing reads. This new indexing scheme is called a Hierarchical Graph FM index (HGFM).
 
 
+### HISAT 2.2.1 release 7/24/2020
+
+This patch version includes the following changes.
+* Python3 support
+* Remove the HISAT-genotype related scripts. HISAT-genotype moved to [http://daehwankimlab.github.io/hisat-genotype/](http://daehwankimlab.github.io/hisat-genotype/)
+* Fixed bugs related to `--read-lengths` option
+
+
 ### HISAT 2.2.0 release 2/6/2020
 
 This major version update includes a new feature to handle “repeat” reads. Based on sets of 100-bp simulated and 101-bp real reads that we tested, we found that 2.6-3.4% and 1.4-1.8% of the reads were mapped to >5 locations and >100 locations, respectively. Attempting to report all alignments would likely consume a prohibitive amount of disk space. In order to address this issue, our repeat indexing and alignment approach directly aligns reads to repeat sequences, resulting in one repeat alignment per read. HISAT2 provides application programming interfaces (API) for C++, Python, and JAVA that rapidly retrieve genomic locations from repeat alignments for use in downstream analyses.  

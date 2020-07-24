@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright 2015, Daehwan Kim <infphilo@gmail.com>
 #
@@ -52,6 +52,13 @@ def reverse_complement(seq):
 
 
 """
+python2 style randint
+"""
+def myrandint(m, x):
+    s = x - m + 1
+    return m + int(random.random() * s)
+
+"""
 Random source for sequencing errors
 """
 class ErrRandomSource:
@@ -91,7 +98,7 @@ def read_genome(genome_file):
         chr_dic[chr_name] = sequence
 
 
-    chr_filter = [str(x) for x in range(1, 23) + ['X', 'Y']]
+    chr_filter = [str(x) for x in list(range(1, 23)) + ['X', 'Y']]
     #chr_filter = None
 
     if chr_filter:
@@ -120,7 +127,7 @@ def read_transcript(genome_seq, gtf_file, frag_len):
                 strand, frame, values = line.split('\t')
         except ValueError:
             continue
-        if not chrom in genome_seq:
+        if chrom not in genome_seq:
             continue
         
         # Zero-based offset
@@ -214,7 +221,7 @@ def sanity_check_input(genome_seq, genes, transcripts, snps, frag_len):
             num_ss += 1
 
     if num_ss > 0:
-        print >> sys.stderr, "GT/AG splice sites: {}/{} ({:.2%})".format(num_canon_ss, num_ss, (float(num_canon_ss) / num_ss))
+        print("GT/AG splice sites: {}/{} ({:.2%})".format(num_canon_ss, num_ss, (float(num_canon_ss) / num_ss)), file=sys.stderr)
 
     num_alt_single, num_single = 0, 0
     for chr, chr_snps in snps.items():
@@ -235,7 +242,7 @@ def sanity_check_input(genome_seq, genes, transcripts, snps, frag_len):
             num_single += 1
 
     if num_single > 0:
-        print >> sys.stderr, "Alternative bases: {}/{} ({:.2%})".format(num_alt_single, num_single, (float(num_alt_single) / num_single))
+        print("Alternative bases: {}/{} ({:.2%})".format(num_alt_single, num_single, (float(num_alt_single) / num_single)), file=sys.stderr)
 
 
 """
@@ -280,7 +287,7 @@ def generate_dna_expr_profile(genome_seq):
 def getSNPs(chr_snps, left, right):
     low, high = 0, len(chr_snps)
     while low < high:
-        mid = (low + high) / 2
+        mid = (low + high) // 2
         snpID, type, pos, data = chr_snps[mid]
         if pos < left:
             low = mid + 1
@@ -370,7 +377,8 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
             if err_rand_src.getRand() == 1:
                 assert i < len(chr_seq)
                 err_base = "A"
-                rand = random.randint(0, 2)
+                #rand = random.randint(0, 2)
+                rand = myrandint(0, 2)
                 if chr_seq[i] == "A":
                     err_base = "GCT"[rand]
                 elif chr_seq[i] == "C":
@@ -382,10 +390,10 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
                 mms.append(["", "single", i, err_base])
 
         tmp_diffs = snps + mms
-        def diff_sort(a , b):
-            return a[2] - b[2]
+#        def diff_sort(a , b):
+#            return a[2] - b[2]
 
-        tmp_diffs = sorted(tmp_diffs, cmp=diff_sort)
+        tmp_diffs = sorted(tmp_diffs, key=lambda t: t[2])
         diffs = []
         if len(tmp_diffs) > 0:
             diffs = tmp_diffs[:1]
@@ -545,8 +553,8 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
         MD += ("{}".format(MD_match_len))
 
     if len(read_seq) != read_len:
-        print >> sys.stderr, "read length differs:", len(read_seq), "vs.", read_len
-        print >> sys.stderr, pos, "".join(cigars), cigar_descs, MD, XM, NM, Zs
+        print("read length differs:", len(read_seq), "vs.", read_len, file=sys.stderr)
+        print(pos, "".join(cigars), cigar_descs, MD, XM, NM, Zs, file=sys.stderr)
         assert False
 
     return pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq
@@ -676,19 +684,19 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch
         tMD += ("{}".format(match_len))
 
     if tMD != MD or tXM != XM or tNM != NM or XM > max_mismatch or XM != NM:
-        print >> sys.stderr, chr, pos, cigar, MD, XM, NM, Zs
-        print >> sys.stderr, tMD, tXM, tNM
+        print(chr, pos, cigar, MD, XM, NM, Zs, file=sys.stderr)
+        print(tMD, tXM, tNM, file=sys.stderr)
         assert False
         
         
 """
 """
-def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
-                   rna, paired_end, read_len, frag_len, \
+def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
+                   rna, paired_end, read_len, frag_len,
                    num_frag, expr_profile_type, repeat_fname,
-                   error_rate, max_mismatch, \
+                   error_rate, max_mismatch,
                    random_seed, snp_prob, sanity_check, verbose):
-    random.seed(random_seed)
+    random.seed(random_seed, version=1)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
     
     if read_len > frag_len:
@@ -716,7 +724,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         for i in range(min(num_frag - sum(expr_profile), len(expr_profile))):
             expr_profile[i] += 1
     assert num_frag == sum(expr_profile)
-
+    
     repeat_loci = {}
     if repeat_fname != "" and os.path.exists(repeat_fname):
         for line in open(repeat_fname):
@@ -730,18 +738,18 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
                 repeat_loci[chr].append([int(pos), strand])
 
     if rna:
-        transcript_ids = transcripts.keys()
-        random.shuffle(transcript_ids)
+        transcript_ids = sorted(list(transcripts.keys()))
+        random.shuffle(transcript_ids, random=random.random)
         assert len(transcript_ids) >= len(expr_profile)
     else:
-        chr_ids = genome_seq.keys()
+        chr_ids = list(genome_seq.keys())
 
     sam_file = open(base_fname + ".sam", "w")
 
     # Write SAM header
-    print >> sam_file, "@HD\tVN:1.0\tSO:unsorted"
+    print("@HD\tVN:1.0\tSO:unsorted", file=sam_file)
     for chr in genome_seq.keys():
-        print >> sam_file, "@SQ\tSN:%s\tLN:%d" % (chr, len(genome_seq[chr]))
+        print("@SQ\tSN:%s\tLN:%d" % (chr, len(genome_seq[chr])), file=sam_file)
     
     read_file = open(base_fname + "_1.fa", "w")
     if paired_end:
@@ -753,10 +761,10 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
         if rna:
             transcript_id = transcript_ids[t]
             chr, strand, transcript_len, exons = transcripts[transcript_id]
-            print >> sys.stderr, transcript_id, t_num_frags
+            print(transcript_id, t_num_frags, file=sys.stderr)
         else:
             chr = chr_ids[t]
-            print >> sys.stderr, chr, t_num_frags
+            print(chr, t_num_frags, file=sys.stderr)
 
         assert chr in genome_seq
         chr_seq = genome_seq[chr]
@@ -783,14 +791,17 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
 
         for f in range(t_num_frags):
             if rna:
-                frag_pos = random.randint(0, transcript_len - frag_len)
+                #frag_pos = random.randint(0, transcript_len - frag_len)
+                frag_pos = myrandint(0, transcript_len - frag_len)
             else:
                 while True:
                     if len(chr_repeat_loci):
-                        locus_id = random.randint(0, len(chr_repeat_loci) - 1)
+                        #locus_id = random.randint(0, len(chr_repeat_loci) - 1)
+                        locus_id = myrandint(0, len(chr_repeat_loci) - 1)
                         frag_pos = chr_repeat_loci[locus_id][0]
                     else:
-                        frag_pos = random.randint(0, chr_len - frag_len)
+                        #frag_pos = random.randint(0, chr_len - frag_len)
+                        frag_pos = myrandint(0, chr_len - frag_len)
                     if 'N' not in chr_seq[frag_pos:frag_pos + frag_len]:
                         break
 
@@ -801,7 +812,8 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, snp_prob, err_rand_src, max_mismatch)
             swapped = False
             if paired_end:
-                if random.randint(0, 1) == 1:
+                #if random.randint(0, 1) == 1:
+                if myrandint(0, 1) == 1:
                     swapped = True
                 if swapped:
                     flag, flag2 = flag - 16, flag2 - 16
@@ -830,19 +842,19 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname, \
             else:
                 XS, TI = "", ""                
 
-            print >> read_file, ">{}".format(cur_read_id)
+            print(">{}".format(cur_read_id), file=read_file)
             if swapped:
-                print >> read_file, reverse_complement(read_seq)
+                print(reverse_complement(read_seq), file=read_file)
             else:
-                print >> read_file, read_seq
-            print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, chr, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI)
+                print(read_seq, file=read_file)
+            print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, chr, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI), file=sam_file)
             if paired_end:
-                print >> read2_file, ">{}".format(cur_read_id)
+                print(">{}".format(cur_read_id), file=read2_file)
                 if swapped:
-                    print >> read2_file, read2_seq
+                    print(read2_seq, file=read2_file)
                 else:
-                    print >> read2_file, reverse_complement(read2_seq)
-                print >> sam_file, "{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, chr, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI)
+                    print(reverse_complement(read2_seq), file=read2_file)
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, chr, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI), file=sam_file)
 
             cur_read_id += 1
             
@@ -952,8 +964,8 @@ if __name__ == '__main__':
         exit(1)
     if not args.rna:
         args.expr_profile = "constant"
-    simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname, \
-                   args.rna, args.paired_end, args.read_len, args.frag_len, \
-                   args.num_frag, args.expr_profile, args.repeat_fname, \
-                   args.error_rate, args.max_mismatch, \
+    simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname,
+                   args.rna, args.paired_end, args.read_len, args.frag_len,
+                   args.num_frag, args.expr_profile, args.repeat_fname,
+                   args.error_rate, args.max_mismatch,
                    args.random_seed, args.snp_prob, args.sanity_check, args.verbose)

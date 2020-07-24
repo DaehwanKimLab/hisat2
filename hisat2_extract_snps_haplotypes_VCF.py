@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright 2016, Daehwan Kim <infphilo@gmail.com>
 #
@@ -21,6 +21,7 @@
 
 import sys, os, subprocess
 from argparse import ArgumentParser, FileType
+from functools import cmp_to_key
 
 digit2str = [str(i) for i in range(10)]
 
@@ -100,11 +101,11 @@ def extract_vars(chr_dic, chr, pos, ref_allele, alt_alleles, varID):
         ref_allele2, pos2 = ref_allele, pos
 
         if chr_seq[pos:pos+len(ref_allele)] != ref_allele:
-            print >> sys.stderr, "Error: the reference genome you provided seems to be incompatible with the VCF file at %d of chromosome %s where %s is in the reference genome while %s is in the VCF file" % (pos, chr, chr_seq[pos:pos+len(ref_allele)], ref_allele)
+            print("Error: the reference genome you provided seems to be incompatible with the VCF file at %d of chromosome %s where %s is in the reference genome while %s is in the VCF file" % (pos, chr, chr_seq[pos:pos+len(ref_allele)], ref_allele), file=sys.stderr)
 
         def warning_msg():
-            print >> sys.stderr, "Warning) ref allele (%s) and alt allele (%s in %s) at chr%s:%d are excluded." % \
-                (ref_allele, alt_allele, ','.join(alt_alleles), chr, pos + 1)
+            print("Warning) ref allele (%s) and alt allele (%s in %s) at chr%s:%d are excluded." % \
+                (ref_allele, alt_allele, ','.join(alt_alleles), chr, pos + 1), file=sys.stderr)
             
         min_len = min(len(ref_allele2), len(alt_allele2))
         if min_len >= 2:
@@ -170,7 +171,7 @@ def generate_haplotypes(snp_file,
     assert len(vars) > 0
 
     # Sort variants and remove redundant variants
-    vars = sorted(vars, cmp=compare_vars)
+    vars = sorted(vars, key=cmp_to_key(compare_vars))
     tmp_vars = []
     v = 0
     while v < len(vars):
@@ -203,8 +204,8 @@ def generate_haplotypes(snp_file,
         else:
             assert type == 'I'
             type = "insertion"
-        print >> snp_file, "%s\t%s\t%s\t%s\t%s" % \
-            (varID, type, chr, pos, data)
+        print("%s\t%s\t%s\t%s\t%s" % \
+            (varID, type, chr, pos, data), file=snp_file)
 
     # variant compatibility
     vars_cmpt = [-1 for i in range(len(vars))]
@@ -363,7 +364,7 @@ def generate_haplotypes(snp_file,
                     split_haplotypes.add('#'.join(haplotype[prev_s:s]))
         return split_haplotypes
 
-    haplotypes2 = split_haplotypes(haplotypes)
+    haplotypes2 = sorted(list(split_haplotypes(haplotypes)))
 
     def cmp_haplotype(a, b):
         a = a.split('#')
@@ -382,7 +383,7 @@ def generate_haplotypes(snp_file,
             return a_begin - b_begin
         return a_end - b_end
     
-    haplotypes = sorted(list(haplotypes2), cmp=cmp_haplotype)
+    haplotypes = sorted(list(haplotypes2), key=cmp_to_key(cmp_haplotype))
 
     # daehwan - for debugging purposes
     """
@@ -424,8 +425,8 @@ def generate_haplotypes(snp_file,
         for id in h:
             var_dic = vars[int(id)][4]
             h_add.append(var_dic["id2"])
-        print >> haplotype_file, "ht%d\t%s\t%d\t%d\t%s" % \
-            (num_haplotypes, chr, h_new_begin, h_end, ','.join(h_add))
+        print("ht%d\t%s\t%d\t%d\t%s" % \
+            (num_haplotypes, chr, h_new_begin, h_end, ','.join(h_add)), file=haplotype_file)
         num_haplotypes += 1
 
     return num_haplotypes
@@ -464,6 +465,7 @@ def main(genome_file,
         else:
             vcf_cmd = ["cat", genotype_vcf]
         vcf_proc = subprocess.Popen(vcf_cmd,
+                                    universal_newlines=True,
                                     stdout=subprocess.PIPE,
                                     stderr=open("/dev/null", 'w'))
         for line in vcf_proc.stdout:
@@ -525,17 +527,17 @@ def main(genome_file,
                     
                 var_set.add(var_str)
 
-        print >> sys.stderr, "Number of variants in %s is:" % (genotype_vcf)
+        print("Number of variants in %s is:" % (genotype_vcf), file=sys.stderr)
         for chr, vars in genotype_var_list.items():
             vars = sorted(vars, cmp=compare_vars)
-            print >> sys.stderr, "\tChromosome %s: %d variants" % (chr, len(vars))
+            print("\tChromosome %s: %d variants" % (chr, len(vars)), file=sys.stderr)
 
         for chr, gene_ranges in genotype_ranges.items():
             for gene, value in gene_ranges.items():
                 gene_ranges[gene] = [value[0] - 100, value[1] + 100]
                 value = genotype_ranges[chr][gene]
                 if verbose:
-                    print >> sys.stderr, "%s\t%s\t%d-%d" % (chr, gene, value[0], value[1])
+                    print("%s\t%s\t%d-%d" % (chr, gene, value[0], value[1]), file=sys.stderr)
 
         if extra_files or True:
             clnsig_file = open("%s.clnsig" % base_fname, 'w')
@@ -544,7 +546,7 @@ def main(genome_file,
                     varID = var[4]["id2"]
                     CLNSIG = var[4]["CLNSIG"]
                     gene = var[4]["gene"]
-                    print >> clnsig_file, "%s\t%s\t%s" % (varID, gene, CLNSIG)
+                    print("%s\t%s\t%s" % (varID, gene, CLNSIG), file=clnsig_file)
             clnsig_file.close()
 
     SNP_file = open("%s.snp" % base_fname, 'w')
@@ -558,7 +560,7 @@ def main(genome_file,
                 left, right = value
                 if reference_type == "gene":
                     left, right = 0, right - left
-                print >> ref_file, "%s\t%s\t%d\t%d" % (gene, chr, left, right)
+                print("%s\t%s\t%d\t%d" % (gene, chr, left, right), file=ref_file)
         ref_file.close()
 
         if reference_type == "gene":
@@ -567,10 +569,10 @@ def main(genome_file,
                 for gene, value in gene_ranges.items():
                     left, right = value
                     left, right = 0, right - left
-                    print >> backbone_file, ">%s" % (gene)
+                    print(">%s" % (gene), file=backbone_file)
                     backbone_seq = chr_dic[chr][value[0]:value[1]+1]
                     for s in range(0, len(backbone_seq), 60):
-                        print >> backbone_file, backbone_seq[s:s+60]
+                        print(backbone_seq[s:s+60], file=backbone_file)
             backbone_file.close()
         elif reference_type == "chromosome":
             first = True
@@ -604,6 +606,7 @@ def main(genome_file,
             else:
                 vcf_cmd = ["cat", VCF_fname]
             vcf_proc = subprocess.Popen(vcf_cmd,
+                                        universal_newlines=True,
                                         stdout=subprocess.PIPE,
                                         stderr=open("/dev/null", 'w'))
 
@@ -665,7 +668,7 @@ def main(genome_file,
                 offset = 0
                 gene = None
                 if num_lines % 10000 == 1:
-                    print >> sys.stderr, "\t%s:%d\r" % (chr, pos),
+                    print("\t%s:%d\r" % (chr, pos), file=sys.stderr)
 
                 if chr_genotype_ranges:
                     skip = True
@@ -883,6 +886,7 @@ if __name__ == '__main__':
             else:
                 vcf_cmd = ["cat", args.genotype_vcf]
             vcf_proc = subprocess.Popen(vcf_cmd,
+                                        universal_newlines=True,
                                         stdout=subprocess.PIPE,
                                         stderr=open("/dev/null", 'w'))
             for line in vcf_proc.stdout:
@@ -900,7 +904,7 @@ if __name__ == '__main__':
             args.genotype_gene_list = args.genotype_gene_list.split(',')
 
         if len(args.genotype_gene_list) == 0:
-            print >> sys.stderr, "Error: please specify --genotype-gene-list."
+            print("Error: please specify --genotype-gene-list.", file=sys.stderr)
             sys.exit(1)
 
     else:

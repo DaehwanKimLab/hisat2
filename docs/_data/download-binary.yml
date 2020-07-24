@@ -1,5 +1,12 @@
-latest_version: 2.2.0,2.1.0
+latest_version: 2.2.1,2.2.0,2.1.0
 release:
+  - version: 2.2.1
+    date: 7/24/2020
+    name: HISAT2
+    artifacts:
+      Source: https://cloud.biohpc.swmed.edu/index.php/s/fE9QCsX3NH4QwBi/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/an8KdGxxRdSRXjr/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/4pMgDq4oAF9QCfA/download
   - version: 2.2.0
     date: 2/6/2020
     name: HISAT2
