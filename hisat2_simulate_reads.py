@@ -83,29 +83,30 @@ class ErrRandomSource:
 """
 def read_genome(genome_file):
     chr_dic = {}
-    
+
+    chr_filter = [str(x) for x in list(range(1, 23)) + ['X', 'Y']]
+    #chr_filter = None
+
+    def check_chr_filter(chr_name, chr_filter):
+        if chr_filter is None:
+            return True
+        if chr_name in chr_filter:
+            return True
+        return False
+
     chr_name, sequence = "", ""
     for line in genome_file:
         if line[0] == ">":
-            if chr_name and sequence:
+            if chr_name and sequence and check_chr_filter(chr_name, chr_filter):
                 chr_dic[chr_name] = sequence
             chr_name = line.strip().split()[0][1:]
             sequence = ""
         else:
             sequence += line[:-1]
 
-    if chr_name and sequence:
+    if chr_name and sequence and check_chr_filter(chr_name, chr_filter):
         chr_dic[chr_name] = sequence
 
-
-    chr_filter = [str(x) for x in list(range(1, 23)) + ['X', 'Y']]
-    #chr_filter = None
-
-    if chr_filter:
-        for chr_id, chr_seq in chr_dic.items():
-            if not chr_id in chr_filter: 
-                chr_dic.pop(chr_id, None)
-    
     return chr_dic
 
 

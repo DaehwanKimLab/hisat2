@@ -779,7 +779,7 @@ Pool& SpliceSiteDB::pool(uint64_t ref) {
     assert_lt(ref, _pool.size());
     EList<Pool*>& pool = _pool[ref];
     if(pool.size() <= 0 || pool.back()->full()) {
-        pool.push_back(new Pool(1 << 20 /* 1MB */, 16 << 10 /* 16KB */, CA_CAT));
+        pool.push_back(new Pool(16 << 10 /* 16KB */, 4 << 10 /* 4KB */, CA_CAT));
     }
     assert(pool.back() != NULL);
     return *pool.back();
@@ -848,3 +848,31 @@ float SpliceSiteDB::probscore(
     return probscore;
 }
 
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+void SpliceSiteDB::show_mem_usage()
+{
+    fprintf(stderr, "Num of Refs: %d\n", _numRefs);
+    fprintf(stderr, "sz, cur of _numRefs: %d, %d\n", _refnames.size(), _refnames.capacity());
+    fprintf(stderr, "Total Size of _refnames: %d\n", _refnames.totalSizeBytes());
+    fprintf(stderr, "Total Capacity of _refnames: %d\n", _refnames.totalCapacityBytes());
+    fprintf(stderr, "string capacity %d, length %d\n", _refnames[0].capacity(), _refnames[0].size());
+    std::cerr << _refnames[0] << std::endl;
+
+    {
+        int tot_size, tot_capacity;
+        tot_capacity = 0;
+        tot_size = 0;
+        for (int i = 0; i < _spliceSites.size(); i++) {
+            tot_size += _spliceSites[i].totalSizeBytes();
+            tot_capacity += _spliceSites[i].totalCapacityBytes();
+        }
+        fprintf(stderr, "Total Size and Capacity of _spliceSites %d, %d\n",
+                tot_size, tot_capacity);
+    }
+
+    fprintf(stderr, "Total Size, Capacity of _fwIndex %d, %d\n", _fwIndex.totalSizeBytes(), _fwIndex.totalCapacityBytes());
+    fprintf(stderr, "Total Size, Capacity of _bwIndex %d, %d\n", _bwIndex.totalSizeBytes(), _bwIndex.totalCapacityBytes());
+    fprintf(stderr, "Total Size, Capacity of _mutex %d, %d\n", _mutex.totalSizeBytes(), _mutex.totalCapacityBytes());
+
+}
+#endif

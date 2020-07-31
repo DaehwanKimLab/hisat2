@@ -1,0 +1,18 @@
+# Chromosome 22
+
+# extract transcript graph, ss file
+
+../hisat2_extract_transcript_graph.py -g data/22.gtf -r data/22.fa -o data/22
+
+# build
+hisat2-build --ss data/22.gt.ss data/22.gt.fa 22_gt
+cp 22_gt.*.ht2 indexes/HISAT2_22/
+
+
+
+
+
+# map transcript-position to genomic position
+
+./hisat2_trans_to_genome.py gt.sam 22.gt.map > out.sam
+

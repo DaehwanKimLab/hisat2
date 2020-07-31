@@ -205,6 +205,12 @@ struct BWTHit {
     
     bool            _anchor_examined;   // whether or not this hit is examined
     index_t         _hit_type;          // hit type (anchor hit, pseudogene hit, or candidate hit)
+
+#ifdef CP_DEBUG
+    void print(FILE *fp, const char *indent = "") const {
+        fprintf(fp, "%s_top %lu, _bot %lu, _len %d, _coords %d\n", indent, _top, _bot, _len, _coords.size());
+    }
+#endif // CP_DEBUG
 };
 
 
@@ -386,6 +392,18 @@ struct ReadBWTHit {
     bool     _repeat;
     
     EList<BWTHit<index_t> >       _partialHits;
+
+#ifdef CP_DEBUG
+    void print(FILE *fp) const {
+        fprintf(fp, "_fw %d, _len %lu, _cur %lu, _done %d\n", _fw, _len, _cur, _done);
+        fprintf(fp, "  _partialHits %d\n", _partialHits.size());
+        int phsize = _partialHits.size();
+        for(int i = 0; i < phsize; i++) {
+            const BWTHit<index_t>& partialhit = _partialHits[i];
+            partialhit.print(fp, "    ");
+        }
+    }
+#endif // CP_DEBUG
 };
 
 
@@ -1366,6 +1384,13 @@ public:
     LinkedEListNode<EList<Edit> >*  _edits_node;
     LinkedEListNode<EList<pair<index_t, index_t> > >*  _ht_list_node;
     SharedTempVars<index_t>* _sharedVars;
+
+#ifdef CP_DEBUG
+    void print(FILE *fp, const char *indent = "") const {
+        fprintf(fp, "%s_fw %d, _rdoff %d, _len %d, _trim5 %d _trim3 %d, _tidx %d, _toff %d, _joinedOff %d\n",
+                indent, _fw, _rdoff, _len, _trim5, _trim3, _tidx, _toff, _joinedOff);
+    }
+#endif // CP_DEBUG
 };
 
 /**
@@ -1412,6 +1437,9 @@ bool GenomeHit<index_t>::compatibleWith(
     return true;
 }
 
+#ifdef USE_TRANSCRIPTOME
+extern bool bTranscriptome;
+#endif
 /**
  * Combine itself with another GenomeHit
  * while allowing mismatches, an insertion, a deletion, or an intron
@@ -1439,6 +1467,9 @@ bool GenomeHit<index_t>::combineWith(
                                      const SpliceSite*          spliceSite,             // penalty for splice site
                                      bool                       no_spliced_alignment)
 {
+#ifdef USE_TRANSCRIPTOME
+    if (bTranscriptome) return true;
+#endif
     if(this == &otherHit) return false;
     assert(compatibleWith(otherHit, minIntronLen, maxIntronLen, no_spliced_alignment));
     assert_eq(this->_tidx, otherHit._tidx);
@@ -5508,6 +5539,15 @@ bool HI_Aligner<index_t, local_index_t>::align(
     ReadBWTHit<index_t>& hit = _hits[rdi][fwi];
     assert(hit.done());
     index_t minOff = 0;
+
+#ifdef CP_DEBUG
+    {
+        // Show _hits
+        fprintf(stderr, "rdi %d, fwi %d\n", rdi, fwi);
+        hit.print(stderr);
+
+    }
+#endif
     if(hit.minWidth(minOff) == std::numeric_limits<index_t>::max()) return false;
     
     // Don't try to align if the potential alignment for this read might be
@@ -5540,7 +5580,14 @@ bool HI_Aligner<index_t, local_index_t>::align(
                                     him,
                                     gfm.repeat());
     if(numHits <= 0) return false;
-   
+#ifdef CP_DEBUG
+    {
+        fprintf(stderr, "_genomeHits %d\n", _genomeHits.size());
+        for (int i = 0; i < _genomeHits.size(); i++) {
+            _genomeHits[i].print(stderr, "  ");
+        }
+    }
+#endif
     // limit the number of local index searches used for alignment of the read
     uint64_t add = 0;
     if(rp.secondary) add = (-_minsc[rdi] / sc.mmpMax) * numHits * 2;

@@ -140,6 +140,14 @@ void SplicedAligner<index_t, local_index_t>::hybridSearch(
     // this extension is performed without any mismatches allowed
     for(index_t hi = 0; hi < this->_genomeHits.size(); hi++) {
         GenomeHit<index_t>& genomeHit = this->_genomeHits[hi];
+#ifdef CP_DEBUG
+        {
+            fprintf(stderr, "Trying to extent the genome hit. rdoff %d, len %d, tidx %d, toff %d\n",
+                    genomeHit._rdoff, genomeHit._len, genomeHit._tidx, genomeHit._toff
+            );
+        }
+#endif
+
         index_t leftext = (index_t)INDEX_MAX, rightext = (index_t)INDEX_MAX;
         genomeHit.extend(
                          *(this->_rds[rdi]),
@@ -386,8 +394,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
     EList<SpliceSite>& spliceSites = this->_spliceSites[dep];
     
     // daehwan - for debugging purposes
-#if 0
-    cout << rd.name << "\t"
+#ifdef CP_DEBUG
+    cerr << rd.name << "\t"
     << (hit.fw() ? "+" : "-") << "\t"
     << hitoff << "\t"
     << hitoff + hitlen << "\t"
@@ -397,8 +405,8 @@ int64_t SplicedAligner<index_t, local_index_t>::hybridSearch_recur(
     << hit.getRightOff() << "\t"
     << hit.score() << "\t"
     << "dep: " << dep << "\t";
-    Edit::print(cout, hit.edits());
-    cout << endl;
+    Edit::print(cerr, hit.edits());
+    cerr << endl;
 #endif
     
     assert_leq(hitoff + hitlen, rdlen);

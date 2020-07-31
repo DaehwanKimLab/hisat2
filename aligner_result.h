@@ -36,7 +36,9 @@ typedef int64_t TAlScore;
 #define VALID_AL_SCORE(x)   ((x).score_ > MIN_I64)
 #define VALID_SCORE(x)      ((x) > MIN_I64)
 #define INVALIDATE_SCORE(x) ((x) = MIN_I64)
-
+#ifdef USE_TRANSCRIPTOME
+extern bool bTranscriptome;
+#endif
 /**
  * A generic score object for an alignment.  Used for accounting during
  * SW and elsewhere.  Encapsulates the score, the number of N positions
@@ -334,6 +336,9 @@ public:
         TAlScore transcript_score = 0;
         if(knownTranscripts_) transcript_score = 2;
         else if(nearSpliceSites_) transcript_score = 1;
+#ifdef USE_TRANSCRIPTOME
+        if(bTranscriptome) transcript_score = 0;
+#endif
         
         // Next 8 bits for splice site score
         TAlScore splicescore = splicescore_ / 100;

@@ -115,7 +115,7 @@ def get_aligners():
         print >> sys.stderr, cmd
         os.system(cmd)
 
-    files = ["hisat2", "hisat2-align-s", "hisat2-build", "hisat2-build-s", "hisat2-inspect", "hisat2-inspect-s", "extract_splice_sites.py", "hisat2_extract_snps_haplotypes_UCSC.py", "hisat2_simulate_reads.py"]
+    files = ["hisat2", "hisat2-align-s", "hisat2-build", "hisat2-build-s", "hisat2-inspect", "hisat2-inspect-s", "extract_splice_sites.py", "hisat2_extract_snps_haplotypes_UCSC.py", "hisat2_simulate_reads.py", "hisat2_trans_to_genome.py"]
     os.chdir("bin")
     for file in files:
         if os.path.exists(file):

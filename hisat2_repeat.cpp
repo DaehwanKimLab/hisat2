@@ -95,6 +95,9 @@ TIndexOffU max_seed_repeat;
 TIndexOffU max_seed_extlen;
 static bool save_sa;
 static bool load_sa;
+#ifdef USE_TRANSCRIPTOME
+bool bTranscriptome;    // run Transcriptome alignment
+#endif
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)

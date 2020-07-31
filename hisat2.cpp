@@ -58,6 +58,10 @@
 #include "outq.h"
 #include "repeat_kmer.h"
 
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+#include <malloc.h>
+#endif
+
 using namespace std;
 
 MemoryTally gMemTally;
@@ -299,7 +303,9 @@ static bool repeat;
 static bool use_repeat_index;
 static EList<size_t> readLens;
 
-
+#ifdef USE_TRANSCRIPTOME
+bool bTranscriptome;    // run Transcriptome alignment
+#endif
 #define DMAX std::numeric_limits<double>::max()
 
 static void resetOptions() {
@@ -534,6 +540,9 @@ static void resetOptions() {
     repeat = false; // true iff alignments to repeat sequences are directly reported.
     use_repeat_index = true;
     readLens.clear();
+#ifdef USE_TRANSCRIPTOME
+    bTranscriptome = false;
+#endif
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -760,6 +769,9 @@ static struct option long_options[] = {
     {(char*)"repeat",          no_argument,        0,        ARG_REPEAT},
     {(char*)"no-repeat-index", no_argument,        0,        ARG_NO_REPEAT_INDEX},
     {(char*)"read-lengths",    required_argument,  0,        ARG_READ_LENGTHS},
+#ifdef USE_TRANSCRIPTOME
+    {(char*)"transcriptome",   no_argument,        0,        ARG_TRANSCRIPTOME},
+#endif
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -1785,6 +1797,12 @@ static void parseOption(int next_option, const char *arg) {
             readLens.sort();
             break;
         }
+#ifdef USE_TRANSCRIPTOME
+        case ARG_TRANSCRIPTOME: {
+            bTranscriptome = true;
+            break;
+        }
+#endif
 		default:
 			printUsage(cerr);
 			throw 1;
@@ -3773,6 +3791,12 @@ static void driver(
     repeatdb = new RepeatDB<index_t>();
     raltdb = new ALTDB<index_t>();
 	adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+    {
+        fprintf(stderr, "Before gfm\n");
+        malloc_stats();
+    }
+#endif
 	HGFM<index_t, local_index_t> gfm(
                                      adjIdxBase,
                                      altdb,
@@ -3795,6 +3819,12 @@ static void driver(
                                      false /*passMemExc*/,
                                      sanityCheck,
                                      use_haplotype); //use haplotypes?
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+    {
+        fprintf(stderr, "After gfm\n");
+        malloc_stats();
+    }
+#endif
 	if(sanityCheck && !os.empty()) {
 		// Sanity check number of patterns and pattern lengths in GFM
 		// against original strings
@@ -3827,6 +3857,12 @@ static void driver(
                            !noRefNames,  // load names?
                            startVerbose);
     }
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+    {
+        fprintf(stderr, "After loadIntoMemory\n");
+        malloc_stats();
+    }
+#endif
     RFM<index_t>* rgfm = NULL;
     string rep_adjIdxBase = adjIdxBase + ".rep";
     bool rep_index_exists = false;
@@ -4094,7 +4130,24 @@ static void driver(
                                 nthreads > 1, // thread-safe
                                 write, // write?
                                 read);  // read?
+
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+        {
+            fprintf(stderr, "After new SSDB\n");
+            malloc_stats();
+        }
+#endif
         ssdb->read(gfm, altdb->alts());
+
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+        {
+            fprintf(stderr, "After ssdb->read\n");
+            malloc_stats();
+
+            ssdb->show_mem_usage();
+        }
+#endif
+
         if(knownSpliceSiteInfile != "") {
             ifstream ssdb_file(knownSpliceSiteInfile.c_str(), ios::in);
             if(ssdb_file.is_open()) {
@@ -4350,6 +4403,12 @@ int hisat2(int argc, const char **argv) {
 			}
 			driver<SString<char> >("DNA", bt2index, outfile);
 		}
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+        {
+            fprintf(stderr, "Before ending\n");
+            malloc_stats();
+        }
+#endif
 		return 0;
 	} catch(std::exception& e) {
 		cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;

@@ -584,6 +584,12 @@ private:
                     ofstream& out,
                     EList<SpliceSite>& ss_list,
                     const SpliceSite* ss = NULL);
+
+#if defined(CP_DEBUG) && defined(CP_DEBUG_MEM)
+public:
+    void show_mem_usage();
+private:
+#endif
     
 private:
     uint64_t                            _numRefs;
