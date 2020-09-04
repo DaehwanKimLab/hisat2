@@ -13,7 +13,7 @@ Please cite:
 {:toc}
 
 ## Index
-HISAT2 indexes are hosted on AWS (Amazon Web Services), thanks to the AWS Public Datasets program. Clink this [link](https://registry.opendata.aws/jhu-indexes/) for more details.
+HISAT2 indexes are hosted on AWS (Amazon Web Services), thanks to the AWS Public Datasets program. Click this [link](https://registry.opendata.aws/jhu-indexes/) for more details.
 
 {% for item in site.data.download-index %}
 ### {{ item.organism }}
