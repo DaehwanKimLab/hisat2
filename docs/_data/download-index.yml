@@ -68,14 +68,14 @@
         url: https://genome-idx.s3.amazonaws.com/hisat/wbcel235_tran.tar.gz
     UCSC ce10:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/ce10.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/bbynxoY2TPpRNQb/download
 - organism: S. cerevisiae
   data: 
     R64-1-1:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64.tar.gz
-      genome_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/JRSoKHD5cHfpCFE/download
+      genome_tran:
+        url: https://cloud.biohpc.swmed.edu/index.php/s/akeiMrGGtt5KoJY/download
     UCSC sacCer3:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/sc3.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/Gsq4goLW4TDAz4E/download
