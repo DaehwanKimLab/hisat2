@@ -3,7 +3,7 @@
 ## Author Information
 
 The original simulation code was completed in 2015 by Dr. Daehwan Kim. 
-Edits to the original code by Micah Thornton beginning 2020. 
+Enhancements by Micah Thornton (Kim Lab) beginning 2020. 
 
 ## Overview 
 
