@@ -17,9 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
-#######################################################################
-#                        Update Log                                   #
-# 09-15-2020:  Micah Thornton  --  Attempt to expand functionality    #  
+
 
 
 import os, sys, math, random, re
