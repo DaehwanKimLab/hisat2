@@ -17,3 +17,10 @@ of reads of other kinds.
 
 
 ## Updates and Edits 
+
+09-17-2020:  Added a class for methylation status of CpGs to be generated using a Bernoulli trials approach. 
+
+09-18-2020:  In order to verify the proper functionality of the simulation script, one may use the included Makefile by running 'make Tests'; 
+the resulting test information will be outputted to a log file called sim-test-res.log. This is a work in progress, for the intention of testing
+various simulated sequencing reads. 
+
