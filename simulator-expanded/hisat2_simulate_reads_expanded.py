@@ -19,7 +19,8 @@
 #
 #######################################################################
 #                        Update Log                                   #
-# 09-15-2020:  Micah Thornton  --  Attempt to expand functionality    #  
+# 09-17-2020:  Micah Thornton  --  Added Class for Methylation        #
+#               Pattern Based on Bernoulli Trials                     #  
 
 
 import os, sys, math, random, re
@@ -58,6 +59,7 @@ def reverse_complement(seq):
 """
 python2 style randint
 """
+
 def myrandint(m, x):
     s = x - m + 1
     return m + int(random.random() * s)
@@ -82,6 +84,29 @@ class ErrRandomSource:
         self.cur = (self.cur + 1) % len(self.rands)
         return rand
 
+'''
+A Bernoulli Random Source for Methylation status at CpG locations
+'''
+class MethylationPatternBernoulliCpG: 
+    def __init__(self, prob = 0.0, size = 1 << 20, nts, seed=0xFEED): 
+        self.size = size; 
+        self.methylated = []; 
+        self.cpgs = []; 
+        random.seed(seed);
+        for i in range(self.size)-1: 
+            if nts[i] == 'C' and nts[i+1] == 'G': 
+                self.cpgs.append(i); 
+        for i in self.cpgs: 
+            if random.random() <= prob: 
+                self.methylated.append(i);  
+        self.cur = 0; 
+
+    def getMethStat(self): 
+        assert self.cur < self.size; 
+        if self.cur in self.methylated:
+            return(1); 
+        else: 
+            return(0); 
 
 """
 """
