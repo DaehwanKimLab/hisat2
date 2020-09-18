@@ -108,6 +108,7 @@ class MethylationPatternBernoulliCpG:
         else: 
             ret = 0;
         self.cur = (self.cur + 1) % self.size
+        return ret;
 
 """
 """
