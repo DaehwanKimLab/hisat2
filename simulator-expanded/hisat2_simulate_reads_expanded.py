@@ -84,32 +84,39 @@ class ErrRandomSource:
         self.cur = (self.cur + 1) % len(self.rands)
         return rand
 
+def strsub(char, i, stri):
+        if i == 0:
+            return(char + stri[1:]);
+        elif i == len(stri)-1:
+            return(stri[:i]+char);
+        else:
+            return(stri[:i] + char + stri[(i+1):]);
 '''
 A Bernoulli Random Source for Methylation status at CpG locations
 '''
-class MethylationPatternBernoulliCpG: 
-    def __init__(self, prob = 0.0, nts, seed=0xFEED): 
-        self.size = len(nts); 
-        self.methylated = []; 
-        self.cpgs = []; 
-        random.seed(seed);
-        for i in range(self.size)-1: 
-            if nts[i] == 'C' and nts[i+1] == 'G': 
-                self.cpgs.append(i); 
-        for i in self.cpgs: 
-            if random.random() <= prob: 
-                self.methylated.append(i);  
-        self.cur = 0; 
-
-    def getMethStat(self): 
-        assert self.cur < self.size; 
-        if self.cur in self.methylated:
-            ret = 1; 
-        else: 
-            ret = 0;
-        self.cur = (self.cur + 1) % self.size
-        return ret;
-
+#class MethylationPatternBernoulliCpG: 
+#    def __init__(self, prob = 0.0, nts, seed=0xFEED): 
+#        self.size = len(nts); 
+#        self.methylated = []; 
+#        self.cpgs = []; 
+#        random.seed(seed);
+#        for i in range(self.size)-1: 
+#            if nts[i] == 'C' and nts[i+1] == 'G': 
+#                self.cpgs.append(i); 
+#        for i in self.cpgs: 
+#            if random.random() <= prob: 
+#                self.methylated.append(i);  
+#        self.cur = 0; 
+#
+#    def getMethStat(self): 
+#        assert self.cur < self.size; 
+#        if self.cur in self.methylated:
+#            ret = 1; 
+#        else: 
+#            ret = 0;
+#        self.cur = (self.cur + 1) % self.size
+#        return ret;
+#
 """
 """
 def read_genome(genome_file):
@@ -726,7 +733,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                    rna, paired_end, read_len, frag_len,
                    num_frag, expr_profile_type, repeat_fname,
                    error_rate, max_mismatch,
-                   random_seed, snp_prob, sanity_check, seq_kind, meth_prob, verbose):
+                   random_seed, snp_prob, sanity_check, bisulfite, meth_prob, verbose):
     random.seed(random_seed, version=1)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
     
@@ -873,14 +880,17 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
             else:
                 XS, TI = "", ""                
 
-            if seq_kind == 2:
+            if bisulfite:
                 assert meth_prob >= 0 and meth_prob <= 1; 
-                mpBern = MethylationPatternBernoulliCpG(meth_prob, read_seq, random_seed);  
-                for nt in range(len(read_seq)): 
-                    if mpBern.getMethStat:
-                        read_seq[nt] = 'T'; 
-                    else:
-                        read_seq[nt] = 'C'; 
+                for i in range(len(read_seq)): 
+                    if i == len(read_seq)-1: 
+                        if read_seq[i] == 'C' and genome_seq[chr][pos+len(read_seq)] == "G": 
+                            if random.random() <= meth_prob: 
+                                read_seq = strsub("T", i, read_seq); 
+                    else: 
+                        if read_seq[i] == 'C' and genome_seq[chr][pos+len(read_seq)] == "G": 
+                            if random.random() <= meth_prob: 
+                                read_seq = strsub("T", i, read_seq); 
 
             print(">{}".format(cur_read_id), file=read_file)
             if swapped:
@@ -991,14 +1001,12 @@ if __name__ == '__main__':
                         dest='sanity_check',
                         action='store_true',
                         help='sanity check')
-    parser.add_argument('--seq-kind', 
-                        dest='seq_kind',
-                        action='store',
-                        type=int,
-                        choices=xrange(1,2),
-                        default=1,
-                        help='The kind of sequencing reads to generate, 1-WGS, 2-BiSulfite')
-    parser.add_argument('--Meth_prob', 
+    parser.add_argument('--bisulfite', 
+                        dest='bisulfite',
+                        action='store_true',
+                        default=False,
+                        help='Allows for the simulation of Bisulfite Sequencing Reads (WIP - For now, just randomly flips Cyotosines to Thymines If they are followed by a Guanine)')
+    parser.add_argument('--meth-prob', 
                         dest='meth_prob',
                         action='store',
                         type=float, 
@@ -1021,4 +1029,4 @@ if __name__ == '__main__':
                    args.rna, args.paired_end, args.read_len, args.frag_len,
                    args.num_frag, args.expr_profile, args.repeat_fname,
                    args.error_rate, args.max_mismatch,
-                   args.random_seed, args.snp_prob, args.sanity_check, args.seq_kind, args.meth_prob, args.verbose)
+                   args.random_seed, args.snp_prob, args.sanity_check, args.bisulfite, args.meth_prob, args.verbose)
