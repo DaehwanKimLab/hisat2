@@ -40,7 +40,7 @@
       genome_tran: 
         url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_tran/download
       genome_snp_tran: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snptran/download
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp_tran/download
     UCSC mm10:
       genome: 
         url: https://genome-idx.s3.amazonaws.com/hisat/mm10_genome.tar.gz
