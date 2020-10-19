@@ -33,14 +33,14 @@
 - organism: M. musculus
   data:
     GRCm38:
-      genome: 
-        url: https://genome-idx.s3.amazonaws.com/hisat/grcm38_genome.tar.gz
+      genome:
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38/download
       genome_snp: 
-        url: https://genome-idx.s3.amazonaws.com/hisat/grcm38_snp.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp/download
       genome_tran: 
-        url: https://genome-idx.s3.amazonaws.com/hisat/grcm38_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_tran/download
       genome_snp_tran: 
-        url: https://genome-idx.s3.amazonaws.com/hisat/grcm38_snptran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snptran/download
     UCSC mm10:
       genome: 
         url: https://genome-idx.s3.amazonaws.com/hisat/mm10_genome.tar.gz
