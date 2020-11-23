@@ -165,7 +165,6 @@ public:
 		EList<string> *names = NULL);
 
 	size_t getMinK() const{
-	    return 5;
 	    return minkRepeat;
 	}
 	

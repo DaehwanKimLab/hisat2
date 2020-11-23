@@ -40,6 +40,8 @@ typedef uint64_t TReadId;
 typedef size_t TReadOff;
 typedef int64_t TAlScore;
 
+extern bool threeN;
+
 class HitSet;
 
 /**
@@ -174,13 +176,13 @@ struct Read {
 			for(int j = 0; j < alts; j++) {
 				altPatRc[j].installReverse(altPatFw[j]);
 			}
-            originalRc.installReverse(originalFw);
+            if (threeN) originalRc.installReverse(originalFw);
 		} else {
 			patRc.installReverseComp(patFw);
 			for(int j = 0; j < alts; j++) {
 				altPatRc[j].installReverseComp(altPatFw[j]);
 			}
-            originalRc.installReverseComp(originalFw);
+            if (threeN) originalRc.installReverseComp(originalFw);
 		}
 	}
 

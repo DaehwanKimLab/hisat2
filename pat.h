@@ -41,6 +41,7 @@
 #include "read.h"
 #include "util.h"
 
+extern bool threeN;
 /**
  * Classes and routines for reading reads from various input sources.
  */
@@ -257,7 +258,7 @@ public:
 	TReadId readCnt() const { return readCnt_ - 1; }
 
     int paired_type; // 1 - left or unpaird, 2-right
-    int align_times = 0;
+//    int align_times = 0;
 
 protected:
 
@@ -527,7 +528,9 @@ public:
 
 	void changePlan3N(int nCycle) {
         buf1_.changePlan3N(nCycle);
-        buf2_.changePlan3N(3-nCycle);
+        if (threeN) {
+			buf2_.changePlan3N(3-nCycle);
+        }
 	}
 
 	/**

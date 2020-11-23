@@ -3918,6 +3918,10 @@ static void driver(
 	if(gVerbose || startVerbose)  {
 		cerr << "Entered driver(): "; logTime(cerr, true);
 	}
+
+	if (gVerbose || startVerbose) {
+	    cerr << "Running in " << ((threeN) ? "3N" : "Regular") << " Mode" << endl;
+	}
     
     initializeCntLut();
     initializeCntBit();
@@ -4287,7 +4291,7 @@ static void driver(
             if(gfm->gh().linearFM()) khits = 5;
             else                    khits = 10;
         }
-    }
+    } // else threeN
 
 	OutputQueue oq(
 		*fout,                   // out file buffer
@@ -4490,13 +4494,13 @@ static void driver(
 
 
         
-        BitPairReference* rrefss[2]{NULL};
+        BitPairReference* rrefss[2] = {NULL, };
         BitPairReference* rrefs = NULL;
 
         if (threeN) {
             for (int j = 0; j < 2; j++) {
                 if (rep_index_exists_3N[j] && use_repeat_index) {
-                    const EList<uint8_t> &included = rgfms_3N[j]->getReadIncluded();
+                    const EList<uint8_t> &included = rgfms_3N[j]->getRepeatIncluded();
                     rrefss[j] = new BitPairReference(
                             rep_adjIdxBase_3N[j],
                             &included,
@@ -4515,7 +4519,7 @@ static void driver(
             }
         } else {
             if(rep_index_exists && use_repeat_index) {
-                const EList<uint8_t>& included = rgfm->getReadIncluded();
+                const EList<uint8_t>& included = rgfm->getRepeatIncluded();
                 rrefs = new BitPairReference(
                         rep_adjIdxBase,
                         &included,

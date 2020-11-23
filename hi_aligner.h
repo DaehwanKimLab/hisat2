@@ -1417,6 +1417,11 @@ bool GenomeHit<index_t>::compatibleWith(
     return true;
 }
 
+static inline char get_ref_base(int threeN, int* mapping, char base)
+{
+    return threeN ? mapping[base] : base;
+}
+
 /**
  * Combine itself with another GenomeHit
  * while allowing mismatches, an insertion, a deletion, or an intron
@@ -1612,7 +1617,7 @@ bool GenomeHit<index_t>::combineWith(
             static const char AA   = 0x00, AArc = 0x33;
             int i;
             for(i = 0; i < (int)len; i++) {
-                int rdc = seq[this_rdoff + i], rfc = refConversion_3N[refbuf[i]];
+                int rdc = seq[this_rdoff + i], rfc = get_ref_base(threeN, refConversion_3N, refbuf[i]);
                 if(i > 0) {
                     temp_scores[i] = temp_scores[i-1];
                 } else {
@@ -1628,7 +1633,7 @@ bool GenomeHit<index_t>::combineWith(
             int i_limit = min<int>(i, len);
             int i2;
             for(i2 = len - 1; i2 >= 0; i2--) {
-                int rdc = seq[this_rdoff + i2], rfc = refConversion_3N[refbuf2[i2]];
+                int rdc = seq[this_rdoff + i2], rfc = get_ref_base(threeN, refConversion_3N, refbuf2[i2]);
                 if((index_t)(i2 + 1) < len) {
                     temp_scores2[i2] = temp_scores2[i2+1];
                 } else {
@@ -1771,7 +1776,7 @@ bool GenomeHit<index_t>::combineWith(
             if(gap_penalty < remainsc) return false;
             int i;
             for(i = 0; i < (int)len; i++) {
-                int rdc = seq[this_rdoff + i], rfc = refConversion_3N[refbuf[i]];
+                int rdc = seq[this_rdoff + i], rfc = get_ref_base(threeN, refConversion_3N, refbuf[i]);
                 if(i > 0) {
                     temp_scores[i] = temp_scores[i-1];
                 } else {
@@ -1787,7 +1792,7 @@ bool GenomeHit<index_t>::combineWith(
             int i_limit = min<int>(i, len);
             int i2;
             for(i2 = len - 1; i2 >= 0; i2--) {
-                int rdc = seq[this_rdoff + i2], rfc = refConversion_3N[refbuf2[i2]];
+                int rdc = seq[this_rdoff + i2], rfc = get_ref_base(threeN, refConversion_3N, refbuf2[i2]);
                 if((index_t)(i2 + 1) < len) {
                     temp_scores2[i2] = temp_scores2[i2+1];
                 } else {
@@ -1860,19 +1865,19 @@ bool GenomeHit<index_t>::combineWith(
             int rfc;
             if(splice_gap_maxscorei <= maxscorei) {
 	      if(i <= (int)splice_gap_maxscorei) {
-                    rfc = refConversion_3N[refbuf[i]];
+                    rfc = get_ref_base(threeN, refConversion_3N, refbuf[i]);
 	      } else if(i <= (int)maxscorei) {
-                    rfc = refConversion_3N[refbuf[i - ref_gap_off + rd_gap_off]];
+                    rfc = get_ref_base(threeN, refConversion_3N, refbuf[i - ref_gap_off + rd_gap_off]);
                 } else {
-                    rfc = refConversion_3N[refbuf2[i]];
+                    rfc = get_ref_base(threeN, refConversion_3N, refbuf2[i]);
                 }
             } else {
 	      if(i <= (int)maxscorei) {
-                    rfc = refConversion_3N[refbuf[i]];
+                    rfc = get_ref_base(threeN, refConversion_3N, refbuf[i]);
 	      } else if(i <= (int)splice_gap_maxscorei) {
-                    rfc = refConversion_3N[refbuf2[i + ref_gap_off - rd_gap_off]];
+                    rfc = get_ref_base(threeN, refConversion_3N, refbuf2[i + ref_gap_off - rd_gap_off]);
                 } else {
-                    rfc = refConversion_3N[refbuf2[i]];
+                    rfc = get_ref_base(threeN, refConversion_3N, refbuf2[i]);
                 }
             }
             assert_range(0, 4, rfc);
@@ -1904,9 +1909,9 @@ bool GenomeHit<index_t>::combineWith(
                         int temp_rfc_off = i + 1 + j;
                         int temp_rfc;
                         if(i < (int)maxscorei) {
-                            temp_rfc = refConversion_3N[refbuf[temp_rfc_off]];
+                            temp_rfc = get_ref_base(threeN, refConversion_3N, refbuf[temp_rfc_off]);
                         } else {
-                            temp_rfc = refConversion_3N[refbuf2[temp_rfc_off - rd_gap_off]];
+                            temp_rfc = get_ref_base(threeN, refConversion_3N, refbuf2[temp_rfc_off - rd_gap_off]);
                         }
                         assert_range(0, 4, temp_rfc);
                         Edit e((uint32_t)(i + 1 + addoff), "ACGTN"[temp_rfc], '-', EDIT_TYPE_READ_GAP);
@@ -1929,7 +1934,7 @@ bool GenomeHit<index_t>::combineWith(
         index_t ins_len = 0;
         for(index_t i = 0; i < len; i++) {
             char rdc = seq[this_rdoff + i];
-            char rfc = (i <= maxscorei ? refConversion_3N[refbuf[i]] : refConversion_3N[refbuf2[i]]);
+            char rfc = (i <= maxscorei ? get_ref_base(threeN, refConversion_3N, refbuf[i]) : get_ref_base(threeN, refConversion_3N, refbuf2[i]));
             assert_geq(this_rdoff, this->_rdoff);
             index_t addoff = this_rdoff - this->_rdoff;
             if(rdc != rfc) {
@@ -1962,8 +1967,8 @@ bool GenomeHit<index_t>::combineWith(
                     skipLen = right - left;
                     for(index_t j = 0; j < skipLen; j++) {
                         int temp_rfc;
-                        if(i + 1 + j < len) temp_rfc = refConversion_3N[refbuf[i + 1 + j]];
-                        else                temp_rfc = refConversion_3N[ref.getBase(this->_tidx, this_toff + i + 1 + j)];
+                        if(i + 1 + j < len) temp_rfc = get_ref_base(threeN, refConversion_3N, refbuf[i + 1 + j]);
+                        else                temp_rfc = get_ref_base(threeN, refConversion_3N, ref.getBase(this->_tidx, this_toff + i + 1 + j));
                         assert_range(0, 4, temp_rfc);
                         Edit e((uint32_t)(i + 1 + addoff), "ACGTN"[temp_rfc], '-', EDIT_TYPE_READ_GAP);
                         _edits->push_back(e);
@@ -2779,7 +2784,6 @@ void add_haplotypes(
     }
 }
 
-
 /*
  *
  */
@@ -2861,7 +2865,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         int mm_min_rd_i = (int)rdoff;
         index_t mm_tmp_numNs = 0;
         for(int rf_i = (int)rflen - 1; rf_i >= 0 && mm_min_rd_i >= 0; rf_i--, mm_min_rd_i--) {
-            int rf_bp = refConversion_3N[rfseq[rf_i]];
+            int rf_bp = get_ref_base(threeN, refConversion_3N, rfseq[rf_i]);
             int rd_bp = rdseq[mm_min_rd_i];
             if(rf_bp != rd_bp || rd_bp == 4) {
                 if(tmp_mm == 0) {
@@ -3033,7 +3037,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
 
             if(alt.type == ALT_SNP_SGL) {
                 if(rd_bp == (int)alt.seq) {
-                    int rf_bp = refConversion_3N[rfseq[rf_i]];
+                    int rf_bp = get_ref_base(threeN, refConversion_3N, rfseq[rf_i]);
                     Edit e(
                            rd_i,
                            "ACGTN"[rf_bp],
@@ -3050,7 +3054,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 if(rfoff + rf_i > (int)alt.len) {
                     if(rf_i > (int)alt.len) {
                         for(index_t i = 0; i < alt.len; i++) {
-                            int rf_bp = refConversion_3N[rfseq[rf_i - i]];
+                            int rf_bp = get_ref_base(threeN, refConversion_3N, rfseq[rf_i - i]);
                             Edit e(
                                    rd_i + 1,
                                    "ACGTN"[rf_bp],
@@ -3078,7 +3082,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                         assert_lt(off, 16);
                         const char* new_rfseq = raw_refbuf.wbuf() + 16 + off + min<int>(new_rfoff, 0);
                         for(int i = 0; i < alt.len; i++) {
-                            int rf_bp = refConversion_3N[new_rfseq[rf_i - i + alt.len]];
+                            int rf_bp = get_ref_base(threeN, refConversion_3N, new_rfseq[rf_i - i + alt.len]);
                             Edit e(
                                    rd_i + 1,
                                    "ACGTN"[rf_bp],
@@ -3208,7 +3212,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
         index_t mm_max_rd_i = 0;
         index_t mm_tmp_numNs = 0;
         for(index_t rf_i = 0; rf_i < rflen && mm_max_rd_i < rdlen; rf_i++, mm_max_rd_i++) {
-            int rf_bp = refConversion_3N[rfseq[rf_i]];
+            int rf_bp = get_ref_base(threeN, refConversion_3N, rfseq[rf_i]);
             int rd_bp = rdseq[rdoff + mm_max_rd_i];
             if(rf_bp != rd_bp || rd_bp == 4) {
                 if(tmp_mm == 0) {
@@ -3345,7 +3349,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
             rf_i = rd_i = alt.pos - joinedOff;
             if(rd_i >= rdlen) continue;
             assert_leq(rd_i, max_rd_i);
-            int rf_bp = refConversion_3N[rfseq[rf_i]];
+            int rf_bp = get_ref_base(threeN, refConversion_3N, rfseq[rf_i]);
             int rd_bp = rdseq[rdoff + rd_i];
             
             // Check to see if there is a haplotype that supports this alt
@@ -3393,7 +3397,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                 if(try_del) {
                     if(rf_i + alt.len <= rflen) {
                         for(index_t i = 0; i < alt.len; i++) {
-                            rf_bp = refConversion_3N[rfseq[rf_i + i]];
+                            rf_bp = get_ref_base(threeN, refConversion_3N, rfseq[rf_i + i]);
                             Edit e(
                                    rd_i + rdoff_add,
                                    "ACGTN"[rf_bp],
@@ -3421,7 +3425,7 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
                         assert_lt(off, 16);
                         const char* new_rfseq = raw_refbuf.wbuf() + 16 + off + min<int>(rfoff, 0);
                         for(index_t i = 0; i < alt.len; i++) {
-                            rf_bp = refConversion_3N[new_rfseq[rf_i + i]];
+                            rf_bp = get_ref_base(threeN, refConversion_3N, new_rfseq[rf_i + i]);
                             Edit e(
                                    rd_i + rdoff_add,
                                    "ACGTN"[rf_bp],
