@@ -1820,7 +1820,7 @@ static void parseOption(int next_option, const char *arg) {
             EList<string> args;
             tokenize(arg, ",", args);
             if(args.size() != 2) {
-                cerr << "Error: expected 1 comma-separated "
+                cerr << "Error: expected 2 comma-separated "
                      << "arguments to --base-change option, got " << args.size() << endl;
                 throw 1;
             }
@@ -4770,28 +4770,19 @@ int hisat2(int argc, const char **argv) {
 			}
 
 			// Get index basename (but only if it wasn't specified via --index)
-			if (threeN) {
-                if(bt2indexs[0].empty()) {
-                    if(optind >= argc) {
-                        cerr << "No index, query, or output file specified!" << endl;
-                        printUsage(cerr);
-                        return 1;
-                    }
-                    bt2indexs[0] = argv[optind++];
+            if(bt2indexs[0].empty()) {
+                if(optind >= argc) {
+                    cerr << "No index, query, or output file specified!" << endl;
+                    printUsage(cerr);
+                    return 1;
                 }
+                bt2indexs[0] = argv[optind++];
+            }
+            if (threeN) {
                 bt2indexs[1] = bt2indexs[0];
                 bt2indexs[0] += ".3n.1";
                 bt2indexs[1] += ".3n.2";
-			} else {
-                if(bt2indexs[0].empty()) {
-                    if(optind >= argc) {
-                        cerr << "No index, query, or output file specified!" << endl;
-                        printUsage(cerr);
-                        return 1;
-                    }
-                    bt2indexs[0] = argv[optind++];
-                }
-			}
+            }
 
 			// Get query filename
 			bool got_reads = !queries.empty() || !mates1.empty() || !mates12.empty();

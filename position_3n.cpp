@@ -17,8 +17,8 @@
  * along with HISAT-3N.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "alignment_3N.h"
-#include "position_3N.h"
+#include "alignment_3n.h"
+#include "position_3n.h"
 
 
 /**

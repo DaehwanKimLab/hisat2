@@ -21,7 +21,7 @@
 #define HISAT2_POSITION_3N_H
 
 #include "sstring.h"
-#include "alignment_3N.h"
+#include "alignment_3n.h"
 
 class Alignment;
 class RepeatMappingPosition;

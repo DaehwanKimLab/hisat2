@@ -40,7 +40,7 @@
 #include "scoring.h"
 #include "mask.h"
 #include "repeat_builder.h"
-#include "alignment_3N.h"
+#include "alignment_3n.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.

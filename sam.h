@@ -29,7 +29,7 @@
 #include "scoring.h"
 #include "alt.h"
 #include "filebuf.h"
-#include "alignment_3N.h"
+#include "alignment_3n.h"
 
 enum {
 	// Comments use language from v1.4-r962 spec

@@ -140,8 +140,11 @@ set(HT2LIB_CPPS
 	hisat2lib/ht2_index.cpp
 	)
 
-set(threeN_CPPS
-		alignment_3N.cpp position_3N.cpp)
+set(THREE_N_CPPS
+		alignment_3n.cpp position_3n.cpp)
+
+set(THREE_N_TABLE_CPPS
+		hisat_3n_table.cpp)
 
 string(TIMESTAMP BUILD_DATE)
 file(STRINGS VERSION HISAT2_VERSION)
@@ -190,13 +193,14 @@ set_target_properties(hisat2lib_shared PROPERTIES OUTPUT_NAME hisat2lib)
 
 
 
-add_executable(hisat2-align-s ${SEARCH_CPPS} ${SHARED_CPPS} ${HT2LIB_CPPS} ${threeN_CPPS})
-add_executable(hisat2-align-l ${SEARCH_CPPS} ${SHARED_CPPS} ${HT2LIB_CPPS} ${threeN_CPPS})
+add_executable(hisat2-align-s ${SEARCH_CPPS} ${SHARED_CPPS} ${HT2LIB_CPPS} ${THREE_N_CPPS})
+add_executable(hisat2-align-l ${SEARCH_CPPS} ${SHARED_CPPS} ${HT2LIB_CPPS} ${THREE_N_CPPS})
 add_executable(hisat2-build-s ${BUILD_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-build-l ${BUILD_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-inspect-s ${INSPECT_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-inspect-l ${INSPECT_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-repeat ${REPEAT_CPPS} ${SHARED_CPPS})
+add_executable(hisat-3n-table ${THREE_N_TABLE_CPPS})
 
 set_target_properties(${HISAT2_BIN_LIST} PROPERTIES DEBUG_POSTFIX "-debug")
 set_target_properties(hisat2-align-l hisat2-build-l hisat2-inspect-l hisat2-repeat 
@@ -243,7 +247,8 @@ add_dependencies(hisat2-all
 		hisat2-build-l
 		hisat2-inspect-s
 		hisat2-inspect-l
-		hisat2-repeat)
+		hisat2-repeat
+		hisat-3n-table)
 
 
 #

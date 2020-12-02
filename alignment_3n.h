@@ -33,8 +33,8 @@
 #include "reference.h"
 #include <unistd.h>
 #include <queue>
-#include "position_3N.h"
-#include "utility_3N.h"
+#include "position_3n.h"
+#include "utility_3n.h"
 
 
 extern char convertedFrom;

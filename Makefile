@@ -130,8 +130,8 @@ SEARCH_CPPS = qual.cpp pat.cpp \
 	aligner_swsse_ee_u8.cpp \
 	aligner_driver.cpp \
 	splice_site.cpp \
-	alignment_3N.cpp \
-	position_3N.cpp \
+	alignment_3n.cpp \
+	position_3n.cpp \
 	$(HT2LIB_CPPS)
 
 BUILD_CPPS = diff_sample.cpp
@@ -205,7 +205,8 @@ HISAT2_BIN_LIST = hisat2-build-s \
 	hisat2-align-l \
 	hisat2-inspect-s \
 	hisat2-inspect-l \
-	hisat2-repeat
+	hisat2-repeat \
+	hisat-3n-table
 
 HISAT2_BIN_LIST_AUX = hisat2-build-s-debug \
 	hisat2-build-l-debug \
@@ -458,6 +459,12 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
+
+#
+# hisat-3n-table targets
+#
+hisat-3n-table: hisat_3n_table.cpp
+	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) -o $@ $<
 
 #
 # HT2LIB targets

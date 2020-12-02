@@ -21,7 +21,7 @@
 #define HISAT2_UTILITY_3N_H
 
 #include <string>
-#include <alignment_3N.h>
+#include <alignment_3n.h>
 
 
 using namespace std;

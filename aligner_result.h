@@ -30,7 +30,7 @@
 #include "edit.h"
 #include "limit.h"
 #include "splice_site.h"
-#include "alignment_3N.h"
+#include "alignment_3n.h"
 
 typedef int64_t TAlScore;
 
