@@ -864,7 +864,7 @@ public:
 		}
 	}
 
-    virtual void report3NHits(
+    /*virtual void report3NHits(
             ReportingMetrics&     met,          // reporting metrics
             BTString&             o,              // write to this buffer
             StackedAln&           staln,       // StackedAln to write stacked alignment
@@ -945,7 +945,7 @@ public:
                 }
             }
         }
-    }
+    }*/
 
 	/**
 	 * Report an unaligned read.  Typically we do nothing, but we might
@@ -1304,7 +1304,7 @@ public:
 		bool suppressAlignments = false,
         bool templateLenAdjustment = true);
 
-    void finish3NRead(
+    /*void finish3NRead(
             const SeedResults<index_t> *sr1, // seed alignment results for mate 1
             const SeedResults<index_t> *sr2, // seed alignment results for mate 2
             bool               exhaust1,     // mate 1 exhausted?
@@ -1324,7 +1324,7 @@ public:
             const Scoring& sc,               // scoring scheme
             bool suppressSeedSummary = true,
             bool suppressAlignments = false,
-            bool templateLenAdjustment = true);
+            bool templateLenAdjustment = true);*/
 
 
 	/**
@@ -1692,7 +1692,6 @@ protected:
 
 };
 
-
 /**
  * An AlnSink concrete subclass for printing SAM alignments.  The user might
  * want to customize SAM output in various ways.  We encapsulate all these
@@ -1733,7 +1732,7 @@ public:
 	 * format.  If the alignment is paired-end, print mate1's alignment
 	 * then mate2's alignment.
 	 */
-	virtual void append(
+	void append(
 		BTString&     o,           // write output to this string
 		StackedAln&   staln,       // StackedAln to write stacked alignment
 		size_t        threadId,    // which thread am I?
@@ -1857,11 +1856,14 @@ protected:
  */
 
 template <typename index_t>
-class AlnSink3NSam : public AlnSinkSam<index_t> {
+class AlnSink3NSam : public AlnSink<index_t> {
 
 public:
+    const SamConfig<index_t>& samc_;    // settings & routines for SAM output
+    BTDnaString               dseq_;    // buffer for decoded read sequence
+    BTString                  dqual_;   // buffer for decoded quality sequence
 
-    using AlnSinkSam<index_t>::samc_;
+    //using AlnSinkSam<index_t>::samc_;
     typedef EList<std::string> StrList;
     using AlnSink<index_t>::oq_;
 
@@ -1929,7 +1931,7 @@ public:
      * output the rest of alignment information in alignmentsEachThreads[threadId0].
      * this function will be used after we receive new alignment result (with different rdid to previous one).
      */
-    void output(int threadId0, ReportingMetrics& met, BTString& o) {
+    virtual void output(int threadId0, ReportingMetrics& met, BTString& o) {
         if (alignmentsEachThreads[threadId0]->readName->empty()) {
             return;
         }
@@ -1945,7 +1947,7 @@ public:
     /**
 	 * Append a single alignment result, this function is for HSIAT-3N.
 	 */
-    void append(
+    virtual void append(
             ReportingMetrics&     met,          // reporting metrics
             BTString&     o,           // write output to this string
             StackedAln&   staln,       // StackedAln to write stacked alignment
@@ -1991,7 +1993,7 @@ public:
 	 * Append a single per-mate alignment result to the Alignment class.
      * This function is for HISAT-3N.
 	 */
-    void appendMate(
+    virtual void appendMate(
             //Alignment*    newAlignment,
             StackedAln&   staln,       // store stacked alignment struct here
             const Read&   rd,
@@ -2016,7 +2018,7 @@ public:
         Alignment* newAlignment;
         alignmentsEachThreads[threadId0]->getFreeAlignmentPointer(newAlignment);
         alignmentsEachThreads[threadId0]->getSequence(rd);
-        newAlignment->cycle_3N = rd.cycle_3N;
+        newAlignment->cycle_3N = rd.three_N_cycle;
 
         char buf[1024];
         char mapqInps[1024];
@@ -3164,7 +3166,7 @@ void AlnSinkWrap<index_t>::finishRead(
 	return;
 }
 
-template <typename index_t>
+/*template <typename index_t>
 void AlnSinkWrap<index_t>::finish3NRead(
         const SeedResults<index_t> *sr1, // seed alignment results for mate 1
         const SeedResults<index_t> *sr2, // seed alignment results for mate 2
@@ -3301,7 +3303,7 @@ void AlnSinkWrap<index_t>::finish3NRead(
                 assert_eq(abs(rs1_[i].fragmentLength()), abs(rs2_[i].fragmentLength()));
             }
             assert(!select1_.empty());
-            g_.report3NHits(
+            g_.reportHits(
                     met,
                     obuf_,
                     staln_,
@@ -3324,7 +3326,7 @@ void AlnSinkWrap<index_t>::finish3NRead(
                     sc);
 
             init_ = false;
-            if (rd1_->cycle_3N == 3) {
+            if (rd1_->three_N_cycle == threeN_GA_RC) {
                 g_.output(threadid_-1, met, obuf_);
             }
             return;
@@ -3385,7 +3387,7 @@ void AlnSinkWrap<index_t>::finish3NRead(
             }
             assert_eq(0, off);
             assert(!select1_.empty());
-            g_.report3NHits(
+            g_.reportHits(
                     met,
                     obuf_,
                     staln_,
@@ -3407,8 +3409,8 @@ void AlnSinkWrap<index_t>::finish3NRead(
                     mapq_,
                     sc);
             init_ = false;
-            // output alignment result if cycle_3N == 3 (the last one)
-            if (rd1_->cycle_3N == 3) {
+            // output alignment result if cycle_3N == threeN_GA_RC (the last one)
+            if (rd1_->three_N_cycle == threeN_GA_RC) {
                 g_.output(threadid_-1, met, obuf_);
             }
             return;
@@ -3539,7 +3541,7 @@ void AlnSinkWrap<index_t>::finish3NRead(
             if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
             if(sr2 != NULL) sr2->toSeedAlSumm(ssm2);
             assert(!select1_.empty());
-            g_.report3NHits(
+            g_.reportHits(
                     met,
                     obuf_,
                     staln_,
@@ -3572,7 +3574,7 @@ void AlnSinkWrap<index_t>::finish3NRead(
             if(sr1 != NULL) sr1->toSeedAlSumm(ssm1);
             if(sr2 != NULL) sr2->toSeedAlSumm(ssm2);
             assert(!select2_.empty());
-            g_.report3NHits(
+            g_.reportHits(
                     met,
                     obuf_,
                     staln_,
@@ -3695,12 +3697,12 @@ void AlnSinkWrap<index_t>::finish3NRead(
         }
     } // if(suppress alignments)
     init_ = false;
-    // output alignment result if cycle_3N == 3 (the last one)
-    if (rd1_->cycle_3N == 3) {
+    // output alignment result if cycle_3N == threeN_GA_RC (the last one)
+    if (rd1_->three_N_cycle == threeN_GA_RC) {
         g_.output(threadid_-1, met, obuf_);
     }
     return;
-}
+}*/
 
 
 /**

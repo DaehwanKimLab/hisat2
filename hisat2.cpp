@@ -3304,6 +3304,8 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 
 	
 	// Make a per-thread wrapper for the global MHitSink object.
+
+
 	AlnSinkWrap<index_t> msinkwrap(
                                    msink,         // global sink
                                    rp,            // reporting parameters
@@ -3458,19 +3460,16 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 				gettimeofday(&prm.tv_beg, &prm.tz_beg);
 			}
 			// Try to align this read
-			int nCycle = 0;
+			int mappingCycle = 0;
             bool gNofw3N = false;
             bool gNorc3N = false;
-			while(retry || (threeN ? (nCycle <= 3) : (nCycle <= 0)) ) {
-                if (nCycle%2 == 0) {
-                    gNofw3N = false;
-                    gNorc3N = true;
-                } else {
-                    gNofw3N = true;
-                    gNorc3N = false;
-                }
+			while(retry || (threeN ? (mappingCycle <= 3) : (mappingCycle <= 0)) ) {
+
+                gNorc3N = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_FW);
+                gNofw3N = !gNorc3N;
+
                 msinkwrap.resetInit_();
-                ps->changePlan3N(nCycle);
+                ps->changePlan3N(mappingCycle);
 
 				retry = false;
 				assert_eq(ps->bufa().color, false);
@@ -3671,12 +3670,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                 if(filt[0] || filt[1]) {
                     int ret;
                     if (threeN) {
-                        int index;
-                        if (nCycle == 0 || nCycle == 3) {
-                            index = 0;
-                        } else{
-                            index = 1;
-                        }
+                        int threeN_index = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_RC) ? 0 : 1;
 
                         bool useRepeat = paired ? (ps->bufa().length() >= 100) && (ps->bufb().length() >= 100) :
                                          ps->bufa().length() >= 80 ;
@@ -3687,13 +3681,13 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                 pepol,
                                 *multiseed_tpol,
                                 *gpol,
-                                *gfm_3N[index],
-                                useRepeat ? rgfm_3N[index] : NULL,
-                                *altdbs_3N[index],
-                                *repeatdbs_3N[index],
-                                *raltdbs_3N[index],
+                                *gfm_3N[threeN_index],
+                                useRepeat ? rgfm_3N[threeN_index] : NULL,
+                                *altdbs_3N[threeN_index],
+                                *repeatdbs_3N[threeN_index],
+                                *raltdbs_3N[threeN_index],
                                 ref,
-                                rref_3N[index],
+                                rref_3N[threeN_index],
                                 sw,
                                 *ssdb,
                                 wlm,
@@ -3777,7 +3771,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                 }
 
                 if (threeN) {
-                    msinkwrap.finish3NRead( // for HISAT-3N.
+                    msinkwrap.finishRead( // for HISAT-3N.
                             NULL,
                             NULL,
                             exhaustive[0],        // exhausted seed hits for mate 1?
@@ -3821,8 +3815,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                             seedSumm,             //rdid suppress alignments?
                             templateLenAdjustment);
                 };
-                //assert(!retry || msinkwrap.empty());
-                nCycle++;
+                mappingCycle++;
 			}
 
 

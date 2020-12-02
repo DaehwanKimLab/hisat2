@@ -1585,8 +1585,8 @@ bool GenomeHit<index_t>::combineWith(
 
     int refConversion_3N[5] = {0, 1, 2, 3, 4};
     if (threeN){
-        if (((rd.cycle_3N == 0 || rd.cycle_3N == 3) && !rd.oppositeConversion_3N) ||
-            ((rd.cycle_3N == 1 || rd.cycle_3N == 2) && rd.oppositeConversion_3N)) {
+        if (((rd.three_N_cycle == threeN_CT_FW || rd.three_N_cycle == threeN_GA_RC) && !rd.oppositeConversion_3N) ||
+            ((rd.three_N_cycle == threeN_CT_RC || rd.three_N_cycle == threeN_GA_FW) && rd.oppositeConversion_3N)) {
             // C to T conversion
             refConversion_3N[1] = 3;
         } else {
@@ -2125,7 +2125,7 @@ bool GenomeHit<index_t>::extend(
                                          _sharedVars->ht_llist,
                                          *this->_ht_list,
                                          _sharedVars->cmp_ht,
-                                         rd.cycle_3N,
+                                         rd.three_N_cycle,
                                          NULL,
                                          mm,
                                          &numNs);
@@ -2208,7 +2208,7 @@ bool GenomeHit<index_t>::extend(
                                              _sharedVars->ht_llist,
                                              *this->_ht_list,
                                              _sharedVars->cmp_ht,
-                                             rd.cycle_3N,
+                                             rd.three_N_cycle,
                                              NULL,
                                              mm);
             // Do not allow for any edits including known snps and splice sites when extending zero-length hit
@@ -2381,7 +2381,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                                sharedVars.ht_llist,
                                                *genomeHit._ht_list,
                                                sharedVars.cmp_ht,
-                                               rd.cycle_3N,
+                                               rd.three_N_cycle,
                                                &candidate_edits);
             if(alignedLen == genomeHit._len) {
                 found2 = true;
@@ -2488,7 +2488,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                            _sharedVars->ht_llist,
                                            *this->_ht_list,
                                            _sharedVars->cmp_ht,
-                                           rd.cycle_3N,
+                                           rd.three_N_cycle,
                                            &_sharedVars->candidate_edits);
         if(alignedLen == this->_len) {
             found = true;
@@ -3713,8 +3713,8 @@ bool GenomeHit<index_t>::repOk(const Read& rd, const BitPairReference& ref)
 
     int refConversion_3N[5] = {0, 1, 2, 3, 4};
     if (threeN){
-        if (((rd.cycle_3N == 0 || rd.cycle_3N == 3) && !rd.oppositeConversion_3N) ||
-            ((rd.cycle_3N == 1 || rd.cycle_3N == 2) && rd.oppositeConversion_3N)) {
+        if (((rd.three_N_cycle == 0 || rd.three_N_cycle == 3) && !rd.oppositeConversion_3N) ||
+            ((rd.three_N_cycle == 1 || rd.three_N_cycle == 2) && rd.oppositeConversion_3N)) {
             // C to T conversion
             refConversion_3N[1] = 3;
         } else {

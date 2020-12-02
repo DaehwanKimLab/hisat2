@@ -526,10 +526,11 @@ public:
         buf2_.planB();
 	}*/
 
-	void changePlan3N(int nCycle) {
-        buf1_.changePlan3N(nCycle);
+
+	void changePlan3N(int mappingCycle) {
+        buf1_.changePlan3N(mappingCycle);
         if (threeN) {
-			buf2_.changePlan3N(3-nCycle);
+            buf2_.changePlan3N(3-mappingCycle);
         }
 	}
 

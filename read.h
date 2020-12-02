@@ -28,6 +28,13 @@
 #include "filebuf.h"
 #include "util.h"
 
+enum {
+    threeN_CT_FW = 0,
+    threeN_CT_RC,
+    threeN_GA_FW,
+    threeN_GA_RC
+};
+
 enum rna_strandness_format {
     RNA_STRANDNESS_UNKNOWN = 0,
     RNA_STRANDNESS_F,
@@ -83,7 +90,7 @@ struct Read {
 		filter = '?';
 		seed = 0;
 		ns_ = 0;
-		cycle_3N = 0;
+		three_N_cycle = threeN_CT_FW;
         oppositeConversion_3N = false;
 	}
 
@@ -100,32 +107,21 @@ struct Read {
 		constructReverses();
 	}
 
-    /*// use pathFW1 for alignment
-    void planB(){
-        if(name.length()>0){
-            ns_ = 0;
-            swap(patFw, patFw_3N);
-            plan = 'B';
-            finalize();
-        }
-    }*/
-
-    void changePlan3N(int nCycle) {
+    /**
+     * change patFw sequence based on current three_N_cycle and newMappingCycle
+     */
+    void changePlan3N(int newMappingCycle) {
 	    if (name.length() == 0) return;
-	    if ((cycle_3N < 2 && nCycle >= 2) || (cycle_3N >= 2 && nCycle < 2)) {
+	    if ((three_N_cycle == threeN_CT_FW && newMappingCycle == threeN_GA_RC) ||
+	        (three_N_cycle == threeN_CT_RC && newMappingCycle == threeN_GA_FW) ||
+	        (three_N_cycle == threeN_GA_FW && newMappingCycle == threeN_CT_FW)) {
             ns_ = 0;
             swap(patFw, patFw_3N);
             finalize();
 	    }
-        cycle_3N = nCycle;
+        three_N_cycle = newMappingCycle;
         oppositeConversion_3N = false;
 	}
-
-    void changePlan3N() {
-        ns_ = 0;
-        swap(patFw, patFw_3N);
-        finalize();
-    }
 
 	/**
 	 * Simple init function, used for testing.
@@ -400,7 +396,7 @@ struct Read {
 	HitSet  *hitset;    // holds previously-found hits; for chaining
 
 	//char plan;          // which plan is it. Default is plan A.
-	int cycle_3N;
+	int three_N_cycle;
 	bool oppositeConversion_3N;
 };
 
