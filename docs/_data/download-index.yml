@@ -2,38 +2,38 @@
   data:
     GRCh38:
       genome:
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch38_genome.tar.gz
       genome_snp: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch38_snp.tar.gz
       genome_tran: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_tran/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch38_tran.tar.gz
       genome_snp_tran: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp_tran/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch38_snptran.tar.gz
       genome_rep(above 2.2.0): 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_rep/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch38_rep.tar.gz
       genome_snp_rep(above 2.2.0): 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch38_snp_rep/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch38_snprep.tar.gz
     UCSC hg38:
       genome: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/hg38/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/hg38_genome.tar.gz
       genome_tran: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/hg38_tran/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/hg38_tran.tar.gz
     GRCh37:
       genome: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch37_genome.tar.gz
       genome_snp: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_snp/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch37_snp.tar.gz
       genome_tran: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_tran/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch37_tran.tar.gz
       genome_snp_tran: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/grch37_snp_tran/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/grch37_snptran.tar.gz
     UCSC hg19:
       genome: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/hg19/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/hg19_genome.tar.gz
 - organism: M. musculus
   data:
     GRCm38:
-      genome: 
+      genome:
         url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38/download
       genome_snp: 
         url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp/download
@@ -43,39 +43,39 @@
         url: https://cloud.biohpc.swmed.edu/index.php/s/grcm38_snp_tran/download
     UCSC mm10:
       genome: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/mm10/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/mm10_genome.tar.gz
 - organism: R. norvegicus
   data:
     UCSC rn6:
       genome: 
-        url: https://cloud.biohpc.swmed.edu/index.php/s/rn6/download
+        url: https://genome-idx.s3.amazonaws.com/hisat/rn6_genome.tar.gz
 - organism: D. melanogaster
   data:
     BDGP6:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/bdgp6.tar.gz
+        url: https://genome-idx.s3.amazonaws.com/hisat/bdgp6.tar.gz
       genome_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/bdgp6_tran.tar.gz
+        url: https://genome-idx.s3.amazonaws.com/hisat/bdgp6_tran.tar.gz
     UCSC dm6:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/dm6.tar.gz
+        url: https://genome-idx.s3.amazonaws.com/hisat/dm6.tar.gz
 - organism: C. elegans
   data:
     WBcel235:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/wbcel235.tar.gz
+        url: https://genome-idx.s3.amazonaws.com/hisat/wbcel235.tar.gz
       genome_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/wbcel235_tran.tar.gz
+        url: https://genome-idx.s3.amazonaws.com/hisat/wbcel235_tran.tar.gz
     UCSC ce10:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/ce10.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/bbynxoY2TPpRNQb/download
 - organism: S. cerevisiae
   data: 
     R64-1-1:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64.tar.gz
-      genome_tran: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/r64_tran.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/JRSoKHD5cHfpCFE/download
+      genome_tran:
+        url: https://cloud.biohpc.swmed.edu/index.php/s/akeiMrGGtt5KoJY/download
     UCSC sacCer3:
       genome: 
-        url: ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/data/sc3.tar.gz
+        url: https://cloud.biohpc.swmed.edu/index.php/s/Gsq4goLW4TDAz4E/download

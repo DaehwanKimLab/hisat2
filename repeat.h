@@ -251,6 +251,7 @@ public:
         for(index_t i = 0; i < numRepeatGroup; i++) {
             filePos[i] = readIndex<uint64_t>(f_in, bigEndian);
         }
+        assert_eq(numRepeatGroup, includeRepeat.size());
         for(index_t i = 0, repID = 0; i < numRepeatGroup; i++) {
             if(!includeRepeat[i])
                 continue;

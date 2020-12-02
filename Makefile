@@ -244,8 +244,6 @@ HT2LIB_PKG_SRC = \
 GENERAL_LIST = $(wildcard scripts/*.sh) \
 	$(wildcard scripts/*.pl) \
 	$(wildcard *.py) \
-	$(wildcard hisatgenotype_modules/*.py) \
-	$(wildcard hisatgenotype_scripts/*.py) \
 	$(wildcard example/index/*.ht2) \
 	$(wildcard example/reads/*.fa) \
 	example/reference/22_20-21M.fa \
