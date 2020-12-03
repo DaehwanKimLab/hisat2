@@ -97,7 +97,7 @@ TIndexOffU max_seed_extlen;
 static bool save_sa;
 static bool load_sa;
 
-bool threeN;
+bool threeN = false;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)

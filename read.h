@@ -28,6 +28,10 @@
 #include "filebuf.h"
 #include "util.h"
 
+
+/**
+ * the threeN_cycle
+ */
 enum {
     threeN_CT_FW = 0,
     threeN_CT_RC,
@@ -90,7 +94,7 @@ struct Read {
 		filter = '?';
 		seed = 0;
 		ns_ = 0;
-		three_N_cycle = threeN_CT_FW;
+		threeN_cycle = threeN_CT_FW;
         oppositeConversion_3N = false;
 	}
 
@@ -109,17 +113,27 @@ struct Read {
 
     /**
      * change patFw sequence based on current three_N_cycle and newMappingCycle
+     *
+     * The initial three_N_cycle is 0. There are 4 cycle: 0, 1, 2, 3;
+     *             mate 1,             mate2
+     * initial:    threeN_CT_FW(0),    threeN_CT_FW(0),
+     *             ---------------            CT->GA                     change conversion type
+     * 1st cycle:  threeN_CT_FW(0),    threeN_GA_RC(3 = 3-0),
+     * 2nd cycle:  threeN_CT_RC(1),    threeN_GA_FW(2 = 3-1),
+     *                    CT->GA              GA->CT                     change conversion type
+     * 3rd cycle:  threeN_GA_FW(2),    threeN_CT_RC(1 = 3-2),
+     * 4rd cycle:  threeN_GA_RC(3),    threeN_CT_FW(0 = 3-3),
      */
     void changePlan3N(int newMappingCycle) {
 	    if (name.length() == 0) return;
-	    if ((three_N_cycle == threeN_CT_FW && newMappingCycle == threeN_GA_RC) ||
-	        (three_N_cycle == threeN_CT_RC && newMappingCycle == threeN_GA_FW) ||
-	        (three_N_cycle == threeN_GA_FW && newMappingCycle == threeN_CT_RC)) {
+	    if ((threeN_cycle == threeN_CT_FW && newMappingCycle == threeN_GA_RC) ||
+	        (threeN_cycle == threeN_CT_RC && newMappingCycle == threeN_GA_FW) ||
+	        (threeN_cycle == threeN_GA_FW && newMappingCycle == threeN_CT_RC)) {
             ns_ = 0;
             swap(patFw, patFw_3N);
             finalize();
 	    }
-        three_N_cycle = newMappingCycle;
+        threeN_cycle = newMappingCycle;
         oppositeConversion_3N = false;
 	}
 
@@ -395,7 +409,7 @@ struct Read {
 	int      trimmed3;  // amount actually trimmed off 3' end
 	HitSet  *hitset;    // holds previously-found hits; for chaining
 	// for HISAT-3N
-	int three_N_cycle;
+	int threeN_cycle;
 	bool oppositeConversion_3N;
 };
 

@@ -521,11 +521,12 @@ public:
 
 	virtual ~PatternSourcePerThread() { }
 
+	/**
+	 * change 3N plan for both mate1 and mate2
+	 */
 	void changePlan3N(int mappingCycle) {
         buf1_.changePlan3N(mappingCycle);
-        if (threeN) {
-            buf2_.changePlan3N(3-mappingCycle);
-        }
+        buf2_.changePlan3N(3-mappingCycle);
 	}
 
 	/**

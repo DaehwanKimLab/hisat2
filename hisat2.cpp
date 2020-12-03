@@ -303,15 +303,16 @@ static bool use_repeat_index;
 static EList<size_t> readLens;
 
 // 3N variable
-char convertedFrom;
-char convertedTo;
-char convertedToComplement;
-char convertedFromComplement;
-vector<ht2_handle_t> repeatHandles;
-struct ht2_index_getrefnames_result *refNameMap;
-int repeatLimit;
-bool uniqueOutputOnly;
-bool threeN = false;
+bool threeN = false; // indicator for 3N mode.
+char convertedFrom; // the nucleotide is replaced by others in sample preparation protocol. use in + strand.
+char convertedTo;   // the nucleotide to others in sample preparation protocol. use in + strand.
+char convertedToComplement; // the complement of convertedFrom. use in - strand.
+char convertedFromComplement; // the complement of convertedTo. use in - strand.
+vector<ht2_handle_t> repeatHandles; // the 2 repeat handles helps expand the repeat alignment information. 0 for + strand. 1 for - strand.
+struct ht2_index_getrefnames_result *refNameMap; // chromosome names and it's index for repeat alignment.
+int repeatLimit; // expand #repeatLimit of qualified position in repeat alignment.
+bool uniqueOutputOnly; // only output the unique alignment result.
+
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -3474,14 +3475,15 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 			int mappingCycle = 0;
             bool gNofw3N = false;
             bool gNorc3N = false;
-			while(retry || (threeN ? (mappingCycle <= 3) : (mappingCycle <= 0)) ) {
-
-                gNorc3N = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_FW);
-                gNofw3N = !gNorc3N;
+            // for threeN (3N) mode, we need to map the read 4 times. for regular mode, only 1 time.
+			while(retry || (threeN ? (mappingCycle < 4) : (mappingCycle < 1)) ) {
 
                 msinkwrap->resetInit_();
-                ps->changePlan3N(mappingCycle);
-
+                if (threeN) {
+                    ps->changePlan3N(mappingCycle);
+                    gNorc3N = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_FW);
+                    gNofw3N = !gNorc3N;
+                }
 				retry = false;
 				assert_eq(ps->bufa().color, false);
 				olm.reads++;
