@@ -734,7 +734,7 @@ public:
             o.append("=");
             o.append('\t');
         } else {
-            o.append("0");
+            o.append("*");
             o.append('\t');
         }
         // pair to location

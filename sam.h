@@ -504,13 +504,15 @@ void SamConfig<index_t>::printSqLines(BTString& o) const {
         o.append(buf);
         o.append('\n');
     }
-    for(size_t i = 0; i < repnames_.size(); i++) {
-        o.append("@SQ\tSN:");
-        printRefName(o, repnames_[i]);
-        o.append("\tLN:");
-        itoa10<size_t>(replens_[i], buf);
-        o.append(buf);
-        o.append('\n');
+    if (!threeN) {
+        for(size_t i = 0; i < repnames_.size(); i++) {
+            o.append("@SQ\tSN:");
+            printRefName(o, repnames_[i]);
+            o.append("\tLN:");
+            itoa10<size_t>(replens_[i], buf);
+            o.append(buf);
+            o.append('\n');
+        }
     }
 }
 

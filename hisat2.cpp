@@ -3305,15 +3305,26 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	
 	// Make a per-thread wrapper for the global MHitSink object.
 
-
-	AlnSinkWrap<index_t> msinkwrap(
-                                   msink,         // global sink
-                                   rp,            // reporting parameters
-                                   *bmapq.get(),  // MAPQ calculator
-                                   (size_t)tid,   // thread id
-                                   secondary,     // secondary alignments
-                                   no_spliced_alignment ? NULL : ssdb,
-                                   thread_rids_mindist);
+    AlnSinkWrap<index_t>* msinkwrap;
+    if (threeN) {
+        msinkwrap = new AlnSinkWrap3N<index_t>(
+                                            msink,         // global sink
+                                            rp,            // reporting parameters
+                                            *bmapq.get(),  // MAPQ calculator
+                                            (size_t)tid,   // thread id
+                                            secondary,     // secondary alignments
+                                            no_spliced_alignment ? NULL : ssdb,
+                                            thread_rids_mindist);
+    } else {
+        msinkwrap = new AlnSinkWrap<index_t>(
+                                            msink,         // global sink
+                                            rp,            // reporting parameters
+                                            *bmapq.get(),  // MAPQ calculator
+                                            (size_t)tid,   // thread id
+                                            secondary,     // secondary alignments
+                                            no_spliced_alignment ? NULL : ssdb,
+                                            thread_rids_mindist);
+    }
 
     SplicedAligner<index_t, local_index_t> splicedAligner(threeN? *gfm_3N[0]: gfm,
                                                           anchorStop,
@@ -3468,7 +3479,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                 gNorc3N = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_FW);
                 gNofw3N = !gNorc3N;
 
-                msinkwrap.resetInit_();
+                msinkwrap->resetInit_();
                 ps->changePlan3N(mappingCycle);
 
 				retry = false;
@@ -3478,12 +3489,12 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 				const size_t rdlen1 = ps->bufa().length();
 				const size_t rdlen2 = pair ? ps->bufb().length() : 0;
 				olm.bases += (rdlen1 + rdlen2);
-				msinkwrap.nextRead(
+				msinkwrap->nextRead(
                                    &ps->bufa(),
                                    pair ? &ps->bufb() : NULL,
                                    rdid,
                                    sc.qualitiesMatter());
-				assert(msinkwrap.inited());
+				assert(msinkwrap->inited());
 				size_t rdlens[2] = { rdlen1, rdlen2 };
 				// Calculate the minimum valid score threshold for the read
 				TAlScore minsc[2], maxpen[2];
@@ -3563,7 +3574,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 				prm.nFilt += (filt[0] ? 0 : 1) + (filt[1] ? 0 : 1);
 				Read* rds[2] = { &ps->bufa(), &ps->bufb() };
 				// For each mate...
-				assert(msinkwrap.empty());
+				assert(msinkwrap->empty());
 				//size_t minedfw[2] = { 0, 0 };
 				//size_t minedrc[2] = { 0, 0 };
 				// Calcualte nofw / no rc
@@ -3669,57 +3680,35 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                 }
                 if(filt[0] || filt[1]) {
                     int ret;
+                    int threeN_index;
+                    bool useRepeat;
+
                     if (threeN) {
-                        int threeN_index = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_RC) ? 0 : 1;
-
-                        bool useRepeat = paired ? (ps->bufa().length() >= 100) && (ps->bufb().length() >= 100) :
-                                         ps->bufa().length() >= 80 ;
-
-                        // for HISAT-3N only
-                        ret = splicedAligner.go(
-                                sc,
-                                pepol,
-                                *multiseed_tpol,
-                                *gpol,
-                                *gfm_3N[threeN_index],
-                                useRepeat ? rgfm_3N[threeN_index] : NULL,
-                                *altdbs_3N[threeN_index],
-                                *repeatdbs_3N[threeN_index],
-                                *raltdbs_3N[threeN_index],
-                                ref,
-                                rref_3N[threeN_index],
-                                sw,
-                                *ssdb,
-                                wlm,
-                                prm,
-                                swmSeed,
-                                him,
-                                rnd,
-                                msinkwrap);
-                    } else {
-                        // for standard Hisat2
-                        ret = splicedAligner.go(
-                                sc,
-                                pepol,
-                                *multiseed_tpol,
-                                *gpol,
-                                gfm,
-                                rgfm,
-                                *altdb,
-                                *repeatdb,
-                                *raltdb,
-                                ref,
-                                rref,
-                                sw,
-                                *ssdb,
-                                wlm,
-                                prm,
-                                swmSeed,
-                                him,
-                                rnd,
-                                msinkwrap);
+                        threeN_index = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_RC) ? 0 : 1;
+                        useRepeat = paired ? (ps->bufa().length() >= 100) && (ps->bufb().length() >= 100) :
+                                         ps->bufa().length() >= 80;
                     }
 
+                    ret = splicedAligner.go(
+                            sc,
+                            pepol,
+                            *multiseed_tpol,
+                            *gpol,
+                            threeN ? *gfm_3N[threeN_index] : gfm,
+                            threeN ?(useRepeat ? rgfm_3N[threeN_index] : NULL) : rgfm,
+                            threeN ? *altdbs_3N[threeN_index] : *altdb,
+                            threeN ? *repeatdbs_3N[threeN_index] : *repeatdb,
+                            threeN ? *raltdbs_3N[threeN_index] : *raltdb,
+                            ref,
+                            threeN ? rref_3N[threeN_index] : rref,
+                            sw,
+                            *ssdb,
+                            wlm,
+                            prm,
+                            swmSeed,
+                            him,
+                            rnd,
+                            *msinkwrap);
 
                     MERGE_SW(sw);
                     // daehwan
@@ -3732,10 +3721,10 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                         // Not done yet
                     } else if(ret == EXTEND_POLICY_FULFILLED) {
                         // Policy is satisfied for this mate at least
-                        if(msinkwrap.state().doneWithMate(mate == 0)) {
+                        if(msinkwrap->state().doneWithMate(mate == 0)) {
                             done[mate] = true;
                         }
-                        if(msinkwrap.state().doneWithMate(mate == 1)) {
+                        if(msinkwrap->state().doneWithMate(mate == 1)) {
                             done[mate^1] = true;
                         }
                     } else if(ret == EXTEND_PERFECT_SCORE) {
@@ -3770,51 +3759,27 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     assert_leq(prm.nEeFail,  streak[i]);
                 }
 
-                if (threeN) {
-                    msinkwrap.finishRead( // for HISAT-3N.
-                            NULL,
-                            NULL,
-                            exhaustive[0],        // exhausted seed hits for mate 1?
-                            exhaustive[1],        // exhausted seed hits for mate 2?
-                            nfilt[0],
-                            nfilt[1],
-                            scfilt[0],
-                            scfilt[1],
-                            lenfilt[0],
-                            lenfilt[1],
-                            qcfilt[0],
-                            qcfilt[1],
-                            sortByScore,          // prioritize by alignment score
-                            rnd,                  // pseudo-random generator
-                            rpm,                  // reporting metrics
-                            prm,                  // per-read metrics
-                            sc,                   // scoring scheme
-                            !seedSumm,            // suppress seed summaries?
-                            seedSumm,             //rdid suppress alignments?
-                            templateLenAdjustment);
-                } else {
-                    msinkwrap.finishRead( // for standard HISAT2
-                            NULL,
-                            NULL,
-                            exhaustive[0],        // exhausted seed hits for mate 1?
-                            exhaustive[1],        // exhausted seed hits for mate 2?
-                            nfilt[0],
-                            nfilt[1],
-                            scfilt[0],
-                            scfilt[1],
-                            lenfilt[0],
-                            lenfilt[1],
-                            qcfilt[0],
-                            qcfilt[1],
-                            sortByScore,          // prioritize by alignment score
-                            rnd,                  // pseudo-random generator
-                            rpm,                  // reporting metrics
-                            prm,                  // per-read metrics
-                            sc,                   // scoring scheme
-                            !seedSumm,            // suppress seed summaries?
-                            seedSumm,             //rdid suppress alignments?
-                            templateLenAdjustment);
-                };
+                msinkwrap->finishRead(
+                        NULL,
+                        NULL,
+                        exhaustive[0],        // exhausted seed hits for mate 1?
+                        exhaustive[1],        // exhausted seed hits for mate 2?
+                        nfilt[0],
+                        nfilt[1],
+                        scfilt[0],
+                        scfilt[1],
+                        lenfilt[0],
+                        lenfilt[1],
+                        qcfilt[0],
+                        qcfilt[1],
+                        sortByScore,          // prioritize by alignment score
+                        rnd,                  // pseudo-random generator
+                        rpm,                  // reporting metrics
+                        prm,                  // per-read metrics
+                        sc,                   // scoring scheme
+                        !seedSumm,            // suppress seed summaries?
+                        seedSumm,             //rdid suppress alignments?
+                        templateLenAdjustment);
                 mappingCycle++;
 			}
 
@@ -3834,7 +3799,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 
 	// One last metrics merge
 	MERGE_METRICS(metrics, nthreads > 1);
-    
+    delete msinkwrap;
 	return;
 }
 

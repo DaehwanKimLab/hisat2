@@ -394,8 +394,7 @@ struct Read {
 	int      trimmed5;  // amount actually trimmed off 5' end
 	int      trimmed3;  // amount actually trimmed off 3' end
 	HitSet  *hitset;    // holds previously-found hits; for chaining
-
-	//char plan;          // which plan is it. Default is plan A.
+	// for HISAT-3N
 	int three_N_cycle;
 	bool oppositeConversion_3N;
 };

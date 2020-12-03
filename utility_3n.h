@@ -26,13 +26,6 @@
 
 using namespace std;
 
-/*enum {
-    threeN_CT_FW = 0,
-    threeN_CT_RC,
-    threeN_GA_FW,
-    threeN_GA_RC
-};*/
-
 /**
  * this is the class to convert asc2dna, asc2dnacomp, and dnacomp matrix for hisat-3n conversion.
  * always save the conversion as convertFrom and convertTo.
