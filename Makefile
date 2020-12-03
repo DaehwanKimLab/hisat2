@@ -464,7 +464,7 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 # hisat-3n-table targets
 #
 hisat-3n-table: hisat_3n_table.cpp
-	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) -o $@ $<
+	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) -pthread -o $@ $<
 
 #
 # HT2LIB targets
