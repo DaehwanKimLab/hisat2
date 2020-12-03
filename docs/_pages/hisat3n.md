@@ -115,7 +115,7 @@ For human genome reference, HISAT-3N requires about 9GB for alignment with stand
 * Paired-end bisulfite-seq reads (C to T conversion) alignment with repeat 3N-index:   
 `hisat-3n --index genome -f -1 read_1.fa -2 read_2.fa -S output.sam --base-change C,T`
 
-* Single-end TAB-seq reads (have C to T conversion) alignment with repeat 3N-index and only output unique aligned result:   
+* Single-end TAPS reads (have C to T conversion) alignment with repeat 3N-index and only output unique aligned result:   
 `hisat-3n --index genome -q -U read.fq -S output.sam --base-change C,T --unique`
 
 
@@ -150,7 +150,7 @@ Generate 3N conversion table with `hisat-3n-table`:
   The reference genome file (FASTA format) for generating HISAT-3N index. 
   
 * `--table-name <tableFile>`  
-  Filename to write 3N conversion table to.
+  Filename to write 3N conversion table (tsv format) to.
   
 * `--base-change <char1,char2>`  
   The base-change rule. User should enter the exact same `--base-change` arguments in hisat-3n.
@@ -171,6 +171,28 @@ Generate 3N conversion table with `hisat-3n-table`:
 
 * `-h/--help`  
   Print usage information and quit.
+  
+####Examples:
+* Generate 3N conversion table for bisulfite sequencing data:
+`hisat-3n-table -p 16 --sam output_sorted.sam --ref genome.fa --table-name output.tsv --base-change C,T`
+
+* Generate 3N conversion table for TAPS data and only count base in CpG island and uniquely aligned:
+`hisat-3n-table -p 16 --sam output_sorted.sam --ref genome.fa --table-name output.tsv --base-change C,T --CG-only --unique-only`
+  
+####Note:
+There are 7 coloumns in the 3N conversion table:
+1. `ref`: the chromosome name.
+2. `pos`: 1-based position in ref.
+3. `strand`: '+' for forward strand. '-' for reverse strand.
+4. `convertedBaseQualities`: the qualities for converted base in read-level measurement. Length of this string is equal to
+the number of converted Base in read-level measurement.
+5. `convertedBaseCount`: number of distinct read positions where converted base in read-level measurements were found.
+this number should equal to the length of convertedBaseQualities.
+6. `unconvertedBaseQualities`: the qualities for unconverted base in read-level measurement. Length of this string is equal to
+the number of unconverted Base in read-level measurement.
+7. `unconvertedBaseCount`: number of distinct read positions where unconverted base in read-level measurements were found.
+this number should equal to the length of unconvertedBaseQualities.
+
 
 [SAMtools]:        http://samtools.sourceforge.net
 
