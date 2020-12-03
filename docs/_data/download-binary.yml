@@ -5,8 +5,8 @@ release:
     name: HISAT2
     artifacts:
       Source: https://cloud.biohpc.swmed.edu/index.php/s/fE9QCsX3NH4QwBi/download
-      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/an8KdGxxRdSRXjr/download
-      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/4pMgDq4oAF9QCfA/download
+      OSX_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/zMgEtnF6LjnjFrr/download
+      Linux_x86_64: https://cloud.biohpc.swmed.edu/index.php/s/oTtGWbWjaxsQ2Ho/download
   - version: 2.2.0
     date: 2/6/2020
     name: HISAT2
