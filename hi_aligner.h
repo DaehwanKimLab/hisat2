@@ -3713,8 +3713,8 @@ bool GenomeHit<index_t>::repOk(const Read& rd, const BitPairReference& ref)
 
     int refConversion_3N[5] = {0, 1, 2, 3, 4};
     if (threeN){
-        if (((rd.three_N_cycle == 0 || rd.three_N_cycle == 3) && !rd.oppositeConversion_3N) ||
-            ((rd.three_N_cycle == 1 || rd.three_N_cycle == 2) && rd.oppositeConversion_3N)) {
+        if (((rd.threeN_cycle == threeN_CT_FW || rd.threeN_cycle == threeN_GA_RC) && !rd.oppositeConversion_3N) ||
+            ((rd.threeN_cycle == threeN_CT_RC || rd.threeN_cycle == threeN_GA_FW) && rd.oppositeConversion_3N)) {
             // C to T conversion
             refConversion_3N[1] = 3;
         } else {
