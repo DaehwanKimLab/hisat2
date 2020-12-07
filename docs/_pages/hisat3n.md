@@ -185,7 +185,7 @@ Generate 3N-conversion-table with `hisat-3n-table`:
 `hisat-3n-table -p 16 --sam output_sorted.sam --ref genome.fa --table-name output.tsv --base-change C,T --CG-only --unique-only`
   
 
-####Note:
+#### Note:
 There are 7 columns in the 3N-conversion-table:
 =======
 1. `ref`: the chromosome name.
@@ -200,7 +200,7 @@ the number of unconverted Base in read-level measurement.
 7. `unconvertedBaseCount`: number of distinct read positions where unconverted base in read-level measurements were found.
 this number should equal to the length of unconvertedBaseQualities.
 
-#####Sample 3N-conversion-table:
+##### Sample 3N-conversion-table:
     ref    pos    strand    convertedBaseQualities    convertedBaseCount    unconvertedBaseQualities    unconvertedBaseCount
     1      11874  +         FFFFFB<BF<F               11                                                0
     1      11877  -         FFFFFF<                   7                                                 0
