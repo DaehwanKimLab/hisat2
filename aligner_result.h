@@ -336,9 +336,6 @@ public:
         TAlScore transcript_score = 0;
         if(knownTranscripts_) transcript_score = 2;
         else if(nearSpliceSites_) transcript_score = 1;
-#ifdef USE_TRANSCRIPTOME
-        if(bTranscriptome) transcript_score = 0;
-#endif
         
         // Next 8 bits for splice site score
         TAlScore splicescore = splicescore_ / 100;

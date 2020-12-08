@@ -1467,9 +1467,6 @@ bool GenomeHit<index_t>::combineWith(
                                      const SpliceSite*          spliceSite,             // penalty for splice site
                                      bool                       no_spliced_alignment)
 {
-#ifdef USE_TRANSCRIPTOME
-    if (bTranscriptome) return true;
-#endif
     if(this == &otherHit) return false;
     assert(compatibleWith(otherHit, minIntronLen, maxIntronLen, no_spliced_alignment));
     assert_eq(this->_tidx, otherHit._tidx);
