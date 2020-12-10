@@ -44,6 +44,8 @@ enum {
 
 using namespace std;
 
+const uint32_t splicesite_pagesz = 16 << 10;    // 16KB
+
 // #define NEW_PROB_MODEL
 // the following parameters are borrowed from Yeo and Burge 2004 in Journal of Computational Biology
 const size_t donor_exonic_len = 3;

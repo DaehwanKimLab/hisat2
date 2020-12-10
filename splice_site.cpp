@@ -151,8 +151,8 @@ _empty(true)
     assert_gt(_numRefs, 0);
     assert_eq(_numRefs, _refnames.size());
     for(uint64_t i = 0; i < _numRefs; i++) {
-        _fwIndex.push_back(new RedBlack<SpliceSitePos, uint32_t>(16 << 10, CA_CAT));
-        _bwIndex.push_back(new RedBlack<SpliceSitePos, uint32_t>(16 << 10, CA_CAT));
+        _fwIndex.push_back(new RedBlack<SpliceSitePos, uint32_t>(splicesite_pagesz, CA_CAT));
+        _bwIndex.push_back(new RedBlack<SpliceSitePos, uint32_t>(splicesite_pagesz, CA_CAT));
         _pool.expand();
         _spliceSites.expand();
         _mutex.push_back(MUTEX_T());
@@ -780,12 +780,10 @@ void SpliceSiteDB::read(ifstream& in, bool known)
 
 Pool& SpliceSiteDB::pool(uint64_t ref) {
     uint64_t pool_bytes = 1 << 20; /* 1MB */
-    uint32_t pool_pagesz = 16 << 10;    /* 16KB */
 
 #ifdef USE_TRANSCRIPTOME
     if (bTranscriptome) {
-        pool_bytes = 16 << 10; /* 16KB */
-        pool_pagesz = 4 << 10;    /* 4KB */
+        pool_bytes = 32 << 10; /* 32KB */
     }
 #endif
 
@@ -793,7 +791,7 @@ Pool& SpliceSiteDB::pool(uint64_t ref) {
     assert_lt(ref, _pool.size());
     EList<Pool*>& pool = _pool[ref];
     if(pool.size() <= 0 || pool.back()->full()) {
-        pool.push_back(new Pool(pool_bytes, pool_pagesz, CA_CAT));
+        pool.push_back(new Pool(pool_bytes, splicesite_pagesz, CA_CAT));
     }
     assert(pool.back() != NULL);
     return *pool.back();

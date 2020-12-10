@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 import sys, os, subprocess, signal
 import multiprocessing
@@ -1027,11 +1027,12 @@ def calculate_read_cost(single_end,
         # ["hisat2", "x1", "snp", "", ""],
         # ["hisat2", "x1", "", "", ""],
         # ["hisat2", "x2", "", "", ""],
-        # ["hisat2", "", "tran", "", ""],
+        ["hisat2", "", "tran", "", ""],
+        ["hisat2", "", "gt", "", "--transcriptome"],
         # ["hisat2", "", "snp_tran", "204", ""],
         # ["hisat2", "", "snp_tran", "", ""],
         # ["hisat2", "", "", "210", ""],
-        ["hisat2", "", "rep", "", ""],
+        # ["hisat2", "", "rep", "", ""],
         # ["hisat2", "", "rep", "", "--read-lengths 101"],
         # ["hisat2", "", "rep", "", "--sensitive"],
         # ["hisat2", "", "rep-100-300", "", ""],
@@ -1040,9 +1041,9 @@ def calculate_read_cost(single_end,
         # ["hisat2", "", "rep-150-300", "", ""],
         # ["tophat2", "", "", "", ""],
         # ["bowtie", "", "", "", ""],
-        ["bowtie2", "", "", "", ""],
+        # ["bowtie2", "", "", "", ""],
         # ["bowtie2", "", "", "", "-k 10"],
-        ["bwa", "mem", "", "", ""],
+        # ["bwa", "mem", "", "", ""],
         # ["bwa", "mem", "", "", "-a"],
         # ["bwa", "sw", "", "", ""],
         # ["star", "", "", "", ""],
@@ -1276,10 +1277,14 @@ def calculate_read_cost(single_end,
                 if type == "x2":
                     if cmd_idx == 1:
                         cmd += ["--alignSJDBoverhangMin", "1"]
+
+                tmp_read1_fname = read1_fname.replace('.gz', '')
+                tmp_read2_fname = read2_fname.replace('.gz', '')
+
                 cmd += ["--readFilesIn",
-                        read1_fname]
+                        tmp_read1_fname]
                 if paired:
-                    cmd += [read2_fname]
+                    cmd += [tmp_read2_fname]
                 if paired:
                     cmd += ["--outFilterMismatchNmax", "6"]
                 else:
@@ -1545,6 +1550,9 @@ def calculate_read_cost(single_end,
                     index_name = '%s/VG%s/' % (index_base, index_add) + genome
                     if index_type:
                         index_name += ('_' + index_type)
+                elif aligner == "hisat2" and index_type in ["gt"]:
+                    os.system("mv %s %s.tmp" % (out_fname, out_fname))
+                    os.system("%s/hisat2_trans_to_genome.py %s.tmp ../../../../data/%s.%s.map > %s" % (aligner_bin_base, out_fname, genome, index_type, out_fname))
 
                 os.system("echo %s %s %f >> runtime" % (str(datetime.now()), aligner, duration))
 

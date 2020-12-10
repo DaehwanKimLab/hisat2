@@ -1104,6 +1104,7 @@ static bool saw_M;
 static bool saw_a;
 static bool saw_k;
 static EList<string> presetList;
+static bool saw_minIntronLen;
 
 /**
  * TODO: Argument parsing is very, very flawed.  The biggest problem is that
@@ -1688,7 +1689,8 @@ static void parseOption(int next_option, const char *arg) {
             break;
         }
         case ARG_MIN_INTRONLEN: {
-            minIntronLen = parseInt(20, "--min-intronlen arg must be at least 20", arg);
+            minIntronLen = parseInt(1, "--min-intronlen arg must be at least 20", arg);
+            saw_minIntronLen = true;
             break;
         }
         case ARG_MAX_INTRONLEN: {
@@ -1818,6 +1820,7 @@ static void parseOptions(int argc, const char **argv) {
 	saw_M = false;
 	saw_a = false;
 	saw_k = false;
+	saw_minIntronLen = false;
 	presetList.clear();
 	if(startVerbose) { cerr << "Parsing options: "; logTime(cerr, true); }
 	while(true) {
@@ -1995,6 +1998,15 @@ static void parseOptions(int argc, const char **argv) {
 		multiseedMms = multiseedLen-1;
 	}
 	sam_print_zm = sam_print_zm && bowtie2p5;
+
+#ifdef USE_TRANSCRIPTOME
+	if (bTranscriptome) {
+	    if (!saw_minIntronLen) {
+            minIntronLen = 1;
+	    }
+	}
+#endif
+
 #ifndef NDEBUG
 	if(!gQuiet) {
 		cerr << "Warning: Running in debug mode.  Please use debug mode only "
@@ -4104,12 +4116,12 @@ static void driver(
                                          startVerbose);
             if(!rrefs->loaded()) throw 1;
         }
-        
+
         bool xsOnly = (tranAssm_program == "cufflinks");
         TranscriptomePolicy tpol(minIntronLen,
                                  maxIntronLen,
-                                 tranAssm ? 15 : 7,
-                                 tranAssm ? 20 : 14,
+                                 bTranscriptome ? 1 : (tranAssm ? 15 : 7),
+                                 bTranscriptome ? 1 : (tranAssm ? 20 : 14),
                                  no_spliced_alignment,
                                  tranMapOnly,
                                  tranAssm,
