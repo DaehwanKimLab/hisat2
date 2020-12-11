@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 import sys, os
 use_message = '''
@@ -10,7 +10,7 @@ def build_indexes():
     if not os.path.exists("indexes"):
         os.mkdir("indexes")
     os.chdir("indexes")
-    aligners = ["HISAT2", "HISAT", "Bowtie", "STAR", "GSNAP", "BWA", "minimap2"]
+    aligners = ["HISAT2", "HISAT-GT", "HISAT", "Bowtie", "STAR", "GSNAP", "BWA", "minimap2"]
     genomes = ["22_20-21M", "22", "genome"]
     for genome in genomes:
         for aligner in aligners:
@@ -27,6 +27,9 @@ def build_indexes():
                 cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --haplotype ../../data/%s.haplotype %s_snp" % (genome, genome, genome, genome)
                 cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --ss ../../data/%s.ss --exon ../../data/%s.exon %s_tran" % (genome, genome, genome, genome)
                 cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --haplotype ../../data/%s.haplotype --ss ../../data/%s.ss --exon ../../data/%s.exon %s_snp_tran" % (genome, genome, genome, genome, genome, genome)
+            elif aligner == "HISAT-GT":
+                cmd = "../../aligners/bin/hisat2_extract_transcript_graph.py -g ../../data/%s.gtf -r ../../data/%s.fa -o ../../data/%s" % (genome, genome, genome)
+                cmd = cmd + ";../../aligners/bin/hisat2-build -p 4 ../../data/%s.gt.fa --ss ../../data/%s.gt.ss %s.gt" % (genome, genome, genome)
             elif aligner == "HISAT":
                 cmd = "../../aligners/bin/hisat-build ../../data/%s.fa %s" % (genome, genome)
                 cmd = cmd + "; ../../aligners/bin/tophat -G ../../data/%s.gtf --transcriptome-index=gtf %s; rm -rf tophat_out" % (genome, genome)

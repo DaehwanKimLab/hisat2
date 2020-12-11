@@ -787,7 +787,7 @@ def extract_single(infilename,
                 XA = col[5:].split(';')[:-1]
         if NH != "":
             NH = int(NH[5:])
-            if aligner == "hisat2":
+            if aligner in ["hisat2", "hisat-gt"]:
                 if prev_read_id == read_id:
                     assert prev_NH == NH
                 if NH == 1 or mapQ == 60:
@@ -796,7 +796,7 @@ def extract_single(infilename,
         
         if read_id != prev_read_id:
             num_aligned_reads += 1
-            if aligner == "hisat2" and \
+            if aligner in ["hisat2", "hisat-gt"] and \
                NH == 1:
                 num_ualigned_reads += 1
         else:
@@ -870,7 +870,7 @@ def extract_single(infilename,
             p_str = "%s\t%s\t%d\t%s\tNM:i:%d" % (read_id, chr, pos, cigar_str, NM_real)
             print >> outfile, p_str
 
-        if aligner == "hisat2":
+        if aligner in ["hisat2", "hisat-gt"]:
             if prev_read_id != read_id:
                 if prev_read_id != "":
                     assert prev_NH == NH_real
@@ -882,7 +882,7 @@ def extract_single(infilename,
         prev_NM = NM
         prev_read_id = read_id
 
-    if aligner == "hisat2":
+    if aligner in ["hisat2", "hisat-gt"]:
         if prev_read_id != "":
             assert prev_NH == NH_real
 
@@ -891,7 +891,7 @@ def extract_single(infilename,
     infile.close()
 
     # Sanity check for HISAT2's alignment summary
-    if aligner == "hisat2" and os.path.exists(infilename + ".summary") and (not mp_mode):
+    if aligner in ["hisat2", "hisat-gt"] and os.path.exists(infilename + ".summary") and (not mp_mode):
         hisat2_reads, hisat2_0aligned_reads, hisat2_ualigned_reads, hisat2_maligned_reads = 0, 0, 0, 0
         for line in open(infilename + ".summary"):
             line = line.strip()
@@ -998,7 +998,7 @@ def extract_pair(infilename,
             elif col.startswith("XA"):
                 XA = col[5:].split(';')[:-1]
 
-        if aligner == "hisat2":
+        if aligner in ["hisat2", "hisat-gt"]:
             if prev_read_id == read_id:
                 if left_read:
                     assert prev_NH1 == 0 or prev_NH1 == NH
@@ -1012,17 +1012,17 @@ def extract_pair(infilename,
             if left_read not in pair_list:
                 pair_list.add(left_read)
                 num_aligned_reads += 1
-                if aligner == "hisat2" and NH == 1:
+                if aligner in ["hisat2", "hisat-gt"] and NH == 1:
                     num_ualigned_reads += 1
                     assert mapQ == 60
         else:
             if read_id != prev_read_id:
                 if concordant:
                     num_conc_aligned_pairs += 1
-                    if aligner == "hisat2" and NH == 1:
+                    if aligner in ["hisat2", "hisat-gt"] and NH == 1:
                         num_conc_ualigned_pairs += 1                        
                 else:
-                    if aligner == "hisat2":
+                    if aligner in ["hisat2", "hisat-gt"]:
                         assert YT == "DP"
                     num_disc_aligned_pairs += 1
 
@@ -1084,7 +1084,7 @@ def extract_pair(infilename,
                 alignments.append([alt_chr, alt_pos, alt_cigar_str])
 
         # Convert repeat alignments to genome alignments
-        if aligner == "hisat2" and (chr1.startswith("rep") or chr2.startswith("rep")) and len(repeat_map) > 0:
+        if aligner in ["hisat2", "hisat-gt"] and (chr1.startswith("rep") or chr2.startswith("rep")) and len(repeat_map) > 0:
             if chr1.startswith("rep"):
                 alignments = repeat_to_genome_alignment(repeat_db, repeat_map, chr1, pos1, cigar1_str)
             if chr2.startswith("rep") or (chr1.startswith("rep") and chr2 == "="):
@@ -1161,7 +1161,7 @@ def extract_pair(infilename,
 
             read_dic[me].append([partner, cigar_str, NM1, pos1])
 
-        if aligner == "hisat2":
+        if aligner in ["hisat2", "hisat-gt"]:
             if prev_read_id != read_id:
                 if prev_read_id != "":
                     assert prev_NH1 == NH1_real
@@ -1182,7 +1182,7 @@ def extract_pair(infilename,
                 prev_NH2 = NH
         prev_read_id = read_id
 
-    if aligner == "hisat2":
+    if aligner in ["hisat2", "hisat-gt"]:
         if prev_read_id != "":
             assert prev_NH1 == NH1_real
             assert prev_NH2 == NH2_real
@@ -1191,7 +1191,7 @@ def extract_pair(infilename,
     infile.close()
 
     # Sanity check for HISAT2's alignment summary
-    if aligner == "hisat2" and os.path.exists(infilename + ".summary") and (not mp_mode):
+    if aligner in ["hisat2", "hisat-gt"] and os.path.exists(infilename + ".summary") and (not mp_mode):
         hisat2_pairs, hisat2_0aligned_pairs, hisat2_conc_ualigned_pairs, hisat2_conc_maligned_pairs, hisat2_disc_aligned_pairs = 0, 0, 0, 0, 0
         hisat2_reads, hisat2_0aligned_reads, hisat2_ualigned_reads, hisat2_maligned_reads = 0, 0, 0, 0
 
@@ -1992,7 +1992,8 @@ def calculate_read_cost(single_end,
         #["hisat2", "", "", "221", ""],  # original version
         #["hisat2", "", "tran", "221", ""],  # original version
         ["hisat2", "", "tran", "", ""],  # original version
-        ["hisat2", "", "gt", "", "--transcriptome"],
+        #["hisat-gt", "", "", "", ""],
+        ["hisat-gt", "", "snp", "", ""],
         # ["hisat2", "", "rep-100-300", "", ""],
         # ["hisat2", "", "rep_mm", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
@@ -2103,6 +2104,15 @@ def calculate_read_cost(single_end,
                     cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
                     version = cmd_process.communicate()[0][:-1].split("\n")[0]
                     version = version.split()[-1]
+                elif aligner == "hisat-gt":
+                    if version:
+                        cmd = ["%s/%s_%s/%s" % (aligner_bin_base, "hisat2", version, "hisat2")]
+                    else:
+                        cmd = ["%s/%s" % (aligner_bin_base, "hisat2")]
+                    cmd += ["--version"]                    
+                    cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                    version = cmd_process.communicate()[0][:-1].split("\n")[0]
+                    version = version.split()[-1]
                 elif aligner == "tophat2":
                     cmd = ["%s/tophat" % (aligner_bin_base)]
                     cmd += ["--version"]
@@ -2199,6 +2209,44 @@ def calculate_read_cost(single_end,
                         index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
                     if index_type:
                         index_cmd += ("_" + index_type)
+                    cmd += [index_cmd]
+                    if paired:
+                        cmd += ["-1", read1_fname,
+                                "-2", read2_fname]
+                    else:
+                        cmd += [read1_fname]                        
+                elif aligner == "hisat-gt":
+                    if version:
+                        cmd += ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
+                    else:
+                        cmd += ["%s/hisat2" % (aligner_bin_base)]
+                    if num_threads > 1:
+                        cmd += ["-p", str(num_threads)]
+
+                    cmd += ["--transcriptome"]
+
+                    cmd += ["-f"]
+
+                    if version == "" or \
+                       (version != "" and int(version) >= 210):
+                        cmd += ["--new-summary",
+                                "--summary-file", out_fname + ".summary"]
+
+                    if version == "" or int(version) >= 220:
+                        cmd += ["--repeat"]
+                        
+                    if options != "":
+                        cmd += options.split(' ')
+                    
+                    if version:
+                        index_cmd = "%s/HISAT-GT_%s%s/" % (index_base, version, index_add) + genome
+                    else:
+                        index_cmd = "%s/HISAT-GT%s/" % (index_base, index_add) + genome
+                    if index_type:
+                        index_cmd += ("_" + index_type)
+
+                    index_cmd += ".gt"
+
                     cmd += [index_cmd]
                     if paired:
                         cmd += ["-1", read1_fname,
@@ -2465,7 +2513,7 @@ def calculate_read_cost(single_end,
                             start_time = datetime.now()
                             if verbose:
                                 print >> sys.stderr, start_time, "\t", " ".join(dummy_cmd)
-                            if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
+                            if aligner in ["hisat2", "hisat-gt", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
                                 proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
                             else:
                                 proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -2482,7 +2530,7 @@ def calculate_read_cost(single_end,
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, "\t", start_time, " ".join(aligner_cmd)
-                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "vg", "minimap2"]:
+                    if aligner in ["hisat2", "hisat-gt", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "vg", "minimap2"]:
                         proc = subprocess.Popen(aligner_cmd, stdout=open(out_fname, "w"), stderr=subprocess.PIPE)
                     else:
                         proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -2553,9 +2601,9 @@ def calculate_read_cost(single_end,
                         index_name = "%s/VG%s/" % (index_base, index_add) + genome
                         if index_type:
                             index_name += ("_" + index_type)
-                    elif aligner == "hisat2" and index_type in ["gt", "ss-tome", "linear-tome"]:
+                    elif aligner == "hisat-gt":
                         os.system("mv %s %s.tmp" % (out_fname, out_fname))
-                        os.system("%s/hisat2_trans_to_genome.py %s.tmp ../../../data/%s.%s.map > %s" % (aligner_bin_base, out_fname, genome, index_type, out_fname))
+                        os.system("%s/hisat2_trans_to_genome.py %s.tmp ../../../data/%s.gt.map > %s" % (aligner_bin_base, out_fname, genome, out_fname))
 
                     if aligner in ["gsnap", "tophat2"]:
                         os.system("tar cvzf %s.tar.gz %s &> /dev/null" % (out_fname, out_fname))
