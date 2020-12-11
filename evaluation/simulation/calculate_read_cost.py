@@ -1993,7 +1993,7 @@ def calculate_read_cost(single_end,
         #["hisat2", "", "tran", "221", ""],  # original version
         ["hisat2", "", "tran", "", ""],  # original version
         #["hisat-gt", "", "", "", ""],
-        ["hisat-gt", "", "snp", "", ""],
+        ["hisat-gt", "", "", "", ""],
         # ["hisat2", "", "rep-100-300", "", ""],
         # ["hisat2", "", "rep_mm", "", ""],
         # ["hisat2", "", "", "", "--sensitive"],
