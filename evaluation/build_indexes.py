@@ -10,7 +10,7 @@ def build_indexes():
     if not os.path.exists("indexes"):
         os.mkdir("indexes")
     os.chdir("indexes")
-    aligners = ["HISAT2", "HISAT-GT", "HISAT", "Bowtie", "STAR", "GSNAP", "BWA", "minimap2"]
+    aligners = ["HISAT2", "HISAT-GT", "HISAT", "Bowtie", "STAR", "GSNAP", "BWA", "minimap2", "salmon"]
     genomes = ["22_20-21M", "22", "genome"]
     for genome in genomes:
         for aligner in aligners:
@@ -48,6 +48,13 @@ def build_indexes():
                 cmd = "../../aligners/bin/minimap2 -x sr -d %s.mmi ../../data/%s.fa" % (genome, genome)
             elif aligner == "VG":
                 assert False
+            elif aligner == 'salmon':
+                cmd = ""
+                if genome == 'genome':
+                    # download cdna from ensembl-84
+                    # wget ftp://ftp.ensembl.org/pub/release-84/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
+                    cmd = ' [[ -e ../../data/genome.cdna.fa ]] || (wget ftp://ftp.ensembl.org/pub/release-84/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz && gzip -cd Homo_sapiens.GRCh38.cdna.all.fa.gz > ../../data/genome.cdna.fa)'
+                    cmd += ' && ../../aligners/bin/salmon index -t ../../data/genome.cdna.fa -i genome -p 5'
             else:
                 assert False
             print >> sys.stderr, cmd
