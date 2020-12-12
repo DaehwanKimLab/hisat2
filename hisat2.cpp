@@ -1998,6 +1998,13 @@ static void parseOptions(int argc, const char **argv) {
 	    if (!saw_minIntronLen) {
             minIntronLen = 1;
 	    }
+
+	    penCanSplice = 0;
+	    penNoncanSplice = 0;
+	    penConflictSplice = 0;
+	    penCanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
+	    penNoncanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
+
 	}
     
 #ifndef NDEBUG

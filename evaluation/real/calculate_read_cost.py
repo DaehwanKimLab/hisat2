@@ -1028,7 +1028,7 @@ def calculate_read_cost(single_end,
         # ["hisat2", "x1", "", "", ""],
         # ["hisat2", "x2", "", "", ""],
         ["hisat2", "", "tran", "", ""],
-        ["hisat2", "", "gt", "", "--transcriptome"],
+        ["hisat-gt", "", "", "", ""],
         # ["hisat2", "", "snp_tran", "204", ""],
         # ["hisat2", "", "snp_tran", "", ""],
         # ["hisat2", "", "", "210", ""],
@@ -1104,6 +1104,15 @@ def calculate_read_cost(single_end,
                     cmd = ["%s/%s_%s/%s" % (aligner_bin_base, aligner, version, aligner)]
                 else:
                     cmd = ["%s/%s" % (aligner_bin_base, aligner)]
+                cmd += ["--version"]                    
+                cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                version = cmd_process.communicate()[0][:-1].split("\n")[0]
+                version = version.split()[-1]
+            elif aligner == "hisat-gt":
+                if version:
+                    cmd = ["%s/%s_%s/%s" % (aligner_bin_base, "hisat2", version, "hisat2")]
+                else:
+                    cmd = ["%s/%s" % (aligner_bin_base, "hisat2")]
                 cmd += ["--version"]                    
                 cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
                 version = cmd_process.communicate()[0][:-1].split("\n")[0]
@@ -1211,6 +1220,38 @@ def calculate_read_cost(single_end,
                             "-2", read2_fname]
                 else:
                     cmd += ["-U", read1_fname]                        
+            elif aligner == "hisat-gt":
+                if version:
+                    cmd += ["%s/hisat2_%s/hisat2" % (aligner_bin_base, version)]
+                else:
+                    cmd += ["%s/hisat2" % (aligner_bin_base)]
+                if num_threads > 1:
+                    cmd += ["-p", str(num_threads)]
+
+                cmd += ["--transcriptome"]
+
+                if version == "204":
+                    cmd += ["--sp", "2,1"]
+
+                if options != "":
+                    cmd += options.split(' ')
+
+                if version:
+                    index_cmd = "%s/HISAT-GT_%s%s/" % (index_base, version, index_add) + genome
+                else:
+                    index_cmd = "%s/HISAT-GT%s/" % (index_base, index_add) + genome
+                if index_type:
+                    index_cmd += ("_" + index_type)
+
+                index_cmd += ".gt"
+
+                cmd += [index_cmd]
+                if paired:
+                    cmd += ["-1", read1_fname,
+                            "-2", read2_fname]
+                else:
+                    cmd += ["-U", read1_fname]                        
+
             elif aligner == "hisat":
                 cmd += ["%s/hisat" % (aligner_bin_base)]
                 if num_threads > 1:
@@ -1408,7 +1449,7 @@ def calculate_read_cost(single_end,
                 continue
                 
             aligner_name = aligner + type + version
-            if (aligner == "hisat2" or aligner == "vg") and index_type != "":
+            if (aligner in ["hisat2", "hisat-gt"] or aligner == "vg") and index_type != "":
                 aligner_name += ("_" + index_type)
 
             if options != "":
@@ -1447,7 +1488,7 @@ def calculate_read_cost(single_end,
                         start_time = datetime.now()
                         if verbose:
                             print >> sys.stderr, start_time, "\t", " ".join(dummy_cmd)
-                        if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
+                        if aligner in ["hisat2", "hisat-gt", "hisat", "bowtie", "bowtie2", "gsnap", "bwa"]:
                             proc = subprocess.Popen(dummy_cmd, stdout=open("/dev/null", "w"), stderr=subprocess.PIPE)
                         else:
                             proc = subprocess.Popen(dummy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1476,7 +1517,7 @@ def calculate_read_cost(single_end,
                     start_time = datetime.now()
                     if verbose:
                         print >> sys.stderr, start_time, "\t", " ".join(aligner_cmd)
-                    if aligner in ["hisat2", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "vg", "minimap2"]:
+                    if aligner in ["hisat2", "hisat-gt", "hisat", "bowtie", "bowtie2", "gsnap", "bwa", "vg", "minimap2"]:
                         proc = subprocess.Popen(aligner_cmd, stdout=open(out_fname, "w"), stderr=subprocess.PIPE)
                     else:
                         proc = subprocess.Popen(aligner_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1550,9 +1591,9 @@ def calculate_read_cost(single_end,
                     index_name = '%s/VG%s/' % (index_base, index_add) + genome
                     if index_type:
                         index_name += ('_' + index_type)
-                elif aligner == "hisat2" and index_type in ["gt"]:
+                elif aligner == "hisat-gt":
                     os.system("mv %s %s.tmp" % (out_fname, out_fname))
-                    os.system("%s/hisat2_trans_to_genome.py %s.tmp ../../../../data/%s.%s.map > %s" % (aligner_bin_base, out_fname, genome, index_type, out_fname))
+                    os.system("%s/hisat2_trans_to_genome.py %s.tmp ../../../../data/%s.gt.map > %s" % (aligner_bin_base, out_fname, genome, out_fname))
 
                 os.system("echo %s %s %f >> runtime" % (str(datetime.now()), aligner, duration))
 
