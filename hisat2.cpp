@@ -303,9 +303,8 @@ static bool repeat;
 static bool use_repeat_index;
 static EList<size_t> readLens;
 
-#ifdef USE_TRANSCRIPTOME
 bool bTranscriptome;    // run Transcriptome alignment
-#endif
+
 #define DMAX std::numeric_limits<double>::max()
 
 static void resetOptions() {
@@ -540,9 +539,8 @@ static void resetOptions() {
     repeat = false; // true iff alignments to repeat sequences are directly reported.
     use_repeat_index = true;
     readLens.clear();
-#ifdef USE_TRANSCRIPTOME
+    
     bTranscriptome = false;
-#endif
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -769,9 +767,7 @@ static struct option long_options[] = {
     {(char*)"repeat",          no_argument,        0,        ARG_REPEAT},
     {(char*)"no-repeat-index", no_argument,        0,        ARG_NO_REPEAT_INDEX},
     {(char*)"read-lengths",    required_argument,  0,        ARG_READ_LENGTHS},
-#ifdef USE_TRANSCRIPTOME
     {(char*)"transcriptome",   no_argument,        0,        ARG_TRANSCRIPTOME},
-#endif
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -1799,12 +1795,11 @@ static void parseOption(int next_option, const char *arg) {
             readLens.sort();
             break;
         }
-#ifdef USE_TRANSCRIPTOME
         case ARG_TRANSCRIPTOME: {
             bTranscriptome = true;
             break;
         }
-#endif
+
 		default:
 			printUsage(cerr);
 			throw 1;
@@ -1999,14 +1994,12 @@ static void parseOptions(int argc, const char **argv) {
 	}
 	sam_print_zm = sam_print_zm && bowtie2p5;
 
-#ifdef USE_TRANSCRIPTOME
 	if (bTranscriptome) {
 	    if (!saw_minIntronLen) {
             minIntronLen = 1;
 	    }
 	}
-#endif
-
+    
 #ifndef NDEBUG
 	if(!gQuiet) {
 		cerr << "Warning: Running in debug mode.  Please use debug mode only "

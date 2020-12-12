@@ -188,9 +188,7 @@ enum {
     ARG_REPEAT,
     ARG_NO_REPEAT_INDEX,
     ARG_READ_LENGTHS,
-#ifdef USE_TRANSCRIPTOME
     ARG_TRANSCRIPTOME,
-#endif
 };
 
 #endif

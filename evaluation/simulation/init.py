@@ -317,6 +317,10 @@ def init():
     for read_dir in read_dirs:
         if os.path.exists(read_dir):
             continue
+
+        # DK - debugging purposes
+        # if not read_dir.startswith("10K_RNA"):
+        #    continue
         
         if not os.path.exists(read_dir_base + read_dir + "/sim.sam") or \
                 not os.path.exists(read_dir_base + read_dir + "/sim_1.fa") or \

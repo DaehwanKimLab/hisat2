@@ -56,6 +56,7 @@ def simulate_reads():
         ["22", 1000000, _rna, not _snp, not _mismatch, _constant],
         ["22", 1000000, _rna, not _snp, _mismatch, not _constant],
         ["22", 1000000, _rna, not _snp, _mismatch, _constant],
+        ["22", 10000, _rna, not _snp, not _mismatch, _constant],
         ["22", 1000000, _rna, _snp, not _mismatch, not _constant],
         ["22", 1000000, _rna, _snp, not _mismatch, _constant],
         ["22", 1000000, _rna, _snp, _mismatch, not _constant],
@@ -94,7 +95,7 @@ def simulate_reads():
         if numreads >= 1000000:
             dirname = "%dM_%s" % (numreads / 1000000, molecule)
         else:
-            dirname = "%dk_%s" % (numreads / 1000, molecule)
+            dirname = "%dK_%s" % (numreads / 1000, molecule)
 
         if mismatch:
             dirname += "_mismatch"
