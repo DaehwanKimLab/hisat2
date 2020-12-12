@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 import sys, os
 use_message = '''
@@ -11,7 +11,7 @@ def get_aligners():
     os.chdir("aligners")
     if not os.path.exists("bin"):
         os.mkdir("bin")
-    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks", "minimap2"]
+    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks", "minimap2", "salmon"]
     for program in programs:
         if program == "HISAT":
             dir = "hisat-0.1.6-beta"
@@ -110,6 +110,22 @@ def get_aligners():
             url = "https://github.com/vgteam/vg/releases/download/%s" % (version)
             cmd = "wget %s/%s.tar.gz; tar zxvf %s.tar.gz; cd %s" % (url, dir, dir, dir)
             cmd += "; source ./source_me.sh; make; cp bin/%s ../bin; cd .." % (program)
+        elif program == "salmon":
+            if mac:
+                print >> sys.stderr, "TODO: need to build from a source"
+                continue
+
+            # install binary version
+            version = "1.4.0"
+            osname = 'linux'
+            machine = 'x86_64'
+
+            pkgname = "salmon-{version}_{os}_{machine}.tar.gz".format(version=version, os=osname, machine=machine)
+            url = "https://github.com/COMBINE-lab/salmon/releases/download/v{version}/{pkgname}".format(version=version, pkgname=pkgname)
+
+            cmd = "wget {url} && tar zxvf {pkgname}".format(url=url, pkgname=pkgname)
+            cmd += " && cp salmon-latest_{os}_{machine}/bin/salmon bin/".format(os=osname, machine=machine)
+            cmd += " && mkdir -p lib && cp -a salmon-latest_{os}_{machine}/lib/* lib/".format(os=osname, machine=machine)
         else:
             assert False
         print >> sys.stderr, cmd
