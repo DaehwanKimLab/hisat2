@@ -1998,7 +1998,7 @@ static void parseOptions(int argc, const char **argv) {
 	    if (!saw_minIntronLen) {
             minIntronLen = 1;
 	    }
-
+        
 	    penCanSplice = 0;
 	    penNoncanSplice = 0;
 	    penConflictSplice = 0;
