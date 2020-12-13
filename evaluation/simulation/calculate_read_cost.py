@@ -9,6 +9,7 @@ import copy
 from argparse import ArgumentParser, FileType
 from multiprocessing import Process
 import bisect
+import json
 
 mp_mode = False
 mp_num = 1
@@ -2028,6 +2029,7 @@ def calculate_read_cost(single_end,
         # ["vg", "", "snp", "", ""],
         # ["vg", "", "snp", "", "-M 10"],
         # ["minimap2", "", "", "", ""],
+        # ["salmon", "", "", "", ""],
         ]
     readtypes = ["all"]
     verbose = True
@@ -2143,6 +2145,11 @@ def calculate_read_cost(single_end,
                     cmd += ["--version"]
                     cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
                     version = cmd_process.communicate()[0][:-1].split("\n")[0]
+                elif aligner == "salmon":
+                    cmd = ["%s/salmon" % (aligner_bin_base)]
+                    cmd += ["--version"]
+                    cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                    version = cmd_process.communicate()[0][:-1].split()[1]
                     
                 return version
 
@@ -2439,6 +2446,25 @@ def calculate_read_cost(single_end,
                     cmd += [read1_fname]
                     if paired:
                         cmd += [read2_fname]
+                elif aligner == "salmon":
+                    # salmon quant -i genome -l A -1 sim_1.fa -2 sim_2.fa -o out -p 5
+                    cmd += ["%s/salmon" % (aligner_bin_base)]
+                    cmd += ["quant"]
+                    index_cmd = "{index_base}/salmon{index_add}/".format(index_base=index_base, index_add=index_add) + genome
+                    if index_type:
+                        index_cmd += ("_" + index_type)
+
+                    cmd += ["-i", index_cmd]
+                    cmd += ["-l", "A"]
+                    if paired:
+                        cmd += ["-1", read1_fname]
+                        cmd += ["-2", read2_fname]
+                    else:
+                        cmd += ["-r", read1_fname]
+
+                    cmd += ["-o", "out"]
+                    cmd += ["-p", str(num_threads)]
+
                 else:
                     assert False
 
@@ -2613,7 +2639,7 @@ def calculate_read_cost(single_end,
                     os.chdir("..")
                     continue
 
-                if not os.path.exists(out_fname2):
+                if not os.path.exists(out_fname2) and (aligner != "salmon"):
                     debug_dic = {}
                     pid_list = []
                     if paired:
@@ -2659,6 +2685,19 @@ def calculate_read_cost(single_end,
 
                 for readtype2 in readtypes:
                     if not two_step and readtype != readtype2:
+                        continue
+
+                    if aligner == 'salmon':
+                        with open('out/aux_info/meta_info.json') as f:
+                            data = json.load(f)
+
+                        num_processed = data['num_processed']
+                        num_mapped = data['num_mapped']
+                        percent_mapped = data['percent_mapped']
+
+                        print >> sys.stderr, "\t\t\tNum Processed: {}".format(num_processed)
+                        print >> sys.stderr, "\t\t\tNum Mapped: {} ({:.2f}%)".format(num_mapped, percent_mapped)
+                        print >> sys.stderr, "\t\t\tMemory Usage: {}MB".format(int(mem_usage) / 1024)
                         continue
 
                     type_sam_fname2 = base_fname + "_" + readtype2 + ".sam"
