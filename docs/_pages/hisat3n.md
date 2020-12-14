@@ -52,7 +52,7 @@ Install
     make
 
 
-:warning:  **Make sure that you are in the `hisat-3n` branch**  :warning:
+Make sure that you are in the `hisat-3n` branch
 
 
 Build a 3N index with `hisat-3n-build`
@@ -187,7 +187,7 @@ Generate 3N-conversion-table with `hisat-3n-table`:
 
 #### Note:
 There are 7 columns in the 3N-conversion-table:
-=======
+
 1. `ref`: the chromosome name.
 2. `pos`: 1-based position in ref.
 3. `strand`: '+' for forward strand. '-' for reverse strand.
@@ -215,5 +215,4 @@ Publication
 * HISAT-3N paper
 
 * HIAST2 paper  
-Kim, D., Paggi, J.M., Park, C. et al. [Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype](https://www.nature.com/articles/s41587-019-0201-4). Nat Biotechnol 37, 907–915 (2019)
-
+Kim, D., Paggi, J.M., Park, C. _et al._ [Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype](https://doi.org/10.1038/s41587-019-0201-4). _Nat Biotechnol_ **37**, 907–915 (2019)  
