@@ -41,3 +41,6 @@ hisat2_test/testset*
 docs/_site
 docs/*.lock
 docs/.*-cache
+*.tar.gz
+*.ipynb
+*.pyc

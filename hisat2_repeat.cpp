@@ -40,6 +40,7 @@
 #include "scoring.h"
 #include "mask.h"
 #include "repeat_builder.h"
+#include "alignment_3n.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -96,6 +97,8 @@ TIndexOffU max_seed_extlen;
 static bool save_sa;
 static bool load_sa;
 
+bool threeN = false;
+
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
 	sanityCheck    = 0;     // do slow sanity checks
@@ -137,6 +140,7 @@ static void resetOptions() {
     save_sa = false;
     load_sa = false;
     wrapper.clear();
+    threeN = false;
 }
 
 // Argument constants for getopts
@@ -172,6 +176,7 @@ enum {
     ARG_MAX_SEED_EXTLEN,
     ARG_SAVE_SA,
     ARG_LOAD_SA,
+    ARG_3N
 };
 
 /**
@@ -215,6 +220,7 @@ static void printUsage(ostream& out) {
         << "    --max-seed-extlen <int>" << endl
         << "    --save-sa" << endl
         << "    --load-sa" << endl
+        << "    --3N                    make 3N repeat database" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -263,6 +269,7 @@ static struct option long_options[] = {
 	{(char*)"max-seed-extlen",required_argument, 0,            ARG_MAX_SEED_EXTLEN},
 	{(char*)"save-sa",        no_argument,       0,            ARG_SAVE_SA},
     {(char*)"load-sa",        no_argument,       0,            ARG_LOAD_SA},
+    {(char*)"3N",             no_argument,       0,            ARG_3N},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -459,6 +466,10 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_LOAD_SA:
                 load_sa = true;
                 break;
+            case ARG_3N: {
+                threeN = true;
+                break;
+            }
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
 			case 's': sanityCheck = true; break;
@@ -491,6 +502,8 @@ static void parseOptions(int argc, const char **argv) {
 extern void initializeCntLut();
 extern void initializeCntBit();
 
+
+ConvertMatrix3N baseChange;
 /**
  * Drive the index construction process and optionally sanity-check the
  * result.
@@ -506,6 +519,7 @@ static void driver(
 {
     initializeCntLut();
     initializeCntBit();
+
 	EList<FileBuf*> is(MISC_CAT);
 	bool bisulfite = false;
     bool nsToAs = false;
@@ -561,6 +575,7 @@ static void driver(
 		Timer _t(cerr, "  Time reading reference sizes: ", verbose);
         sztot = BitPairReference::szsFromFasta(is, "", bigEndian, refparams, szs, sanityCheck, &ref_names);
 	}
+
 	assert_gt(sztot.first, 0);
 	assert_gt(sztot.second, 0);
 	assert_gt(szs.size(), 0);
@@ -588,6 +603,34 @@ static void driver(
                 s,
                 both_strand, // include reverse complemented sequence
                 CGtoTG); //Change CG to TG
+    }
+
+    TStr sOriginal;
+    if (threeN) {
+        baseChange.restoreNormal();
+        bool both_strand = forward_only ? false : true;
+        for (int i = 0; i < is.size(); i++) {
+            is[i]->reset();
+        }
+        GFM<TIndexOffU>::join<TStr>(
+                is,
+                szs,
+                (TIndexOffU) sztot.first,
+                refparams,
+                seed,
+                sOriginal,
+                both_strand, // include reverse complemented sequence
+                CGtoTG); //Change CG to TG
+        baseChange.restoreConversion();
+
+        long long int guessLen = s.length() / 2;
+        for (TIndexOffU i = 0; i < guessLen; i++) {
+            int nt = sOriginal[guessLen - i - 1];
+            assert_range(0, 3, nt);
+            s[guessLen + i] = dnacomp[nt];
+        }
+    } else {
+        sOriginal = s;
     }
 
     // Successfully obtained joined reference string
@@ -752,6 +795,7 @@ static void driver(
             rp.append_result = (i != 0);
 
             RepeatBuilder<TStr> repeatBuilder(s,
+                                              sOriginal,
                                               szs,
                                               ref_names,
                                               forward_only,
@@ -783,7 +827,7 @@ int hisat2_repeat(int argc, const char **argv) {
 		resetOptions();
 
 		string infile;
-		EList<string> infiles(MISC_CAT);
+        EList<string> infiles(MISC_CAT);
 
 		parseOptions(argc, argv);
 		argv0 = argv[0];
@@ -823,12 +867,12 @@ int hisat2_repeat(int argc, const char **argv) {
 		}
 		outfile = argv[optind++];
 
-		tokenize(infile, ",", infiles);
-		if(infiles.size() < 1) {
-			cerr << "Tokenized input file list was empty!" << endl;
-			printUsage(cerr);
-			return 1;
-		}
+        tokenize(infile, ",", infiles);
+        if(infiles.size() < 1) {
+            cerr << "Tokenized input file list was empty!" << endl;
+            printUsage(cerr);
+            return 1;
+        }
 
    		// Optionally summarize
 		if(verbose) {
@@ -844,17 +888,31 @@ int hisat2_repeat(int argc, const char **argv) {
 	#endif
 			cerr << "  Random seed: " << seed << endl;
 			cerr << "  Sizeofs: void*:" << sizeof(void*) << ", int:" << sizeof(int) << ", long:" << sizeof(long) << ", size_t:" << sizeof(size_t) << endl;
-			cerr << "Input files DNA, " << file_format_names[format].c_str() << ":" << endl;
-			for(size_t i = 0; i < infiles.size(); i++) {
-				cerr << "  " << infiles[i].c_str() << endl;
-			}
+            cerr << "Input files DNA, " << file_format_names[format].c_str() << ":" << endl;
+            for(size_t i = 0; i < infiles.size(); i++) {
+                cerr << "  " << infiles[i].c_str() << endl;
+            }
 		}
 		// Seed random number generator
         srand(seed);
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                driver<SString<char> >(infile, infiles, outfile, false, forward_only, CGtoTG);
+                int nloop = threeN ? 2 : 1; // if threeN == true, nloop = 2. else one loop
+                for (int i = 0; i < nloop; i++) {
+                    string tag = "";
+                    if (threeN) {
+                        if (i == 0) {
+                            tag = ".3n.1";
+                            baseChange.convert('C', 'T');
+                        } else {
+                            tag = ".3n.2";
+                            baseChange.convert('G', 'A');
+                        }
+                    }
+                    driver<SString<char> >(infile, infiles, outfile + tag, false, forward_only, CGtoTG);
+                }
+
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;

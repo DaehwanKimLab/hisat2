@@ -2,6 +2,7 @@
  * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
  *
  * This file is part of Bowtie 2.
+ * This file is edited by Yun (Leo) Zhang for HISAT-3N.
  *
  * Bowtie 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +28,17 @@
 #include "filebuf.h"
 #include "util.h"
 
+
+/**
+ * the threeN_cycle
+ */
+enum {
+    threeN_CT_FW = 0,
+    threeN_CT_RC,
+    threeN_GA_FW,
+    threeN_GA_RC
+};
+
 enum rna_strandness_format {
     RNA_STRANDNESS_UNKNOWN = 0,
     RNA_STRANDNESS_F,
@@ -38,6 +50,8 @@ enum rna_strandness_format {
 typedef uint64_t TReadId;
 typedef size_t TReadOff;
 typedef int64_t TAlScore;
+
+extern bool threeN;
 
 class HitSet;
 
@@ -57,12 +71,15 @@ struct Read {
 		trimmed5 = trimmed3 = 0;
 		readOrigBuf.clear();
 		patFw.clear();
+		patFw_3N.clear();
 		patRc.clear();
 		qual.clear();
 		patFwRev.clear();
 		patRcRev.clear();
 		qualRev.clear();
 		name.clear();
+		originalFw.clear();
+		originalRc.clear();
 		for(int j = 0; j < 3; j++) {
 			altPatFw[j].clear();
 			altPatFwRev[j].clear();
@@ -77,8 +94,10 @@ struct Read {
 		filter = '?';
 		seed = 0;
 		ns_ = 0;
+		threeN_cycle = threeN_CT_FW;
+        oppositeConversion_3N = false;
 	}
-	
+
 	/**
 	 * Finish initializing a new read.
 	 */
@@ -90,6 +109,32 @@ struct Read {
 		}
 		constructRevComps();
 		constructReverses();
+	}
+
+    /**
+     * change patFw sequence based on current three_N_cycle and newMappingCycle
+     *
+     * The initial three_N_cycle is 0. There are 4 cycle: 0, 1, 2, 3;
+     *             mate 1,             mate2
+     * initial:    threeN_CT_FW(0),    threeN_CT_FW(0),
+     *             ---------------            CT->GA                     change conversion type
+     * 1st cycle:  threeN_CT_FW(0),    threeN_GA_RC(3 = 3-0),
+     * 2nd cycle:  threeN_CT_RC(1),    threeN_GA_FW(2 = 3-1),
+     *                    CT->GA              GA->CT                     change conversion type
+     * 3rd cycle:  threeN_GA_FW(2),    threeN_CT_RC(1 = 3-2),
+     * 4rd cycle:  threeN_GA_RC(3),    threeN_CT_FW(0 = 3-3),
+     */
+    void changePlan3N(int newMappingCycle) {
+	    if (name.length() == 0) return;
+	    if ((threeN_cycle == threeN_CT_FW && newMappingCycle == threeN_GA_RC) ||
+	        (threeN_cycle == threeN_CT_RC && newMappingCycle == threeN_GA_FW) ||
+	        (threeN_cycle == threeN_GA_FW && newMappingCycle == threeN_CT_RC)) {
+            ns_ = 0;
+            swap(patFw, patFw_3N);
+            finalize();
+	    }
+        threeN_cycle = newMappingCycle;
+        oppositeConversion_3N = false;
 	}
 
 	/**
@@ -141,11 +186,13 @@ struct Read {
 			for(int j = 0; j < alts; j++) {
 				altPatRc[j].installReverse(altPatFw[j]);
 			}
+            if (threeN) originalRc.installReverse(originalFw);
 		} else {
 			patRc.installReverseComp(patFw);
 			for(int j = 0; j < alts; j++) {
 				altPatRc[j].installReverseComp(altPatFw[j]);
 			}
+            if (threeN) originalRc.installReverseComp(originalFw);
 		}
 	}
 
@@ -323,8 +370,12 @@ struct Read {
 #endif
 
 	BTDnaString patFw;            // forward-strand sequence
-	BTDnaString patRc;            // reverse-complement sequence
+    BTDnaString patFw_3N;
+    BTDnaString patRc;            // reverse-complement sequence
+    BTDnaString patRc1;
 	BTString    qual;             // quality values
+    BTDnaString originalFw;       // the forward-strand sequence from read (without editing)
+    BTDnaString originalRc;       // the reverse-complement sequence from read (without editing)
 
 	BTDnaString altPatFw[3];
 	BTDnaString altPatRc[3];
@@ -357,6 +408,9 @@ struct Read {
 	int      trimmed5;  // amount actually trimmed off 5' end
 	int      trimmed3;  // amount actually trimmed off 3' end
 	HitSet  *hitset;    // holds previously-found hits; for chaining
+	// for HISAT-3N
+	int threeN_cycle;
+	bool oppositeConversion_3N;
 };
 
 /**

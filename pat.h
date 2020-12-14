@@ -41,6 +41,7 @@
 #include "read.h"
 #include "util.h"
 
+extern bool threeN;
 /**
  * Classes and routines for reading reads from various input sources.
  */
@@ -255,6 +256,9 @@ public:
 	 * Return the number of reads attempted.
 	 */
 	TReadId readCnt() const { return readCnt_ - 1; }
+
+    int paired_type; // 1 - left or unpaird, 2-right
+//    int align_times = 0;
 
 protected:
 
@@ -516,6 +520,14 @@ public:
 		buf1_(), buf2_(), rdid_(0xffffffff), endid_(0xffffffff) { }
 
 	virtual ~PatternSourcePerThread() { }
+
+	/**
+	 * change 3N plan for both mate1 and mate2
+	 */
+	void changePlan3N(int mappingCycle) {
+        buf1_.changePlan3N(mappingCycle);
+        buf2_.changePlan3N(3-mappingCycle);
+	}
 
 	/**
 	 * Read the next read pair.

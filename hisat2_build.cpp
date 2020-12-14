@@ -35,6 +35,7 @@
 #include "gfm.h"
 #include "hgfm.h"
 #include "rfm.h"
+#include "alignment_3n.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -86,6 +87,11 @@ static string repeat_info_fname;
 static string repeat_snp_fname;
 static string repeat_haplotype_fname;
 
+bool threeN = false;
+bool repeatIndex = false;
+
+ConvertMatrix3N baseChange;
+
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
 	sanityCheck    = 0;     // do slow sanity checks
@@ -124,6 +130,8 @@ static void resetOptions() {
     repeat_info_fname = "";
     repeat_snp_fname = "";
     repeat_haplotype_fname = "";
+    threeN = false;
+    repeatIndex = false;
 }
 
 // Argument constants for getopts
@@ -151,6 +159,8 @@ enum {
     ARG_REPEAT_INFO,
     ARG_REPEAT_SNP,
     ARG_REPEAT_HAPLOTYPE,
+    ARG_3N,
+    ARG_REPEAT_INDEX
 };
 
 /**
@@ -199,6 +209,8 @@ static void printUsage(ostream& out) {
         << "    --repeat-snp <path>     Repeat snp file name" << endl
         << "    --repeat-haplotype <path>   Repeat haplotype file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
+	    << "    --3N                    build 3N index rather than standard hisat2 index" << endl
+	    << "    --repeat-index<int>-<int>[,<int>-<int>]  automatically build repeat database and repeat index, enter the minimum-maximum repeat length pairs (default: 100-300)" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -255,6 +267,8 @@ static struct option long_options[] = {
 	{(char*)"reverse-each",   no_argument,       0,            ARG_REVERSE_EACH},
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
+    {(char*)"3N",            no_argument,       0,            ARG_3N},
+    {(char*)"repeat-index",   no_argument, 0,            ARG_REPEAT_INDEX},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -385,6 +399,8 @@ static void parseOptions(int argc, const char **argv) {
 				reverseEach = true;
 				break;
 			case ARG_NTOA: nsToAs = true; break;
+            case ARG_3N: threeN = true; break;
+            case ARG_REPEAT_INDEX: repeatIndex = true; break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
 			case 's': sanityCheck = true; break;
@@ -432,6 +448,7 @@ static void deleteIdxFiles(
 extern void initializeCntLut();
 extern void initializeCntBit();
 
+
 /**
  * Drive the index construction process and optionally sanity-check the
  * result.
@@ -457,205 +474,212 @@ static void driver(
 {
     initializeCntLut();
     initializeCntBit();
-	EList<FileBuf*> is(MISC_CAT);
-	bool bisulfite = false;
+    EList<FileBuf*> is(MISC_CAT);
+    bool bisulfite = false;
     bool repeat = parent_szs != NULL;
-	RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
-	assert_gt(infiles.size(), 0);
-	if(format == CMDLINE) {
-		// Adapt sequence strings to stringstreams open for input
-		stringstream *ss = new stringstream();
-		for(size_t i = 0; i < infiles.size(); i++) {
-			(*ss) << ">" << i << endl << infiles[i].c_str() << endl;
-		}
-		FileBuf *fb = new FileBuf(ss);
-		assert(fb != NULL);
-		assert(!fb->eof());
-		assert(fb->get() == '>');
-		ASSERT_ONLY(fb->reset());
-		assert(!fb->eof());
-		is.push_back(fb);
-	} else {
-		// Adapt sequence files to ifstreams
-		for(size_t i = 0; i < infiles.size(); i++) {
-			FILE *f = fopen(infiles[i].c_str(), "r");
-			if (f == NULL) {
-				cerr << "Error: could not open "<< infiles[i].c_str() << endl;
-				throw 1;
-			}
-			FileBuf *fb = new FileBuf(f);
-			assert(fb != NULL);
-			if(fb->peek() == -1 || fb->eof()) {
-				cerr << "Warning: Empty fasta file: '" << infile.c_str() << "'" << endl;
-				continue;
-			}
-			assert(!fb->eof());
-			assert(fb->get() == '>');
-			ASSERT_ONLY(fb->reset());
-			assert(!fb->eof());
-			is.push_back(fb);
-		}
-	}
-	if(is.empty()) {
-		cerr << "Warning: All fasta inputs were empty" << endl;
-		throw 1;
-	}
+    RefReadInParams refparams(false, reverse, nsToAs, bisulfite);
+    assert_gt(infiles.size(), 0);
+    if(format == CMDLINE) {
+        // Adapt sequence strings to stringstreams open for input
+        stringstream *ss = new stringstream();
+        for(size_t i = 0; i < infiles.size(); i++) {
+            (*ss) << ">" << i << endl << infiles[i].c_str() << endl;
+        }
+        FileBuf *fb = new FileBuf(ss);
+        assert(fb != NULL);
+        assert(!fb->eof());
+        assert(fb->get() == '>');
+        ASSERT_ONLY(fb->reset());
+        assert(!fb->eof());
+        is.push_back(fb);
+    } else {
+        // Adapt sequence files to ifstreams
+        for(size_t i = 0; i < infiles.size(); i++) {
+            FILE *f = fopen(infiles[i].c_str(), "r");
+            if (f == NULL) {
+                cerr << "Error: could not open "<< infiles[i].c_str() << endl;
+                throw 1;
+            }
+            FileBuf *fb = new FileBuf(f);
+            assert(fb != NULL);
+            if(fb->peek() == -1 || fb->eof()) {
+                cerr << "Warning: Empty fasta file: '" << infile.c_str() << "'" << endl;
+                continue;
+            }
+            assert(!fb->eof());
+            assert(fb->get() == '>');
+            ASSERT_ONLY(fb->reset());
+            assert(!fb->eof());
+            is.push_back(fb);
+        }
+    }
+    if(is.empty()) {
+        cerr << "Warning: All fasta inputs were empty" << endl;
+        throw 1;
+    }
     filesWritten.push_back(outfile + ".1." + gfm_ext);
     filesWritten.push_back(outfile + ".2." + gfm_ext);
-	// Vector for the ordered list of "records" comprising the input
-	// sequences.  A record represents a stretch of unambiguous
-	// characters in one of the input sequences.
-	EList<RefRecord> szs(MISC_CAT);
-	std::pair<size_t, size_t> sztot;
-	{
-		if(verbose) cerr << "Reading reference sizes" << endl;
-		Timer _t(cerr, "  Time reading reference sizes: ", verbose);
-		if(!reverse && (writeRef || justRef)) {
-			filesWritten.push_back(outfile + ".3." + gfm_ext);
-			filesWritten.push_back(outfile + ".4." + gfm_ext);
+    // Vector for the ordered list of "records" comprising the input
+    // sequences.  A record represents a stretch of unambiguous
+    // characters in one of the input sequences.
+    EList<RefRecord> szs(MISC_CAT);
+    std::pair<size_t, size_t> sztot;
+    {
+        if(verbose) cerr << "Reading reference sizes" << endl;
+        Timer _t(cerr, "  Time reading reference sizes: ", verbose);
+        if(!reverse && (writeRef || justRef)) {
+            filesWritten.push_back(outfile + ".3." + gfm_ext);
+            filesWritten.push_back(outfile + ".4." + gfm_ext);
             sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck);
-		} else {
+            if (threeN) {
+                // save the unchanged reference in .3.ht2 and .4.ht2
+                baseChange.restoreNormal();
+                EList<RefRecord> tmp_szs(MISC_CAT);
+                BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, tmp_szs, sanityCheck);
+                baseChange.restoreConversion();
+            }
+        } else {
             assert(false);
-			sztot = BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
-		}
-	}
-	if(justRef) return;
-	assert_gt(sztot.first, 0);
-	assert_gt(sztot.second, 0);
-	assert_gt(szs.size(), 0);
-    
-	// Construct index from input strings and parameters	
+            sztot = BitPairReference::szsFromFasta(is, string(), bigEndian, refparams, szs, sanityCheck);
+        }
+    }
+    if(justRef) return;
+    assert_gt(sztot.first, 0);
+    assert_gt(sztot.second, 0);
+    assert_gt(szs.size(), 0);
+
+    // Construct index from input strings and parameters
     filesWritten.push_back(outfile + ".5." + gfm_ext);
     filesWritten.push_back(outfile + ".6." + gfm_ext);
     filesWritten.push_back(outfile + ".7." + gfm_ext);
     filesWritten.push_back(outfile + ".8." + gfm_ext);
-	TStr s;
+    TStr s;
     GFM<TIndexOffU>* gfm = NULL;
     if(!repeat) { // base index
         gfm = new HGFM<TIndexOffU>(
-                                   s,
-                                   packed,
-                                   1,  // TODO: maybe not?
-                                   lineRate,
-                                   offRate,      // suffix-array sampling rate
-                                   ftabChars,    // number of chars in initial arrow-pair calc
-                                   localOffRate,
-                                   localFtabChars,
-                                   nthreads,
-                                   snpfile,
-                                   htfile,
-                                   ssfile,
-                                   exonfile,
-                                   svfile,
-                                   repeatfile,
-                                   outfile,      // basename for .?.ht2 files
-                                   reverse == 0, // fw
-                                   !entireSA,    // useBlockwise
-                                   bmax,         // block size for blockwise SA builder
-                                   bmaxMultSqrt, // block size as multiplier of sqrt(len)
-                                   bmaxDivN,     // block size as divisor of len
-                                   noDc? 0 : dcv,// difference-cover period
-                                   is,           // list of input streams
-                                   szs,          // list of reference sizes
-                                   (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
-                                   refparams,    // reference read-in parameters
-                                   localindex,   // create local indexes?
-                                   parent_szs,   // parent szs
-                                   parent_refnames, // parent refence names
-                                   seed,         // pseudo-random number generator seed
-                                   -1,           // override offRate
-                                   verbose,      // be talkative
-                                   autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                                   sanityCheck); // verify results and internal consistency
+                s,
+                packed,
+                1,  // TODO: maybe not?
+                lineRate,
+                offRate,      // suffix-array sampling rate
+                ftabChars,    // number of chars in initial arrow-pair calc
+                localOffRate,
+                localFtabChars,
+                nthreads,
+                snpfile,
+                htfile,
+                ssfile,
+                exonfile,
+                svfile,
+                repeatfile,
+                outfile,      // basename for .?.ht2 files
+                reverse == 0, // fw
+                !entireSA,    // useBlockwise
+                bmax,         // block size for blockwise SA builder
+                bmaxMultSqrt, // block size as multiplier of sqrt(len)
+                bmaxDivN,     // block size as divisor of len
+                noDc? 0 : dcv,// difference-cover period
+                is,           // list of input streams
+                szs,          // list of reference sizes
+                (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
+                refparams,    // reference read-in parameters
+                localindex,   // create local indexes?
+                parent_szs,   // parent szs
+                parent_refnames, // parent refence names
+                seed,         // pseudo-random number generator seed
+                -1,           // override offRate
+                verbose,      // be talkative
+                autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                sanityCheck); // verify results and internal consistency
     } else { // repeat index
         gfm = new RFM<TIndexOffU>(
-                                  s,
-                                  packed,
-                                  1,  // TODO: maybe not?
-                                  lineRate,
-                                  offRate,      // suffix-array sampling rate
-                                  ftabChars,    // number of chars in initial arrow-pair calc
-                                  localOffRate,
-                                  localFtabChars,
-                                  nthreads,
-                                  snpfile,
-                                  htfile,
-                                  ssfile,
-                                  exonfile,
-                                  svfile,
-                                  repeatfile,
-                                  outfile,      // basename for .?.ht2 files
-                                  reverse == 0, // fw
-                                  !entireSA,    // useBlockwise
-                                  bmax,         // block size for blockwise SA builder
-                                  bmaxMultSqrt, // block size as multiplier of sqrt(len)
-                                  bmaxDivN,     // block size as divisor of len
-                                  noDc? 0 : dcv,// difference-cover period
-                                  is,           // list of input streams
-                                  szs,          // list of reference sizes
-                                  (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
-                                  refparams,    // reference read-in parameters
-                                  localindex,   // create local indexes?
-                                  parent_szs,   // parent szs
-                                  parent_refnames, // parent refence names
-                                  seed,         // pseudo-random number generator seed
-                                  -1,           // override offRate
-                                  verbose,      // be talkative
-                                  autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
-                                  sanityCheck); // verify results and internal consistency
+                s,
+                packed,
+                1,  // TODO: maybe not?
+                lineRate,
+                offRate,      // suffix-array sampling rate
+                ftabChars,    // number of chars in initial arrow-pair calc
+                localOffRate,
+                localFtabChars,
+                nthreads,
+                snpfile,
+                htfile,
+                ssfile,
+                exonfile,
+                svfile,
+                repeatfile,
+                outfile,      // basename for .?.ht2 files
+                reverse == 0, // fw
+                !entireSA,    // useBlockwise
+                bmax,         // block size for blockwise SA builder
+                bmaxMultSqrt, // block size as multiplier of sqrt(len)
+                bmaxDivN,     // block size as divisor of len
+                noDc? 0 : dcv,// difference-cover period
+                is,           // list of input streams
+                szs,          // list of reference sizes
+                (TIndexOffU)sztot.first,  // total size of all unambiguous ref chars
+                refparams,    // reference read-in parameters
+                localindex,   // create local indexes?
+                parent_szs,   // parent szs
+                parent_refnames, // parent refence names
+                seed,         // pseudo-random number generator seed
+                -1,           // override offRate
+                verbose,      // be talkative
+                autoMem,      // pass exceptions up to the toplevel so that we can adjust memory settings automatically
+                sanityCheck); // verify results and internal consistency
     }
-    
+
     if(output_szs != NULL) {
         *output_szs = szs;
     }
     if(output_refnames != NULL) {
         *output_refnames = gfm->_refnames_nospace;
     }
-    
+
     // Note that the Ebwt is *not* resident in memory at this time.  To
     // load it into memory, call ebwt.loadIntoMemory()
-	if(verbose) {
-		// Print Ebwt's vital stats
-		gfm->gh().print(cerr);
-	}
-	if(sanityCheck) {
-		// Try restoring the original string (if there were
-		// multiple texts, what we'll get back is the joined,
-		// padded string, not a list)
-		gfm->loadIntoMemory(
-                            reverse ? (refparams.reverse == REF_READ_REVERSE) : 0,
-                            true,  // load SA sample?
-                            true,  // load ftab?
-                            true,  // load rstarts?
-                            false,
-                            false);
-		SString<char> s2;
-		gfm->restore(s2);
-		gfm->evictFromMemory();
-		{
+    if(verbose) {
+        // Print Ebwt's vital stats
+        gfm->gh().print(cerr);
+    }
+    if(sanityCheck) {
+        // Try restoring the original string (if there were
+        // multiple texts, what we'll get back is the joined,
+        // padded string, not a list)
+        gfm->loadIntoMemory(
+                reverse ? (refparams.reverse == REF_READ_REVERSE) : 0,
+                true,  // load SA sample?
+                true,  // load ftab?
+                true,  // load rstarts?
+                false,
+                false);
+        SString<char> s2;
+        gfm->restore(s2);
+        gfm->evictFromMemory();
+        {
             SString<char> joinedss;
             GFM<>::join<SString<char> >(
-                                        is,          // list of input streams
-                                        szs,         // list of reference sizes
-                                        (TIndexOffU)sztot.first, // total size of all unambiguous ref chars
-                                        refparams,   // reference read-in parameters
-                                        seed,        // pseudo-random number generator seed
-                                        joinedss);
-			if(refparams.reverse == REF_READ_REVERSE) {
-				joinedss.reverse();
-			}
-			assert_eq(joinedss.length(), s2.length());
-			assert(sstr_eq(joinedss, s2));
-		}
-		if(verbose) {
-			if(s2.length() < 1000) {
-				cout << "Passed restore check: " << s2.toZBuf() << endl;
-			} else {
-				cout << "Passed restore check: (" << s2.length() << " chars)" << endl;
-			}
-		}
-	}
-    
+                    is,          // list of input streams
+                    szs,         // list of reference sizes
+                    (TIndexOffU)sztot.first, // total size of all unambiguous ref chars
+                    refparams,   // reference read-in parameters
+                    seed,        // pseudo-random number generator seed
+                    joinedss);
+            if(refparams.reverse == REF_READ_REVERSE) {
+                joinedss.reverse();
+            }
+            assert_eq(joinedss.length(), s2.length());
+            assert(sstr_eq(joinedss, s2));
+        }
+        if(verbose) {
+            if(s2.length() < 1000) {
+                cout << "Passed restore check: " << s2.toZBuf() << endl;
+            } else {
+                cout << "Passed restore check: (" << s2.length() << " chars)" << endl;
+            }
+        }
+    }
+
     delete gfm;
 }
 
@@ -732,7 +756,7 @@ int hisat2_build(int argc, const char **argv) {
 		// Optionally summarize
 		if(verbose) {
 			cerr << "Settings:" << endl
-				 << "  Output files: \"" << outfile.c_str() << ".*." << gfm_ext << "\"" << endl
+				 << "  Output files: \"" << outfile.c_str() << (threeN?".3n":"") << ".*." << gfm_ext << "\"" << endl
 				 << "  Line rate: " << lineRate << " (line is " << (1<<lineRate) << " bytes)" << endl
 				 << "  Lines per side: " << linesPerSide << " (side is " << ((1<<lineRate)*linesPerSide) << " bytes)" << endl
 				 << "  Offset rate: " << offRate << " (one in " << (1<<offRate) << ")" << endl
@@ -777,46 +801,87 @@ int hisat2_build(int argc, const char **argv) {
 		}
 		// Seed random number generator
         srand(seed);
+
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
                 EList<RefRecord> parent_szs(MISC_CAT);
                 EList<string> parent_refnames;
                 string dummy_fname = "";
-                driver<SString<char> >(infile,
-                                       infiles,
-                                       snp_fname,
-                                       ht_fname,
-                                       ss_fname,
-                                       exon_fname,
-                                       sv_fname,
-                                       dummy_fname,
-                                       outfile,
-                                       false,
-                                       REF_READ_FORWARD,
-                                       true, // create local indexes
-                                       NULL, // no parent szs
-                                       NULL, // no parent refnames
-                                       &parent_szs, // get parent szs
-                                       &parent_refnames); // get parent refnames
-                
-                if(repeat_ref_fname.length() > 0) {
-                    EList<string> repeat_infiles(MISC_CAT);
-                    tokenize(repeat_ref_fname, ",", repeat_infiles);
-                    driver<SString<char> >(repeat_ref_fname,
-                                           repeat_infiles,
-                                           repeat_snp_fname,
-                                           repeat_haplotype_fname,
+
+                int nloop = threeN ? 2 : 1; // if threeN == true, nloop = 2. else one loop
+                for (int i = 0; i < nloop; i++) {
+                    string tag = "";
+                    if (threeN) {
+                        if (i == 0) {
+                            tag = ".3n.1";
+                            baseChange.convert('C', 'T');
+                        } else {
+                            tag = ".3n.2";
+                            baseChange.convert('G', 'A');
+                        }
+                    }
+
+                    driver<SString<char> >(infile,
+                                           infiles,
+                                           snp_fname,
+                                           ht_fname,
+                                           ss_fname,
+                                           exon_fname,
+                                           sv_fname,
                                            dummy_fname,
-                                           dummy_fname,
-                                           dummy_fname,
-                                           repeat_info_fname,
-                                           outfile + ".rep",
+                                           outfile + tag,
                                            false,
                                            REF_READ_FORWARD,
-                                           true, // create local index?
-                                           &parent_szs,
-                                           &parent_refnames);
+                                           true, // create local indexes
+                                           NULL, // no parent szs
+                                           NULL, // no parent refnames
+                                           &parent_szs, // get parent szs
+                                           &parent_refnames); // get parent refnames
+
+                    if(repeat_ref_fname.length() > 0) {
+                        string repeat_ref_fname_3N;
+                        string repeat_info_fname_3N;
+                        if (threeN) {
+                            repeat_ref_fname_3N = repeat_ref_fname + tag + ".rep.fa";
+                            repeat_info_fname_3N = repeat_info_fname + tag + ".rep.info";
+                        }
+                        EList<string> repeat_infiles(MISC_CAT);
+                        tokenize(repeat_ref_fname_3N, ",", repeat_infiles);
+                        driver<SString<char> >(repeat_ref_fname_3N,
+                                               repeat_infiles,
+                                               repeat_snp_fname,
+                                               repeat_haplotype_fname,
+                                               dummy_fname,
+                                               dummy_fname,
+                                               dummy_fname,
+                                               repeat_info_fname_3N,
+                                               outfile + tag + ".rep",
+                                               false,
+                                               REF_READ_FORWARD,
+                                               true, // create local index?
+                                               &parent_szs,
+                                               &parent_refnames);
+                    } else if (repeatIndex) {
+                        string repeat_ref_fname_3N = outfile + tag + ".rep.fa";
+                        string repeat_info_fname_3N = outfile + tag + ".rep.info";
+                        EList<string> repeat_infiles(MISC_CAT);
+                        tokenize(repeat_ref_fname_3N, ",", repeat_infiles);
+                        driver<SString<char> >(repeat_ref_fname_3N,
+                                               repeat_infiles,
+                                               repeat_snp_fname,
+                                               repeat_haplotype_fname,
+                                               dummy_fname,
+                                               dummy_fname,
+                                               dummy_fname,
+                                               repeat_info_fname_3N,
+                                               outfile + tag + ".rep",
+                                               false,
+                                               REF_READ_FORWARD,
+                                               true, // create local index?
+                                               &parent_szs,
+                                               &parent_refnames);
+                    }
                 }
             } catch(bad_alloc& e) {
                 if(autoMem) {

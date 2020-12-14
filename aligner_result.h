@@ -30,6 +30,7 @@
 #include "edit.h"
 #include "limit.h"
 #include "splice_site.h"
+#include "alignment_3n.h"
 
 typedef int64_t TAlScore;
 
@@ -818,6 +819,12 @@ public:
 	 * char buffer.
 	 */
 	void writeCigar(BTString* o, char* oc) const;
+
+    /**
+     * Write a CIGAR representation of the alignment to the given string and/or
+     * char buffer. This function is for HISAT-3N.
+     */
+    void writeCigar(Alignment* o, char* oc) const;
 	
 	/**
 	 * Write an MD:Z representation of the alignment to the given string and/or

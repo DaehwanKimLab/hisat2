@@ -2,7 +2,7 @@
 layout: page
 title: HowTo
 permalink: /howto/
-order: 5
+order: 6
 share: false
 ---
 

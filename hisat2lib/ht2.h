@@ -52,6 +52,13 @@ struct ht2_options {
     int sanityCheck;
     
     int useHaplotype;
+
+    void *altdb;
+    void *raltdb;
+    void *repeatdb;
+
+    void *gfm;
+    void *rgfm;
 };
 
 typedef struct ht2_options ht2_option_t;

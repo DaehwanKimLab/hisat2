@@ -389,7 +389,11 @@ PairedPatternSource* PairedPatternSource::setupPatternSources(
 			tmpSeq.push_back(m1[i]);
 			assert_eq(1, tmpSeq.size());
 		}
-		a->push_back(PatternSource::patsrcFromStrings(p, *qs, nthreads));
+
+		PatternSource *patsrc = PatternSource::patsrcFromStrings(p, *qs, nthreads);
+		patsrc->paired_type = 1;
+		a->push_back(patsrc);
+
 		if(!p.fileParallel) {
 			break;
 		}
@@ -406,7 +410,11 @@ PairedPatternSource* PairedPatternSource::setupPatternSources(
 			tmpSeq.push_back(m2[i]);
 			assert_eq(1, tmpSeq.size());
 		}
-		b->push_back(PatternSource::patsrcFromStrings(p, *qs, nthreads));
+        PatternSource *patsrc = PatternSource::patsrcFromStrings(p, *qs, nthreads);
+        patsrc->paired_type = 2;
+		b->push_back(patsrc);
+
+
 		if(!p.fileParallel) {
 			break;
 		}
@@ -427,6 +435,7 @@ PairedPatternSource* PairedPatternSource::setupPatternSources(
 			assert_eq(1, tmpSeq.size());
 		}
 		patsrc = PatternSource::patsrcFromStrings(p, *qs, nthreads);
+		patsrc->paired_type = 1;
 		assert(patsrc != NULL);
 		a->push_back(patsrc);
 		b->push_back(NULL);
@@ -568,6 +577,7 @@ bool VectorPatternSource::nextReadImpl(
 	// Copy v_*, quals_* strings into the respective Strings
 	r.color = gColor;
 	r.patFw  = v_[cur_];
+    r.patFw_3N  = v_[cur_];
 	r.qual = quals_[cur_];
 	r.trimmed3 = trimmed3_[cur_];
 	r.trimmed5 = trimmed5_[cur_];
@@ -824,13 +834,19 @@ bool FastaPatternSource::read(
 			if(c == '.') c = 'N';
 		}
 		if(asc2dnacat[c] > 0 && begin++ >= mytrim5) {
-			r.patFw.append(asc2dna[c]);
+		    r.patFw.append(asc2dna_3N[0][c]);
+            if (threeN) {
+		        r.patFw_3N.append(asc2dna_3N[1][c]);
+		        r.originalFw.append((asc2dna[c]));
+            }
 			r.qual.append('I');
 		}
 		if(fb_.peek() == '>') break;
 		c = fb_.get();
 	}
+
 	r.patFw.trimEnd(gTrim3);
+    if (threeN) r.patFw_3N.trimEnd(gTrim3);
 	r.qual.trimEnd(gTrim3);
 	r.trimmed3 = gTrim3;
 	r.trimmed5 = mytrim5;
@@ -939,10 +955,14 @@ bool FastqPatternSource::read(
 			if(isalpha(c)) {
 				// If it's past the 5'-end trim point
 				if(charsRead >= trim5) {
-					sbuf->append(asc2dna[c]);
-					(*dstLenCur)++;
+				    r.patFw.append(asc2dna_3N[0][c]);
+                    if (threeN) {
+				        r.patFw_3N.append(asc2dna_3N[1][c]);
+                        r.originalFw.append((asc2dna[c]));
+                    }
+				    (*dstLenCur)++;
 				}
-				charsRead++;
+                charsRead++;
 			} else if(fuzzy_ && c == ' ') {
 				trim5 = 0; // disable 5' trimming for now
 				if(charsRead == 0) {
@@ -1423,7 +1443,11 @@ int TabbedPatternSource::parseSeq(
 			assert_in(toupper(c), "ACGTN");
 			if(begin++ >= trim5) {
 				assert_neq(0, asc2dnacat[c]);
-				r.patFw.append(asc2dna[c]);
+				r.patFw.append(asc2dna_3N[0][c]);
+                if (threeN) {
+                    r.patFw_3N.append(asc2dna_3N[1][c]);
+                    r.originalFw.append((asc2dna[c]));
+                }
 			}
 			charsRead++;
 		}
@@ -1432,6 +1456,7 @@ int TabbedPatternSource::parseSeq(
 		}
 	}
 	r.patFw.trimEnd(gTrim3);
+    if (threeN) r.patFw_3N.trimEnd(gTrim3);
 	return (int)r.patFw.length();
 }
 

@@ -28,8 +28,9 @@
 
 using namespace std;
 
-
+#ifdef HISAT2_BUILD_LIB
 MemoryTally gMemTally;
+#endif
 
 static const struct ht2_options ht2_default_options = {
     .offRate = -1,
@@ -44,118 +45,150 @@ static const struct ht2_options ht2_default_options = {
     .sanityCheck = 0,
 
     .useHaplotype = false,
+
+    .altdb = NULL,
+    .raltdb = NULL,
+    .repeatdb = NULL,
+    .gfm = NULL,
+    .rgfm = NULL,
 };
+
+static int is_external_index(struct ht2_options *opt)
+{
+    if (opt->altdb != NULL ||
+        opt->raltdb != NULL ||
+        opt->repeatdb != NULL ||
+        opt->gfm != NULL ||
+        opt->rgfm != NULL) {
+        return 1;
+    }
+
+    return 0;
+}
 
 static void free_handle(struct ht2_handle *hp)
 {
-    if(hp->altdb) {
-        delete hp->altdb;
-    }
-
-    if(hp->raltdb) {
-        delete hp->raltdb;
-    }
-
-    if(hp->repeatdb) {
-        delete hp->repeatdb;
-    }
-
-    if(hp->gfm) {
-        if(hp->gfm->isInMemory()) {
-            hp->gfm->evictFromMemory();
+    if (!is_external_index(&hp->options)) {
+        if(hp->altdb) {
+            delete hp->altdb;
         }
-        delete hp->gfm;
-    }
 
-    if(hp->rgfm) {
-        if(hp->rgfm->isInMemory()) {
-            hp->rgfm->evictFromMemory();
+        if(hp->raltdb) {
+            delete hp->raltdb;
         }
-        delete hp->rgfm;
+
+        if(hp->repeatdb) {
+            delete hp->repeatdb;
+        }
+
+        if(hp->gfm) {
+            if(hp->gfm->isInMemory()) {
+                hp->gfm->evictFromMemory();
+            }
+            delete hp->gfm;
+        }
+
+        if(hp->rgfm) {
+            if(hp->rgfm->isInMemory()) {
+                hp->rgfm->evictFromMemory();
+            }
+            delete hp->rgfm;
+        }
     }
 
     delete hp;
 }
-
 
 static void init_handle(struct ht2_handle *hp)
 {
 
     struct ht2_options *opt = &hp->options;
 
-    hp->altdb = new ALTDB<index_t>();
-    hp->repeatdb = new RepeatDB<TIndexOffU>();
-    hp->raltdb = new ALTDB<index_t>();
+    if (is_external_index(opt)) {
 
-    hp->gfm = new HGFM<TIndexOffU, local_index_t>(
-            hp->ht2_idx_name,
-            hp->altdb,
-            NULL,
-            NULL,
-            -1,
-            true,
-            opt->offRate,
-            0,
-            opt->useMm,
-            opt->useShmem,
-            opt->mmSweep,
-            !opt->noRefNames,
-            true,
-            true,
-            true,
-            !opt->noSplicedAlignment,
-            opt->gVerbose,
-            opt->startVerbose,
-            false,
-            opt->sanityCheck,
-            opt->useHaplotype);
+        hp->altdb = (ALTDB<index_t> *)opt->altdb;
+        hp->repeatdb = (RepeatDB<TIndexOffU> *)opt->repeatdb;
+        hp->raltdb = (ALTDB<index_t> *)opt->raltdb;
 
+        hp->gfm = (HGFM<TIndexOffU, local_index_t>* )opt->gfm;
+        hp->rgfm = (RFM<index_t> *)opt->rgfm;
 
-    // Load the other half of the index into memory
-    assert(!hp->gfm->isInMemory());
+    } else {
 
-    hp->gfm->loadIntoMemory(
-            -1,
-            true,
-            true,
-            true,
-            !opt->noRefNames,
-            opt->startVerbose);
+        hp->altdb = new ALTDB<index_t>();
+        hp->repeatdb = new RepeatDB<TIndexOffU>();
+        hp->raltdb = new ALTDB<index_t>();
 
-    hp->rgfm = new RFM<TIndexOffU>(
-            hp->ht2_idx_name + ".rep",
-            hp->raltdb,
-            hp->repeatdb,
-            NULL,
-            -1,
-            true,
-            opt->offRate,
-            0,
-            opt->useMm,
-            opt->useShmem,
-            opt->mmSweep,
-            !opt->noRefNames,
-            true,
-            true,
-            true,
-            !opt->noSplicedAlignment,
-            opt->gVerbose,
-            opt->startVerbose,
-            false,
-            opt->sanityCheck,
-            false);
+        hp->gfm = new HGFM<TIndexOffU, local_index_t>(
+                hp->ht2_idx_name,
+                hp->altdb,
+                NULL,
+                NULL,
+                -1,
+                true,
+                opt->offRate,
+                0,
+                opt->useMm,
+                opt->useShmem,
+                opt->mmSweep,
+                !opt->noRefNames,
+                true,
+                true,
+                true,
+                !opt->noSplicedAlignment,
+                opt->gVerbose,
+                opt->startVerbose,
+                false,
+                opt->sanityCheck,
+                opt->useHaplotype);
 
 
-    assert(!hp->rgfm->isInMemory());
-    hp->rgfm->loadIntoMemory(
-            -1,
-            true,
-            true,
-            true,
-            !opt->noRefNames,
-            opt->startVerbose);
+        // Load the other half of the index into memory
+        assert(!hp->gfm->isInMemory());
 
-    hp->repeatdb->construct(hp->gfm->rstarts(), hp->gfm->nFrag());
+        hp->gfm->loadIntoMemory(
+                -1,
+                true,
+                true,
+                true,
+                !opt->noRefNames,
+                opt->startVerbose);
+
+        hp->rgfm = new RFM<TIndexOffU>(
+                hp->ht2_idx_name + ".rep",
+                hp->raltdb,
+                hp->repeatdb,
+                NULL,
+                -1,
+                true,
+                opt->offRate,
+                0,
+                opt->useMm,
+                opt->useShmem,
+                opt->mmSweep,
+                !opt->noRefNames,
+                true,
+                true,
+                true,
+                !opt->noSplicedAlignment,
+                opt->gVerbose,
+                opt->startVerbose,
+                false,
+                opt->sanityCheck,
+                false);
+
+
+        assert(!hp->rgfm->isInMemory());
+        hp->rgfm->loadIntoMemory(
+                -1,
+                true,
+                true,
+                true,
+                !opt->noRefNames,
+                opt->startVerbose);
+
+        hp->repeatdb->construct(hp->gfm->rstarts(), hp->gfm->nFrag());
+    }
 }
 
 EXPORT

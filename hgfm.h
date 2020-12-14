@@ -1647,7 +1647,9 @@ public:
          bool verbose = false,
          bool passMemExc = false,
          bool sanityCheck = false);
-    
+
+	HGFM() {}
+
 	~HGFM() {
         clearLocalGFMs();
 	}
@@ -2641,7 +2643,7 @@ void HGFM<index_t, local_index_t>::readIntoMemory(
 		assert_eq(tidx + 1, _localGFMs.size());
 		_localGFMs.back().push_back(localGFM);
 	}	
-		
+
 #ifdef BOWTIE_MM
     fseek(_in5, 0, SEEK_SET);
 	fseek(_in6, 0, SEEK_SET);
