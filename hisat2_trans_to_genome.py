@@ -79,7 +79,6 @@ class Transinfo:
                     current_trans[3].append([int(genomic_position), int(exon_len)])
 
         # sort offset_lookup_table
-        print('Sort lookup table...', file=sys.stderr)
         for tid in self.offset_lookup_table:
             self.offset_lookup_table[tid].sort()
 
@@ -141,6 +140,10 @@ class Transinfo:
 
         read_len = read_len_cigar(cigars)
         tr_pos -= offset
+        if tr_pos + read_len > trans[2]:
+            # wrong transcript
+            return new_chr, new_pos, cigar_str
+
         assert tr_pos + read_len <= trans[2]
 
         tmp_cigar = list()
@@ -166,11 +169,17 @@ class Transinfo:
                     if e_idx == len(exons):
                         print(tid)
                     """
-                    gap = exons[e_idx + 1][0] - (exons[e_idx][0] + exons[e_idx][1])
-                    tmp_cigar.append([gap, 'N'])
+                    if e_idx == len(exons) - 1:
+                        # FIXME: parkch
+                        # wrong mapping (across a transcript)
+                        gap = c_len
+                        e_idx += 1
+                    else:
+                        gap = exons[e_idx + 1][0] - (exons[e_idx][0] + exons[e_idx][1])
+                        e_idx += 1
+                        r_len = exons[e_idx][1]
 
-                    e_idx += 1
-                    r_len = exons[e_idx][1]
+                tmp_cigar.append([gap, 'N'])
 
 
         # clean new_cigars
@@ -453,7 +462,7 @@ def main(sam_file, transinfo_file):
         old_pair_pos = int(fields[7])
 
         '''
-        if rid == '858144':
+        if rid == '989880':
             print(rid)
         '''
 
