@@ -22,12 +22,14 @@
 from sys import stderr, exit
 from collections import defaultdict, Counter
 from argparse import ArgumentParser, FileType
+import itertools
 import pprint
 import bisect
 
 bDebug = False
 bVerbose = False
 bUniqueSNP = False
+bChrTome = False
 
 
 def read_genome(genome_file, chr_filter=None):
@@ -116,7 +118,7 @@ def load_transcript(genome_seq, gtf_file):
 
             gene_biotype = values_dict['gene_biotype']
             gene_name = values_dict['gene_name']
-            genes[gene_id] = [list(), gene_biotype, gene_name]
+            genes[gene_id] = [list(), gene_biotype, gene_name, chrom]
 
         elif feature == 'exon':
             transcript_id = values_dict['transcript_id']
@@ -293,7 +295,7 @@ def write_transcripts_snp(fp, gene_id, trans_ids, transcripts, exon_list):
     return
 
 
-def write_transcripts_ss(fp, gene_id, trans_ids, transcripts, exon_list):
+def write_transcripts_ss(fp, gene_id, trans_ids, transcripts, exon_list, offset = 0):
     ss = set()
 
     for trans_id in trans_ids:
@@ -326,7 +328,7 @@ def write_transcripts_ss(fp, gene_id, trans_ids, transcripts, exon_list):
     ss_list = sorted(list(ss))
 
     for s in ss_list:
-        print('{}\t{}\t{}\t{}'.format(gene_id, s[0], s[1], s[2]), file=fp)
+        print('{}\t{}\t{}\t{}'.format(gene_id, s[0] + offset, s[1] + offset, s[2]), file=fp)
 
     return
 
@@ -347,6 +349,49 @@ def write_transcripts_map(fp, gene_id, chr_name, exon_list):
     return
 
 
+def groupby_gene(genes):
+    chr_gene_list = dict()
+
+    for k, g in itertools.groupby(genes.items(), key=lambda x : x[1][3]):
+        chr_gene_list[k] = [ x[0] for x in g ]
+
+    return chr_gene_list
+
+
+def make_chrtome_seq(exon_list, out_seq, ref_seq):
+    out_seq = get_seq(ref_seq, exon_list)
+    return
+
+
+def generate_chr_tome(genes, transcripts, gene_ids, exons_list, genome_seq, trseq_file, trsnp_file, trmap_file, trss_file):
+
+    chr_gene_list = groupby_gene(genes)
+
+    offset_in_chrtome = {}
+    for chrname, chrgene in chr_gene_list.items():
+        print(chrname, len(chrgene))
+        offset = 0
+        seq = ''
+
+        chrtome_name = '{}_tome'.format(chrname)
+        for g in chrgene:
+            tmp_seq = get_seq(genome_seq[chrname], exons_list[g])
+            seq += tmp_seq + 'N'
+
+            # write ss, snp, map
+            write_transcripts_ss(trss_file, chrtome_name, genes[g][0], transcripts, exons_list[g], offset)
+
+            offset += len(tmp_seq) + 1
+            
+
+
+        write_fasta(trseq_file, chrtome_name, seq)
+
+
+
+    return
+
+
 def extract_transcript_graph(genome_file, gtf_file, base_fname):
     genome_seq = read_genome(genome_file)
     genes, transcripts = read_transcript(genome_seq, gtf_file)
@@ -361,49 +406,61 @@ def extract_transcript_graph(genome_file, gtf_file, base_fname):
 
     # get sorted id
     gene_ids = sorted(list(genes.keys()))
+    exons_list = {}
+
+    # for each gene, build a consensus exons
+    #   exon in consensus exons is not overlapped to other exon
+    for gene_id in gene_ids:
+        if bDebug:
+            if gene_id != "ENSG00000244625":
+                continue
+
+        trans_ids = genes[gene_id][0]
+        chrom = transcripts[trans_ids[0]][0]
+        tmp_exons_list = list()
+        for tid in trans_ids:
+            tmp_exons_list += transcripts[tid][3]
+
+        exon_list = make_consensus_exons(tmp_exons_list)
+
+        exons_list[gene_id] = exon_list
 
     with open(base_fname + ".gt.fa", "w") as trseq_file, \
             open(base_fname + ".gt.snp", "w") as trsnp_file, \
             open(base_fname + ".gt.map", "w") as trmap_file, \
             open(base_fname + ".gt.ss", "w") as trss_file:
 
-        # for each gene, build a consensus exons
-        #   exon in consensus exons is not overlapped to other exon
-        for gene_id in gene_ids:
-            if bDebug:
-                if gene_id != "ENSG00000244625":
-                    continue
-
-            trans_ids = genes[gene_id][0]
-            chrom = transcripts[trans_ids[0]][0]
-            tmp_exons_list = list()
-            for tid in trans_ids:
-                tmp_exons_list += transcripts[tid][3]
-
-            exon_list = make_consensus_exons(tmp_exons_list)
-
+        if bChrTome:
+            generate_chr_tome(genes, transcripts, gene_ids, exons_list, genome_seq, trseq_file, trsnp_file, trmap_file, trss_file)
+        else:
             if bDebug:
                 pprint.pprint(sorted(tmp_exons_list))
                 pprint.pprint(exon_list)
 
-            # print sequeunce
-            write_transcripts_seq(trseq_file, gene_id, chrom, genome_seq, exon_list)
+            for gene_id in gene_ids:
+                trans_ids = genes[gene_id][0]
+                chrom = transcripts[trans_ids[0]][0]
+                exon_list = exons_list[gene_id]
 
-            # print snps
-            write_transcripts_snp(trsnp_file, gene_id, trans_ids, transcripts, exon_list)
+                # print sequeunce
+                write_transcripts_seq(trseq_file, gene_id, chrom, genome_seq, exon_list)
 
-            # print splice-sites 
-            write_transcripts_ss(trss_file, gene_id, trans_ids, transcripts, exon_list)
+                # print snps
+                write_transcripts_snp(trsnp_file, gene_id, trans_ids, transcripts, exon_list)
 
-            # print exon_map
-            write_transcripts_map(trmap_file, gene_id, chrom, exon_list)
+                # print splice-sites
+                write_transcripts_ss(trss_file, gene_id, trans_ids, transcripts, exon_list)
 
-            """
-            exon_count = 0
-            for t_id in genes[gene_id]:
-                exon_count += len(transcripts[t_id][3])
-            print(gene_id, len(genes[gene_id]), exon_count)
-            """
+                # print exon_map
+                write_transcripts_map(trmap_file, gene_id, chrom, exon_list)
+
+                """
+        exon_count = 0
+        for t_id in genes[gene_id]:
+            exon_count += len(transcripts[t_id][3])
+        print(gene_id, len(genes[gene_id]), exon_count)
+        """
+
 
     return
 
@@ -428,8 +485,8 @@ def extract_transcript_linear(genome_file, gtf_file, base_fname):
 
     transcript_ids = sorted(list(transcripts.keys()))
 
-    with open(base_fname + ".trans.fa", "w") as trseq_file, \
-            open(base_fname + ".trans.map", "w") as trmap_file:
+    with open(base_fname + ".gt.fa", "w") as trseq_file, \
+            open(base_fname + ".gt.map", "w") as trmap_file:
         for tid in transcript_ids:
             chrom, strand, transcript_len, exons, gene_id = transcripts[tid]
 
@@ -467,6 +524,12 @@ if __name__ == '__main__':
                         default=False,
                         help='Create linear-transcripts files')
 
+    parser.add_argument('--chrtome',
+                        dest='bChrTome',
+                        action='store_true',
+                        default=False,
+                        help='Create transcriptome for chromosome')
+
     parser.add_argument('--unique-snp',
                         dest='bUniqueSNP',
                         action='store_true',
@@ -496,6 +559,9 @@ if __name__ == '__main__':
 
     if args.bUniqueSNP is not None:
         bUniqueSNP = args.bUniqueSNP
+
+    if args.bChrTome is not None:
+        bChrTome = args.bChrTome
 
     if args.bLinear:
         extract_transcript_linear(

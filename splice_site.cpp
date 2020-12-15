@@ -783,7 +783,8 @@ Pool& SpliceSiteDB::pool(uint64_t ref) {
 
 #ifdef USE_TRANSCRIPTOME
     if (bTranscriptome) {
-        pool_bytes = 32 << 10; /* 32KB */
+        //pool_bytes = 32 << 10; /* 32KB */
+        pool_bytes = 1 << 20; /* 1MB */
     }
 #endif
 
