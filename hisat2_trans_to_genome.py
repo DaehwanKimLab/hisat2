@@ -4,9 +4,9 @@ import os, sys, math, random, re
 from collections import defaultdict, Counter
 from argparse import ArgumentParser, FileType
 import pprint
+import bisect
 
 cigar_re = re.compile('\d+\w')
-
 
 def read_len_cigar(cigars):
     read_len = 0
@@ -18,13 +18,16 @@ def read_len_cigar(cigars):
     return read_len
 
 
-
 class Transinfo:
     def __init__(self):
+        # tbl['tid,offset'] = (gene_id, tlen, ..., list of exons)
         self.tbl = {}
+        # offset_lookup_table[tid] = [list of offsets, sorted]
+        self.offset_lookup_table = {}
 
     def loadfromfile(self, info_fp):
         self.tbl = {}
+        self.offset_lookup_table = {}
 
         current_trans = None
         # parse
@@ -36,26 +39,37 @@ class Transinfo:
             if line.startswith('>'):
                 line = line[1:].split('\t')
 
+                # tid, chr_name, gene_id, offset, tran_gene_len
                 current_tid = line[0]
                 chr_name = line[1]
 
+                strand = ''
                 if len(line) < 3:
-                    strand = ''
                     tran_gene_len = 100000000
                     gene_id = ''
+                    offset = 0
                 else:
-                    strand = line[2]
-                    tran_gene_len = int(line[3])
-                    gene_id = line[4]
+                    gene_id = line[2]
+                    offset = int(line[3])
+                    tran_gene_len = int(line[4])
 
-                if not current_tid in self.tbl:
+                tbl_key = '{},{}'.format(current_tid, offset)
+
+
+                # add to offset_lookup_table
+                if not current_tid in self.offset_lookup_table:
+                    self.offset_lookup_table[current_tid] = [offset]
+                else:
+                    self.offset_lookup_table[current_tid].append(offset)
+
+                if not tbl_key in self.tbl:
                     #                   chr_name, strand, len, exons, gene_id
-                    self.tbl[current_tid] = [chr_name, strand, tran_gene_len, list(), gene_id]
-                    current_trans = self.tbl[current_tid]
+                    self.tbl[tbl_key] = [chr_name, strand, tran_gene_len, list(), gene_id]
+                    current_trans = self.tbl[tbl_key]
 
                 else:
-                    print('Duplicated tid', current_tid)
-                    current_trans = self.tbl[current_tid]
+                    print('Duplicated tid', tbl_key)
+                    current_trans = self.tbl[tbl_key]
 
             else:
                 field = line.split('\t')
@@ -64,9 +78,30 @@ class Transinfo:
                     chr_name, genomic_position, exon_len = item.split(':')[0:3]
                     current_trans[3].append([int(genomic_position), int(exon_len)])
 
-    def map_position_internal(self, tid, tr_pos):
-        trans = self.tbl[tid]
+        # sort offset_lookup_table
+        print('Sort lookup table...', file=sys.stderr)
+        for tid in self.offset_lookup_table:
+            self.offset_lookup_table[tid].sort()
 
+
+    def find_offset_in_lookup_table(self, tid, pos):
+        # find a rightmost offset less than or equal to the pos
+        offset_list = self.offset_lookup_table[tid]
+
+        i = bisect.bisect_right(offset_list, pos)
+        if i:
+            return offset_list[i - 1]
+
+        raise ValueError
+
+    def map_position_internal(self, tid, tr_pos):
+
+        offset = self.find_offset_in_lookup_table(tid, tr_pos)
+        tbl_key = '{},{}'.format(tid, offset)
+
+        trans = self.tbl[tbl_key]
+
+        tr_pos -= offset
         new_chr = trans[0]
         exons = trans[3]
 
@@ -86,18 +121,16 @@ class Transinfo:
 
         assert e_idx >= 0
 
-        return new_chr, new_pos, e_idx
-
+        return new_chr, new_pos, e_idx, trans, offset
 
     def map_position(self, tid, tr_pos):
-        new_chr, new_pos, e_idx = self.map_position_internal(tid, tr_pos)
+        new_chr, new_pos, e_idx, _, _ = self.map_position_internal(tid, tr_pos)
         return new_chr, new_pos
 
-
     def translate_pos_cigar(self, tid, tr_pos, cigar_str):
-        new_chr, new_pos, e_idx = self.map_position_internal(tid, tr_pos)
+        new_chr, new_pos, e_idx, trans, offset = self.map_position_internal(tid, tr_pos)
 
-        trans = self.tbl[tid]
+        #trans = self.tbl[tid]
         exons = trans[3]
 
         if cigar_str == '*':
@@ -107,6 +140,7 @@ class Transinfo:
         cigars = [[int(cigars[i][:-1]), cigars[i][-1]] for i in range(len(cigars))]
 
         read_len = read_len_cigar(cigars)
+        tr_pos -= offset
         assert tr_pos + read_len <= trans[2]
 
         tmp_cigar = list()

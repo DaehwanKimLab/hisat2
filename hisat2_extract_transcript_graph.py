@@ -251,7 +251,7 @@ def map_to_exons(old_exon, consensus_exon_list):
     return [-1, -1], -1
 
 
-def write_transcripts_snp(fp, gene_id, trans_ids, transcripts, exon_list):
+def write_transcripts_snp(fp, gene_id, trans_ids, transcripts, exon_list, real_gene_id='', offset=0):
     snps = set()
 
     for trans_id in trans_ids:
@@ -280,22 +280,25 @@ def write_transcripts_snp(fp, gene_id, trans_ids, transcripts, exon_list):
             gap = new_exons[i][0] - new_exons[i - 1][1] - 1
             if gap > 0:
                 if bUniqueSNP:
-                    snps.add(('', new_exons[i - 1][1] + 1, gap, ''))
+                    snps.add(('', new_exons[i - 1][1] + 1 + offset, gap, ''))
                 else:
-                    snps.add((trans[0], new_exons[i - 1][1] + 1, gap, trans_id))
+                    snps.add((trans[0], new_exons[i - 1][1] + 1 + offset, gap, trans_id))
 
     snps_list = sorted(list(snps))
 
     snp_count = 0
 
+    snp_name = gene_id
+    if real_gene_id:
+        snp_name = real_gene_id
     for s in snps_list:
-        print('{}.{}\t{}\t{}\t{}\t{}'.format(gene_id, snp_count, 'deletion', gene_id, s[1], s[2]), file=fp)
+        print('{}.{}\t{}\t{}\t{}\t{}'.format(snp_name, snp_count, 'deletion', gene_id, s[1], s[2]), file=fp)
         snp_count += 1
 
     return
 
 
-def write_transcripts_ss(fp, gene_id, trans_ids, transcripts, exon_list, offset = 0):
+def write_transcripts_ss(fp, gene_id, trans_ids, transcripts, exon_list, offset=0):
     ss = set()
 
     for trans_id in trans_ids:
@@ -333,8 +336,13 @@ def write_transcripts_ss(fp, gene_id, trans_ids, transcripts, exon_list, offset 
     return
 
 
-def write_transcripts_map(fp, gene_id, chr_name, exon_list):
-    print('>{}\t{}'.format(gene_id, chr_name), file=fp)
+def write_transcripts_map(fp, gene_id, chr_name, exon_list, real_gene_id='', offset=0, tome_len=0):
+    header='>{}\t{}'.format(gene_id, chr_name)
+
+    if real_gene_id:
+        header += '\t{}\t{}\t{}'.format(real_gene_id, offset, tome_len)
+
+    print(header, file=fp)
 
     for i, e in enumerate(exon_list):
         fp.write('{}:{}:{}'.format(chr_name, e[0], e[1] - e[0] + 1))
@@ -368,26 +376,26 @@ def generate_chr_tome(genes, transcripts, gene_ids, exons_list, genome_seq, trse
     chr_gene_list = groupby_gene(genes)
 
     offset_in_chrtome = {}
+
     for chrname, chrgene in chr_gene_list.items():
         print(chrname, len(chrgene))
         offset = 0
         seq = ''
 
         chrtome_name = '{}_tome'.format(chrname)
+
         for g in chrgene:
             tmp_seq = get_seq(genome_seq[chrname], exons_list[g])
             seq += tmp_seq + 'N'
 
             # write ss, snp, map
             write_transcripts_ss(trss_file, chrtome_name, genes[g][0], transcripts, exons_list[g], offset)
+            write_transcripts_snp(trsnp_file, chrtome_name, genes[g][0], transcripts, exons_list[g], g, offset)
+            write_transcripts_map(trmap_file, chrtome_name, chrname, exons_list[g], g, offset, len(tmp_seq))
 
             offset += len(tmp_seq) + 1
-            
-
 
         write_fasta(trseq_file, chrtome_name, seq)
-
-
 
     return
 
@@ -466,6 +474,7 @@ def extract_transcript_graph(genome_file, gtf_file, base_fname):
 
 
 def write_exon_info(fp, tid, chr_name, strand, transcript_len, exons, gene_id):
+    # FIXME: sync with graph (chrtome-mode)
     print('>{}\t{}\t{}\t{}\t{}'.format(tid, chr_name, strand, transcript_len, gene_id), file=fp)
 
     for i, e in enumerate(exons):
