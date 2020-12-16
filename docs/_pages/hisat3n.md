@@ -72,7 +72,7 @@ These files constitute the hisat-3n index and no other file is needed to alignme
 It is optional to make the graph index and add SNP or spicing site information to the index, to increase the alignment accuracy.
 for more detail, please check the [HISAT2 manual].
 
-[HISAT2 manual]:https://daehwankimlab.github.io/hisat2/manual/
+[HISAT2 manual]: {{ site.baseurl }}{% link _pages/manual.md %}
 
     # Standard HISAT-3N integrated index with SNP information
     hisat-3n-build --exons genome.exon genome.fa genome 

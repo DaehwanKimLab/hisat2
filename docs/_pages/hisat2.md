@@ -9,6 +9,12 @@ share: false
 **HISAT2** is a fast and sensitive alignment program for mapping next-generation sequencing reads (both DNA and RNA) to a population of human genomes as well as to a single reference genome. Based on an extension of BWT for graphs ([Sir&eacute;n et al. 2014](http://dl.acm.org/citation.cfm?id=2674828)), we designed and implemented a graph FM index (GFM), an original approach and its first implementation. In addition to using one global GFM index that represents a population of human genomes, **HISAT2** uses a large set of small GFM indexes that collectively cover the whole genome. These small indexes (called local indexes), combined with several alignment strategies, enable rapid and accurate alignment of sequencing reads. This new indexing scheme is called a Hierarchical Graph FM index (HGFM).
 
 
+### HISAT-3N beta release 12/14/2020
+
+HISAT-3N is a software system for analyzing nucleotide conversion sequencing reads. See the [HISAT-3N] for more details.
+
+[HISAT-3N]:	{{ site.baseurl }}{% link _pages/hisat3n.md %}
+
 ### Index files are moved to the AWS Public Dataset Program. 9/3/2020
 
 We have moved HISAT2 index files to the AWS Public Dataset Program. See the [link](https://registry.opendata.aws/jhu-indexes/) for more details.
