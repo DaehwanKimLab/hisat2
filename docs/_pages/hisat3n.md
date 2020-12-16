@@ -43,6 +43,8 @@ A few notes:
 3. The alignment process with either standard or repeat index requires no more than 16 GB of RAM.
 4. [SAMtools] is required to sort SAM file for hisat-3n-table.
 
+[SAMtools]:        http://samtools.sourceforge.net
+
 Install
 ------------
    
