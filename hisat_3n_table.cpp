@@ -123,7 +123,7 @@ static void parseOption(int next_option, const char *optarg) {
         }
         case 'h': {
             printHelp(cerr);
-            throw 1;
+            throw 0;
         }
         case 'p': {
             nThreads = stoi(optarg);
@@ -201,11 +201,9 @@ bool getSAMChromosomePos(string* line, string& chr, long long int& pos) {
     return false;
 }
 
-int main(int argc, const char** argv) {
 
-    parseOptions(argc, argv);
-
-
+int hisat_3n()
+{
     positions = new Positions(refFileName, nThreads);
 
     // open #nThreads workers
@@ -297,4 +295,31 @@ int main(int argc, const char** argv) {
     outputThread.join();
     delete positions;
     return 0;
+}
+
+int main(int argc, const char** argv)
+{
+    int ret = 0;
+
+    try {
+        parseOptions(argc, argv);
+        ret = hisat_3n();
+
+    } catch(std::exception& e) {
+        cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
+        cerr << "Command: ";
+        for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+        cerr << endl;
+        return 1;
+    } catch(int e) {
+        if (e != 0) {
+            cerr << "Error: Encountered internal HISAT-3N exception (#" << e << ")" << endl;
+            cerr << "Command: ";
+            for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+            cerr << endl;
+        }
+        return e;
+    }
+
+    return ret;
 }
