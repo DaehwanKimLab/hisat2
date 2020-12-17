@@ -1994,18 +1994,23 @@ static void parseOptions(int argc, const char **argv) {
 	}
 	sam_print_zm = sam_print_zm && bowtie2p5;
 
-	if (bTranscriptome) {
-	    if (!saw_minIntronLen) {
+    if (bTranscriptome) {
+        if (!saw_minIntronLen) {
             minIntronLen = 1;
-	    }
-        
-	    penCanSplice = 0;
-	    penNoncanSplice = 0;
-	    penConflictSplice = 0;
-	    penCanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
-	    penNoncanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
+        }
 
-	}
+        penCanSplice = 0;
+        penNoncanSplice = 0;
+        penConflictSplice = 0;
+        penCanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
+        penNoncanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
+
+        // -a
+        allHits = true;
+        msample = false;
+        mhits = 0;
+
+    }
     
 #ifndef NDEBUG
 	if(!gQuiet) {

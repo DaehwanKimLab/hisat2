@@ -334,14 +334,18 @@ public:
         
         // Next 4 bits for alignments against transcripts
         TAlScore transcript_score = 0;
-        if(knownTranscripts_) transcript_score = 2;
-        else if(nearSpliceSites_) transcript_score = 1;
-        
+        if (!bTranscriptome) {
+            if(knownTranscripts_) transcript_score = 2;
+            else if(nearSpliceSites_) transcript_score = 1;
+        }
+
         // Next 8 bits for splice site score
         TAlScore splicescore = splicescore_ / 100;
-        if(splicescore > MAX_U8) splicescore = 0;
-        else                     splicescore = MAX_U8 - splicescore;
-        
+        if (!bTranscriptome) {
+            if(splicescore > MAX_U8) splicescore = 0;
+            else                     splicescore = MAX_U8 - splicescore;
+        }
+
         // Remaining 16 bits (rightmost 16 bits) for sum of left and right trim lengths
         TAlScore trim = leftTrim_ + rightTrim_;
         if(trim > MAX_U16) trim = 0;
