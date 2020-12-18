@@ -2030,6 +2030,7 @@ def calculate_read_cost(single_end,
         # ["vg", "", "snp", "", "-M 10"],
         # ["minimap2", "", "", "", ""],
         # ["salmon", "", "", "", ""],
+        # ["kallisto", "", "", "", ""],
         ]
     readtypes = ["all"]
     verbose = True
@@ -2150,6 +2151,11 @@ def calculate_read_cost(single_end,
                     cmd += ["--version"]
                     cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
                     version = cmd_process.communicate()[0][:-1].split()[1]
+                elif aligner == "kallisto":
+                    cmd = ["%s/kallisto" % (aligner_bin_base)]
+                    cmd += ["version"]
+                    cmd_process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                    version = cmd_process.communicate()[0][:-1].split()[2]
                     
                 return version
 
@@ -2465,6 +2471,27 @@ def calculate_read_cost(single_end,
                     cmd += ["-o", "out"]
                     cmd += ["-p", str(num_threads)]
 
+                elif aligner == "kallisto":
+                    # kallisto quant -i genome -o output -t 5 sim_1.fa sim_2.fa 
+                    cmd += ["{}/kallisto".format(aligner_bin_base)]
+                    cmd += ["quant"]
+                    index_cmd = "{index_base}/kallisto{index_add}/{index_name}".format(index_base=index_base, index_add=index_add, index_name=genome)
+                    if index_type:
+                        index_cmd += ("_" + index_type)
+                    
+                    cmd += ["-i", index_cmd]
+                    cmd += ["-o", "out"]
+                    cmd += ["-t", str(num_threads)]
+
+                    if paired:
+                        cmd += [read1_fname]
+                        cmd += [read2_fname]
+                    else:
+                        cmd += ["--single"]
+                        cmd += [read1_fname]
+                        cmd += ["-l", "250"]
+                        cmd += ["-s", "1"]
+
                 else:
                     assert False
 
@@ -2639,7 +2666,7 @@ def calculate_read_cost(single_end,
                     os.chdir("..")
                     continue
 
-                if not os.path.exists(out_fname2) and (aligner != "salmon"):
+                if not os.path.exists(out_fname2) and (aligner != "salmon" and aligner != "kallisto"):
                     debug_dic = {}
                     pid_list = []
                     if paired:
@@ -2698,6 +2725,19 @@ def calculate_read_cost(single_end,
                         print >> sys.stderr, "\t\t\tNum Processed: {}".format(num_processed)
                         print >> sys.stderr, "\t\t\tNum Mapped: {} ({:.2f}%)".format(num_mapped, percent_mapped)
                         print >> sys.stderr, "\t\t\tMemory Usage: {}MB".format(int(mem_usage) / 1024)
+                        continue
+                    elif aligner == 'kallisto':
+                        with open('out/run_info.json') as f:
+                            data = json.load(f)
+
+                        num_processed = data['n_processed']
+                        num_mapped = data['n_pseudoaligned']
+                        percent_mapped = data['p_pseudoaligned']
+
+                        print >> sys.stderr, "\t\t\tNum Processed: {}".format(num_processed)
+                        print >> sys.stderr, "\t\t\tNum Mapped: {} ({:.2f}%)".format(num_mapped, percent_mapped)
+                        print >> sys.stderr, "\t\t\tMemory Usage: {}MB".format(int(mem_usage) / 1024)
+
                         continue
 
                     type_sam_fname2 = base_fname + "_" + readtype2 + ".sam"
