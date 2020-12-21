@@ -12,15 +12,15 @@ HISAT-3N
 Overview
 -----------------
 **HISAT-3N** (hierarchical indexing for spliced alignment of transcripts - 3 nucleotides)
-is designed for nucleotide conversion sequencing technologies and implemented based on HISAT2. 
+is designed for nucleotide conversion sequencing technologies and implemented based on [HISAT2]. 
 There are two strategies for HISAT-3N to align nuleotide conversion sequencing reads: *standard mode* and *repeat mode*. 
-The standard mode align reads with standard-3N index only, so it is fast and require small memory (~9GB for human genome alignment).
-The repeat mode align reads with both standard-3N index and repeat-3N index, then output 1,000 alignment result (the output number can be adjust by `--repeat-limit`).
-The repeat mode can align nucleotide conversion reads more accurately, 
-and it is only 10% slower than the standard mode with tiny more memory (repeat mode use about ~10.5GB) usage than standard mode.
+The standard mode aligns reads with the standard 3N index only, so it is fast and requires small amount of memory (~9GB for human genome alignment).
+The repeat mode aligns reads with both standard 3N index and repeat 3N index, then outputs up to 1,000 alignment result (the output number can be adjusted by `--repeat-limit`).
+The repeat mode can also align nucleotide conversion reads more accurately, 
+and it is only 10% slower than the standard mode with tiny more memory (repeat mode uses about ~10.5GB) than standard mode.
 
 HISAT-3N is developed based on [HISAT2], which is particularly optimized for RNA sequencing technology. 
-HISAT-3N can be used for any base-converted sequencing reads include [BS-seq], [SLAM-seq], [TAB-seq], [oxBS-seq], [TAPS], [scBS-seq], and [scSLAM-seq],.
+HISAT-3N can be used for any base-converted sequencing reads include [BS-seq], [SLAM-seq], [TAB-seq], [oxBS-seq], [TAPS], [scBS-seq], and [scSLAM-seq].
 
 [HISAT2]:https://github.com/DaehwanKimLab/hisat2
 [BS-seq]: https://en.wikipedia.org/wiki/Bisulfite_sequencing
@@ -34,13 +34,13 @@ HISAT-3N can be used for any base-converted sequencing reads include [BS-seq], [
 
 Getting started
 ============
-HISAT-3N requires a 64-bit computer running either Linux or Mac OS X and at least 16 GB of RAM. 
+HISAT-3N requires a 64-bit computer running either Linux or Mac OS and at least 16GB of RAM. 
 
 A few notes:  
 
-1. The repeat 3N index building process requires 256 GB of RAM.
-2. The standard 3N index building requires no more than 16 GB of RAM.
-3. The alignment process with either standard or repeat index requires no more than 16 GB of RAM.
+1. The repeat 3N index building process requires 256GB of RAM.
+2. The standard 3N index building requires no more than 16GB of RAM.
+3. The alignment process with either standard or repeat index requires no more than 16GB of RAM.
 4. [SAMtools] is required to sort SAM file for hisat-3n-table.
 
 [SAMtools]:        http://samtools.sourceforge.net
@@ -59,7 +59,7 @@ Make sure that you are in the `hisat-3n` branch
 
 Build a 3N index with `hisat-3n-build`
 -----------
-`hisat-3n-build` builds a 3N-index, which contains two hisat2 indexes, from a set of DNA sequences. For standard 3N-index,
+`hisat-3n-build` builds a 3N-index, which internally contains two hisat2 indexes for a set of DNA sequences. For standard 3N-index,
 each index contains 16 files with suffix `.3n.*.*.ht2`.
 For repeat 3N-index, there are 16 more files in addition to the standard 3N-index, and they have the suffix 
 `.3n.*.rep.*.ht2`. 
@@ -215,6 +215,9 @@ Publication
 ============
 
 * HISAT-3N paper
+Yun Zhang, Chanhee Park, Christopher Bennett, Micah Thornton, Daehwan Kim <br/>
+[HISAT-3N: a rapid and accurate three-nucleotide sequence aligner](https://doi.org/10.1101/2020.12.15.422906). _bioRxiv_ (2020) 
 
-* HIAST2 paper  
-Kim, D., Paggi, J.M., Park, C. _et al._ [Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype](https://doi.org/10.1038/s41587-019-0201-4). _Nat Biotechnol_ **37**, 907–915 (2019)  
+* HISAT2 paper  
+Daehwan Kim, Joseph Paggi, Chanhee Park, Christopher Bennett, Steven Salzberg <br/>
+[Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype](https://doi.org/10.1038/s41587-019-0201-4). _Nat Biotechnol_ **37**, 907–915 (2019)  
