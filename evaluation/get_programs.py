@@ -11,7 +11,7 @@ def get_aligners():
     os.chdir("aligners")
     if not os.path.exists("bin"):
         os.mkdir("bin")
-    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks", "minimap2", "salmon"]
+    programs = ["HISAT", "Bowtie2", "Bowtie", "TopHat2", "STAR", "GSNAP", "BWA", "StringTie", "Cufflinks", "minimap2", "salmon", "kallisto"]
     for program in programs:
         if program == "HISAT":
             dir = "hisat-0.1.6-beta"
@@ -126,6 +126,18 @@ def get_aligners():
             cmd = "wget {url} && tar zxvf {pkgname}".format(url=url, pkgname=pkgname)
             cmd += " && cp salmon-latest_{os}_{machine}/bin/salmon bin/".format(os=osname, machine=machine)
             cmd += " && mkdir -p lib && cp -a salmon-latest_{os}_{machine}/lib/* lib/".format(os=osname, machine=machine)
+        elif program == "kallisto":
+            version = '0.46.1'
+            osname = 'linux'
+            if mac:
+                osname = 'mac'
+
+            pkgname = 'kallisto_{osname}-v{version}'.format(osname=osname, version=version)
+            url = 'https://github.com/pachterlab/kallisto/releases/download/v{version}/{pkgname}.tar.gz'.format(version=version, pkgname=pkgname)
+
+            cmd = "wget {url} && tar zxvf {pkgname}.tar.gz".format(url=url, pkgname=pkgname)
+            cmd += " && cp kallisto/kallisto bin/"
+
         else:
             assert False
         print >> sys.stderr, cmd

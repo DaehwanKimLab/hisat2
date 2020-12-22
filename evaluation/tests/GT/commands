@@ -1,14 +1,38 @@
 # Chromosome 22
 
-# extract transcript graph, ss file
-
+# extract transcript graph, ss file (per gene)
 ../hisat2_extract_transcript_graph.py -g data/22.gtf -r data/22.fa -o data/22
+
+# extract transcript graph, ss file (per chromosome), *recommend*
+../hisat2_extract_transcript_graph.py -g data/22.gtf -r data/22.fa -o data/22 --chrtome
 
 # build
 hisat2-build --ss data/22.gt.ss data/22.gt.fa data/22_gt
 
 
+# align
+hisat2 -x 22_gt --transcriptome -f -1 sim_1.fa -2 sim_2.fa -p 5 -S out.sam
+
 # map transcript-position to genomic position
 
 ./hisat2_trans_to_genome.py gt.sam 22.gt.map > out.sam
 
+
+
+
+# salmon
+## build index
+salmon index -t genome.cdna.fa -i genome -p 5
+
+
+## quant
+salmon quant -i genome -l A -1 sim_1.fa -2 sim_2.fa -o output -p 5
+
+
+
+# kallisto
+## build index
+kallisto index -i genome genome.cdna.fa
+
+## quant
+kallisto quant -i genome -o output -t 5 sim_1.fa sim_2.fa 
