@@ -20,6 +20,18 @@
 	<!--#include virtual="sidebar.inc.shtml"-->
 	</div> <!-- End of "rightside" -->
     <div id="leftside">
+      <h2>Index files are moved to a different location. 8/30/2019</h2>
+      Due to a high volume of index downloads, we have moved HISAT2 index files to a different location in order to provide faster download speed.
+      If you use wget or curl to download index files, then you may need to use the following commands to get the correct file name.  
+          <ul> 
+            <li> wget --content-disposition <i>download_link</i>
+            <li> curl -OJ <i>download_link</i>
+	  </ul>
+	  <br/>
+
+	  <h2><a href="https://www.nature.com/articles/s41587-019-0201-4">The HISAT2 paper</a> is out in <i>Nature Biotechnology</i>. 8/2/2019</h2>
+	  
+	  
           <h2>HISAT2 2.1.0 release 6/8/2017</h2>
           <ul> 
             <li>This major version includes the first release of HISAT-genotype, which currently performs HLA typing, DNA fingerprinting analysis, and CYP typing on whole genome sequencing (WGS) reads.  We plan to extend the system so that it can analyze not just a few genes, but a whole human genome.  Please refer to <a href="http://ccb.jhu.edu/hisat-genotype">the HISAT-genotype website</a> for more details.</li>
