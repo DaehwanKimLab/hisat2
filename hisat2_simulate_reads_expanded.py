@@ -777,7 +777,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
 
     if rna:
         transcript_ids = sorted(list(transcripts.keys()))
-        random.shuffle(transcript_ids, random=random.random)
+        random.shuffle(transcript_ids)
         assert len(transcript_ids) >= len(expr_profile)
     else:
         chr_ids = list(genome_seq.keys())
@@ -997,10 +997,6 @@ if __name__ == '__main__':
                         type=float,
                         default=1.0,
                         help='probability of a read including a snp when the read spans the snp ranging from 0.0 to 1.0 (default: 1.0)')
-    parser.add_argument('--sanity-check',
-                        dest='sanity_check',
-                        action='store_true',
-                        help='sanity check')
     parser.add_argument('--bisulfite', 
                         dest='bisulfite',
                         action='store_true',
@@ -1012,6 +1008,15 @@ if __name__ == '__main__':
                         type=float, 
                         default=0.0,
                         help='The CpG location specification for methylation probability across all reads (default: 0.0)')
+    parser.add_argument('-a', '--allele-specific', 
+                        dest='allele_specific',
+                        action='store_true',
+                        default=False,
+                        help='Allows for allele-specific gene expressions')
+    parser.add_argument('--sanity-check',
+                        dest='sanity_check',
+                        action='store_true',
+                        help='sanity check')
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         action='store_true',
