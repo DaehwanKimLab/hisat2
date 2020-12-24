@@ -39,6 +39,7 @@ def shuffle_pairs(read1_fname, read2_fname):
 
 def simulate_reads(input_genomes,
                    input_molecules,
+                   numflag_list,
                    fresh,
                    v1):
     if not os.path.exists("reads"):
@@ -58,31 +59,28 @@ def simulate_reads(input_genomes,
     else:
         molecules = ["DNA", "RNA"]
 
-
-    _rna, _mismatch, _snp, _constant = True, True, True, True
-    _dna = not _rna
+    _mismatch, _snp, _constant, _allele = True, True, True, True
     datasets = [
-        ["22", 1000000, _dna, not _snp, not _mismatch, _constant],
-        ["22", 1000000, _dna, not _snp, _mismatch, _constant],
-        ["22", 1000000, _dna, _snp, not _mismatch, _constant],
-        ["22", 1000000, _dna, _snp, _mismatch, _constant],
-        ["22", 1000000, _rna, not _snp, not _mismatch, not _constant],
-        ["22", 1000000, _rna, not _snp, not _mismatch, _constant],
-        ["22", 1000000, _rna, not _snp, _mismatch, not _constant],
-        ["22", 1000000, _rna, not _snp, _mismatch, _constant],
-        ["22", 10000, _rna, not _snp, not _mismatch, _constant],
-        ["22", 1000000, _rna, _snp, not _mismatch, not _constant],
-        ["22", 1000000, _rna, _snp, not _mismatch, _constant],
-        ["22", 1000000, _rna, _snp, _mismatch, not _constant],
-        ["22", 1000000, _rna, _snp, _mismatch, _constant],
-        # ["22_20-21M", 1000000, _rna, not _snp, not _mismatch, not _constant],
-        # ["22_20-21M", 1000000, _rna, _snp, not _mismatch, _constant],
-        ["genome", 10000000, _dna, not _snp, not _mismatch, _constant],
-        ["genome", 10000000, _dna, _snp, not _mismatch, _constant],
-        ["genome", 10000000, _dna, _snp, _mismatch, _constant],
-        ["genome", 10000000, _rna, not _snp, not _mismatch, not _constant],
-        ["genome", 10000000, _rna, _snp, not _mismatch, not _constant],
-        ["genome", 10000000, _rna, _snp, _mismatch, not _constant],
+        ["22",     10000,    "RNA", not _snp, not _mismatch,     _constant, not _allele],
+        ["22",     10000,    "RNA",     _snp, not _mismatch,     _constant,     _allele],
+        ["22",     1000000,  "DNA", not _snp, not _mismatch,     _constant, not _allele],
+        ["22",     1000000,  "DNA", not _snp,     _mismatch,     _constant, not _allele],
+        ["22",     1000000,  "DNA",     _snp, not _mismatch,     _constant, not _allele],
+        ["22",     1000000,  "DNA",     _snp,     _mismatch,     _constant, not _allele],
+        ["22",     1000000,  "RNA", not _snp, not _mismatch, not _constant, not _allele],
+        ["22",     1000000,  "RNA", not _snp, not _mismatch,     _constant, not _allele],
+        ["22",     1000000,  "RNA", not _snp,     _mismatch, not _constant, not _allele],
+        ["22",     1000000,  "RNA", not _snp,     _mismatch,     _constant, not _allele],
+        ["22",     1000000,  "RNA",     _snp, not _mismatch, not _constant, not _allele],
+        ["22",     1000000,  "RNA",     _snp, not _mismatch,     _constant, not _allele],
+        ["22",     1000000,  "RNA",     _snp,     _mismatch, not _constant, not _allele],
+        ["22",     1000000,  "RNA",     _snp,     _mismatch,     _constant, not _allele],
+        ["genome", 10000000, "DNA", not _snp, not _mismatch,     _constant, not _allele],
+        ["genome", 10000000, "DNA",     _snp, not _mismatch,     _constant, not _allele],
+        ["genome", 10000000, "DNA",     _snp,     _mismatch,     _constant, not _allele],
+        ["genome", 10000000, "DNA", not _snp, not _mismatch, not _constant, not _allele],
+        ["genome", 10000000, "RNA",     _snp, not _mismatch, not _constant, not _allele],
+        ["genome", 10000000, "RNA",     _snp,     _mismatch, not _constant, not _allele],
     ]
 
     data_dir_base = "../../../data"
@@ -98,30 +96,30 @@ def simulate_reads(input_genomes,
         shuffle_reads_cmd += "; mv sim_2.fa.shuffle sim_2.fa"
         os.system(shuffle_reads_cmd)
 
-
     pid_list = []
 
-    for genome, numreads, rna, snp, mismatch, constant in datasets:
+    for genome, numfrags, molecule, snp, mismatch, constant, allele in datasets:
         if genome not in genomes:
             continue
         
-        if rna:
-            molecule = "RNA"
-        else:
-            molecule = "DNA"
         if molecule not in molecules:
             continue
+
+        if numfrag_list and numfrags not in numfrag_list:
+            continue
             
-        if numreads >= 1000000:
-            dirname = "%dM_%s" % (numreads / 1000000, molecule)
+        if numfrags >= 1000000:
+            dirname = "%dM_%s" % (numfrags / 1000000, molecule)
         else:
-            dirname = "%dK_%s" % (numreads / 1000, molecule)
+            dirname = "%dK_%s" % (numfrags / 1000, molecule)
 
         if mismatch:
             dirname += "_mismatch"
         if snp:
             dirname += "_snp"
-        if rna and constant:
+        if allele:
+            dirname += "_allele"
+        if molecule == "RNA" and constant:
             dirname += "_constant"
         dirname += "_reads"
         dirname += ("_" + genome)
@@ -136,7 +134,7 @@ def simulate_reads(input_genomes,
         os.chdir(dirname)
         genome_fname = data_dir_base + "/%s.fa" % (genome)
 
-        if rna:
+        if molecule == "RNA":
             gtf_fname = data_dir_base + "/%s.gtf" % (genome)
         else:
             gtf_fname = "/dev/null"
@@ -147,19 +145,25 @@ def simulate_reads(input_genomes,
             snp_fname = "/dev/null"
 
         cmd_add = ""
-        if not rna:
+        if molecule == "DNA":
             cmd_add += "--dna "
         if mismatch:
             cmd_add += "--error-rate 0.2 "
-        if rna and constant:
+        if molecule == "RNA" and constant:
             cmd_add += "--expr-profile constant "
+
+        if allele:
+            cmd_add += "--allele-specific "
+            
+            # DK - debugging purposes
+            cmd_add += "--num-tran 10 "
 
         if v1:
             simulator = "hisat2_simulate_reads_v1.py"
         else:
             simulator = "hisat2_simulate_reads.py"
         cmd = "../../../aligners/bin/%s --sanity-check %s --num-fragment %d %s %s %s sim" % \
-            (simulator, cmd_add, numreads, genome_fname, gtf_fname, snp_fname)
+            (simulator, cmd_add, numfrags, genome_fname, gtf_fname, snp_fname)
 
         p = Process(target=generate_reads, args=(cmd,))
         p.start()
@@ -187,6 +191,11 @@ if __name__ == "__main__":
                         type=str,
                         default="",
                         help='comma-separated list of molecule types (e.g. DNA,RNA')
+    parser.add_argument('--numfrag-list',
+                        dest='numfrag_list',
+                        type=str,
+                        default="",
+                        help='comma-separated list of fragment numbers')
     parser.add_argument('--fresh',
                         dest='fresh',
                         action='store_true',
@@ -213,9 +222,14 @@ if __name__ == "__main__":
         if molecule == "":
             continue
         molecules.append(molecule)
-        
+
+    numfrag_list = []
+    for frags in args.numfrag_list.split(','):
+        numfrag_list.append(int(frags))
+    
     simulate_reads(genomes,
                    molecules,
+                   numfrag_list,
                    args.fresh,
                    args.v1)
 

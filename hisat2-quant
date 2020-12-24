@@ -44,7 +44,7 @@ while (-f $prog && -l $prog){
 ($vol,$script_path,$prog) 
                 = File::Spec->splitpath($prog);
 my $os_is_nix   = ($^O eq "linux") || ($^O eq "darwin");
-my $quant_bin = $os_is_nix ? 'hisat2-align-s' : 'hisat2-align-s.exe'; 
+my $quant_bin = $os_is_nix ? 'hisat2-quant-bin' : 'hisat2-quant-bin.exe'; 
 my $quant_prog = File::Spec->catpath($vol,$script_path,$quant_bin);
 my $seq_in_args = 0;
 my %signo       = ();
@@ -144,41 +144,9 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 			$ht2_args[$i] = undef;
 		}
 	}
-	if($arg =~ /^--?([12])/ && $arg !~ /^--?12/) {
-		my $mate = $1;
-		$ht2_args[$i] = undef;
-		$arg =~ s/^--?[12]//;
-		if($arg ne "") {
-			# Argument was part of this token
-			my @args = split(/,/, $arg);
-			for my $a (@args) { push @ht2w_args, ("-$mate", $a); }
-		} else {
-			# Argument is in the next token
-			$i < scalar(@ht2_args)-1 || Fail("Argument expected in next token!\n");
-			$i++;
-			my @args = split(/,/, $ht2_args[$i]);
-			for my $a (@args) { push @ht2w_args, ("-$mate", $a); }
-			$ht2_args[$i] = undef;
-		}
-	}
 	if($arg eq "--debug") {
 		$debug = 1;
 		$ht2_args[$i] = undef;
-	}
-	if($arg eq "--no-unal") {
-		$no_unal = 1;
-		$ht2_args[$i] = undef;
-	}
-	if($arg eq "--large-index") {
-		$large_idx = 1;
-		$ht2_args[$i] = undef;
-	}
-	if($arg eq "--skip-read-lengths") {
-		$skip_read_stat = 1;
-		$ht2_args[$i] = undef
-	}
-	if($arg eq "-c") {
-		$seq_in_args = 1;
 	}
 	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
 		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
@@ -270,31 +238,6 @@ Info("  Binary args:\n[ @ht2_args ]\n");
 # check read lengths
 # if read_files have more than 1 files, use first one,
 my @read_files = (scalar(@unps) > 0) ? @unps : @mate1s;
-if ((scalar(@read_files) > 0)
-		&& ($seq_in_args == 0)
-		&& ($skip_read_stat == 0)) {
-	Info("Check read length: $read_files[0]\n");
-	my $cmd = "'$read_stat_prog' $read_files[0]";
-	my $read_len_str = "";
-
-	open(my $fh, "$cmd |") || Fail("Failed to run command '$cmd'\n");
-	while(readline $fh) {
-		chomp;
-		next if /^\s*$/;
-		my @ts = split(/ /);
-		if (scalar(@ts) > 4) {
-			$read_len_str = $ts[4];
-		} else {
-			$read_len_str = "";
-		}
-	}
-	close($fh);
-
-	if (($read_len_str ne "") && ($read_len_str ne "0")) {
-		Info("Read Length String: $read_len_str\n");
-		push @ht2_args, ("--read-lengths", $read_len_str);
-	}
-}
 
 sub check_file_exist($$$) {
 	my ($unps, $mate1s, $mate2s) = @_;

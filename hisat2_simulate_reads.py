@@ -182,15 +182,16 @@ def read_transcript(genome_seq, gtf_file, frag_len):
                 'transcript_id' not in values_dict:
             continue
 
+        gene_id = values_dict['gene_id']
         transcript_id = values_dict['transcript_id']
         if transcript_id not in transcripts:
-            transcripts[transcript_id] = [chrom, strand, [[left, right]]]
-            genes[values_dict['gene_id']].append(transcript_id)
+            transcripts[transcript_id] = [chrom, strand, [[left, right]], gene_id]
+            genes[gene_id].append(transcript_id)
         else:
             transcripts[transcript_id][2].append([left, right])
 
     # Sort exons and merge where separating introns are <=5 bps
-    for tran, [chr, strand, exons] in transcripts.items():
+    for tran, [chr, strand, exons, gene_id] in transcripts.items():
             exons.sort()
             tmp_exons = [exons[0]]
             for i in range(1, len(exons)):
@@ -198,14 +199,14 @@ def read_transcript(genome_seq, gtf_file, frag_len):
                     tmp_exons[-1][1] = exons[i][1]
                 else:
                     tmp_exons.append(exons[i])
-            transcripts[tran] = [chr, strand, tmp_exons]
+            transcripts[tran] = [chr, strand, tmp_exons, gene_id]
 
     tmp_transcripts = {}
-    for tran, [chr, strand, exons] in transcripts.items():
+    for tran, [chr, strand, exons, gene_id] in transcripts.items():
         exon_lens = [e[1] - e[0] + 1 for e in exons]
         transcript_len = sum(exon_lens)
         if transcript_len >= frag_len:
-            tmp_transcripts[tran] = [chr, strand, transcript_len, exons]
+            tmp_transcripts[tran] = [chr, strand, transcript_len, exons, gene_id]
 
     transcripts = tmp_transcripts
 
@@ -237,7 +238,7 @@ def read_snp(snp_file):
 """
 def sanity_check_input(genome_seq, genes, transcripts, snps, frag_len):
     num_canon_ss, num_ss = 0, 0
-    for transcript, [chr, strand, transcript_len, exons] in transcripts.items():
+    for transcript, [chr, strand, transcript_len, exons, gene_id] in transcripts.items():
         assert transcript_len >= frag_len
         if len(exons) <= 1:
             continue
@@ -428,9 +429,6 @@ def getSamAlignment(rna, exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps
                 mms.append(["", "single", i, err_base])
 
         tmp_diffs = snps + mms
-#        def diff_sort(a , b):
-#            return a[2] - b[2]
-
         tmp_diffs = sorted(tmp_diffs, key=lambda t: t[2])
         diffs = []
         if len(tmp_diffs) > 0:
@@ -733,7 +731,10 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                    rna, paired_end, read_len, frag_len,
                    num_frag, expr_profile_type, repeat_fname,
                    error_rate, max_mismatch,
-                   random_seed, snp_prob, sanity_check, bisulfite, meth_prob, verbose):
+                   random_seed, snp_prob,
+                   bisulfite, meth_prob,
+                   allele_specific, num_tran,
+                   sanity_check, verbose):
     random.seed(random_seed, version=1)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
     
@@ -751,7 +752,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
         sanity_check_input(genome_seq, genes, transcripts, snps, frag_len)
 
     if rna:
-        num_transcripts = min(len(transcripts), 10000)
+        num_transcripts = min(len(transcripts), num_tran)        
         expr_profile = generate_rna_expr_profile(expr_profile_type, num_transcripts)
     else:
         expr_profile = generate_dna_expr_profile(genome_seq)
@@ -783,6 +784,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
         chr_ids = list(genome_seq.keys())
 
     sam_file = open(base_fname + ".sam", "w")
+    stat_file = open(base_fname + ".stat", "w")
 
     # Write SAM header
     print("@HD\tVN:1.0\tSO:unsorted", file=sam_file)
@@ -798,11 +800,21 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
         t_num_frags = expr_profile[t]
         if rna:
             transcript_id = transcript_ids[t]
-            chr, strand, transcript_len, exons = transcripts[transcript_id]
+            chr, strand, transcript_len, exons, gene_id = transcripts[transcript_id]
             print(transcript_id, t_num_frags, file=sys.stderr)
         else:
             chr = chr_ids[t]
             print(chr, t_num_frags, file=sys.stderr)
+
+        if allele_specific:
+            ref_num_frags = int(t_num_frags / 2)
+            alt_num_frags = t_num_frags - ref_num_frags
+            if rna:
+                print("%s\t%s_ref\t%d" % (gene_id, transcript_id, ref_num_frags), file=stat_file)
+                print("%s\t%s_alt\t%d\tsnps" % (gene_id, transcript_id, ref_num_frags), file=stat_file)
+            else:
+                print("%s_ref\t%d" % (chr, ref_num_frags), file=stat_file)
+                print("%s_alt\t%d" % (chr, ref_num_frags), file=stat_file)
 
         assert chr in genome_seq
         chr_seq = genome_seq[chr]
@@ -829,25 +841,31 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
 
         for f in range(t_num_frags):
             if rna:
-                #frag_pos = random.randint(0, transcript_len - frag_len)
                 frag_pos = myrandint(0, transcript_len - frag_len)
             else:
                 while True:
                     if len(chr_repeat_loci):
-                        #locus_id = random.randint(0, len(chr_repeat_loci) - 1)
                         locus_id = myrandint(0, len(chr_repeat_loci) - 1)
                         frag_pos = chr_repeat_loci[locus_id][0]
                     else:
-                        #frag_pos = random.randint(0, chr_len - frag_len)
                         frag_pos = myrandint(0, chr_len - frag_len)
                     if 'N' not in chr_seq[frag_pos:frag_pos + frag_len]:
                         break
 
+            # DK - 50%/50% alleles
+            if allele_specific:
+                if f < t_num_frags / 2:
+                    t_snp_prob = 0.0
+                else:
+                    t_snp_prob = 1.0
+            else:
+                t_snp_prob = snp_prob
+
             # SAM specification (v1.4)
             # http://samtools.sourceforge.net/
             flag, flag2 = 99, 163  # 83, 147
-            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, snp_prob, err_rand_src, max_mismatch)
-            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, snp_prob, err_rand_src, max_mismatch)
+            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, t_snp_prob, err_rand_src, max_mismatch)
+            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSamAlignment(rna, exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, t_snp_prob, err_rand_src, max_mismatch)
             swapped = False
             if paired_end:
                 #if random.randint(0, 1) == 1:
@@ -909,6 +927,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
             cur_read_id += 1
             
     sam_file.close()
+    stat_file.close()
     read_file.close()
     if paired_end:
         read2_file.close()
@@ -1013,6 +1032,12 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Allows for allele-specific gene expressions')
+    parser.add_argument('--num-transcript',
+                        dest='num_tran',
+                        action='store',
+                        type=int,
+                        default=10000,
+                        help='number of transcripts (default: 10000)')
     parser.add_argument('--sanity-check',
                         dest='sanity_check',
                         action='store_true',
@@ -1030,8 +1055,13 @@ if __name__ == '__main__':
         exit(1)
     if not args.rna:
         args.expr_profile = "constant"
+        
     simulate_reads(args.genome_file, args.gtf_file, args.snp_file, args.base_fname,
                    args.rna, args.paired_end, args.read_len, args.frag_len,
                    args.num_frag, args.expr_profile, args.repeat_fname,
                    args.error_rate, args.max_mismatch,
-                   args.random_seed, args.snp_prob, args.sanity_check, args.bisulfite, args.meth_prob, args.verbose)
+                   args.random_seed, args.snp_prob, 
+                   args.bisulfite, args.meth_prob,
+                   args.allele_specific, args.num_tran,
+                   args.sanity_check, args.verbose)
+
