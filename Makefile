@@ -153,6 +153,8 @@ REPEAT_CPPS = \
 HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
 HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
 HISAT2_REPEAT_CPPS_MAIN = $(REPEAT_CPPS) $(BUILD_CPPS) hisat2_repeat_main.cpp
+HISAT2_QUANT_CPPS_MAIN = $(REPEAT_CPPS) $(BUILD_CPPS) hisat2_quant_main.cpp
+HISAT2_DIFFEXPR_CPPS_MAIN = $(BUILD_CPPS) hisat2_diffexpr_main.cpp
 
 SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
 VERSION = $(shell cat VERSION)
@@ -291,6 +293,11 @@ repeat: hisat2-repeat
 
 repeat-debug: hisat2-repeat-debug
 
+quant: hisat2-quant-bin
+
+quant-debug: hisat2-quant-bin-debug
+
+
 DEFS=-fno-strict-aliasing \
      -DHISAT2_VERSION="\"`cat VERSION`\"" \
      -DBUILD_HOST="\"`hostname`\"" \
@@ -300,27 +307,6 @@ DEFS=-fno-strict-aliasing \
      $(PREF_DEF) \
      $(MM_DEF) \
      $(SHMEM_DEF)
-
-#
-# hisat-bp targets
-#
-
-hisat-bp-bin: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRAGMENTS)
-	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
-	$(DEFS) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall \
-	$(INC) \
-	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT_CPPS_MAIN) \
-	$(LIBS) $(SEARCH_LIBS)
-
-hisat-bp-bin-debug: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRAGMENTS)
-	$(CXX) $(DEBUG_FLAGS) \
-	$(DEBUG_DEFS) $(EXTRA_FLAGS) \
-	$(DEFS) -DBOWTIE2 -Wall \
-	$(INC) \
-	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT_CPPS_MAIN) \
-	$(LIBS) $(SEARCH_LIBS)
 
 #
 # hisat2-repeat targets
@@ -458,6 +444,27 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(LIBS) $(INSPECT_LIBS)
 
 #
+# hisat2-quant targets
+#
+
+hisat2-quant-bin: hisat2_quant.cpp $(QUANT_CPPS) $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX $(NOASSERT_FLAGS) -Wall \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
+hisat2-quant-bin-debug: hisat2_quant.cpp $(QUANT_CPPS) $(SHARED_CPPS) $(HEADERS)
+	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
+	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -Wall \
+	$(INC) \
+	-o $@ $< \
+	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
+	$(LIBS) $(BUILD_LIBS)
+
+
+#
 # HT2LIB targets
 #
 
@@ -476,7 +483,7 @@ libhisat2lib-debug.so: $(HT2LIB_SHARED_DEBUG_OBJS)
 libhisat2lib.so: $(HT2LIB_SHARED_RELEASE_OBJS)
 	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) -DBOWTIE2 $(NOASSERT_FLAGS) -Wall  $(INC) $(SEARCH_INC)\
 	-shared -o $@ $(HT2LIB_SHARED_RELEASE_OBJS) $(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
-	
+
 .ht2lib-obj-debug/%.o: %.cpp
 	@mkdir -p $(dir $@)/$(dir $<)
 	$(CXX) -fPIC $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) $(DEFS) $(SRA_DEF) -DBOWTIE2 -Wall $(INC) $(SEARCH_INC) \
@@ -573,3 +580,4 @@ clean:
 .PHONY: push-doc
 push-doc: doc/manual.inc.html
 	scp doc/*.*html doc/indexes.txt salz-dmz:/ccb/salz7-data/www/ccb.jhu.edu/html/software/hisat2/
+
