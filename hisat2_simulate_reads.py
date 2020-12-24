@@ -17,6 +17,11 @@
 # You should have received a copy of the GNU General Public License
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
+#######################################################################
+#                        Update Log                                   #
+# 09-17-2020:  Micah Thornton  --  Added Class for Methylation        #
+#               Pattern Based on Bernoulli Trials                     #  
+
 
 import os, sys, math, random, re
 from collections import defaultdict, Counter
@@ -54,6 +59,7 @@ def reverse_complement(seq):
 """
 python2 style randint
 """
+
 def myrandint(m, x):
     s = x - m + 1
     return m + int(random.random() * s)
@@ -78,35 +84,66 @@ class ErrRandomSource:
         self.cur = (self.cur + 1) % len(self.rands)
         return rand
 
-
+def strsub(char, i, stri):
+        if i == 0:
+            return(char + stri[1:]);
+        elif i == len(stri)-1:
+            return(stri[:i]+char);
+        else:
+            return(stri[:i] + char + stri[(i+1):]);
+'''
+A Bernoulli Random Source for Methylation status at CpG locations
+'''
+#class MethylationPatternBernoulliCpG: 
+#    def __init__(self, prob = 0.0, nts, seed=0xFEED): 
+#        self.size = len(nts); 
+#        self.methylated = []; 
+#        self.cpgs = []; 
+#        random.seed(seed);
+#        for i in range(self.size)-1: 
+#            if nts[i] == 'C' and nts[i+1] == 'G': 
+#                self.cpgs.append(i); 
+#        for i in self.cpgs: 
+#            if random.random() <= prob: 
+#                self.methylated.append(i);  
+#        self.cur = 0; 
+#
+#    def getMethStat(self): 
+#        assert self.cur < self.size; 
+#        if self.cur in self.methylated:
+#            ret = 1; 
+#        else: 
+#            ret = 0;
+#        self.cur = (self.cur + 1) % self.size
+#        return ret;
+#
 """
 """
 def read_genome(genome_file):
     chr_dic = {}
-
-    chr_filter = [str(x) for x in list(range(1, 23)) + ['X', 'Y']]
-    #chr_filter = None
-
-    def check_chr_filter(chr_name, chr_filter):
-        if chr_filter is None:
-            return True
-        if chr_name in chr_filter:
-            return True
-        return False
-
+    
     chr_name, sequence = "", ""
     for line in genome_file:
         if line[0] == ">":
-            if chr_name and sequence and check_chr_filter(chr_name, chr_filter):
+            if chr_name and sequence:
                 chr_dic[chr_name] = sequence
             chr_name = line.strip().split()[0][1:]
             sequence = ""
         else:
             sequence += line[:-1]
 
-    if chr_name and sequence and check_chr_filter(chr_name, chr_filter):
+    if chr_name and sequence:
         chr_dic[chr_name] = sequence
 
+
+    chr_filter = [str(x) for x in list(range(1, 23)) + ['X', 'Y']]
+    #chr_filter = None
+
+    if chr_filter:
+        for chr_id, chr_seq in chr_dic.items():
+            if not chr_id in chr_filter: 
+                chr_dic.pop(chr_id, None)
+    
     return chr_dic
 
 
@@ -696,7 +733,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                    rna, paired_end, read_len, frag_len,
                    num_frag, expr_profile_type, repeat_fname,
                    error_rate, max_mismatch,
-                   random_seed, snp_prob, sanity_check, verbose):
+                   random_seed, snp_prob, sanity_check, bisulfite, meth_prob, verbose):
     random.seed(random_seed, version=1)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
     
@@ -740,7 +777,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
 
     if rna:
         transcript_ids = sorted(list(transcripts.keys()))
-        random.shuffle(transcript_ids, random=random.random)
+        random.shuffle(transcript_ids)
         assert len(transcript_ids) >= len(expr_profile)
     else:
         chr_ids = list(genome_seq.keys())
@@ -842,6 +879,18 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                 TI = "\tTI:Z:{}".format(transcript_id)
             else:
                 XS, TI = "", ""                
+
+            if bisulfite:
+                assert meth_prob >= 0 and meth_prob <= 1; 
+                for i in range(len(read_seq)): 
+                    if i == len(read_seq)-1: 
+                        if read_seq[i] == 'C' and genome_seq[chr][pos+len(read_seq)] == "G": 
+                            if random.random() <= meth_prob: 
+                                read_seq = strsub("T", i, read_seq); 
+                    else: 
+                        if read_seq[i] == 'C' and genome_seq[chr][pos+len(read_seq)] == "G": 
+                            if random.random() <= meth_prob: 
+                                read_seq = strsub("T", i, read_seq); 
 
             print(">{}".format(cur_read_id), file=read_file)
             if swapped:
@@ -948,6 +997,22 @@ if __name__ == '__main__':
                         type=float,
                         default=1.0,
                         help='probability of a read including a snp when the read spans the snp ranging from 0.0 to 1.0 (default: 1.0)')
+    parser.add_argument('--bisulfite', 
+                        dest='bisulfite',
+                        action='store_true',
+                        default=False,
+                        help='Allows for the simulation of Bisulfite Sequencing Reads (WIP - For now, just randomly flips Cyotosines to Thymines If they are followed by a Guanine)')
+    parser.add_argument('--meth-prob', 
+                        dest='meth_prob',
+                        action='store',
+                        type=float, 
+                        default=0.0,
+                        help='The CpG location specification for methylation probability across all reads (default: 0.0)')
+    parser.add_argument('-a', '--allele-specific', 
+                        dest='allele_specific',
+                        action='store_true',
+                        default=False,
+                        help='Allows for allele-specific gene expressions')
     parser.add_argument('--sanity-check',
                         dest='sanity_check',
                         action='store_true',
@@ -969,4 +1034,4 @@ if __name__ == '__main__':
                    args.rna, args.paired_end, args.read_len, args.frag_len,
                    args.num_frag, args.expr_profile, args.repeat_fname,
                    args.error_rate, args.max_mismatch,
-                   args.random_seed, args.snp_prob, args.sanity_check, args.verbose)
+                   args.random_seed, args.snp_prob, args.sanity_check, args.bisulfite, args.meth_prob, args.verbose)

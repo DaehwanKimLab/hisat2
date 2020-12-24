@@ -1,1 +1,1 @@
-../hisat2_simulate_reads_expanded.py
+../hisat2_simulate_reads.py

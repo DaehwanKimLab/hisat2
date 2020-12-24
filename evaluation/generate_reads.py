@@ -37,13 +37,27 @@ def shuffle_pairs(read1_fname, read2_fname):
     shuffle_reads(read2_fname, random_list)
 
 
-def simulate_reads():
+def simulate_reads(input_genomes,
+                   input_molecules,
+                   fresh,
+                   v1):
     if not os.path.exists("reads"):
         os.mkdir("reads")
     os.chdir("reads")
     if not os.path.exists("simulation"):
         os.mkdir("simulation")
     os.chdir("simulation")
+
+    if input_genomes:
+        genomes = input_genomes
+    else:
+        genomes = ["22_20-21M", "22", "genome"]
+
+    if input_molecules:
+        molecules = input_molecules
+    else:
+        molecules = ["DNA", "RNA"]
+
 
     _rna, _mismatch, _snp, _constant = True, True, True, True
     _dna = not _rna
@@ -69,7 +83,7 @@ def simulate_reads():
         ["genome", 10000000, _rna, not _snp, not _mismatch, not _constant],
         ["genome", 10000000, _rna, _snp, not _mismatch, not _constant],
         ["genome", 10000000, _rna, _snp, _mismatch, not _constant],
-        ]
+    ]
 
     data_dir_base = "../../../data"
 
@@ -88,10 +102,16 @@ def simulate_reads():
     pid_list = []
 
     for genome, numreads, rna, snp, mismatch, constant in datasets:
+        if genome not in genomes:
+            continue
+        
         if rna:
             molecule = "RNA"
         else:
             molecule = "DNA"
+        if molecule not in molecules:
+            continue
+            
         if numreads >= 1000000:
             dirname = "%dM_%s" % (numreads / 1000000, molecule)
         else:
@@ -105,8 +125,13 @@ def simulate_reads():
             dirname += "_constant"
         dirname += "_reads"
         dirname += ("_" + genome)
+
         if os.path.exists(dirname):
-            continue
+            if fresh:
+                os.system("rm -rf %s" % (dirname))
+            else:
+                continue
+        
         os.mkdir(dirname)
         os.chdir(dirname)
         genome_fname = data_dir_base + "/%s.fa" % (genome)
@@ -128,21 +153,14 @@ def simulate_reads():
             cmd_add += "--error-rate 0.2 "
         if rna and constant:
             cmd_add += "--expr-profile constant "
-        cmd = "../../../aligners/bin/hisat2_simulate_reads.py --sanity-check %s --num-fragment %d %s %s %s sim" % \
-            (cmd_add, numreads, genome_fname, gtf_fname, snp_fname)
 
-        """
-        print >> sys.stderr, cmd
-        os.system(cmd)
+        if v1:
+            simulator = "hisat2_simulate_reads_v1.py"
+        else:
+            simulator = "hisat2_simulate_reads.py"
+        cmd = "../../../aligners/bin/%s --sanity-check %s --num-fragment %d %s %s %s sim" % \
+            (simulator, cmd_add, numreads, genome_fname, gtf_fname, snp_fname)
 
-        random.seed(0)
-        print >> sys.stderr, "shuffle reads sim_1.fa and sim_2.fa"
-        shuffle_pairs("sim_1.fa", "sim_2.fa")
-        shuffle_reads_cmd = " mv sim_1.fa.shuffle sim_1.fa"
-        shuffle_reads_cmd += "; mv sim_2.fa.shuffle sim_2.fa"
-        os.system(shuffle_reads_cmd)
-        """
-        #generate_reads(cmd)
         p = Process(target=generate_reads, args=(cmd,))
         p.start()
         pid_list.append(p)
@@ -159,5 +177,45 @@ def simulate_reads():
 if __name__ == "__main__":
     parser = ArgumentParser(
         description='Generate reads using simulate_reads.py in HISAT2')
+    parser.add_argument('--genome-list',
+                        dest='genome_list',
+                        type=str,
+                        default="",
+                        help='comma-separated list of genomes (e.g. 22,genome')
+    parser.add_argument('--molecule-list',
+                        dest='molecule_list',
+                        type=str,
+                        default="",
+                        help='comma-separated list of molecule types (e.g. DNA,RNA')
+    parser.add_argument('--fresh',
+                        dest='fresh',
+                        action='store_true',
+                        help='delete existing directories')
+    parser.add_argument('--v1',
+                        dest='v1',
+                        action='store_true',
+                        help='use an original version of hisat2_simulate_reads_v1.py')
+    parser.add_argument('-v', '--verbose',
+                        dest='verbose',
+                        action='store_true',
+                        help='also print some statistics to stderr')
+
     args = parser.parse_args()
-    simulate_reads()
+
+    genomes = []
+    for genome in args.genome_list.split(','):
+        if genome == "":
+            continue
+        genomes.append(genome)
+
+    molecules = []
+    for molecule in args.molecule_list.split(','):
+        if molecule == "":
+            continue
+        molecules.append(molecule)
+        
+    simulate_reads(genomes,
+                   molecules,
+                   args.fresh,
+                   args.v1)
+
