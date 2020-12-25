@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 #
 # Copyright 2020, Chanhee Park <parkchanhee@gmail.com>, Daehwan Kim <infphilo@gmail.com>
 #

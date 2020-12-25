@@ -522,7 +522,7 @@ def main(sam_file, transinfo_file):
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Translate the transcription-based postion to the genomic position')
+        description='Convert transcriptome-based positions to the corresponding genomic positions')
 
     parser.add_argument('sam_file',
             nargs='?',
